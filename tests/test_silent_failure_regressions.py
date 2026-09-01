@@ -9,16 +9,14 @@ implementations.
 
 from __future__ import annotations
 
-import http.client
 import json
 import os
-import socket
 import tarfile
 from pathlib import Path
 
 import pytest
 
-from mind_mem import ingestion_pipeline, ledger_anchor
+from mind_mem import ledger_anchor
 from mind_mem.backup_restore import WAL, backup_workspace
 from mind_mem.importers.note_parsers import parse_chat_json
 from mind_mem.importers.records import ImportParseError
@@ -264,56 +262,6 @@ class TestTranscriptNestedMessage:
 
 
 # ---------------------------------------------------------------------------
-# ingestion_pipeline — the rejected counter
-# ---------------------------------------------------------------------------
-
-
-def _free_port() -> int:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    return port
-
-
-@pytest.mark.unit
-class TestIngestionRejectedCounter:
-    def _post(self, port: int, path: str, body: str) -> int:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-        conn.request("POST", path, body=body, headers={"Content-Type": "application/json"})
-        status = conn.getresponse().status
-        conn.close()
-        return status
-
-    def test_malformed_bodies_are_counted_as_rejected(self) -> None:
-        q = ingestion_pipeline.IngestionQueue(capacity=4)
-        port = _free_port()
-        _, stop = ingestion_pipeline.serve_webhook(port, q)
-        try:
-            assert self._post(port, "/ingest", "{not json") == 400
-            assert self._post(port, "/ingest", "[1, 2, 3]") == 400
-            assert self._post(port, "/wrong-path", "{}") == 404
-        finally:
-            stop()
-        stats = q.stats().as_dict()
-        assert stats["rejected"] == 3, "a producer sending only malformed events must not read as an idle queue"
-        assert stats["accepted"] == 0
-        assert stats["backpressure_drops"] == 0
-
-    def test_accepted_events_do_not_bump_rejected(self) -> None:
-        q = ingestion_pipeline.IngestionQueue(capacity=4)
-        port = _free_port()
-        _, stop = ingestion_pipeline.serve_webhook(port, q)
-        try:
-            assert self._post(port, "/ingest", json.dumps({"ok": True})) == 202
-        finally:
-            stop()
-        stats = q.stats().as_dict()
-        assert stats["accepted"] == 1
-        assert stats["rejected"] == 0
-
-
-# ---------------------------------------------------------------------------
 # ledger_anchor — damaged history
 # ---------------------------------------------------------------------------
 
@@ -352,51 +300,6 @@ class TestAnchorHistoryDamage:
         hist = self._history(tmp_path)
         assert hist.problems() == []
         assert len(hist.all(strict=True)) == 2
-
-
-# ---------------------------------------------------------------------------
-# v4 observability — the documented cardinality knob
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-class TestObservabilityCardinalityConfig:
-    def _cfg(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, block: dict) -> None:
-        (tmp_path / "mind-mem.json").write_text(json.dumps({"v4": {"observability": block}}), encoding="utf-8")
-        monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
-
-    def test_configured_cap_is_honoured(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from mind_mem.v4 import observability as obs
-
-        self._cfg(tmp_path, monkeypatch, {"enabled": True, "max_cardinality": 3})
-        obs.reset_for_tests()
-        try:
-            for i in range(3):
-                obs.counter(f"c_{i}")
-            assert obs.counter("c_overflow") is obs._OVERFLOW_COUNTER
-            assert obs.snapshot()["v4.cardinality.dropped_counter"] == 1
-        finally:
-            obs.reset_for_tests()
-
-    def test_default_cap_applies_without_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from mind_mem.v4 import observability as obs
-
-        self._cfg(tmp_path, monkeypatch, {"enabled": True})
-        obs.reset_for_tests()
-        try:
-            assert obs._effective_max_cardinality() == obs.MAX_CARDINALITY
-        finally:
-            obs.reset_for_tests()
-
-    def test_invalid_cap_falls_back_to_the_default(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from mind_mem.v4 import observability as obs
-
-        self._cfg(tmp_path, monkeypatch, {"enabled": True, "max_cardinality": 0})
-        obs.reset_for_tests()
-        try:
-            assert obs._effective_max_cardinality() == obs.MAX_CARDINALITY
-        finally:
-            obs.reset_for_tests()
 
 
 # ---------------------------------------------------------------------------

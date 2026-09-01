@@ -1,7 +1,7 @@
-"""Every SQLite connection ``tool_output/store.py`` and ``v4/hnsw_kind_index.py``
-open must be CLOSED before the call that opened it returns.
+"""Every SQLite connection ``tool_output/store.py`` opens must be CLOSED before
+the call that opened it returns.
 
-Both modules used the ``with sqlite3.connect(...) as conn`` idiom. That context
+The module used the ``with sqlite3.connect(...) as conn`` idiom. That context
 manager commits (or, on an exception, rolls back) and then leaves the handle
 **open** — its ``__exit__`` documents exactly that and nothing more. Nothing
 reclaims it afterwards either: a ``sqlite3.Connection`` and its
@@ -10,12 +10,10 @@ to the *cyclic* collector, never to refcounting.
 
 Consequences, all of them observable and all of them tested here:
 
-* descriptors accumulate — one per call, on modules called once per stored tool
-  run and once per registered embedding;
+* descriptors accumulate — one per call, on a module called once per stored
+  tool run;
 * the ``-wal`` / ``-shm`` sidecars cannot be checkpointed away while a
-  connection still holds them, so they outlive the work;
-* on Windows an open handle makes ``os.unlink`` / ``rmdir`` fail, so a workspace
-  containing either database cannot be deleted.
+  connection still holds them, so they outlive the work.
 
 The tests below come in three flavours deliberately:
 
@@ -39,7 +37,6 @@ collection can close the leaked connections and make the leak look fixed.
 from __future__ import annotations
 
 import gc
-import json
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
@@ -47,13 +44,6 @@ from pathlib import Path
 import pytest
 
 from mind_mem.tool_output import ToolOutputStore
-from mind_mem.v4.hnsw_kind_index import FLAG as HNSW_FLAG
-from mind_mem.v4.hnsw_kind_index import (
-    backend_status,
-    ensure_hnsw_schema,
-    knn_by_kind,
-    register_block_embedding,
-)
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -132,22 +122,6 @@ def _sidecars(db: Path) -> list[str]:
     return [suffix for suffix in ("-wal", "-shm") if db.with_name(db.name + suffix).exists()]
 
 
-@pytest.fixture
-def hnsw_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    cfg = {"v4": {HNSW_FLAG: {"enabled": True}}}
-    (tmp_path / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
-    monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
-    return tmp_path
-
-
-def _exercise_hnsw(workspace: Path) -> None:
-    """One pass over every public entry point that opens a connection."""
-    backend_status(workspace)
-    ensure_hnsw_schema(workspace)
-    register_block_embedding(workspace, "B-1", "entity", [1.0, 0.0, 0.5])
-    knn_by_kind(workspace, "entity", [1.0, 0.0, 0.5], k=3)
-
-
 def _exercise_store(store: ToolOutputStore) -> None:
     """One pass over every public entry point that opens a connection."""
     handle = store.store_and_summarize("alpha\nbeta\n", source="cmd", ts="").handle
@@ -189,58 +163,6 @@ def test_tool_output_store_leaves_no_wal_sidecars(tmp_path: Path, no_gc: None) -
 
 
 # ---------------------------------------------------------------------------
-# v4/hnsw_kind_index.py
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_hnsw_kind_index_closes_every_sqlite_connection(
-    hnsw_workspace: Path,
-    no_gc: None,
-    opened_connections: list[sqlite3.Connection],
-) -> None:
-    for _ in range(3):
-        _exercise_hnsw(hnsw_workspace)
-
-    # 3 × (backend_status + ensure + register [which re-ensures] + knn) = 15.
-    assert len(opened_connections) >= 15, "spy never saw the module's connections — test wired wrong"
-    assert _still_open(opened_connections) == 0
-
-
-@pytest.mark.unit
-def test_hnsw_kind_index_leaves_no_wal_sidecars(hnsw_workspace: Path, no_gc: None) -> None:
-    ensure_hnsw_schema(hnsw_workspace)  # creates index.db
-    db = hnsw_workspace / "index.db"
-    if not _seed_wal(db):
-        pytest.skip("filesystem does not support WAL journal mode")
-
-    _exercise_hnsw(hnsw_workspace)
-
-    assert _sidecars(db) == []
-
-
-@pytest.mark.unit
-def test_hnsw_workspace_directory_is_removable_after_use(hnsw_workspace: Path, no_gc: None) -> None:
-    """The Windows symptom, asserted where it actually bites.
-
-    Honest scope: this test discriminates on **Windows only**. POSIX unlinks a
-    file that still has open descriptors, so it passed against the leaking code
-    too; it is Windows where an open handle makes ``unlink``/``rmdir`` raise
-    ``PermissionError``. It is kept as the direct guard for that platform (CI
-    runs a Windows matrix row) — the leak itself is caught everywhere by the
-    ``_closed`` and ``_sidecar`` tests above.
-    """
-    _exercise_hnsw(hnsw_workspace)
-
-    db = hnsw_workspace / "index.db"
-    assert db.is_file()
-    for path in sorted(hnsw_workspace.iterdir()):
-        path.unlink()
-    hnsw_workspace.rmdir()
-    assert not hnsw_workspace.exists()
-
-
-# ---------------------------------------------------------------------------
 # Transaction ordering — the half of the fix that is easy to get wrong
 # ---------------------------------------------------------------------------
 
@@ -267,20 +189,6 @@ def test_stored_rows_survive_the_close(tmp_path: Path, no_gc: None) -> None:
     # 8 stored, retention keeps the newest 3 — both the INSERTs and the
     # eviction DELETE had to commit for this number to be right.
     assert rows == 3
-
-
-@pytest.mark.unit
-def test_hnsw_embeddings_survive_the_close(hnsw_workspace: Path, no_gc: None) -> None:
-    """Same guard for the other module: registration must still commit."""
-    for i in range(5):
-        register_block_embedding(hnsw_workspace, f"B-{i}", "entity", [1.0, 0.0, float(i)])
-
-    independent = sqlite3.connect(hnsw_workspace / "index.db")
-    try:
-        rows = independent.execute("SELECT COUNT(*) FROM block_kind_embeddings").fetchone()[0]
-    finally:
-        independent.close()
-    assert rows == 5
 
 
 @pytest.mark.unit

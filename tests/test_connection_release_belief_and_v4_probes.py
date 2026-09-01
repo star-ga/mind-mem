@@ -1,4 +1,4 @@
-"""Every SQLite connection these four modules open is CLOSED, not just committed.
+"""Every SQLite connection these modules open is CLOSED, not just committed.
 
 ``with sqlite3.connect(...) as conn`` commits (or, on an exception, rolls back)
 and then leaves the handle **open** — that is all its ``__exit__`` does. Nothing
@@ -20,9 +20,8 @@ Three consequences are asserted, in increasing order of platform independence:
 * the directory holding the database cannot be removed on Windows, where an
   open handle makes ``unlink``/``rmdir`` fail (asserted here via ``rmtree``).
 
-Modules covered: :mod:`mind_mem.kalman_belief` (writes),
-:mod:`mind_mem.v4.block_versioning`, :mod:`mind_mem.v4.health` and
-:mod:`mind_mem.v4.embedding_pipeline` (reads).
+Modules covered: :mod:`mind_mem.kalman_belief` (writes) and
+:mod:`mind_mem.v4.block_versioning` (reads).
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ from pathlib import Path
 import pytest
 
 from mind_mem.kalman_belief import BeliefStore
-from mind_mem.v4 import block_versioning, embedding_pipeline, health
+from mind_mem.v4 import block_versioning
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -102,8 +101,8 @@ def _wal(db: Path) -> str:
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A workspace with a WAL-mode ``index.db`` and every v4 flag on."""
-    flags = {name: {"enabled": True} for name in ("self_editing", "embedding_pipeline", "block_kinds", "federation")}
+    """A workspace with a WAL-mode ``index.db`` and the self-editing flag on."""
+    flags = {"self_editing": {"enabled": True}}
     cfg = tmp_path / "mind-mem.json"
     cfg.write_text(json.dumps({"v4": flags}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
@@ -243,32 +242,6 @@ def test_block_versioning_closes_even_when_the_table_is_absent(tmp_path: Path, m
         gc.enable()
 
 
-def test_health_probes_close_their_connections(workspace: Path) -> None:
-    db = str(workspace / "index.db")
-    gc.disable()
-    try:
-        for _ in range(5):
-            report = health.health_check(workspace)
-            assert report["modules"]["block_kinds"] == "ok"
-            assert report["modules"]["federation"] == "ok"
-        _assert_released(db, "health_check")
-    finally:
-        gc.enable()
-
-
-def test_embedding_pipeline_reads_close_their_connections(workspace: Path) -> None:
-    db = str(workspace / "index.db")
-    gc.disable()
-    try:
-        for _ in range(5):
-            assert embedding_pipeline.derive_embeddings(workspace, ["B-1"])
-            # The miss path falls through to the recall-index lookup as well.
-            assert embedding_pipeline.derive_embeddings(workspace, ["ABSENT"]) == {}
-        _assert_released(db, "embedding_pipeline")
-    finally:
-        gc.enable()
-
-
 # ---------------------------------------------------------------------------
 # The property the open handle actually breaks
 # ---------------------------------------------------------------------------
@@ -284,9 +257,7 @@ def test_a_directory_holding_these_databases_is_removable(workspace: Path) -> No
     try:
         store = BeliefStore(db_path=beliefs)
         store.update_belief("D-1", observation=1.0, source="s")
-        health.health_check(workspace)
         block_versioning.block_history(workspace, "B-1")
-        embedding_pipeline.derive_embeddings(workspace, ["B-1"])
         _assert_no_open_fds(str(workspace), "the v4 surfaces")
         assert _sidecars(db) == []
         assert _sidecars(beliefs) == []

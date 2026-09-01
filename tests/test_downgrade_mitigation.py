@@ -10,12 +10,10 @@ under v3, no later entry may verify only under v1.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
 from mind_mem.audit_chain import AuditChain, AuditEntry
-from mind_mem.mind_kernels import sha3_512_chain_verify
 
 
 class TestAuditChainDowngradeBlocked:
@@ -125,40 +123,3 @@ class TestAuditChainDowngradeBlocked:
         ok, errors = chain.verify()
         assert not ok
         assert any("downgrade" in e.lower() for e in errors), errors
-
-
-class TestMindKernelsDowngradeBlocked:
-    def test_v3_then_v1_rejected(self) -> None:
-        """The mind_kernels.sha3_512_chain_verify fallback verifier
-        also refuses a v1 entry after a v3 entry."""
-        from mind_mem.preimage import preimage
-
-        # Entry 1: v3 via preimage
-        prev = "0" * 128
-        fields1 = ("id1", "t1", "b1", "create", "ch1", prev)
-        h1 = hashlib.sha3_512(preimage("CHAIN_v1", *fields1)).hexdigest()
-        entry1 = {
-            "entry_id": "id1",
-            "timestamp": "t1",
-            "block_id": "b1",
-            "action": "create",
-            "content_hash": "ch1",
-            "previous_hash": prev,
-            "entry_hash": h1,
-        }
-
-        # Entry 2: v1 via |-join (the downgrade)
-        fields2 = ("id2", "t2", "b2", "update", "ch2", h1)
-        h2 = hashlib.sha3_512("|".join(fields2).encode()).hexdigest()
-        entry2 = {
-            "entry_id": "id2",
-            "timestamp": "t2",
-            "block_id": "b2",
-            "action": "update",
-            "content_hash": "ch2",
-            "previous_hash": h1,
-            "entry_hash": h2,
-        }
-
-        assert sha3_512_chain_verify([entry1]) is True
-        assert sha3_512_chain_verify([entry1, entry2]) is False

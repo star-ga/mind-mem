@@ -164,6 +164,12 @@ def check_sqlite_vec() -> tuple[str, str]:
 
 
 def check_v3_3_modules() -> tuple[str, str]:
+    # This is a PARITY LIST that must track the product, not a consumer that
+    # pins it. streaming / consensus_vote / retrieval_trace / feature_gate were
+    # removed in 5.0.0 as unreachable, so asserting their presence would fail an
+    # environment audit for a module the product no longer ships. The companion
+    # check_v4_prep_modules went with them -- all six of its modules were in the
+    # same sweep.
     modules = [
         "query_planner",
         "graph_recall",
@@ -173,10 +179,6 @@ def check_v3_3_modules() -> tuple[str, str]:
         "rerank_ensemble",
         "truth_score",
         "answer_quality",
-        "streaming",
-        "consensus_vote",
-        "retrieval_trace",
-        "feature_gate",
     ]
     missing = []
     for m in modules:
@@ -189,31 +191,10 @@ def check_v3_3_modules() -> tuple[str, str]:
     return _ok(f"{len(modules)}/{len(modules)} v3.3.0 modules importable")
 
 
-def check_v4_prep_modules() -> tuple[str, str]:
-    modules = [
-        "event_fanout",
-        "tenant_audit",
-        "tenant_kms",
-        "governance_raft",
-        "api.grpc_server",
-        "storage.sharded_pg",
-    ]
-    missing = []
-    for m in modules:
-        try:
-            __import__(f"mind_mem.{m}")
-        except ImportError as e:
-            missing.append(f"{m}({e})")
-    if missing:
-        return _fail(f"missing: {missing}")
-    return _ok(f"{len(modules)}/{len(modules)} v4.0-prep modules importable")
-
-
 CHECKS: list[Check] = [
     Check("mind_mem install", check_mind_mem_install),
     Check("integrity", check_integrity),
     Check("v3.3.0 modules", check_v3_3_modules),
-    Check("v4.0-prep modules", check_v4_prep_modules),
     Check(".mind kernels", check_mind_kernels),
     Check("ollama mind-mem:4b", check_ollama, critical=False),
     Check("redis L2 cache", check_redis, critical=False),

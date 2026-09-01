@@ -1,22 +1,19 @@
 """Tests for invisible-Unicode ingest sanitization (security).
 
 Covers the pure sanitizer, the recursive structure sanitizer, the
-config/env gate, and the wiring into the inbox + webhook ingestion
+config/env gate, and the wiring into the inbox ingestion
 paths. Invisible characters are built with ``chr()`` so this file
 itself contains none of them.
 """
 
 from __future__ import annotations
 
-import http.client
 import json
 import logging
-import socket
 from pathlib import Path
 
 import pytest
 
-from mind_mem import ingestion_pipeline
 from mind_mem.codepoint_sanitize import (
     is_sanitize_enabled,
     sanitize_codepoints,
@@ -303,64 +300,3 @@ class TestInboxIntegration:
         f.write_text(f"keep{ZWSP}raw", encoding="utf-8")
         ingest_text_file(workspace, str(f))
         assert ZWSP in _workspace_corpus(workspace)
-
-
-# ---------------------------------------------------------------------------
-# Webhook integration — event strings sanitized before WAL/queue
-# ---------------------------------------------------------------------------
-
-
-def _free_port() -> int:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    return port
-
-
-class TestWebhookSanitize:
-    def _post(self, port: int, payload: dict) -> int:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-        conn.request(
-            "POST",
-            "/ingest",
-            body=json.dumps(payload),
-            headers={"Content-Type": "application/json"},
-        )
-        status = conn.getresponse().status
-        conn.close()
-        return status
-
-    def test_event_strings_sanitized(self) -> None:
-        q = ingestion_pipeline.IngestionQueue(capacity=4)
-        port = _free_port()
-        _, stop = ingestion_pipeline.serve_webhook(port, q)
-        try:
-            assert self._post(port, {"text": f"he{ZWSP}llo", "n": 1}) == 202
-        finally:
-            stop()
-        drained = q.drain()
-        assert drained[0] == {"text": "hello", "n": 1}
-
-    def test_sanitize_disabled_passthrough(self) -> None:
-        q = ingestion_pipeline.IngestionQueue(capacity=4)
-        port = _free_port()
-        _, stop = ingestion_pipeline.serve_webhook(port, q, sanitize=False)
-        try:
-            assert self._post(port, {"text": f"he{ZWSP}llo"}) == 202
-        finally:
-            stop()
-        assert q.drain()[0]["text"] == f"he{ZWSP}llo"
-
-    def test_over_deep_event_rejected(self) -> None:
-        q = ingestion_pipeline.IngestionQueue(capacity=4)
-        payload: dict = {"k": "v"}
-        for _ in range(70):
-            payload = {"k": payload}
-        port = _free_port()
-        _, stop = ingestion_pipeline.serve_webhook(port, q)
-        try:
-            assert self._post(port, payload) == 400
-        finally:
-            stop()
-        assert q.drain() == []

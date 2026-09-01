@@ -3,10 +3,6 @@
 One test (or small group) per confirmed defect, each written so that it
 fails against the pre-fix code:
 
-    v4/health.py            flag-registry probe was a tautology; a probe
-                            returning a non-str crashed the never-raises
-                            health endpoint
-    v4/kind_summaries.py    the ``max_chars`` knob reached nothing
     mind_filelock.py        a failed OS lock left the lockfile on disk,
                             wedging every later acquire
     governance_gate.py      an unarmed spec binding was invisible (debug)
@@ -15,6 +11,10 @@ fails against the pre-fix code:
     http_transport.py       token compare short-circuited on a match
     daemon.py               ``--once`` exited 0 with every task failed
     skill_opt/history.py    an abandoned run stayed ``status='running'``
+
+The batch-12 v4/health.py and v4/kind_summaries.py sections were dropped
+with those modules in the 5.0.0 unused-module sweep; nothing imports them
+any more, so there is no behaviour left to regress.
 """
 
 from __future__ import annotations
@@ -29,150 +29,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-# ---------------------------------------------------------------------------
-# v4/health.py
-# ---------------------------------------------------------------------------
-
-
-def _write_flag_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw: str) -> Path:
-    cfg = tmp_path / "mind-mem.json"
-    cfg.write_text(raw, encoding="utf-8")
-    monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
-    return tmp_path
-
-
-@pytest.fixture(autouse=True)
-def _clean_health_probes():
-    from mind_mem.v4.health import reset_custom_probes_for_tests
-
-    reset_custom_probes_for_tests()
-    yield
-    reset_custom_probes_for_tests()
-
-
-@pytest.mark.unit
-def test_health_flag_probe_reports_unparseable_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A mind-mem.json that does not parse silently disables every v4
-    surface. The one probe whose job is the flag registry must say so."""
-    from mind_mem.v4.health import health_check
-
-    ws = _write_flag_config(tmp_path, monkeypatch, '{ "v4": { "block_kinds": ')
-    out = health_check(ws)
-    assert out["modules"]["feature_flags"].startswith("error:"), out["modules"]
-    assert out["status"] == "fail"
-
-
-@pytest.mark.unit
-def test_health_flag_probe_reports_non_object_v4_block(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from mind_mem.v4.health import health_check
-
-    ws = _write_flag_config(tmp_path, monkeypatch, json.dumps({"v4": ["block_kinds"]}))
-    out = health_check(ws)
-    assert out["modules"]["feature_flags"].startswith("error:")
-    assert out["status"] == "fail"
-
-
-@pytest.mark.unit
-def test_health_flag_probe_ok_on_valid_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from mind_mem.v4.health import health_check
-
-    ws = _write_flag_config(tmp_path, monkeypatch, json.dumps({"v4": {"block_kinds": {"enabled": False}}}))
-    out = health_check(ws)
-    assert out["modules"]["feature_flags"] == "ok"
-
-
-@pytest.mark.unit
-def test_health_flag_probe_ok_when_no_config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """No config at all is a supported v3.x deployment, not a fault."""
-    from mind_mem.v4.health import health_check
-
-    monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "does-not-exist.json"))
-    out = health_check(tmp_path)
-    assert out["modules"]["feature_flags"] == "ok"
-
-
-@pytest.mark.unit
-def test_health_check_survives_probe_returning_non_string(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The endpoint contract is "never raises". A probe returning None
-    used to reach ``str.startswith`` and take the endpoint down."""
-    from mind_mem.v4.health import health_check, register_health_probe
-
-    ws = _write_flag_config(tmp_path, monkeypatch, json.dumps({"v4": {}}))
-    register_health_probe("batch12_none_probe", lambda _ws: None)
-    out = health_check(ws)
-    assert out["modules"]["batch12_none_probe"].startswith("error:")
-    assert "NoneType" in out["modules"]["batch12_none_probe"]
-    assert out["status"] == "fail"
-
-
-@pytest.mark.unit
-def test_register_health_probe_rejects_non_callable() -> None:
-    from mind_mem.v4.health import register_health_probe
-
-    with pytest.raises(TypeError):
-        register_health_probe("batch12_bad", "not-callable")  # type: ignore[arg-type]
-    with pytest.raises(TypeError):
-        register_health_probe("", lambda _ws: "ok")
-
-
-# ---------------------------------------------------------------------------
-# v4/kind_summaries.py
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_default_summariser_honours_configured_max_chars(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``v4.kind_summaries.max_chars`` is the documented cap; before the
-    fix it reached nothing and every summary used the 4000-char default."""
-    from mind_mem.v4.kind_summaries import DEFAULT_MAX_CHARS, default_summariser
-
-    blocks = [f"{i:03d} " + ("x" * 150) for i in range(40)]
-
-    _write_flag_config(
-        tmp_path,
-        monkeypatch,
-        json.dumps({"v4": {"kind_summaries": {"enabled": True, "max_chars": 400}}}),
-    )
-    capped = default_summariser(blocks)
-
-    _write_flag_config(
-        tmp_path,
-        monkeypatch,
-        json.dumps({"v4": {"kind_summaries": {"enabled": True}}}),
-    )
-    uncapped = default_summariser(blocks)
-
-    assert len(capped) < len(uncapped), "max_chars did not bound the summary"
-    assert len(capped) <= 400
-    assert len(uncapped) <= DEFAULT_MAX_CHARS
-
-
-@pytest.mark.unit
-def test_default_summariser_explicit_argument_overrides_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from mind_mem.v4.kind_summaries import default_summariser
-
-    _write_flag_config(
-        tmp_path,
-        monkeypatch,
-        json.dumps({"v4": {"kind_summaries": {"enabled": True, "max_chars": 4000}}}),
-    )
-    blocks = [f"{i:03d} " + ("x" * 150) for i in range(40)]
-    assert len(default_summariser(blocks, max_chars=200)) <= 200
-
-
-@pytest.mark.unit
-def test_max_chars_ignores_junk_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from mind_mem.v4.kind_summaries import DEFAULT_MAX_CHARS, _max_chars
-
-    for junk in ("banana", None, True, [1]):
-        _write_flag_config(
-            tmp_path,
-            monkeypatch,
-            json.dumps({"v4": {"kind_summaries": {"enabled": True, "max_chars": junk}}}),
-        )
-        assert _max_chars() == DEFAULT_MAX_CHARS, junk
-
 
 # ---------------------------------------------------------------------------
 # mind_filelock.py

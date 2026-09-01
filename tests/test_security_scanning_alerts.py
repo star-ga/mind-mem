@@ -1,17 +1,19 @@
-"""Regression tests for code-scanning alerts #181–#189.
+"""Regression tests for code-scanning alerts #189 and #192.
 
 Covered:
 - #189: federation log sanitization strips CRLF/NUL from str-typed
   fields in the three_way_merge_resolved LogRecord extra dict.
-- #182: embedding_pipeline IN-clause parameterized query survives
-  SQL-metacharacter block ids without injection.
+- #192: the federation _safe() helper coerces non-str values and
+  leads with an explicit CR/LF replace so CodeQL sees a sanitiser.
+
+The #182 case (embedding_pipeline IN-clause parameterization) was
+dropped in 5.0.0 along with the v4.embedding_pipeline module itself.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -143,65 +145,3 @@ def test_federation_safe_helper_coerces_non_str_for_alert_192() -> None:
     assert "\r" not in _safe("\r\n" + "\x01" * 10 + "\r\n")
     assert "\n" not in _safe("\r\n" + "\x01" * 10 + "\r\n")
 
-
-# ---------------------------------------------------------------------------
-# #182 — embedding_pipeline IN-clause parameterized query
-# ---------------------------------------------------------------------------
-
-
-def test_embedding_pipeline_in_clause_survives_sql_metacharacters(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The IN-clause in embedding_pipeline.derive_embeddings uses only
-    parameterized "?,?,..,?" placeholders — block ids containing SQL
-    metacharacters must not cause injection or a query error (alert #182).
-
-    Strategy: build a real SQLite workspace index.db with a blocks table,
-    insert rows whose ids contain SQL-significant characters, call
-    derive_embeddings, and assert:
-    (a) the call completes without raising,
-    (b) the blocks table is intact afterwards (no DROP executed).
-    """
-    from mind_mem.v4.embedding_pipeline import derive_embeddings
-
-    # Enable the embedding_pipeline feature flag.
-    cfg = tmp_path / "cfg.json"
-    cfg.write_text(json.dumps({"v4": {"embedding_pipeline": {"enabled": True}}}))
-    monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
-
-    workspace = tmp_path
-    db = workspace / "index.db"
-
-    adversarial_ids = [
-        "normal-id",
-        "id-with-'quote",
-        'id-with-"doublequote',
-        "id; DROP TABLE blocks; --",
-        "id--comment",
-        "id) OR 1=1 --",
-    ]
-
-    # Build the schema expected by derive_embeddings.
-    with sqlite3.connect(str(db)) as conn:
-        conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT NOT NULL)")
-        for bid in adversarial_ids:
-            conn.execute(
-                "INSERT INTO blocks (id, content) VALUES (?, ?)",
-                (bid, f"content for {bid}"),
-            )
-
-    # Call must complete without raising.
-    result = derive_embeddings(workspace, adversarial_ids, dim=16)
-
-    # All inserted ids must appear in the result (or be silently skipped
-    # by the fail-soft path — important thing is no exception was raised).
-    unknown = set(result.keys()) - set(adversarial_ids)
-    assert not unknown, f"Unexpected keys in result: {unknown}"
-
-    # Verify the table is still intact — no DROP survived.
-    with sqlite3.connect(str(db)) as conn:
-        count = conn.execute("SELECT COUNT(*) FROM blocks").fetchone()[0]
-    assert count == len(adversarial_ids), (
-        f"blocks table row count changed — SQL injection may have occurred (expected {len(adversarial_ids)}, got {count})"
-    )

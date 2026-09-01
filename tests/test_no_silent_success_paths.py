@@ -390,31 +390,3 @@ def test_init_main_returns_zero_on_a_complete_install(tmp_path: Path, capsys: py
     assert rc == 0
     assert "Done." in captured.out
 
-
-# ---------------------------------------------------------------------------
-# v4 cognitive kernel -- the typo case the docstring claimed to cover
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_unknown_kernel_name_names_the_valid_kernels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A mistyped kernel name must say what the valid names are.
-
-    The docstring promised the available kernels in the message; a bare
-    ``KernelKind(kernel)`` raised ValueError("'x' is not a valid
-    KernelKind") with no list, which is exactly the typo case it claimed
-    to cover.
-    """
-    from mind_mem.v4.cognitive_kernel import FLAG, mind_recall
-
-    cfg = tmp_path / "mind-mem.json"
-    cfg.write_text(json.dumps({"v4": {FLAG: {"enabled": True}}}), encoding="utf-8")
-    monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
-
-    with pytest.raises(ValueError) as excinfo:
-        mind_recall(str(tmp_path), "q", kernel="recnet_first")
-
-    message = str(excinfo.value)
-    assert "recnet_first" in message
-    assert "valid kernels" in message
-    assert "surprise_weighted" in message

@@ -64,11 +64,45 @@ def build_proposal(index: int, *, created: str = "", day: str = "20260829") -> d
     return proposal
 
 
+def _render_proposal_block(proposal: Mapping[str, Any]) -> str:
+    """Serialise *proposal* to the canonical proposal-block markdown.
+
+    Inlined here in 5.0.0. This was ``mind_mem.lint_autofix.render_proposal_block``
+    until that module was removed as unreachable -- nothing in the product
+    imported it; only this fixture did. The function is pure formatting with no
+    dependencies, and eight review test files build their corpora through it, so
+    it moves to the test support layer rather than keeping a production module
+    alive for test-only use. The wire format below is the on-disk proposal block
+    the review CLI parses, so it must stay byte-compatible with the parser.
+    """
+    ops_lines: list[str] = []
+    for op in proposal.get("Ops", []):
+        ops_lines.append(f"- op: {op['op']}")
+        for key in ("file", "target", "field", "value", "status"):
+            if key in op:
+                ops_lines.append(f"  {key}: {op[key]}")
+    evidence = "\n".join(f"- {line}" for line in proposal["Evidence"])
+    touched = "\n".join(f"- {line}" for line in proposal["FilesTouched"])
+    sources = "\n".join(f"- {line}" for line in proposal["Sources"])
+    return (
+        f"\n[{proposal['ProposalId']}]\n"
+        f"ProposalId: {proposal['ProposalId']}\n"
+        f"Type: {proposal['Type']}\n"
+        f"TargetBlock: {proposal['TargetBlock']}\n"
+        f"Risk: {proposal['Risk']}\n"
+        f"Evidence:\n{evidence}\n"
+        f"Rollback: {proposal['Rollback']}\n"
+        f"Ops:\n" + "\n".join(ops_lines) + "\n"
+        f"Fingerprint: {proposal['Fingerprint']}\n"
+        f"Status: {proposal['Status']}\n"
+        f"FilesTouched:\n{touched}\n"
+        f"Sources:\n{sources}\n"
+    )
+
+
 def render(proposal: Mapping[str, Any]) -> str:
     """Serialise one proposal, carrying ``Created`` through when present."""
-    from mind_mem.lint_autofix import render_proposal_block
-
-    text = render_proposal_block(proposal)
+    text = _render_proposal_block(proposal)
     created = proposal.get("Created")
     if created:
         text = text.replace(
