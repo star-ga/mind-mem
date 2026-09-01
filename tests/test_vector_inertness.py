@@ -94,7 +94,10 @@ class TestVerdict:
         r = vi.measure(str(tmp_path))
         assert r.inert is True
         assert r.spread is not None and r.spread < vi.DEFAULT_SPREAD_FLOOR
-        assert "BM25-only" in r.reason
+        # The reason must state the CONSEQUENCE, not just the verdict -- an
+        # operator reading it should learn that the leg stopped contributing.
+        assert "RRF weight is zero" in r.reason
+        assert "no ranking signal" in r.reason
 
     def test_a_healthy_corpus_is_not_disabled(self, tmp_path) -> None:
         _write_index(tmp_path, _prose())

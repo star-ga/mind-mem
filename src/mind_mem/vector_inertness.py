@@ -49,6 +49,12 @@ _log = get_logger("vector_inertness")
 #: floor is an order of magnitude clear of BOTH. It is deliberately not tuned
 #: to sit near either -- a threshold close to observed data is a threshold that
 #: flips on noise.
+#:
+#: CAVEAT, stated because the number looks more universal than it is: both
+#: measurements come from ``all-MiniLM-L6-v2``, and the gauge reads whatever
+#: vectors are cached regardless of which embedder produced them. A different
+#: model shifts the cosine-spread scale, and nothing keys this floor to the
+#: embedder. Re-measure before trusting it on another model.
 DEFAULT_SPREAD_FLOOR = 0.02
 
 #: Below this many vectors the spread is not a meaningful statistic and the
@@ -56,9 +62,10 @@ DEFAULT_SPREAD_FLOOR = 0.02
 #: outcome for a sample too small to support one.
 MIN_SAMPLE = 8
 
-#: Cap on vectors read for the measurement. The spread of a random sample
-#: estimates the population spread; reading an entire large index to compute
-#: one standard deviation would make recall pay for the diagnosis.
+#: Cap on vectors read for the measurement. Reading an entire large index to
+#: compute one standard deviation would make recall pay for the diagnosis, so
+#: the sample STRIDES across the table (see :func:`sample_cached_vectors`)
+#: rather than taking a lexicographic prefix, which would sample one corpus.
 MAX_SAMPLE = 256
 
 
@@ -111,12 +118,26 @@ def _db_path(workspace: str) -> str:
 
 
 def sample_cached_vectors(workspace: str, *, limit: int = MAX_SAMPLE) -> list[list[float]]:
-    """Read up to *limit* embeddings already cached for this workspace.
+    """Read a spread sample of up to *limit* cached embeddings.
 
     Plain sqlite3: ``embedding_cache`` is an ordinary table, so this needs
     neither the sqlite-vec extension nor an embedding model. The gauge must be
     cheap enough to run on the recall path; anything that loads a model there
     would cost more than the leg it is judging.
+
+    **The sample strides across the whole table, and that matters.** An earlier
+    version took ``ORDER BY block_id LIMIT 256`` while describing itself as a
+    random sample. It was neither: block ids are prefix-routed by corpus
+    (``D-``, ``T-``, ``PRJ-``, ``MSG-`` ...), so the lexicographically-first 256
+    rows are dominated by whichever prefix sorts first -- a topically clustered
+    subset that can be materially tighter or looser than the population. On a
+    large index that could flip the verdict, and a module whose whole purpose is
+    "refuse to fake a hybrid" must not carry a false description of its own
+    method.
+
+    So: count the rows, derive a stride, take every *stride*-th rowid. That
+    spans every corpus in the table and stays fully DETERMINISTIC -- no clock,
+    no RNG, the same index yields the same sample.
     """
     path = _db_path(workspace)
     if not os.path.isfile(path):
@@ -124,10 +145,24 @@ def sample_cached_vectors(workspace: str, *, limit: int = MAX_SAMPLE) -> list[li
     conn = None
     try:
         conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        total = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
+        if not total:
+            return []
+        # stride >= 1; when the table already fits under the cap this degenerates
+        # to "take everything", which is the correct sample.
+        stride = max(1, total // int(limit))
         rows = conn.execute(
-            "SELECT embedding, dimension FROM embedding_cache ORDER BY block_id LIMIT ?",
+            f"SELECT embedding, dimension FROM embedding_cache WHERE (rowid % {stride}) = 0 ORDER BY rowid LIMIT ?",
             (int(limit),),
         ).fetchall()
+        if len(rows) < MIN_SAMPLE <= total:
+            # A sparse or renumbered rowid space can under-fill the stride.
+            # Fall back to a contiguous read rather than abstain on a table
+            # that genuinely holds enough vectors to judge.
+            rows = conn.execute(
+                "SELECT embedding, dimension FROM embedding_cache ORDER BY rowid LIMIT ?",
+                (int(limit),),
+            ).fetchall()
     except sqlite3.Error:
         # No cache table yet, or an unreadable index. Not an error condition:
         # the caller gets an abstention, never a fabricated verdict.
@@ -174,7 +209,10 @@ def measure(workspace: str, *, floor: float = DEFAULT_SPREAD_FLOOR) -> Inertness
             reason=(
                 f"inter-block cosine spread {spread:.4f} < floor {floor}: the vectors "
                 "are effectively indistinguishable, so the vector ranking is noise. "
-                "Vector leg dropped from fusion; results are BM25-only and say so."
+                "Vector leg dropped from fusion: its RRF weight is zero, so it "
+                "contributes no ranking signal. (A vector-only block can still "
+                "appear at the tail with score 0 when BM25 returns fewer than "
+                "`limit` hits -- it is unranked padding, not a contribution.)"
             ),
         )
     return InertnessReport(
@@ -194,16 +232,35 @@ def measure(workspace: str, *, floor: float = DEFAULT_SPREAD_FLOOR) -> Inertness
 # re-measures automatically while a quiet index answers from memory. No TTL:
 # a clock would make the gauge time-dependent, and this store keeps clocks off
 # the deterministic paths.
-_CACHE: dict[str, tuple[tuple[int, int], InertnessReport]] = {}
+_CACHE: dict[str, tuple[tuple[int, ...], InertnessReport]] = {}
 _CACHE_MAX = 32
 
 
-def _index_stamp(workspace: str) -> tuple[int, int] | None:
+def _index_stamp(workspace: str) -> tuple[int, ...] | None:
+    """A stamp that changes whenever the vector population might have.
+
+    Stats the ``-wal`` sidecar as well as the main database. mind-mem runs
+    SQLite in WAL mode, so embeddings committed through the write-ahead log do
+    not necessarily move ``recall.db``'s own size or mtime until a checkpoint.
+    Keying on the main file alone meant the gauge could serve a STALE verdict
+    across a materially changed corpus -- inert reported as healthy, or the
+    reverse -- until something happened to checkpoint. Not a withholding or
+    security problem (the worst case is one checkpoint of fake-hybrid or of
+    needless BM25-only), but the docstring claimed the cache re-measures on an
+    appended index, and with WAL that was only true post-checkpoint.
+    """
+    base = _db_path(workspace)
     try:
-        st = os.stat(_db_path(workspace))
+        st = os.stat(base)
     except OSError:
         return None
-    return (st.st_size, st.st_mtime_ns)
+    stamp = [st.st_size, st.st_mtime_ns]
+    try:
+        wal = os.stat(base + "-wal")
+        stamp += [wal.st_size, wal.st_mtime_ns]
+    except OSError:
+        stamp += [0, 0]  # no WAL sidecar right now; a later one changes the stamp
+    return tuple(stamp)
 
 
 def inertness_for(workspace: str, *, floor: float = DEFAULT_SPREAD_FLOOR) -> InertnessReport:

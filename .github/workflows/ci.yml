@@ -140,6 +140,11 @@ jobs:
       # a ratchet at zero, not a tolerated backlog.
       - name: Check MCP tool surface is supported
         run: python scripts/check_tool_surface.py --check 0
+      # A doc naming a tool that does not exist is worse than an undocumented
+      # tool: it sends a caller to a surface that will fail, and reads as
+      # authoritative. CLAUDE.md carried ELEVEN such ghosts.
+      - name: Check no doc names a tool that does not exist
+        run: python scripts/check_tool_surface.py --check-doc-names
       - name: Check documented tool count matches the code
         # --check 97 above compares the CODE against a number written on this
         # line; it cannot see the docs. On 2026-08-28 that gap had the README

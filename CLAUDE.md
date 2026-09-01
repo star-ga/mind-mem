@@ -235,17 +235,19 @@ docs/                   — User + integration docs (35+ files)
 ### MCP Tools (98)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
-recall, hybrid_search, prefetch, propose_update, approve_apply,
-rollback_proposal, scan, list_contradictions, reindex, index_stats,
-create_snapshot, list_snapshots, restore_snapshot, briefing,
-category_summary, cross_encoder_rerank, find_similar, memory_evolution,
-delete_memory, export_memory, import_memory, intent_classify,
-retrieval_diagnostics, get_mind_kernel, list_mind_kernels,
-verify_chain, audit_replay, anchor_root, anchor_history,
-tier_decay_apply, encrypt_status,
-alerts_subscribe, mic_convert_tool, mic_inspect_tool,
-compile_truth_walkthrough, recall_with_persona, pipeline_status,
-reindex_dirty, and more.
+recall, hybrid_search, find_similar, prefetch, intent_classify,
+retrieval_diagnostics, propose_update, approve_apply, reject_proposal,
+rollback_proposal, delete_memory_item, export_memory, memory_evolution,
+scan, list_contradictions, reindex, reindex_dirty, index_stats,
+category_summary, verify_chain, verify_merkle, list_evidence, anchor_root,
+anchor_history, get_mind_kernel, list_mind_kernels, mic_convert_tool,
+mic_inspect_tool, compile_truth_walkthrough, recall_with_persona,
+pipeline_status, encrypt_file, decrypt_file, graph_query, traverse_graph,
+ontology_load,
+and 62 more (98 total). Verified against the registry by
+`scripts/check_tool_surface.py --check-doc-names`, which fails on a tool
+name that no longer exists -- this list previously carried 11 ghosts
+(create_snapshot, briefing, import_memory, audit_replay, ...).
 
 ## Config
 - Config file: `mind-mem.json` (NOT `mem-os.json` — renamed)

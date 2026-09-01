@@ -214,3 +214,83 @@ def test_quarantine_holds_in_every_governance_mode(mode: str) -> None:
 
     assert _canary_is_on_disk(ws), f"positive control failed in {mode} mode"
     assert not _recall_reaches_canary(ws), f"quarantine leaked in {mode} mode"
+
+
+# ---------------------------------------------------------------------------
+# The write-door tripwire — the mirror of the read-surface one
+# ---------------------------------------------------------------------------
+
+
+class TestEveryWriteDoorStillWithholds:
+    """A new ingest tier must not be able to open a door quietly.
+
+    The suite above has a tripwire for new READ surfaces. It had none for new
+    WRITE doors, and the whole withholding guarantee rests on `UNADMITTED`
+    being derived from `enums.INITIAL_STATUS`: a tier added tomorrow that minted
+    an already-servable status (`active`, or something like `staged`/`open`)
+    would leak, and every test above would still pass because none of them
+    knows the tier exists.
+
+    So assert over the TABLE rather than over a hand-kept list of doors: every
+    ingest tier except the one deliberate exception must mint a status that is
+    neither servable nor admissible.
+
+    `PROPOSAL_APPLY` is that exception, and it is the point of the system, not
+    a hole: content becomes servable exactly when it has passed the governed
+    propose->apply path. If a second exception ever appears here, it needs the
+    same argument made explicitly.
+    """
+
+    def test_every_ingest_tier_but_proposal_apply_mints_an_unservable_status(self) -> None:
+        from mind_mem.admissibility import UNADMITTED
+        from mind_mem.enums import INITIAL_STATUS, IngestTier, is_servable
+
+        # A tier minting None CARRIES the block's existing status rather than
+        # setting one -- RESTAMP re-stamps blocks already in the store, and
+        # STORE_MIGRATION copies an already-governed corpus between backends.
+        # Neither introduces new content, so neither needs a quarantine status.
+        # That exemption is pinned separately below, so a NEW None-minting tier
+        # cannot inherit it silently.
+        carry_only = {t for t, st in INITIAL_STATUS.items() if st is None}
+
+        leaky = []
+        for tier, status in INITIAL_STATUS.items():
+            if tier is IngestTier.PROPOSAL_APPLY or tier in carry_only:
+                continue
+            if is_servable(status):
+                leaky.append(f"{tier}: mints servable {status.value!r}")
+            elif status.value not in UNADMITTED:
+                leaky.append(f"{tier}: {status.value!r} is not in UNADMITTED")
+        assert not leaky, f"an ingest tier can write content recall will serve without admission: {leaky}"
+
+    def test_the_carry_only_tiers_are_exactly_the_two_documented_ones(self) -> None:
+        """A new tier minting None must be argued for, not inherited.
+
+        Minting None means "keep whatever status the block already has". That
+        is safe ONLY for a tier that moves or re-stamps already-governed
+        content. A new ingest door that minted None would write blocks with no
+        status at all -- and an unstated status is SERVABLE -- so this is the
+        assertion that stops that arriving quietly.
+        """
+        from mind_mem.enums import INITIAL_STATUS, IngestTier
+
+        carry_only = {t for t, st in INITIAL_STATUS.items() if st is None}
+        assert carry_only == {IngestTier.RESTAMP, IngestTier.STORE_MIGRATION}, (
+            f"carry-only tiers changed: {carry_only}. A tier that mints no status "
+            "writes blocks whose status is unstated, and an unstated status is "
+            "servable. Justify it here or give it a quarantine status."
+        )
+
+    def test_proposal_apply_is_the_only_admitting_tier(self) -> None:
+        """Pinned so a second one cannot be added without this failing."""
+        from mind_mem.enums import INITIAL_STATUS, IngestTier, is_servable
+
+        admitting = {tier for tier, status in INITIAL_STATUS.items() if status is not None and is_servable(status)}
+        assert admitting == {IngestTier.PROPOSAL_APPLY}, f"expected only PROPOSAL_APPLY to mint a servable status, got {admitting}"
+
+    def test_every_tier_is_actually_in_the_table(self) -> None:
+        """A tier missing from INITIAL_STATUS would be unclassified, not safe."""
+        from mind_mem.enums import INITIAL_STATUS, IngestTier
+
+        missing = [t for t in IngestTier if t not in INITIAL_STATUS]
+        assert not missing, f"ingest tiers with no declared initial status: {missing}"
