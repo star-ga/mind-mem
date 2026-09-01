@@ -49,6 +49,32 @@ SRC = ROOT / "src" / "mind_mem"
 # deferred one MUST name the roadmap item that will consume it.
 ALLOWLIST: dict[str, str] = {
     "__init__": "package root",
+    # ---- String-dispatched daemon jobs -------------------------------------
+    # These three are LIVE, SHIPPED surfaces the AST scan structurally cannot
+    # see: nothing imports them, because the daemon dispatches them by NAME.
+    # `cron_runner.JOB_DEFS` maps a job string to a module and runs it as
+    # `python -m mind_mem.<module>` in a subprocess, and `daemon._TASK_RUNNERS`
+    # wires the same names into the scheduler.
+    #
+    # This is not a deferred-consumer exemption -- there is no debt to repay.
+    # It is the gate declaring a known blind spot, and it was earned: the 5.0.0
+    # sweep's cascade wave flagged `entity_ingest` as dead in wave 1 and
+    # `transcript_capture` in wave 2, and deleting either would have left the
+    # gate green while breaking the daemon at runtime.
+    "entity_ingest": (
+        "LIVE. Dispatched by string, not import: cron_runner.JOB_DEFS job "
+        "'entity_ingest' -> `python -m mind_mem.entity_ingest`, wired into "
+        "daemon._TASK_RUNNERS. No importer by design."
+    ),
+    "transcript_capture": (
+        "LIVE. Backs cron_runner.JOB_DEFS job 'transcript_scan' (the job name "
+        "and module name deliberately differ) and is in the init_workspace "
+        "scaffold list. No importer by design."
+    ),
+    "intel_scan": (
+        "LIVE. Reached through `importlib.util.find_spec('mind_mem.intel_scan')` "
+        "in apply_engine -- a runtime probe, invisible to an AST import scan."
+    ),
     "__main__": "python -m mind_mem entry point",
     "mm_cli": "console_scripts entry point in pyproject.toml",
     "mcp_server": "MCP stdio server entry point",
@@ -134,6 +160,51 @@ def _entry_point_modules() -> set[str]:
     return out
 
 
+# Consumer trees that live OUTSIDE the package but import it. Parsed as
+# REFERENCERS only -- never gated as modules themselves.
+CONSUMER_TREES = ("benchmarks", "train", "examples")
+
+
+def _consumer_tree_references() -> set[str]:
+    """mind_mem modules imported by benchmarks/, train/ and examples/.
+
+    This gate originally walked only ``src/`` for referencers, so any module
+    whose sole caller lives in one of these trees read as unreachable. That
+    scope defect nearly cost four modules on the canonical LoCoMo reproduce
+    path during the 5.0.0 sweep -- the gate's own blind spot became the
+    argument for deleting live code.
+
+    Files here are referencers, never gated modules: nothing in these trees is
+    product code, so nothing in them is ever reported as unreachable.
+
+    AST-only, so a string-built ``__import__(f"mind_mem.{name}")`` stays
+    invisible. That is deliberate rather than a gap:
+    ``benchmarks/local_stack_audit.py`` builds names that way, and it is a
+    PARITY LIST that must track the product -- counting it as a referencer
+    would let a stale audit list pin modules the product no longer ships.
+    """
+    out: set[str] = set()
+    for tree_name in CONSUMER_TREES:
+        tree = ROOT / tree_name
+        if not tree.is_dir():
+            continue
+        for path in tree.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            try:
+                parsed = ast.parse(path.read_text(encoding="utf-8"))
+            except (OSError, SyntaxError, UnicodeDecodeError):
+                continue
+            for raw in _imported_names(parsed):
+                if raw.startswith("\x00"):
+                    # A relative import inside the consumer tree itself, not
+                    # an import of mind_mem. Not resolvable against SRC.
+                    continue
+                out.add(raw)
+                out.add(raw.rsplit(".", 1)[0])
+    return out
+
+
 def scan() -> tuple[list[str], dict[str, int]]:
     modules = {_module_name(p) for p in SRC.rglob("*.py") if "__pycache__" not in p.parts}
     referenced: set[str] = set()
@@ -155,6 +226,9 @@ def scan() -> tuple[list[str], dict[str, int]]:
     entry_points = _entry_point_modules()
     referenced |= entry_points
 
+    consumer_refs = _consumer_tree_references()
+    referenced |= consumer_refs
+
     unreachable = sorted(
         m
         for m in modules
@@ -163,6 +237,7 @@ def scan() -> tuple[list[str], dict[str, int]]:
     return unreachable, {
         "modules": len(modules),
         "referenced": len(referenced),
+        "consumer_tree_refs": len(consumer_refs),
         "entry_points": len(entry_points),
     }
 

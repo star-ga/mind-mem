@@ -1,49 +1,10 @@
-api.grpc_server
-bench.locomo_suite
-bench.recompaction_bench
-bootstrap_corpus
-check_version
-consensus_vote
-core_export
-error_codes
-event_fanout
-evidence_packer
-feature_gate
-governance_raft
-granularity_align
-ingestion_pipeline
-iterative_recall
-ledger_anchor
-lint_autofix
-llm_noise_profile
-maintenance_migrate
-memory_mesh
-mind_kernels
-mrs
-multi_modal
-observation_compress
-online_trainer
-retrieval_trace
-self_update
-smart_chunker
-storage.sharded_pg
-streaming
-temporal_metadata
-tenant_audit
-tenant_kms
-tracking
-trajectory
-turbo_quant
-uncertainty_propagation
-usage_meter
-v4.backpressure
-v4.block_kinds
-v4.block_metadata
-v4.embedding_pipeline
-v4.health
-v4.hnsw_kind_index
-v4.kernels
-v4.kind_summaries
-v4.logging_context
-v4.pq
-v4.vocabulary
+# Reachability debt register -- the file only ever SHRINKS.
+#
+# 2026-08-31: emptied. It held 49 modules (~15% of src/mind_mem) that were
+# tested but never invoked by the product. The 5.0.0 sweep resolved every one:
+# 42 deleted in the first wave, 5 more in the cascade wave they orphaned,
+# 2 relocated to benchmarks/ as non-product entry-point scripts.
+#
+# The debt is zero. Any name that appears here again is NEW debt and must
+# carry the roadmap item that will consume it -- an allowlist entry is a
+# promise with an address, not an exemption.
