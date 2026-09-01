@@ -41,7 +41,10 @@ import site
 import subprocess  # nosec B404
 import tarfile
 from dataclasses import dataclass, replace
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
+
+if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Iterator
 
 from .repo_task_mining import Candidate, git
 
@@ -130,6 +133,41 @@ def sandbox_env(tree: str, home: str) -> dict[str, str]:
     }
 
 
+def _within(base: str, target: str) -> bool:
+    """True when ``target`` resolves inside ``base``."""
+    base_abs = os.path.abspath(base)
+    target_abs = os.path.abspath(target)
+    return target_abs == base_abs or target_abs.startswith(base_abs + os.sep)
+
+
+def _vetted_members(tar: tarfile.TarFile, dest: str) -> "Iterator[tarfile.TarInfo]":
+    """The `filter="data"` guarantees, hand-rolled for interpreters without it.
+
+    `tarfile.data_filter` landed in 3.12 and in the 3.9-3.11 security
+    backports, but `requires-python` is >=3.10 and an un-backported 3.10 still
+    reaches the fallback `extractall`. Rather than suppress the resulting
+    tar-slip alert, apply the same three checks the stdlib filter applies:
+    no member escapes `dest`, no link points out of it, and nothing but
+    regular files, directories and links is materialised at all.
+
+    The stream is our own `git archive` of a local repo, so this is
+    defence-in-depth rather than a live exploit path -- but a guard that only
+    runs on new interpreters is not a guard.
+    """
+    for member in tar:
+        target = os.path.join(dest, member.name)
+        if not _within(dest, target):
+            raise RuntimeError(f"tar member escapes destination: {member.name!r}")
+        if member.issym() or member.islnk():
+            anchor = dest if member.islnk() else os.path.dirname(target)
+            if not _within(dest, os.path.join(anchor, member.linkname)):
+                raise RuntimeError(f"tar link {member.name!r} points outside destination: {member.linkname!r}")
+        elif not (member.isfile() or member.isdir()):
+            # Devices, FIFOs and the rest are never part of a source tree.
+            continue
+        yield member
+
+
 def extract_tree(repo: str, sha: str, dest: str) -> None:
     """Materialise ``sha`` into ``dest`` via ``git archive`` (read-only)."""
     os.makedirs(dest, exist_ok=True)
@@ -153,7 +191,11 @@ def extract_tree(repo: str, sha: str, dest: str) -> None:
             if supports_filter:
                 tar.extractall(dest, filter="data")  # nosec B202 - our own git archive
             else:
-                tar.extractall(dest)  # nosec B202 - our own git archive, filter unavailable
+                # No data_filter on this interpreter -- apply the same
+                # guarantees by vetting every member before extraction.
+                tar.extractall(  # nosec B202 - members vetted by _vetted_members
+                    dest, members=_vetted_members(tar, dest)
+                )
     except BaseException:
         failed = True
         raise
