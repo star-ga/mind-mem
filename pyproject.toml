@@ -45,7 +45,7 @@ test = [
     # let `[test]` install on every supported runner.
     "onnxruntime>=1.20,<2.0",
     "tokenizers>=0.22,<1.0",
-    "sentence-transformers>=5.0,<6.0",
+    "sentence-transformers>=5.0,<7.0",
     # v3.2.0 REST-layer tests import fastapi + python-jose directly;
     # install them in the test matrix so tests/test_rest_api.py et al.
     # don't fail collection on a fresh CI runner.
@@ -88,7 +88,7 @@ mcp = ["fastmcp>=3.2.0"]
 # requirements-optional.txt provides a known-good exact set for
 # reproducible-build users.
 embeddings = ["onnxruntime>=1.20,<2.0", "tokenizers>=0.22,<1.0"]
-cross-encoder = ["sentence-transformers>=5.0,<6.0"]
+cross-encoder = ["sentence-transformers>=5.0,<7.0"]
 benchmark = ["pytest-benchmark>=4.0,<6.0"]
 red-team = ["inspect-petri>=3.0"]
 # v3.8.10 optional Cython accelerator for the MIC/MAP hot loops
@@ -106,7 +106,7 @@ all = [
     "fastmcp>=3.2.0",
     "onnxruntime>=1.20,<2.0",
     "tokenizers>=0.22,<1.0",
-    "sentence-transformers>=5.0,<6.0",
+    "sentence-transformers>=5.0,<7.0",
 ]
 
 [project.urls]
