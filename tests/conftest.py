@@ -17,9 +17,22 @@ checks that reported success over work they never inspected.
 from __future__ import annotations
 
 import contextlib
+import pathlib
+import sys
 from typing import Iterator
 
 import pytest
+
+
+# The two benchmark entry-point scripts moved out of the wheel in 5.0.0
+# (src/mind_mem/bench/{locomo_suite,recompaction_bench}.py -> benchmarks/).
+# They are still real, tested logic -- they reproduce the published LoCoMo and
+# recompaction numbers -- so their tests keep running; they just import by
+# module name from benchmarks/ instead of through the package.
+_BENCHMARKS = pathlib.Path(__file__).resolve().parents[1] / "benchmarks"
+if _BENCHMARKS.is_dir() and str(_BENCHMARKS) not in sys.path:
+    sys.path.insert(0, str(_BENCHMARKS))
+
 
 
 @pytest.fixture

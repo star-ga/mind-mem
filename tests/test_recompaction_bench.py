@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from mind_mem.bench.recompaction_bench import (
+from recompaction_bench import (
     BenchResult,
     ClusterRecord,
     _block_dict,
@@ -700,7 +700,7 @@ def test_similarity_floor_is_a_real_cosine(tmp_path):
     behaved like cos >= 0.595. Scoring from the vectors makes the constant
     mean what it says.
     """
-    from mind_mem.bench.recompaction_bench import _SIMILARITY_FLOOR
+    from recompaction_bench import _SIMILARITY_FLOOR
 
     path = str(tmp_path / "floor.db")
     _make_floor_db(path, _SIMILARITY_FLOOR)
@@ -711,7 +711,7 @@ def test_similarity_floor_is_a_real_cosine(tmp_path):
 
 def test_similarity_floor_still_excludes_below_floor(tmp_path):
     """And a pair just under the floor must still be excluded."""
-    from mind_mem.bench.recompaction_bench import _SIMILARITY_FLOOR
+    from recompaction_bench import _SIMILARITY_FLOOR
 
     path = str(tmp_path / "below.db")
     _make_floor_db(path, _SIMILARITY_FLOOR - 0.05)
@@ -731,7 +731,7 @@ def test_cosine_is_normalisation_independent(tmp_path):
 
     import sqlite_vec
 
-    from mind_mem.bench.recompaction_bench import _SIMILARITY_FLOOR, _cosine, _decode_embedding
+    from recompaction_bench import _SIMILARITY_FLOOR, _cosine, _decode_embedding
 
     unit = [1.0, 0.0, 0.0]
     c = _SIMILARITY_FLOOR

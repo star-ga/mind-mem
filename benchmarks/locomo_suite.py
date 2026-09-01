@@ -1,3 +1,8 @@
+
+# Relocated out of the wheel in 5.0.0: this is a benchmark entry-point
+# script, not product code. It keeps its package imports ABSOLUTE now that it
+# lives outside src/, which also makes it a recognised consumer of the modules
+# it uses (see scripts/check_reachable_modules.py CONSUMER_TREES).
 #!/usr/bin/env python3
 """LoCoMo recall harness — one loop, any adapter, self-asserting.
 
@@ -48,14 +53,14 @@ import time
 from datetime import date
 from typing import Any
 
-from .eval_adapter import SessionDoc
-from .eval_adapters import get_adapter
-from .eval_scorer import K_VALUES, aggregate, score_question
+from mind_mem.bench.eval_adapter import SessionDoc
+from mind_mem.bench.eval_adapters import get_adapter
+from mind_mem.bench.eval_scorer import K_VALUES, aggregate, score_question
 
 # Reuse the LongMemEval harness primitives verbatim rather than re-implement
 # them: the SuiteResult record, the seeded stratified sampler, and the
 # pipeline-carrying NDJSON writer are dataset-shape-agnostic.
-from .longmemeval_suite import SuiteResult, stratified_sample, write_ndjson
+from mind_mem.bench.longmemeval_suite import SuiteResult, stratified_sample, write_ndjson
 
 DEFAULT_DATA_PATH = "benchmarks/.cache/locomo.json"
 

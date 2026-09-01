@@ -16,7 +16,7 @@ import pytest
 
 from mind_mem.bench.eval_adapter import PipelineProbe
 from mind_mem.bench.eval_scorer import aggregate
-from mind_mem.bench.locomo_suite import (
+from locomo_suite import (
     DatasetNotFoundError,
     build_session_docs,
     evidence_session_id,
@@ -154,7 +154,7 @@ def test_run_suite_per_type_is_deterministic_and_seeded():
 
 
 def test_run_suite_ndjson_carries_pipeline(tmp_path):
-    from mind_mem.bench.locomo_suite import write_ndjson
+    from locomo_suite import write_ndjson
 
     result = run_suite("bm25_baseline", _load(), k=5, turns="all")
     out = tmp_path / "locomo.ndjson"

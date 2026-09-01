@@ -1,3 +1,8 @@
+
+# Relocated out of the wheel in 5.0.0: this is a benchmark entry-point
+# script, not product code. It keeps its package imports ABSOLUTE now that it
+# lives outside src/, which also makes it a recognised consumer of the modules
+# it uses (see scripts/check_reachable_modules.py CONSUMER_TREES).
 #!/usr/bin/env python3
 """Recompaction benchmark — the scalar metric downstream tooling depends on.
 
@@ -41,9 +46,9 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
-from ..compressors import CompressorError, EchoCompressor, OllamaCompressor
-from ..observability import get_logger, metrics
-from ..recompaction import (
+from mind_mem.compressors import CompressorError, EchoCompressor, OllamaCompressor
+from mind_mem.observability import get_logger, metrics
+from mind_mem.recompaction import (
     Compressor,
     NonConvergenceError,
     RecompactionConfig,
@@ -434,7 +439,7 @@ class BenchResult:
 
 
 def _concat_source_text(blocks: list[dict[str, Any]]) -> str:
-    from ..recompaction import _block_body
+    from mind_mem.recompaction import _block_body
 
     return "\n\n".join(_block_body(b) for b in blocks)
 
