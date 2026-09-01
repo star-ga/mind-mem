@@ -7,7 +7,6 @@ from mind_mem.block_parser import parse_blocks
 from mind_mem.entity_ingest import extract_entities
 from mind_mem.init_workspace import init
 from mind_mem.recall import recall, tokenize
-from mind_mem.session_summarizer import extract_summary
 
 
 class TestUnicodeBlockParsing:
@@ -138,36 +137,6 @@ class TestEdgeCaseInputs:
         entities = extract_entities("")
         assert isinstance(entities, list)
         assert len(entities) == 0
-
-    def test_extract_summary_empty_messages(self):
-        result = extract_summary([])
-        assert result["message_count"] == 0
-        assert result["topics"] == []
-        assert result["files"] == []
-
-    def test_extract_summary_unicode_messages(self):
-        messages = [
-            {"role": "user", "content": "使用Python开发"},
-            {"role": "assistant", "content": "好的，我来帮你"},
-        ]
-        result = extract_summary(messages)
-        assert result["message_count"] == 2
-
-    def test_extract_summary_only_whitespace(self):
-        messages = [
-            {"role": "user", "content": "   "},
-            {"role": "assistant", "content": "\n\n"},
-        ]
-        result = extract_summary(messages)
-        assert result["message_count"] == 2
-
-    def test_extract_summary_emoji_content(self):
-        messages = [
-            {"role": "user", "content": "🚀 Deploy the app 🎉"},
-            {"role": "assistant", "content": "Done! ✅"},
-        ]
-        result = extract_summary(messages)
-        assert result["message_count"] == 2
 
     def test_parse_blocks_with_bom(self):
         """UTF-8 BOM at start of text is stripped so first block parses."""

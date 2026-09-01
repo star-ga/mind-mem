@@ -91,8 +91,6 @@ CONFIG = {
         "cross_encoder": {"enabled": False, "auto_enable": False},
     },
     "feature_flags": {
-        "v4.cognitive_kernel": True,
-        "v4.surprise_retrieval": True,
         "v4.tier_memory": True,
     },
 }

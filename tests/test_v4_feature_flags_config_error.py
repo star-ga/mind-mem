@@ -25,8 +25,17 @@ from mind_mem.v4.feature_flags import (
     require_enabled,
 )
 
-_FLAG = "lint"
+#: A registered v4 flag, used purely as a sample subject for the parse-error
+#: path. It must stay registered: ``is_enabled`` fails closed on an unknown
+#: name *before* it reads the config, so an unregistered sample silently stops
+#: exercising the parse failure these tests exist to cover.
+_FLAG = "federation"
 _ENABLED = {"v4": {_FLAG: {"enabled": True}}}
+
+
+def test_sample_flag_is_registered() -> None:
+    """Guard: the sample flag must be real, or every test below tests nothing."""
+    assert _FLAG in feature_flags.ALL_V4_FLAGS
 
 
 @pytest.fixture(autouse=True)
@@ -69,7 +78,7 @@ class _Recorder:
 
 class TestUnparseableConfigIsReported:
     def test_config_error_names_the_parse_failure(self, config) -> None:
-        config('{"v4": {"lint": {"enabled": true},}}')  # trailing comma
+        config('{"v4": {"federation": {"enabled": true},}}')  # trailing comma
         error = config_error()
         assert error
         assert "mind-mem.json" in error
@@ -77,7 +86,7 @@ class TestUnparseableConfigIsReported:
     def test_parse_failure_is_logged(self, config, monkeypatch: pytest.MonkeyPatch) -> None:
         recorder = _Recorder()
         monkeypatch.setattr(feature_flags, "_log", recorder)
-        config('{"v4": {"lint": {"enabled": true},}}')
+        config('{"v4": {"federation": {"enabled": true},}}')
 
         assert is_enabled(_FLAG) is False
 
@@ -86,7 +95,7 @@ class TestUnparseableConfigIsReported:
     def test_repeat_reads_do_not_flood_the_log(self, config, monkeypatch: pytest.MonkeyPatch) -> None:
         recorder = _Recorder()
         monkeypatch.setattr(feature_flags, "_log", recorder)
-        config('{"v4": {"lint": {"enabled": true},}}')
+        config('{"v4": {"federation": {"enabled": true},}}')
 
         for _ in range(5):
             is_enabled(_FLAG)
@@ -94,7 +103,7 @@ class TestUnparseableConfigIsReported:
         assert len(recorder.events) == 1
 
     def test_error_message_blames_the_config_not_the_flag(self, config) -> None:
-        config('{"v4": {"lint": {"enabled": true},}}')
+        config('{"v4": {"federation": {"enabled": true},}}')
 
         with pytest.raises(FeatureDisabledError) as exc_info:
             require_enabled(_FLAG)
@@ -143,7 +152,7 @@ class TestHealthyConfigIsUnchanged:
         assert flag_config("long_context_recall")["max_tokens"] == 32000
 
     def test_a_fixed_config_clears_the_error(self, config) -> None:
-        config('{"v4": {"lint": {"enabled": true},}}')
+        config('{"v4": {"federation": {"enabled": true},}}')
         assert config_error()
         config(json.dumps(_ENABLED))
         assert config_error() == ""

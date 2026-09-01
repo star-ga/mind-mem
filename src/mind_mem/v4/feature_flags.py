@@ -47,9 +47,6 @@ _last_config_warning: tuple[str, str] | None = None
 #: Authoritative list of v4 feature flags. Each maps to a sub-key under
 #: ``mind-mem.json: v4: {...}``. Order roughly matches ROADMAP §A→§E.
 ALL_V4_FLAGS: Final[tuple[str, ...]] = (
-    # Group A — cognition / model layer
-    "cognitive_kernel",
-    "surprise_retrieval",
     # Group B — knowledge graph
     "block_kinds",
     "long_context_recall",
@@ -59,7 +56,6 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "prompt_schema",
     # Group C — governance / UX
     "idle_ingest",
-    "lint",
     "contradiction_states",
     "self_heal",
     "viewer",

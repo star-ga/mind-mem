@@ -1,10 +1,11 @@
 """v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 
 Both round-5 reviewers flagged the same single missing primitive: a
-circuit breaker for external embedders. The :class:`FallbackPolicy` in
-:mod:`mind_mem.v4.surprise_retrieval` handles *individual* embedding
-failures, but a slow / timing-out embedder still gets called on every
-recall, dragging the whole pipeline. A circuit breaker prevents this
+circuit breaker for external embedders. Per-call fallback handling (the
+``FallbackPolicy`` that lived in ``v4.surprise_retrieval``, removed as
+unreachable in 5.0.0) covered *individual* embedding failures, but a slow
+or timing-out embedder still gets called on every recall, dragging the
+whole pipeline. A circuit breaker prevents this
 cascading-failure scenario by *short-circuiting* calls to a known-bad
 dependency until it recovers.
 

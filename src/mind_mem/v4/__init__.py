@@ -11,8 +11,6 @@ Design rationale: ``docs/roadmap-v4.md``.
 Surfaces (mapped to ROADMAP groups):
 
 A. cognition / model layer
-   - Cognitive Mind Kernel API           →  v4.cognitive_kernel
-   - surprise-weighted retrieval term    →  v4.surprise_retrieval
 
 B. knowledge graph (multi-page entity / concept extraction)
    - block kinds (entity/concept/...)    →  v4.block_kinds
@@ -24,7 +22,6 @@ B. knowledge graph (multi-page entity / concept extraction)
 
 C. knowledge graph governance / UX
    - idle-only background ingest         →  v4.idle_ingest
-   - AI lint with auto-fix               →  v4.lint
    - contradiction state machine         →  v4.contradiction_states
    - self-healing index                  →  v4.self_heal
    - local visual viewer                 →  v4.viewer
@@ -64,7 +61,7 @@ The contract, stated precisely:
     — the deliberately *un-gated* entry point (see its docstring), so a
     dead embedder is short-circuited even with every v4 flag off. This
     is the one place v4 logic runs on a v3.x path by design.
-  - ``lint`` and ``world_staleness`` import ``v4.feature_flags`` at
+  - ``world_staleness`` imports ``v4.feature_flags`` at
     module level; ``_recall_core``, ``world_staleness_config``,
     ``knowledge_graph``, ``http_transport`` and ``mcp.tools.graph``
     import v4 modules at call time.
