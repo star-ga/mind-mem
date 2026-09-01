@@ -3692,6 +3692,25 @@ better than the external project's convention of retaining copies of the source
 elements in chunk metadata: it is cheaper, and it is *anchorable*. That is the
 seam N2 exploits.
 
+- [ ] **BLOCKED BY THE 5.0.0 SWEEP — Group N has no subject any more.**
+  Both N items are about `smart_chunker`, and Fable's own N2 verdict recorded
+  the reason it is now gone: *"`smart_chunker` has zero production importers
+  (only its two test files)"*. The reachability sweep deleted it on exactly
+  that evidence, along with both test files.
+
+  So N1 (soft maximum) and N2 (chunk-provenance anchoring) are not "next" —
+  they are proposals about a module the product no longer ships. Fable's
+  sequencing already put a prerequisite ahead of them (*"wire the chunker into
+  the production ingest path — its own reviewable change"*), and that
+  prerequisite is now the whole question: **does this product chunk at all?**
+
+  Re-open only after that is answered. If ingestion needs chunking, the chunker
+  returns through the front door with a production caller, and N1/N2 follow
+  as designed — the N2 verdict below (anchor in the EXISTING EvidenceChain via
+  the metadata dict of PROPOSE/APPLY records, never a second chain and never
+  one record per chunk; `doc_hash` over RAW BYTES; `EvidenceAction` stays
+  closed) remains the right design and is preserved verbatim.
+
 - [ ] **N1 — Soft maximum as a distinct boundary control.** The chunker today has
   a hard ceiling (`max_chunk_size`, default 1500) and a merge floor
   (`min_chunk_size`, default 100), and nothing in between:
@@ -4302,6 +4321,58 @@ and lacked the signal. Idea only — no code adopted, no dependency added, nothi
 named in any public artifact.
 
 ---
+
+## Fable's five for 5.0.0 — "everything already claimed is demonstrably true"
+
+Generative consult 2026-09-01. Asked for architecture rather than approval, the
+ruling was that the correct 5.0.0 is **not the release with more** — after
+deleting 15% of `src` for being unwired, it is the release where every existing
+claim becomes a proven property. Five items, each converting a claim into
+evidence.
+
+- [x] **1a. Vector-leg inertness gauge — "refuse to fake a hybrid".** M1 measured
+  a near-duplicate corpus ranking at CHANCE (12.5% top1 over 8 blocks, negative
+  mean margin, inter-block cosine spread 0.002 against 0.108 for prose) while RRF
+  fused that noise at full weight and kept the "hybrid" label. `vector_inertness`
+  samples cached vectors straight from the index — plain sqlite3, no model load —
+  and below a 0.02 spread floor drops the leg's fusion weight to zero, naming the
+  measured spread, the floor and the sample size in the degraded marker and in
+  `retrieval_diagnostics`. Abstains below 8 vectors, because silently disabling a
+  working leg is the worse failure. 22 tests.
+
+- [x] **2. Quarantine red-team proof suite.** The claim the product rests on,
+  attacked rather than asserted: each untrusted door (inbox drop, peer-agent
+  message) plants a canary, and every case pairs a POSITIVE CONTROL (the block
+  really is on disk) with the withholding assertion — otherwise "not found"
+  passes when the write silently failed. **Mutation-verified:** stubbing
+  `is_admissible_status` to always-True turns 5 of 6 cases red. The read surfaces
+  are enumerated from the tool registry, so a new recall-shaped tool that forgets
+  the admissibility funnel trips the tripwire.
+
+- [ ] **1b. Store/embed/slot split** — the actual fix behind the gauge. Keep the
+  canonical `statement` untouched (evidence chain and MIC preimages must not
+  move); add versioned `slots` (typed key→value, extracted at propose time so a
+  human approves them) and `gist` (statement minus slot values and template
+  boilerplate). **The gist is embedded; the slots are exact-match filters.** A
+  proposal whose gist matches an existing block's offers a slot-delta instead of
+  a new block — the governed answer to a caller that writes one flat string per
+  record. Absorbs Group M's enum-keyed upsert slots: building those without the
+  embed split wires slots into writes while leaving reads broken.
+
+- [ ] **3. Lifecycle deaths in the evidence chain** — `DEMOTE`/`ARCHIVE`/`FORGET`
+  as chained, replayable events, folding in RA.4's retention class. A governed
+  memory whose FORGET path is un-evidenced has a hole exactly where the
+  differentiator lives.
+
+- [ ] **4. Enforcement-in-code audit** — every claim in README/CLAUDE.md mapped to
+  a test that enforces it, plus the same reachability pass applied to the 98-tool
+  MCP surface. Fable's addition: the tool list is the most public instance of
+  shipping surface before consumers, and a major version is the one licence to
+  cut it. This is the institutional fix for the over-building lesson, not another
+  one-time sweep.
+
+- [ ] **5. Chunk provenance** — see Group N: BLOCKED, the sweep deleted its
+  subject. Re-opens only if this product turns out to chunk at all.
 
 ## Reachability sweep — 5.0.0 (2026-08-31)
 
