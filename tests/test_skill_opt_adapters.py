@@ -11,6 +11,8 @@ silence, and resurfaced downstream as "Skill not found".
 
 from __future__ import annotations
 
+import os
+
 from mind_mem.skill_opt.adapters import ClaudeAgentAdapter, discover_all
 
 _AGENT = "---\nname: reviewer\ndescription: Reviews code\n---\n\nYou are a reviewer.\n"
@@ -39,7 +41,10 @@ class TestAgentDiscoveryIsNarrow:
         (agents / "CONSTITUTION.md").write_text(_PROSE, encoding="utf-8")
 
         found = ClaudeAgentAdapter().discover(str(agents))
-        assert [p.rsplit("/", 1)[-1] for p in found] == ["reviewer.md"]
+        # os.path.basename, not rsplit("/"): discover() returns absolute paths,
+        # and on Windows those are backslash-separated, so a forward-slash split
+        # returns the whole path and the assertion compares a path to a name.
+        assert [os.path.basename(p) for p in found] == ["reviewer.md"]
 
     def test_can_handle_matches_what_discover_returns(self, tmp_path) -> None:
         agents = tmp_path / "agents"
