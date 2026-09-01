@@ -53,7 +53,8 @@ def _vault_allowlist() -> list[str]:
     # so drive letters are safe there. ";" stays accepted everywhere so a POSIX
     # operator who already writes the list that way is not broken by the fix.
     seps = {os.pathsep, ";"}
-    parts, current = [], []
+    parts: list[str] = []
+    current: list[str] = []
     for ch in raw:
         if ch in seps:
             parts.append("".join(current))

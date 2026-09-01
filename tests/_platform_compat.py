@@ -20,6 +20,7 @@ import os
 
 __all__ = [
     "append_only_settable_unprivileged",
+    "chmod_denies_read",
     "assert_owner_only",
     "is_root",
     "posix_creation_modes_honored",
@@ -128,4 +129,45 @@ def append_only_settable_unprivileged(tmp_dir) -> bool:
         except OSError:
             # An actually-flagged probe file may be undeletable; harmless in
             # a tmp dir, and reporting it as "settable" is the useful answer.
+            pass
+
+
+def chmod_denies_read(tmp_dir) -> bool:
+    """True when ``chmod(path, 0o000)`` actually makes a path unreadable here.
+
+    Windows has no POSIX mode bits: ``os.chmod`` accepts the call, changes only
+    the read-only attribute, and the directory stays perfectly readable. A test
+    that locks a path and asserts the product NOTICED is then asserting the
+    host, and fails on Windows for a reason that has nothing to do with the
+    product.
+
+    Probed, not branched on a platform name, for the same reason as
+    ``posix_creation_modes_honored``: the honest question is what THIS
+    filesystem enforces. A container, an overlay mount, or a runner where the
+    process is effectively privileged can all answer differently from the OS
+    they nominally run.
+    """
+    probe = os.path.join(str(tmp_dir), ".perm-probe")
+    os.makedirs(probe, exist_ok=True)
+    inner = os.path.join(probe, "f.txt")
+    try:
+        with open(inner, "w", encoding="utf-8") as handle:
+            handle.write("x\n")
+        os.chmod(probe, 0o000)
+        try:
+            os.listdir(probe)
+            return False  # still readable -> bits not enforced
+        except PermissionError:
+            return True
+    except OSError:
+        return False
+    finally:
+        try:
+            os.chmod(probe, 0o700)
+        except OSError:
+            pass
+        try:
+            os.remove(inner)
+            os.rmdir(probe)
+        except OSError:
             pass
