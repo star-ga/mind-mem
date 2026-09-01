@@ -45,7 +45,7 @@ All notable changes to MIND-Mem are documented in this file.
   15. Every one of those files had been deleted — and the 5.0.0 commit titled
   *"align every claim with reality"* missed all of them.
 
-### Fixed — Windows: text I/O never named its encoding (43 sites)
+### Fixed — Windows: EVERY text I/O site now names its encoding (62 sites)
 
 * **`rollback_proposal` was broken on Windows for any non-ASCII byte.** Python
   picks the *locale* encoding when ``encoding=`` is omitted — UTF-8 on Linux,
@@ -62,7 +62,17 @@ All notable changes to MIND-Mem are documented in this file.
   it wrote. Our corpus routinely contains emoji. A Linux-only gate cannot see
   any of this; it surfaced only on the Windows CI matrix.
 
-  ``tests/test_text_io_is_utf8.py`` is the guard. It parses with ``ast`` rather
+  **The claim is total and the gate enforces it: zero text-I/O sites in
+  ``src/mind_mem`` take the locale encoding.** That is checked on every run,
+  not asserted here — ``tests/test_text_io_is_utf8.py`` fails the build on the
+  next one. An earlier version of this entry said 43 sites and the guard agreed,
+  because the guard skipped mode-less ``open(path)`` calls — which are text mode
+  with the locale encoding, i.e. exactly the defect. 20 more were hiding behind
+  that hole, including a second write-UTF-8 / read-locale pair on
+  ``vec_meta.json`` shielded only by ``json.dump``'s ``ensure_ascii`` default.
+  The hole is closed and the scanner is mutation-controlled, so it can fail.
+
+  The guard. It parses with ``ast`` rather
   than grepping, so the two docstrings that deliberately describe the dangerous
   pattern are not mistaken for calls, and it exempts ``tarfile.open``/
   ``gzip.open`` (whose mode is a compression mode, not a text mode) and
@@ -3943,6 +3953,7 @@ To verify the accelerator was loaded:
 
 ```python
 from mind_mem.mic_map import _ACCEL_AVAILABLE
+
 print(_ACCEL_AVAILABLE)  # True if the .so was found
 ```
 

@@ -100,6 +100,15 @@ def test_the_detector_actually_detects() -> None:
     bad = ast.parse('with open(p, "r") as f:\n    pass\n')
     assert _text_opens_without_encoding(bad) == [1]
 
+    # Pin the hole that ACTUALLY happened, not a cousin of it. The scanner
+    # once skipped mode-less opens with `if mode is None: continue`, and 20
+    # sites escaped while the guard went green. An explicit-mode control
+    # would still pass if someone reintroduced that line -- so the historical
+    # mutation gets its own assertion. A mutation control that does not pin
+    # the real mutation certifies the return of the bug it exists to stop.
+    modeless = ast.parse("with open(p) as f:\n    pass\n")
+    assert _text_opens_without_encoding(modeless) == [1], "the historical hole"
+
     good = ast.parse('with open(p, "r", encoding="utf-8") as f:\n    pass\n')
     assert _text_opens_without_encoding(good) == []
 
