@@ -476,7 +476,13 @@ def reset_fanout_cache() -> None:
     for fanout in stale:
         try:
             fanout.close()
-        except Exception:  # pragma: no cover — close is best-effort
+        except Exception:  # nosec B112  # pragma: no cover
+            # Swallowed DELIBERATELY. This runs during shutdown/reset over
+            # every registered fanout; one publisher whose socket is already
+            # gone must not stop the others from closing, and there is no
+            # caller left to report to. Narrowing the except would mean
+            # enumerating every transport's failure mode (redis, http, log)
+            # and would silently start propagating the one we forgot.
             continue
 
 
@@ -505,7 +511,13 @@ def emit_event(
     except Exception as exc:
         try:
             _log.warning("event_emit_failed", kind=kind, error=str(exc))
-        except Exception:  # pragma: no cover — a broken logger must not escape
+        except Exception:  # nosec B110  # pragma: no cover
+            # Swallowed DELIBERATELY. This is the error path OF the error
+            # path: we are already handling a failed emit, and fan-out must
+            # never be able to fail a governed write. A logger that raises
+            # here would turn "the event did not send" into "the apply
+            # crashed", which is the exact coupling this whole leg exists to
+            # avoid. The caller still gets False.
             pass
         return False
 
