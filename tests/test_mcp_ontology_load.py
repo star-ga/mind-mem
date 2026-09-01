@@ -226,7 +226,12 @@ class TestInvalidOntologyRefusals:
     def test_scalar_in_place_of_a_type_body_is_refused(self, ws):
         """A string where a type declaration belongs raises TypeError, caught."""
         out = json.loads(ontology_load('{"version": "v", "types": {"FOO": "not-a-type-body"}}'))
-        assert out["error"] == "invalid ontology: string indices must be integers, not 'str'"
+        # Assert the CONTRACT (a structured refusal naming the cause), not
+        # CPython's exact wording: 3.10 says "string indices must be integers"
+        # and 3.11+ appends ", not 'str'". Pinning the full string made this
+        # test assert the interpreter version rather than the tool.
+        assert out["error"].startswith("invalid ontology: ")
+        assert "string indices must be integers" in out["error"]
 
     def test_a_refused_spec_does_not_reach_the_registry(self, ws):
         """Refusal means refusal -- nothing half-loaded is left behind."""
