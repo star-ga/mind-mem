@@ -151,9 +151,14 @@ def sample_cached_vectors(workspace: str, *, limit: int = MAX_SAMPLE) -> list[li
         # stride >= 1; when the table already fits under the cap this degenerates
         # to "take everything", which is the correct sample.
         stride = max(1, total // int(limit))
+        # Stride BOUND as a parameter, not interpolated. It is an int derived
+        # from COUNT(*) and could never carry injection, but an f-string in a
+        # SQL statement is a pattern reviewers and scanners have to re-litigate
+        # every time they see it -- and SQLite binds fine inside the modulo, so
+        # there is nothing to trade away.
         rows = conn.execute(
-            f"SELECT embedding, dimension FROM embedding_cache WHERE (rowid % {stride}) = 0 ORDER BY rowid LIMIT ?",
-            (int(limit),),
+            "SELECT embedding, dimension FROM embedding_cache WHERE (rowid % ?) = 0 ORDER BY rowid LIMIT ?",
+            (stride, int(limit)),
         ).fetchall()
         if len(rows) < MIN_SAMPLE <= total:
             # A sparse or renumbered rowid space can under-fill the stride.
