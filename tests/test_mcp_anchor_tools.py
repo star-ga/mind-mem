@@ -27,6 +27,27 @@ from mind_mem.mcp.tools.audit import anchor_history, anchor_root
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Give back the shared MCP call budget this module spends.
+
+    ``mcp_tool_observe`` enforces a per-client sliding window (120 calls / 60s)
+    through a module-global ``rate_limit._rate_limiters``, and every test in the
+    session shares one client id. This file makes ~30 tool calls, so without
+    this it silently eats a quarter of the budget and a LATER, unrelated test
+    fails with "Rate limit exceeded" -- which is exactly how it first showed up:
+    green locally under ``-p no:randomly``, red on CI's random ordering, in
+    test_mcp_integration rather than here.
+    """
+    from mind_mem.mcp.infra import rate_limit
+
+    with rate_limit._rate_limiters_lock:
+        rate_limit._rate_limiters.clear()
+    yield
+    with rate_limit._rate_limiters_lock:
+        rate_limit._rate_limiters.clear()
+
+
+@pytest.fixture(autouse=True)
 def _admin_scope(monkeypatch):
     """anchor_root is admin-scoped by design; these tests exercise it as admin.
 

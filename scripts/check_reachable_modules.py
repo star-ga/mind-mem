@@ -119,6 +119,16 @@ def _imported_names(tree: ast.AST) -> set[str]:
         elif isinstance(node, ast.ImportFrom):
             if node.level:
                 out.add(f"\x00{node.level}\x00{node.module or ''}")
+            elif node.module == _SELF_PKG:
+                # `from mind_mem import usage_meter` -- the module is EXACTLY
+                # the package root, so each imported NAME may itself be a
+                # submodule. This form was missed until 2026-08-31: the old
+                # test required node.module to start with "mind_mem.", which
+                # this never does, so mm_cli's `from mind_mem import
+                # usage_meter` / `self_update` read as no reference at all and
+                # both modules were deleted out from under a console_script.
+                for a in node.names:
+                    out.add(a.name)
             elif node.module and node.module.startswith(_SELF_PKG + "."):
                 out.add(node.module[len(_SELF_PKG) + 1 :])
                 for a in node.names:
@@ -205,6 +215,36 @@ def _consumer_tree_references() -> set[str]:
     return out
 
 
+def _workflow_path_references() -> set[str]:
+    """Modules a CI workflow invokes by PATH rather than by import.
+
+    `.github/workflows/ci.yml` runs `python src/mind_mem/check_version.py` as
+    the version-consistency gate. No Python file imports it, so an
+    import-graph scan of any scope reports it dead -- and the 5.0.0 sweep duly
+    deleted it, turning the gate into "can't open file". A YAML job step is a
+    caller; it just is not an import.
+
+    Text scan rather than a YAML parse on purpose: the reference can appear in
+    a `run:` block, a composite action, or a shell one-liner, and all that
+    matters is that the path is named somewhere in the workflow.
+    """
+    wf = ROOT / ".github" / "workflows"
+    if not wf.is_dir():
+        return set()
+    out: set[str] = set()
+    text = "\n".join(
+        f.read_text(encoding="utf-8", errors="replace")
+        for f in sorted(wf.rglob("*.y*ml"))
+    )
+    for path in SRC.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        if rel in text:
+            out.add(_module_name(path))
+    return out
+
+
 def scan() -> tuple[list[str], dict[str, int]]:
     modules = {_module_name(p) for p in SRC.rglob("*.py") if "__pycache__" not in p.parts}
     referenced: set[str] = set()
@@ -229,6 +269,9 @@ def scan() -> tuple[list[str], dict[str, int]]:
     consumer_refs = _consumer_tree_references()
     referenced |= consumer_refs
 
+    workflow_refs = _workflow_path_references()
+    referenced |= workflow_refs
+
     unreachable = sorted(
         m
         for m in modules
@@ -238,6 +281,7 @@ def scan() -> tuple[list[str], dict[str, int]]:
         "modules": len(modules),
         "referenced": len(referenced),
         "consumer_tree_refs": len(consumer_refs),
+        "workflow_path_refs": len(workflow_refs),
         "entry_points": len(entry_points),
     }
 
