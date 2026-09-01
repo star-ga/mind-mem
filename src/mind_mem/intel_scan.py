@@ -149,7 +149,7 @@ def save_intel_state(ws, state):
     path = f"{ws}/memory/intel-state.json"
     tmp_path = path + ".tmp"
     with FileLock(path):
-        with open(tmp_path, "w") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2, default=str)
             f.write("\n")
         os.replace(tmp_path, path)
@@ -654,7 +654,7 @@ def generate_snapshot(data, ws, report):
     snap_dir = f"{ws}/intelligence/state/snapshots"
     os.makedirs(snap_dir, exist_ok=True)
     snap_path = f"{snap_dir}/S-{today}.json"
-    with open(snap_path, "w") as f:
+    with open(snap_path, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, indent=2)
         f.write("\n")
 
@@ -789,16 +789,16 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     briefing_path = f"{ws}/intelligence/BRIEFINGS.md"
     if not os.path.isfile(briefing_path):
         os.makedirs(os.path.dirname(briefing_path), exist_ok=True)
-        with open(briefing_path, "w") as f:
+        with open(briefing_path, "w", encoding="utf-8") as f:
             f.write("# Intelligence Briefings\n\n")
-    with open(briefing_path, "r") as f:
+    with open(briefing_path, "r", encoding="utf-8") as f:
         existing = f.read()
 
     # Check if this week's briefing already exists
     if week_id in existing:
         report.info_msg(f"Briefing {week_id} already exists, skipping.")
     else:
-        with open(briefing_path, "a") as f:
+        with open(briefing_path, "a", encoding="utf-8") as f:
             f.write(f"\n{briefing_text}\n")
         report.ok(f"Briefing {week_id} generated and appended.")
 
@@ -819,7 +819,7 @@ def write_contradictions(contradictions, ws, report):
 
     with FileLock(path):
         try:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 existing = f.read()
         except FileNotFoundError:
             existing = ""
@@ -858,7 +858,7 @@ Sources:
             new_blocks.append(block)
 
         if new_blocks:
-            with open(path, "a") as f:
+            with open(path, "a", encoding="utf-8") as f:
                 for block in new_blocks:
                     f.write(block + "\n")
             report.info_msg(f"Wrote {len(new_blocks)} new contradiction(s) to CONTRADICTIONS.md")
@@ -891,7 +891,7 @@ def write_drift(drift_signals, ws, report):
 
     with FileLock(path):
         try:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 existing = f.read()
         except FileNotFoundError:
             existing = ""
@@ -927,7 +927,7 @@ Sources:
             new_blocks.append(block)
 
         if new_blocks:
-            with open(path, "a") as f:
+            with open(path, "a", encoding="utf-8") as f:
                 for block in new_blocks:
                     f.write(block + "\n")
             report.info_msg(f"Wrote {len(new_blocks)} new drift signal(s) to DRIFT.md")
@@ -970,7 +970,7 @@ def write_impact(impacts, ws, report):
         lines.append("- decisions/DECISIONS.md")
         lines.append("- tasks/TASKS.md")
 
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
     report.ok(f"Impact graph rebuilt: {len(impacts)} entries.")
@@ -1049,7 +1049,7 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
         for fname in os.listdir(proposed_dir):
             fpath = os.path.join(proposed_dir, fname)
             if os.path.isfile(fpath):
-                with open(fpath, "r") as f:
+                with open(fpath, "r", encoding="utf-8") as f:
                     for line in f:
                         if line.startswith(f"ProposalId: P-{proposal_date}-"):
                             try:
@@ -1137,7 +1137,7 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
             proposed_path = os.path.join(ws, target_file)
             existing = ""
             if os.path.isfile(proposed_path):
-                with open(proposed_path, "r") as f:
+                with open(proposed_path, "r", encoding="utf-8") as f:
                     existing = f.read()
 
             new_blocks = []
@@ -1189,7 +1189,7 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
                 new_blocks.append(block)
 
             if new_blocks:
-                with open(proposed_path, "a") as f:
+                with open(proposed_path, "a", encoding="utf-8") as f:
                     for block in new_blocks:
                         f.write(block)
                 new_blocks_total += len(new_blocks)
@@ -1324,7 +1324,7 @@ def _finalize_report(ws, report) -> None:
     report.lines.append("=" * 50)
 
     report_path = f"{ws}/maintenance/intel-report.txt"
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write(report.text() + "\n")
 
     print(report.text())

@@ -427,7 +427,7 @@ def init(
     # section), so the zero-config path is byte-for-byte unchanged.
     config_path = os.path.join(ws, "mind-mem.json")
     if not os.path.exists(config_path):
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
             f.write("\n")
         os.chmod(config_path, 0o600)
@@ -438,7 +438,7 @@ def init(
     # Create empty weekly summary placeholder
     placeholder = os.path.join(ws, "summaries/weekly/.gitkeep")
     if not os.path.exists(placeholder):
-        with open(placeholder, "w") as f:
+        with open(placeholder, "w", encoding="utf-8") as f:
             pass
 
     return created, skipped

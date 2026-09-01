@@ -475,14 +475,14 @@ def write_receipt(snap_dir, proposal, ts, pre_checks, status="in_progress"):
     lines.append(f"Status: {status}")
     lines.append("")
 
-    with open(receipt_path, "w") as fh:
+    with open(receipt_path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
     return receipt_path
 
 
 def update_receipt(receipt_path, post_checks, delta, status, diff_text=None):
     """Update receipt with post-check results and diff."""
-    with open(receipt_path, "a") as fh:
+    with open(receipt_path, "a", encoding="utf-8") as fh:
         fh.write("PostChecks:\n")
         for c in post_checks:
             fh.write(f"- {c}\n")
@@ -592,7 +592,7 @@ def _op_append_block(filepath, op, store=None):
             store.write_block(block)
         return True, f"append_block: wrote {len(blocks)} block(s) via BlockStore"
 
-    with open(filepath, "a") as f:
+    with open(filepath, "a", encoding="utf-8") as f:
         f.write(f"\n{patch}\n")
     return True, "append_block: OK"
 
@@ -698,7 +698,7 @@ def _op_update_field(filepath, op, ws=None, store=None):
         return True, f"update_field: {target}.{field} = {value}"
 
     # Legacy path — kept for callers that haven't threaded store yet.
-    with open(filepath, "r") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
@@ -724,7 +724,7 @@ def _op_update_field(filepath, op, ws=None, store=None):
     if not updated:
         return False, f"update_field: field '{field}' not found in block {target}"
 
-    with open(filepath, "w") as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         f.writelines(lines)
 
     if ws:
@@ -785,7 +785,7 @@ def _op_append_list_item(filepath, op, store=None):
         store.write_block(block)
         return True, f"append_list_item: added to {target}.{list_field}"
 
-    with open(filepath, "r") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
@@ -822,7 +822,7 @@ def _op_append_list_item(filepath, op, store=None):
 
     lines.insert(insert_at, f"- {item_clean}\n")
 
-    with open(filepath, "w") as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         f.writelines(lines)
     return True, f"append_list_item: added to {target}.{list_field}"
 
@@ -962,7 +962,7 @@ def _op_supersede_decision(filepath, op, store=None):
 
     # Build the complete new file content in memory, then write atomically.
     # Reading the file once here avoids two separate read-modify-write cycles.
-    with open(filepath, "r") as fh:
+    with open(filepath, "r", encoding="utf-8") as fh:
         lines = fh.readlines()
 
     # Mark the old block's Status field as superseded
@@ -990,7 +990,7 @@ def _op_supersede_decision(filepath, op, store=None):
     # Atomic write via temp file + rename
     tmp = filepath + ".supersede_tmp"
     try:
-        with open(tmp, "w") as fh:
+        with open(tmp, "w", encoding="utf-8") as fh:
             fh.write(new_content)
         os.replace(tmp, filepath)
     except Exception:
@@ -1153,10 +1153,10 @@ def generate_diff_text(ws, snap_dir, files_touched):
         old_lines = []
         new_lines = []
         if os.path.isfile(old_path):
-            with open(old_path, "r", errors="replace") as f:
+            with open(old_path, "r", encoding="utf-8", errors="replace") as f:
                 old_lines = f.readlines()
         if os.path.isfile(new_path):
-            with open(new_path, "r", errors="replace") as f:
+            with open(new_path, "r", encoding="utf-8", errors="replace") as f:
                 new_lines = f.readlines()
 
         diff = difflib.unified_diff(old_lines, new_lines, fromfile=f"a/{rel_path}", tofile=f"b/{rel_path}", lineterm="")
@@ -1645,7 +1645,7 @@ def _mark_proposal_status(source_file, proposal_id, new_status, *, reason=""):
     lock = FileLock(source_file + ".lock", timeout=5.0)
     try:
         with lock:
-            with open(source_file, "r") as f:
+            with open(source_file, "r", encoding="utf-8") as f:
                 content = f.read()
             # Find the proposal block and update its Status
             # Simple approach: find line with "ProposalId: <id>" then find "Status:" nearby
@@ -1765,7 +1765,7 @@ def rollback(ws, receipt_ts, reason="", strict=False):
     if os.path.isfile(receipt_path):  # nosec — receipt_path validated by _safe_resolve
         receipt_lock = FileLock(receipt_path + ".lock", timeout=5.0)
         try:
-            with receipt_lock, open(receipt_path, "a") as f:  # nosec — receipt_path validated by _safe_resolve
+            with receipt_lock, open(receipt_path, "a", encoding="utf-8") as f:  # nosec — receipt_path validated by _safe_resolve
                 f.write(f"\nRolledBack: {_utc_stamp()}\n")
                 f.write("Result: rolled_back\n")
                 if reason:

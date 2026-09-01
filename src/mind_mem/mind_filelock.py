@@ -193,7 +193,7 @@ class FileLock:
     def _is_stale(self) -> bool:
         """Check if existing lock file is from a dead process."""
         try:
-            with open(self.lock_path, "r") as f:
+            with open(self.lock_path, "r", encoding="utf-8") as f:
                 pid_str = f.read().strip()
             if not pid_str:
                 return True

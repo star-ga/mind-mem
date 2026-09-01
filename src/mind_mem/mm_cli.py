@@ -1986,7 +1986,7 @@ def _cmd_audit_model(args: argparse.Namespace) -> int:
 
     if args.manifest_out:
         out_path = os.path.expanduser(args.manifest_out)
-        with open(out_path, "w") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             for name, digest in sorted(report.manifest.items()):
                 f.write(f"{digest}  {name}\n")
         print(f"\nmanifest written to {out_path}", file=sys.stderr)

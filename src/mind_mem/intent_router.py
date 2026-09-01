@@ -266,7 +266,7 @@ class IntentRouter:
                 "intent_stats": self._intent_stats,
                 "adaptation_weights": self._adaptation_weights,
             }
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             _log.debug("stats_saved", path=path)
         except OSError as exc:

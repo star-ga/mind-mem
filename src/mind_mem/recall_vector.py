@@ -885,7 +885,7 @@ class VectorBackend(RecallBackend):
 
         index_file = self._get_index_path(workspace)
         try:
-            with open(index_file, "w") as f:
+            with open(index_file, "w", encoding="utf-8") as f:
                 json.dump(index, f, indent=2)
             _log.info("index_saved", path=index_file, blocks=len(index.get("blocks", [])))
         except OSError as e:

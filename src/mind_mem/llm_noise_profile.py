@@ -250,7 +250,7 @@ class LLMNoiseProfiler:
             "profiles": {pid: profile.to_dict() for pid, profile in self._profiles.items()},
         }
         tmp_path = path + ".tmp"
-        with open(tmp_path, "w") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         os.replace(tmp_path, path)
 

@@ -132,7 +132,7 @@ def _atomic_write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".gate.", dir=str(path.parent))
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, sort_keys=True)
             f.write("\n")
         os.replace(tmp, path)
