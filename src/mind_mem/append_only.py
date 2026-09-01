@@ -269,11 +269,28 @@ def ensure_append_only(path: str, *, create: bool = False, mode: str | None = No
             return _unprotected(
                 path, "none", f"{path} does not exist yet; the file must exist before the flag can be set (see {_RUNBOOK})", resolved
             )
+        # A dangling symlink at an audit path is a planted one: following it
+        # would create -- then harden, then trust -- a file of someone else's
+        # choosing. os.path.exists() is False for a dangling link, so this
+        # branch is exactly where such a link lands.
+        #
+        # Checked explicitly rather than left to O_NOFOLLOW alone. That flag is
+        # POSIX-only, so `getattr(os, "O_NOFOLLOW", 0)` degrades to 0 on
+        # Windows and the open silently FOLLOWS the link and creates the
+        # target -- the precise outcome the flag was there to prevent, on the
+        # one platform that could not say so. os.path.islink is available
+        # everywhere, so this needs no platform branch (and this module
+        # forbids one: see test_no_platform_branching).
+        if os.path.islink(path):
+            return _unprotected(
+                path,
+                "none",
+                f"{path} is a dangling symlink; refusing to create an audit log through it (see {_RUNBOOK})",
+                resolved,
+            )
         try:
-            # O_NOFOLLOW: a dangling symlink at an audit path is a planted
-            # one, and following it would create -- then harden, then trust
-            # -- a file of someone else's choosing. Probed, because Windows
-            # has no such flag.
+            # O_NOFOLLOW still requested where it exists: it closes the race
+            # between the islink check above and this open.
             fd = os.open(path, os.O_CREAT | os.O_APPEND | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
         except OSError as exc:
             return _unprotected(path, "none", f"{path} could not be created: {exc.strerror or exc}", resolved)

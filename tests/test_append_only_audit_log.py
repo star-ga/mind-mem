@@ -36,7 +36,7 @@ import subprocess  # nosec B404 -- test asserts the helper does not shell out
 from pathlib import Path
 
 import pytest
-from _platform_compat import assert_owner_only, is_root
+from _platform_compat import append_only_settable_unprivileged, assert_owner_only, is_root
 
 from mind_mem.append_only import (
     AppendOnlyUnavailable,
@@ -99,7 +99,17 @@ def test_the_status_never_claims_a_flag_the_filesystem_did_not_apply(tmp_path: P
 @pytest.mark.unit
 @pytest.mark.skipif(is_root(), reason="root can actually set the flag; this pins the unprivileged refusal")
 def test_a_refused_flag_is_reported_not_claimed(tmp_path: Path) -> None:
-    """Non-root: the call must degrade, name the refusal, and not raise."""
+    """Non-root: the call must degrade, name the refusal, and not raise.
+
+    Only meaningful where an unprivileged owner is actually REFUSED. On macOS
+    the owner may set `chflags uappnd` without privilege, so the call succeeds
+    and ``enforced=True`` is correct -- asserting False there tests the host,
+    not the product. The general claim-matches-the-filesystem invariant is
+    pinned unconditionally by ``test_the_claim_matches_the_filesystem`` above,
+    which is the assertion that actually matters on every platform.
+    """
+    if append_only_settable_unprivileged(tmp_path):
+        pytest.skip("this host lets an unprivileged owner set the flag (e.g. macOS chflags uappnd)")
     log = _fresh_log(tmp_path)
     status = ensure_append_only(str(log))
 

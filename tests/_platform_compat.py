@@ -18,7 +18,12 @@ from __future__ import annotations
 
 import os
 
-__all__ = ["assert_owner_only", "is_root", "posix_creation_modes_honored"]
+__all__ = [
+    "append_only_settable_unprivileged",
+    "assert_owner_only",
+    "is_root",
+    "posix_creation_modes_honored",
+]
 
 
 def is_root() -> bool:
@@ -88,3 +93,39 @@ def assert_owner_only(path) -> None:
     if posix_creation_modes_honored(os.path.dirname(path) or "."):
         mode = _stat.S_IMODE(os.stat(path).st_mode)
         assert mode == 0o600, f"expected owner-only 0600, got {mode:04o}"
+
+
+def append_only_settable_unprivileged(tmp_dir) -> bool:
+    """True when a NON-root owner can actually set the append-only flag here.
+
+    Linux `chattr +a` needs CAP_LINUX_IMMUTABLE, so an unprivileged user is
+    refused -- which is what the refusal tests pin. macOS is different: the
+    file's OWNER may set the user append-only flag (`chflags uappnd`) with no
+    privilege at all, so on macOS the very same call SUCCEEDS and
+    ``enforced=True`` is the correct answer, not a bug.
+
+    Probed rather than branched on a platform name, for the reason
+    ``posix_creation_modes_honored`` exists: the question is what THIS
+    filesystem does, and a container, a network mount or a future runner can
+    answer differently from the OS it is nominally running.
+    """
+    import mind_mem.append_only as _ao
+
+    probe = os.path.join(str(tmp_dir), ".append-only-capability-probe")
+    try:
+        with open(probe, "w", encoding="utf-8") as handle:
+            handle.write("probe\n")
+        return bool(_ao.ensure_append_only(probe).enforced)
+    except OSError:
+        return False
+    finally:
+        try:
+            os.chmod(probe, 0o600)
+        except OSError:
+            pass
+        try:
+            os.remove(probe)
+        except OSError:
+            # An actually-flagged probe file may be undeletable; harmless in
+            # a tmp dir, and reporting it as "settable" is the useful answer.
+            pass

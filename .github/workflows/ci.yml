@@ -130,7 +130,7 @@ jobs:
         # Single source of truth for the registered MCP tool count.
         # Fails the build if the discovered count drifts from the expected
         # value. Bump the expected value here when tools are added/removed.
-        run: python scripts/count_mcp_tools.py --check 96
+        run: python scripts/count_mcp_tools.py --check 98
       - name: Check documented tool count matches the code
         # --check 97 above compares the CODE against a number written on this
         # line; it cannot see the docs. On 2026-08-28 that gap had the README
