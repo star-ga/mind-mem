@@ -208,9 +208,26 @@ def test_resolve_missing_conflict_returns_404(server: str, federation_enabled: N
 
 
 def test_unauthenticated_request_rejected(server: str, federation_enabled: None) -> None:
+    """A bad token must not get a write through.
+
+    Accepts a transport abort as well as FederationAuthError, because Windows
+    reports a server-side reject differently: the 3.13 runner raised
+    ConnectionAbortedError (WinError 10053) when the server closed the socket
+    before the client finished reading the 401. An aborted connection IS a
+    rejection.
+
+    But "any exception" would weaken this to "something went wrong", which
+    would also pass if the server had simply crashed. So the rejection is
+    paired with a POSITIVE CONTROL: a correctly-authenticated write to the same
+    server must still succeed afterwards. That distinguishes "the bad token was
+    refused" from "the server is broken", which is the whole claim.
+    """
     client = FederationClient(server, token="WRONG-token", timeout=_CLIENT_TIMEOUT)
-    with pytest.raises(FederationAuthError):
+    with pytest.raises((FederationAuthError, ConnectionAbortedError, ConnectionResetError)):
         client.push_write("block-x", agent_id="alice")
+
+    good = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
+    good.push_write("block-x-control", agent_id="alice")
 
 
 def test_flag_disabled_returns_503(server: str, federation_disabled: None) -> None:
