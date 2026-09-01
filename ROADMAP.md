@@ -22,7 +22,7 @@ by its full description below.
 
 ### Group D — Network hardening (3 items; +1 shipped in v4.0.14)
 
-- [ ] **TLS 1.3 minimum + cert pinning** on REST / gRPC / MCP-HTTP
+- *(tracked below — see “TLS 1.3 minimum + cert pinning” in the status section; listed twice, counted once)*
 - [x] **Audit headers** (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`) — **shipped v4.0.14** (REST middleware; gRPC parity TODO when gRPC surface gets the same treatment)
 
 ### Group B — Knowledge graph (2 items)
@@ -45,9 +45,9 @@ by its full description below.
   proposal; `UnknownFindingError` / `NotAutofixableError` rather than a silent no-op),
   covered by `tests/test_lint_autofix.py`. Open half: it is not exposed as an MCP tool,
   so today it is reachable from Python and from `lint.py`, not from an agent session.
-- [ ] **Local visual viewer** — `mm view` web UI (stdlib HTTP + JS/D3)
+- *(tracked below — see “Local visual viewer” in the status section; listed twice, counted once)*
 - [x] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
-- [ ] **Adversarial / poisoning defense** — per-actor anomaly, canary blocks
+- *(tracked below — see “Adversarial / poisoning defense” in the status section; listed twice, counted once)*
 - [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from the GLOSSOPETRAE "Lingua Ex Machina" report ([elder-plinius/GLOSSOPETRAE](https://github.com/elder-plinius/GLOSSOPETRAE), Jun 2026): its covert-channel finding shows payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (100% receiver recovery, 0% monitor detection). Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
 - [x] **Memory reputation / trust scores** — shipped as the validity gate's FIFTH component, not a separate subsystem: `src/mind_mem/provenance_class.py` classifies a block `operator` > `agent-verified` > `agent-inferred` > `external-ingest` from the existing `ActorRole` / `ToolId` / `Source` fields, and `validity_gate.validity_components()` folds that weight into the composite `V`. No per-actor learned or anomaly scoring (determinism wedge). `trust_scores.apply_trust_scores` keeps the `actor_trust` field as a thin façade over that one component. Opt-in via `recall.validity_gate.provenance_class.enabled`; flag-off recall ordering is byte-identical. 48 tests.
 
@@ -59,9 +59,9 @@ by its full description below.
 
 ### Group G — Ecosystem (9 items, mostly SDK fan-out)
 
-- [ ] **JavaScript / TypeScript SDK** — client **exists in-tree** (`sdk/js/`); open work is packaging/publishing it as `@star-ga/mind-mem-client` on npm
+- *(tracked below — see “JavaScript / TypeScript SDK” in the status section; listed twice, counted once)*
 - [ ] **Publish the Go client as a Go module** — `sdk/go/` exists in-tree with tests; only the publish step is open. Kept from the cut SDK fan-out (the JS publish is tracked separately above); the Rust/Java/Ruby STUBS were inventory and are cut.
-- [ ] **OpenAPI + AsyncAPI specs** (single source of truth for SDK generation)
+- *(tracked below — see “OpenAPI + AsyncAPI specs” in the status section; listed twice, counted once)*
 - [ ] **Migration importers** — `mm import --from {chroma|mem0|letta} <dump.json>` **ships** (file-based subset: `src/mind_mem/importers/`, `IMP-` blocks in `memory/IMPORTED.md`, `imported:<system>` provenance, idempotent re-import). Open half is the endpoint-backed systems — pinecone / weaviate / qdrant need a live endpoint + credential and are refused with an explicit deferred message
 - [x] **Model-call token metering** — `mm usage` **ships** (`src/mind_mem/usage_meter.py`, wired into `mm_cli.py` with `CAP_EXIT_CODE`; per-day token counter + optional daily cap). The quota/spending-alert surface was deliberately dropped: self-hosted mind-mem has no spend outside model calls.
 
@@ -591,12 +591,12 @@ HITL gate deliberately refuses.
 
 - [x] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` now commit through the same `FileLock` + `_atomic_write` (temp file + `os.replace`) path as every other op; a failure partway through the write can no longer truncate the corpus file
 - [ ] **FastAPI audit attribution** — `current_agent_id` doesn't propagate through anyio threadpool worker; fix via `request.state.agent_id`
-- [ ] **`PostgresBlockStore.snapshot(snap_id=…)`** — current signature still requires filesystem path; cross-host PG snapshots blocked
+- *(tracked below — see “`PostgresBlockStore.snapshot(snap_id=…)`” in the status section; listed twice, counted once)*
 - [x] **T-004 webhook allowlist + T-001 content-provenance tags + N-08/N-12/N-13/T-007** — minor security-hardening items (see v3.2.0 section)
 
 ### v4.0.x federation transport hardening (3 items; +1 shipped in v4.0.14)
 
-- [ ] **Per-peer identity beyond bearer token** (token → agent_id binding, signed-write envelopes)
+- *(tracked below — see “Per-peer identity beyond bearer token” in the status section; listed twice, counted once)*
 - [x] **Operator-side peer allowlist** (`MIND_MEM_FED_PEERS=10.0.0.5,…`) — **shipped v4.0.14**
 - [x] **Token rotation primitive** (N-of-K active tokens, `mm token rotate`)
   - Residual: the grace window is ADVISORY. `grace_seconds` is printed and the operator must run the emitted `shell_final` export; the server never timestamps or auto-expires an old token, so the "then expires" half of the original line is not implemented.
@@ -643,21 +643,10 @@ No CI job compiles any of them, which is why the false tick survived: no gate
 could fail. A compile gate lands with the migration, not before — it would only
 pin a state the toolchain cannot yet satisfy.
 
-- [ ] Hot scoring kernels in pure MIND (`mind/*.mind`) — **claim corrected
-  2026-08-30, measured with the installed `mindc`.** Of the 26 `mind/*.mind`
-  files, only **8 are MIND source**; the other 18 are TOML configuration that
-  carries a `.mind` extension (they open with `[section]` headers and `key =
-  value`, and are read as config, not compiled). Of the 8 real kernels, **4
-  compile** (`importance`, `ranking`, `reranker`, `rrf`) and **4 do not**:
-  `abstention` / `bm25` / `category` need `sum_all`, `prefetch` needs
-  `reduce_sum` — neither exists, and the `std.tensor` module all 8 import is
-  not present in the toolchain's `std/` at all. Nothing in CI compiles any of
-  them, which is why "bench-gated" survived as a tick: no gate could fail.
-  Blocked on the toolchain; see the Pure-MIND Core Port section.
-- [ ] Governance / decision / boundary layer in pure MIND
-- [ ] Core retrieval engine (index walk, fusion, rerank) in pure MIND
-- [ ] I/O adapters via MIND C-ABI / FFI
-- [ ] Python reduced to thin shim, then removed
+- *(the five Pure-MIND port steps are tracked in the “Pure-MIND Core Port”
+  section below — they were listed twice and are now counted once. The
+  measured toolchain state that used to live here is folded into that
+  section's first item.)*
 
 ### Advanced Agent Memory Primitives (5 planned block types, future)
 
@@ -2511,9 +2500,18 @@ missing compiler capability.
 
 **Sequencing (incremental, never a big-bang rewrite):**
 
-- [ ] Hot scoring kernels in pure MIND (`mind/*.mind`) — claim corrected
-  2026-08-30; see the Pure-MIND Core Port section for the measured state
-  (8 of 26 files are MIND source, 4 of those compile, `std.tensor` absent).
+- [ ] Hot scoring kernels in pure MIND (`mind/*.mind`) — **claim corrected
+  2026-08-30, measured with the installed `mindc`.** Of the 26 `mind/*.mind`
+  files only **8 are MIND source**; the other 18 are TOML configuration wearing
+  a `.mind` extension (they open with `[section]` headers and `key = value`, and
+  are read as config, never compiled). Of the 8 real kernels **4 compile**
+  (`importance`, `ranking`, `reranker`, `rrf`) and **4 do not**: `abstention` /
+  `bm25` / `category` need `sum_all`, `prefetch` needs `reduce_sum` — neither
+  exists — and the `std.tensor` module all 8 import is absent from the
+  toolchain's `std/` entirely. **No CI job compiles any of them, which is why
+  "bench-gated" survived as a tick: no gate could fail.** A compile gate lands
+  WITH the migration, not before, since it would otherwise pin a state the
+  toolchain cannot satisfy. Blocked on the toolchain.
 - [ ] Governance / decision / boundary layer in pure MIND — recall
       scoring orchestration, quality-gate, ACL, contradiction and
       decision rules (best fit for MIND's systems-programming surface;
