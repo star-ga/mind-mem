@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Iterable, Mapping, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Iterable, Mapping, Optional, Protocol, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Forgetting state machine
@@ -297,12 +297,25 @@ def pack_to_budget(
     text_field: str = "excerpt",
     graph_reserve_frac: float = _GRAPH_RESERVE_FRAC,
     provenance_reserve_frac: float = _PROVENANCE_RESERVE_FRAC,
+    cost_fn: Optional[Callable[[Mapping[str, Any]], int]] = None,
 ) -> PackedBudget:
     """Pack results into ``max_tokens`` respecting graph + provenance reserves.
 
     Results that don't fit are *dropped* rather than truncated —
     truncation would silently mangle fact cards / decision statements.
     The input order is treated as priority order (highest first).
+
+    ``cost_fn`` prices one result. ``None`` — the default — keeps the
+    char-count estimate over ``text_field`` that has always been the
+    price here, so the ordinary call is unchanged down to the token.
+    A caller supplies one when a result is not priced by its text at all:
+    an image costs tiles and an audio clip costs seconds, and charging
+    either by the length of its caption understates it by two orders of
+    magnitude (:func:`mind_mem.multi_modal.pack_cost`). The function must
+    be deterministic — packing is a pure function of the ranked list, and
+    a cost that moved between two runs would make it not one. A negative
+    price is clamped to zero rather than being allowed to refund budget
+    to the results behind it.
     """
     if max_tokens <= 0:
         raise ValueError("max_tokens must be > 0")
@@ -321,8 +334,10 @@ def pack_to_budget(
     dropped: list[dict] = []
     used = 0
     for res in results:
-        text = str(res.get(text_field, ""))
-        cost = estimate_tokens(text)
+        if cost_fn is None:
+            cost = estimate_tokens(str(res.get(text_field, "")))
+        else:
+            cost = max(0, int(cost_fn(res)))
         if used + cost <= block_budget:
             included.append(dict(res) | {"_token_cost": cost})
             used += cost

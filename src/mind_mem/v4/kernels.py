@@ -52,7 +52,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Sequence
 
-from ..retrieval_graph import _db_path as _lineage_db_path
+from ..retrieval_graph import graph_db_path as _lineage_db_path
 from .cognitive_kernel import (
     DEFAULT_KERNEL,
     KernelHit,

@@ -296,12 +296,55 @@ class TestOnlineTrainer:
         ok, _ = reg.promote("m", new_mrr=0.4)
         assert ok is False  # regression rejected
 
-    def test_weight_registry_revert(self) -> None:
+    def test_weight_registry_revert(self, tmp_path) -> None:
+        """Promote a candidate, then revert it.
+
+        ``verify_load_gate=False`` is deliberate and is the point of the
+        comment. ``WeightRegistry`` is now a facade over ``model_gate``, whose
+        ``promote`` first runs ``gate_check`` on the candidate -- which wants a
+        real, audited checkpoint DIRECTORY. This test is about revert
+        semantics, so it opts out of that gate rather than faking a checkpoint
+        convincing enough to pass an audit; ``gate_check`` has its own tests.
+
+        Historically this test used the paths "/a" and "/b" and passed because
+        the pre-merge registry had no load gate at all: nothing was ever
+        promoted, so ``revert`` had nothing to undo and returned... True. The
+        assertion below now proves the promotion happened first, so a revert
+        that succeeds vacuously cannot pass.
+        """
+        active = tmp_path / "active"
+        candidate = tmp_path / "candidate"
+        active.mkdir()
+        candidate.mkdir()
+
         reg = online_trainer.WeightRegistry()
-        reg.set_active(online_trainer.WeightRef("m", "1", "/a", 0.5, "t"))
-        reg.set_candidate(online_trainer.WeightRef("m", "2", "/b", 0.0, "t"))
-        reg.promote("m", new_mrr=0.9)
+        reg.set_active(online_trainer.WeightRef("m", "1", str(active), 0.5, "t"))
+        reg.set_candidate(online_trainer.WeightRef("m", "2", str(candidate), 0.0, "t"))
+
+        promoted, why = reg.promote("m", new_mrr=0.9, verify_load_gate=False)
+        assert promoted is True, f"nothing was promoted, so revert would be vacuous: {why}"
+
         assert reg.revert("m", reason="MRR regression") is True
+
+    def test_the_load_gate_refuses_an_unaudited_checkpoint(self, tmp_path) -> None:
+        """The gate the test above opts out of is real and does refuse.
+
+        Positive control for the opt-out: without this, disabling the gate
+        could be hiding that it never worked.
+        """
+        candidate = tmp_path / "candidate"
+        candidate.mkdir()
+        # Non-empty: an EMPTY directory audits clean (there is nothing to
+        # verify), so an empty fixture would make this control pass for the
+        # wrong reason -- it would prove the gate runs, not that it refuses.
+        (candidate / "model.bin").write_bytes(b"unaudited-weights")
+        reg = online_trainer.WeightRegistry()
+        reg.set_active(online_trainer.WeightRef("m", "1", str(tmp_path), 0.5, "t"))
+        reg.set_candidate(online_trainer.WeightRef("m", "2", str(candidate), 0.0, "t"))
+
+        promoted, why = reg.promote("m", new_mrr=0.9)
+        assert promoted is False
+        assert "load gate refused" in why
 
     def test_training_loop_batches(self) -> None:
         calls: list[int] = []

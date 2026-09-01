@@ -27,6 +27,14 @@ mm recall "authentication strategy" --limit 5 --active-only
 |------|---------|-------------|
 | `--limit N` | 10 | Maximum results |
 | `--active-only` | off | Restrict to active blocks |
+| `--kernel NAME` | off | Route through a v4 cognitive-kernel strategy instead of plain recall (5.1.0) |
+
+`--kernel` takes one of `default`, `surprise_weighted`, `lineage_first`,
+`contradicts_first`, `graph_walk` and requires
+`"v4": {"cognitive_kernel": {"enabled": true}}` in `mind-mem.json`. Omit it and
+recall behaves exactly as before — no feature flag is even read. Kernel hits
+pass the same admission gate as recall, so a quarantined block reached through
+the lineage graph is withheld and counted under `withheld`.
 
 ### `mm context <query>`
 
@@ -360,6 +368,44 @@ containing `tool`, `duration_ms`, `success`, and optionally `result_size`.
 
 ---
 
+## Block-kind subcommands (5.1.0)
+
+The v4 block-kind taxonomy's operator surface. Requires
+`"v4": {"block_kinds": {"enabled": true}}` in `mind-mem.json`; every command
+exits 64 with an actionable message when the flag is off.
+
+### `mm kinds backfill`
+
+Classify every **admitted** block into the v4 kind index. Writes only the v4
+side store `<workspace>/index.db` — no corpus file is touched and nothing is
+minted, so this is an index build, not an ingest. Blocks the governance gate
+withholds (quarantined, pending) are never indexed.
+
+Three further steps run only if their own flag is on, in this order:
+
+| Flag | Step |
+|------|------|
+| `v4.kind_summaries` | Rebuild one summary per kind (read back via `category_summary`) |
+| `v4.embedding_pipeline` | Derive an embedding per block, using `recall_vector`'s provider chain when available and the stdlib hashed-trigram embedder otherwise |
+| `v4.hnsw_kind_index` | Register those embeddings under each block's primary kind, so `find_similar(..., kind=...)` has a partition to scan |
+
+Idempotent and replayable: two runs over an unchanged corpus write identical
+rows.
+
+```
+mm kinds backfill
+```
+
+### `mm kinds list [--kind KIND] [--limit N]`
+
+List the block ids carrying one kind, with each block's full tag set. `--kind`
+is one of `entity`, `concept`, `source`, `synthesis`, `image`, `audio`,
+`code`, `structured`, `unspecified` (default `entity`). An empty answer on a
+workspace that was never backfilled means exactly that — run `mm kinds
+backfill` first.
+
+---
+
 ## Vault subcommands
 
 ### `mm vault scan <vault_root>`
@@ -428,3 +474,37 @@ per-value breakdown. `--json` emits a machine-readable envelope.
 mm mic inspect graph.mic2
 mm mic inspect graph.micb --json
 ```
+
+---
+
+## `mind-mem-bootstrap` — one-shot corpus backfill (5.1.0)
+
+A separate console script rather than an `mm` subcommand, because it is a
+one-time post-`mind-mem-init` operation and not part of the daily loop.
+
+```
+mind-mem-bootstrap <workspace> [--dry-run] [--max-transcripts N]
+```
+
+It mines four sources into the corpus: every JSONL transcript under
+`~/.claude/projects/`, every daily log in `<workspace>/memory/`, `~/CLAUDE.md`
+and `~/.claude/MEMORY.md`, and the entities extracted from all of that text.
+Re-running is safe — signals are deduplicated by content hash.
+
+**It is an ingest door, and it ships OFF.** Enable it deliberately:
+
+```json
+{ "v4": { "bootstrap_corpus": { "enabled": true } } }
+```
+
+With the flag off the command reads nothing, writes nothing, and exits `2`.
+
+**Nothing it writes is servable.** Both write legs run under a governance
+admission with `IngestTier.AUTO_CAPTURE`, which mints `Status: pending` — a
+transcript holds whatever an agent was shown, including text an attacker chose,
+so none of it is recallable until a human releases it. `recall` withholds those
+blocks; `recall(..., include_pending=True)` shows them for review, and
+`approve_apply` on a proposal is the only path to `active`. Start with
+`--dry-run`, which reports what each phase found and writes nothing.
+
+Exit codes: `0` ran, `2` the flag is off.

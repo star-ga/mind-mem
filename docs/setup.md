@@ -144,7 +144,7 @@ See [Configuration Reference](configuration.md#extraction-llm-backend) for full 
 }
 ```
 
-Restart Claude Code. All 101 MCP tools (recall, recall_with_axis,
+Restart Claude Code. All 102 MCP tools (recall, recall_with_axis,
 verify_merkle, observe_signal, graph_query, build_core,
 agent_inject, etc.) become available.
 
@@ -193,13 +193,21 @@ when present. The native library is **not bundled** with this public
 repo. To opt in:
 
 ```bash
-export MIND_MEM_KERNELS_SO=/path/to/libmindmem_kernels.so
+# The path must resolve inside one of the package's lib/ directories
+# (<package>/lib, <parent-of-package>/lib, <repo>/lib). A path outside
+# them is refused and logged as `ffi_env_lib_rejected` — the loader will
+# not pull an arbitrary shared object into the process.
+export MIND_MEM_KERNELS_SO=/path/to/mind-mem/lib/libmindmem.so
 ```
 
-When the env var is unset or points at a missing file, MIND-Mem
-transparently falls back to the pure-Python kernels in
-`mind_mem.mind_kernels`. There is **no behaviour change** other than
-throughput — everything works without the native library.
+`MIND_MEM_LIB` is the same knob under the older name and is probed
+first. When neither is set, points outside the allowlist, or names a
+missing file, MIND-Mem transparently falls back to the pure-Python
+kernels in `mind_mem.mind_kernels`. There is **no behaviour change**
+other than throughput — everything works without the native library.
+
+Both variables, and an explicit `mind_ffi.load_kernels(path=...)`, go
+through the single loader `mind_mem.mind_ffi.load_kernels()`.
 
 ## 7. Optional: ledger anchoring
 
@@ -228,7 +236,8 @@ fully auditable, just not on-chain.
 | Var | Default | Purpose |
 |---|---|---|
 | `MIND_MEM_WORKSPACE` | `$(pwd)` | Active workspace path |
-| `MIND_MEM_KERNELS_SO` | unset | Path to MIND native library (opt-in) |
+| `MIND_MEM_KERNELS_SO` | unset | Path to MIND native library (opt-in, allowlisted to `lib/`) |
+| `MIND_MEM_LIB` | unset | Same, probed first (allowlisted to `lib/`) |
 | `MIND_MEM_ADMIN_TOKEN` | unset | Required for admin-scoped MCP tools |
 | `MIND_MEM_SCOPE` | `user` | Override MCP scope when stdio |
 | `PYPI_API_TOKEN` | unset | Only for maintainers (local publish) |

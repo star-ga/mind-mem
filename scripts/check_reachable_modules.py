@@ -75,6 +75,17 @@ ALLOWLIST: dict[str, str] = {
         "LIVE. Reached through `importlib.util.find_spec('mind_mem.intel_scan')` "
         "in apply_engine -- a runtime probe, invisible to an AST import scan."
     ),
+    "session_summarizer": (
+        "LIVE, by THREE routes this AST scan cannot see, which is why it is "
+        "named here rather than left to luck: (1) hooks/session-end.sh runs "
+        "`python3 -m mind_mem.session_summarizer` -- a shell caller that has "
+        "existed all along; (2) cron_runner.OPT_IN_JOB_DEFS job "
+        "'session_summary' -> `python -m mind_mem.session_summarizer`, wired "
+        "into daemon._TASK_RUNNERS (OFF by default); (3) bootstrap_corpus "
+        "imports write_summary. Only (3) is an import, and bootstrap_corpus is "
+        "itself in the reachability baseline -- so without this entry a LIVE "
+        "shipped surface's visibility depends on an unwired module staying put."
+    ),
     "__main__": "python -m mind_mem entry point",
     "mm_cli": "console_scripts entry point in pyproject.toml",
     "mcp_server": "MCP stdio server entry point",
@@ -299,13 +310,45 @@ def _baseline() -> set[str]:
     """
     if not BASELINE.is_file():
         return set()
-    return {line.strip() for line in BASELINE.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")}
+    out = set()
+    for line in BASELINE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        out.add(line.split("#", 1)[0].strip())
+    return out
+
+
+def _waiting() -> dict[str, str]:
+    """Modules deliberately held back, mapped to their stated trigger.
+
+    A line of the form ``module  # waiting: <trigger>`` says a human decided
+    this module is not wired YET and named the condition that should flip it.
+    That annotation is the whole point: without it a reachability report says
+    only "unreachable", and "unreachable" is what got 47 working modules
+    deleted on the theory that no caller means no worth. It does not. An
+    unwired module with a recorded trigger is a decision; an unwired module
+    with no note is an open question. The report must not confuse the two.
+    """
+    if not BASELINE.is_file():
+        return {}
+    out: dict[str, str] = {}
+    for line in BASELINE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "#" not in line:
+            continue
+        mod, _, note = line.partition("#")
+        note = note.strip()
+        if note.lower().startswith("waiting:"):
+            out[mod.strip()] = note[len("waiting:") :].strip()
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--check", action="store_true", help="exit 1 on any NEW unreachable module")
     ap.add_argument("--update-baseline", action="store_true", help="rewrite the baseline (only ever to shrink it)")
+    ap.add_argument("--list", action="store_true", help="print every currently-unreachable module")
     args = ap.parse_args(argv)
 
     unreachable, stats = scan()
@@ -321,6 +364,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"NEWLY REACHABLE (wire or delete confirmed) -- shrink the baseline: {len(fixed)}")
         for m in fixed:
             print(f"  + {m}")
+    if args.list:
+        waiting = _waiting()
+        held = [m for m in sorted(unreachable) if m in waiting]
+        open_q = [m for m in sorted(unreachable) if m not in waiting]
+        print(f"NOT WIRED, DELIBERATELY WAITING ({len(held)}) -- decided, not debt:")
+        for m in held:
+            print(f"  ~ {m}  <- flips when: {waiting[m]}")
+        print(f"NOT WIRED, NO RECORDED DECISION ({len(open_q)}) -- each needs a call:")
+        for m in open_q:
+            print(f"  - {m}")
     if new_debt:
         print(f"NEW unreachable modules: {len(new_debt)}")
         for m in new_debt:
@@ -330,7 +383,12 @@ def main(argv: list[str] | None = None) -> int:
         if len(unreachable) > len(base):
             print("refusing to grow the baseline; wire or delete the new module instead", file=sys.stderr)
             return 1
-        BASELINE.write_text("\n".join(unreachable) + "\n", encoding="utf-8")
+        waiting = _waiting()
+        lines = []
+        for m in sorted(unreachable):
+            note = waiting.get(m)
+            lines.append(f"{m}  # waiting: {note}" if note else m)
+        BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
         print(f"baseline updated: {len(base)} -> {len(unreachable)}")
         return 0
 

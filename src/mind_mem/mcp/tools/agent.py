@@ -26,6 +26,30 @@ from ..infra.workspace import _check_workspace, _workspace
 from ._helpers import _change_stream, _kg_path
 
 
+def _backpressure_snapshot() -> dict:
+    """Per-producer backpressure state, or ``{}`` when the flag is off.
+
+    Late import so the tool module keeps its current import cost, and so
+    a v4 module is not pulled in by a server that never turns it on.
+    """
+    from mind_mem.v4.backpressure import snapshot
+
+    return snapshot()
+
+
+def _ingest_door_snapshot() -> dict:
+    """Streaming ingest-door counters, or ``{}`` when no door is open.
+
+    Late import for the same reason as the backpressure probe above: a
+    server that never turns ``streaming.enabled`` on should not pay for the
+    module. ``build_stream_door`` registers the door; with the flag off
+    nothing is registered and this returns ``{}``.
+    """
+    from mind_mem.streaming import stream_door_snapshot
+
+    return stream_door_snapshot() or {}
+
+
 def _vault_allowlist() -> list[str]:
     """Return the configured vault-root allowlist.
 
@@ -234,15 +258,38 @@ def vault_sync(
 
 @mcp_tool_observe
 def stream_status() -> str:
-    """Current change-stream publish / delivery / drop counters."""
+    """Current change-stream publish / delivery / drop counters.
+
+    With ``v4.backpressure`` enabled the payload also carries a
+    ``backpressure`` object: per-producer depth, watermarks, and whether
+    the producer is currently overloaded. The key is ABSENT when the flag
+    is off rather than present-and-empty, so a client can tell "nothing
+    is measuring" from "measuring, and fine".
+
+    With ``streaming.enabled`` the payload also carries an ``ingest_door``
+    object: queue depth and capacity, the per-client 429 count, and how
+    many streamed events have been admitted to the store QUARANTINED. Same
+    absent-when-off rule as ``backpressure``, so with both flags off -- the
+    default -- this payload is byte-identical to the pre-5.1.0 one.
+
+    No new tool, and no new ACL row: both objects are queue telemetry about
+    buses this tool already reports on. They carry counters and watermarks
+    only -- never block ids, never block content -- so they stay exactly as
+    sensitive as the counters beside them.
+    """
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
-    return json.dumps(
-        {**_change_stream().stats().as_dict(), "_schema_version": "1.0"},
-        indent=2,
-    )
+    stream = _change_stream()
+    payload: dict = {**stream.stats().as_dict(), "_schema_version": "1.0"}
+    bp = _backpressure_snapshot()
+    if bp:
+        payload["backpressure"] = bp
+    door = _ingest_door_snapshot()
+    if door:
+        payload["ingest_door"] = door
+    return json.dumps(payload, indent=2)
 
 
 def register(mcp) -> None:

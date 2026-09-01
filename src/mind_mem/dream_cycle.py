@@ -1116,6 +1116,21 @@ def pass_auto_repair(
 # --- Main entry point ---
 
 
+def _online_training_enabled() -> bool:
+    """Quiet probe for ``v4.online_training``.
+
+    Delegates to ``online_trainer.is_online_training_enabled``'s resolver
+    without importing that module: with the flag off the harvest module is
+    never imported at all, so an OFF build is not merely inert, it is absent.
+    """
+    try:
+        from .v4.feature_flags import is_enabled_quiet
+
+        return is_enabled_quiet("online_training")
+    except Exception:
+        return False
+
+
 def run_dream_cycle(
     workspace: str,
     dry_run: bool = False,
@@ -1175,6 +1190,31 @@ def run_dream_cycle(
             msg = f"Pass 4 (consolidation) failed: {exc}"
             _log.error(msg)
             errors.append(msg)
+
+    # Pass 4b: online-training signal harvest (v4.online_training, OFF by
+    # default). The dream cycle is where the daemon already runs periodic
+    # maintenance, and draining the append-only interaction-signal ledger
+    # into training tuples is maintenance of exactly that shape: bounded,
+    # idempotent, resumable from a persisted cursor.
+    #
+    # Three things keep this honest with the flag OFF: the probe is
+    # ``is_enabled_quiet`` (the loud resolver logs on a malformed config,
+    # which would make the OFF build observably different), ``online_trainer``
+    # is not even imported, and DreamCycleReport is untouched — no field, no
+    # new line in the integrity summary, no metric. ``dry_run`` suppresses it
+    # for the same reason it suppresses the summary write: the harvest
+    # appends to the queue and advances the cursor.
+    if not dry_run and _online_training_enabled():
+        with timed("dream_pass_signal_harvest", _log):
+            try:
+                from .online_trainer import run_harvest_job
+
+                harvest = run_harvest_job(ws)
+                _log.info("dream_pass_signal_harvest", **{k: v for k, v in harvest.items() if k != "signal_stats"})
+            except Exception as exc:
+                msg = f"Pass 4b (signal harvest) failed: {exc}"
+                _log.error(msg)
+                errors.append(msg)
 
     report = DreamCycleReport(
         timestamp=timestamp,

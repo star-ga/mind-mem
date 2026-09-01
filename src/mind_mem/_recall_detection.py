@@ -638,7 +638,14 @@ def _parse_speaker_from_tags(tags_str: str) -> str:
 
 
 def get_block_type(block_id: str) -> str:
-    """Infer block type from ID prefix."""
+    """Infer block type from ID prefix.
+
+    This is the ONLY place a result's ``type`` comes from: both the
+    corpus-scan path and the SQLite index row builder call it, and
+    neither reads a ``Type`` field off the block. A modality that is not
+    in this table is therefore invisible to every consumer of a result,
+    however carefully the ingest door wrote it down.
+    """
     prefixes = {
         "D-": "decision",
         "T-": "task",
@@ -654,6 +661,14 @@ def get_block_type(block_id: str) -> str:
         "SIG-": "signal",
         "P-": "proposal",
         "I-": "impact",
+        # Multimodal inbox drops (v4.multi_modal). Only the flagged door
+        # mints these ids, so nothing in an existing corpus changes type;
+        # what changes is that once one exists, the budget packer can see
+        # it is an image rather than pricing it by its caption.
+        # Plain `INBOX-` text drops are deliberately NOT listed: they have
+        # always read as "unknown" and that is not this slice's to change.
+        "INBOX-IMG-": "image",
+        "INBOX-AUD-": "audio",
     }
     for prefix, btype in prefixes.items():
         if block_id.startswith(prefix):

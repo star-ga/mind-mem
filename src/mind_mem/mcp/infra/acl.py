@@ -170,6 +170,11 @@ USER_TOOLS = frozenset(
         "calibration_stats",
         "report_outcome",
         "outcome_stats",
+        # similar_trajectories READS the trajectories/ sidecar that
+        # report_outcome (a user-scope tool) writes, through admit_corpus.
+        # It writes nothing, proposes nothing, and never reaches the corpus,
+        # so it carries report_outcome's scope rather than admin.
+        "similar_trajectories",
         "list_evidence",
         # Read-only view of the anchor trail (and its integrity problems).
         "anchor_history",

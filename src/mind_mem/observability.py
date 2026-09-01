@@ -325,6 +325,17 @@ class Metrics:
         """Get counter value."""
         return self._counters.get(name, 0)
 
+    def samples(self, name: str) -> list[float]:
+        """A copy of the raw observations recorded under *name* (thread-safe).
+
+        :meth:`summary` reduces each series to count/min/max/avg, which
+        cannot answer a percentile question — an SLI on p99 latency needs
+        the readings themselves. Returns a copy so a caller cannot mutate
+        the live series, and an empty list for an unknown name.
+        """
+        with self._lock:
+            return list(self._observations.get(name, ()))
+
     def summary(self) -> dict:
         """Return metrics summary as dict."""
         result: dict[str, object] = {"counters": dict(self._counters)}

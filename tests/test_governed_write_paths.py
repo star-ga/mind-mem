@@ -77,6 +77,21 @@ SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     # as the importer — batch admission, lands quarantined.
     ("src/mind_mem/inbox.py", "ingest_text_file"): LOCAL,
     ("src/mind_mem/inbox.py", "_ingest_pdf"): LOCAL,
+    # --- the same drop folder, media half (v4.multi_modal, default OFF).
+    # An image or audio drop carries no derivable text, so the operator's
+    # SIDECAR file is the content; the media itself is only hashed. One
+    # writer for both handlers, opening its own admit_block under
+    # EXTERNAL_INGEST exactly as the text and PDF doors do, so a media
+    # drop lands quarantined and unrecallable on the same terms.
+    ("src/mind_mem/inbox.py", "_write_modal_block"): LOCAL,
+    # --- the webhook drop door (`mm ingest-serve`, v4.ingest_serve, default
+    # OFF). Anything POSTed to /ingest is untrusted external input, exactly
+    # like a file dropped in the inbox, so the drain consumer admits every
+    # event under IngestTier.EXTERNAL_INGEST -> Status.QUARANTINED before a
+    # byte lands. This is the ONLY function in ingestion_pipeline.py that
+    # touches a BlockStore -- every drain path funnels through it, pinned by
+    # test_ingestion_pipeline_wiring.TestTheDrainPathIsTheGate.
+    ("src/mind_mem/ingestion_pipeline.py", "_write_admitted"): LOCAL,
     # --- agent-to-agent messaging. Admitted per message under
     # IngestTier.AGENT_MESSAGE, which mints Status.QUARANTINED: a peer
     # agent is the standard prompt-injection carrier, so its text is not
@@ -125,6 +140,27 @@ SANCTIONED_CORPUS_WRITERS: dict[tuple[str, str], str] = {
     # bytes land (it used to admit after, inside a bare except that
     # swallowed the refusal, so a drifted spec blocked nothing).
     ("src/mind_mem/capture.py", "append_signals"): LOCAL,
+    # The session summariser's dated artifact, summaries/daily/<date>.md.
+    #
+    # WHY IT IS ALLOWLISTED RATHER THAN PENDING. It is a DERIVED artifact --
+    # topics, file paths and short excerpts computed from a Claude Code
+    # transcript -- and its signal side already goes through
+    # capture.append_signals (IngestTier.AUTO_CAPTURE -> Status: pending).
+    # The summary half used to be the one leg with no admission at all, so
+    # it now opens its own admit_block under the SAME tier before a byte
+    # lands, and the block it writes declares `Status: pending` read off
+    # INITIAL_STATUS rather than spelled as a literal.
+    #
+    # WHY THE SCANNER WOULD NEVER HAVE CAUGHT IT. `summaries/daily/*.md` is
+    # a DATE-named file, so its basename is in neither CORPUS_BASENAMES nor
+    # CORPUS_FILES: scan_corpus_writes cannot see this write, and recall
+    # does not index the directory. Both facts are true today and neither is
+    # a guarantee -- an ingest door whose safety rests on a filename pattern
+    # and a directory list kept somewhere else is one refactor from being a
+    # leak. Pinned here so the admission is enforced by
+    # test_sanctioned_corpus_writers_open_an_admission rather than by that
+    # coincidence.
+    ("src/mind_mem/session_summarizer.py", "write_summary"): LOCAL,
 }
 
 #: Known-ungoverned corpus writers, pinned so the set cannot grow while

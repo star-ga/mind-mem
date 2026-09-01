@@ -86,6 +86,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .observability import get_logger
+from .trajectory import TRAJECTORY_FLAG
 
 _log = get_logger("outcome_attribution")
 
@@ -355,7 +356,7 @@ def report_outcome(
     """
     from .calibration import CalibrationManager
 
-    return CalibrationManager(workspace).record_outcome(
+    result = CalibrationManager(workspace).record_outcome(
         block_ids=block_ids,
         outcome=outcome,
         query_id=query_id,
@@ -367,6 +368,31 @@ def report_outcome(
         recorded_at=recorded_at,
         project_to_calibration=project_to_calibration,
     )
+    trajectory_path = _capture_trajectory(workspace, result)
+    return result if trajectory_path is None else {**result, "trajectory": trajectory_path}
+
+
+def _capture_trajectory(workspace: str, result: dict[str, Any]) -> str | None:
+    """Mirror a recorded outcome into the trajectory sidecar, if enabled.
+
+    Gated on the v4 ``trajectory`` flag, default-OFF. The probe is
+    ``is_enabled_quiet``: ``is_enabled`` warns ``v4_config_unreadable`` on a
+    malformed config, and a probe that logs on an OFF path makes the
+    flag-off build observably different from the build that never had the
+    feature. With the flag off this function reads the config file and
+    returns — no trajectory directory, no log line, and the dict the caller
+    gets back is the one ``record_outcome`` returned, unchanged.
+
+    Runs only AFTER the outcome is durably recorded, so a report that
+    ``record_outcome`` rejects leaves nothing behind.
+    """
+    from .v4.feature_flags import is_enabled_quiet
+
+    if not is_enabled_quiet(TRAJECTORY_FLAG):
+        return None
+    from .trajectory import capture_from_outcome
+
+    return capture_from_outcome(workspace, result)
 
 
 def load_outcome_signals(workspace: str, block_ids: Sequence[str]) -> dict[str, OutcomeSignal]:

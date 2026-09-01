@@ -164,11 +164,14 @@ src/mind_mem/           — Main package (src layout; flat modules, not
     alerting.py, governance_gate.py — governance: contradiction/drift
                           detection, proposals, audit chain, alerting hooks
   _recall_core.py, hybrid_recall.py, recall_vector.py — retrieval core
-  mcp_server.py         — MCP server monolith (101 tools, 8 resources)
+  mcp_server.py         — MCP server monolith (102 tools, 8 resources)
   mcp/                  — per-domain MCP tool modules (mcp.tools.*)
-  inbox.py, entity_ingest.py — auto-ingestion (ingestion_pipeline.py was
-                          removed in 5.0.0: an unreachable webhook write
-                          path that would have bypassed the HITL gate)
+  inbox.py, entity_ingest.py, ingestion_pipeline.py — auto-ingestion.
+                          ingestion_pipeline was deleted in 5.0.0 as an
+                          unreachable webhook write path; RESTORED and WIRED
+                          in 5.1.0, and the concern that justified deleting it
+                          is answered by construction: the drain path IS the
+                          gate, so every event goes through admit_block.
   skill_opt/            — Skill optimization
   hook_installer.py     — Client hook installation (v3.1.1+)
   http_transport.py     — Stdlib HTTP REST adapter (v3.9.0)
@@ -180,13 +183,17 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   quality_gate.py       — Deterministic quality validation (v3.11.0)
   block_lineage.py      — Typed relationship edges (v3.11.0)
   lineage_staleness.py  — BFS staleness propagation (v3.12.0)
-  v4/  — the v4.0.0 surfaces that SURVIVED the 5.0.0 reachability sweep.
-         Eleven more shipped here and were removed in 5.0.0 because nothing in
-         the product ever imported them (cognitive_kernel, surprise_retrieval,
+  v4/  — the v4.0.0 surfaces. Twelve were deleted in 5.0.0 because nothing in
+         the product imported them (cognitive_kernel, surprise_retrieval,
          block_kinds, block_metadata, kind_summaries, embedding_pipeline, pq,
          hnsw_kind_index, backpressure, health, logging_context, observability).
-         They had tests -- up to 29 files each -- which is exactly why test
-         count is not evidence of reachability. See scripts/check_reachable_modules.py.
+         ALL are restored and wired as of 5.1.0. They had tests -- up to 29
+         files each -- which was read at the time as evidence that test count
+         does not prove reachability. True, and it proves nothing about WORTH
+         either, which is the mistake that cost 47 modules.
+         `scripts/check_reachable_modules.py` now reports "deliberately
+         waiting" (with the trigger that flips it) separately from "no recorded
+         decision", so an unwired module is never again read as a dead one.
   federation.py         — VClock + conflict log + MergeStrategy (v4.0.0)
   federation_client.py  — federation transport client
   self_editing.py       — block_edits + propose/approve/reject (v4.0.0)
@@ -232,7 +239,7 @@ docs/                   — User + integration docs (35+ files)
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
   `docs/client-integrations.md`.
 
-### MCP Tools (101)
+### MCP Tools (102)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, find_similar, prefetch, intent_classify,
@@ -244,7 +251,7 @@ anchor_history, get_mind_kernel, list_mind_kernels, mic_convert_tool,
 mic_inspect_tool, compile_truth_walkthrough, recall_with_persona,
 pipeline_status, encrypt_file, decrypt_file, graph_query, traverse_graph,
 ontology_load, lint, lint_autofix,
-and 62 more (101 total). Verified against the registry by
+and 63 more (102 total). Verified against the registry by
 `scripts/check_tool_surface.py --check-doc-names`, which fails on a tool
 name that no longer exists -- this list previously carried 11 ghosts
 (create_snapshot, briefing, import_memory, audit_replay, ...).

@@ -455,8 +455,19 @@ class ABResult:
         }
 
 
-def _mrr(ranked: list[str], target_ids: Iterable[str]) -> float:
-    """Mean reciprocal rank of the first target id in the ranked list."""
+def reciprocal_rank(ranked: Iterable[str], target_ids: Iterable[str]) -> float:
+    """Reciprocal rank of the first target id in the ranked list.
+
+    The one implementation of this arithmetic in the package. It was
+    private (``_mrr``) while ``evaluate_ab`` was its only caller;
+    :class:`mind_mem.tracking.MRRTracker` carried a second copy of the
+    same loop, which is exactly how a "delta against the baseline" ends
+    up comparing two numbers that were not computed the same way. The
+    old private name stays as an alias so nothing that reached for it
+    breaks.
+
+    Pure: no clock, no I/O, no state.
+    """
     targets = {str(t) for t in target_ids if t}
     if not targets:
         return 0.0
@@ -464,6 +475,10 @@ def _mrr(ranked: list[str], target_ids: Iterable[str]) -> float:
         if str(block_id) in targets:
             return 1.0 / rank
     return 0.0
+
+
+#: Back-compat alias for the pre-rename private name.
+_mrr = reciprocal_rank
 
 
 def evaluate_ab(
@@ -516,4 +531,5 @@ __all__ = [
     "classify",
     "jaccard_similarity",
     "evaluate_ab",
+    "reciprocal_rank",
 ]

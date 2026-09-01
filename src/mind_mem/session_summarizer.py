@@ -8,6 +8,20 @@ Writes:
   - Summary blocks [SESS-YYYYMMDD-NNN] to summaries/daily/YYYY-MM-DD.md
   - Linking signal to intelligence/SIGNALS.md
 
+GOVERNANCE. Both writes are admitted under
+:attr:`~mind_mem.enums.IngestTier.AUTO_CAPTURE` before a byte lands. That
+tier's :data:`~mind_mem.enums.INITIAL_STATUS` row is ``PENDING``, which is
+not in :data:`~mind_mem.enums.SERVABLE`, so nothing this module writes is
+recallable until a governance proposal releases it. The summary block
+carries that status explicitly rather than inheriting it by accident:
+``summaries/`` is outside ``_recall_constants.CORPUS_FILES`` today, and a
+door whose safety rests on a directory listing somewhere else is one
+refactor away from being a leak.
+
+The content is transcript text the operator never reviewed -- a summary is
+a DERIVED artifact, not a trusted one -- so it goes through the same door
+as any other auto-capture.
+
 Usage:
     python3 -m mind_mem.session_summarizer workspace/ --transcript path/to.jsonl
     python3 -m mind_mem.session_summarizer workspace/ --scan-recent
@@ -22,11 +36,42 @@ from collections import Counter
 from datetime import datetime
 
 from .capture import append_signals
+from .enums import INITIAL_STATUS, IngestTier
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 from .transcript_capture import TRANSCRIPT_PATTERNS, find_recent_transcripts, parse_transcript
 
 _log = get_logger("session_summarizer")
+
+#: The tier every write in this module is admitted under. A session summary
+#: is transcript-derived text nobody reviewed, which is exactly what
+#: AUTO_CAPTURE names -- the same tier ``capture.append_signals`` already
+#: uses for the linking signal this module emits beside the summary.
+SUMMARY_TIER = IngestTier.AUTO_CAPTURE
+
+#: The status the summary block declares, READ OFF the one table that
+#: decides it rather than spelled as a literal here. A second hand-written
+#: copy of "pending" is a second place for the answer to drift; this way a
+#: change to INITIAL_STATUS moves the block with it.
+_SUMMARY_STATUS_OR_NONE = INITIAL_STATUS[SUMMARY_TIER]
+#: Fail at import if this tier mints no status. ``INITIAL_STATUS`` maps some
+#: tiers to ``None`` on purpose (RESTAMP and STORE_MIGRATION carry the existing
+#: status forward), and an UNSTATED status is SERVABLE -- so a ``None`` here
+#: would silently publish every session summary instead of withholding it.
+#: This is the invariant, not a type-checker appeasement: if someone retiers
+#: the summarizer to a carry-forward tier, the import fails loudly rather than
+#: the summaries quietly becoming world-readable.
+if _SUMMARY_STATUS_OR_NONE is None:  # pragma: no cover - import-time invariant
+    # NOT an ``assert``: ``python -O`` strips those, and an invariant that
+    # disappears under an optimisation flag is not an invariant. This one
+    # decides whether session summaries are withheld or published, so it has
+    # to hold in every interpreter mode.
+    raise RuntimeError(
+        f"session summaries are written under tier {SUMMARY_TIER!r}, which mints "
+        "no initial status; an unstated status is SERVABLE, so this would "
+        "publish them"
+    )
+SUMMARY_STATUS = _SUMMARY_STATUS_OR_NONE
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +299,11 @@ def format_summary_block(
     lines = [
         f"[{sess_id}]",
         f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        # Declared, not implied. `is_servable` fails closed on a block with
+        # no Status at all, so the field is belt AND braces -- but a block
+        # that states its own withheld status is auditable by reading it,
+        # which a block relying on an absent field is not.
+        f"Status: {SUMMARY_STATUS.value}",
         f"Source: {transcript_path}",
         f"TranscriptHash: {transcript_hash}",
         f"Messages: {summary['message_count']}",
@@ -328,14 +378,34 @@ def write_summary(
         print(f"[DRY RUN] Would write {sess_id}:\n{block}")
         return sess_id
 
-    # Write summary block
-    with FileLock(summary_file):
-        header_needed = not os.path.isfile(summary_file)
-        with open(summary_file, "a", encoding="utf-8") as f:
-            if header_needed:
-                f.write(f"# Session Summaries — {today}\n\n---\n\n")
-            f.write(block)
-            f.write("\n---\n\n")
+    # Admit BEFORE the bytes land, and let a refusal propagate. Admitting
+    # after the append is what `capture.append_signals` used to do, inside a
+    # bare except that downgraded the refusal to a warning -- so a rejected
+    # write stayed on disk anyway. There is no `_get_gate`-returns-None
+    # fallback here for the same reason: a door that writes when it cannot
+    # reach the gate is a door with no gate.
+    #
+    # Lazy import -- governance_gate pulls in the hash chain and the evidence
+    # chain, and this module is also a plain CLI that parses transcripts.
+    from .governance_gate import get_gate
+
+    with get_gate(workspace).admit_block(
+        action="WRITE",
+        block_id=sess_id,
+        content=block,
+        tier=SUMMARY_TIER,
+        actor="session_summarizer",
+        target_file=summary_file,
+        metadata={"source": os.path.basename(transcript_path), "transcript_hash": t_hash},
+    ):
+        # Write summary block
+        with FileLock(summary_file):
+            header_needed = not os.path.isfile(summary_file)
+            with open(summary_file, "a", encoding="utf-8") as f:
+                if header_needed:
+                    f.write(f"# Session Summaries — {today}\n\n---\n\n")
+                f.write(block)
+                f.write("\n---\n\n")
 
     # Write linking signal to SIGNALS.md
     linking_signal = [

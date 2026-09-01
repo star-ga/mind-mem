@@ -23,6 +23,7 @@ accurate for mixed-modal context windows.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
 from dataclasses import dataclass
@@ -173,6 +174,26 @@ _DEFAULT_IMAGE_TOKENS: int = 85
 _DEFAULT_AUDIO_TOKENS_PER_SECOND: float = 1.3
 
 
+def _as_float(value: Any, default: float) -> float:
+    """Coerce a corpus field to a float, or *default* — never raises.
+
+    A block that came back through the Markdown parser carries every
+    field as a **string**: ``duration_seconds`` is ``"30.0"``, not
+    ``30.0``. A bare ``float(...)`` therefore works on the happy path and
+    raises ``ValueError`` on a hand-edited (or hostile) corpus, and this
+    function is on the packing path — an exception there would take down
+    a recall response over one malformed field. Non-numeric means
+    "duration unknown", which is what *default* says.
+    """
+    if isinstance(value, bool) or value is None:
+        return default
+    try:
+        out = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    return default if out != out or out in (float("inf"), float("-inf")) else out
+
+
 def modal_token_cost(
     block: Mapping[str, Any],
     *,
@@ -186,10 +207,10 @@ def modal_token_cost(
     kind = str(block.get("type", "")).lower()
     table = model_cost_table or {}
     if kind == "image":
-        return int(table.get("image", _DEFAULT_IMAGE_TOKENS))
+        return int(_as_float(table.get("image"), _DEFAULT_IMAGE_TOKENS))
     if kind == "audio":
-        duration = float(block.get("duration_seconds", 0.0))
-        per_sec = float(table.get("audio_per_second", _DEFAULT_AUDIO_TOKENS_PER_SECOND))
+        duration = _as_float(block.get("duration_seconds"), 0.0)
+        per_sec = _as_float(table.get("audio_per_second"), _DEFAULT_AUDIO_TOKENS_PER_SECOND)
         return max(1, int(round(duration * per_sec)))
     # Text / unknown — defer to stdlib estimator.
     text = ""
@@ -203,9 +224,131 @@ def modal_token_cost(
     return estimate_tokens(text)
 
 
+#: Packing fields a text result may carry, in the order the packer reads
+#: them. Mirrors ``pack_to_budget``'s ``text_field`` default; kept here so
+#: :func:`pack_cost` is a drop-in for the estimator it replaces.
+_PACK_TEXT_FIELD: str = "excerpt"
+
+
+def _modality_of(block: Mapping[str, Any]) -> str:
+    """``"image"`` / ``"audio"`` / ``""`` for a result OR a parsed block.
+
+    Two spellings, because the same content wears two shapes on the way
+    to the packer. A recall RESULT carries ``type``, derived from the id
+    prefix by ``_recall_detection.get_block_type``. A block read back off
+    disk carries ``Type``, because ``block_parser`` only sees field keys
+    that start with a capital. Reading one spelling and writing the other
+    is how a wiring silently does nothing.
+    """
+    for key in ("type", "Type"):
+        value = block.get(key)
+        if isinstance(value, str) and value.strip():
+            kind = value.strip().lower()
+            if kind in ("image", "audio"):
+                return kind
+    return ""
+
+
+def _stated_duration(block: Mapping[str, Any]) -> Optional[float]:
+    """Seconds this audio result states, or ``None`` when it states none."""
+    for key in ("duration_seconds", "DurationSeconds"):
+        if key in block and block.get(key) is not None:
+            return _as_float(block.get(key), 0.0)
+    return None
+
+
+def pack_cost(
+    block: Mapping[str, Any],
+    *,
+    text_field: str = _PACK_TEXT_FIELD,
+    model_cost_table: Optional[Mapping[str, Any]] = None,
+) -> int:
+    """Per-result token cost for the budget packer, modality-aware.
+
+    The drop-in the ``pack_recall_budget`` path passes to
+    :func:`~mind_mem.cognitive_forget.pack_to_budget` when the
+    ``v4.multi_modal`` flag is on. A text result costs **exactly** what
+    the packer's own estimator charges it — same field, same heuristic —
+    so turning the flag on cannot move a text-only budget by one token;
+    only image and audio results are priced differently, because for
+    those the excerpt is a caption and the real cost is the tile count or
+    the audio duration.
+
+    An audio result that does not state its duration is priced by its
+    transcript rather than by :func:`modal_token_cost`'s
+    duration-of-zero, which would charge a half-hour recording one token.
+    A recall RESULT does not currently carry the duration through — the
+    result payload passes a fixed field list — so this is the ordinary
+    case, not the exotic one, and understating it would be worse than
+    declining to guess.
+
+    Deterministic and total: no clock, no randomness, no exception path.
+    """
+    kind = _modality_of(block)
+    if kind == "image":
+        return modal_token_cost({"type": "image"}, model_cost_table=model_cost_table)
+    if kind == "audio":
+        duration = _stated_duration(block)
+        if duration is not None:
+            return modal_token_cost({"type": "audio", "duration_seconds": duration}, model_cost_table=model_cost_table)
+    from .cognitive_forget import estimate_tokens
+
+    return estimate_tokens(str(block.get(text_field, "")))
+
+
+# ---------------------------------------------------------------------------
+# Flag — the ingest door and the packing path are OFF until asked for
+# ---------------------------------------------------------------------------
+
+
+#: ``mind-mem.json`` → ``v4.multi_modal.enabled``. Off by default: this
+#: gates an INGEST DOOR, and a door nobody asked for should not exist.
+FLAG: str = "multi_modal"
+
+
+def flag_enabled(workspace: str) -> bool:
+    """``v4.multi_modal`` state for *workspace*, ambient config as fallback.
+
+    Reads only, logs nothing, raises nothing — a caller may ask "is this
+    surface on?" without the asking being observable. That is a hard
+    requirement, not politeness: with the flag off this build must be
+    indistinguishable from the one that never had the feature, and
+    ``feature_flags.is_enabled`` would emit ``v4_config_unreadable`` on a
+    malformed config and break exactly that.
+
+    The workspace's own ``mind-mem.json`` wins over the ambient config,
+    because every caller here (the inbox handlers, ``pack_recall_budget``)
+    is already holding one explicit workspace directory.
+
+    deferred: this is the third copy of the shape (``lint.flag_enabled``,
+    ``maintenance_migrate.flag_enabled``) — upgrade path: hoist one
+    ``feature_flags.is_enabled_for_workspace(ws, flag)`` and retire all
+    three, once a slice touches those two modules for another reason.
+    """
+    config_path = os.path.join(workspace, "mind-mem.json") if workspace else ""
+    if config_path:
+        try:
+            with open(config_path, encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, ValueError):
+            data = None
+        if isinstance(data, dict):
+            block = data.get("v4")
+            if isinstance(block, dict) and FLAG in block:
+                sub = block.get(FLAG)
+                return isinstance(sub, dict) and sub.get("enabled") is True
+
+    from .v4.feature_flags import is_enabled_quiet
+
+    return is_enabled_quiet(FLAG)
+
+
 __all__ = [
+    "FLAG",
     "ImageBlock",
     "AudioBlock",
+    "flag_enabled",
+    "pack_cost",
     "thumbnail_hash",
     "build_image_block",
     "build_audio_block",

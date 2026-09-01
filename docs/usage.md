@@ -7,12 +7,12 @@ provides. See [setup.md](setup.md) first.
 
 | Surface | When to use |
 |---|---|
-| **MCP server** | Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, OpenClaw, any MCP agent. 101 tools. |
+| **MCP server** | Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, OpenClaw, any MCP agent. 102 tools. |
 | **`mm` CLI** | Non-MCP agents: codex, gemini CLI, Cursor, Windsurf, Aider, plain shell. |
 | **`mind-mem-verify` CLI** | Third-party integrity audits. Standalone; no network. |
 | **Python library** | Direct import from your own code. |
 
-## MCP tool index (101 tools)
+## MCP tool index (102 tools)
 
 ### Retrieval
 - `recall(query, limit, active_only, backend)` — BM25 / hybrid / auto
@@ -77,7 +77,7 @@ provides. See [setup.md](setup.md) first.
 ### Competitive intel (v2.6)
 - `propagate_staleness(seed_block_ids, max_hops)`
 - `project_profile(name, top_k)`
-- `stream_status()` — change stream stats
+- `stream_status()` — change stream stats; plus an `ingest_door` object (queue depth, per-client 429 count) when `streaming.enabled` is set
 
 ### Agent bridge (v2.7)
 - `agent_inject(query, agent, limit)` — render context for any CLI
@@ -115,6 +115,10 @@ mm inbox --to S1                                # read your mail + broadcasts
 
 # Status of current workspace
 mm status
+
+# Webhook ingest door (requires "v4": { "ingest_serve": { "enabled": true } })
+mm ingest-serve --port 8788           # POST /ingest -> QUARANTINED blocks
+mm ingest-serve --replay-only         # apply a WAL backlog left by a killed run
 
 # Corpus lint (requires "v4": { "lint": { "enabled": true } } in mind-mem.json)
 mm lint                       # report findings as JSON; exit 1 if any
@@ -240,14 +244,23 @@ store.observe_pair(
 ## Proprietary code protection
 
 MIND-Mem is a **public Apache-2.0 package**. It has **no proprietary
-code**. Modules that can use a proprietary native accelerator load
-it via the `MIND_MEM_KERNELS_SO` env var — when the library is
-present it's loaded via `ctypes`; when absent the pure-Python
-fallback in `mind_mem.mind_kernels` is used. Install, use, and
-test the package without ever setting that variable and everything
-still works.
+code**. Modules that can use a proprietary native accelerator resolve
+it through one loader, `mind_mem.mind_ffi.load_kernels()` — when a
+library is present it's loaded via `ctypes`; when absent the
+pure-Python kernels in `mind_mem.mind_kernels` are used. Install, use,
+and test the package without ever pointing at a library and everything
+still works: MIND kernels are optional, and their absence is the
+documented normal case, not a failure.
 
-See `mind_mem.mind_kernels.load_kernels()` for the exact contract.
+**The path is allowlisted.** `MIND_MEM_LIB` and `MIND_MEM_KERNELS_SO`
+(and an explicit `load_kernels(path=...)`) are honoured only when they
+resolve inside one of the package's `lib/` directories; anything else is
+refused and the rejection is logged with the reason. Before 5.1.0 a
+second loader handed `MIND_MEM_KERNELS_SO` straight to `ctypes.CDLL`, so
+any path in the environment could pull arbitrary native code into the
+process. That loader is gone.
+
+`mind_mem.mind_kernels.load_kernels()` still exists and delegates here.
 The accelerator library itself is distributed separately and is
 not part of this repository.
 

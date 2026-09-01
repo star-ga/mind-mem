@@ -50,6 +50,10 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     # Group A — cognition / model layer
     "cognitive_kernel",
     "surprise_retrieval",
+    # 5.1.0: per-provider / per-domain reliability EMA fed by report_outcome
+    # and persisted to intelligence/llm_profiles.json; surfaced in
+    # calibration_stats. Sidecar only — nothing on the scored path reads it.
+    "llm_noise_profile",
     # Group B — knowledge graph
     "block_kinds",
     "long_context_recall",
@@ -66,6 +70,8 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "contradiction_stream",
     "world_staleness",  # external-anchor liveness check surfaced through scan()
     "maintenance_layout",  # first-run maintenance/ tracked|append-only split at apply time
+    "ingest_serve",  # `mm ingest-serve` webhook door + its governed drain consumer
+    "bootstrap_corpus",  # one-shot post-init backfill CLI (mind-mem-bootstrap); every write quarantined
     # Group D — platform scale (selected v4-introduced items)
     "rust_hot_path",
     "embedding_fallback",
@@ -76,6 +82,7 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "kind_summaries",  # GraphRAG-style per-kind summaries (round 2 audit 3/4)
     "self_editing",  # MemGPT-style propose_edit / approve_edit (round 2 audit 2/4)
     "granularity_align",  # named merge operation surfaced in plan_consolidation (proposal-only)
+    "multi_modal",  # sidecar-described image/audio inbox drops + modality-aware pack cost
     "observability",  # counters / gauges / histograms (round 3 audit 4/4)
     "logging_context",  # correlation-ID + kv context on every log line (round 4 audit)
     "backpressure",  # ingestion overload signal (round 4 audit, DeepSeek 9.75→10)
@@ -94,6 +101,34 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "typed_edges",  # first-class typed relation layer + proposal-gated writes (roadmap §a)
     "entity_observations",  # per-entity accreted-facts field on the entity registry (roadmap §b)
     "core_export",  # .mmcore static export (OKF / JSON-LD / markdown) + governed OKF re-import
+    # 5.1.0: MIND kernels. Turns the hash-chain import door from a
+    # per-entry check into a SEQUENCE check, so a v3->v1 entry-hash
+    # downgrade inside an imported segment is refused at the door
+    # instead of being written and only discovered by a later
+    # verify_chain(). Default OFF; see hash_chain_v2.import_jsonl.
+    "mind_kernels",
+    # 5.1.0: trajectory memory. Capture half writes a TRAJ- sidecar per
+    # report_outcome; recall half is the similar_trajectories MCP tool. The
+    # sidecar is never served by recall() and never bypasses the HITL gate.
+    "trajectory",
+    # 5.1.0: pack_recall_budget sizes its budget to the TARGET MODEL's real
+    # context window instead of to whatever number the caller typed.
+    "context_budget",
+    # 5.1.0: measured retrieval quality in index_stats — weekly MRR drift
+    # from the signal ledger, and the packed-vs-referenced token ratio.
+    "retrieval_metrics",
+    # 5.1.0: online training. Harvest half is a dream_cycle pass draining the
+    # interaction-signal ledger into admission-filtered training tuples;
+    # registry half is model_gate's persisted weight-promotion ledger.
+    "online_training",
+    # 5.1.0: v4/health's probe sweep folded into the `memory_health` MCP tool.
+    # The flag gates the CALL SITE, not the check: `health.health_check` is
+    # deliberately never flag-gated (an operator debugging a failure needs it
+    # regardless) and each of its probes reports "disabled" for its own OFF
+    # feature. What the flag buys is that `memory_health`'s payload -- which a
+    # test pins byte-for-byte -- is unchanged until an operator asks for the
+    # section, and that no clock is read on the OFF path.
+    "health",
 )
 
 
@@ -191,6 +226,39 @@ def _load_v4_block(*, quiet: bool = False) -> dict:
 # ---------------------------------------------------------------------------
 
 
+#: Parsed ``v4`` blocks, keyed by (path, mtime_ns, size).
+#:
+#: ``is_enabled_quiet`` is a PROBE: an off-by-default surface calls it to
+#: decide whether to run at all, so it lands on hot paths — ``publish()``
+#: called it once per event. Uncached, every one of those calls re-read AND
+#: re-parsed ``mind-mem.json`` (measured: 1000 config reads per 1000 flag-OFF
+#: publishes, 2.5x slower than a build with no config file at all). That is
+#: the flag-off inertness rule broken: a default-OFF deployment must not pay
+#: a cost the unwired build never paid.
+#:
+#: Keying on (mtime_ns, size) rather than time means an edited config still
+#: takes effect on the next call — the cache changes the cost, never the
+#: answer. A same-nanosecond same-size edit is not distinguishable, which is
+#: why this is only used by the silent probe; ``is_enabled`` still reads live.
+_QUIET_CACHE: dict[tuple[str, int, int], dict] = {}
+_QUIET_CACHE_MAX = 32
+
+
+def _quiet_block(path: Path, mtime_ns: int, size: int) -> dict:
+    """Return the parsed ``v4`` block for *path*, cached on its stat."""
+    key = (str(path), mtime_ns, size)
+    hit = _QUIET_CACHE.get(key)
+    if hit is not None:
+        return hit
+    block = json.loads(path.read_text(encoding="utf-8")).get("v4") or {}
+    if not isinstance(block, dict):
+        block = {}
+    if len(_QUIET_CACHE) >= _QUIET_CACHE_MAX:
+        _QUIET_CACHE.clear()
+    _QUIET_CACHE[key] = block
+    return block
+
+
 def is_enabled_quiet(flag: str) -> bool:
     """:func:`is_enabled`, but guaranteed to emit nothing.
 
@@ -211,9 +279,8 @@ def is_enabled_quiet(flag: str) -> bool:
         return False
     try:
         path = _config_path()
-        if not path.is_file():
-            return False
-        block = json.loads(path.read_text(encoding="utf-8")).get("v4") or {}
+        st = path.stat()
+        block = _quiet_block(path, st.st_mtime_ns, st.st_size)
         sub = block.get(flag) if isinstance(block, dict) else None
         return isinstance(sub, dict) and sub.get("enabled") is True
     except Exception:
@@ -284,6 +351,61 @@ def flag_config(flag: str, *, quiet: bool = False) -> dict:
     return _load_v4_block(quiet=quiet).get(flag, {}) or {}
 
 
+def is_enabled_for_workspace(workspace: str, flag: str) -> bool:
+    """Quiet, workspace-first probe: is *flag* on for *workspace*?
+
+    The workspace's own ``mind-mem.json`` wins over the ambient config,
+    because a caller holding one explicit workspace directory means that
+    one — not whatever ``MIND_MEM_CONFIG`` or the cwd happens to resolve
+    to. When the workspace config says nothing about *flag*, the ambient
+    resolver answers (:func:`is_enabled_quiet`).
+
+    Reads only, logs nothing, raises nothing. That is a hard requirement,
+    not politeness: with the flag off this build must be indistinguishable
+    from the one that never had the feature, and a probe that logged
+    ``v4_config_unreadable`` on a malformed config would break exactly
+    that.
+
+    This is the hoist ``multi_modal.flag_enabled``'s deferred note asked
+    for — one shared implementation of a shape that had been copied into
+    three modules. New callers use this one; the copies migrate as slices
+    touch them for other reasons.
+    """
+    if flag not in ALL_V4_FLAGS:
+        return False
+    if workspace:
+        try:
+            data = json.loads((Path(workspace) / "mind-mem.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = None
+        if isinstance(data, dict):
+            block = data.get("v4")
+            if isinstance(block, dict) and flag in block:
+                sub = block.get(flag)
+                return isinstance(sub, dict) and sub.get("enabled") is True
+    return is_enabled_quiet(flag)
+
+
+def flag_config_for_workspace(workspace: str, flag: str) -> dict:
+    """The sub-config dict for *flag*, workspace-first. Quiet, like the probe.
+
+    The enable bit is not interpreted here — see :func:`flag_config`.
+    """
+    if flag not in ALL_V4_FLAGS:
+        return {}
+    if workspace:
+        try:
+            data = json.loads((Path(workspace) / "mind-mem.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = None
+        if isinstance(data, dict):
+            block = data.get("v4")
+            if isinstance(block, dict) and flag in block:
+                sub = block.get(flag)
+                return sub if isinstance(sub, dict) else {}
+    return flag_config(flag, quiet=True)
+
+
 def config_error() -> str:
     """Describe why the active config could not be read — ``""`` when it can.
 
@@ -301,4 +423,6 @@ __all__ = [
     "is_enabled_quiet",
     "require_enabled",
     "flag_config",
+    "flag_config_for_workspace",
+    "is_enabled_for_workspace",
 ]

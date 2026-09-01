@@ -18,7 +18,7 @@ import json
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _workspace
-from ._helpers import get_logger, metrics
+from ._helpers import _retrieval_metrics_enabled, get_logger, metrics
 
 _log = get_logger("mcp_server")
 
@@ -93,6 +93,27 @@ def calibration_feedback(
                 "error": f"Failed to record feedback: {exc}",
             }
         )
+
+    # v4.retrieval_metrics: close the packing-quality loop. The pack path
+    # knows what it packed and what each block cost; only this call knows
+    # what was referenced. Joined on the query fingerprint, in-process,
+    # against the receipt the pack left behind. No receipt (a feedback call
+    # for a recall that was never packed, or one from a previous process)
+    # means no observation — the meter records what it can price, never an
+    # estimate standing in for a measurement.
+    if _retrieval_metrics_enabled(ws):
+        try:
+            from mind_mem.calibration import fingerprint_of
+            from mind_mem.tracking import default_pack_receipts, default_packing_meter
+
+            receipt = default_pack_receipts().get(fingerprint_of(query_id))
+            if receipt is not None:
+                default_packing_meter().observe(
+                    receipt.packed_tokens,
+                    receipt.referenced_tokens(useful),
+                )
+        except Exception as exc:  # pragma: no cover - telemetry never fails feedback
+            _log.debug("packing_quality_skipped", error=str(exc))
 
     metrics.inc("mcp_calibration_feedback")
     return json.dumps(

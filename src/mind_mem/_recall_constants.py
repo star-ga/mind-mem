@@ -91,6 +91,12 @@ CORPUS_FILES = {
     # immediately, at parity with INBOX-/MSG-. Purely additive — a
     # workspace without the file is skipped exactly as before.
     "imported": "memory/IMPORTED.md",
+    # 5.1.0: the `mm ingest-serve` webhook door lands INGEST- blocks here.
+    # Registered UNGATED on purpose, unlike the door itself: the file is
+    # inert until the door writes it, and gating the registry on the flag
+    # would make already-RELEASED content vanish the moment an operator
+    # turned the door off. Absent file → skipped, exactly as before.
+    "ingest": "memory/INGEST.md",
 }
 
 # BM25 parameters

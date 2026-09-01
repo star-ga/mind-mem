@@ -211,6 +211,50 @@ See `docs/storage-backends.md` for a full setup guide including Docker Compose a
 | `propose` | Detect findings and generate fix proposals in `intelligence/proposed/`. Proposals require explicit human approval via `approve_apply`. |
 | `enforce` | Detect findings, generate proposals, and auto-apply approved proposals. Use with caution. |
 
+### Consensus voting on contradictions (`governance.consensus`)
+
+Opt-in, **default off**. When enabled, a contradiction that no deterministic
+strategy can settle -- same date, same priority, same scope specificity, the
+`manual_review` fallback -- consults a multi-agent quorum before it is handed
+to a human. It is only ever reached where `manual_review` would have been the
+verdict, so it can never override timestamp/confidence/scope priority.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `governance.consensus.enabled` | bool | `false` | Consult the quorum on `manual_review` contradictions. Off: `intelligence/VOTES.md` is never read and resolution is byte-identical to a workspace without the file. |
+| `governance.consensus.quorum_threshold` | float | `0.66` | Winning share of the weighted vote. Values outside `(0, 1]` fall back to the default. |
+| `governance.consensus.min_votes` | int | `2` | Distinct agents required. Below it the outcome is `insufficient_votes` and the contradiction stays `manual_review` -- which is the single-operator case. |
+| `namespaces.<agent_id>.trust_weight` | float | `1.0` | Per-agent vote weight. `0` excludes the agent. A vote block cannot set its own weight; only this config can. |
+
+Votes live in `intelligence/VOTES.md` as ordinary blocks:
+
+```
+[V-20260201-001]
+Contradiction: CONTRA-001
+Agent: agent-alice
+Choice: D-20260201-001
+Status: active
+Rationale: matches the shipped schema
+```
+
+Three properties are load-bearing:
+
+* **Vote blocks pass through the admission filter.** A vote a governance gate
+  has not admitted (`quarantined`, `pending`, or any status the package does
+  not recognise) is not counted, so an ingest door cannot vote.
+* **The winner must be one of the two contradicting blocks.** A quorum for any
+  other id is refused rather than written onto a supersede proposal.
+* **The winner is staged, never applied.** It becomes a `pending-review`
+  proposal in `intelligence/proposed/RESOLUTIONS_PROPOSED.md` under strategy
+  `consensus_quorum`; applying it stays `approve_apply`'s job.
+
+```json
+{
+  "governance": { "consensus": { "enabled": true, "quorum_threshold": 0.66, "min_votes": 2 } },
+  "namespaces": { "agent-alice": { "trust_weight": 1.5 } }
+}
+```
+
 ---
 
 ## Recall Settings
@@ -418,8 +462,78 @@ Controls the automated ingestion pipeline managed by `cron_runner.py`. When enab
 | `auto_ingest.transcript_scan` | bool | `true` | Enable the transcript scan job (`transcript_capture.py --scan-recent`). Scans recent transcripts for signals. Default schedule: every 6 hours. |
 | `auto_ingest.entity_ingest` | bool | `true` | Enable the entity ingestion job (`entity_ingest.py`). Extracts entities (projects, tools, people) from signals and logs. Default schedule: daily at 3am. |
 | `auto_ingest.intel_scan` | bool | `true` | Enable the intelligence scan job (`intel_scan.py`). Runs contradiction detection, drift analysis, and briefing generation. Default schedule: daily at 3am. |
+| `auto_ingest.session_summary` | bool | `false` | **Opt-in ingest door.** Enable the session-summary job (`session_summarizer.py --scan-recent`). Summarises recent Claude Code transcripts into `summaries/daily/<date>.md` plus a linking signal in `intelligence/SIGNALS.md`. Off unless set: the job reads transcripts from **outside** the workspace (`~/.claude/projects`). |
 
 Individual job toggles are only checked when `auto_ingest.enabled` is `true`. When the master toggle is off, no jobs run.
+
+`session_summary` is the one job whose per-job default is `false`. With no
+config, `--job all` dispatches exactly the three default-on jobs and does not
+mention the opt-in one — an ingest door has to be asked for by name.
+
+**What it writes, and why it is not recallable.** Both of its writes are
+admitted through the governance gate under `IngestTier.AUTO_CAPTURE`, whose
+`INITIAL_STATUS` row is `pending`. `pending` is not in the servable
+allow-list, so a session summary and its linking signal are withheld from
+recall until a governance proposal releases them. The summary block declares
+`Status: pending` in the block itself rather than relying on
+`summaries/` happening to sit outside the indexed corpus.
+
+To run it from the daemon instead of cron, give it an interval:
+
+```json
+{
+  "daemon": {
+    "enabled": true,
+    "session_summary": { "auto_interval_seconds": 3600 }
+  }
+}
+```
+
+`auto_interval_seconds` defaults to `0` (off) exactly like every other daemon
+task; `mm daemon --once` then writes one dated summary per new transcript, and
+the transcript content-hash dedup stops a second run from rewriting it.
+
+---
+
+## Streaming Ingest Rate Limit
+
+Per-client rate limiting for the `POST /ingest` webhook (`mm ingest-serve`).
+Off unless `streaming.enabled` is `true`; with it off the webhook has no
+rate-limit leg at all and behaves exactly as it did before 5.1.0.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `streaming.enabled` | bool | `false` | Master toggle for the front gate. Off: no limiter, no counters, and `stream_status` reports no `ingest_door` key. |
+| `streaming.rate_limit.tokens_per_second` | float | `20` | Refill rate of the token bucket **each** client gets. Omit the whole `rate_limit` block to arm the gate's telemetry without throttling anything. |
+| `streaming.rate_limit.burst` | float | `40` | Bucket size — the burst **each** client may spend before refill matters. |
+| `streaming.rate_limit.max_clients` | int | `1024` | How many distinct `client_id` values keep their own bucket; the least-recently-used one is evicted past this. A **memory** bound, not an authentication one. |
+
+```json
+{
+  "streaming": {
+    "enabled": true,
+    "rate_limit": { "tokens_per_second": 20, "burst": 40, "max_clients": 1024 }
+  }
+}
+```
+
+The client is read from the `X-Client-Id` request header, falling back to the
+peer address. A refused request gets **HTTP 429** before its body reaches the
+write-ahead log or the queue, so one flooding producer cannot spend another
+producer's allowance — the cross-client denial of service the per-client
+keying exists to prevent.
+
+**The header identifies, it does not authenticate.** A producer free to invent
+a fresh `client_id` per request is not throttled by per-client accounting under
+any keying. Authenticate upstream if that matters.
+
+**This gate stores nothing.** It decides who may knock; what gets stored is
+decided by the ingest door's single governed write, which admits every event
+under `IngestTier.EXTERNAL_INGEST` and therefore lands it `Status:
+quarantined` — withheld from recall until a governance proposal releases it.
+Queue depth (`queue_depth`), the 429 count (`rate_limited`) and how many
+queued events the drain has written (`applied`) are visible through the
+`stream_status` MCP tool, under its `ingest_door` key.
 
 ---
 
@@ -732,6 +846,69 @@ mutating the workspace.
 
 ---
 
+## Producer Backpressure (`v4.backpressure`)
+
+A producer loop that outruns the store grows its queue until the process is
+OOM-killed. With this flag on, the loops that can do that report their backlog
+depth and get an explicit "back off" answer.
+
+Two watermarks with a gap between them, not one threshold: the state flips to
+overloaded at `depth >= high_watermark` and back at `depth <= low_watermark`.
+A queue hovering at 600 with the defaults (1000/200) therefore stays in the
+state it is in instead of flapping on every tick.
+
+**Off by default.** With the flag absent, every wired loop behaves exactly as
+it did before — the probe reads the flag silently, so a flag-off process does
+not even log differently.
+
+```json
+{
+  "v4": {
+    "backpressure": {
+      "enabled": true,
+      "high_watermark": 1000,
+      "low_watermark": 200,
+      "max_pause_seconds": 5.0,
+      "producers": {
+        "inbox": { "high_watermark": 20, "low_watermark": 5 }
+      }
+    }
+  }
+}
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `high_watermark` | `1000` | depth at which a producer becomes overloaded |
+| `low_watermark` | `200` | depth at which it recovers (must be `<=` high) |
+| `max_pause_seconds` | `5.0` | cap on the exponential backoff hint |
+| `producers.<name>` | — | per-producer overrides; 50 files and 5000 events are not the same kind of "deep" |
+
+Producer names: `inbox` (the file-drop drain), `change_stream` (the in-process
+event bus), `daemon` (scheduled maintenance ticks), and `webhook` (reserved —
+the ingestion webhook drain is not wired yet).
+
+What being overloaded actually does:
+
+* **inbox** — a scheduled tick ingests `low_watermark` files and yields; the
+  rest stay in the inbox root for the next pass. `mm`-driven one-shot runs are
+  never capped.
+* **change_stream** — `ChangeStream.is_overloaded()` starts answering `True`.
+  The bus itself still delivers, queues and sheds exactly as before;
+  backpressure is advice to producers, not policy the bus enforces.
+* **daemon** — the tick is skipped and `last_run` is deliberately not stamped,
+  so a deferred tick never reads as a completed one.
+
+Deferring is not dropping: every wired loop leaves its input where it is and
+picks it up on a later tick. Backpressure sheds rate, never data — and it
+never touches an ingest path's admission, so a throttled inbox admits fewer
+blocks per tick, never a different kind of block.
+
+With the flag on, the `stream_status` MCP tool grows a `backpressure` object
+(per-producer depth, watermarks, overload state). The key is absent when the
+flag is off, so "nothing is measuring" is distinguishable from "measuring, and
+fine".
+
 ## Structure-Aware Chunk Scoring (`retrieval.smart_chunking`)
 
 Recall scores a long `Statement` twice — once whole, once as its best-scoring
@@ -778,6 +955,70 @@ Notes:
   sentence window is used, so enabling the key never *removes* a chunk boost.
 - This is a scoring surface only. Chunks are never stored, surfaced, or written
   back to the corpus.
+
+---
+
+## Multimodal Inbox Drops (`v4.multi_modal`)
+
+Off by default. With the flag on, the inbox stops refusing image and audio
+drops — but **nothing here interprets a media file**. There is no embedder, no
+transcriber, and no extra that installs either one. What the door accepts is a
+**sidecar** the operator wrote:
+
+```
+inbox/
+  board.png          <- hashed, never interpreted
+  board.png.txt      <- the description; this is what becomes the block
+```
+
+The sidecar name is the full media filename plus `.txt` or `.md`, never the
+stem: `board.txt` is a legitimate text drop in its own right, and consuming it
+as a caption would swallow a document the operator meant to ingest. When a pair
+is present the watcher treats it as one drop and stages both files together; an
+*orphan* sidecar with no media beside it is still an ordinary text drop.
+
+```json
+{
+  "v4": {
+    "multi_modal": { "enabled": true }
+  }
+}
+```
+
+A sidecar may also be a JSON object, which is the only way to state a duration
+(the packer prices audio by it):
+
+```json
+{
+  "transcript": "Standup: the migration is blocked on the index rebuild.",
+  "duration_seconds": 90,
+  "speakers": ["ana", "bo"],
+  "dimensions": [1920, 1080]
+}
+```
+
+| Sidecar field | Type | Notes |
+| --- | --- | --- |
+| `description` / `transcript` / `text` | string | The block's content. One is required; the first present wins, in that order. |
+| `duration_seconds` | number | `0`–86400. Audio only. |
+| `speakers` | list of strings | Max 64 entries, 128 characters each. |
+| `dimensions` | `[width, height]` | Integers, `0`–1000000. Nothing reads the image header, so unstated means unknown. |
+
+Anything else in the object is ignored — including `embedding`. The door will
+not accept a vector from a file: an embedding is a scoring input, and taking
+one from untrusted input would let a drop steer retrieval rather than merely
+supply text for a human to admit.
+
+**A media drop is an untrusted drop.** It goes through the same codepoint
+sanitizer as the text door and is admitted under the same
+`IngestTier.EXTERNAL_INGEST`, so the block lands `Status: quarantined` and is
+invisible to recall until a governance proposal releases it. Turning this flag
+on adds a door; it does not add a way to reach recall without a human.
+
+The same flag makes `pack_recall_budget` price results by modality: an image
+costs its tile count (85 tokens) rather than the length of its caption, and an
+audio block that states a duration costs that duration. A text result costs
+exactly what it costs with the flag off, so a text-only budget cannot move.
 
 ---
 
@@ -880,3 +1121,205 @@ four panels:
 - **Recall QPS** — `rate(recall_total[5m])`.
 - **propose_update Rate** — `rate(propose_update_total[5m])`.
 - **Apply Rollback Rate** — `rate(apply_rollback_total[5m])`.
+
+---
+
+## LLM Reliability Profile (`v4.llm_noise_profile`)
+
+Models each reporting agent as a noisy sensor and tracks how often it turns out
+to have been right, per domain. The signal is one you are already producing:
+`report_outcome` says whether acting on recalled blocks actually worked, and a
+`success` / `failure` verdict is exactly a `was_correct` observation.
+
+**Off by default.** With the flag absent nothing is read, written or logged on
+the outcome path, and `calibration_stats` returns the same keys it always did.
+The probe reads the flag silently, so a flag-off process is not even
+distinguishable by its log lines.
+
+```json
+{
+  "v4": {
+    "llm_noise_profile": { "enabled": true }
+  }
+}
+```
+
+**What it records.** Reliability is an exponential moving average (α = 0.95,
+starting at 0.7) kept per **provider** and per **domain**:
+
+| Axis | Derived from | Example |
+| --- | --- | --- |
+| provider | `tool_id`, else `actor_id`, else the shared `unattributed` bucket | `gpt-4` |
+| domain | the block-id family — the leading alphabetic run of the id | `D`, `T`, `INBOX` |
+
+Persisted to `intelligence/llm_profiles.json` (state, not corpus: only `.md`
+files under `intelligence/` are blocks). Load → update → save happens on every
+recorded report, because an MCP call is frequently its own process — the file
+*is* the state, so the profile survives a restart.
+
+**What it deliberately does not do.**
+
+- **It never reaches a score.** Nothing on the retrieval path reads the
+  profile. It is evidence for an operator reading `calibration_stats`, not an
+  input to ranking, and it must never become an agent leaderboard that routing
+  consults — the moment "highest reliability" is a target, the incentive is to
+  report less specifically rather than to be right more often.
+- **Influence is bounded**, the same way the calibration projection already
+  bounds it. The fold runs only when the store actually inserted a row, so
+  replaying a report (same canonical payload → same outcome id) moves nothing.
+  And one report is one observation *per distinct domain*: naming fifty blocks
+  instead of one buys no extra movement.
+- **`neutral` moves nothing.** "Not attributable to these blocks" is not
+  evidence about the reporter's accuracy either.
+- **It reads no block content** — only the ids the report already named — so it
+  cannot surface quarantined material.
+
+**Reproducible.** `report_outcome`'s `recorded_at` is injectable and is fed
+through to the profile, so the same reports replayed on another machine write a
+byte-identical file.
+
+**Reading it back.** `calibration_stats` grows an `llm_reliability` section
+while the flag is on:
+
+```json
+{
+  "llm_reliability": {
+    "flag": "v4.llm_noise_profile",
+    "path": "intelligence/llm_profiles.json",
+    "provider_count": 2,
+    "providers": [
+      {
+        "provider_id": "mistral",
+        "reliability": 0.715,
+        "observation_noise": 0.285,
+        "observations": 1,
+        "errors": 0,
+        "domains": { "T": 0.715 }
+      }
+    ]
+  }
+}
+```
+
+The key is **absent**, not null, when the flag is off.
+
+## Model Reliability Score (`mrs`)
+
+**Default OFF.** Turning it on adds an `mrs` section to `memory_health`: a
+0–100 composite over latency percentiles, MCP error rate, and the corpus's own
+drift / contradiction / staleness readings. A breach is routed through the
+`alerts` sinks (`alerting.get_alert_router`, configured under the `alerts` key). With the flag off the tool is byte-identical to
+what it returned before — the section is **absent**, not null, and the module
+is not imported at all.
+
+```json
+{
+  "mrs": {
+    "enabled": true,
+    "target": "retrieval",
+    "latency_metric": "mcp_tool_duration_ms",
+    "observation_days": 7,
+    "alert": true,
+    "alert_severity": "warning",
+    "alert_below": 100.0,
+    "slo": {
+      "slis": [
+        { "name": "p99_ms", "threshold": 2500 },
+        { "name": "staleness_ratio", "threshold": 0.1, "weight": 2.0 }
+      ]
+    }
+  }
+}
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Master switch. There is deliberately no `auto_enable`: MRS reads the whole corpus and can fire alerts, so it turns on when an operator says so. |
+| `target` | `"retrieval"` | Label the report is filed under. |
+| `latency_metric` | `"mcp_tool_duration_ms"` | Which in-process observation series the latency percentiles are read from. |
+| `latency_ms` | *(unset)* | A literal list of readings, which overrides `latency_metric`. For fixtures and replay. |
+| `observation_days` | `1.0` | Window the `relevance_decay` rate is divided by. **Injected, never derived** — deriving it would mean reading a clock, and the score would stop being reproducible. |
+| `alert` | `true` | Route breaches to the alert sinks. |
+| `alert_severity` | `"warning"` | Severity of the `mrs_degraded` alert. Must clear the `alerts.min_severity` threshold to be delivered. |
+| `alert_below` | `100.0` | Also alert when the score falls below this, even with no named violation. |
+| `slo` | `{}` | Operator SLO spec. Entries join measured readings on `name` and override `threshold` / `weight`; an entry with no `threshold` keeps the built-in one rather than switching the violation off, and an entry naming an SLI nobody measured is ignored. |
+
+**The SLIs.** `p50_ms` / `p95_ms` / `p99_ms` (thresholds 100 / 500 / 1500 ms);
+`error_rate` (1%, and **omitted entirely** when nothing has been called — no
+errors out of no requests is not a 0% error rate); `relevance_decay` (drift
+items per servable block per day, 0.05); `contradiction_density` (per 100
+servable blocks, 0.5); `staleness_ratio` (0.2). Each SLI contributes
+`weight × (1 − penalty)`, where the penalty ramps from 0 at the threshold to 1
+at double it, so one breached SLI out of six costs about 17 points.
+
+**The denominator is the *servable* corpus.** The collector reads blocks, so it
+goes through the same `admit_corpus` gate every retrieval leg uses: a
+quarantined block is not counted, and a staleness flag pointing at one is not
+counted either. That is the correct population as well as the required gate — a
+quarantined block is not a retrieval problem, it is quarantine working.
+
+**The alert payload carries aggregates only** — target, score, violated SLI
+names and the numeric readings. Sinks write to log lines and third-party
+webhooks, which is exactly the surface block text must not reach.
+
+
+---
+
+## Webhook Ingest Door (`v4.ingest_serve`)
+
+Off by default. With the flag on, `mm ingest-serve` listens on loopback and
+accepts `POST /ingest` with a JSON body, turning each event into a block.
+
+```json
+{
+  "v4": {
+    "ingest_serve": { "enabled": true }
+  }
+}
+```
+
+```bash
+mm ingest-serve --port 8788
+curl -X POST http://127.0.0.1:8788/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "the deploy was rolled back at 14:02", "source": "ci"}'
+```
+
+**What arrives is quarantined.** The drain consumer admits every event through
+`GovernanceGate.admit_block(tier=EXTERNAL_INGEST)` before a byte lands, and
+that tier mints `Status: quarantined`: the block is on disk, it is in the audit
+chain, and `recall` will not return it. Releasing a batch is one governed
+decision (`propose_import_release` → `approve_apply`), exactly as for `mm
+import` and the inbox drop folder. A producer cannot ask for a different
+status — the gate refuses any tier that mints a servable one.
+
+| Flag / option | Default | Notes |
+| --- | --- | --- |
+| `v4.ingest_serve.enabled` | `false` | Off means off: no socket is bound, no WAL is created, and the probe that reads this key logs nothing. |
+| `--port` / `--host` | `8788` / `127.0.0.1` | Loopback by default. There is **no authentication on this endpoint** — put it behind a reverse proxy or an SSH tunnel before binding a routable address. |
+| `--wal` | `<workspace>/memory/ingest-wal.jsonl` | Every accepted event is fsynced here *before* it is queued. |
+| `--no-wal` | off | At-most-once: a kill loses whatever has not been drained. |
+| `--interval` | `1.0` | Seconds between drain passes. |
+| `--capacity` | `1024` | Queue depth before the endpoint answers `503` instead of `202`. |
+| `--replay-only` | off | Apply the WAL backlog through the gate and exit; bind no socket. |
+
+**Crash safety.** The WAL is the source of record and the drain tracks a
+checkpoint beside it (`<wal>.applied`), advanced only *after* the blocks are
+written. A kill therefore loses nothing: an event is either applied or still
+pending. A record re-applied across the crash window is harmless because block
+ids are content-addressed — the same event always yields the same
+`INGEST-<sha256 prefix>` id, so a replay (or a producer retrying a `503`)
+rewrites the identical block instead of duplicating it.
+
+**Determinism.** Nothing on this path reads a clock or a random source: the id
+is a hash of the event, and the block carries no generated timestamp. A
+producer's own `timestamp` field is recorded verbatim as `EventTime` and is
+never trusted or used for ordering. Arrival time is recorded where it is
+accountable — the gate's tamper-evident chain entry.
+
+**Event shape.** The text is taken from the first present of `text`,
+`statement`, `content`, `body`, `message`; `source` and `subject` are optional
+and are flattened to a single line (a newline in one would otherwise forge a
+block field). An event with no usable text, or with text over 1 MiB, is
+refused and counted rather than written. Invisible-Unicode codepoints are
+stripped on the way in (`ingest.sanitize_codepoints`, on by default).

@@ -260,7 +260,9 @@ def _run_tier_promotion(ws: str) -> int:
 
         db_path = os.path.join(ws, "intelligence", "tiers.db")
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        mgr = TierManager(db_path)
+        # The one product construction site that HAS the workspace, so it is
+        # the one that can turn tier events on. Flag still decides.
+        mgr = TierManager(db_path, workspace=ws)
         promotions = mgr.run_promotion_cycle()
         # v3.0.0+ (#502): TTL/LRU decay — demote stale blocks, evict
         # never-used WORKING-tier entries. Runs alongside promotion so

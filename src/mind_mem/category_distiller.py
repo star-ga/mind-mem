@@ -75,14 +75,16 @@ except ImportError:
 
 _log = get_logger("category_distiller")
 
-# Optional MIND kernel acceleration
+# Optional MIND kernel acceleration. Resolved through the package's ONE
+# loader (mind_ffi.load_kernels) rather than constructing MindMemKernel here:
+# a module-level `MindMemKernel()` was a third probe with its own error
+# handling, and the point of the 5.1.0 kernel work is that there is exactly
+# one door. Same resolution, same silence when no .so exists.
 _mind_ffi = None
 try:
-    from .mind_ffi import MindMemKernel
+    from .mind_ffi import load_kernels as _load_kernels
 
-    _k = MindMemKernel()
-    if _k._lib is not None:
-        _mind_ffi = _k
+    _mind_ffi = _load_kernels().native
 except (ImportError, OSError):
     pass
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-MIND-Mem exposes 101 MCP tools for integration with AI coding assistants like Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, and Zed (v3.1.0+).
+MIND-Mem exposes 102 MCP tools for integration with AI coding assistants like Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, and Zed (v3.1.0+).
 
 ## Setup
 
@@ -76,7 +76,7 @@ Add to `~/.claude/mcp.json`:
 | Tool | Description |
 |------|-------------|
 | `calibration_feedback` | Submit quality feedback for a block |
-| `calibration_stats` | View per-block quality distributions |
+| `calibration_stats` | View per-block quality distributions (plus per-provider `llm_reliability` when `v4.llm_noise_profile` is on) |
 | `report_outcome` | Report whether acting on recalled blocks actually worked (utility) |
 | `outcome_stats` | Query recorded outcomes — corroborated vs. implicated blocks |
 | `retrieval_diagnostics` | Analyze recent retrieval performance |

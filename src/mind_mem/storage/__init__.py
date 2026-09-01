@@ -235,12 +235,12 @@ def _corpus_has_ciphertext(workspace: str) -> bool:
     missing files skipped.
     """
     from .._recall_constants import CORPUS_FILES
-    from ..encryption import _MAGIC
+    from ..encryption import _MAGIC, has_magic
 
     for rel_path in CORPUS_FILES.values():
         try:
             with open(os.path.join(workspace, rel_path), "rb") as fh:
-                if fh.read(len(_MAGIC)) == _MAGIC:
+                if has_magic(fh.read(len(_MAGIC))):
                     return True
         except OSError:
             continue

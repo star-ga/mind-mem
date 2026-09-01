@@ -22,7 +22,16 @@ import sqlite3
 from typing import Any
 
 from mind_mem.block_parser import get_active, parse_blocks, parse_file
+from mind_mem.event_fanout import (
+    EVENT_CONTRADICTION_DETECTED,
+    EVENT_PROPOSAL_APPLIED,
+    EVENT_ROLLBACK_EXECUTED,
+    emit_event,
+)
 from mind_mem.storage import iter_active_blocks
+from mind_mem.v4.block_metadata import FLAG as _V4_METADATA_FLAG
+from mind_mem.v4.feature_flags import FeatureDisabledError as _V4FeatureDisabledError
+from mind_mem.v4.feature_flags import is_enabled_quiet as _v4_enabled_quiet
 
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
@@ -355,6 +364,73 @@ def propose_update(
                 block_type=block_type,
             )
 
+    # v4 schema-validation hooks + vocabulary-bound fields
+    # (``v4.block_metadata`` / ``v4.vocabulary``, both default OFF).
+    #
+    # This is the door: block_type, tags and every provenance value arrive
+    # from outside the store, and the quality gate above judges the STATEMENT
+    # TEXT only. Nothing judged the fields. A workspace that wants
+    # "ActorRole is one of these four" or "only these tags exist" had no place
+    # to say it, and a per-kind invariant ("a task proposal must carry a
+    # purpose") had nowhere to live either. Both now land here, before the
+    # SIGNALS.md append, so a refused proposal leaves nothing written.
+    #
+    # The probe runs ONCE per proposal, at the outermost point and outside
+    # every loop. With the flag off it is one stat-cached lookup that logs
+    # nothing, touches no database and reads no JSON, so a default deployment
+    # is indistinguishable from one that never had the surface.
+    if _v4_enabled_quiet(_V4_METADATA_FLAG):
+        from mind_mem.v4.block_metadata import validate_block as _v4_validate_block
+
+        _v4_fields: dict[str, Any] = {
+            "statement": statement,
+            "confidence": confidence,
+            "tags": raw_tags,
+            **provenance,
+        }
+        try:
+            # ``block_kind`` is left implicit: validate_block defaults it to
+            # the kind argument, which is the one place that mapping is
+            # defined. Spelling it again here would be a second definition
+            # free to drift from the first.
+            _v4_verdict = _v4_validate_block(block_type, _v4_fields, workspace=ws)
+        except _V4FeatureDisabledError:
+            # The quiet probe stats the config; validate_block re-reads it.
+            # A config removed between the two answers "off" on the second
+            # read. Skipping the leg is the correct response to "the surface
+            # is off" — it must never turn a flag race into a failed write.
+            _log.warning("v4_block_metadata_flag_race", block_type=block_type)
+        else:
+            if not _v4_verdict.ok:
+                metrics.inc("v4_schema_validation_rejections")
+                _log.warning(
+                    "v4_schema_validation_reject",
+                    block_type=block_type,
+                    reason=_v4_verdict.reason,
+                )
+                return json.dumps(
+                    {
+                        "error": "schema_validation_rejection",
+                        "reason": _v4_verdict.reason,
+                        "block_type": block_type,
+                        "hint": (
+                            "The proposal was refused by this workspace's v4 field rules — a "
+                            "registered schema validator for this block kind, or a controlled "
+                            "vocabulary declared under mind-mem.json 'vocabularies' / "
+                            "vocabularies.json. Nothing was written to SIGNALS.md."
+                        ),
+                    },
+                    indent=2,
+                )
+            if _v4_verdict.reason.startswith("vocabulary_flagged:"):
+                # ``flag`` mode: reported, not enforced. The write proceeds.
+                metrics.inc("v4_vocabulary_flagged")
+                _log.warning(
+                    "v4_vocabulary_flagged",
+                    block_type=block_type,
+                    reason=_v4_verdict.reason,
+                )
+
     from datetime import datetime
 
     from mind_mem.capture import CONFIDENCE_TO_PRIORITY, append_signals
@@ -620,6 +696,19 @@ def _value_conflict_reason(text_a: str, text_b: str) -> str | None:
     return None
 
 
+def _log_digest(text: str) -> str:
+    """Short SHA-256 of engine output — a correlation handle, never the text.
+
+    An event payload may carry a HASH of the apply log so a subscriber can tie
+    its notification to the receipt. It must never carry the log itself: the
+    apply log quotes block content, and ``LoggingPublisher`` writes payloads
+    verbatim into the log while ``RedisStreamPublisher`` puts them on a stream.
+    """
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:16]
+
+
 def _world_staleness_enabled(ws: str) -> bool:
     """True when the ``v4.world_staleness`` flag is ON for *ws*.
 
@@ -847,6 +936,22 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     except Exception as e:
         _log.warning("contradiction_check_failed", error=str(e))
 
+    # Governance event: a detection, so it fires on dry runs too — a subscriber
+    # watching for conflicts wants to hear about them before the apply, not
+    # only when one gets through. Counts only; the conflicting STATEMENTS stay
+    # in the response envelope, which is inside the ACL.
+    if contra_report and contra_report.get("has_contradictions"):
+        emit_event(
+            ws,
+            EVENT_CONTRADICTION_DETECTED,
+            lambda: {
+                "proposal_id": proposal_id,
+                "dry_run": dry_run,
+                "contradiction_count": int(contra_report.get("contradiction_count") or 0),
+                "conflict_count": int(contra_report.get("total_conflicts") or 0),
+            },
+        )
+
     capture = io.StringIO()
     with contextlib.redirect_stdout(capture):
         success, message = apply_proposal(ws, proposal_id, dry_run=dry_run)
@@ -859,6 +964,20 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     # v3.2.1: invalidate recall cache only on a real (non-dry-run) apply.
     if success and not dry_run:
         _invalidate_recall_cache()
+        # 5.1.0: one event per REAL apply. Deliberately not on a dry run —
+        # "applied" must mean the corpus changed, or a subscriber that acts on
+        # the event acts on a change that never happened. Emission is the last
+        # thing this branch does and cannot raise, so a dead subscriber leaves
+        # the apply applied.
+        emit_event(
+            ws,
+            EVENT_PROPOSAL_APPLIED,
+            lambda: {
+                "proposal_id": proposal_id,
+                "success": True,
+                "log_digest": _log_digest(log_output),
+            },
+        )
 
     blocked_by_contradictions = not success and message == "Blocked: contradictions detected"
 
@@ -1035,6 +1154,19 @@ def rollback_proposal(receipt_ts: str, reason: str = "") -> str:
     # v3.2.1: post-rollback cache flush so recall sees the restored state.
     if success:
         _invalidate_recall_cache()
+        # ``reason`` is operator free text and never leaves in a payload — its
+        # LENGTH is the auditable part, and the text itself is already on the
+        # receipt where the audit chain covers it.
+        emit_event(
+            ws,
+            EVENT_ROLLBACK_EXECUTED,
+            lambda: {
+                "receipt_ts": receipt_ts,
+                "success": True,
+                "reason_length": len(reason.strip()),
+                "log_digest": _log_digest(log_output),
+            },
+        )
 
     return json.dumps(
         {

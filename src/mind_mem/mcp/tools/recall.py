@@ -29,6 +29,7 @@ import time
 from datetime import date
 from typing import Any
 
+from mind_mem.error_codes import ErrorCode
 from mind_mem.recall import recall as recall_engine
 from mind_mem.retrieval_graph import retrieval_diagnostics as _retrieval_diag
 from mind_mem.scoring_instant import format_scoring_instant, resolve_scoring_instant
@@ -39,7 +40,13 @@ from ..infra.config import QUERY_TIMEOUT_SECONDS, _get_limits, _load_config
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger, metrics
+from ._helpers import (
+    _context_budget_enabled,
+    _retrieval_metrics_enabled,
+    error_envelope,
+    get_logger,
+    metrics,
+)
 
 _log = get_logger("mcp_server")
 
@@ -79,7 +86,10 @@ def _recall_impl(
     if not isinstance(query, str):
         return json.dumps({"error": "query must be a string"})
     if len(query) > _MAX_QUERY_LEN:
-        return json.dumps({"error": f"query must be ≤{_MAX_QUERY_LEN} characters"})
+        return error_envelope(
+            f"query must be ≤{_MAX_QUERY_LEN} characters",
+            ErrorCode.RECALL_QUERY_TOO_LONG,
+        )
     if format not in ("blocks", "bundle"):
         return json.dumps({"error": f"format must be 'blocks' or 'bundle', got {format!r}"})
     try:
@@ -579,14 +589,47 @@ def recall(
 
 
 @mcp_tool_observe
-def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20, scoring_instant: str = "") -> str:
+def pack_recall_budget(
+    query: str,
+    max_tokens: int = 2000,
+    limit: int = 20,
+    scoring_instant: str = "",
+    model: str = "",
+) -> str:
     """Run a recall, then pack the result list under a token budget.
 
     The recall underneath is the ranked pipeline, so ``scoring_instant`` (an
     ISO-8601 UTC date, empty = today in UTC) pins its recency layer. Packing
     itself is a pure function of the ranked list.
+
+    With ``v4.multi_modal`` on, results are priced by
+    :func:`mind_mem.multi_modal.pack_cost` instead of by excerpt length. A
+    text result costs exactly the same either way; an image is charged its
+    tile cost and an audio clip its duration, because charging either by
+    the length of its caption understates it by two orders of magnitude and
+    silently overfills the window it was asked to respect. Off by default,
+    and the cost function stays deterministic on both sides of the flag.
+
+    With ``v4.context_budget`` on, ``model`` names the model this pack is
+    being assembled for and the budget is sized to that model's REAL
+    context window: a ``max_tokens`` larger than the window is clamped to
+    it, because a pack that cannot be sent is not a pack. The decision is
+    reported in a ``context_budget`` section beside the existing ``budget``
+    integer, which keeps its meaning (the ceiling the pack ran under). A model id we
+    have not verified a window for is NOT clamped — it is reported as
+    ``model_known: false`` and the caller's number stands. Quietly sizing
+    an unknown model to an assumed 32 K was the old behaviour of the
+    lookup, and it is wrong in both directions: it throws away 84% of a
+    200 K window, or overflows a smaller one, and in neither case does
+    anyone find out. See :func:`mind_mem.tracking.resolve_pack_budget`.
+
+    ``model`` is inert with the flag off — the budget, the pack and the
+    returned JSON are then byte-for-byte what they were before the
+    parameter existed.
     """
     from mind_mem.cognitive_forget import pack_to_budget
+    from mind_mem.multi_modal import flag_enabled as _multimodal_enabled
+    from mind_mem.multi_modal import pack_cost
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -608,10 +651,52 @@ def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20, scor
     else:
         results = []
 
+    # None keeps the char-count estimator that has always priced this pack,
+    # so the flag-off call is unchanged down to the token.
+    cost_fn = pack_cost if _multimodal_enabled(ws) else None
+
+    # v4.context_budget: size the pack to the target model's real window.
+    # Off, `budget` stays None and `effective_max` is the caller's number,
+    # so the pack below is the one this tool has always produced. It is
+    # reported under `context_budget`, NOT `budget` — `PackedBudget.as_dict`
+    # already ships `budget` as the ceiling integer, and overwriting an int
+    # with a dict would break every existing reader of this envelope.
+    budget: dict[str, Any] | None = None
+    effective_max = int(max_tokens)
+    if _context_budget_enabled(ws):
+        from mind_mem.tracking import resolve_pack_budget
+
+        budget = resolve_pack_budget(int(max_tokens), model)
+        # HONOUR the resolved budget. It used to be computed, reported, and
+        # then discarded -- `effective_max` was reassigned the raw request --
+        # so a caller asking for a pack larger than the model's context
+        # window got told it had been clamped while the packer went ahead and
+        # built the oversized pack anyway. A budget that is reported but not
+        # applied is worse than none: it reads as a guarantee.
+        #
+        # `resolve_pack_budget` only ever LOWERS the number, and only for a
+        # model whose window is in the verified table -- an unknown model is
+        # left at the request rather than clamped to a guess. This whole leg
+        # is behind `v4.context_budget`, so flag-off packing is unchanged.
+        effective_max = int(budget["effective_max_tokens"])
+
     try:
-        packed = pack_to_budget(results, max_tokens=int(max_tokens))
+        packed = pack_to_budget(results, max_tokens=effective_max, cost_fn=cost_fn)
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
+
+    # v4.retrieval_metrics: leave a receipt so the feedback path can price
+    # what was referenced against what was packed. Keyed by the query
+    # FINGERPRINT, which is the clock-free half of a query id — computing a
+    # full `make_query_id` here would put a clock read on the pack path.
+    if _retrieval_metrics_enabled(ws):
+        try:
+            from mind_mem.calibration import query_fingerprint
+            from mind_mem.tracking import default_pack_receipts, pack_receipt_from_included
+
+            default_pack_receipts().record(pack_receipt_from_included(query_fingerprint(query), packed.included, packed.tokens_used))
+        except Exception as exc:  # pragma: no cover - telemetry must never fail a pack
+            _log.debug("pack_receipt_skipped", error=str(exc))
 
     # Group I item 2: sufficiency over the PACKED list (did what fit the
     # budget deliver enough for this query class), with the pre-pack
@@ -642,6 +727,7 @@ def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20, scor
             "dropped": packed.dropped,
             **packed.as_dict(),
             **({"sufficiency": sufficiency} if sufficiency else {}),
+            **({"context_budget": budget} if budget is not None else {}),
             "_schema_version": "1.0",
         },
         indent=2,
@@ -792,8 +878,63 @@ def hybrid_search(
         return raw
 
 
+def _kind_neighbours(ws: str, block_id: str, kind: str, limit: int) -> dict | None:
+    """The ``v4.hnsw_kind_index`` neighbourhood, or ``None`` to fall through.
+
+    ``None`` means "this tool behaves exactly as it did before": the flag is
+    OFF, the v4 surface is absent, or the workspace has no registered
+    embedding for this block. Falling through rather than erroring keeps the
+    default answer available to a caller who passed ``kind`` on a workspace
+    that was never backfilled.
+
+    ONE quiet flag read, before any database work, so the OFF path parses no
+    config twice, opens nothing and logs nothing.
+
+    Every returned id is re-checked against the LIVE corpus admission set.
+    The registered partition was admission-filtered when it was written, but
+    a block quarantined since then would still have its row -- an index that
+    has outrun the corpus is ordinary, and the fix is to resolve against the
+    corpus rather than to trust the cache.
+    """
+    try:
+        from mind_mem.v4.feature_flags import is_enabled_quiet
+
+        if not is_enabled_quiet("hnsw_kind_index"):
+            return None
+        from mind_mem.v4.hnsw_kind_index import get_block_embedding, knn_by_kind
+    except Exception as exc:  # noqa: BLE001 - v4 surface absent is a fall-through
+        _log.debug("find_similar_kind_leg_unavailable", error=str(exc))
+        return None
+
+    try:
+        query = get_block_embedding(ws, block_id)
+        if not query:
+            return None
+        # limit + 1: the block is its own nearest neighbour at distance 0.
+        hits = knn_by_kind(ws, kind, query, k=limit + 1)
+    except Exception as exc:  # noqa: BLE001 - never take down the default leg
+        _log.warning("find_similar_kind_leg_failed", block_id=block_id, kind=kind, error=str(exc))
+        return None
+
+    from mind_mem.admissibility import admissible
+    from mind_mem.storage import iter_blocks
+
+    servable = admissible(iter_blocks(ws, active_only=False))
+    similar = [{"block_id": bid, "distance": round(dist, 6)} for bid, dist in hits if bid != block_id and bid in servable][:limit]
+    metrics.inc("mcp_find_similar_kind_queries")
+    return {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "source": block_id,
+        "kind": kind,
+        "similar": similar,
+        # Named for what runs, not for the module. See the module docstring
+        # of v4/hnsw_kind_index: there is no ANN backend behind this yet.
+        "method": "kind-partition-brute-force-cosine",
+    }
+
+
 @mcp_tool_observe
-def find_similar(block_id: str, limit: int = 5) -> str:
+def find_similar(block_id: str, limit: int = 5, kind: str = "") -> str:
     """Find blocks co-retrieved with a given block (co-occurrence, not embeddings).
 
     This is the one-line description agents route on, so it states the actual
@@ -801,12 +942,24 @@ def find_similar(block_id: str, limit: int = 5) -> str:
     a block that has never been co-retrieved returns an empty list even when
     semantically near neighbours exist. For semantic nearest-neighbour search
     use ``recall`` with ``backend="hybrid"``.
+
+    ``kind`` switches to the v4 kind-partitioned vector neighbourhood
+    (``v4.hnsw_kind_index``, default OFF): neighbours of the same block KIND
+    ranked by cosine distance over the embeddings ``mm kinds backfill``
+    registered. It is a **brute-force scan of the kind partition**, not an
+    HNSW graph -- the module ships no ANN backend yet and the reported
+    ``method`` says so, because a caller told "HNSW" would reasonably assume
+    a complexity guarantee nothing here provides.
     """
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
         return json.dumps({"error": f"Invalid block_id format: {block_id}"})
     ws = _workspace()
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_similar_results"]))
+    if kind:
+        kind_payload = _kind_neighbours(ws, block_id, kind, limit)
+        if kind_payload is not None:
+            return json.dumps(kind_payload, indent=2)
     try:
         from mind_mem.block_metadata import BlockMetadataManager
 

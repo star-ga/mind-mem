@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from .connection_manager import ConnectionManager
+from .event_fanout import EVENT_TIER_DEMOTED, EVENT_TIER_PROMOTED, emit_event
 from .observability import get_logger, metrics
 
 
@@ -212,12 +213,20 @@ class TierManager:
         self,
         db_path: str,
         policies: dict[MemoryTier, TierPolicy] | None = None,
+        *,
+        workspace: str | None = None,
     ) -> None:
         self._db_path = db_path
         self._policies: dict[MemoryTier, TierPolicy] = policies or default_policies()
         self._conn_mgr = ConnectionManager(db_path)
         self._lock = threading.RLock()
         self._ensure_schema()
+        # Optional, and None by default: this class is addressed by DB PATH, and
+        # a workspace cannot be inferred from one without guessing. A caller
+        # that has the workspace passes it and gets tier events; a caller that
+        # does not gets exactly the pre-5.1.0 behaviour, since ``emit_event``
+        # with no workspace is a no-op.
+        self._workspace = workspace
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -297,6 +306,13 @@ class TierManager:
         if not self._write_tier(block_id, to_tier, demotion_reason=None):
             return False
         _log.info("promoted", block_id=block_id, from_tier=current.name, to_tier=to_tier.name)
+        # A tier is an attention/trust level, not an admission decision — the
+        # payload names the block and the two tiers and carries no block text.
+        emit_event(
+            self._workspace,
+            EVENT_TIER_PROMOTED,
+            lambda: {"block_id": block_id, "from_tier": current.name, "to_tier": to_tier.name},
+        )
         return True
 
     def demote(self, block_id: str, to_tier: MemoryTier, reason: DemotionReason) -> bool:
@@ -323,6 +339,16 @@ class TierManager:
             from_tier=current.name,
             to_tier=to_tier.name,
             reason=reason.value,
+        )
+        emit_event(
+            self._workspace,
+            EVENT_TIER_DEMOTED,
+            lambda: {
+                "block_id": block_id,
+                "from_tier": current.name,
+                "to_tier": to_tier.name,
+                "reason_code": reason.value,
+            },
         )
         return True
 

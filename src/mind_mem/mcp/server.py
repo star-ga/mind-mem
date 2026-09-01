@@ -103,6 +103,9 @@ from mind_mem.mcp.tools import (
     signal as _tools_signal,
 )
 from mind_mem.mcp.tools import (
+    trajectory as _tools_trajectory,
+)
+from mind_mem.mcp.tools import (
     walkthrough_persona as _tools_walkthrough_persona,
 )
 from mind_mem.observability import get_logger
@@ -148,6 +151,7 @@ _tools_quality.register(mcp)
 _tools_lint.register(mcp)
 _tools_lineage.register(mcp)
 _tools_chat.register(mcp)
+_tools_trajectory.register(mcp)
 
 # v3.2.0 — additive consolidated dispatchers (recall, staged_change,
 # memory_verify, graph, core, kernels, compiled_truth). Registered

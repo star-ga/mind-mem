@@ -13,6 +13,7 @@ Extracted from ``mcp_server.py`` per docs/v3.2.0-mcp-decomposition-plan.md
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from ..infra.config import _get_limits, _load_extra_categories
 from ..infra.constants import MCP_SCHEMA_VERSION
@@ -21,6 +22,41 @@ from ..infra.workspace import _workspace
 from ._helpers import get_logger, metrics
 
 _log = get_logger("mcp_server")
+
+
+def _kind_summaries_section(ws: str) -> list[dict] | None:
+    """The ``v4.kind_summaries`` table of contents, or ``None`` when OFF.
+
+    ``category_summary`` answers "what does this workspace know about X" from
+    the category distiller's thematic files. ``v4.kind_summaries`` answers the
+    same question along the other axis — one summary per BLOCK KIND, the
+    GraphRAG-style per-domain table of contents — so this is where it belongs.
+
+    ONE flag read per tool call, and a QUIET one: ``is_enabled_quiet`` never
+    logs, so with the flag off this tool is byte-for-byte the 5.0.0 tool, with
+    no config parse inside any loop and no line in the log that the unwired
+    build did not emit. Read-only — ``list_summaries`` never writes; the
+    refresh side is ``mm kinds backfill``.
+    """
+    try:
+        from mind_mem.v4.feature_flags import is_enabled_quiet
+
+        if not is_enabled_quiet("kind_summaries"):
+            return None
+        from mind_mem.v4.kind_summaries import list_summaries
+
+        return [
+            {
+                "kind": s.kind,
+                "block_count": s.block_count,
+                "updated_at": s.updated_at,
+                "summary": s.summary,
+            }
+            for s in list_summaries(ws)
+        ]
+    except Exception as exc:  # noqa: BLE001 - a sidecar section never breaks the tool
+        _log.debug("category_summary_kind_summaries_skipped", error=str(exc))
+        return None
 
 
 @mcp_tool_observe
@@ -75,25 +111,26 @@ def category_summary(topic: str, limit: int = 3) -> str:
         cats = distiller.get_categories_for_query(topic)
         metrics.inc("mcp_category_summary")
         _log.info("mcp_category_summary", topic=topic, matched_categories=cats[:limit])
+        kind_sections = _kind_summaries_section(ws)
         if not context:
-            return json.dumps(
-                {
-                    "_schema_version": MCP_SCHEMA_VERSION,
-                    "topic": topic,
-                    "status": "no_categories",
-                    "hint": "Run reindex to generate category files, or add blocks with matching tags.",
-                },
-                indent=2,
-            )
-        return json.dumps(
-            {
+            empty: dict = {
                 "_schema_version": MCP_SCHEMA_VERSION,
                 "topic": topic,
-                "matched_categories": cats[:limit],
-                "content": context,
-            },
-            indent=2,
-        )
+                "status": "no_categories",
+                "hint": "Run reindex to generate category files, or add blocks with matching tags.",
+            }
+            if kind_sections is not None:
+                empty["kind_summaries"] = kind_sections
+            return json.dumps(empty, indent=2)
+        payload: dict[str, Any] = {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "topic": topic,
+            "matched_categories": cats[:limit],
+            "content": context,
+        }
+        if kind_sections is not None:
+            payload["kind_summaries"] = kind_sections
+        return json.dumps(payload, indent=2)
     except ImportError:
         return json.dumps(
             {

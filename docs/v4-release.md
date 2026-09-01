@@ -3,7 +3,7 @@
 > **These surfaces were removed in 5.0.0 and RESTORED for 5.1.0.**
 > The 5.0.0 reachability sweep deleted them because no product code imported
 > them. That was overturned: "nothing imports it" is evidence about WIRING, not
-> about worth, and the sweep removed 13,594 lines of working capability on that
+> about worth, and the sweep removed 14,711 lines of working capability on that
 > basis. Two of the modules were not even unreachable — `session_summarizer`
 > had a shell caller in `hooks/session-end.sh` and a Python importer in
 > `bootstrap_corpus`.
@@ -365,21 +365,69 @@ States: `CLOSED` (normal), `OPEN` (rejecting calls), `HALF_OPEN`
 
 Flag: `v4.backpressure`
 
-Hysteresis-gated overload detection. When the workspace write queue
-exceeds the high-water mark, the controller recommends a pause before
-the next write.
+Hysteresis-gated overload detection for producer loops. A producer
+reports how deep its backlog is and learns, from the same call, whether
+to stop adding work:
 
 ```python
-from mind_mem.backpressure import controller
+from mind_mem.v4.backpressure import PRODUCER_INBOX, batch_limit, report_depth
 
-pause_ms = controller.recommended_pause()
-if pause_ms > 0:
-    time.sleep(pause_ms / 1000)
-controller.record_write()
+overloaded = report_depth(PRODUCER_INBOX, len(pending))   # True/False
+limit = batch_limit(PRODUCER_INBOX, len(pending))         # int cap, or None
 ```
 
-`current_pause` is the active hysteresis value. `recommended_pause` is
-the caller-facing hint (may be 0 when load is below threshold).
+Entering the overloaded state needs `depth >= high_watermark` (default
+1000); leaving it needs `depth <= low_watermark` (default 200). The gap
+is the point: a queue oscillating around 600 stays in the state it is
+in rather than flapping on every tick.
+
+Each producer gets its **own** controller, keyed by name.
+`set_depth` is last-writer-wins, so one shared controller would let the
+inbox backlog overwrite the change-stream queue depth and both readings
+would be fiction. `any_overloaded()` is the aggregate for a loop that
+only wants to know whether the *process* is behind.
+
+**It opens no door.** Backpressure writes nothing, reads no block and
+touches no store; it paces loops that already own their governed write
+path. It sheds RATE, never DATA — a throttled tick defers work to the
+next tick and no input is dropped.
+
+*(The pre-5.1.0 snippet here imported `mind_mem.backpressure`, called
+`controller` as if it were an instance, invoked a `record_write()` that
+does not exist, and divided the result by 1000. `recommended_pause`
+returns SECONDS. Corrected above.)*
+
+`current_pause()` peeks at the pause hint; `recommended_pause()`
+returns it AND advances the exponential backoff, so observability code
+must use the former or watching the system would change it.
+
+**Wired producers (5.1.0)**
+
+| Producer | Loop | Behaviour while overloaded |
+|---|---|---|
+| `inbox` | `InboxWatcher._loop` (`inbox.py`) | the scheduled tick takes `low_watermark` files and yields; the rest stay in the inbox for the next pass. `process_once` reports depth but is never capped — one-shot mode is an explicit request for the whole backlog. |
+| `change_stream` | `ChangeStream.publish` | reports `queue_depth`; `ChangeStream.is_overloaded()` lets a producer ask before publishing. The bus never changes what it delivers, queues or sheds — backpressure is advice to producers, not policy the bus enforces. |
+| `daemon` | `Daemon._tick` | defers the tick via `any_overloaded()` and does **not** stamp `last_run`; the next tick runs normally. Fires only when a reporting producer shares the process. |
+| `webhook` | *not wired* | `PRODUCER_WEBHOOK` is reserved for the ingestion webhook drain, which does not exist yet. The drain author wires one `batch_limit(PRODUCER_WEBHOOK, depth)` call rather than inventing a fourth spelling. |
+
+Per-producer watermarks override the workspace defaults — 50 files and
+5000 events are not the same kind of "deep":
+
+```json
+{"v4": {"backpressure": {"enabled": true,
+                         "high_watermark": 5000,
+                         "low_watermark": 500,
+                         "producers": {"inbox": {"high_watermark": 20,
+                                                 "low_watermark": 5}}}}}
+```
+
+With the flag enabled, the `stream_status` MCP tool grows a
+`backpressure` object carrying per-producer depth, watermarks and
+overload state. The key is **absent** when the flag is off, so a client
+can tell "nothing is measuring" from "measuring, and fine". No new tool
+and no new ACL row: it is queue telemetry about a bus that tool already
+reports on, and it carries counters only — never a block id, never
+block content.
 
 ### `health.py`
 
@@ -497,6 +545,59 @@ nothing, so a merge reaches a block only after a human approves it. With the
 flag off the section is absent and the tool's JSON is byte-identical to what
 it was before the wiring existed.
 
+### `multi_modal.py`
+
+Flag: `v4.multi_modal`
+
+The image / audio block schema shipped with no caller: `ImageBlock`,
+`AudioBlock`, `thumbnail_hash` and `modal_token_cost` were tested in
+isolation and invoked by nothing, while the two places they belonged sat a
+few lines apart in the same package.
+
+Wired in 5.1.0, in both places:
+
+* `inbox._ingest_image` / `_ingest_audio` no longer raise. A drop is
+  accepted when the operator supplies a **sidecar** — `board.png` beside
+  `board.png.txt` (or `.md`, or a JSON object with `transcript` /
+  `duration_seconds` / `speakers` / `dimensions`). Nothing reads pixels or
+  samples: the media file is hashed for a stable `ThumbnailHash` and the
+  sidecar text becomes the block. The watcher treats the pair as one drop
+  and stages both files; an orphan sidecar stays an ordinary text drop.
+* `pack_recall_budget` prices results by modality. `pack_to_budget` gained an
+  optional `cost_fn`, defaulting to `None` — the char-count estimator that
+  has always priced it — and the tool passes `multi_modal.pack_cost` only
+  when the flag is on. An image costs its 85-token tile cost instead of the
+  length of its caption; a text result costs exactly what it did before, so
+  a text-only budget cannot move by a token.
+
+**The door is an untrusted door.** The sidecar goes through the same
+codepoint sanitizer as the text ingest and one shared writer opens
+`admit_block` under `IngestTier.EXTERNAL_INGEST`, so a media drop lands
+`Status: quarantined` and recall cannot see it until a governance proposal
+releases it. The red-team suite carries it as Door 3, with the same
+positive-control pairing as the text and agent-message doors, plus a proof
+that the flag-off build refuses and writes nothing.
+
+Two things the door will not do: it does not accept an `embedding` from a
+sidecar (a vector is a scoring input, and a drop does not get to steer
+retrieval), and it does not read image dimensions from the file — unstated
+means unknown rather than parsed from a header for one format only.
+
+Two seams had to be fixed for the wiring to be real rather than nominal, and
+both were pre-existing:
+
+* `block_parser` only reads field keys matching `[A-Z][A-Za-z]+:`, so the
+  media blocks use `Type` / `ThumbnailHash` / `SourcePath` /
+  `DurationSeconds`. (The text door's `type: INBOX_DOCUMENT` line has always
+  been dropped on read-back. Left alone here: changing it would change bytes
+  on a path this flag does not gate.)
+* a result's `type` comes only from `_recall_detection.get_block_type`, an id
+  prefix table — so `INBOX-IMG-` / `INBOX-AUD-` were added to it. Without
+  that an image reached the packer as `"unknown"` and was priced by its
+  caption: the cost function would have been wired and inert.
+
+---
+
 ---
 
 ## Foundation
@@ -577,6 +678,7 @@ raw float32 vectors and never reads PQ codes. Enable whichever you need.
 | `tier_memory.py` | `v4.tier_memory` | Cognition |
 | `cognitive_kernel.py` | `v4.cognitive_kernel` | Cognition |
 | `surprise_retrieval.py` | `v4.surprise_retrieval` | Cognition |
+| `llm_noise_profile.py` | `v4.llm_noise_profile` | Cognition |
 | `block_kinds.py` | `v4.block_kinds` | Knowledge graph |
 | `block_metadata.py` | `v4.block_metadata` | Knowledge graph |
 | `kind_summaries.py` | `v4.kind_summaries` | Knowledge graph |

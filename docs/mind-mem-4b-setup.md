@@ -1,19 +1,27 @@
 # Setting up the mind-mem-4b model
 
-> **Tool-surface drift as of 5.0.0 — read this before trusting the model on
+> **Tool-surface drift as of 5.1.0 — read this before trusting the model on
 > surfaces.** The shipped v4 weights were trained against a 96-tool surface.
-> The live server now exposes **98** (`anchor_root` and `anchor_history`, added
-> when external-ledger anchoring was wired onto the audit family), and 5.0.0
-> removed 44 unreachable modules. So the local model will happily describe
-> surfaces that no longer exist — `v4.health`, `v4.pq`, `KernelKind`,
-> `FallbackPolicy` and friends — and does not know the two anchor tools at all.
+> The live server now exposes **102**, so the model does not know the newest
+> tools at all.
+>
+> The module drift has moved TWICE and the current state is not the obvious
+> one. 5.0.0 deleted 47 modules as unreachable; this note then warned that the
+> model would describe surfaces that no longer existed — `v4.health`, `v4.pq`,
+> `KernelKind`, `FallbackPolicy` and friends. **5.1.0 restored all 47 and wired
+> them**, so those names are real again and the model's descriptions of them
+> are roughly right once more. What the model still cannot know is the wiring:
+> which surface each module now hangs off, that most sit behind default-OFF v4
+> flags, and that six modules are deliberately unwired with a recorded trigger.
 >
 > The number below is left at 96 deliberately: it is a fact about the WEIGHTS,
-> not about the server, and editing it to 98 would state something untrue about
-> the model you are running. The corpus is regenerated and the model retrained
-> as a separate, sequenced piece of work; until then treat model answers about
-> module names as advisory and check them against `mm doctor` or the live tool
-> list.
+> not about the server, and editing it to 102 would state something untrue
+> about the model you are running. The corpus is regenerated and the model
+> retrained as a separate, sequenced piece of work — and the corpus that
+> generated these weights described the pre-5.0.0 tree, so it needs
+> regenerating against 5.1.0 rather than against either earlier state. Until
+> then treat model answers about module names as advisory and check them
+> against `mm doctor` or the live tool list.
 
 `star-ga/mind-mem-4b` is the **fully trained** mind-mem:4b model —
 all ~4.2B parameters trained on the MIND-Mem domain (not a LoRA
@@ -254,7 +262,7 @@ Typical stack:
 ```
 ┌──────────────┐       ┌─────────────────┐       ┌──────────────────────┐
 │  Claude Code │──────▶│ mind-mem MCP    │──────▶│ SQLite + FTS + vec   │
-│ (or any CLI) │       │  (101 tools)     │       │   OR                 │
+│ (or any CLI) │       │  (102 tools)     │       │   OR                 │
 └──────────────┘       └────────┬────────┘       │ Postgres + pgvector  │
                                 │                │   + HNSW + GIN       │
                                 ▼                └──────────────────────┘

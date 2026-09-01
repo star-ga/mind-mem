@@ -21,8 +21,10 @@ user breaks.
   index-level protection should keep the workspace on an encrypted
   filesystem (LUKS, FileVault, BitLocker).
 
-- Encryption is a no-op for files that don't start with
-  :data:`encryption._MAGIC` — this keeps existing unencrypted
+- Encryption is a no-op for files that don't start with a mind-mem
+  ciphertext magic (:func:`encryption.has_magic`, which covers both the
+  legacy ``MMENC1`` record and the opt-in ``MMKMS1`` KMS envelope
+  record) — this keeps existing unencrypted
   workspaces readable during rollout, and a write to a file the
   operator has left in plaintext leaves it in plaintext. A corpus
   file that does not exist yet follows its neighbours — created
@@ -333,12 +335,12 @@ class EncryptedBlockStore:
         cannot tell us it is sealed, and the read path is where being
         unable to read it becomes an error rather than a guess.
         """
-        from .encryption import _MAGIC
+        from .encryption import _MAGIC, has_magic
 
         for fpath in self.list_blocks():
             try:
                 with open(fpath, "rb") as fh:
-                    if fh.read(len(_MAGIC)) == _MAGIC:
+                    if has_magic(fh.read(len(_MAGIC))):
                         return True
             except OSError:
                 continue
@@ -350,7 +352,7 @@ class EncryptedBlockStore:
         Uses a tempfile only when we detect ciphertext so the happy
         path (plaintext file) matches the inner store's performance.
         """
-        from .encryption import _MAGIC
+        from .encryption import _MAGIC, has_magic
 
         try:
             with open(fpath, "rb") as fh:
@@ -361,7 +363,7 @@ class EncryptedBlockStore:
             # I/O) propagates: a file we cannot read is not a file with
             # nothing in it.
             return []
-        if head != _MAGIC:
+        if not has_magic(head):
             return parse_file(fpath)
 
         try:
@@ -446,7 +448,7 @@ def encrypt_workspace(workspace: str) -> dict[str, int]:
     if not passphrase:
         raise RuntimeError("encrypt_workspace requires MIND_MEM_ENCRYPTION_PASSPHRASE")
 
-    from .encryption import _MAGIC, EncryptionManager
+    from .encryption import _MAGIC, EncryptionManager, has_magic
 
     em = EncryptionManager(workspace, passphrase)
     encrypted = skipped = failed = 0
@@ -462,7 +464,9 @@ def encrypt_workspace(workspace: str) -> dict[str, int]:
                 try:
                     with open(fpath, "rb") as fh:
                         head = fh.read(len(_MAGIC))
-                    if head == _MAGIC:
+                    # Either record format counts as already-encrypted; a bare
+                    # ``_MAGIC`` compare would re-encrypt KMS envelope records.
+                    if has_magic(head):
                         skipped += 1
                         continue
                     em.encrypt_file(fpath)

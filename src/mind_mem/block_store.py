@@ -255,6 +255,11 @@ _BLOCK_PREFIX_MAP: dict[str, tuple[str, str]] = {
     "MSG": ("memory", "MESSAGES.md"),
     # Migration importers (roadmap Group G) (`mm import --from ...`) write here.
     "IMP": ("memory", "IMPORTED.md"),
+    # 5.1.0: the `mm ingest-serve` webhook door. Under memory/ like every
+    # other untrusted drop corpus, so a release decision can name these ids
+    # (``admissibility._releasable_id_pattern`` derives the releasable set
+    # from this table).
+    "INGEST": ("memory", "INGEST.md"),
 }
 
 _BLOCK_ID_RE = _re.compile(r"^([A-Z]+)-[a-zA-Z0-9_.-]+$")
@@ -313,6 +318,43 @@ _CANONICAL_FIELD_ORDER: tuple[str, ...] = (
 _FORBIDDEN_WRITE_FIELDS: frozenset[str] = frozenset({"_id", "_source_file", "_line_number", "_raw"})
 
 
+#: A line INSIDE a field value that would be read as a block boundary.
+#: ``block_parser`` ends a block at any line starting with ``---``
+#: (:mod:`mind_mem.block_parser`, "Section separator").
+_VALUE_SEPARATOR_RE = _re.compile(r"\n(-{3,})")
+
+
+def _neutralise_value(value: str) -> str:
+    """Stop a field value from breaking out of the block that contains it.
+
+    Two escapes, and the second one is a SECURITY fix, not cosmetics.
+
+    ``\n[`` would start a new block header mid-value — forging a block.
+    That escape has always been here.
+
+    ``\n---`` would *terminate* the block mid-value, and everything the
+    renderer emits after that point is then read as loose text outside any
+    block. ``Status`` is emitted after ``Statement`` in
+    :data:`_CANONICAL_FIELD_ORDER`, so a payload containing a ``---`` line
+    dropped its own ``Status: quarantined`` — and an **unstated status is
+    servable** (``admissibility.is_admissible_status``). Measured on the
+    live inbox door before this fix: a dropped file whose text contained a
+    ``---`` line was returned by ``recall``, with no proposal and no
+    release. Every door that writes attacker-supplied text through this
+    renderer had the same hole (inbox, agent messages, importers, the
+    5.1.0 webhook), so the fix belongs here rather than in any one door.
+
+    The escape is a single leading space, matching the ``\n[`` precedent:
+    the parser's separator rule is ``line.startswith("---")``, so an
+    indented one is not a separator. :func:`_locate_block_in_text` was
+    using a *different* rule (``line.strip() == "---"``) and is realigned
+    with the parser, so the write/delete boundary and the read boundary
+    agree — otherwise a rewrite would splice at the escaped line and leave
+    the block's real tail orphaned in the file.
+    """
+    return _VALUE_SEPARATOR_RE.sub(r"\n \1", value.replace("\n[", "\n "))
+
+
 def _render_block(block: dict[str, Any]) -> str:
     """Serialize a parsed block dict back to its Markdown form.
 
@@ -326,9 +368,9 @@ def _render_block(block: dict[str, Any]) -> str:
         ---
 
     Lists are rendered as ``"- item"`` bullets on lines following the
-    field. Multi-line field values are emitted verbatim except that
-    newline-plus-left-bracket ("\\n[") is neutralised to avoid
-    accidentally starting a new block header mid-value.
+    field. Multi-line field values are emitted verbatim except that a
+    value can never break out of its own block: see
+    :func:`_neutralise_value`.
     """
     block_id = block.get("_id")
     if not block_id:
@@ -347,11 +389,9 @@ def _render_block(block: dict[str, Any]) -> str:
         if isinstance(value, list):
             out.append(f"{key}:")
             for item in value:
-                safe = str(item).replace("\n[", "\n ")
-                out.append(f"- {safe}")
+                out.append(f"- {_neutralise_value(str(item))}")
         else:
-            safe = str(value).replace("\n[", "\n ")
-            out.append(f"{key}: {safe}")
+            out.append(f"{key}: {_neutralise_value(str(value))}")
 
     for key in _CANONICAL_FIELD_ORDER:
         if key in block:
@@ -412,8 +452,17 @@ def _locate_block_in_text(text: str, block_id: str) -> Optional[tuple[int, int, 
     Mirrors the scan logic in ``mcp.tools.memory_ops.delete_memory_item``
     so both implementations see the same boundary rules:
     * A block starts at a line exactly equal to ``[<id>]``.
-    * A block ends at the next ``[<ID>]`` header line, an isolated
-      ``---`` separator (preceded by a blank line), or EOF.
+    * A block ends at the next ``[<ID>]`` header line, a ``---``
+      separator (preceded by a blank line), or EOF.
+
+    The separator rule is ``line.startswith("---")``, which is
+    ``block_parser``'s rule verbatim. It used to be ``line.strip() ==
+    "---"``, which is a *different* rule: it treats an INDENTED ``---`` as
+    a boundary where the parser does not. That divergence became load-
+    bearing once :func:`_neutralise_value` started escaping a value's
+    ``---`` line by indenting it — under the old rule a rewrite of such a
+    block would have ended at the escaped line and orphaned the block's
+    real tail (Status included) in the file.
     """
     lines = text.split("\n")
     header = f"[{block_id}]"
@@ -426,7 +475,7 @@ def _locate_block_in_text(text: str, block_id: str) -> Optional[tuple[int, int, 
             stripped = line.strip()
             if line.startswith("[") and stripped.endswith("]") and _re.match(r"^\[[A-Z]+-", stripped):
                 block_end = i
-            elif stripped == "---":
+            elif line.startswith("---"):
                 preceding_blank = (i == 0) or (lines[i - 1].strip() == "")
                 if preceding_blank:
                     block_end = i + 1

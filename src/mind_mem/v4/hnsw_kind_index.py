@@ -50,6 +50,8 @@ from .feature_flags import require_enabled
 __all__ = [
     "FLAG",
     "register_block_embedding",
+    "get_block_embedding",
+    "prune_embeddings",
     "knn_by_kind",
     "ensure_hnsw_schema",
     "backend_status",
@@ -195,6 +197,50 @@ def register_block_embedding(
 
 
 # ---------------------------------------------------------------------------
+# Read one row back
+# ---------------------------------------------------------------------------
+
+
+def get_block_embedding(workspace: str | Path, block_id: str) -> list[float]:
+    """The stored embedding for ``block_id``, or ``[]`` when there is none.
+
+    The register/query pair shipped without this, which made the obvious
+    query — *"what is near THIS block?"* — impossible to ask without either
+    re-embedding the block (a different embedder gives a different dimension
+    and ``knn_by_kind`` then silently matches nothing) or reaching into the
+    table by hand. Reading the vector that was actually registered is the
+    only formulation that cannot drift from the partition it is scanned
+    against.
+
+    Read-only. Empty list for: no database, no schema, no row, or a payload
+    whose length disagrees with its recorded ``dim`` (a truncated write is
+    not a short vector).
+    """
+    require_enabled(FLAG)
+    db = Path(workspace) / "index.db"
+    if not db.is_file():
+        return []
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            if not _table_exists(conn, "block_kind_embeddings"):
+                return []
+            row = conn.execute(
+                "SELECT payload, dim FROM block_kind_embeddings WHERE block_id = ?",
+                (block_id,),
+            ).fetchone()
+    if not row:
+        return []
+    payload, dim = bytes(row[0]), int(row[1])
+    if dim <= 0 or len(payload) != dim * 4:
+        _log.warning(
+            "hnsw_embedding_payload_mismatch",
+            extra={"block_id": block_id, "dim": dim, "payload_bytes": len(payload)},
+        )
+        return []
+    return list(struct.unpack(f"<{dim}f", payload))
+
+
+# ---------------------------------------------------------------------------
 # kNN
 # ---------------------------------------------------------------------------
 
@@ -302,3 +348,31 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
         (name,),
     ).fetchone()
     return row is not None
+
+
+def prune_embeddings(workspace: str | Path, keep_ids: Sequence[str]) -> int:
+    """Drop registered embeddings for ids not in ``keep_ids``.
+
+    The partition is a cache of what was admissible when it was written, and
+    a cache goes stale fail-open: a block quarantined after registration keeps
+    its vector and keeps being returned as a neighbour. Readers re-check
+    against the live corpus, but the row itself must also be reclaimable or
+    the store grows without bound and holds vectors for withheld blocks.
+
+    Returns the number of rows removed.
+    """
+    require_enabled(FLAG)
+    keep = {str(i) for i in keep_ids}
+    db = Path(workspace) / "index.db"
+    if not db.is_file():
+        return 0
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            if not _table_exists(conn, "block_kind_embeddings"):
+                return 0
+            present = {r[0] for r in conn.execute("SELECT block_id FROM block_kind_embeddings")}
+            stale = sorted(present - keep)
+            for bid in stale:
+                conn.execute("DELETE FROM block_kind_embeddings WHERE block_id = ?", (bid,))
+            conn.commit()
+    return len(stale)

@@ -101,16 +101,31 @@ def _sidecars(ws: Path) -> list[str]:
     return sorted(p.name for p in ws.iterdir() if p.name.startswith("index.db-"))
 
 
-def _open_index_db_fds() -> list[str]:
-    """Descriptors this process holds on ``index.db`` and its sidecars (Linux)."""
+def _open_index_db_fds(root: Path | None = None) -> list[str]:
+    """Descriptors this process holds on THIS workspace's ``index.db`` (Linux).
+
+    Scoped to *root* deliberately. It used to match any descriptor whose
+    target merely contained ``index.db``, which is every workspace in the
+    process -- so an unrelated test that left a handle open elsewhere failed
+    THIS test, and the message blamed the v4 store for someone else's leak.
+    That also made the result order-dependent: green alone, red in a full run.
+
+    A test that can be failed by code it does not exercise is not measuring
+    what its name claims. Scoping restores the attribution; a leak in another
+    module is for that module's own test to catch.
+    """
     held: list[str] = []
+    prefix = str(root.resolve()) + os.sep if root is not None else None
     for name in os.listdir("/proc/self/fd"):
         try:
             target = os.readlink(f"/proc/self/fd/{name}")
         except OSError:  # fd closed between listdir and readlink
             continue
-        if "index.db" in target:
-            held.append(target)
+        if "index.db" not in target:
+            continue
+        if prefix is not None and not target.startswith(prefix):
+            continue
+        held.append(target)
     return held
 
 
@@ -136,7 +151,7 @@ def test_no_descriptors_left_open_on_the_v4_store(workspace: Path) -> None:
     with _no_gc():
         for _ in range(10):
             _exercise(workspace)
-        held = _open_index_db_fds()
+        held = _open_index_db_fds(workspace)
 
     assert held == [], f"{len(held)} descriptor(s) still open on the v4 store: {sorted(set(held))}"
 

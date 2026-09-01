@@ -14,7 +14,8 @@ Configurable intervals live under the ``daemon`` block of
         "dream_cycle":     { "auto_interval_seconds": 1800,  "dry_run": false },
         "intel_scan":      { "auto_interval_seconds": 21600 },
         "entity_ingest":   { "auto_interval_seconds": 21600 },
-        "transcript_scan": { "auto_interval_seconds": 3600  }
+        "transcript_scan": { "auto_interval_seconds": 3600  },
+        "session_summary": { "auto_interval_seconds": 0     }
       }
     }
 
@@ -39,6 +40,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .v4.backpressure import any_overloaded as _bp_any_overloaded
+
 __all__ = [
     "DEFAULT_INTERVALS",
     "Daemon",
@@ -61,6 +64,13 @@ DEFAULT_INTERVALS: dict[str, int] = {
     "intel_scan": 0,
     "entity_ingest": 0,
     "transcript_scan": 0,
+    # An INGEST DOOR, and the only reason it is safe to list here at all is
+    # that 0 means OFF: the operator has to write an interval before a single
+    # transcript is read. It reads Claude Code transcripts from OUTSIDE the
+    # workspace and derives blocks from them; both of its writes are admitted
+    # under IngestTier.AUTO_CAPTURE, so the derived content lands
+    # `Status: pending` and recall withholds it until a proposal releases it.
+    "session_summary": 0,
 }
 
 _MIN_INTERVAL_SECONDS = 60  # Prevent foot-gun "every second" misconfig.
@@ -150,6 +160,11 @@ _TASK_RUNNERS: dict[str, Callable[[str, dict[str, Any]], dict[str, Any]]] = {
     "intel_scan": lambda ws, extras: _run_via_cron_runner("intel_scan", ws, extras),
     "entity_ingest": lambda ws, extras: _run_via_cron_runner("entity_ingest", ws, extras),
     "transcript_scan": lambda ws, extras: _run_via_cron_runner("transcript_scan", ws, extras),
+    # Opt-in on the cron side too (cron_runner.OPT_IN_JOB_DEFS). Here the
+    # gate is the interval: `_run_loop` and the `--once` path only ever see
+    # tasks whose interval_seconds > 0, so a default config never reaches
+    # this runner at all.
+    "session_summary": lambda ws, extras: _run_via_cron_runner("session_summary", ws, extras),
 }
 
 
@@ -231,6 +246,22 @@ class Daemon:
             self._tick(task, runner)
 
     def _tick(self, task: TaskConfig, runner: Callable[[str, dict[str, Any]], dict[str, Any]]) -> None:
+        # Backpressure: if any producer in THIS process is behind, a
+        # scheduled tick is the cheapest work to defer -- it is periodic
+        # maintenance, and skipping one costs a single interval. The next
+        # tick runs normally, so nothing is lost and `last_run` is
+        # deliberately NOT stamped: a deferred tick must not read as a
+        # completed one.
+        #
+        # `any_overloaded()` is False, silently, whenever v4.backpressure
+        # is off, so an unconfigured daemon behaves exactly as before. It
+        # is also False in a daemon process where no producer reports --
+        # the guard fires when the daemon shares a process with a
+        # reporting producer (an inbox watcher or the change stream), not
+        # on the strength of some other machine's backlog.
+        if _bp_any_overloaded():
+            _log.warning("daemon_tick_deferred", extra={"task": task.name, "reason": "backpressure"})
+            return
         if self.dry_run:
             _log.info("daemon_tick_dryrun", extra={"task": task.name})
             with self._lock:

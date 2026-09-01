@@ -160,15 +160,46 @@ def _init_calibration_schema(conn: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _like_escape(value: str) -> str:
+    """Neutralise LIKE wildcards in *value* so it matches literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def query_fingerprint(query: str) -> str:
+    """The clock-free half of a query id: ``sha256(query)[:12]``.
+
+    A ``query_id`` is ``cal-<fingerprint>-<epoch_ms>``, so it is *not*
+    reproducible from the query text — two recalls of the same string get
+    different ids. The fingerprint is, which makes it the only usable join
+    key between something recorded at recall time and something recorded at
+    feedback time, and the only one a caller on the deterministic recall
+    path may compute at all (see :func:`make_query_id`, which reads a clock).
+    """
+    return hashlib.sha256(query.encode("utf-8")).hexdigest()[:12]
+
+
+def fingerprint_of(query_id: str) -> str:
+    """Recover the fingerprint from a ``cal-<fingerprint>-<epoch_ms>`` id.
+
+    ``""`` for anything not in that shape — a caller must be able to tell
+    "this id carries no fingerprint" from "this id fingerprints to nothing".
+    """
+    parts = str(query_id or "").split("-")
+    if len(parts) < 3 or parts[0] != "cal" or not parts[1]:
+        return ""
+    return parts[1]
+
+
 def make_query_id(query: str) -> str:
-    """Generate a deterministic query ID from query text + timestamp.
+    """Generate a query ID from query text + timestamp.
 
     Format: ``cal-<sha256_prefix>-<epoch_ms>`` to allow both dedup and
-    time-ordering.
+    time-ordering. The epoch suffix is a clock read, so this is NOT a pure
+    function of *query* and must not be called from the scored recall path;
+    :func:`query_fingerprint` is the deterministic part.
     """
-    h = hashlib.sha256(query.encode("utf-8")).hexdigest()[:12]
     ts = int(time.time() * 1000)
-    return f"cal-{h}-{ts}"
+    return f"cal-{query_fingerprint(query)}-{ts}"
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +248,37 @@ class CalibrationManager:
             conn = self._mgr.get_write_connection()
             conn.row_factory = sqlite3.Row
             _init_calibration_schema(conn)
+
+    # -----------------------------------------------------------------------
+    # Read labels
+    # -----------------------------------------------------------------------
+
+    def accepted_ids_by_fingerprint(self, fingerprints: Iterable[str]) -> dict[str, set[str]]:
+        """Block ids marked ``accepted`` for each query fingerprint.
+
+        The relevance labels a ranked list can be scored against. Keyed by
+        :func:`query_fingerprint` rather than by ``query_id`` because a
+        ``query_id`` embeds an epoch and so never repeats across the two
+        calls that need to be joined.
+
+        Read-only, and it returns ids only — never block text, never a
+        statement, never a tag. Nothing here can surface unadmitted content,
+        which is why it needs no admission decision of its own; a caller
+        that later resolves these ids to blocks owes that call itself.
+        """
+        wanted = [str(f) for f in fingerprints if f]
+        out: dict[str, set[str]] = {f: set() for f in wanted}
+        if not wanted:
+            return out
+        conn = self._mgr.get_read_connection()
+        for fingerprint in wanted:
+            rows = conn.execute(
+                """SELECT DISTINCT block_id FROM calibration_feedback
+                   WHERE feedback = 'accepted' AND query_id LIKE ? ESCAPE '\\'""",
+                (f"cal-{_like_escape(fingerprint)}-%",),
+            ).fetchall()
+            out[fingerprint] = {str(r[0]) for r in rows}
+        return out
 
     # -----------------------------------------------------------------------
     # Record feedback
@@ -642,7 +704,7 @@ class CalibrationManager:
 
         overall_accuracy = accept_count / total_feedback if total_feedback > 0 else 0.0
 
-        return {
+        stats: dict[str, Any] = {
             "window_days": CALIBRATION_WINDOW_DAYS,
             "total_feedback": total_feedback,
             "unique_queries": unique_queries,
@@ -652,6 +714,19 @@ class CalibrationManager:
             "top_demoted": top_demoted,
             "query_type_accuracy": query_type_accuracy,
         }
+
+        # Per-provider reliability, when v4.llm_noise_profile is on. The
+        # helper returns None (not {}) while the flag is off, so the key is
+        # absent rather than empty and flag-off output stays byte-identical
+        # to 5.0.0. It reads the persisted sidecar only — no clock, no
+        # corpus, no block content — so adding it cannot move a score.
+        from .llm_noise_profile import reliability_report
+
+        llm_reliability = reliability_report(self._workspace)
+        if llm_reliability is not None:
+            stats["llm_reliability"] = llm_reliability
+
+        return stats
 
 
 # ---------------------------------------------------------------------------

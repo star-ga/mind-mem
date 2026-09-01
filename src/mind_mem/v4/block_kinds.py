@@ -29,19 +29,22 @@ still the right shape for the store it does own: any row already present
 stays legal under the new schema with no data movement, and readers that
 predate the column ignore it.
 
-**The primary column has no writer in this package.** ``blocks.kind`` is
-populated only by a caller that writes it directly —
-:func:`set_block_kinds` deliberately writes ``block_kind_tags`` and leaves
-the column alone. Until such a caller exists, :func:`get_block_kind`
-answers :data:`DEFAULT_KIND` and :func:`list_blocks_by_kind` answers ``[]``
-for every workspace, and both are behaving as written rather than failing.
-The multi-label pair (:func:`set_block_kinds` /
-:func:`get_block_kind_tags`) is the surface that round-trips today.
+**The primary column's writer is :func:`set_block_kind`.**
+:func:`set_block_kinds` still deliberately writes only ``block_kind_tags``
+and leaves the column alone — the two surfaces stay independent — so a
+workspace that has never been backfilled reads :data:`DEFAULT_KIND` from
+:func:`get_block_kind` and ``[]`` from :func:`list_blocks_by_kind`, and both
+are behaving as written rather than failing. What changed in 5.1.0 is that
+a backfill now exists to run: :mod:`mind_mem.v4.kind_backfill` calls
+:func:`classify_block` over the *admitted* corpus and writes both surfaces.
 
-deferred: the single-label column has a reader and no in-package writer —
-upgrade path is either a ``set_block_kind`` that writes the column beside
-the tag set, or dropping the column surface in favour of the tags table
-and having ``get_block_kind`` derive a primary from it.
+The deferred note that used to sit here — *"the single-label column has a
+reader and no in-package writer"* — is CLOSED as of 5.1.0: the first of its
+two named upgrade paths is now implemented as :func:`set_block_kind`, which
+writes the ``blocks`` row and its ``kind`` column beside the tag set. Its
+caller is :mod:`mind_mem.v4.kind_backfill`, reached from ``mm kinds
+backfill``, so ``get_block_kind`` and ``list_blocks_by_kind`` answer from
+real data on a backfilled workspace instead of always falling back.
 
 Two retrieval modes coexist downstream (landed in
 :mod:`mind_mem.v4.long_context_recall`):
@@ -53,9 +56,11 @@ Two retrieval modes coexist downstream (landed in
         Returns full ``entity`` / ``concept`` pages whose summaries match.
         Higher token cost; preserves relational understanding.
 
-This module ships the **type + read surface only**:
-:class:`BlockKind` enum, :func:`ensure_block_kind_column`,
-:func:`get_block_kind`, :func:`list_blocks_by_kind`. The fusion / merge
+This module ships the type surface, the read surface
+(:class:`BlockKind` enum, :func:`ensure_block_kind_column`,
+:func:`get_block_kind`, :func:`list_blocks_by_kind`) and, since 5.1.0, the
+write surface (:func:`set_block_kind`, :func:`set_block_kinds`) plus the
+deterministic :func:`classify_block` that decides what to write. The fusion / merge
 side (``propose_fuse``, multi-page entity reconciliation) lands in
 :mod:`mind_mem.v4.fusion` once block_kinds is stable.
 
@@ -93,6 +98,13 @@ __all__ = [
     "set_block_kinds",
     "get_block_kind_tags",
     "ensure_block_kind_tags_table",
+    # The single-label WRITER the deferred note above asked for, plus the
+    # deterministic corpus classifier that feeds it. Wired 5.1.0 through
+    # ``mind_mem.v4.kind_backfill`` (`mm kinds backfill`).
+    "set_block_kind",
+    "classify_block",
+    "primary_kind",
+    "prune_kind_index",
 ]
 
 
@@ -413,3 +425,200 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
         (name,),
     ).fetchone()
     return row is not None
+
+
+# ---------------------------------------------------------------------------
+# Single-label writer  (5.1.0 — closes this module's own deferred note)
+# ---------------------------------------------------------------------------
+
+
+def set_block_kind(
+    workspace: str | Path,
+    block_id: str,
+    kind: BlockKind | str,
+    *,
+    content: str | None = None,
+) -> BlockKind:
+    """Write the PRIMARY kind for ``block_id`` into ``blocks.kind``.
+
+    This is the writer :func:`get_block_kind` and :func:`list_blocks_by_kind`
+    were reading for and never had. It upserts the row in the v4 side store's
+    ``blocks`` table (``<workspace>/index.db``, never the corpus and never the
+    v3 recall index) and sets its ``kind`` column.
+
+    ``content`` is optional and only ever *added*: passing ``None`` leaves any
+    existing content untouched rather than blanking it, so a caller that knows
+    a kind but not the text cannot erase text a previous caller stored. That
+    matters because :func:`mind_mem.v4.kind_summaries.refresh_summary` reads
+    ``blocks.content`` — a kind-only re-run must not empty every summary.
+
+    Unknown ``kind`` strings raise :class:`ValueError` at the enum
+    constructor: fail-loud, because a typo that silently became
+    ``unspecified`` would be indistinguishable from a block nobody classified.
+
+    Returns the :class:`BlockKind` actually written. Raises
+    :class:`FeatureDisabledError` if the flag is OFF.
+    """
+    require_enabled(FLAG)
+    if isinstance(kind, str):
+        kind = BlockKind(kind)
+    db = Path(workspace) / "index.db"
+    if not db.parent.is_dir():
+        db.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS blocks (id TEXT PRIMARY KEY, content TEXT)")
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(blocks)")}
+        if "kind" not in cols:
+            conn.execute(_ADD_COLUMN_SQL)
+        conn.execute(_INDEX_SQL)
+        # INSERT .. ON CONFLICT rather than INSERT OR REPLACE: REPLACE deletes
+        # the old row first, which would drop the stored content on a
+        # kind-only update and take any ON DELETE CASCADE rows with it.
+        conn.execute(
+            "INSERT INTO blocks (id, content, kind) VALUES (?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, "
+            "content = COALESCE(excluded.content, blocks.content)",
+            (block_id, content, kind.value),
+        )
+        conn.commit()
+    return kind
+
+
+# ---------------------------------------------------------------------------
+# Deterministic corpus classifier
+# ---------------------------------------------------------------------------
+#
+# What a block IS, decided from what the corpus already records about it —
+# never from a model call, a clock or a random draw. The backfill has to be
+# replayable: running it twice over an unchanged corpus must write the same
+# kinds, or `list_blocks_by_kind` becomes a function of when you last ran it.
+
+#: Corpus source label -> primary kind. The label is the directory the block
+#: was parsed out of (``storage._iter_markdown_active_blocks`` stamps it), so
+#: this is a fact about the corpus layout rather than a guess about content.
+_LABEL_KIND: dict[str, BlockKind] = {
+    "entities": BlockKind.ENTITY,
+    "decisions": BlockKind.SYNTHESIS,
+    "intelligence": BlockKind.SYNTHESIS,
+    "signals": BlockKind.SOURCE,
+    "tasks": BlockKind.STRUCTURED,
+    "memory": BlockKind.SOURCE,
+    "summaries": BlockKind.SYNTHESIS,
+}
+
+#: Block-id prefix -> primary kind, consulted when the source label is absent
+#: (a Postgres-backed store hands back rows with no ``_source_label``). Kept
+#: deliberately in step with ``mcp.tools.memory_ops._BLOCK_PREFIX_MAP``.
+_PREFIX_KIND: dict[str, BlockKind] = {
+    "PRJ": BlockKind.ENTITY,
+    "PER": BlockKind.ENTITY,
+    "TOOL": BlockKind.ENTITY,
+    "INC": BlockKind.ENTITY,
+    "D": BlockKind.SYNTHESIS,
+    "C": BlockKind.SYNTHESIS,
+    "T": BlockKind.STRUCTURED,
+    "SIG": BlockKind.SOURCE,
+    "INBOX": BlockKind.SOURCE,
+    "IMP": BlockKind.SOURCE,
+    "INGEST": BlockKind.SOURCE,
+    "MSG": BlockKind.SOURCE,
+    "TRAJ": BlockKind.STRUCTURED,
+}
+
+#: Fields whose presence means the block references code, whatever else it is.
+#: This is the multi-label case the junction table exists for: a decision that
+#: names a file is both ``synthesis`` and ``code``.
+_CODE_FIELDS: tuple[str, ...] = ("File", "Path", "Symbol", "Function", "Module", "Class")
+
+#: ``type:``/``Type:`` values that name a modality outright.
+_TYPE_KIND: dict[str, BlockKind] = {
+    "image": BlockKind.IMAGE,
+    "audio": BlockKind.AUDIO,
+    "code": BlockKind.CODE,
+    "concept": BlockKind.CONCEPT,
+    "entity": BlockKind.ENTITY,
+    "source": BlockKind.SOURCE,
+    "synthesis": BlockKind.SYNTHESIS,
+    "structured": BlockKind.STRUCTURED,
+}
+
+
+def primary_kind(block: dict) -> BlockKind:
+    """The single kind that goes in ``blocks.kind``. Pure; no I/O.
+
+    Public because the backfill needs the primary and the tag set from one
+    classification, and a private ``_primary_kind`` reached across modules is
+    exactly the fragile private-import this slice is elsewhere removing.
+    Deliberately NOT flag-gated: it is a pure lookup with no side effect, and
+    :func:`classify_block` — the entry point callers use — carries the gate.
+    """
+    for key in ("type", "Type", "Kind"):
+        raw = block.get(key)
+        if isinstance(raw, str):
+            hit = _TYPE_KIND.get(raw.strip().lower())
+            if hit is not None:
+                return hit
+    label = block.get("_source_label")
+    if isinstance(label, str):
+        hit = _LABEL_KIND.get(label.strip().lower())
+        if hit is not None:
+            return hit
+    bid = str(block.get("_id", ""))
+    prefix = bid.split("-", 1)[0] if "-" in bid else ""
+    return _PREFIX_KIND.get(prefix.upper(), DEFAULT_KIND)
+
+
+def classify_block(block: dict) -> set[BlockKind]:
+    """Every kind ``block`` carries, including the :func:`primary_kind` one.
+
+    Pure function of the block dict — no database, no config, no clock — so
+    the backfill that calls it is replayable. Returns at least one kind;
+    a block nothing matches is :data:`DEFAULT_KIND`, which is a real answer
+    ("nobody has classified this") rather than an omission.
+
+    Requires the flag, like every other public function here.
+    """
+    require_enabled(FLAG)
+    kinds = {primary_kind(block)}
+    if any(isinstance(block.get(f), str) and block.get(f, "").strip() for f in _CODE_FIELDS):
+        kinds.add(BlockKind.CODE)
+    return kinds
+
+
+def prune_kind_index(workspace: str | Path, keep_ids: Iterable[str]) -> int:
+    """Drop kind rows for ids not in ``keep_ids``. Returns the count removed.
+
+    Without this the index only ever grows, and it grows in the FAIL-OPEN
+    direction: a block that was admitted when the backfill ran and has since
+    been quarantined keeps its row, its tags and its stored ``content``, so
+    ``list_blocks_by_kind`` goes on naming it and ``blocks.content`` goes on
+    holding withheld text. Re-running the backfill has to be able to take
+    something away, not just add.
+
+    Scoped on purpose. Only rows this package could have written are eligible:
+    a ``blocks`` row is removed only if it carries a non-default ``kind`` or a
+    tag, so a row some other v4 caller put in the shared side store is left
+    alone even though the corpus does not name it.
+
+    Raises :class:`FeatureDisabledError` if the flag is OFF.
+    """
+    require_enabled(FLAG)
+    keep = {str(i) for i in keep_ids}
+    db = Path(workspace) / "index.db"
+    if not db.is_file():
+        return 0
+    removed = 0
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
+        if not _has_kind_column(conn):
+            return 0
+        owned: set[str] = {r[0] for r in conn.execute("SELECT id FROM blocks WHERE kind IS NOT NULL AND kind != ?", (DEFAULT_KIND.value,))}
+        if _table_exists(conn, "block_kind_tags"):
+            owned |= {r[0] for r in conn.execute("SELECT DISTINCT block_id FROM block_kind_tags")}
+        stale = sorted(owned - keep)
+        for bid in stale:
+            conn.execute("DELETE FROM blocks WHERE id = ?", (bid,))
+            if _table_exists(conn, "block_kind_tags"):
+                conn.execute("DELETE FROM block_kind_tags WHERE block_id = ?", (bid,))
+            removed += 1
+        conn.commit()
+    return removed

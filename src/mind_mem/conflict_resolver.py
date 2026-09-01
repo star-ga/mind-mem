@@ -12,6 +12,10 @@ Resolution strategies:
 - CONFIDENCE_PRIORITY: Highest ConstraintSignature priority wins
 - SCOPE_PRIORITY: More specific scope wins over general
 - MANUAL: Cannot auto-resolve, requires human review
+- CONSENSUS: A multi-agent quorum picked the winner (opt-in, default OFF —
+  ``governance.consensus.enabled`` in ``mind-mem.json``). Only ever consulted
+  where MANUAL would otherwise be the verdict, and its winner becomes a
+  pending-review PROPOSAL, never an apply.
 
 Usage:
     from .conflict_resolver import resolve_contradictions, generate_resolution_proposals
@@ -27,7 +31,9 @@ import os
 import re
 from datetime import datetime
 
+from .admissibility import admit_corpus
 from .block_parser import get_by_id, parse_file
+from .consensus_vote import Vote, reach_consensus, resolve_consensus_config
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
@@ -44,6 +50,91 @@ class ResolutionStrategy:
     CONFIDENCE = "confidence_priority"
     SCOPE = "scope_priority"
     MANUAL = "manual_review"
+    #: Opt-in (``governance.consensus.enabled``). Reached only from the MANUAL
+    #: fallback, so it can never override a deterministic strategy above it.
+    CONSENSUS = "consensus_quorum"
+
+
+#: Workspace-relative corpus of agent votes on contradictions. Optional: a
+#: workspace without it simply has no votes, which is the single-operator
+#: case and resolves exactly as it did before consensus existed.
+VOTES_FILE = os.path.join("intelligence", "VOTES.md")
+
+
+def _load_workspace_config(ws: str) -> dict:
+    """Read ``mind-mem.json`` from *ws*, silently, returning ``{}`` on any problem.
+
+    Deliberately does NOT reuse ``init_workspace.load_config`` /
+    ``cron_runner.load_config``: both of those log a warning when the file is
+    absent or unparseable, and this read happens on the DEFAULT-OFF path of a
+    flag. A flag probe that emits a log line is observable, which would make
+    flag-off behaviour differ from before the flag existed. The parsing and
+    validation of what comes back is not duplicated — that is
+    :func:`consensus_vote.resolve_consensus_config`, the tested incumbent.
+    """
+    try:
+        with open(os.path.join(ws, "mind-mem.json"), "r", encoding="utf-8") as fh:
+            cfg = json.load(fh)
+    except (OSError, ValueError, UnicodeDecodeError):
+        return {}
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _load_consensus_votes(ws: str) -> dict[str, list[Vote]]:
+    """Parse ``intelligence/VOTES.md`` into ``{contradiction_id: [Vote, ...]}``.
+
+    **Admission-filtered.** The vote blocks go through
+    :func:`~mind_mem.admissibility.admit_corpus` before any of them is turned
+    into a :class:`~mind_mem.consensus_vote.Vote`. A vote is a block like any
+    other, so a block minted by a withheld ingest tier (``quarantined``,
+    ``pending``) — or carrying a status nobody has named — must not be able to
+    push a contradiction over quorum and stage a supersede proposal off the
+    back of it. Reading the ``Status`` field and *selecting* on it is not the
+    same as filtering: ``admit_corpus`` is the one predicate that is
+    fail-closed on statuses it has never heard of.
+
+    Only reached when the consensus flag is ON; the flag-off path never opens
+    this file.
+    """
+    path = os.path.join(ws, VOTES_FILE)
+    if not os.path.isfile(path):
+        return {}
+    try:
+        blocks = parse_file(path)
+    except (OSError, ValueError) as exc:
+        _log.warning("consensus_votes_unreadable", path=path, error=str(exc))
+        return {}
+
+    votes: dict[str, list[Vote]] = {}
+    for block in admit_corpus(blocks):
+        contradiction = _vote_field(block, "Contradiction")
+        agent = _vote_field(block, "Agent")
+        choice = _vote_field(block, "Choice")
+        if not (contradiction and agent and choice):
+            continue
+        votes.setdefault(contradiction, []).append(
+            Vote(
+                agent_id=agent,
+                choice=choice,
+                # Left UNSPECIFIED on purpose: the weight comes from
+                # ``namespaces.<agent>.trust_weight``, so a vote file cannot
+                # award itself trust the operator did not configure.
+                trust_weight=None,
+                rationale=_vote_field(block, "Rationale") or None,
+            )
+        )
+    return votes
+
+
+def _vote_field(block: dict, key: str) -> str:
+    """A single trimmed string field of a vote block, or ``""``.
+
+    The block parser renders a bare ``Key:`` as an empty list and repeated
+    keys as lists, so anything that is not a populated string is treated as
+    absent rather than coerced.
+    """
+    value = block.get(key)
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _extract_date(block: dict) -> str | None:
@@ -98,11 +189,31 @@ def _block_hash(block: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def analyze_contradiction(block_a: dict, block_b: dict) -> dict:
+def analyze_contradiction(
+    block_a: dict,
+    block_b: dict,
+    *,
+    votes: list[Vote] | None = None,
+    consensus: dict | None = None,
+    namespace_config: dict | None = None,
+) -> dict:
     """Analyze a contradiction pair and recommend a resolution strategy.
+
+    Pure: no clock, no filesystem, no configuration read. Everything the
+    consensus leg needs is injected by :func:`resolve_contradictions`.
+
+    Args:
+        votes: Agent votes for THIS contradiction. ``None`` (the default) is
+            the flag-off shape and is byte-identical to the pre-consensus
+            function.
+        consensus: Resolved ``governance.consensus`` settings from
+            :func:`~mind_mem.consensus_vote.resolve_consensus_config`. The
+            quorum is consulted only when this says ``enabled``.
+        namespace_config: ``namespaces`` map, for per-agent ``trust_weight``.
 
     Returns:
         Dict with: strategy, confidence, winner_id, loser_id, rationale
+        (plus ``consensus`` detail when the quorum decided it).
     """
     date_a = _extract_date(block_a)
     date_b = _extract_date(block_b)
@@ -153,12 +264,57 @@ def analyze_contradiction(block_a: dict, block_b: dict) -> dict:
         }
 
     # Fallback: cannot auto-resolve
-    return {
+    manual = {
         "strategy": ResolutionStrategy.MANUAL,
         "confidence": "low",
         "winner_id": None,
         "loser_id": None,
         "rationale": "Cannot auto-resolve: same date, similar priority and scope. Requires human review.",
+    }
+
+    # Opt-in quorum leg. Nothing above this point can reach it, so an
+    # auto-resolvable contradiction is never overridden by a vote, and with
+    # the flag off (or no votes) the function returns exactly what it always
+    # did — no logging, no probe, no observable difference.
+    if not consensus or not consensus.get("enabled") or not votes:
+        return manual
+
+    threshold = float(consensus.get("quorum_threshold", 0.66))
+    decision = reach_consensus(
+        votes,
+        quorum_threshold=threshold,
+        min_votes=int(consensus.get("min_votes", 2)),
+        namespace_config=namespace_config,
+    )
+    # The winner must be one of the two blocks actually in contradiction.
+    # Without this, a vote file naming any id at all could put that id on the
+    # "Winner:" line of a supersede proposal for a pair it has nothing to do
+    # with. A vote for a third id is not filtered out before the tally either
+    # — it dilutes the quorum, which is the fail-closed direction.
+    if decision.reason != "quorum" or decision.winner not in (id_a, id_b):
+        return manual
+
+    winner = decision.winner
+    loser = id_b if winner == id_a else id_a
+    return {
+        "strategy": ResolutionStrategy.CONSENSUS,
+        # Never "high": a quorum is agreement, not evidence, and this outcome
+        # is staged for review like every other non-MANUAL strategy.
+        "confidence": "medium",
+        "winner_id": winner,
+        "loser_id": loser,
+        "rationale": (
+            f"Quorum consensus of {len({v.agent_id for v in votes})} agent(s): "
+            f"weighted margin {decision.margin} >= threshold {threshold} "
+            f"(confidence {decision.confidence}). Staged for review, never auto-applied."
+        ),
+        "consensus": {
+            "margin": decision.margin,
+            "confidence": decision.confidence,
+            "threshold": threshold,
+            "agents": sorted({v.agent_id for v in votes}),
+            "vote_counts": dict(decision.vote_counts),
+        },
     }
 
 
@@ -182,6 +338,20 @@ def resolve_contradictions(workspace: str) -> list[dict]:
     contra_blocks = parse_file(contradictions_path)
     decision_blocks = parse_file(decisions_path)
 
+    # Opt-in consensus leg (``governance.consensus.enabled``, default OFF).
+    # Flag off: no votes file is opened, no namespace map is resolved, and
+    # analyze_contradiction is called with exactly the arguments it took
+    # before this leg existed.
+    workspace_config = _load_workspace_config(ws)
+    consensus_cfg = resolve_consensus_config(workspace_config)
+    consensus_on = bool(consensus_cfg["enabled"])
+    votes_by_contradiction: dict[str, list[Vote]] = {}
+    namespace_config: dict | None = None
+    if consensus_on:
+        votes_by_contradiction = _load_consensus_votes(ws)
+        namespaces = workspace_config.get("namespaces")
+        namespace_config = namespaces if isinstance(namespaces, dict) else None
+
     resolutions = []
     _ID_RE = re.compile(r"[A-Z]+-\d{8}-\d{3}")
 
@@ -199,8 +369,15 @@ def resolve_contradictions(workspace: str) -> list[dict]:
         if not block_a or not block_b:
             continue
 
-        resolution = analyze_contradiction(block_a, block_b)
-        resolution["contradiction_id"] = contra.get("_id", "?")
+        contra_id = contra.get("_id", "?")
+        resolution = analyze_contradiction(
+            block_a,
+            block_b,
+            votes=votes_by_contradiction.get(str(contra_id)) if consensus_on else None,
+            consensus=consensus_cfg if consensus_on else None,
+            namespace_config=namespace_config,
+        )
+        resolution["contradiction_id"] = contra_id
         resolution["block_a"] = ids[0]
         resolution["block_b"] = ids[1]
         resolution["hash_a"] = _block_hash(block_a)
@@ -213,6 +390,11 @@ def resolve_contradictions(workspace: str) -> list[dict]:
         auto_resolvable=sum(1 for r in resolutions if r["strategy"] != ResolutionStrategy.MANUAL),
     )
     metrics.inc("contradictions_analyzed", len(resolutions))
+    if consensus_on:
+        by_quorum = sum(1 for r in resolutions if r["strategy"] == ResolutionStrategy.CONSENSUS)
+        if by_quorum:
+            _log.info("contradictions_resolved_by_quorum", count=by_quorum)
+            metrics.inc("consensus_resolutions", by_quorum)
     return resolutions
 
 

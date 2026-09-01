@@ -144,6 +144,28 @@ def _compute_entry_hash_v3(
 _compute_entry_hash = _compute_entry_hash_v3
 
 
+#: v4 flag gating the sequence-aware import check. See
+#: :meth:`HashChainV2.import_jsonl`.
+_SEQUENCE_VERIFY_FLAG = "mind_kernels"
+
+
+def _sequence_verify_enabled() -> bool:
+    """Read ``v4.mind_kernels``, fail-closed and QUIET.
+
+    Uses ``is_enabled_quiet``, never ``is_enabled``: the latter warns
+    ``v4_config_unreadable`` on a malformed config, and a probe that decides
+    whether a feature is on must not itself be observable when the answer is
+    no. With the flag OFF this call emits nothing and ``import_jsonl``
+    behaves exactly as it did before the kernel was wired.
+    """
+    try:
+        from .v4.feature_flags import is_enabled_quiet
+
+        return is_enabled_quiet(_SEQUENCE_VERIFY_FLAG)
+    except Exception:
+        return False
+
+
 def _row_to_entry(row: sqlite3.Row) -> HashEntry:
     return HashEntry(
         entry_id=row["entry_id"],
@@ -485,6 +507,29 @@ class HashChainV2:
         Validates each entry's internal consistency before writing.
         Raises ValueError if any entry fails verification.
 
+        Downgrade monotonicity (flag ``v4.mind_kernels``, default OFF)
+        -------------------------------------------------------------
+        The per-entry gate below is :meth:`verify_entry`, which accepts the
+        v3 scheme **or** the legacy v1 one — it has no memory of what the
+        segment has already proven, so it cannot see a v3 entry followed by
+        a v1 entry as the downgrade it is. :meth:`verify_chain` *can*, and
+        rejects exactly that. The two doors therefore disagreed: a crafted
+        export could pass import and then make the whole ledger read as
+        broken from the forged entry onward.
+
+        With the flag ON the incoming segment is first checked as a
+        SEQUENCE by ``mind_kernels.sha3_512_chain_verify`` — the same
+        monotonicity rule ``verify_chain`` applies — anchored to the current
+        ledger head. The per-entry loop is left exactly as it was, so every
+        input that was rejected before is still rejected with the same
+        message and line number; the flag only ever refuses MORE.
+
+        deferred: with the flag OFF the disagreement above is still live.
+        It is not fixed unconditionally only because 5.1.0's restoration
+        lands every wiring default-OFF and byte-identical. Upgrade path:
+        default ``v4.mind_kernels`` to ON, then delete the flag and make
+        the sequence check unconditional.
+
         Args:
             input_path: Path to the JSONL file.
 
@@ -492,7 +537,9 @@ class HashChainV2:
             Number of entries imported.
 
         Raises:
-            ValueError: If any entry is tampered/invalid/corrupt.
+            ValueError: If any entry is tampered/invalid/corrupt, or (flag
+                ON) if the segment downgrades from the v3 entry-hash scheme
+                back to v1.
             FileNotFoundError: If input_path does not exist.
         """
         if self._readonly:
@@ -509,6 +556,31 @@ class HashChainV2:
                 conn.execute("BEGIN IMMEDIATE")
                 head_row = conn.execute("SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1").fetchone()
                 prev_hash = head_row["entry_hash"] if head_row else GENESIS_HASH
+
+                if entries and _sequence_verify_enabled():
+                    from .mind_kernels import sha3_512_chain_verify
+
+                    if not sha3_512_chain_verify(
+                        [
+                            {
+                                "entry_id": e.entry_id,
+                                "timestamp": e.timestamp,
+                                "block_id": e.block_id,
+                                "action": e.action,
+                                "content_hash": e.content_hash,
+                                "previous_hash": e.previous_hash,
+                                "entry_hash": e.entry_hash,
+                            }
+                            for e in entries
+                        ],
+                        previous_hash=prev_hash,
+                    ):
+                        conn.rollback()
+                        raise ValueError(
+                            "Imported segment fails sequence verification: an entry-hash scheme downgrade "
+                            "(v3 -> legacy v1) or a broken link. Per-entry verification cannot see this; "
+                            "verify_chain() would reject the ledger after the import."
+                        )
 
                 for idx, entry in enumerate(entries):
                     if not self.verify_entry(entry):

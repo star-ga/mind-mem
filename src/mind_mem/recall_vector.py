@@ -1490,6 +1490,119 @@ def search_batch(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# v4.pq — opt-in product-quantization of the local vector index (default OFF)
+# ---------------------------------------------------------------------------
+
+#: How many vectors the PQ codebook is trained on. The default equals the
+#: default centroid count on purpose: ``pq._stdlib_kmeans`` short-circuits
+#: when ``k >= len(points)``, so training at the default is O(n) rather than
+#: O(M x iters x n x K x sub_dim) of pure-Python float math.
+#:
+#: deferred: raising ``train_sample`` above ``centroids`` runs real Lloyd
+#: iterations in pure Python and is minutes-to-hours on a large corpus --
+#: upgrade path: install a numpy/sklearn trainer with
+#: ``pq.set_codebook_trainer(...)`` first, then raise the knob.
+_PQ_DEFAULT_TRAIN_SAMPLE = 256
+
+
+def _pq_compress(workspace: str, codebook_name: str, ids: list[str], embeddings: list[list[float]]) -> dict | None:
+    """PQ-encode ``embeddings`` into ``index.db``; ``None`` when the flag is OFF.
+
+    Wired into :func:`rebuild_index` -- the vector-index rebuild the MCP
+    ``reindex(include_vectors=True)`` tool actually calls. (The architect's
+    plan named ``VectorBackend._index_local``; that method has no live caller
+    in this tree, so wiring it there would have been wiring into dead code.)
+
+    The flag is read ONCE per rebuild, before any per-vector work, with the
+    QUIET probe: with ``v4.pq`` off this function reads no config twice, opens
+    no database, writes no row and logs nothing, so a rebuild is byte-for-byte
+    what it was unwired.
+
+    Deterministic: the training sample is the first ``train_sample`` vectors
+    in the rebuild's own (sorted-file, parse-order) sequence, and the codebook
+    trainer seeds its k-means++ from ``cfg.kmeans_seed``. No clock, no RNG
+    draw that is not seeded.
+
+    Returns a small report dict, or ``None`` if the flag is off or the vectors
+    cannot be encoded under the configured geometry.
+    """
+    try:
+        from .v4.feature_flags import is_enabled_quiet
+
+        if not is_enabled_quiet("pq"):
+            return None
+    except Exception:  # pragma: no cover - defensive: v4 surface absent
+        return None
+
+    from .v4 import pq as _pq
+
+    # Filter ids and vectors AS PAIRS. Filtering the vectors alone and then
+    # zipping against the unfiltered ids is how a block ends up wearing its
+    # neighbour's code — silently, and only for corpora that contain one
+    # unembeddable block.
+    pairs = [(bid, list(vec)) for bid, vec in zip(ids, embeddings) if vec]
+    if not pairs:
+        _log.info("pq_compress_skipped", reason="no_usable_vectors")
+        return None
+    dim = len(pairs[0][1])
+    ragged = [bid for bid, vec in pairs if len(vec) != dim]
+    if ragged:
+        # A mixed-dimension training set makes train_codebook raise, and a
+        # codebook trained on the wrong shape encodes every real vector to
+        # b"" — an empty index with no error anywhere.
+        _log.warning("pq_compress_skipped", reason="ragged_embedding_dimensions", dim=dim, offenders=len(ragged))
+        return None
+
+    cfg = _pq._load_config()
+    if cfg.subvectors <= 0 or dim % cfg.subvectors != 0:
+        # Encoding under a geometry that does not divide the dimension would
+        # make encode() return b"" for every vector -- a silently empty index.
+        _log.warning("pq_compress_skipped", reason="subvectors_do_not_divide_dim", dim=dim, subvectors=cfg.subvectors)
+        return None
+
+    sample_n = max(1, min(len(pairs), _pq_train_sample()))
+    codebook = _pq.train_codebook([vec for _bid, vec in pairs[:sample_n]], cfg)
+    _pq.store_codebook(workspace, codebook_name, codebook)
+
+    encoded = 0
+    for bid, vec in pairs:
+        code = _pq.encode(vec, codebook)
+        if not code:
+            continue
+        _pq.store_code(workspace, bid, codebook_name, code)
+        encoded += 1
+
+    report = {
+        "codebook": codebook_name,
+        "dim": dim,
+        "subvectors": cfg.subvectors,
+        "train_sample": sample_n,
+        "encoded": encoded,
+        "bytes_per_vector": cfg.subvectors,
+    }
+    _log.info("pq_compress", **report)
+    return report
+
+
+def _pq_train_sample() -> int:
+    """The ``v4.pq.train_sample`` knob, defaulted and floored.
+
+    Separate from ``pq._load_config`` because the cap is a property of THIS
+    call site (a pure-Python trainer on a rebuild path), not of the codec.
+    """
+    try:
+        from .v4.feature_flags import flag_config
+
+        raw = flag_config("pq", quiet=True)
+        v = raw.get("train_sample", _PQ_DEFAULT_TRAIN_SAMPLE) if isinstance(raw, dict) else _PQ_DEFAULT_TRAIN_SAMPLE
+        if isinstance(v, bool):
+            return _PQ_DEFAULT_TRAIN_SAMPLE
+        return max(1, int(v))
+    except (TypeError, ValueError, ImportError):
+        return _PQ_DEFAULT_TRAIN_SAMPLE
+
+
 def rebuild_index(workspace: str) -> int:
     """Rebuild vector index for all blocks in the workspace.
 
@@ -1520,7 +1633,7 @@ def rebuild_index(workspace: str) -> int:
     # Collect all blocks from workspace
     from .block_parser import parse_file as _parse
 
-    blocks: list[dict] = []
+    parsed: list[dict] = []
     for subdir in CORPUS_DIRS:
         d = os.path.join(workspace, subdir)
         if not os.path.isdir(d):
@@ -1528,9 +1641,28 @@ def rebuild_index(workspace: str) -> int:
         for fn in sorted(os.listdir(d)):
             if fn.endswith(".md"):
                 try:
-                    blocks.extend(_parse(os.path.join(d, fn)))
+                    parsed.extend(_parse(os.path.join(d, fn)))
                 except Exception as exc:
                     _log.debug("corpus_file_parse_skipped", error=str(exc))
+
+    # ADMISSION. This loop parsed the corpus off disk with no status filter at
+    # all, so a quarantined or pending block went straight into the vector
+    # index and was reachable by similarity even though every text path
+    # correctly withholds it. Same defect class as the consolidation loader
+    # that SELECTed a status and never filtered on it -- here there was not
+    # even a status to ignore.
+    #
+    # `admit_corpus` is the shared gate and is called, never re-implemented:
+    # a hand-rolled status check here would drift from the one table that
+    # decides servability, and an unstated status is SERVABLE, so a
+    # re-implementation that only rejected known-bad values would admit
+    # anything unlabelled.
+    from .admissibility import admit_corpus
+
+    blocks = admit_corpus(parsed)
+    withheld = len(parsed) - len(blocks)
+    if withheld:
+        _log.info("rebuild_index_withheld", workspace=workspace, withheld=withheld)
 
     if not blocks:
         _log.info("rebuild_index_empty", workspace=workspace)
@@ -1570,6 +1702,30 @@ def rebuild_index(workspace: str) -> int:
     index_file = os.path.join(index_dir, "index.json")
     with open(index_file, "w", encoding="utf-8") as f:
         json.dump(index_data, f)
+
+    # v4.pq (default OFF): compress the same vectors into 1 byte per
+    # subvector position in the v4 side store. One flag read, here, after
+    # every per-vector loop above has already finished.
+    #
+    # The ids are filtered through ``admissibility.admissible`` first. This
+    # leg reads blocks, so it calls the shared admission gate -- the rule that
+    # exists because a loader once SELECTed a status column and never filtered
+    # on it. It matters concretely here: ``rebuild_index`` parses the corpus
+    # with ``parse_file`` and no status filter at all, so ``blocks`` above (and
+    # therefore ``index.json``) contains quarantined blocks. That is a
+    # PRE-EXISTING gap in the JSON index and is deliberately not changed here
+    # -- but a new store must not inherit it, so nothing withheld gets a PQ
+    # code.
+    from .admissibility import admissible as _admissible
+
+    _servable = _admissible(blocks)
+    _pq_records = [rec for rec in index_data if rec["_id"] in _servable]
+    _pq_compress(
+        workspace,
+        backend.model_name,
+        [rec["_id"] for rec in _pq_records],
+        [rec["embedding"] for rec in _pq_records],
+    )
 
     _log.info("rebuild_index_complete", blocks=len(blocks), workspace=workspace)
     return len(blocks)

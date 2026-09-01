@@ -1,44 +1,6 @@
-# Reachability debt register — the file only ever SHRINKS.
-#
-# 2026-09-01: 39 -> 35 (slice 1) -> 30 (slice 2). Re-seeded after the 5.1.0 RESTORATION.
-#
-# 5.0.0 deleted 44 modules (13,594 LOC) as unreachable and emptied this file.
-# That was overturned: "nothing imports it" is evidence about WIRING, never
-# about worth. The modules are restored and are being WIRED, slice by slice,
-# per the architectural plan — so this register goes back to zero by
-# connecting code, not by deleting it.
-#
-# Every name below has a wiring slice assigned. The gate fails only on
-# ADDITIONS, so each slice shrinks this file and CI stays green throughout.
-# Six modules are deliberately not wired and carry a documented re-entry
-# condition rather than a deletion.
-api.grpc_server
-bootstrap_corpus
-consensus_vote
-error_codes
-event_fanout
-governance_raft
-ingestion_pipeline
-llm_noise_profile
-memory_mesh
-mind_kernels
-mrs
-multi_modal
-online_trainer
-storage.sharded_pg
-streaming
-tenant_audit
-tenant_kms
-tracking
-trajectory
-turbo_quant
-v4.backpressure
-v4.block_kinds
-v4.block_metadata
-v4.embedding_pipeline
-v4.health
-v4.hnsw_kind_index
-v4.kernels
-v4.kind_summaries
-v4.pq
-v4.vocabulary
+api.grpc_server  # waiting: a named client integration that requires gRPC (streaming recall, cross-language perf), or a multi-tenant server deployment. 'REST feels slow' is not the trigger; a profile showing http_transport as the bottleneck is.
+governance_raft  # waiting: a SECOND writer to the governance store exists (multi-primary replication, or federation write-conflict resolution needing more than LWW/three-way-merge). Checkable: a deployment config with >1 governance write endpoint.
+memory_mesh  # waiting: two live workspaces need a sync scope federation.py does not cover. First action at trigger time is an overlap review against federation.py -- fold in or wire the delta, never a second parallel sync surface.
+storage.sharded_pg  # waiting: a MEASURED single-PG bottleneck: block count or write throughput degrading recall/ingest SLOs on one instance, or a customer requiring Citus. The trigger is a benchmark number, not a feeling.
+tenant_audit  # waiting: the server surface gains authenticated per-tenant identity -- and it must be wired in that SAME release: retrofitting audit isolation after tenant data has interleaved into one chain is the exact mistake audit chains exist to prevent.
+turbo_quant  # waiting: the first self-contained-artifact consumer wants compression (export_memory, cold tier, federation transport). INVARIANT: it never touches the recall path -- v4/pq is the sole retrieval-path quantiser; two on one path is a fork.

@@ -8,6 +8,9 @@ Jobs:
   transcript_scan  — scan recent transcripts for signals
   entity_ingest    — extract entities from signals/logs
   intel_scan       — contradiction detection, drift analysis, briefings
+  session_summary  — OPT-IN. Summarise recent transcripts into
+                     summaries/daily/*.md + a linking signal. OFF unless
+                     ``auto_ingest.session_summary`` is true.
   all              — run all enabled jobs sequentially
 
 Usage:
@@ -72,6 +75,41 @@ JOB_DEFS: dict[str, tuple[str, list[str], str]] = {
 
 ALL_JOBS = list(JOB_DEFS.keys())
 
+# ---------------------------------------------------------------------------
+# Opt-in jobs: same shape, OFF unless the workspace config says otherwise.
+#
+# Deliberately a SECOND table rather than a fourth row in ``JOB_DEFS``.
+# ``JOB_DEFS`` is "what a tick runs", and ``ALL_JOBS`` is derived from it —
+# a job that is off by default does not belong in either, or `--job all`
+# would grow a "skipped" line on every workspace that never asked for it.
+# Splitting the tables is what keeps flag-OFF behaviour byte-identical:
+# with no config, ``main`` dispatches exactly ``ALL_JOBS``, prints exactly
+# the lines it printed before, and logs nothing about the opt-in job.
+#
+# ``session_summary`` is an INGEST DOOR: it reads Claude Code transcripts
+# from OUTSIDE the workspace (``~/.claude/projects``) and derives content
+# from them. Both of its writes are admitted under
+# ``IngestTier.AUTO_CAPTURE``, so what it produces lands ``Status: pending``
+# and is not recallable until a governance proposal releases it — but a
+# door that reads the operator's whole transcript history is still an
+# opt-in, not a default.
+# ---------------------------------------------------------------------------
+
+OPT_IN_JOB_DEFS: dict[str, tuple[str, list[str], str]] = {
+    "session_summary": (
+        "session_summarizer",
+        ["--scan-recent", "--days", "1"],
+        "session_summary",
+    ),
+}
+
+OPT_IN_JOBS = list(OPT_IN_JOB_DEFS.keys())
+
+#: Every job this runner can dispatch, default-on and opt-in alike. Lookup
+#: only — enablement is decided by :func:`is_job_enabled`, never by
+#: membership here.
+KNOWN_JOBS: dict[str, tuple[str, list[str], str]] = {**JOB_DEFS, **OPT_IN_JOB_DEFS}
+
 
 # ---------------------------------------------------------------------------
 # Config
@@ -123,13 +161,22 @@ def config_read_error(workspace: str) -> str | None:
 
 
 def is_job_enabled(config: dict, job_name: str) -> bool:
-    """Check if a job is enabled in the auto_ingest config section."""
+    """Check if a job is enabled in the auto_ingest config section.
+
+    The per-job default depends on which table the job came from: the three
+    jobs in :data:`JOB_DEFS` default to ON (unchanged), and everything in
+    :data:`OPT_IN_JOB_DEFS` defaults to OFF. An ingest door must be asked
+    for by name — ``auto_ingest.session_summary: true`` — not acquired by
+    upgrading.
+    """
     auto_ingest = config.get("auto_ingest", {})
     # If auto_ingest.enabled is explicitly false, nothing runs
     if not auto_ingest.get("enabled", True):
         return False
-    # Check individual toggle (default: enabled)
-    return bool(auto_ingest.get(job_name, True))
+    # Check individual toggle. Default ON for a default-on job, OFF for an
+    # opt-in one.
+    default = job_name not in OPT_IN_JOB_DEFS
+    return bool(auto_ingest.get(job_name, default))
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +192,7 @@ def run_job(job_name: str, workspace: str) -> dict:
     them as a top-level script raised ``ImportError: attempted relative import
     with no known parent package``, which silently broke every daemon tick.
     """
-    module, extra_args, _ = JOB_DEFS[job_name]
+    module, extra_args, _ = KNOWN_JOBS[job_name]
     # Validate the module file actually exists in the package before invoking,
     # so a missing/renamed module fails fast with a clear error instead of a
     # generic subprocess non-zero exit.
@@ -222,7 +269,7 @@ def print_cron_instructions(workspace: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="mind-mem periodic job runner")
     parser.add_argument("workspace", nargs="?", default=".", help="workspace path (default: cwd)")
-    parser.add_argument("--job", choices=ALL_JOBS + ["all"], default="all", help="which job to run")
+    parser.add_argument("--job", choices=ALL_JOBS + OPT_IN_JOBS + ["all"], default="all", help="which job to run")
     parser.add_argument("--install-cron", action="store_true", help="print crontab install instructions")
     args = parser.parse_args()
 
@@ -246,7 +293,14 @@ def main() -> int:
         return 2
 
     config = load_config(workspace)
-    jobs = ALL_JOBS if args.job == "all" else [args.job]
+    # `all` means every default-on job, plus any opt-in job the workspace has
+    # explicitly enabled. An opt-in job that is off is not appended and not
+    # reported as skipped: probing the flag must leave no trace, or "off" is
+    # observable and the flag-off path is no longer byte-identical.
+    if args.job == "all":
+        jobs = ALL_JOBS + [name for name in OPT_IN_JOBS if is_job_enabled(config, name)]
+    else:
+        jobs = [args.job]
 
     _log.info("cron_run_start", workspace=workspace, jobs=jobs)
 

@@ -25,6 +25,12 @@ Lazy singletons
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mind_mem.error_codes import ErrorCode
+
+import json
 import os
 from typing import Any
 
@@ -40,6 +46,9 @@ from mind_mem.observability import get_logger, metrics  # noqa: E402, F401
 from mind_mem.telemetry import traced  # noqa: E402, F401
 
 __all__ = [
+    "error_envelope",
+    "_context_budget_enabled",
+    "_retrieval_metrics_enabled",
     "_signal_store_path",
     "_kg_path",
     "_core_dir",
@@ -50,6 +59,29 @@ __all__ = [
     "metrics",
     "traced",
 ]
+
+
+def _context_budget_enabled(ws: str) -> bool:
+    """``v4.context_budget`` state for *ws*. Silent probe — see below."""
+    return _flag_enabled(ws, "context_budget")
+
+
+def _retrieval_metrics_enabled(ws: str) -> bool:
+    """``v4.retrieval_metrics`` state for *ws*. Silent probe — see below."""
+    return _flag_enabled(ws, "retrieval_metrics")
+
+
+def _flag_enabled(ws: str, flag: str) -> bool:
+    """Workspace-first, non-observable flag probe.
+
+    Delegates to :func:`mind_mem.v4.feature_flags.is_enabled_for_workspace`,
+    which logs nothing and raises nothing. Asking "is this surface on?" must
+    leave no trace when the answer is no, or the flag-off build stops being
+    indistinguishable from the build that never had the feature.
+    """
+    from mind_mem.v4.feature_flags import is_enabled_for_workspace
+
+    return is_enabled_for_workspace(ws, flag)
 
 
 def _signal_store_path(ws: str) -> str:
@@ -99,3 +131,32 @@ def _core_registry() -> Any:
 
         _CORE_REGISTRY = CoreRegistry()
     return _CORE_REGISTRY
+
+
+def error_envelope(message: str, code: "ErrorCode | None" = None, **extra: Any) -> str:
+    """A tool error as JSON, carrying a stable machine-readable code.
+
+    **Purely additive.** ``error`` keeps the exact string it always had, so
+    every existing reader is untouched; new readers get ``code`` — a stable
+    ``MM-NNNN`` identifier — plus its category and severity. Clients that
+    want to branch on a failure currently have to pattern-match English
+    prose, which changes whenever someone improves the wording.
+
+    ``code`` is optional so a call site that has not been classified yet
+    degrades to exactly today's envelope rather than to a wrong code. A
+    missing code is honest; a guessed one is not.
+
+    This is deliberately NOT a replacement for the typed exceptions in
+    ``mind_mem.errors`` — those stay as the in-process contract. This is the
+    wire representation for the MCP boundary, where an exception cannot
+    cross.
+    """
+    out: dict[str, Any] = {"error": message}
+    if code is not None:
+        from mind_mem.error_codes import error_category, error_severity
+
+        out["code"] = f"MM-{code.value}"
+        out["error_category"] = error_category(code).value
+        out["error_severity"] = error_severity(code).value
+    out.update(extra)
+    return json.dumps(out)

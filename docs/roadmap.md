@@ -528,11 +528,12 @@ classifies by extension, routes to the right ingestion path:
 
 - ✓ text (`.txt`, `.md`, `.json`, `.csv`, `.log`, `.xml`, `.yaml`,
   `.yml`) → markdown block (stdlib only).
-- · image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) → ImageBlock
-  scaffold raises `NotImplementedError` with a clear pointer at the
-  optional `multimodal` extra (CLIP / SigLIP embedding wires in v3.10).
-- · audio (`.mp3`, `.wav`, `.flac`, `.m4a`) → AudioBlock scaffold,
-  same posture (Whisper transcription wires in v3.10).
+- ✓ image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) → ImageBlock from an
+  operator-written **sidecar** (`board.png` + `board.png.txt`), behind
+  `v4.multi_modal` (default off). Nothing reads pixels: the media file is
+  hashed, the sidecar is the content.
+- ✓ audio (`.mp3`, `.wav`, `.flac`, `.m4a`) → AudioBlock from a sidecar
+  transcript, same flag and same posture. Nothing transcribes anything.
 - ✓ documents (`.pdf`) → `pypdf` text-extract → markdown block (the
   optional dep is auto-detected at handler time).
 
@@ -543,8 +544,11 @@ The watcher polls (default 5s) so it works across volumes that
 don't support inotify; mtime ordering keeps the most-recent file at
 the end of the queue.
 
-Heavy dependencies (CLIP / Whisper / pdf-extract) stay optional behind
-the `multimodal` extra: `pip install mind-mem[multimodal]`.
+There is **no `multimodal` extra** — `pyproject.toml` declares none, so
+`pip install mind-mem[multimodal]` is a warning and a no-op. No CLIP and no
+Whisper ship, which is why the image and audio doors take a description from
+the operator instead of deriving one. `pdf` needs `pypdf`, which the handler
+names by package at the point of failure.
 
 Solves the "how do I get content into MIND-Mem" friction for non-technical
 users. Files = universal interface, no API knowledge needed.

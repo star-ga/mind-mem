@@ -47,7 +47,59 @@ def _workspace() -> str:
 # ---------------------------------------------------------------------------
 
 
+def _cmd_kernel_recall(args: argparse.Namespace) -> int:
+    """``mm recall --kernel <name>`` — route through a v4 cognitive kernel.
+
+    This is ``v4/kernels``' consumer. Importing that module is what REGISTERS
+    the four named strategies (the registry lives in ``cognitive_kernel`` and
+    that module does not import this one -- a documented trap), so the import
+    below is load-bearing, not decoration: drop it and every name except
+    ``default`` raises ``KeyError`` here.
+
+    Every returned id is filtered through the shared admission gate before it
+    is printed. The default kernel delegates to the governed recall path and
+    is already filtered, but ``graph_walk`` and ``lineage_first`` reach ids
+    out of the ``co_retrieval`` graph directly -- an id that recall would have
+    withheld must not become visible just because a different kernel found it.
+    """
+    import mind_mem.v4.kernels  # noqa: F401 — importing IS the registration
+    from mind_mem.admissibility import admissible
+    from mind_mem.storage import iter_blocks
+    from mind_mem.v4.cognitive_kernel import KernelKind, available_kernels, mind_recall
+    from mind_mem.v4.feature_flags import FeatureDisabledError
+
+    ws = _workspace()
+    try:
+        result = mind_recall(ws, args.query, kernel=args.kernel)
+    except (FeatureDisabledError, ValueError, KeyError) as exc:
+        # FeatureDisabledError: flag off. ValueError: no such kernel name.
+        # KeyError: a real kind with no strategy bound (``recent_first``).
+        # All three are operator input errors, all three name the fix.
+        print(f"mm recall --kernel: {exc}", file=sys.stderr)
+        return 64
+
+    servable = admissible(iter_blocks(ws, active_only=False))
+    kept = [h for h in result.hits if h.block_id in servable]
+    hits = [{"block_id": h.block_id, "score": h.score, "reason": h.reason} for h in kept][: args.limit]
+    payload = {
+        "query": args.query,
+        "kernel": result.kernel.value if isinstance(result.kernel, KernelKind) else str(result.kernel),
+        "registered_kernels": sorted(k.value for k in available_kernels()),
+        "withheld": len(result.hits) - len(kept),
+        "count": len(hits),
+        "hits": hits,
+        "metadata": dict(result.metadata),
+    }
+    print(json.dumps(payload, indent=2, default=str))
+    return 0
+
+
 def _cmd_recall(args: argparse.Namespace) -> int:
+    # v4 cognitive kernels are opt-in per invocation: with no --kernel the
+    # path below is byte-for-byte what it was, and no feature flag is read.
+    if getattr(args, "kernel", None):
+        return _cmd_kernel_recall(args)
+
     from mind_mem.recall import recall
 
     results = recall(
@@ -996,6 +1048,72 @@ def _cmd_detect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_kinds_backfill(args: argparse.Namespace) -> int:
+    """Build the v4 kind index for the workspace (``mm kinds backfill``).
+
+    The consumer for ``v4.block_kinds``' write surface and, in the
+    architect-mandated dependency order behind their own flags, for
+    ``v4.kind_summaries``, ``v4.embedding_pipeline`` and
+    ``v4.hnsw_kind_index``. Everything it writes lands in the v4 side store
+    ``<workspace>/index.db``; the corpus is only ever read, and only the
+    ADMITTED subset of it (see :mod:`mind_mem.v4.kind_backfill`).
+    """
+    from mind_mem.v4.feature_flags import FeatureDisabledError
+    from mind_mem.v4.kind_backfill import backfill
+
+    try:
+        result = backfill(_workspace())
+    except FeatureDisabledError as exc:
+        print(f"mm kinds backfill: {exc}", file=sys.stderr)
+        return 64
+    print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+    return 0
+
+
+def _cmd_kinds_list(args: argparse.Namespace) -> int:
+    """List block ids carrying a kind (``mm kinds list --kind entity``).
+
+    Reads ``blocks.kind`` — the column ``mm kinds backfill`` populates — so an
+    empty answer on a workspace that was never backfilled is the documented
+    fallback, not a lookup failure. The message says which of the two it is.
+
+    The ids are re-checked against the LIVE corpus before printing. The index
+    is admission-filtered when it is WRITTEN and pruned on every re-run, but
+    between two runs it is a cache, and a cache goes stale fail-open: a block
+    quarantined an hour ago is still in the column until the next backfill.
+    ``withheld`` reports how many that was, so a drifting index is visible
+    rather than silent.
+    """
+    from mind_mem.admissibility import admissible
+    from mind_mem.storage import iter_blocks
+    from mind_mem.v4.block_kinds import BlockKind, get_block_kind_tags, list_blocks_by_kind
+    from mind_mem.v4.feature_flags import FeatureDisabledError
+
+    try:
+        kind = BlockKind(args.kind)
+    except ValueError:
+        valid = sorted(k.value for k in BlockKind)
+        print(f"mm kinds list: unknown kind {args.kind!r}; valid kinds: {valid}", file=sys.stderr)
+        return 64
+    ws = _workspace()
+    try:
+        indexed = list_blocks_by_kind(ws, kind, limit=args.limit)
+        servable = admissible(iter_blocks(ws, active_only=False))
+        ids = [bid for bid in indexed if bid in servable]
+        payload = {
+            "kind": kind.value,
+            "count": len(ids),
+            "withheld": len(indexed) - len(ids),
+            "block_ids": ids,
+            "tags": {bid: sorted(k.value for k in get_block_kind_tags(ws, bid)) for bid in ids},
+        }
+    except FeatureDisabledError as exc:
+        print(f"mm kinds list: {exc}", file=sys.stderr)
+        return 64
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
 def _cmd_vault_write(args: argparse.Namespace) -> int:
     from mind_mem.agent_bridge import VaultBlock, VaultBridge
 
@@ -1740,6 +1858,77 @@ def _cmd_inbox_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ingest_serve(args: argparse.Namespace) -> int:
+    """Serve the POST /ingest webhook door and drain it through the gate (5.1.0).
+
+    The drain consumer is the point of this command. Every accepted event
+    becomes a block only via ``admit_block(tier=EXTERNAL_INGEST)``, so it
+    lands quarantined and is not recallable until a governance release
+    admits it. Flag-gated, default OFF: without ``v4.ingest_serve`` this
+    binds no socket, writes no WAL and creates no file.
+    """
+    import time as _time
+
+    from mind_mem.ingestion_pipeline import (
+        WriteAheadLog,
+        default_wal_path,
+        flag_enabled,
+        open_ingest_door,
+        replay_wal,
+    )
+
+    ws = _workspace()
+    if not flag_enabled(ws):
+        print(
+            'error: the ingest webhook door is disabled. Enable it in mind-mem.json:\n  "v4": { "ingest_serve": { "enabled": true } }',
+            file=sys.stderr,
+        )
+        return 2
+
+    wal_path = None if args.no_wal else (args.wal or default_wal_path(ws))
+
+    # Catch up first: anything a previous run fsynced but never applied.
+    # Content-addressed ids make this idempotent, so replaying a record that
+    # WAS applied rewrites the identical block rather than duplicating it.
+    if wal_path:
+        replayed = replay_wal(ws, WriteAheadLog(wal_path))
+        if replayed.processed or args.replay_only:
+            print(json.dumps({"replayed": replayed.as_dict()}, sort_keys=True))
+    elif args.replay_only:
+        print("error: --replay-only needs a WAL; --no-wal leaves nothing to replay.", file=sys.stderr)
+        return 2
+    if args.replay_only:
+        return 0
+
+    door = open_ingest_door(
+        ws,
+        port=args.port,
+        host=args.host,
+        wal_path=wal_path,
+        capacity=args.capacity,
+    )
+    print(
+        f"mind-mem ingest-serve: workspace={ws} POST http://{args.host}:{args.port}/ingest "
+        f"wal={wal_path or '(none, at-most-once)'} interval={args.interval}s"
+    )
+    print("every accepted event lands Status: quarantined and is NOT recallable until released.")
+    try:
+        while True:
+            _time.sleep(args.interval)
+            outcome = door.drain()
+            if outcome.processed:
+                print(json.dumps(outcome.as_dict(), sort_keys=True))
+    except KeyboardInterrupt:
+        print("\nshutting down ...")
+    finally:
+        door.stop()
+        # Apply whatever arrived between the last pass and the shutdown.
+        final = door.drain()
+        if final.processed:
+            print(json.dumps(final.as_dict(), sort_keys=True))
+    return 0
+
+
 def _cmd_send(args: argparse.Namespace) -> int:
     """Send an agent-to-agent message (write an MSG- block) — v4.0.19."""
     from mind_mem.agent_messaging import send_message
@@ -2413,6 +2602,52 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             ),
         }
 
+    # Controlled-vocabulary declaration health (``v4.vocabulary``, default OFF).
+    #
+    # ``load_vocabularies`` is deliberately TOLERANT on the write path: a
+    # malformed declaration is skipped with a logged warning so one typo in
+    # mind-mem.json cannot take ingest down. That is the right default, and it
+    # is also exactly how a broken vocabulary becomes invisible — the field
+    # simply stops being enforced, and nothing at the write door can tell the
+    # difference between "no vocabulary declared" and "the vocabulary did not
+    # parse". doctor is where the tolerant path gets its loud counterpart: it
+    # re-loads the SAME declarations in strict mode and reports what ingest is
+    # silently dropping, plus which fields are actually being enforced.
+    #
+    # Probed once, quietly, with `is_enabled_quiet` — the AMBIENT resolver, and
+    # deliberately not the workspace-first one. `load_vocabularies` gates itself
+    # on `require_enabled`, which reads the ambient config, so a probe that
+    # resolved the flag any other way could answer "on" for a surface the callee
+    # then refuses: workspace-first here raised FeatureDisabledError straight out
+    # of `mm doctor` the moment MIND_MEM_CONFIG named a different file. A probe
+    # must ask the same question its callee will. With the flag off doctor
+    # reports nothing about vocabularies: the key is simply absent, exactly as
+    # before the surface existed.
+    from .v4.feature_flags import is_enabled_quiet as _v4_quiet
+
+    if _v4_quiet("vocabulary"):
+        from .v4.vocabulary import WORKSPACE_FILE, VocabularyConfigError, load_vocabularies
+
+        try:
+            _vocabs = load_vocabularies(ws, strict=True)
+        except VocabularyConfigError as exc:
+            report["vocabularies"] = {
+                "ok": False,
+                "error": str(exc),
+                "advice": (
+                    f"a declaration in mind-mem.json 'vocabularies' or {WORKSPACE_FILE} does not "
+                    "parse. The write path SKIPS malformed declarations rather than failing, so "
+                    "the affected field is currently unenforced — fix the declaration or delete it."
+                ),
+            }
+        else:
+            report["vocabularies"] = {
+                "ok": True,
+                "declared_fields": sorted(_vocabs),
+                "enforced_fields": sorted(f for f, v in _vocabs.items() if v.mode == "reject"),
+                "flag_only_fields": sorted(f for f, v in _vocabs.items() if v.mode == "flag"),
+            }
+
     # --migrate-recall-log: schema-drift fix
     if args.migrate_recall_log and sq_exists:
         try:
@@ -2531,7 +2766,12 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             report["actions"].append({"rebuild_cache": {"error": str(exc)}})
 
     print(json.dumps(report, indent=2, default=str))
-    healthy = report.get("in_sync", False) and not report.get("fts_index_empty", False)
+    # A malformed vocabulary declaration counts against health: the write path
+    # skips it silently, so the affected field stops being enforced and nothing
+    # else in the product will ever say so. Absent key (flag off) reads as
+    # ``True`` here, so the exit code is unchanged for every workspace that has
+    # not opted in.
+    healthy = report.get("in_sync", False) and not report.get("fts_index_empty", False) and report.get("vocabularies", {}).get("ok", True)
     return 0 if healthy or args.rebuild_cache or args.migrate_recall_log else 1
 
 
@@ -2669,6 +2909,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--until",
         default=None,
         help="ISO-8601 upper bound on block Date (inclusive). E.g. --until 2026-12-31.",
+    )
+    p_recall.add_argument(
+        "--kernel",
+        default=None,
+        help=(
+            "Route through a v4 cognitive-kernel strategy instead of plain "
+            "recall: default, surprise_weighted, lineage_first, "
+            "contradicts_first, graph_walk. Requires v4.cognitive_kernel in "
+            "mind-mem.json. Omit for unchanged v3 recall."
+        ),
     )
     p_recall.set_defaults(func=_cmd_recall)
 
@@ -3016,6 +3266,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_import.set_defaults(func=_cmd_import)
 
+    # kinds namespace — the v4 block-kind taxonomy's operator surface.
+    # `backfill` is the WRITER v4/block_kinds shipped without; `list` is the
+    # reader that proves the write landed.
+    p_kinds = sub.add_parser(
+        "kinds",
+        help="v4 block-kind taxonomy (requires v4.block_kinds in mind-mem.json).",
+    )
+    ksub = p_kinds.add_subparsers(dest="kinds_cmd", required=True)
+
+    k_backfill = ksub.add_parser(
+        "backfill",
+        help=(
+            "Classify every admitted block into the v4 kind index, and "
+            "(per their own flags) refresh kind summaries, derive "
+            "embeddings, and register them for kind-filtered kNN."
+        ),
+    )
+    k_backfill.set_defaults(func=_cmd_kinds_backfill)
+
+    k_list = ksub.add_parser("list", help="List block ids of one kind, with their full tag sets.")
+    k_list.add_argument(
+        "--kind",
+        default="entity",
+        help="Kind to list: entity, concept, source, synthesis, image, audio, code, structured, unspecified.",
+    )
+    k_list.add_argument("--limit", type=int, default=100, help="Maximum block ids to return (default 100).")
+    k_list.set_defaults(func=_cmd_kinds_list)
+
     # vault namespace
     p_vault = sub.add_parser("vault", help="Vault sync subcommands.")
     vsub = p_vault.add_subparsers(dest="vault_cmd", required=True)
@@ -3141,6 +3419,31 @@ def build_parser() -> argparse.ArgumentParser:
     p_inbox.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds (>=0.5).")
     p_inbox.add_argument("--once", action="store_true", help="Drain inbox once and exit.")
     p_inbox.set_defaults(func=_cmd_inbox_watch)
+
+    # ingest-serve — 5.1.0 webhook ingest door + governed drain consumer
+    p_ingest = sub.add_parser(
+        "ingest-serve",
+        help=(
+            "Serve POST /ingest and drain accepted events into QUARANTINED blocks. "
+            "Requires v4.ingest_serve in mind-mem.json; off by default."
+        ),
+    )
+    p_ingest.add_argument("--port", type=int, default=8788, help="TCP port to listen on (default: 8788).")
+    p_ingest.add_argument("--host", default="127.0.0.1", help="Bind address (default: loopback).")
+    p_ingest.add_argument("--wal", default=None, help="WAL path (default: <workspace>/memory/ingest-wal.jsonl).")
+    p_ingest.add_argument(
+        "--no-wal",
+        action="store_true",
+        help="Run without a write-ahead log. At-most-once: a kill loses un-drained events.",
+    )
+    p_ingest.add_argument("--interval", type=float, default=1.0, help="Seconds between drain passes (default: 1.0).")
+    p_ingest.add_argument("--capacity", type=int, default=1024, help="Queue capacity before backpressure (default: 1024).")
+    p_ingest.add_argument(
+        "--replay-only",
+        action="store_true",
+        help="Apply the WAL backlog through the gate and exit; bind no socket.",
+    )
+    p_ingest.set_defaults(func=_cmd_ingest_serve)
 
     # send — v4.0.19 agent-to-agent messaging (write an MSG- block)
     p_send = sub.add_parser(

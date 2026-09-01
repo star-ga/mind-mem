@@ -34,6 +34,18 @@ while a callback-only subscriber never polls and will accumulate shed
 events as a matter of course — its consumption is the callback, not the
 queue. Read ``dropped`` against ``poll`` usage, never as "events the
 listener missed".
+
+Backpressure (5.1.0)
+--------------------
+``queue_depth`` was a number an operator could read and nothing could
+act on. With ``v4.backpressure`` enabled, every publish reports that
+depth to :mod:`mind_mem.v4.backpressure`, so a producer can ask
+:meth:`ChangeStream.is_overloaded` BEFORE it enqueues more work instead
+of discovering the backlog after the fact in the ``dropped`` counter.
+The flag is off by default and the probe is silent, so an unconfigured
+process behaves exactly as it did before: the bus itself never changes
+what it delivers, queues, or sheds either way — backpressure is advice
+to producers, not a policy the bus enforces.
 """
 
 from __future__ import annotations
@@ -43,6 +55,12 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Optional
+
+from .v4.backpressure import PRODUCER_CHANGE_STREAM as _BP_PRODUCER
+from .v4.backpressure import producer_overloaded as _bp_producer_overloaded
+from .v4.backpressure import report_depth as _bp_report_depth
+from .v4.backpressure import snapshot as _bp_snapshot
+from .v4.backpressure import wiring_enabled as _bp_wiring_enabled
 
 
 @dataclass(frozen=True)
@@ -120,12 +138,19 @@ class ChangeStream:
         max_queue_depth: Per-subscriber backlog cap for the pull surface.
             Events beyond the cap shed the oldest element first so the
             newest data always reaches a recovering subscriber.
+        producer: Name this bus reports its depth under when
+            ``v4.backpressure`` is enabled. Defaults to the canonical
+            ``change_stream``. Two buses in one process must not share a
+            name — ``set_depth`` is last-writer-wins, so they would
+            overwrite each other's backlog and both readings would be
+            fiction.
     """
 
-    def __init__(self, *, max_queue_depth: int = 1024) -> None:
+    def __init__(self, *, max_queue_depth: int = 1024, producer: str | None = None) -> None:
         if max_queue_depth < 1:
             raise ValueError("max_queue_depth must be >= 1")
         self._max_depth = int(max_queue_depth)
+        self._producer = producer or _BP_PRODUCER
         self._lock = threading.RLock()
         self._subs: list[_Subscription | None] = []
         self._published = 0
@@ -175,7 +200,18 @@ class ChangeStream:
                 count = len(sub.queue)
             else:
                 count = max(0, min(int(max_events), len(sub.queue)))
-            return [sub.queue.popleft() for _ in range(count)]
+            drained = [sub.queue.popleft() for _ in range(count)]
+            depth = sum(len(s.queue) for s in self._subs if s is not None)
+        # Report the POST-DRAIN depth. Without this the controller only ever
+        # hears from publish(), so it could learn that the backlog grew but
+        # never that it shrank: recovery needs a report at or below the low
+        # watermark, and a stream whose queue cap (1024) exceeds the high
+        # watermark (1000) trips overload and then pins there forever once
+        # publishing goes idle -- deferring every daemon task on every tick,
+        # indefinitely. The drain is the only place that knows the load
+        # actually dropped, so the drain is where it has to be said.
+        _bp_report_depth(self._producer, depth)
+        return drained
 
     # ------------------------------------------------------------------
     # Publish
@@ -214,7 +250,38 @@ class ChangeStream:
                     # subscribers.
                     sub.listener_errors += 1
                     self._listener_errors += 1
+            depth = sum(len(s.queue) for s in self._subs if s is not None)
+        # Reported OUTSIDE the bus lock: the controller has a lock of its
+        # own, and holding both would put a second lock in the path of
+        # every publish for a signal no subscriber waits on.
+        _bp_report_depth(self._producer, depth)
         return ev
+
+    # ------------------------------------------------------------------
+    # Backpressure
+    # ------------------------------------------------------------------
+
+    def is_overloaded(self) -> bool:
+        """Is the pull-side backlog past the high watermark?
+
+        Always ``False`` when ``v4.backpressure`` is off — an
+        unconfigured deployment has no watermarks to be past. A producer
+        that gets ``True`` should stop publishing and let subscribers
+        drain; the bus does not enforce that, and a producer that
+        ignores it sees exactly the shedding it saw before.
+        """
+        return _bp_producer_overloaded(self._producer)
+
+    def backpressure_status(self) -> dict[str, Any] | None:
+        """Controller state for this bus, or ``None`` when the flag is off.
+
+        ``None`` and "not overloaded" are deliberately different answers:
+        the first says nothing is measuring, the second says something is
+        measuring and the queue is fine.
+        """
+        if not _bp_wiring_enabled():
+            return None
+        return _bp_snapshot().get(self._producer)
 
     # ------------------------------------------------------------------
     # Stats

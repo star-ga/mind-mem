@@ -6,7 +6,7 @@
   <strong>Replayable memory for AI agents. Deterministic recall with a byte-identical audit chain across runs, machines, and substrates.</strong>
 </p>
 <p align="center">
-  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 101 MCP tools<br>
+  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 102 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
@@ -22,14 +22,14 @@
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/tests-7%2C500%2B-brightgreen?style=flat-square" alt="Tests: 7,500+">
-  <img src="https://img.shields.io/badge/MCP_tools-101-blue?style=flat-square" alt="MCP Tools: 101">
+  <img src="https://img.shields.io/badge/MCP_tools-102-blue?style=flat-square" alt="MCP Tools: 102">
   <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
   <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v5.0.0</code> &mdash; every block write now passes a governance gate, a withheld block can no longer be served by omitting its status, and the recall attestation binds the question and the served set &mdash;
+  <strong>Current release:</strong> <code>v5.1.0</code> &mdash; the 47 modules 5.0.0 deleted as "unreachable" are restored and being wired, the reachability report now separates a recorded decision from undeclared debt, and a flag-off build is inert again &mdash; measured, not asserted &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -40,7 +40,7 @@ MIND-Mem is a deterministic AI memory system: recall is a pure function of **(co
 
 `scoring_instant` is a UTC date and is the honest part of that claim: recency ranking is load-bearing for a coding agent, so it is not deleted, it is *named*. Omit it and it resolves to today in UTC — the one clock read on the whole path, taken once at the boundary, never inside the scoring loop. Its resolved value is bound into the recall attestation, so any attested run replays exactly by passing that date back.
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 101 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic given (corpus, config, `scoring_instant`) — same three inputs → same ranked results — and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 102 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic given (corpus, config, `scoring_instant`) — same three inputs → same ranked results — and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: scoring kernels compiled from MIND source with Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
@@ -65,7 +65,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v5.0.0** — a **breaking** governance release: no block reaches the store without a gate receipt, an ingest source with no tier cannot get one, the three block-lifecycle tier ladders collapse to one, and `RECALL_ATTEST_v2` binds the query and a rank-ordered digest of the served set.</sub>
+<sub>Current release: **v5.1.0** — a restoration release. 5.0.0 deleted 47 modules (14,711 LOC) because nothing imported them; that reasoning was wrong — **"nothing imports it" is evidence about wiring, never about worth** — and all 47 are back, with all 43 of their test files, being wired one at a time behind default-OFF flags. Two of them were never unreachable at all: an import scan cannot see shell dispatch. The gate that produced this now reports *not wired, deliberately waiting* (with the condition that flips it) separately from *not wired, no recorded decision*. The 5.0.0 governance guarantees are unchanged: no block reaches the store without a gate receipt, and `RECALL_ATTEST_v2` still binds the query to a rank-ordered digest of the served set.</sub>
 
 ### Substrate Properties
 
@@ -248,8 +248,8 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (101 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 101 distinct tools and 8 read-only resources (6 static + 2 templated). The server makes 102 `mcp.tool(...)` registrations, but the consolidated `recall` dispatcher intentionally shadows the base `recall`, so the live surface is 101 distinct tool names. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
+### MCP Server (102 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 102 distinct tools and 8 read-only resources (6 static + 2 templated). The server makes 102 `mcp.tool(...)` registrations, but the consolidated `recall` dispatcher intentionally shadows the base `recall`, so the live surface is 102 distinct tool names. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
 ### 74+ Structural Checks + 3024 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
@@ -258,7 +258,7 @@ Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 101 
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
 
 ### Calibration Feedback Loop
-Per-block quality tracking with Bayesian weight computation. When users provide feedback (thumbs up/down) via `calibration_feedback`, the system maintains a rolling quality score per block over a 30-day window. Bayesian smoothing constrains calibration weights to the 0.5-1.5 range, preventing any single block from dominating or being silenced. Calibration weights integrate directly into the BM25 + FTS5 retrieval pipeline — high-quality blocks rank higher, low-quality blocks are naturally demoted. Use `calibration_stats` to inspect per-block quality distributions and global calibration health.
+Per-block quality tracking with Bayesian weight computation. When users provide feedback (thumbs up/down) via `calibration_feedback`, the system maintains a rolling quality score per block over a 30-day window. Bayesian smoothing constrains calibration weights to the 0.5-1.5 range, preventing any single block from dominating or being silenced. Calibration weights integrate directly into the BM25 + FTS5 retrieval pipeline — high-quality blocks rank higher, low-quality blocks are naturally demoted. Use `calibration_stats` to inspect per-block quality distributions and global calibration health. With `v4.llm_noise_profile` enabled (default off), it also carries an `llm_reliability` section: a per-provider, per-domain reliability EMA fed by `report_outcome` and persisted to `intelligence/llm_profiles.json`. Reliability is evidence for an operator reading the record — nothing on the retrieval scoring path reads it.
 
 ### LLM-Guided Multi-Query Expansion
 Generates semantically diverse query reformulations before search — synonym expansion, specificity shifts, temporal rephrasing, and negation variants. Combines all reformulated queries with Reciprocal Rank Fusion for broader recall without sacrificing precision. Runs locally with zero API calls.
@@ -722,7 +722,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 101 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 102 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -870,7 +870,7 @@ with this row.
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 101 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
+| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 102 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -916,7 +916,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
-| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **101 tools**   |
+| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **102 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
 ### The Gap MIND-Mem Fills

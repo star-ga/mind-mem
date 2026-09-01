@@ -14,8 +14,11 @@ from __future__ import annotations
 import ctypes
 import os
 import re as _re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
+from . import mind_kernels
 from .observability import get_logger
 
 _log = get_logger("ffi")
@@ -90,6 +93,47 @@ def _check_version_compat(so_version: str) -> bool:
     return True
 
 
+def allowed_lib_dirs() -> list[Path]:
+    """Directories an operator-supplied ``.so`` path may live under.
+
+    The same three ``lib/`` locations :data:`_LIB_SEARCH_PATHS` probes,
+    minus the file names. Recomputed per call rather than frozen at import
+    so a test that relocates the package still sees the right roots.
+    """
+    return [
+        Path(__file__).parent / "lib",
+        Path(__file__).parent.parent / "lib",
+        Path(__file__).parent.parent.parent / "lib",
+    ]
+
+
+def resolve_allowlisted_lib(raw: str) -> tuple[Path | None, str]:
+    """Resolve an operator-supplied library path against the allowlist.
+
+    This is the package's ONE answer to "may I load this shared object?".
+    It was previously inlined in :meth:`MindMemKernel.__init__` while
+    ``mind_kernels.load_kernels`` ran a second, allowlist-free loader that
+    handed ``$MIND_MEM_KERNELS_SO`` straight to ``ctypes.CDLL`` — any path
+    in the environment could pull arbitrary native code into the process.
+    That loader is gone; both env vars now come through here.
+
+    Args:
+        raw: The path as the operator wrote it.
+
+    Returns:
+        ``(resolved_path, "")`` when the path is inside an allowed
+        directory and exists, else ``(None, reason)``. The caller decides
+        whether a rejection is worth logging — a probe that runs on an
+        OFF path must be able to ask quietly.
+    """
+    resolved = Path(raw).resolve()
+    dirs = allowed_lib_dirs()
+    in_allowed = any(resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep) for d in dirs)
+    if in_allowed and resolved.exists():
+        return resolved, ""
+    return None, ("outside allowed directories" if not in_allowed else "file does not exist")
+
+
 class MindMemKernel:
     """Wrapper around compiled MIND scoring kernels.
 
@@ -117,14 +161,8 @@ class MindMemKernel:
             env_path = os.environ.get("MIND_MEM_LIB", "")
             if env_path:
                 # Restrict to allowed directories (prevent arbitrary .so loading)
-                resolved = Path(env_path).resolve()
-                allowed = [
-                    Path(__file__).parent / "lib",
-                    Path(__file__).parent.parent / "lib",
-                    Path(__file__).parent.parent.parent / "lib",
-                ]
-                in_allowed = any(resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep) for d in allowed)
-                if in_allowed and resolved.exists():
+                resolved, reason = resolve_allowlisted_lib(env_path)
+                if resolved is not None:
                     self._lib = ctypes.CDLL(str(resolved), mode=_LAZY)
                 else:
                     # Say why the explicit override was dropped. Falling
@@ -134,9 +172,9 @@ class MindMemKernel:
                     # running a different library than the one they named.
                     _log.warning(
                         "ffi_env_lib_rejected",
-                        path=str(resolved),
-                        reason=("outside allowed directories" if not in_allowed else "file does not exist"),
-                        allowed=[str(d) for d in allowed],
+                        path=str(Path(env_path).resolve()),
+                        reason=reason,
+                        allowed=[str(d) for d in allowed_lib_dirs()],
                     )
 
             if self._lib is None:
@@ -496,21 +534,131 @@ _kernel: MindMemKernel | None = None
 _USE_MIND: bool = False
 
 
+def _try_native(lib_path: str | None = None) -> MindMemKernel | None:
+    """Probe for the compiled kernel. Returns None if absent — and stays QUIET.
+
+    The one native probe. Silence is the contract, not an oversight: this
+    runs on paths where the kernel's absence is the documented normal case
+    (no wheel ships a ``.so``), and a probe that logs makes a build with the
+    feature wired observably different from one without it. Callers that
+    want the "falling back to pure Python" notice emit it themselves —
+    :func:`get_kernel` does.
+    """
+    try:
+        return MindMemKernel(lib_path)
+    except (OSError, ImportError):
+        return None
+
+
 def get_kernel() -> MindMemKernel | None:
     """Get or create singleton kernel. Returns None if unavailable."""
     global _kernel, _USE_MIND
     if _kernel is not None:
         return _kernel
-    try:
-        _kernel = MindMemKernel()
+    native = _try_native()
+    if native is not None:
+        _kernel = native
         _USE_MIND = True
         return _kernel
-    except (OSError, ImportError):
-        _USE_MIND = False
-        _log.info(
-            "MIND kernel .so not found — using pure Python fallback. Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
+    _USE_MIND = False
+    _log.info("MIND kernel .so not found — using pure Python fallback. Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so")
+    return None
+
+
+# --- The one kernel loader ---
+
+#: Env vars an operator may point at a compiled kernel, in probe order.
+#: ``MIND_MEM_KERNELS_SO`` is the name the retired ``mind_kernels.load_kernels``
+#: read; it is still honoured, but it now goes through
+#: :func:`resolve_allowlisted_lib` like everything else instead of being
+#: handed to ``ctypes.CDLL`` unchecked.
+_LIB_ENV_VARS = ("MIND_MEM_LIB", "MIND_MEM_KERNELS_SO")
+
+
+@dataclass(frozen=True)
+class Kernels:
+    """A resolved kernel binding: four hot-path kernels plus the native handle.
+
+    ``backend`` names which *library* answered the probe — ``"native"`` when
+    a compiled ``libmindmem.so`` loaded, ``"python"`` otherwise. It does NOT
+    mean the four callables below changed: they are always the pure-Python
+    implementations in :mod:`mind_mem.mind_kernels`.
+
+    deferred: the compiled ABI is *batched* (``bm25f_batch``, ``rrf_fuse``
+    over flat float arrays) while these four are per-document/per-pair, so
+    there is no shim to route them through the ``.so`` yet. Upgrade path:
+    add scalar wrappers over ``native.bm25f_batch_py`` /
+    ``native.rrf_fuse_py`` and bind them here when ``backend == "native"``,
+    gated on a byte-identity test against the Python results. Until then a
+    native library accelerates only the callers that reach for ``.native``
+    directly (``category_distiller``).
+    """
+
+    bm25f_score: Callable[..., float]
+    sha3_512_chain_verify: Callable[..., bool]
+    cosine: Callable[..., float]
+    dot: Callable[..., float]
+    rrf_fusion: Callable[..., list]
+    native: MindMemKernel | None
+    backend: str
+
+
+def load_kernels(path: str | None = None) -> Kernels:
+    """Resolve the kernel binding — the package's single kernel loader.
+
+    Probe order: an explicit *path*, then ``$MIND_MEM_LIB``, then
+    ``$MIND_MEM_KERNELS_SO``, then :data:`_LIB_SEARCH_PATHS`. Every
+    operator-supplied path is checked against
+    :func:`resolve_allowlisted_lib` first, including the explicit argument —
+    so no caller of this function can load a shared object from outside the
+    package's ``lib/`` directories.
+
+    A rejected env path is reported (``ffi_env_lib_rejected``), because an
+    operator who set a variable is owed the reason it was ignored. A path
+    that is simply absent is not: the kernel being missing is the normal,
+    documented state of every install.
+
+    Args:
+        path: Explicit library path. Allowlist-checked like the env vars.
+
+    Returns:
+        A :class:`Kernels` binding. Never raises and never returns None —
+        MIND kernels are optional, so "no library" is an answer, not a
+        failure.
+    """
+    candidate: Path | None = None
+    for raw, source in [(path, "argument")] + [(os.environ.get(v, ""), v) for v in _LIB_ENV_VARS]:
+        if not raw:
+            continue
+        resolved, reason = resolve_allowlisted_lib(raw)
+        if resolved is not None:
+            candidate = resolved
+            break
+        _log.warning(
+            "ffi_env_lib_rejected",
+            path=str(Path(raw).resolve()),
+            reason=reason,
+            source=source,
+            allowed=[str(d) for d in allowed_lib_dirs()],
         )
-        return None
+
+    if candidate is None:
+        # Walk the search paths here rather than letting MindMemKernel do it:
+        # its no-argument constructor re-reads MIND_MEM_LIB and would log a
+        # second rejection for the path we just reported. These paths ARE the
+        # allowlist, so handing one over explicitly skips no check.
+        candidate = next((probe for probe in _LIB_SEARCH_PATHS if probe.exists()), None)
+
+    native = _try_native(str(candidate)) if candidate is not None else None
+    return Kernels(
+        bm25f_score=mind_kernels.bm25f_score,
+        sha3_512_chain_verify=mind_kernels.sha3_512_chain_verify,
+        cosine=mind_kernels.cosine,
+        dot=mind_kernels.dot,
+        rrf_fusion=mind_kernels.rrf_fusion,
+        native=native,
+        backend="native" if native is not None else "python",
+    )
 
 
 def is_available() -> bool:

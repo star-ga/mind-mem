@@ -6,8 +6,8 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Restored
 
-* **All 44 modules deleted in 5.0.0 are back (13,594 LOC), with their 39 test
-  files.** The 5.0.0 sweep removed them because no product code imported them.
+* **All 47 modules deleted in 5.0.0 are back (14,711 LOC), with all 43 of their
+  test files (11,911 LOC).** The 5.0.0 sweep removed them because no product code imported them.
   That reasoning was wrong: **"nothing imports it" is evidence about WIRING,
   never about worth.** Unreachability was verified and then reported as if it
   settled the question of value. A finished feature that was never connected is
@@ -17,7 +17,7 @@ All notable changes to MIND-Mem are documented in this file.
   flag-off behaviour byte-identical to 5.0.0. Where a restored module duplicates
   a live one the resolution is substitution or merge — never deletion.
 
-* **Two of the 44 were not unreachable at all.** `session_summarizer` had a
+* **Two of the 47 were not unreachable at all.** `session_summarizer` had a
   shell caller (`hooks/session-end.sh` runs `python3 -m
   mind_mem.session_summarizer`) *and* a Python importer. An AST import scan
   cannot see shell dispatch, so the sweep did not either.
@@ -47,6 +47,27 @@ All notable changes to MIND-Mem are documented in this file.
 * **`ALL_V4_FLAGS` was missing `cognitive_kernel`, `surprise_retrieval` and
   `lint`**, removed during the sweep, so `require_enabled()` raised
   unknown-flag for all three.
+* **SECURITY — untrusted text could truncate its own block and escape
+  quarantine.** `block_store._render_block` emits fields in
+  `_CANONICAL_FIELD_ORDER`, where `Statement` precedes `Status`, and the block
+  parser ends a block at any line starting with `---`. So an ingested payload
+  containing a `---` line ended its own block **before `Status: quarantined`
+  was written** — and an unstated status is *servable*
+  (`admissibility.is_admissible_status`), by design, for pre-gate corpora. The
+  content came straight back out of `recall`, with no proposal, no release and
+  no chain entry naming an admission. Measured on the live inbox door: a
+  dropped file containing a `---` line was returned by `recall`; the agent-
+  message door had it too. Found while wiring the 5.1.0 webhook door, whose
+  own forgery test caught it.
+
+  Fixed in the renderer, not in any one door: `_neutralise_value` now escapes a
+  value's `---` line by indenting it, alongside the `\n[` escape that has
+  always been there. `_locate_block_in_text` (and its `memory_ops` twin) used a
+  *different* separator rule from the parser (`line.strip() == "---"` versus
+  `line.startswith("---")`); they now use the parser's, so an escaped line is
+  not mistaken for a block boundary during a rewrite. Pinned for all three
+  doors in `test_quarantine_redteam.py`, and mutation-verified: with the old
+  renderer all three tests fail.
 * **A flag probe was observable when the flag was off.** The `logging_context`
   check called a helper that logs `v4_config_unreadable` on a malformed config,
   so flag-off emitted a line the unwired build did not. A probe deciding
@@ -67,6 +88,110 @@ All notable changes to MIND-Mem are documented in this file.
   installs on mind-mem's own handler, not the root logger: `propagate = False`
   makes a root install a silent no-op, which is what the module's own docstring
   wrongly recommended.
+* `consensus_vote` → the `manual_review` fallback of
+  `conflict_resolver.analyze_contradiction`, behind `governance.consensus.enabled`
+  (default off). A contradiction no deterministic strategy can settle now
+  consults a multi-agent quorum read from `intelligence/VOTES.md`; the quorum's
+  winner becomes a **`pending-review` proposal**, never an apply. Vote blocks go
+  through `admit_corpus` — a vote the governance gate has not admitted is not a
+  vote — and a quorum for an id outside the contradicting pair is refused.
+  Trust weights come only from `namespaces.<agent>.trust_weight`, so a vote
+  cannot award itself authority. 22 wiring tests.
+* `streaming` → the per-client rate limiter now fronts the `POST /ingest`
+  webhook (`streaming.enabled`, default off). Two producers get **independent**
+  429s: one flooding client exhausts its own token bucket and nobody else's,
+  and a refused request is turned away before its body reaches the write-ahead
+  log or the queue. **The module writes nothing** — no `write_block`, no
+  admission scope, no `IngestTier` reference anywhere in its code — so the
+  ingest door keeps exactly one governed write funnel, in `ingestion_pipeline`,
+  which admits every event under `IngestTier.EXTERNAL_INGEST` and therefore
+  lands it `Status: quarantined`. Queue depth (`queue_depth`), the 429 count
+  (`rate_limited`) and how many events the drain has written (`applied`)
+  surface through the **existing** `stream_status` tool: no new tool, no new ACL row, and the key is absent (not null) when the
+  flag is off.
+* `streaming.StreamingIngestQueue` is **deprecated in place**, pointing at
+  `ingestion_pipeline.IngestionQueue`. Reject-new beats drop-oldest for a
+  governed store: a full drop-oldest queue deletes the oldest event and returns
+  *accepted*, which is data loss reporting itself as success. Deprecated, not
+  deleted — it works and it is tested.
+
+* `llm_noise_profile` → the `report_outcome` path (`outcome_store.record_outcome`),
+  behind `v4.llm_noise_profile` (default off). A recorded outcome is a
+  `was_correct` observation about a noisy sensor, which is exactly what this
+  module's EMA wanted and never had: it shipped with 29 tests and **no product
+  caller at all**. Reliability is tracked per provider (`tool_id`, else
+  `actor_id`, else one shared `unattributed` bucket) and per domain (the
+  block-id family — `D`, `T`, `INBOX`), persisted to
+  `intelligence/llm_profiles.json`, and surfaced as `llm_reliability` in
+  `calibration_stats`. No new MCP tool and no new ACL row; the key is absent,
+  not null, when the flag is off.
+  **Influence is bounded the same way the calibration projection already is.**
+  The fold runs only when the store actually inserted a row, so a replayed
+  report — same canonical payload, same outcome id — moves nothing; and one
+  report is one observation *per distinct domain*, so naming fifty blocks
+  instead of one buys no extra movement. `neutral` means "not attributable",
+  so it moves nothing either.
+  **The persisted profile is a pure function of the outcome stream**:
+  `record_outcome`/`save` now take an injectable instant, fed from the
+  outcome's own injectable `recorded_at`, so the same reports replayed on
+  another machine write byte-identical bytes. Nothing on the scored path reads
+  the file. 37 wiring tests, both mutations (call removed, module body stubbed)
+  verified to fail 12 of them.
+
+* `mrs` → the `mrs` section of `memory_health`, behind `mrs.enabled` (default
+  OFF). The Model Reliability Score now scores something: latency percentiles
+  off the live `mcp_tool_duration_ms` series, the MCP error-rate counters, and
+  the drift / contradiction / staleness readings the dashboard already had,
+  with breaches routed to the `alerting` sinks. It arrived with a scoring core
+  and no collector, no caller and no config — all three are now written.
+
+  Three properties it holds, each pinned by a test that fails when the wiring
+  is unpicked. **It reads no clock and no randomness** — `computed_at` is
+  injected, so the same corpus and the same readings produce the same report on
+  any machine; an `observation_days` window is configured, never derived.
+  **Its corpus counts go through `admit_corpus`**, so a quarantined block is
+  out of the denominator and a staleness flag pointing at one is not counted —
+  which is the right population for a *retrieval* SLI as well as the required
+  gate. **Its alert payload carries aggregates only** (target, score, violated
+  SLI names, numeric readings): an alert sink writes to a log line or a
+  third-party webhook, which is exactly where block text must not go.
+
+  `Metrics.samples()` is new and additive: `summary()` reduces a series to
+  count/min/max/avg, which cannot answer a percentile question.
+
+* `ingestion_pipeline` → **the drain consumer that never existed**, plus
+  `mm ingest-serve` (`v4.ingest_serve`, default off). The module shipped a
+  bounded queue, a write-ahead log and a `POST /ingest` endpoint with **no
+  consumer**: events reached the WAL and stopped. That is why 5.0.0 called it
+  an unguarded door in waiting — the risk was always the consumer nobody had
+  written.
+
+  Written now, and **the drain path is the gate**: `_write_admitted` is the
+  only function in the module that touches a `BlockStore`, it opens
+  `admit_block(tier=IngestTier.EXTERNAL_INGEST)` around the write, and that
+  tier mints `Status: quarantined`. A posted event is on disk, in the audit
+  chain, and **not recallable** until a governed release admits it. No new
+  ingest tier, so `INITIAL_STATUS` is untouched and the red-team tripwire over
+  it still holds. A structural test asserts `write_block` is called from
+  exactly one function, so a second write site cannot appear quietly.
+
+  `INGEST-` blocks land in `memory/INGEST.md`, registered in `CORPUS_FILES`
+  (so recall actually scans them — a quarantine over a corpus nobody reads is
+  not quarantine, it is a corpus that can never be released either) and under
+  `memory/`, so `admissibility._releasable_id_pattern` accepts these ids in a
+  release decision.
+
+  **WAL replay loses nothing.** The endpoint fsyncs before it queues; the drain
+  consumes from the WAL by a checkpoint (`<wal>.applied`) advanced only after
+  the blocks are written; and block ids are content-addressed
+  (`INGEST-<sha256 prefix>`), so a record re-applied across the crash window —
+  or a producer retrying a `503` — rewrites the identical block instead of
+  duplicating it. A kill mid-drain resumes at the failed record. Nothing on the
+  path reads a clock or a random source; a producer's own timestamp is recorded
+  as `EventTime` and never trusted.
+
+  35 wiring tests, plus three new red-team doors. Flag off: no socket bound, no
+  WAL created, no file written, and the probe emits nothing.
 
 ### Notes
 
@@ -81,7 +206,10 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Removed
 
-* **BREAKING: 44 unreachable modules deleted (13,594 LOC).** A reachability
+* **BREAKING: 47 modules deleted (14,711 LOC, plus 43 test files /
+  11,911 LOC).** This entry originally said "44 modules, 13,594 LOC";
+  both numbers were wrong and are corrected here rather than left to
+  stand. Every one of them was restored in 5.1.0. A reachability
   audit found 49 modules under `src/mind_mem` -- roughly 15% of the package --
   that no product code imported: not from any other module, not from
   `__init__.py`, not from any of the 17 `console_scripts`, and not through any

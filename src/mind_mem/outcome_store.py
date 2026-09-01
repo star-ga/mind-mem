@@ -18,12 +18,13 @@ Copyright (c) STARGA, Inc.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Any
 
-from .calibration import _MAX_OUTCOME_PAGE, _OUTCOME_TO_FEEDBACK, _init_calibration_schema
+from .calibration import _DB_REL_PATH, _MAX_OUTCOME_PAGE, _OUTCOME_TO_FEEDBACK, _init_calibration_schema
 from .connection_manager import ConnectionManager
 from .observability import get_logger, metrics
 from .outcome_attribution import (
@@ -72,6 +73,66 @@ def _projection_query_id(actor_id: str) -> str:
     return f"outcome:{actor_id or _ANONYMOUS_ACTOR}"
 
 
+def _workspace_of(mgr: ConnectionManager) -> str:
+    """Recover the workspace root from the manager's database path.
+
+    The inverse of ``calibration._db_path``, spelled with the same constant
+    so the two cannot drift: if the index ever moves, this follows it rather
+    than pointing at a stale ancestor. Used only by the OFF-by-default
+    profile leg below — nothing else here needs a filesystem path.
+    """
+    db_path = os.path.abspath(mgr.db_path)
+    suffix = os.sep + _DB_REL_PATH.replace("/", os.sep)
+    if db_path.endswith(suffix):
+        return db_path[: -len(suffix)]
+    return os.path.dirname(os.path.dirname(db_path))
+
+
+def _fold_into_noise_profile(
+    mgr: ConnectionManager,
+    ids: list[str],
+    verdict: str,
+    *,
+    actor_id: str,
+    tool_id: str,
+    recorded_at: str,
+) -> None:
+    """Feed one newly recorded report into the per-provider noise profile.
+
+    OFF by default (``v4.llm_noise_profile``) and probed quietly, so a
+    build with the flag unset is indistinguishable from one that never had
+    this leg: no log line, no file, no change to the returned envelope.
+
+    Three properties this call site owns, rather than the profiler:
+
+    * it runs only when ``recorded > 0`` — a replayed report conflicts on
+      the outcome-id primary key and changes nothing in the store, so it
+      must move no reliability either;
+    * it runs strictly after the transaction commits, so a profile write
+      can never roll the outcome back;
+    * it reads no block content — only the ids the caller already named —
+      so it needs no ``admit_corpus`` pass and cannot serve quarantined
+      material.
+    """
+    try:
+        from .llm_noise_profile import profiling_enabled, record_report
+
+        if not profiling_enabled():
+            return
+        record_report(
+            _workspace_of(mgr),
+            ids,
+            verdict,
+            tool_id=tool_id,
+            actor_id=actor_id,
+            recorded_at=recorded_at,
+        )
+    except Exception as exc:  # pragma: no cover — degradation path
+        # The outcome row is already committed and returned; a sidecar
+        # profile must never turn a successful write into a failure.
+        _log.warning("llm_noise_profile_update_failed", error=str(exc))
+
+
 def record_outcome(
     mgr: ConnectionManager,
     block_ids: Iterable[str],
@@ -114,6 +175,12 @@ def record_outcome(
 
     Never mutates block content: the only writes are to this sidecar
     index database. Corpus changes go through ``propose_update``.
+
+    One further sidecar, OFF by default (``v4.llm_noise_profile``): a report
+    that actually inserted a row is folded into the per-provider reliability
+    profile — see :func:`_fold_into_noise_profile`. With the flag unset
+    nothing is read, written or logged, and the returned envelope is
+    unchanged.
     """
     verdict = validate_outcome(outcome)
     ids = normalize_block_ids(block_ids)
@@ -189,6 +256,17 @@ def record_outcome(
         ).fetchone()
 
     effective_stamp = stored["recorded_at"] if stored else stamp
+
+    if recorded:
+        _fold_into_noise_profile(
+            mgr,
+            list(ids),
+            verdict,
+            actor_id=actor_id,
+            tool_id=tool_id,
+            recorded_at=effective_stamp,
+        )
+
     metrics.inc("outcome_recorded", recorded)
     _log.info(
         "outcome_recorded",

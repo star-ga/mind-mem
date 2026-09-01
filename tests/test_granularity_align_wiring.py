@@ -391,19 +391,37 @@ class TestTheCorpusIsUntouched:
 
 
 def _pre_wiring_tool(tmp_path: Path):
-    """Load ``HEAD``'s consolidation.py verbatim and hand back its tool.
+    """Load the last PRE-WIRING consolidation.py and hand back its tool.
 
-    The module is loaded under a ``mind_mem.mcp.tools.*`` name so its relative
-    imports resolve against the real package — this is the pre-change code
-    running against the current tree, not a re-implementation of it.
+    The reference must be a revision in which this wiring does not exist.
+    It used to be spelled ``HEAD``, which was true exactly until the wiring
+    was committed — after that HEAD *is* the wired code, the comparison
+    below became "wired == wired", and the positive control could no longer
+    fail. A control that cannot fail is not a control, so the revision is
+    found rather than assumed: walk the history of consolidation.py and take
+    the newest commit whose blob does not mention the module at all.
     """
     repo = Path(__file__).resolve().parent.parent
+    marker = b"granularity_align"
     try:
-        blob = subprocess.run(
-            ["git", "-C", str(repo), "show", "HEAD:src/mind_mem/mcp/tools/consolidation.py"],
+        revs = subprocess.run(
+            ["git", "-C", str(repo), "log", "--format=%H", "--", "src/mind_mem/mcp/tools/consolidation.py"],
             capture_output=True,
             check=True,
-        ).stdout
+            text=True,
+        ).stdout.split()
+        blob = None
+        for rev in revs:
+            candidate = subprocess.run(
+                ["git", "-C", str(repo), "show", f"{rev}:src/mind_mem/mcp/tools/consolidation.py"],
+                capture_output=True,
+                check=True,
+            ).stdout
+            if marker not in candidate:
+                blob = candidate
+                break
+        if blob is None:  # pragma: no cover — no pre-wiring revision in history
+            pytest.skip("no pre-wiring revision of consolidation.py in history")
     except (OSError, subprocess.CalledProcessError):  # pragma: no cover
         pytest.skip("git reference revision unavailable")
 

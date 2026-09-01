@@ -39,6 +39,7 @@ __all__ = [
     "retrieval_diagnostics",
     "feedback_quality_credit",
     "recall_sufficiency",
+    "graph_db_path",
 ]
 
 # ---------------------------------------------------------------------------
@@ -86,6 +87,18 @@ CREATE TABLE IF NOT EXISTS hard_negatives (
 
 def _db_path(workspace: str) -> str:
     return os.path.join(os.path.abspath(workspace), ".mind-mem-index", "recall.db")
+
+
+def graph_db_path(workspace: str) -> str:
+    """Where this module writes the ``co_retrieval`` graph — the public name.
+
+    Readers of the graph (``v4.kernels``' lineage / contradicts / graph_walk
+    strategies) resolve the path through the WRITER rather than rebuilding it,
+    so the reader can never drift away from wherever the writer puts it. They
+    were reaching for the private ``_db_path`` to do it; this is the same
+    function under a name that is part of the contract.
+    """
+    return _db_path(workspace)
 
 
 def _connect(workspace: str) -> sqlite3.Connection:

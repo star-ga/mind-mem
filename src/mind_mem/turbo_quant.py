@@ -1,16 +1,33 @@
 # Copyright 2026 STARGA, Inc.
-"""Pure-Python TurboQuant 3-bit vector quantiser (v2.0.0b1).
+"""Pure-Python 3-bit scalar vector quantiser (v2.0.0b1).
 
-The roadmap entry points at arXiv:2504.19874 (TurboQuant — PolarQuant
-rotation + Lloyd-Max codebook + QJL residual correction) for eventual
-GPU-accelerated integration via ``mind-inference``. Until that
-toolchain is wired, this stdlib-only implementation ships the format
-and round-trip so callers can build against the API now.
+**What this actually is:** a per-vector uniform min-max scalar quantiser
+at 3 bits per channel (8 levels), stdlib-only, with the dimension, scale
+and offset carried in the blob header. It is fully self-describing and
+deterministic on round-trip: a blob decodes with no external state.
 
-Uses 3 bits per channel (8 quantisation levels). Quality is
-quality-neutral at ≤6× memory reduction on typical embedding
-distributions; callers sensitive to last-bit recall should keep
-the full-precision copy in a cold store.
+That self-description is the whole point, and it is what separates this
+from ``v4/pq``. Product quantisation trains KMeans codebooks and reaches
+far higher compression, but a PQ code is meaningless without the codebook
+that produced it. So the two are different layers, not rivals:
+
+* ``v4/pq``      -- the quantiser on the RETRIEVAL path (ANN distance).
+* ``turbo_quant`` -- the embedding blob codec for SELF-CONTAINED artifacts:
+  export bundles, cold-tier storage, federation transport. Anywhere a
+  vector must decode without shipping a codebook beside it.
+
+**Invariant: this module never touches the recall path.** Two quantisers
+on one retrieval path would be a fork; keeping this one at the codec
+layer is what stops that.
+
+Roughly 6x memory reduction on typical embedding distributions. Callers
+sensitive to last-bit recall should keep the full-precision copy in a
+cold store.
+
+deferred: the name is aspirational -- the format is a placeholder for a
+rotation + learned-codebook + residual-correction scheme (see the private
+research notes, not cited here). Upgrade path: keep the header, swap the
+channel encoder, bump the format byte.
 """
 
 from __future__ import annotations

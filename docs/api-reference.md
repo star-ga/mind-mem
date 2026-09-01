@@ -59,9 +59,9 @@ Useful if you're writing a custom MCP config writer.
 
 ---
 
-## MCP Server (101 tools, 8 resources)
+## MCP Server (102 tools, 8 resources)
 
-The MCP server exposes 101 distinct tools via JSON-RPC (102 `mcp.tool` registrations; the consolidated `recall` dispatcher shadows the base `recall`). See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
+The MCP server exposes 102 distinct tools via JSON-RPC (102 `mcp.tool` registrations; the consolidated `recall` dispatcher shadows the base `recall`). See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
 
 ### Starting the Server
 

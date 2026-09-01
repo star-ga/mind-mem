@@ -36,11 +36,107 @@ from mind_mem.mind_filelock import FileLock
 from mind_mem.sqlite_index import _db_path as fts_db_path
 from mind_mem.storage import _MARKDOWN_BACKENDS, _backend_name, get_block_store
 
-from ..infra.config import _load_extra_categories
+from ..infra.config import _load_config, _load_extra_categories
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import _signal_store_path, get_logger, metrics
+from ._helpers import _retrieval_metrics_enabled, _signal_store_path, get_logger, metrics
+
+
+def _kernel_backend_reporting_enabled() -> bool:
+    """Read ``v4.mind_kernels``, fail-closed and QUIET.
+
+    ``is_enabled_quiet``, not ``is_enabled``: the loud variant logs
+    ``v4_config_unreadable`` on a malformed config, which would make an
+    index_stats call on the flag-OFF path emit a line the unwired build
+    never emitted.
+    """
+    try:
+        from mind_mem.v4.feature_flags import is_enabled_quiet
+
+        return is_enabled_quiet("mind_kernels")
+    except Exception:
+        return False
+
+
+def _v4_kind_index_section(ws: str) -> dict[str, Any] | None:
+    """``v4.hnsw_kind_index`` / ``v4.pq`` state for ``index_stats``, or None.
+
+    ``index_stats`` answers "what indexes exist and are they current". Two v4
+    side indexes now can exist, and an operator has no other way to learn
+    whether ``mm kinds backfill`` ever ran or which backend answers a
+    kind-filtered query.
+
+    Both probes are QUIET (``is_enabled_quiet`` never logs) and both are read
+    ONCE per tool call, before any database is opened. With both flags off
+    this function opens nothing, writes nothing and returns ``None``, so the
+    payload is exactly the payload of the build that never had the section.
+    The OFF cost is the two small config reads that decide it -- this is an
+    explicitly-invoked diagnostic, not a per-recall path.
+    """
+    try:
+        from mind_mem.v4.feature_flags import is_enabled_quiet
+    except Exception:  # pragma: no cover - defensive: v4 surface absent
+        return None
+    out: dict[str, Any] = {}
+    if is_enabled_quiet("hnsw_kind_index"):
+        try:
+            from mind_mem.v4.hnsw_kind_index import backend_status
+
+            # ``backend_status`` opens (and therefore CREATES) index.db to
+            # probe for the sqlite-vec extension. A stats call must not be the
+            # thing that brings a store into existence, so an unbuilt
+            # workspace is reported as unbuilt instead of being built.
+            if os.path.isfile(os.path.join(ws, "index.db")):
+                out["hnsw_kind_index"] = backend_status(ws)
+            else:
+                out["hnsw_kind_index"] = {"backend": "brute_force", "status": "not_built"}
+        except Exception as exc:  # noqa: BLE001 - a stats section never breaks the tool
+            out["hnsw_kind_index"] = {"error": str(exc)}
+    if is_enabled_quiet("pq"):
+        try:
+            from mind_mem.v4.pq import load_codebook
+
+            # The codebook is stored under the embedding model's name, because
+            # a model swap invalidates every code; ``VectorBackend``'s own
+            # default is the fallback so the two names cannot drift.
+            name = str((_load_config(ws).get("recall") or {}).get("model") or "all-MiniLM-L6-v2")
+            cb = load_codebook(ws, name)
+            out["pq"] = {
+                "codebook": name,
+                "trained": cb is not None,
+                # Bytes per encoded vector == subvector count: one 8-bit
+                # centroid index per subvector position.
+                "bytes_per_vector": cb.cfg.subvectors if cb is not None else None,
+            }
+        except Exception as exc:  # noqa: BLE001
+            out["pq"] = {"error": str(exc)}
+    return out or None
+
+
+def _v4_health_section(ws: str) -> dict[str, Any] | None:
+    """``v4/health``'s probe sweep for ``memory_health``, or None when OFF.
+
+    ``health_check`` itself is never flag-gated -- see its module docstring --
+    but its CALL SITE here is, because ``memory_health``'s payload is pinned
+    byte-for-byte with flags off and this section carries a ``latency_ms`` and
+    a ``checked_at`` clock read. ONE quiet flag read decides it, before the
+    module is imported at all, so with ``v4.health`` off nothing here reads a
+    clock, opens a database or emits a line.
+
+    ``health_check`` never raises by contract; the guard is for the import.
+    """
+    try:
+        from mind_mem.v4.feature_flags import is_enabled_quiet
+
+        if not is_enabled_quiet("health"):
+            return None
+        from mind_mem.v4.health import health_check
+    except Exception as exc:  # noqa: BLE001 - v4 surface absent
+        _log.debug("health_v4_probe_unavailable", error=str(exc))
+        return None
+    return health_check(ws)
+
 
 _log = get_logger("mcp_server")
 
@@ -61,6 +157,9 @@ _BLOCK_PREFIX_MAP = {
     # Migration importers (roadmap Group G) (`mm import --from ...`). Keep in
     # lockstep with ``block_store._BLOCK_PREFIX_MAP``.
     "IMP": ("memory", "IMPORTED.md"),
+    # 5.1.0: `mm ingest-serve` webhook door. Keep in lockstep with
+    # ``block_store._BLOCK_PREFIX_MAP``.
+    "INGEST": ("memory", "INGEST.md"),
 }
 
 
@@ -115,6 +214,71 @@ def _store_block_is_active(block: dict) -> bool:
     return bool(get_active([block]))
 
 
+def _mrs_health_section(ws: str) -> dict[str, Any] | None:
+    """The ``mrs`` block of :func:`memory_health`, or None when OFF.
+
+    Flag: ``mrs.enabled`` in ``mind-mem.json``, **default OFF**. With the
+    flag off this returns before :mod:`mind_mem.mrs` is even imported —
+    no log line, no metric, no key in the payload — so ``memory_health``
+    is byte-identical to what it returned before this wiring existed.
+    ``tests/test_mrs_wiring.py`` pins that by differencing the output of
+    a workspace with no ``mrs`` section against one whose section is
+    present and disabled.
+
+    What it scores (all readings injected, so the module itself stays a
+    pure function of them — see :mod:`mind_mem.mrs`):
+
+    * **latency** — the raw ``mcp_tool_duration_ms`` observations this
+      process has recorded, which is the only series in the package that
+      can answer a p99 question. An operator can override the metric
+      name, or supply a literal ``latency_ms`` list.
+    * **error rate** — the ``mcp_tool_failure`` / ``mcp_tool_success``
+      counters. Omitted when nothing has been called yet.
+    * **corpus health** — drift, contradictions and staleness, counted
+      over the *admitted* corpus.
+
+    A breach is routed to :mod:`mind_mem.alerting` unless ``alert`` is
+    false. Alert-routing failure degrades to a debug line: a dashboard
+    must not fail because a webhook did.
+    """
+    cfg = _load_config(ws)
+    from mind_mem.mrs import is_mrs_enabled
+
+    if not is_mrs_enabled(cfg):
+        return None
+
+    from mind_mem.alerting import get_alert_router
+    from mind_mem.mrs import resolve_mrs_config, route_mrs_alerts, workspace_mrs_report
+
+    resolved = resolve_mrs_config(cfg)
+    latency = resolved["latency_ms"]
+    if latency is None:
+        latency = metrics.samples(str(resolved["latency_metric"]))
+    failures = metrics.get("mcp_tool_failure")
+    successes = metrics.get("mcp_tool_success")
+
+    report = workspace_mrs_report(
+        ws,
+        latency_ms=latency,
+        error_count=int(failures),
+        request_count=int(failures) + int(successes),
+        observation_days=float(resolved["observation_days"]),
+        slo_spec=resolved["slo"],
+        target=str(resolved["target"]),
+    )
+    if resolved["alert"]:
+        try:
+            route_mrs_alerts(
+                report,
+                router=get_alert_router(ws),
+                alert_below=float(resolved["alert_below"]),
+                severity=str(resolved["alert_severity"]),
+            )
+        except (OSError, ValueError) as exc:
+            _log.debug("mrs_alert_routing_skipped", error=str(exc))
+    return report.as_dict()
+
+
 @mcp_tool_observe
 def index_stats() -> str:
     """Block counts, index staleness, vector coverage, and MIND kernel status."""
@@ -167,11 +331,25 @@ def index_stats() -> str:
             except Exception as e:  # pragma: no cover - defensive: store probe
                 _log.debug("index_stats_store_count_failed", error=str(e))
 
+    v4_indexes = _v4_kind_index_section(ws)
+    if v4_indexes is not None:
+        stats["v4_indexes"] = v4_indexes
+
     mind_dir = get_mind_dir(ws)
     kernels = ffi_list_kernels(mind_dir)
     stats["mind_kernels"] = kernels
     stats["mind_kernel_compiled"] = mind_kernel_available()
     stats["mind_kernel_protected"] = mind_kernel_protected()
+
+    # v4.mind_kernels (default OFF): report which library the ONE loader
+    # actually bound. `mind_kernel_compiled` above answers "did a .so load
+    # at some point in this process" from a cached singleton; this answers
+    # "what would a caller asking for kernels right now get". With the flag
+    # OFF the key is absent and the response is byte-identical to 5.0.0.
+    if _kernel_backend_reporting_enabled():
+        from mind_mem.mind_ffi import load_kernels as _load_kernels
+
+        stats["mind_kernel_backend"] = _load_kernels().backend
 
     try:
         from mind_mem.prefix_cache import all_stats as _prefix_all_stats
@@ -198,9 +376,93 @@ def index_stats() -> str:
         _log.debug("interaction_signal_stats_unavailable", error=str(exc))
         stats["interaction_signals"] = {}
 
+    # Online-training state, beside the signals it is derived from.
+    # ``is_enabled_quiet``, and the key is ABSENT rather than empty when the
+    # flag is off: an added `"online_training": {}` would already be an
+    # observable difference in a response clients diff.
+    try:
+        from mind_mem.v4.feature_flags import is_enabled_quiet
+
+        _online_training = is_enabled_quiet("online_training")
+    except Exception:  # pragma: no cover - defensive: flag resolver
+        _online_training = False
+    if _online_training:
+        try:
+            from mind_mem.model_gate import promotion_stats
+            from mind_mem.online_trainer import harvest_stats
+
+            stats["online_training"] = {**harvest_stats(ws), "promotions": promotion_stats()}
+        except (ImportError, AttributeError, OSError, ValueError) as exc:
+            _log.debug("online_training_stats_unavailable", error=str(exc))
+            stats["online_training"] = {}
+
+    # v4.retrieval_metrics: measured retrieval quality. Absent with the flag
+    # off, so the envelope is byte-identical to the one this tool has always
+    # returned.
+    if _retrieval_metrics_enabled(ws):
+        try:
+            stats["mrr"] = _mrr_drift(ws)
+        except Exception as exc:
+            _log.debug("mrr_drift_unavailable", error=str(exc))
+            stats["mrr"] = {}
+        try:
+            from mind_mem.tracking import default_packing_meter
+
+            stats["packing_quality"] = default_packing_meter().stats()
+        except (ImportError, AttributeError) as exc:
+            _log.debug("packing_quality_unavailable", error=str(exc))
+            stats["packing_quality"] = {}
+
     metrics.inc("mcp_index_stats")
     _log.info("mcp_index_stats", stats=stats)
     return json.dumps(stats, indent=2)
+
+
+#: Newest signals folded into the MRR series. The ledger is append-only and
+#: unbounded; a stats call must not turn into a full-history scan on a
+#: long-lived workspace. Newest-first, so the recent weeks the delta is
+#: computed from are always the ones that survive the cap.
+_MRR_SIGNAL_SCAN_CAP: int = 20_000
+
+
+def _mrr_drift(ws: str) -> dict[str, Any]:
+    """Weekly mean MRR + week-over-week delta for *ws*.
+
+    Both halves of a real MRR already exist in the workspace and were never
+    joined: ``observe_signal`` stores the ranked block ids a recall returned
+    (plus when), and ``calibration_feedback`` stores which ids a caller then
+    accepted. This scores the first against the second, buckets by ISO week
+    using each signal's OWN timestamp, and reports the change.
+
+    DETERMINISTIC: a pure function of (signal ledger, calibration labels).
+    No clock is read — not here, and not in ``tracking`` on this path, which
+    is why replaying a ledger reproduces the same weeks and the same delta
+    rather than sliding as "this week" moves.
+
+    The output is aggregate numbers only — means, counts, a delta. No block
+    id, statement or tag leaves this function, so nothing here can surface
+    corpus content that never passed admission.
+
+    ``queries_scored: 0`` is the honest answer for a workspace with signals
+    but no feedback labels, and it is reported rather than smoothed into a
+    plausible-looking score. An unmeasured retrieval stack should say so.
+    """
+    from mind_mem.calibration import CalibrationManager, query_fingerprint
+    from mind_mem.interaction_signals import SignalStore
+    from mind_mem.tracking import mrr_events_from_signals, mrr_from_events
+
+    signals = SignalStore(_signal_store_path(ws)).all_signals()[-_MRR_SIGNAL_SCAN_CAP:]
+    fingerprints: set[str] = set()
+    for sig in signals:
+        for query in (sig.previous_query, sig.new_query):
+            if query:
+                fingerprints.add(query_fingerprint(query))
+    labels = CalibrationManager(ws).accepted_ids_by_fingerprint(fingerprints)
+    events = mrr_events_from_signals(signals, labels, fingerprint=query_fingerprint)
+    out = mrr_from_events(events).as_dict()
+    out["signals_scanned"] = len(signals)
+    out["signals_unlabelled"] = len(signals) - len(events)
+    return out
 
 
 @mcp_tool_observe
@@ -350,7 +612,11 @@ def delete_memory_item(block_id: str) -> str:
             elif block_start is not None and block_end is None:
                 if line.startswith("[") and line.strip().endswith("]") and _re_mod.match(r"^\[[A-Z]+-", line.strip()):
                     block_end = i
-                elif line.strip() == "---":
+                # ``startswith``, not ``strip() == ``: block_parser's own
+                # separator rule, and the one block_store._locate_block_in_text
+                # uses. An INDENTED ``---`` is a value escaped by
+                # block_store._neutralise_value, not a boundary.
+                elif line.startswith("---"):
                     preceding_blank = (i == 0) or (lines[i - 1].strip() == "")
                     if preceding_blank:
                         block_end = i + 1
@@ -784,6 +1050,32 @@ def memory_health() -> str:
             recommendations.append(f"{total_compactable} item(s) ready for compaction. Run compact tool.")
     except (ImportError, OSError, ValueError) as exc:
         health["compaction"] = {"error": str(exc)}
+
+    # Model Reliability Score (flag-gated, default OFF — see
+    # _mrs_health_section). Deliberately last: it is the only section
+    # that can fire an alert, so everything the dashboard reports has
+    # already been gathered by the time it runs.
+    try:
+        mrs_section = _mrs_health_section(ws)
+    except (ImportError, sqlite3.OperationalError, OSError, ValueError) as exc:
+        mrs_section = None
+        _log.debug("health_mrs_skipped", error=str(exc))
+    if mrs_section is not None:
+        health["mrs"] = mrs_section
+        if mrs_section["violations"]:
+            recommendations.append(f"MRS {mrs_section['score']}/100 — SLI breach: {', '.join(mrs_section['violations'])}.")
+
+    # v4/health probe sweep (flag-gated, default OFF — see _v4_health_section).
+    # After mrs so the alert-firing section still runs against a complete
+    # dashboard, and because a degraded v4 surface is a recommendation, not a
+    # reason to withhold the numbers already gathered.
+    v4_health = _v4_health_section(ws)
+    if v4_health is not None:
+        health["v4"] = v4_health
+        if v4_health.get("status") != "ok":
+            broken = sorted(name for name, st in v4_health.get("modules", {}).items() if st != "ok" and st != "disabled")
+            if broken:
+                recommendations.append(f"v4 health {v4_health.get('status')}: {', '.join(broken)}.")
 
     health["recommendations"] = recommendations
     health["score"] = "healthy" if not recommendations else "needs_attention"

@@ -24,9 +24,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Final
+
+from .observability import get_logger
 
 # EMA smoothing factor — higher means slower adaptation (more history weight)
 _EMA_ALPHA: float = 0.95
@@ -113,7 +118,14 @@ class LLMNoiseProfiler:
     # Outcome recording
     # ------------------------------------------------------------------
 
-    def record_outcome(self, provider_id: str, domain: str, *, was_correct: bool) -> None:
+    def record_outcome(
+        self,
+        provider_id: str,
+        domain: str,
+        *,
+        was_correct: bool,
+        at: float | None = None,
+    ) -> None:
         """Update reliability scores for a provider after an observed outcome.
 
         Uses EMA to blend the new binary signal into both global and
@@ -123,6 +135,13 @@ class LLMNoiseProfiler:
             provider_id: Must already be registered.
             domain: Domain label (e.g. "code", "math", "summarization").
             was_correct: True if the LLM's output was correct/useful.
+            at: Injectable observation instant (UTC epoch seconds) recorded
+                as ``last_calibrated``. Defaults to the wall clock, which is
+                what every pre-5.1.0 caller gets. Injecting it makes the
+                persisted profile a pure function of the outcome stream —
+                the same reports replayed on another machine produce the
+                same file, byte for byte. The value is provenance only: no
+                score, here or downstream, reads it.
 
         Raises:
             KeyError: If provider_id has not been registered.
@@ -144,7 +163,7 @@ class LLMNoiseProfiler:
         profile.total_observations += 1
         if not was_correct:
             profile.error_count += 1
-        profile.last_calibrated = time.time()
+        profile.last_calibrated = time.time() if at is None else at
 
     # ------------------------------------------------------------------
     # Querying
@@ -209,7 +228,7 @@ class LLMNoiseProfiler:
     # Persistence
     # ------------------------------------------------------------------
 
-    def save(self, path: str) -> None:
+    def save(self, path: str, *, at: float | None = None) -> None:
         """Persist all profiles to a JSON file.
 
         Creates parent directories as needed. Atomic write is approximated
@@ -217,13 +236,17 @@ class LLMNoiseProfiler:
 
         Args:
             path: Destination file path.
+            at: Injectable value for the file's ``saved_at`` provenance
+                field; defaults to the wall clock. See
+                :meth:`record_outcome` — with both injected, two runs over
+                the same reports write byte-identical files.
         """
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
         data: dict[str, Any] = {
             "version": 1,
-            "saved_at": time.time(),
+            "saved_at": time.time() if at is None else at,
             "profiles": {pid: profile.to_dict() for pid, profile in self._profiles.items()},
         }
         tmp_path = path + ".tmp"
@@ -252,3 +275,238 @@ class LLMNoiseProfiler:
         for pid, raw in profiles_raw.items():
             if isinstance(raw, dict):
                 self._profiles[pid] = NoiseProfile.from_dict(raw)
+
+
+# ---------------------------------------------------------------------------
+# Wiring: the ``report_outcome`` → profile leg (5.1.0 restoration, slice 5)
+# ---------------------------------------------------------------------------
+#
+# Until 5.1.0 this module had no production caller: everything above was
+# imported only by ``tests/test_llm_noise_profile.py``. The event source it
+# was always missing is outcome attribution — ``report_outcome`` already
+# carries a verdict ("did acting on these blocks actually work?") plus the
+# provenance of who reported it, which is exactly a ``was_correct``
+# observation about a noisy sensor.
+#
+# Everything below is the adapter between that event and the EMA above. It
+# is deliberately in *this* module rather than in ``outcome_store``: the
+# derivation rules (who is the provider, what is the domain, when does an
+# observation count at all) are the profiler's contract, and they are
+# testable here without a database.
+
+#: v4 flag guarding the whole leg. OFF by default; see :mod:`mind_mem.v4.feature_flags`.
+NOISE_PROFILE_FLAG: Final[str] = "llm_noise_profile"
+
+#: Where the profile is persisted, relative to the workspace root.
+#: ``intelligence/`` is a corpus directory, but only ``.md`` files are corpus
+#: (``corpus_registry.BLOCK_EXTENSIONS``), so a JSON sidecar here is state,
+#: not content — it is never parsed as a block and never reaches recall.
+PROFILE_REL_PATH: Final[str] = "intelligence/llm_profiles.json"
+
+#: Provider used when a report carries neither ``tool_id`` nor ``actor_id``.
+#: One shared bucket, mirroring ``outcome_store._ANONYMOUS_ACTOR``: an
+#: unattributed report must not mint a fresh provider each time.
+UNATTRIBUTED_PROVIDER: Final[str] = "unattributed"
+
+#: Domain used for a block id with no leading alphabetic family.
+DEFAULT_DOMAIN: Final[str] = "general"
+
+#: Verdicts that carry information about correctness. ``neutral`` means "not
+#: attributable to these blocks", which is not evidence about the reporter's
+#: accuracy either — it moves nothing.
+_SCORED_VERDICTS: Final[dict[str, bool]] = {"success": True, "failure": False}
+
+_FAMILY_RE = re.compile(r"^[A-Za-z]+")
+
+_log = get_logger("llm_noise_profile")
+
+
+def block_domain(block_id: str) -> str:
+    """Return the reliability *domain* a block id belongs to.
+
+    The domain is the block id's family — the leading alphabetic run,
+    upper-cased: ``D-20260401-001`` → ``"D"``, ``INBOX-2026-…`` → ``"INBOX"``.
+    That is the coarsest partition mind-mem already has that means something
+    ("decisions", "tasks", "inbox drops"), and it is derived from the id
+    alone, so it needs no corpus read — which matters, because this leg must
+    never touch block content.
+
+    An id with no alphabetic prefix falls back to :data:`DEFAULT_DOMAIN`
+    rather than minting a domain per id; a per-id domain would make every
+    observation the first one in its bucket and the EMA would never run.
+    """
+    match = _FAMILY_RE.match(block_id.strip())
+    return match.group(0).upper() if match else DEFAULT_DOMAIN
+
+
+def report_domains(block_ids: Iterable[str]) -> list[str]:
+    """Return the sorted distinct domains one outcome report speaks about.
+
+    Sorted, because the EMA is order-dependent and two identical reports
+    must move the profile identically.
+
+    DISTINCT is the load-bearing word. A report naming fifty decision blocks
+    is *one* verdict about the ``D`` domain, not fifty: counting per block
+    would let a reporter amplify its own vote simply by listing more ids —
+    the same unbounded-influence bug ``outcome_store._projection_query_id``
+    exists to prevent on the calibration side.
+    """
+    return sorted({block_domain(bid) for bid in block_ids if str(bid).strip()})
+
+
+def provider_for(*, tool_id: str = "", actor_id: str = "") -> str:
+    """Return the provider id an outcome report is evidence about.
+
+    ``tool_id`` first (it names the reporting tool — in practice the model or
+    agent whose work was judged), then ``actor_id``, then the shared
+    :data:`UNATTRIBUTED_PROVIDER` bucket. Never empty: an empty provider id
+    would collide with nothing and grow the file without meaning.
+    """
+    return tool_id.strip() or actor_id.strip() or UNATTRIBUTED_PROVIDER
+
+
+def profile_path(workspace: str) -> str:
+    """Absolute path of the persisted profile for *workspace*."""
+    return os.path.join(os.path.abspath(workspace), *PROFILE_REL_PATH.split("/"))
+
+
+def profiling_enabled() -> bool:
+    """Whether the outcome → profile leg is switched on.
+
+    Uses ``is_enabled_quiet``, never ``is_enabled``: this is the PROBE that
+    decides whether an OFF-by-default surface runs at all, and a probe that
+    logs (``is_enabled`` warns ``v4_config_unreadable`` on a malformed
+    config) would make the flag-off build observably different from the
+    build that never had the feature. That regression was caught in slice 1
+    and is pinned here by ``tests/test_llm_noise_profile_wiring.py``.
+    """
+    try:
+        from .v4.feature_flags import is_enabled_quiet
+
+        return is_enabled_quiet(NOISE_PROFILE_FLAG)
+    except Exception:  # pragma: no cover — a broken import means OFF, silently
+        return False
+
+
+def stamp_to_epoch(stamp: str | None) -> float | None:
+    """Parse an outcome's ``recorded_at`` into a UTC epoch, or ``None``.
+
+    ``report_outcome`` takes an injectable ISO-8601 ``recorded_at``; feeding
+    it through to the profile is what makes the persisted file a pure
+    function of the outcome stream rather than of when the stream was
+    replayed. ``None`` (unparseable or absent) lets the caller fall back to
+    the wall clock, which is the pre-existing behaviour of this module.
+
+    Timezone-independent by construction: the parsed value is stamped UTC
+    before ``.timestamp()``, so two machines in different zones agree.
+    """
+    if not stamp:
+        return None
+    try:
+        parsed = datetime.strptime(stamp.strip(), "%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError):
+        return None
+    return parsed.replace(tzinfo=timezone.utc).timestamp()
+
+
+def record_report(
+    workspace: str,
+    block_ids: Iterable[str],
+    outcome: str,
+    *,
+    tool_id: str = "",
+    actor_id: str = "",
+    recorded_at: str | None = None,
+) -> dict[str, Any]:
+    """Fold one **newly recorded** outcome report into the persisted profile.
+
+    Load → update → save on every call, rather than holding a profiler in
+    memory: an MCP tool call is frequently its own process, so "survives a
+    restart" is only true if the file is the state. The file is tiny and the
+    save is atomic (temp + ``os.replace``).
+
+    Called only when ``outcome_store.record_outcome`` actually inserted a
+    row. A replayed report conflicts on the outcome-id primary key and
+    changes nothing in the store; it must change nothing here either, or a
+    reporter could move its own reliability without bound by re-sending one
+    report.
+
+    Returns a summary dict (never raises): ``provider_id``, the ``domains``
+    observed, the number of ``observations`` applied, and the resulting
+    per-domain ``reliability``. ``observations`` is 0 for a ``neutral``
+    verdict and for any failure to persist.
+    """
+    was_correct = _SCORED_VERDICTS.get(outcome)
+    provider = provider_for(tool_id=tool_id, actor_id=actor_id)
+    if was_correct is None:
+        return {"provider_id": provider, "domains": [], "observations": 0, "reliability": {}}
+
+    domains = report_domains(block_ids)
+    if not domains:
+        return {"provider_id": provider, "domains": [], "observations": 0, "reliability": {}}
+
+    at = stamp_to_epoch(recorded_at)
+    path = profile_path(workspace)
+    profiler = LLMNoiseProfiler()
+    try:
+        profiler.load(path)
+        profiler.register_provider(provider)
+        for domain in domains:
+            profiler.record_outcome(provider, domain, was_correct=was_correct, at=at)
+        profiler.save(path, at=at)
+    except OSError as exc:
+        # The flag is ON, so a persistence failure is worth saying out loud —
+        # but it must never take the outcome write down with it. The row is
+        # already committed; the profile is a sidecar.
+        _log.warning("llm_noise_profile_persist_failed", path=path, error=str(exc))
+        return {"provider_id": provider, "domains": domains, "observations": 0, "reliability": {}}
+
+    return {
+        "provider_id": provider,
+        "domains": domains,
+        "observations": len(domains),
+        "reliability": {domain: profiler.get_reliability(provider, domain) for domain in domains},
+    }
+
+
+def reliability_report(workspace: str, *, top_n: int = 20) -> dict[str, Any] | None:
+    """Per-provider reliability for ``calibration_stats``, or ``None`` when OFF.
+
+    ``None`` — not an empty dict — is the OFF answer, so the caller can leave
+    the key out of its response entirely and keep flag-off output
+    byte-identical. An ON workspace that has recorded nothing yet reports an
+    empty ``providers`` list, which is a different statement.
+
+    Reads only the persisted file: no clock, no corpus, no block content.
+    """
+    if not profiling_enabled():
+        return None
+    profiler = LLMNoiseProfiler()
+    profiler.load(profile_path(workspace))
+    # Order the PROFILES, then render. Sorting the rendered dicts instead
+    # means sorting values typed as ``object``, which needs a cast per key to
+    # type-check and hides the fact that the ordering is a property of the
+    # profile, not of its JSON shape. Deterministic: reliability descending,
+    # provider_id as the tie-break, so equal-reliability providers keep a
+    # stable order rather than dict-insertion order.
+    ordered = sorted(
+        profiler._profiles.values(),
+        key=lambda profile: (-profile.global_reliability, profile.provider_id),
+    )
+    providers = [
+        {
+            "provider_id": profile.provider_id,
+            "reliability": profile.global_reliability,
+            "observation_noise": max(0.0, 1.0 - profile.global_reliability),
+            "observations": profile.total_observations,
+            "errors": profile.error_count,
+            "domains": dict(sorted(profile.domain_reliability.items())),
+        }
+        for profile in ordered
+    ]
+    return {
+        "flag": f"v4.{NOISE_PROFILE_FLAG}",
+        "path": PROFILE_REL_PATH,
+        "providers": providers[: max(1, int(top_n))],
+        "provider_count": len(providers),
+    }
