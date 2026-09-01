@@ -331,3 +331,100 @@ def test_expansion_end_to_end_propagates_degraded(monkeypatch):
     assert results.degraded["variants_total"] == "3"
     # BM25 leg still produced fused results across variants.
     assert len(results) >= 1
+
+
+# --------------------------------------------------------------------------
+# Vector-leg inertness: refuse to fake a hybrid
+# --------------------------------------------------------------------------
+
+
+def _seed_inert_index(ws: str, n: int = 16, dim: int = 32) -> None:
+    """Fill the workspace's embedding_cache with indistinguishable vectors."""
+    import random
+    import sqlite3
+    import struct
+
+    d = os.path.join(ws, ".mind-mem-index")
+    os.makedirs(d, exist_ok=True)
+    conn = sqlite3.connect(os.path.join(d, "recall.db"))
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS embedding_cache ("
+        "block_id TEXT NOT NULL, content_hash TEXT NOT NULL, model_name TEXT NOT NULL, "
+        "dimension INTEGER NOT NULL, embedding BLOB NOT NULL, "
+        "PRIMARY KEY (block_id, model_name))"
+    )
+    rng = random.Random(3)
+    base = [rng.gauss(0, 1) for _ in range(dim)]
+    for i in range(n):
+        vec = [v + rng.gauss(0, 1e-5) for v in base]
+        conn.execute(
+            "INSERT OR REPLACE INTO embedding_cache VALUES (?,?,?,?,?)",
+            (f"B-{i:04d}", f"h{i}", "m", dim, struct.pack(f"{dim}f", *vec)),
+        )
+    conn.commit()
+    conn.close()
+
+
+def test_an_inert_vector_leg_is_dropped_and_marked(monkeypatch):
+    """The measured failure, end to end.
+
+    A near-duplicate corpus ranks at chance, but RRF used to fuse that noise at
+    full weight and still call the answer hybrid. The leg must be dropped AND
+    the caller must be told, with the number that justified it.
+    """
+    from mind_mem import vector_inertness
+
+    vector_inertness.reset_cache()
+    ws = _make_workspace()
+    _seed_inert_index(ws)
+
+    hb = HybridBackend({"vector_enabled": True})
+    hb._vector_available = True
+    monkeypatch.setattr(hb, "_vector_search", lambda *a, **k: [{"doc_id": "D-20260101-002", "score": 0.9}])
+
+    results = hb.search("capital of France", ws, limit=5)
+    marker = getattr(results, "degraded", None)
+    assert marker is not None, "an inert vector leg must be reported, not silently fused"
+    assert marker["leg"] == "vector"
+    assert marker["reason"] == "inert"
+    assert marker["spread"] < marker["floor"], marker
+    assert marker["sampled"] >= 8
+    vector_inertness.reset_cache()
+
+
+def test_a_healthy_vector_leg_is_not_dropped(monkeypatch):
+    """The gauge must not disable a leg that carries signal."""
+    import random
+    import sqlite3
+    import struct
+
+    from mind_mem import vector_inertness
+
+    vector_inertness.reset_cache()
+    ws = _make_workspace()
+    d = os.path.join(ws, ".mind-mem-index")
+    os.makedirs(d, exist_ok=True)
+    conn = sqlite3.connect(os.path.join(d, "recall.db"))
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS embedding_cache ("
+        "block_id TEXT NOT NULL, content_hash TEXT NOT NULL, model_name TEXT NOT NULL, "
+        "dimension INTEGER NOT NULL, embedding BLOB NOT NULL, "
+        "PRIMARY KEY (block_id, model_name))"
+    )
+    rng = random.Random(9)
+    for i in range(16):
+        vec = [rng.gauss(0, 1) for _ in range(32)]
+        conn.execute(
+            "INSERT OR REPLACE INTO embedding_cache VALUES (?,?,?,?,?)",
+            (f"B-{i:04d}", f"h{i}", "m", 32, struct.pack("32f", *vec)),
+        )
+    conn.commit()
+    conn.close()
+
+    hb = HybridBackend({"vector_enabled": True})
+    hb._vector_available = True
+    monkeypatch.setattr(hb, "_vector_search", lambda *a, **k: [{"doc_id": "D-20260101-002", "score": 0.9}])
+
+    results = hb.search("capital of France", ws, limit=5)
+    assert getattr(results, "degraded", None) is None
+    vector_inertness.reset_cache()

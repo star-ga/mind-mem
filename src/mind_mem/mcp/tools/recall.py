@@ -867,6 +867,15 @@ def retrieval_diagnostics(last_n: int = 50, max_age_days: int = 7) -> str:
         if _is_db_locked(exc):
             return _sqlite_busy_error()
         raise
+    # Whether the vector leg is contributing at all. An operator debugging
+    # "why is recall bad" has no other way to learn that the leg is inert:
+    # nothing errors, every query returns results, and the answer is still
+    # labelled hybrid. Reported unconditionally -- a healthy verdict with its
+    # measured spread is as useful as the warning, because it dates the check.
+    from mind_mem.vector_inertness import inertness_for
+
+    result["vector_leg"] = inertness_for(ws).as_dict()
+
     result["_schema_version"] = MCP_SCHEMA_VERSION
     metrics.inc("mcp_retrieval_diagnostics")
     return json.dumps(result, indent=2)

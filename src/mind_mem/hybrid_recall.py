@@ -27,6 +27,7 @@ from concurrent.futures import TimeoutError as _FutureTimeout
 from datetime import date
 from typing import Any, Mapping
 
+from . import vector_inertness
 from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
 from .enums import Leg
 from .observability import get_logger, metrics, timed
@@ -272,7 +273,15 @@ def _fts_row_count(db_path: str) -> int | None:
                 pass
 
 
-def _merge_leg_markers(*markers: dict[str, str] | None) -> dict[str, str] | None:
+#: A degradation marker. Values are NOT all strings: the inertness marker
+#: carries the measured spread and floor (floats) and the sample size (int),
+#: because a verdict shipped without its evidence is an assertion, not a
+#: report. Widened from ``dict[str, str]`` when the vector-inertness gauge
+#: landed.
+LegMarker = dict[str, object]
+
+
+def _merge_leg_markers(*markers: LegMarker | None) -> LegMarker | None:
     """Union >=1 ``{leg, reason}`` degradation markers into one (or ``None``).
 
     Legs and reasons are deduped, sorted, and comma-joined — the same shape
@@ -284,9 +293,18 @@ def _merge_leg_markers(*markers: dict[str, str] | None) -> dict[str, str] | None
     present = [m for m in markers if m]
     if not present:
         return None
+    if len(present) == 1:
+        # A single marker keeps its own extra keys. Some carry EVIDENCE, not
+        # just a label -- the inertness marker ships the measured spread, the
+        # floor it failed, and the sample size, so a caller can argue with the
+        # verdict instead of taking "inert" on trust. Those keys are dropped
+        # below only when several legs are merged, because a spread from one
+        # leg attached to a union of two would be a lie about which leg it
+        # described.
+        return dict(present[0])
     legs = sorted({str(m.get("leg", "")).strip() for m in present if m.get("leg")})
     reasons = sorted({str(m.get("reason", "")).strip() for m in present if m.get("reason")})
-    out: dict[str, str] = {}
+    out: LegMarker = {}
     if legs:
         out["leg"] = ",".join(legs)
     if reasons:
@@ -313,20 +331,20 @@ class RecallResults(list):
     that never derive one are unaffected.
     """
 
-    degraded: dict[str, str] | None = None
+    degraded: LegMarker | None = None
     attestation: Any | None = None
 
 
-def _as_results(items: list[dict], degraded: dict[str, str] | None = None) -> RecallResults:
+def _as_results(items: list[dict], degraded: LegMarker | None = None) -> RecallResults:
     rr = RecallResults(items)
     rr.degraded = degraded
     return rr
 
 
 def _union_degraded(
-    markers: list[dict[str, str] | None],
+    markers: list[LegMarker | None],
     total: int,
-) -> dict[str, str] | None:
+) -> LegMarker | None:
     """Combine per-variant degradation markers for a multi-query recall.
 
     Multi-query expansion / decomposition fans a recall out across query
@@ -662,7 +680,7 @@ class HybridBackend:
                 )
                 # Capture the bm25 leg's structural-degradation marker BEFORE
                 # rerank (which returns a plain list and drops ``.degraded``).
-                bm25_degraded = getattr(results, "degraded", None)
+                bm25_degraded: LegMarker | None = getattr(results, "degraded", None)
                 metrics.inc("hybrid_searches_bm25_only")
                 results = self._admit(results, workspace, leg=Leg.BM25, overrides=live_statuses(workspace))
                 # v3.3.0 Tier 2: cross-encoder rerank also applies to
@@ -672,7 +690,7 @@ class HybridBackend:
                 # recall but the backend was unavailable at init — a plain
                 # BM25 config (vector never requested) is not "degraded",
                 # and a postgres server-side hybrid is its own leg.
-                vector_degraded = None
+                vector_degraded: LegMarker | None = None
                 if self.vector_enabled and not self._vector_available and not pg_server_side:
                     vector_degraded = {"leg": "vector", "reason": "unavailable"}
                 return _as_results(results, _merge_leg_markers(bm25_degraded, vector_degraded))
@@ -779,9 +797,35 @@ class HybridBackend:
                 vector_count=len(vec_results),
             )
 
+            # Honesty gauge: a vector leg whose blocks are mutually
+            # indistinguishable contributes a ranking that is noise, and RRF
+            # would blend that noise into BM25's real signal while the answer
+            # kept the "hybrid" label. Measured: a near-duplicate corpus sits
+            # at an inter-block cosine spread of 0.002 and ranks at chance,
+            # against 0.108 for prose. Drop the leg rather than fake the
+            # fusion -- and SAY so, both in the degraded marker and in
+            # retrieval_diagnostics.
+            #
+            # Only overrides when the gauge is confident; it abstains on a
+            # sample too small to judge, because silently disabling a working
+            # leg is the worse error.
+            vector_weight = self.vector_weight
+            if vec_results and vector_degraded is None:
+                _inert = vector_inertness.inertness_for(workspace)
+                if _inert.inert:
+                    vector_weight = 0.0
+                    vector_degraded = {
+                        "leg": "vector",
+                        "reason": "inert",
+                        "spread": _inert.spread,
+                        "floor": _inert.floor,
+                        "sampled": _inert.sampled,
+                        "detail": _inert.reason,
+                    }
+
             fused = rrf_fuse(
                 ranked_lists=[bm25_results, vec_results],
-                weights=[self.bm25_weight, self.vector_weight],
+                weights=[self.bm25_weight, vector_weight],
                 k=self.rrf_k,
                 source_names=["bm25", "vector"],
             )
@@ -943,7 +987,7 @@ class HybridBackend:
         # without this, the single-query degraded marker (419bee5) would
         # be silently dropped on the expansion / decomposition paths.
         variant_markers = [getattr(r, "degraded", None) for r in per_query_results]
-        combined_degraded = _union_degraded(variant_markers, total=len(per_query_results))
+        combined_degraded: LegMarker | None = _union_degraded(variant_markers, total=len(per_query_results))
 
         # Fuse all query variant results with equal weights
         weights = [1.0] * len(per_query_results)
@@ -1440,7 +1484,7 @@ class HybridBackend:
         if marker is None:
             return _as_results(results, None)
         if self._strict_hybrid:
-            raise BM25LegError(marker["reason"])
+            raise BM25LegError(str(marker["reason"]))
         metrics.inc("hybrid_bm25_leg_index_empty")
         _log.warning(
             "hybrid_bm25_leg_degraded",
@@ -1491,7 +1535,7 @@ class HybridBackend:
             _log.error("bm25_search_failed", error=str(exc))
             return []
 
-    def _bm25_empty_arm_marker(self, workspace: str) -> dict[str, str] | None:
+    def _bm25_empty_arm_marker(self, workspace: str) -> LegMarker | None:
         """Return a ``bm25`` degradation marker IFF the lexical index is
         STRUCTURALLY empty while the store has blocks; else ``None``.
 
