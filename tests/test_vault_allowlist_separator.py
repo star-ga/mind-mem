@@ -58,7 +58,11 @@ class TestPosix:
     def test_both_separators_are_accepted(self, monkeypatch, raw: str) -> None:
         got = _allowlist(monkeypatch, raw, ":")
         assert len(got) == 2, got
-        assert got[0].endswith("/tmp/a") and got[1].endswith("/tmp/b")
+        # Compare BASENAMES, not a "/tmp/a" suffix: _vault_allowlist realpaths
+        # every entry, and on Windows realpath("/tmp/a") is "C:\\tmp\\a", which
+        # ends with no forward slash at all. The separator behaviour is what
+        # this test is about; the absolute form is the platform's business.
+        assert [os.path.basename(g) for g in got] == ["a", "b"]
 
     def test_a_single_path_is_one_entry(self, monkeypatch) -> None:
         assert len(_allowlist(monkeypatch, "/tmp/only", ":")) == 1
