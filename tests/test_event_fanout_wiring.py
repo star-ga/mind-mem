@@ -533,8 +533,16 @@ class TestFlagOff:
                 result = json.loads(governance.approve_apply(proposal_id, dry_run=False))
             # Both carry the workspace path (receipt location); that differs
             # by construction, so normalise it and compare everything else.
+            #
+            # The receipt directory is stamped ``YYYYMMDD-HHMMSS``, so the two
+            # applies below disagree whenever they straddle a second boundary
+            # -- which is exactly what happened on a CI runner (204849 vs
+            # 204850) while passing locally every time. A byte-identity
+            # assertion that includes a wall-clock read is not testing
+            # byte-identity, it is testing how fast the machine is.
             result.pop("log", None)
             result["message"] = result["message"].replace(ws, "<ws>")
+            result["message"] = re.sub(r"/applied/\d{8}-\d{6}/", "/applied/<stamp>/", result["message"])
             results[name] = result
             corpora[name] = Path(ws, "decisions", "DECISIONS.md").read_text(encoding="utf-8")
 

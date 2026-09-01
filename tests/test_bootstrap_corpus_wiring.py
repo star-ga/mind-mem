@@ -106,6 +106,11 @@ def _isolated_home(tmp_path, monkeypatch):
     empty = tmp_path / "empty_home"
     empty.mkdir()
     monkeypatch.setenv("HOME", str(empty))
+    # ``os.path.expanduser("~")`` reads USERPROFILE on Windows and HOME
+    # on POSIX, so setting only HOME leaves Windows looking at the REAL
+    # user profile -- the fake home is never consulted and the fixture
+    # finds nothing. Both must be set for this redirect to hold.
+    monkeypatch.setenv("USERPROFILE", str(empty))
 
 
 @pytest.fixture
@@ -128,6 +133,11 @@ def door(tmp_path, monkeypatch):
         fh.write(f"We need to document the {CANARY} convention.\n")
 
     monkeypatch.setenv("HOME", str(home))
+    # ``os.path.expanduser("~")`` reads USERPROFILE on Windows and HOME
+    # on POSIX, so setting only HOME leaves Windows looking at the REAL
+    # user profile -- the fake home is never consulted and the fixture
+    # finds nothing. Both must be set for this redirect to hold.
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("MIND_MEM_CONFIG", _set_flag(ws, True))
     return ws
 

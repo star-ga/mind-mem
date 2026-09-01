@@ -87,6 +87,11 @@ def planted_transcript(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ]
     transcript.write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
     monkeypatch.setenv("HOME", str(home))
+    # ``os.path.expanduser("~")`` reads USERPROFILE on Windows and HOME
+    # on POSIX, so setting only HOME leaves Windows looking at the REAL
+    # user profile -- the fake home is never consulted and the fixture
+    # finds nothing. Both must be set for this redirect to hold.
+    monkeypatch.setenv("USERPROFILE", str(home))
     return transcript
 
 

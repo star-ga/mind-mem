@@ -130,7 +130,7 @@ jobs:
         # Single source of truth for the registered MCP tool count.
         # Fails the build if the discovered count drifts from the expected
         # value. Bump the expected value here when tools are added/removed.
-        run: python scripts/count_mcp_tools.py --check 101
+        run: python scripts/count_mcp_tools.py --check 102
       # Reachability, applied to the TOOL surface. The 5.0.0 sweep deleted 44
       # modules nothing imported; the generator of that debt was shipping
       # surface before consumers, and a 98-tool list is the most public
