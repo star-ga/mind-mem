@@ -4,7 +4,7 @@
 > surfaces.** The shipped v4 weights were trained against a 96-tool surface.
 > The live server now exposes **98** (`anchor_root` and `anchor_history`, added
 > when external-ledger anchoring was wired onto the audit family), and 5.0.0
-> removed 47 unreachable modules. So the local model will happily describe
+> removed 44 unreachable modules. So the local model will happily describe
 > surfaces that no longer exist — `v4.health`, `v4.pq`, `KernelKind`,
 > `FallbackPolicy` and friends — and does not know the two anchor tools at all.
 >

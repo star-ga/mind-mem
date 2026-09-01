@@ -6,7 +6,7 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Removed
 
-* **BREAKING: 47 unreachable modules deleted (~13k LOC).** A reachability
+* **BREAKING: 44 unreachable modules deleted (~12k LOC).** A reachability
   audit found 49 modules under `src/mind_mem` -- roughly 15% of the package --
   that no product code imported: not from any other module, not from
   `__init__.py`, not from any of the 17 `console_scripts`, and not through any
@@ -15,8 +15,15 @@ All notable changes to MIND-Mem are documented in this file.
   Those 49 resolved as 42 deleted, 2 relocated to `benchmarks/`, 1 wired
   (`ledger_anchor`, below), and 4 kept because a live benchmark consumer does
   import them. Deleting the 42 then orphaned 5 more whose only importers had
-  just gone -- the sweep cascades -- and those 5 went in a second wave, for 47
-  removed in total.
+  just gone -- the sweep cascades -- and those 5 went in a second wave.
+
+  Three of the 42 were then RESTORED: `self_update`, `usage_meter` and
+  `check_version` were reachable all along, through two forms the scan could
+  not see. `mm_cli` reaches the first two with `from mind_mem import X`, where
+  the module is exactly the package root -- a form the scan's
+  `startswith("mind_mem.")` test never matched -- and `ci.yml` runs
+  `python src/mind_mem/check_version.py` by path, which no import graph
+  contains. Both holes are closed in the gate. 44 removed in total.
 
   **Every one of them had tests** -- between 1 and 29 test files each,
   `v4/health.py` alone had 29. The suite was green and coverage looked healthy
@@ -29,18 +36,17 @@ All notable changes to MIND-Mem are documented in this file.
 
   Removed:
 
-  `api.grpc_server`, `bootstrap_corpus`, `check_version`, `consensus_vote`,
-  `core_export`, `error_codes`, `event_fanout`, `feature_gate`,
-  `governance_raft`, `granularity_align`, `ingestion_pipeline`, `lint`,
-  `lint_autofix`, `llm_noise_profile`, `maintenance_migrate`, `memory_mesh`,
-  `mind_kernels`, `mrs`, `multi_modal`, `online_trainer`,
-  `retrieval_trace`, `self_update`, `session_summarizer`, `smart_chunker`,
-  `storage.sharded_pg`, `streaming`, `tenant_audit`, `tenant_kms`,
-  `tracking`, `trajectory`, `turbo_quant`, `uncertainty_propagation`,
-  `usage_meter`, `v4.backpressure`, `v4.block_kinds`, `v4.block_metadata`,
-  `v4.cognitive_kernel`, `v4.embedding_pipeline`, `v4.health`, `v4.hnsw_kind_index`,
-  `v4.kernels`, `v4.kind_summaries`, `v4.logging_context`, `v4.observability`,
-  `v4.pq`, `v4.surprise_retrieval`, `v4.vocabulary`.
+  `api.grpc_server`, `bootstrap_corpus`, `consensus_vote`, `core_export`,
+  `error_codes`, `event_fanout`, `feature_gate`, `governance_raft`,
+  `granularity_align`, `ingestion_pipeline`, `lint`, `lint_autofix`,
+  `llm_noise_profile`, `maintenance_migrate`, `memory_mesh`, `mind_kernels`,
+  `mrs`, `multi_modal`, `online_trainer`, `retrieval_trace`,
+  `session_summarizer`, `smart_chunker`, `storage.sharded_pg`, `streaming`,
+  `tenant_audit`, `tenant_kms`, `tracking`, `trajectory`,
+  `turbo_quant`, `uncertainty_propagation`, `v4.backpressure`, `v4.block_kinds`,
+  `v4.block_metadata`, `v4.cognitive_kernel`, `v4.embedding_pipeline`, `v4.health`,
+  `v4.hnsw_kind_index`, `v4.kernels`, `v4.kind_summaries`, `v4.logging_context`,
+  `v4.observability`, `v4.pq`, `v4.surprise_retrieval`, `v4.vocabulary`,
 
   Kept, and why, since "unreachable" was wrong for six of them:
   `bench.locomo_suite` and `bench.recompaction_bench` moved to `benchmarks/`

@@ -4273,7 +4273,7 @@ named in any public artifact.
 
 ## Reachability sweep — 5.0.0 (2026-08-31)
 
-- [x] **The "no caller, no tick" gate paid out: 47 modules deleted, ~13k LOC.**
+- [x] **The "no caller, no tick" gate paid out: 44 modules deleted, ~12k LOC.**
   The audit found 49 modules under `src/mind_mem` (~15% of the package) that no
   product code imported — not from another module, not from `__init__.py`, not
   from any of the 17 `console_scripts`, not via any dynamic-import path. All 49
@@ -4284,6 +4284,13 @@ named in any public artifact.
   reproduce path for the published 73.8% — imports them.
   `scripts/reachability_baseline.txt` is now **empty**: the debt register reads
   zero for the first time.
+
+  Three deletions were WRONG and were restored after CI caught them --
+  `self_update`, `usage_meter`, `check_version`. Two more scan holes, found the
+  expensive way: `from mind_mem import X` (module exactly the package root) was
+  never matched, and a workflow that runs a module BY PATH is in no import
+  graph. Both closed. Re-running the fixed gate against the pre-sweep tree
+  confirms exactly those three and no others.
 
 - [x] **Gate hardened against its own blind spots, twice, both earned.** The
   scan walked only `src/` for referencers, so any module whose sole caller lived
