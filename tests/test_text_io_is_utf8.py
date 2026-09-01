@@ -58,8 +58,12 @@ def _text_opens_without_encoding(tree: ast.AST) -> list[int]:
                 mode = k.value.value
         if isinstance(mode, str) and ("b" in mode):
             continue  # binary: encoding would be an error
-        if mode is None:
-            continue  # default "r" with no explicit mode: covered below
+        # ``mode is None`` means NO mode argument, i.e. the default "r" --
+        # text mode, locale encoding, exactly the defect. An earlier version
+        # of this scanner skipped that case with the comment "covered below"
+        # and then did not cover it, so 20 mode-less reads passed the guard
+        # while the commit claimed every text open was fixed. A guard with a
+        # hole is worse than no guard: it certifies the thing it missed.
         bad.append(node.lineno)
     return bad
 

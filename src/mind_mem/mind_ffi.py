@@ -61,7 +61,7 @@ def _get_python_version() -> str:
     # Fallback: read from __init__.py next to this file
     init_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "__init__.py")
     try:
-        with open(init_path) as f:
+        with open(init_path, encoding="utf-8") as f:
             for line in f:
                 if line.startswith("__version__"):
                     return line.split("=", 1)[1].strip().strip("\"'")

@@ -792,7 +792,7 @@ class VectorBackend(RecallBackend):
         meta: dict = {}
         if os.path.isfile(meta_path):
             try:
-                with open(meta_path) as f:
+                with open(meta_path, encoding="utf-8") as f:
                     meta = json.load(f)
             except (OSError, json.JSONDecodeError):
                 pass
@@ -865,7 +865,7 @@ class VectorBackend(RecallBackend):
             return None
 
         try:
-            with open(index_file) as f:
+            with open(index_file, encoding="utf-8") as f:
                 index: dict[str, Any] = json.load(f)
             _log.info("index_loaded", path=index_file, blocks=len(index.get("blocks", [])))
             return index
@@ -1468,7 +1468,7 @@ def search_batch(
         config = {}
         if os.path.isfile(config_path):
             try:
-                with open(config_path) as f:
+                with open(config_path, encoding="utf-8") as f:
                     full = json.load(f)
                     config = full.get("recall", {})
             except (OSError, json.JSONDecodeError):
@@ -1622,7 +1622,7 @@ def rebuild_index(workspace: str) -> int:
     config: dict = {}
     if os.path.isfile(config_path):
         try:
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 full = json.load(f)
                 config = full.get("recall", {})
         except (OSError, json.JSONDecodeError):
@@ -1764,7 +1764,7 @@ def main():
     config = {}
     if os.path.isfile(config_path):
         try:
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 full_config = json.load(f)
                 config = full_config.get("recall", {})
         except (OSError, json.JSONDecodeError) as e:

@@ -242,7 +242,7 @@ class IntentRouter:
         if not path or not os.path.isfile(path):
             return
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             self._intent_stats = data.get("intent_stats", {})
             self._adaptation_weights = data.get("adaptation_weights", {})

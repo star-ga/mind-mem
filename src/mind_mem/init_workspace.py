@@ -310,7 +310,7 @@ def load_config(ws: str) -> dict:
     config_path = os.path.join(os.path.abspath(ws), "mind-mem.json")
     if os.path.isfile(config_path):
         try:
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 cfg = json.load(f)
             return _validate_config(cfg)
         except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:

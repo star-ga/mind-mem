@@ -126,7 +126,7 @@ def load_config(workspace: str) -> dict:
     """
     config_path = os.path.join(workspace, "mind-mem.json")
     try:
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             return dict(json.load(f))
     except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
         _log.warning("config_load_failed", path=config_path, error=str(exc))

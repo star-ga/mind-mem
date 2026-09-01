@@ -68,7 +68,7 @@ def load_config(workspace: str = ".") -> dict[str, Any]:
     config_path = os.path.join(workspace, "mind-mem.json")
     if os.path.isfile(config_path):
         try:
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 cfg = json.load(f)
             extraction = cfg.get("extraction", {})
             if isinstance(extraction, dict):

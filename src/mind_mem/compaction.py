@@ -36,7 +36,7 @@ def _load_config(ws: str) -> dict:
     """Load compaction config from mind-mem.json."""
     config_path = os.path.join(ws, "mind-mem.json")
     try:
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             cfg = json.load(f)
         return dict(cfg.get("compaction", {}))
     except (OSError, json.JSONDecodeError):

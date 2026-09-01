@@ -129,7 +129,7 @@ def load_intel_state(ws):
     defaults = {"governance_mode": "detect_only", "counters": {}}
     if os.path.exists(path):
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
                 print("[WARN] intel-state.json is not a dict, using defaults", file=sys.stderr)
@@ -985,7 +985,7 @@ def _load_config(ws):
     """Load mind-mem.json config."""
     path = os.path.join(ws, "mind-mem.json")
     if os.path.exists(path):
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     return {}
 
@@ -999,7 +999,7 @@ def _count_staged_proposals(ws):
     for fn in os.listdir(proposed_dir):
         if fn.endswith(".md"):
             path = os.path.join(proposed_dir, fn)
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 content = f.read()
             count += content.count("\nStatus: staged")
     return count

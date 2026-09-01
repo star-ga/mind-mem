@@ -505,7 +505,7 @@ def _get_mode(ws="."):
     Supports legacy 'self_correcting_mode' for backward compatibility.
     """
     try:
-        with open(os.path.join(ws, "memory/intel-state.json")) as f:
+        with open(os.path.join(ws, "memory/intel-state.json"), encoding="utf-8") as f:
             state = json.load(f)
         return state.get("governance_mode", state.get("self_correcting_mode", "detect_only"))
     except Exception:
@@ -1060,7 +1060,7 @@ def check_backlog_limit(ws):
     # Read limit from mind-mem.json (source of truth for config), not intel-state.json
     config_path = os.path.join(ws, "mind-mem.json")
     try:
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
     except (OSError, json.JSONDecodeError, ValueError):
         config = {}
@@ -1173,7 +1173,7 @@ def _load_intel_state(ws):
     """Load intel-state.json."""
     path = os.path.join(ws, "memory/intel-state.json")
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return {}
@@ -1303,7 +1303,7 @@ def apply_proposal(ws, proposal_id, dry_run=False, agent_id=None):
             block_on_detect = True
             try:
                 config_path = os.path.join(ws, "mind-mem.json")
-                with open(config_path) as f:
+                with open(config_path, encoding="utf-8") as f:
                     cfg = json.load(f)
                 block_on_detect = cfg.get("contradiction", {}).get("block_on_detect", True)
             except Exception as exc:

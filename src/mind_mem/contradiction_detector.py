@@ -493,7 +493,7 @@ def _get_config_threshold(workspace: str) -> float:
     """Read contradiction threshold from mind-mem.json config."""
     config_path = os.path.join(workspace, "mind-mem.json")
     try:
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
         threshold = float(config.get("contradiction", {}).get("threshold", DEFAULT_SIMILARITY_THRESHOLD))
         if not (0.0 <= threshold <= 1.0):
