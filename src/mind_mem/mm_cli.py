@@ -853,6 +853,54 @@ def _cmd_install_all(args: argparse.Namespace) -> int:
     return 0 if errored == 0 else 1
 
 
+def _cmd_migrate(args: argparse.Namespace) -> int:
+    """``mm migrate --maintenance`` — run the v3.2.0 §2.2 layout split now.
+
+    The same migration the apply engine performs on first run, invoked
+    ahead of time so an operator can inspect the result before a governed
+    apply depends on it. Gated on the same ``v4.maintenance_layout`` flag:
+    the point of the gate is that a workspace's on-disk layout does not
+    change until its owner opts in, and an explicit command is still a
+    layout change.
+    """
+    from mind_mem.maintenance_migrate import (
+        FLAG,
+        already_migrated,
+        flag_enabled,
+        migrate_maintenance,
+    )
+
+    ws = _workspace()
+    if not flag_enabled(ws):
+        print(
+            json.dumps(
+                {
+                    "workspace": ws,
+                    "migrated": False,
+                    "error": f"v4.{FLAG} is disabled",
+                    "enable": f'mind-mem.json: "v4": {{ "{FLAG}": {{ "enabled": true }} }}',
+                },
+                indent=2,
+            )
+        )
+        return 1
+
+    was_migrated = already_migrated(ws)
+    counts = migrate_maintenance(ws, verbose=False)
+    print(
+        json.dumps(
+            {
+                "workspace": ws,
+                "migrated": True,
+                "already_migrated": was_migrated,
+                "moved": {"tracked": counts["tracked"], "append-only": counts["append-only"]},
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def _cmd_detect(args: argparse.Namespace) -> int:
     """List AI clients detected on the current machine."""
     from mind_mem.hook_installer import AGENT_REGISTRY, detect_installed_agents
@@ -2656,6 +2704,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ollama embedding model name (default: mxbai-embed-large, dim 1024).",
     )
     p_migrate.set_defaults(func=_cmd_migrate_store)
+
+    # migrate — workspace layout migrations (distinct from migrate-store,
+    # which moves the block corpus between storage backends)
+    p_wsmigrate = sub.add_parser(
+        "migrate",
+        help="Run a workspace layout migration.",
+    )
+    p_wsmigrate.add_argument(
+        "--maintenance",
+        action="store_true",
+        required=True,
+        help="Split a flat maintenance/ directory into tracked/ and append-only/ (v3.2.0 §2.2). Requires v4.maintenance_layout.",
+    )
+    p_wsmigrate.set_defaults(func=_cmd_migrate)
 
     # detect — list AI coding clients present on the machine
     p_detect = sub.add_parser(

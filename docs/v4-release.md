@@ -435,20 +435,26 @@ Flag: `v4.logging_context`
 Contextvar-backed key-value stack. Values propagate across `await`
 boundaries automatically.
 
+Wired in 5.1.0: with the flag on, `mind_mem.observability` installs
+`StructuredLogFilter` on the handler its `StructuredLogger` owns, and the
+MCP tool decorator (`mcp_tool_observe`) runs every tool call inside a fresh
+`with_correlation_id` scope. Two concurrent recalls therefore tag every log
+line they emit with their own id.
+
 ```python
-from mind_mem.logging_context import with_context, with_correlation_id, StructuredLogFilter
-import logging
+from mind_mem.v4.logging_context import with_context, with_correlation_id
 
-logging.getLogger().addFilter(StructuredLogFilter())
-
-with with_correlation_id("req-abc-123"):
+@with_correlation_id           # decorator: fresh uuid4 per call, inherited
+def handle_request(...):       # by nested calls that already have one
     with with_context(user_id="u_456", op="recall"):
-        logger.info("retrieving blocks")
-        # log record includes: correlation_id, user_id, op
+        log.info("retrieving blocks")
+        # emitted JSON gains: "ctx": {"correlation_id": ..., "user_id": ..., "op": ...}
 ```
 
 `StructuredLogFilter` injects the current context stack into every
-`LogRecord` as a `context` dict field.
+`LogRecord` as a `ctx` dict attribute. Install it on the **handler**, never
+on the root logger: `StructuredLogger` sets `propagate = False`, so a
+root-logger install never sees a mind-mem record.
 
 ---
 

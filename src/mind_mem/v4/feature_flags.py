@@ -65,6 +65,7 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "viewer",
     "contradiction_stream",
     "world_staleness",  # external-anchor liveness check surfaced through scan()
+    "maintenance_layout",  # first-run maintenance/ tracked|append-only split at apply time
     # Group D — platform scale (selected v4-introduced items)
     "rust_hot_path",
     "embedding_fallback",
@@ -75,6 +76,7 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "kind_summaries",  # GraphRAG-style per-kind summaries (round 2 audit 3/4)
     "self_editing",  # MemGPT-style propose_edit / approve_edit (round 2 audit 2/4)
     "observability",  # counters / gauges / histograms (round 3 audit 4/4)
+    "logging_context",  # correlation-ID + kv context on every log line (round 4 audit)
     "backpressure",  # ingestion overload signal (round 4 audit, DeepSeek 9.75→10)
     "block_metadata",  # ChromaDB-style tags + Weaviate-style validators (round 4 audit)
     "circuit_breaker",  # external dependency CB (round 5 audit, Mistral + GLM 9.9→10)

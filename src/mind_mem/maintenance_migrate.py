@@ -20,10 +20,17 @@ Rule of thumb applied by :func:`classify_maintenance_file`:
 Idempotent. Safe to call multiple times. Prints a one-line summary
 per migrated file so users can audit what moved.
 
-Invoked automatically by :func:`mind_mem.apply_engine.apply_proposal`
-on first-run detection of the old layout (no ``tracked/`` or
-``append-only/`` subdir present yet). Can also be run standalone::
+Invoked by :func:`mind_mem.apply_engine.apply_proposal` on first-run
+detection of the old layout (no ``tracked/`` or ``append-only/`` subdir
+present yet), under the workspace apply lock and before the snapshot —
+see :func:`migrate_if_enabled`. That auto-invocation is gated on the
+``v4.maintenance_layout`` flag and is OFF by default: with the flag
+unset nothing here reads or writes the filesystem, so a workspace that
+never opts in keeps the legacy flat layout byte-for-byte.
 
+Can also be run explicitly::
+
+    mm migrate --maintenance
     python3 -m mind_mem.maintenance_migrate [workspace_path]
 
 STARGA, Inc. — Apache-2.0.
@@ -31,6 +38,7 @@ STARGA, Inc. — Apache-2.0.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -53,6 +61,25 @@ _TRACKED_SUFFIXES = (
     "-checkpoint.json",
     ".lock",
 )
+
+#: Suffixes of files that are NOT migrated at all — they stay flat in
+#: ``maintenance/``.
+#:
+#: ``init_workspace.MAINTENANCE_SCRIPTS`` copies the workspace's own
+#: tooling (``validate.sh`` and every ``*.py`` helper) into
+#: ``maintenance/`` at init time, and every entry in that list ends in
+#: ``.py`` or ``.sh``. Those are shipped CODE, not corpus state and not
+#: observability output: their paths are quoted to operators (init
+#: prints ``bash maintenance/validate.sh <ws>``) and pinned by
+#: ``tests/test_maintenance_scripts_ship.py``. ``classify_maintenance_file``
+#: would file them under ``tracked`` via the unknown-default and the move
+#: would break every one of those references — so the move loop skips
+#: them outright rather than the classifier being bent to cover a case
+#: that is not about snapshot scope at all.
+_SKIP_SUFFIXES = (".py", ".sh")
+
+#: v4 feature flag gating the automatic first-run migration.
+FLAG = "maintenance_layout"
 
 
 def classify_maintenance_file(basename: str) -> Category:
@@ -109,6 +136,10 @@ def migrate_maintenance(ws: str, *, verbose: bool = True) -> dict[Category, int]
         src = os.path.join(base, entry)
         if not os.path.isfile(src):
             continue
+        if entry.lower().endswith(_SKIP_SUFFIXES):
+            # Shipped workspace tooling — see _SKIP_SUFFIXES. Left where
+            # init_workspace put it; nothing about snapshot scope applies.
+            continue
         cat = classify_maintenance_file(entry)
         dst_dir = tracked_dir if cat == "tracked" else append_dir
         dst = os.path.join(dst_dir, entry)
@@ -128,6 +159,54 @@ def migrate_maintenance(ws: str, *, verbose: bool = True) -> dict[Category, int]
             )
 
     return counts
+
+
+def flag_enabled(ws: str) -> bool:
+    """``v4.maintenance_layout`` state for *workspace*, ambient config as fallback.
+
+    ``feature_flags.is_enabled`` resolves the config from the process
+    environment, which is right for process-wide surfaces and wrong for
+    an API whose whole subject is one explicit workspace directory — so
+    the workspace's own ``mind-mem.json`` is consulted first. Same shape
+    as :func:`mind_mem.lint._flag_enabled`, for the same reason.
+
+    Reads only; never writes. Unset (the default) → ``False``.
+    """
+    config_path = os.path.join(ws, "mind-mem.json")
+    try:
+        with open(config_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        data = None
+    if isinstance(data, dict):
+        block = data.get("v4")
+        if isinstance(block, dict):
+            sub = block.get(FLAG)
+            if isinstance(sub, dict):
+                return sub.get("enabled") is True
+
+    from .v4.feature_flags import is_enabled
+
+    return is_enabled(FLAG)
+
+
+def migrate_if_enabled(ws: str, *, verbose: bool = False) -> dict[Category, int] | None:
+    """Run the first-run layout migration iff ``v4.maintenance_layout`` is ON.
+
+    The gated entry point the apply engine calls. Returns ``None`` when
+    the flag is OFF — and in that case touches nothing on disk at all, so
+    a workspace that never opts in behaves exactly as it did before this
+    call site existed. When the flag is ON it returns the per-category
+    move counts, which are ``{"tracked": 0, "append-only": 0}`` on every
+    run after the first (``already_migrated`` short-circuits).
+
+    Deterministic: no clock, no randomness, no network. The file order is
+    ``sorted(os.listdir(...))``, so a given flat layout always splits the
+    same way.
+    """
+    if not flag_enabled(ws):
+        return None
+    return migrate_maintenance(ws, verbose=verbose)
 
 
 def main() -> int:

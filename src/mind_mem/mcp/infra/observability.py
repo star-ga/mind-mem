@@ -25,7 +25,7 @@ import os
 import sqlite3
 import time
 
-from mind_mem.observability import get_logger, metrics
+from mind_mem.observability import get_logger, log_context_active, metrics
 
 from .acl import ADMIN_TOOLS, USER_TOOLS, _get_request_scope, check_tool_acl
 from .constants import MCP_SCHEMA_VERSION
@@ -76,10 +76,14 @@ def mcp_tool_observe(fn):
 
     Logs structured JSON for every call: tool_name, duration_ms, success,
     error_type, result_size.  Also increments success/failure counters.
+
+    When the v4 ``logging_context`` surface is armed, each call additionally
+    runs inside a fresh correlation-ID scope, so every log line the tool (and
+    everything it calls) emits carries the id of the call that produced it.
     """
 
     @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
+    def _observed(*args, **kwargs):
         tool_name = fn.__name__
 
         # Rate limit enforcement (#475): per-client sliding window
@@ -190,5 +194,23 @@ def mcp_tool_observe(fn):
                 metrics.inc("mcp_tool_success")
             else:
                 metrics.inc("mcp_tool_failure")
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        # v4.logging_context (flag-gated, default OFF). ``log_context_active``
+        # is an in-memory bool, so with the flag off this is one attribute
+        # read and ``_observed`` runs exactly as it did before.
+        #
+        # The scope is per CALL, not per decoration: decorating
+        # ``mcp_tool_observe`` itself would run ``with_correlation_id`` once at
+        # import time and hand every tool call in the process the same id,
+        # which is the opposite of what a correlation id is for.
+        if not log_context_active():
+            return _observed(*args, **kwargs)
+        try:
+            from mind_mem.v4.logging_context import with_correlation_id
+        except Exception:  # pragma: no cover - surface armed implies importable
+            return _observed(*args, **kwargs)
+        return with_correlation_id(_observed)(*args, **kwargs)
 
     return wrapper

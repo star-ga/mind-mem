@@ -19,9 +19,18 @@ Read the active context at log time with :func:`current_context()`.
 The dict is a snapshot — modifying it does not change the stack.
 
 The module integrates cleanly with :mod:`logging` via a
-:class:`StructuredLogFilter`: install it on the root logger and every
-log record gains a ``ctx`` attribute carrying the current bindings,
-ready to be formatted as JSON by an upstream handler.
+:class:`StructuredLogFilter`: install it on the handler records actually
+pass through, and every log record gains a ``ctx`` attribute carrying the
+current bindings, ready to be formatted as JSON by that handler.
+
+Install it on the HANDLER, not on the root logger. A ``logging.Filter``
+added to a logger runs only for records logged *through that logger*, and
+mind-mem's :class:`~mind_mem.observability.StructuredLogger` sets
+``propagate = False`` on its own logger — so a root-logger install never
+sees a single mind-mem record and looks, misleadingly, like it works.
+:func:`mind_mem.observability.sync_log_context` does the real install (on
+mind-mem's own stderr handler) when ``v4.logging_context`` is enabled;
+``tests/test_v4_logging_context_wiring.py`` pins the no-op.
 
 This is dependency-free (stdlib + contextvars) so the v4 surface
 stays importable on a fresh install.
@@ -136,14 +145,15 @@ def with_correlation_id(fn: Callable[..., Any]) -> Callable[..., Any]:
 class StructuredLogFilter(logging.Filter):
     """Logging filter that attaches the active context to each record.
 
-    Install on the root logger:
+    Install on the handler that emits the records, not on the root
+    logger — see the module docstring for why the latter silently does
+    nothing for mind-mem::
 
-    ::
-
-        logging.getLogger().addFilter(StructuredLogFilter())
+        handler.addFilter(StructuredLogFilter())
 
     Every log record gains a ``ctx`` attribute (dict) that downstream
-    JSON / structured handlers can serialize alongside the message.
+    JSON / structured handlers can serialize alongside the message;
+    :class:`mind_mem.observability.JSONFormatter` emits it as ``ctx``.
     """
 
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003

@@ -24,6 +24,7 @@ from __future__ import annotations
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as _FutureTimeout
+from contextlib import AbstractContextManager, nullcontext
 from datetime import date
 from typing import Any, Mapping
 
@@ -31,6 +32,9 @@ from . import vector_inertness
 from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
 from .enums import Leg
 from .observability import get_logger, metrics, timed
+from .retrieval_trace import current_trace, is_trace_enabled
+from .retrieval_trace import step as _record_step
+from .retrieval_trace import trace as _open_trace
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 
 _log = get_logger("hybrid_recall")
@@ -323,6 +327,13 @@ class RecallResults(list):
     that a "hybrid" recall actually served BM25-only because the vector leg
     was unavailable / timed out / failed.
 
+    ``.trace`` carries the per-feature attribution summary
+    (:meth:`~mind_mem.retrieval_trace.RetrievalTrace.summary`) for the run that
+    produced this list — which of the conditional retrieval features actually
+    fired, how long each took, and how many hits it added. ``None`` unless
+    ``recall.retrieval.trace_attribution`` is on, so the default path carries
+    exactly what it carried before.
+
     ``.attestation`` generalises ``.degraded``: it is the full per-run recall
     attestation (which legs ran, the effective config hash, the index anchor,
     plus the degraded marker folded in) when a caller has derived one. It is a
@@ -333,6 +344,7 @@ class RecallResults(list):
 
     degraded: LegMarker | None = None
     attestation: Any | None = None
+    trace: dict[str, Any] | None = None
 
 
 def _as_results(items: list[dict], degraded: LegMarker | None = None) -> RecallResults:
@@ -371,6 +383,48 @@ def _union_degraded(
         "variants_degraded": str(len(present)),
         "variants_total": str(total),
     }
+
+
+# ---------------------------------------------------------------------------
+# Per-feature attribution (retrieval.trace_attribution, default OFF)
+# ---------------------------------------------------------------------------
+
+
+def _step(feature: str, **metadata: Any) -> AbstractContextManager[dict[str, Any]]:
+    """:func:`~mind_mem.retrieval_trace.step` when a trace is open, else a no-op.
+
+    ``step`` unconditionally reads the monotonic clock twice and emits a debug
+    log line. With ``retrieval.trace_attribution`` off no trace is ever opened,
+    and this collapses to one ContextVar read plus a :class:`nullcontext` — so
+    the default path pays no timer and emits no extra log record. The yielded
+    dict is fresh per call either way, so a caller's ``added_count`` /
+    ``top_score_delta`` writes never leak between features.
+    """
+    if current_trace() is None:
+        return nullcontext({"added_count": 0, "top_score_delta": 0.0})
+    return _record_step(feature, **metadata)
+
+
+def _top_score(items: list[dict]) -> float:
+    """Score of the head hit, for a step's ``top_score_delta``.
+
+    Reads whichever score field the stage in question ranks on
+    (``score`` post-expansion, ``rrf_score`` straight out of fusion). Never
+    raises: attribution is observation, and a malformed hit must not be able
+    to fail a recall.
+    """
+    if not items:
+        return 0.0
+    head = items[0]
+    if not isinstance(head, dict):  # pragma: no cover - defensive
+        return 0.0
+    for key in ("score", "rrf_score", "_score"):
+        if key in head:
+            try:
+                return float(head[key] or 0.0)
+            except (TypeError, ValueError):  # pragma: no cover - defensive
+                return 0.0
+    return 0.0
 
 
 class HybridBackend:
@@ -489,6 +543,74 @@ class HybridBackend:
     # -- search entry point -------------------------------------------------
 
     def search(
+        self,
+        query: str,
+        workspace: str,
+        limit: int = 10,
+        active_only: bool = False,
+        graph_boost: bool = False,
+        retrieve_wide_k: int = 200,
+        rerank: bool = True,
+        _skip_auto_features: bool = False,
+        scoring_instant: date | None = None,
+        **kwargs: Any,
+    ) -> list[dict]:
+        """Public recall entry point; see :meth:`_search` for the pipeline.
+
+        This wrapper does exactly one thing on top of :meth:`_search`: when
+        ``recall.retrieval.trace_attribution`` is on it opens a
+        :func:`~mind_mem.retrieval_trace.trace` for the call, so every
+        conditional feature that fires downstream records what it contributed,
+        and hangs the resulting summary off the returned
+        :class:`RecallResults` as ``.trace``.
+
+        With the flag off — the default — the trace is never opened, no
+        feature records a step (see :func:`_step`), and this returns the exact
+        object :meth:`_search` returned. A trace already open on this context
+        is NOT nested over: the multi-query paths recurse back through
+        ``search`` per variant, and the steps those variants record belong to
+        the one outer trace the caller opened.
+
+        The trace is observation only. Nothing it measures is read back by any
+        scoring, ranking or fusion step, so turning it on cannot move a
+        result. It carries wall-clock latencies, which is precisely why it is
+        opt-in: recall's ranked output stays a pure function of (corpus,
+        config, scoring_instant), while the attribution envelope beside it
+        does not.
+        """
+        if current_trace() is not None or not is_trace_enabled(self._config):
+            return self._search(
+                query,
+                workspace,
+                limit=limit,
+                active_only=active_only,
+                graph_boost=graph_boost,
+                retrieve_wide_k=retrieve_wide_k,
+                rerank=rerank,
+                _skip_auto_features=_skip_auto_features,
+                scoring_instant=scoring_instant,
+                **kwargs,
+            )
+        with _open_trace(query) as tracer:
+            out = self._search(
+                query,
+                workspace,
+                limit=limit,
+                active_only=active_only,
+                graph_boost=graph_boost,
+                retrieve_wide_k=retrieve_wide_k,
+                rerank=rerank,
+                _skip_auto_features=_skip_auto_features,
+                scoring_instant=scoring_instant,
+                **kwargs,
+            )
+            if not isinstance(out, RecallResults):
+                # The empty-query short-circuit returns a plain list.
+                out = _as_results(list(out))
+            out.trace = tracer.summary()
+            return out
+
+    def _search(
         self,
         query: str,
         workspace: str,
@@ -959,6 +1081,14 @@ class HybridBackend:
         else:
             from concurrent.futures import ThreadPoolExecutor
 
+            # deferred: an open attribution trace does NOT reach these workers —
+            # a ThreadPoolExecutor task runs in a fresh context, so each variant
+            # opens (and discards) its own trace and the outer summary lists no
+            # steps for the multi-variant expansion path. The in-line branch
+            # above traces correctly. Upgrade path: hand the active
+            # RetrievalTrace to the worker explicitly (a re-entrant activation
+            # helper on retrieval_trace) rather than copying the context, since
+            # one Context cannot be entered by two threads at once.
             def _one(q: str) -> list[dict]:
                 return self.search(
                     q,
@@ -1031,7 +1161,11 @@ class HybridBackend:
             if not is_session_boost_enabled(self._config, results):
                 return results
             params = resolve_session_boost_config(self._config)
-            return apply_session_boost(results, **params)
+            with _step("session_boost") as rec:
+                boosted = apply_session_boost(results, **params)
+                rec["added_count"] = len(boosted) - len(results)
+                rec["top_score_delta"] = _top_score(boosted) - _top_score(results)
+            return boosted
         except Exception as exc:  # pragma: no cover — defensive
             _log.warning("session_boost_failed", error=str(exc))
             return results
@@ -1048,7 +1182,11 @@ class HybridBackend:
             # Contradiction graph is passed through when the caller
             # supplies one via config; otherwise just Status/age/access
             # signals feed the score.
-            return annotate_results(results)
+            with _step("truth_score") as rec:
+                annotated = annotate_results(results)
+                rec["added_count"] = len(annotated) - len(results)
+                rec["top_score_delta"] = _top_score(annotated) - _top_score(results)
+            return annotated
         except Exception as exc:  # pragma: no cover
             _log.warning("truth_score_failed", error=str(exc))
             return results
@@ -1078,12 +1216,16 @@ class HybridBackend:
 
             if not is_trust_scores_enabled(self._config):
                 return results
-            return apply_trust_scores(
-                results,
-                config=self._config,
-                workspace=workspace,
-                scoring_instant=scoring_instant,
-            )
+            with _step("trust_scores") as rec:
+                scored = apply_trust_scores(
+                    results,
+                    config=self._config,
+                    workspace=workspace,
+                    scoring_instant=scoring_instant,
+                )
+                rec["added_count"] = len(scored) - len(results)
+                rec["top_score_delta"] = _top_score(scored) - _top_score(results)
+            return scored
         except Exception as exc:  # pragma: no cover — defensive
             _log.warning("trust_scores_failed", error=str(exc))
             return results
@@ -1112,15 +1254,18 @@ class HybridBackend:
             # (cross-encoder rerank, session boost) reuse the input
             # list, and in-place score mutation corrupted their views
             # when temporal_decay_hot_path was enabled mid-request.
-            decayed: list[dict] = []
-            for r in results:
-                mult = temporal_decay_score(r, half_life_days=half_life, now=_decay_moment)
-                current = float(r.get("score", 0.0) or 0.0)
-                copy = dict(r)
-                copy["score"] = current * mult
-                copy["_temporal_decay"] = round(mult, 4)
-                decayed.append(copy)
-            decayed.sort(key=lambda x: float(x.get("score", 0.0) or 0.0), reverse=True)
+            with _step("temporal_decay", half_life_days=half_life) as rec:
+                decayed: list[dict] = []
+                for r in results:
+                    mult = temporal_decay_score(r, half_life_days=half_life, now=_decay_moment)
+                    current = float(r.get("score", 0.0) or 0.0)
+                    copy = dict(r)
+                    copy["score"] = current * mult
+                    copy["_temporal_decay"] = round(mult, 4)
+                    decayed.append(copy)
+                decayed.sort(key=lambda x: float(x.get("score", 0.0) or 0.0), reverse=True)
+                rec["added_count"] = len(decayed) - len(results)
+                rec["top_score_delta"] = _top_score(decayed) - _top_score(results)
             _log.info("temporal_decay_applied", count=len(decayed), half_life_days=half_life)
             return decayed
         except Exception as exc:  # pragma: no cover
@@ -1225,27 +1370,30 @@ class HybridBackend:
             if not is_entity_prefetch_enabled(self._config):
                 return results
             params = resolve_entity_prefetch_config(self._config)
-            prefetched = prefetch_entity_blocks(
-                query,
-                workspace,
-                max_entities=params["max_entities"],
-                max_hops=params["max_hops"],
-                entity_score=params["entity_score"],
-                corpus=corpus,
-            )
-            if not prefetched:
-                return results
-            # Merge: keep original order, append prefetched blocks that
-            # aren't already in the result set. Downstream dedup catches
-            # any ID collisions.
-            seen_ids = {str(r.get("_id")) for r in results if r.get("_id")}
-            merged = list(results)
-            for b in prefetched:
-                bid = str(b.get("_id") or "")
-                if not bid or bid in seen_ids:
-                    continue
-                seen_ids.add(bid)
-                merged.append(b)
+            with _step("entity_prefetch", max_hops=params["max_hops"]) as rec:
+                prefetched = prefetch_entity_blocks(
+                    query,
+                    workspace,
+                    max_entities=params["max_entities"],
+                    max_hops=params["max_hops"],
+                    entity_score=params["entity_score"],
+                    corpus=corpus,
+                )
+                if not prefetched:
+                    return results
+                # Merge: keep original order, append prefetched blocks that
+                # aren't already in the result set. Downstream dedup catches
+                # any ID collisions.
+                seen_ids = {str(r.get("_id")) for r in results if r.get("_id")}
+                merged = list(results)
+                for b in prefetched:
+                    bid = str(b.get("_id") or "")
+                    if not bid or bid in seen_ids:
+                        continue
+                    seen_ids.add(bid)
+                    merged.append(b)
+                rec["added_count"] = len(merged) - len(results)
+                rec["top_score_delta"] = _top_score(merged) - _top_score(results)
             if len(merged) > len(results):
                 _log.info(
                     "entity_prefetch_merged",
@@ -1298,7 +1446,10 @@ class HybridBackend:
                         _log.debug("graph_expand_block_parse_skipped", error=str(exc))
                         continue
             params = resolve_graph_config(self._config)
-            expanded = graph_expand(results, all_blocks, **params)
+            with _step("graph_expand", max_hops=params["max_hops"]) as rec:
+                expanded = graph_expand(results, all_blocks, **params)
+                rec["added_count"] = len(expanded) - len(results)
+                rec["top_score_delta"] = _top_score(expanded) - _top_score(results)
             if len(expanded) > len(results):
                 _log.info(
                     "graph_expand_applied",
@@ -1357,8 +1508,11 @@ class HybridBackend:
                         _log.debug("kg_expand_block_parse_skipped", error=str(exc))
                         continue
             params = resolve_kg_fusion_config(self._config)
-            with KnowledgeGraph(db_path) as kg:
-                expanded = kg_expand(results, all_blocks, kg, query, **params)
+            with _step("kg_expand", max_hops=params["max_hops"]) as rec:
+                with KnowledgeGraph(db_path) as kg:
+                    expanded = kg_expand(results, all_blocks, kg, query, **params)
+                rec["added_count"] = len(expanded) - len(results)
+                rec["top_score_delta"] = _top_score(expanded) - _top_score(results)
             if len(expanded) > len(results):
                 _log.info(
                     "kg_fusion_applied",
@@ -1378,6 +1532,14 @@ class HybridBackend:
         (per detect_query_type) even when ``cross_encoder.enabled`` is
         false, unless operator sets ``cross_encoder.auto_enable: false``.
         Returns ``result`` unchanged on any failure.
+
+        deferred: this stage records NO attribution step, unlike the seven
+        ``_maybe_*`` hooks above it — it rebinds ``result`` across two
+        independent early-return paths (ensemble, then single-model CE), so a
+        single honest ``_step`` around it needs the reranker body extracted
+        into its own method first. Upgrade path: extract
+        ``_apply_reranker(query, result, limit, ce_cfg)`` and wrap the one
+        call, rather than sprinkling three partial steps.
         """
         if not result:
             return result

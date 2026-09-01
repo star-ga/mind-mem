@@ -1346,9 +1346,59 @@ def apply_proposal(ws, proposal_id, dry_run=False, agent_id=None):
         return False, f"Workspace lock timeout: {e}"
 
     try:
+        _migrate_maintenance_layout(ws)
         return _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock)
     finally:
         lock.release()
+
+
+def _migrate_maintenance_layout(ws):
+    """First-run ``maintenance/`` subdivision, gated on ``v4.maintenance_layout``.
+
+    v3.2.0 §2.2 moved the apply engine's snapshot scope from "exclude
+    ``maintenance/`` wholesale" to "snapshot ``maintenance/tracked/``,
+    exclude ``maintenance/append-only/``" — see :data:`SNAPSHOT_DIRS` and
+    :data:`SNAPSHOT_EXCLUDE_DIRS`. A workspace created before that split
+    still keeps its behavioural state flat in ``maintenance/``, where it
+    is neither snapshotted (only the ``tracked/`` subdir is) nor
+    explicitly excluded — so it silently escapes snapshot AND rollback,
+    which is the exact atomicity hole §2.2 closed. ``maintenance_migrate``
+    was written to perform that split and its docstring has always named
+    this auto-invocation; the call was never written, so the fix has only
+    ever applied to workspaces that happened to be laid out correctly
+    already.
+
+    Placement is load-bearing, on three counts:
+
+    * under the workspace apply lock, so two concurrent applies cannot
+      both walk ``maintenance/`` and race each other's ``shutil.move``;
+    * before ``_list_workspace_files`` records the pre-apply inventory,
+      so files that land in ``maintenance/tracked/`` (a SNAPSHOT_DIR) are
+      not seen as post-apply orphans and deleted by rollback cleanup;
+    * before ``create_snapshot``, so this apply's snapshot already covers
+      the relocated state rather than the run after it.
+
+    OFF by default: with the flag unset ``migrate_if_enabled`` returns
+    ``None`` without touching the filesystem or printing anything, so the
+    apply transcript is byte-identical to the pre-wiring engine.
+    """
+    from .maintenance_migrate import migrate_if_enabled
+
+    try:
+        counts = migrate_if_enabled(ws)
+    except OSError as exc:
+        # A layout migration must never be the thing that fails an apply:
+        # the pre-§2.2 flat layout is what the engine did for years, so
+        # falling back to it is a degradation, not a corruption. Loud,
+        # though — a silent skip here is indistinguishable from the flag
+        # being off, and the operator would never learn their state files
+        # are still outside the snapshot.
+        print(f"  WARNING: maintenance layout migration skipped: {exc}")
+        _log.warning("maintenance_migrate_failed", workspace=ws, error=str(exc))
+        return
+    if counts and (counts["tracked"] or counts["append-only"]):
+        print(f"\n  Maintenance layout: split flat maintenance/ → tracked={counts['tracked']} append-only={counts['append-only']}")
+        _log.info("maintenance_migrated", workspace=ws, tracked=counts["tracked"], append_only=counts["append-only"])
 
 
 def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):

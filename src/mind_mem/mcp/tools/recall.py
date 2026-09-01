@@ -110,7 +110,15 @@ def _recall_impl(
             scoring_instant=resolved_instant,
         )
 
-    if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True):
+    # Attribution tracing bypasses the recall cache. A cache HIT runs none of
+    # the retrieval features, so a trace replayed out of the cached envelope
+    # would claim graph_expand / entity_prefetch fired on a request where they
+    # never ran — the exact "stale evidence presented as this run's" failure
+    # the attestation is derived post-cache to avoid. Diagnostics that lie are
+    # worse than no diagnostics, so the trace flag (default OFF) buys the
+    # measurement at the price of the cache.
+    _trace_on = _trace_attribution_enabled(_raw_config)
+    if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
         raw = cached_recall(
             _inner,
             query,
@@ -176,6 +184,21 @@ class _AttestationInput(list):
     """
 
     degraded: dict | None = None
+
+
+def _trace_attribution_enabled(config: Any) -> bool:
+    """Is ``recall.retrieval.trace_attribution`` on for this workspace?
+
+    The flag lives under the ``recall`` section, which is what
+    :meth:`HybridBackend.from_config` hands the backend. Anything malformed
+    reads as off — a diagnostic knob must never be able to fail a recall.
+    """
+    if not isinstance(config, dict):
+        return False
+    from mind_mem.retrieval_trace import is_trace_enabled
+
+    recall_cfg = config.get("recall", {})
+    return is_trace_enabled(recall_cfg if isinstance(recall_cfg, dict) else None)
 
 
 def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
@@ -383,6 +406,7 @@ def _recall_impl_uncached(
     used_backend = "scan"
     results: list = []
     hybrid_degraded: dict | None = None
+    hybrid_trace: dict | None = None
 
     if backend in ("hybrid", "auto"):
         try:
@@ -404,6 +428,11 @@ def _recall_impl_uncached(
             # results tagged with ``.degraded`` so a caller can tell the
             # "hybrid" label did NOT mean a two-leg fusion this time.
             hybrid_degraded = getattr(results, "degraded", None)
+            # Per-feature attribution, when the operator opted in: which of the
+            # conditional retrieval features actually fired on THIS request and
+            # what each one added. ``None`` unless
+            # ``recall.retrieval.trace_attribution`` is on.
+            hybrid_trace = getattr(results, "trace", None)
         except ImportError:
             if backend == "hybrid":
                 warnings.append("Hybrid backend unavailable — falling back to BM25.")
@@ -489,6 +518,11 @@ def _recall_impl_uncached(
         "scoring_instant": format_scoring_instant(resolve_scoring_instant(scoring_instant)),
         "results": results,
     }
+    # Per-feature attribution (opt-in): which conditional retrieval features
+    # fired on this request and what each contributed. Sits beside ``degraded``
+    # as the run's other in-band self-description. Absent by default.
+    if hybrid_trace:
+        envelope["trace"] = hybrid_trace
     # In-band degradation marker (local hybrid path): a "hybrid" backend that
     # actually served BM25-only because the vector leg was unavailable / timed
     # out / failed. Silent degradation is the bug — make it a first-class,

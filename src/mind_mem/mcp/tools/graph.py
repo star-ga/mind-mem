@@ -407,9 +407,135 @@ def graph_stats() -> str:
     return json.dumps({**stats, "_schema_version": "1.0"}, indent=2)
 
 
+def _weighted_hops(
+    edges: list[tuple[str, str]],
+    weights: dict[tuple[str, str], float],
+    root_id: str,
+    depths: dict[str, int],
+) -> list[Any]:
+    """Build the ``HopResult`` chain for a set of parent→child links.
+
+    ``edges`` is ``(parent_id, child_id)`` in traversal order. Each child's
+    raw confidence is the stored weight of the edge that reached it, so a
+    weak link starts weak; the root is the queried block itself and enters
+    at full trust. Ordering is the caller's traversal order, which is
+    SQL-``ORDER BY``-stable, so the same graph always yields the same list.
+    """
+    from mind_mem.uncertainty_propagation import HopResult
+
+    hops: list[Any] = [
+        HopResult(
+            block_id=root_id,
+            content="",
+            confidence=1.0,
+            hop_depth=0,
+            parent_hop_id=None,
+        )
+    ]
+    for parent_id, child_id in edges:
+        raw = weights.get((parent_id, child_id))
+        if raw is None:
+            raw = weights.get((child_id, parent_id), 1.0)
+        hops.append(
+            HopResult(
+                block_id=child_id,
+                content="",
+                confidence=max(0.0, min(1.0, float(raw))),
+                hop_depth=depths.get(child_id, 1),
+                parent_hop_id=parent_id,
+            )
+        )
+    return hops
+
+
+def _edge_weights(cg: Any) -> dict[tuple[str, str], float]:
+    """``(source, target) -> weight`` for every causal edge.
+
+    Read once per call. Only reached when uncertainty propagation is
+    switched on, so the default-off envelope issues no extra query.
+    """
+    return {(e.source_id, e.target_id): float(e.weight) for e in cg.all_edges()}
+
+
+def _chain_confidences(
+    chains: list[list[str]],
+    weights: dict[tuple[str, str], float],
+    decay: float,
+) -> list[dict[str, Any]]:
+    """Confidence-annotate each upstream causal chain.
+
+    Without this, every id in a chain reads alike: a block three hops back
+    is reported with the same standing as a direct dependency, and a
+    consumer treats a triple-indirect cause as first-hand evidence. Each
+    hop is discounted by its parent's *already adjusted* confidence, and
+    the chain gets an end-to-end ``confidence`` from
+    :meth:`UncertaintyPropagator.chain_confidence`.
+    """
+    from mind_mem.uncertainty_propagation import UncertaintyPropagator
+
+    propagator = UncertaintyPropagator(decay_factor=decay)
+    out: list[dict[str, Any]] = []
+    for chain in chains:
+        depths = {bid: i for i, bid in enumerate(chain)}
+        edges = list(zip(chain, chain[1:]))
+        hops = _weighted_hops(edges, weights, chain[0], depths)
+        adjusted = propagator.propagate(hops)
+        out.append(
+            {
+                "chain": list(chain),
+                "confidence": propagator.chain_confidence(hops),
+                "hops": [
+                    {
+                        "block_id": h.block_id,
+                        "depth": h.hop_depth,
+                        "confidence": h.confidence,
+                    }
+                    for h in adjusted
+                ],
+            }
+        )
+    return out
+
+
+def _downstream_confidences(
+    root_id: str,
+    nodes: list[dict],
+    weights: dict[tuple[str, str], float],
+    decay: float,
+) -> dict[str, float]:
+    """``block_id -> adjusted confidence`` for the downstream reachable set.
+
+    The whole reachable tree is propagated in one pass, so a depth-3
+    dependent is discounted through both of its ancestors rather than
+    being reported at the same strength as a direct dependent.
+    """
+    from mind_mem.uncertainty_propagation import UncertaintyPropagator
+
+    depths = {root_id: 0}
+    edges: list[tuple[str, str]] = []
+    for node in nodes:
+        child = str(node.get("block_id"))
+        parent = str(node.get("depends_on"))
+        depths[child] = int(node.get("depth", 1))
+        # Downstream edges are stored child-depends-on-parent, so the
+        # weight lives under (child, parent) — the reverse of the walk.
+        edges.append((parent, child))
+    hops = _weighted_hops(edges, weights, root_id, depths)
+    propagator = UncertaintyPropagator(decay_factor=decay)
+    return {h.block_id: h.confidence for h in propagator.propagate(hops)}
+
+
 @mcp_tool_observe
 def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> str:
-    """Navigate the causal dependency graph from a block."""
+    """Navigate the causal dependency graph from a block.
+
+    When ``retrieval.multi_hop.uncertainty.enabled`` is true in
+    ``mind-mem.json`` (default false), the envelope additionally carries
+    propagated confidence: ``upstream.chain_confidence`` per causal chain
+    and a ``confidence`` field on each ``downstream.reachable_nodes``
+    entry. Both are purely additive — with the flag off the response is
+    byte-for-byte what it has always been.
+    """
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
         return json.dumps(
             {
@@ -431,8 +557,16 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
     ws = _workspace()
     try:
         from mind_mem.causal_graph import CausalGraph
+        from mind_mem.graph_recall import is_uncertainty_enabled, resolve_chain_decay
+
+        from ..infra.config import _load_config
 
         cg = CausalGraph(ws)
+
+        cfg = _load_config(ws)
+        propagate_uncertainty = is_uncertainty_enabled(cfg)
+        chain_decay = resolve_chain_decay(cfg)
+        edge_weights: dict[tuple[str, str], float] = _edge_weights(cg) if propagate_uncertainty else {}
 
         result: dict[str, Any] = {
             "_schema_version": MCP_SCHEMA_VERSION,
@@ -455,6 +589,8 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
                 ],
                 "causal_chains": chains,
             }
+            if propagate_uncertainty:
+                result["upstream"]["chain_confidence"] = _chain_confidences(chains, edge_weights, chain_decay)
 
         if direction in ("downstream", "both"):
             dependents = cg.dependents(block_id)
@@ -480,6 +616,11 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
                 current_layer = next_layer
                 if not current_layer:
                     break
+
+            if propagate_uncertainty and downstream_nodes:
+                conf_by_id = _downstream_confidences(block_id, downstream_nodes, edge_weights, chain_decay)
+                for node in downstream_nodes:
+                    node["confidence"] = conf_by_id.get(str(node.get("block_id")), 0.0)
 
             result["downstream"] = {
                 "direct_dependents": [
