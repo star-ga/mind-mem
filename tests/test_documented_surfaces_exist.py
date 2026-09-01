@@ -144,10 +144,11 @@ class TestQualityGateConfigKeyDocs:
 # 3. Docs that describe REMOVED surfaces must say so
 # ---------------------------------------------------------------------------
 
-#: v4 modules deleted by the 5.0.0 reachability sweep. A doc may still discuss
-#: them -- release notes are a historical record and rewriting one falsifies it
-#: -- but it must not read as a guide to a live API.
-_REMOVED_V4_SURFACES = (
+#: v4 modules that were deleted by the 5.0.0 sweep and RESTORED for 5.1.0.
+#: The sweep removed them as unreachable; the operator's ruling was that
+#: "nothing imports it" was never sufficient grounds, and they are being wired
+#: rather than deleted. This tuple now pins the RESTORATION, not the removal.
+_RESTORED_V4_SURFACES = (
     "cognitive_kernel",
     "surprise_retrieval",
     "block_kinds",
@@ -159,59 +160,38 @@ _REMOVED_V4_SURFACES = (
     "backpressure",
     "health",
     "logging_context",
+    "observability",
+    "vocabulary",
 )
 
 
-class TestRemovedV4SurfacesAreMarkedHistorical:
-    """The replacement pin for the deleted ``TestHnswKindIndexDocs`` group.
+class TestRestoredV4SurfacesAreImportable:
+    """The inverse of what this class asserted in 5.0.0, and deliberately so.
 
-    That group asserted documentation against ``v4/hnsw_kind_index.py``. The
-    module is gone, so four of its six tests could not survive -- but deleting
-    the class outright left NOTHING pinning the drift it existed to catch, and
-    ``docs/v4-release.md`` still carries 53 references to removed surfaces
-    including a runnable import example.
+    In 5.0.0 this pinned that these modules must NOT import — the sweep had
+    deleted them. That sweep removed 13,594 lines on the grounds that nothing
+    referenced them, which conflated "unreachable" with "worthless". Two of the
+    44 were not even unreachable: ``session_summarizer`` had a shell caller in
+    ``hooks/session-end.sh`` and a Python importer in ``bootstrap_corpus``.
 
-    The honest pin is not "no doc may name these" (that would force rewriting a
-    release record) but "a doc that names them must not present them as live".
+    They are restored and being wired. This class now fails if one goes missing
+    again, so a future cleanup cannot quietly re-run the same mistake.
     """
 
-    def test_the_v4_release_note_is_marked_historical(self) -> None:
-        doc = _read("docs/v4-release.md")
-        head = doc[:1600]
-        assert "HISTORICAL" in head, "v4-release.md must announce itself as a historical record"
-        assert "5.0.0" in head, "the banner must name the release that removed these surfaces"
-
-    def test_the_banner_names_every_surface_the_page_still_documents(self) -> None:
-        """A banner that omits a surface the page teaches is worse than none."""
-        doc = _read("docs/v4-release.md")
-        head, body = doc[:1600], doc[1600:]
-        missing = [n for n in _REMOVED_V4_SURFACES if n in body and n not in head]
-        assert not missing, f"documented but not named as removed in the banner: {missing}"
-
-    def test_no_removed_surface_is_importable(self) -> None:
-        """Pins the claim the banner makes, against the tree rather than prose."""
+    def test_every_restored_v4_surface_imports(self) -> None:
         import importlib.util
 
-        alive = [n for n in _REMOVED_V4_SURFACES if importlib.util.find_spec(f"mind_mem.v4.{n}") is not None]
-        assert not alive, f"banner says these were removed, but they import: {alive}"
+        missing = [n for n in _RESTORED_V4_SURFACES if importlib.util.find_spec(f"mind_mem.v4.{n}") is None]
+        assert not missing, (
+            f"restored v4 modules are missing again: {missing}. They were deleted "
+            "in 5.0.0 and restored by operator ruling; removing one needs that "
+            "ruling reversed, not a reachability argument."
+        )
 
-    def test_live_docs_do_not_teach_a_removed_surface(self) -> None:
-        """The non-historical docs are held to the stricter rule.
-
-        ``docs/v4-release.md`` and the frozen v4 model card are exempt: both are
-        records of a shipped artifact. Everything else is read as current.
-        """
-        import glob
-        import os
-
-        exempt = {"docs/v4-release.md"}
-        offenders: list[str] = []
-        for path in sorted(glob.glob(str(_REPO / "docs" / "*.md"))):
-            rel = "docs/" + os.path.basename(path)
-            if rel in exempt:
-                continue
-            text = _read(rel)
-            for name in _REMOVED_V4_SURFACES:
-                if f"from mind_mem.v4.{name} import" in text or f"mind_mem.v4.{name}(" in text:
-                    offenders.append(f"{rel}:{name}")
-        assert not offenders, f"live docs teach removed surfaces: {offenders}"
+    def test_the_v4_release_note_no_longer_claims_they_are_removed(self) -> None:
+        """The 5.0.0 banner said these were removed. That is no longer true."""
+        doc = _read("docs/v4-release.md")
+        head = doc[:1800]
+        assert "removed most of the modules named below" not in head, (
+            "docs/v4-release.md still carries the 5.0.0 removal banner, but the modules are restored — the banner is now the false claim"
+        )

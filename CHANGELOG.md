@@ -6,7 +6,7 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Removed
 
-* **BREAKING: 44 unreachable modules deleted (~12k LOC).** A reachability
+* **BREAKING: 44 unreachable modules deleted (13,594 LOC).** A reachability
   audit found 49 modules under `src/mind_mem` -- roughly 15% of the package --
   that no product code imported: not from any other module, not from
   `__init__.py`, not from any of the 17 `console_scripts`, and not through any

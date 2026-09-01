@@ -4376,7 +4376,7 @@ evidence.
 
 ## Reachability sweep — 5.0.0 (2026-08-31)
 
-- [x] **The "no caller, no tick" gate paid out: 44 modules deleted, ~12k LOC.**
+- [x] **The "no caller, no tick" gate paid out: 44 modules deleted, 13,594 LOC.**
   The audit found 49 modules under `src/mind_mem` (~15% of the package) that no
   product code imported — not from another module, not from `__init__.py`, not
   from any of the 17 `console_scripts`, not via any dynamic-import path. All 49

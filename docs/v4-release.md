@@ -1,20 +1,17 @@
 # v4.0.0 Release Notes
 
-> **HISTORICAL — describes the v4.0.0 release as it shipped on 2026-05-10.**
-> **Do not use it as a guide to the current API.** The 5.0.0 reachability sweep
-> removed most of the modules named below, because a later audit found that no
-> product code ever imported them: `cognitive_kernel`, `surprise_retrieval`,
-> `block_kinds`, `block_metadata`, `kind_summaries`, `embedding_pipeline`, `pq`,
-> `hnsw_kind_index`, `backpressure`, `health`, `logging_context` and the v4
-> `observability` module are all gone, and their feature flags with them.
+> **These surfaces were removed in 5.0.0 and RESTORED for 5.1.0.**
+> The 5.0.0 reachability sweep deleted them because no product code imported
+> them. That was overturned: "nothing imports it" is evidence about WIRING, not
+> about worth, and the sweep removed 13,594 lines of working capability on that
+> basis. Two of the modules were not even unreachable — `session_summarizer`
+> had a shell caller in `hooks/session-end.sh` and a Python importer in
+> `bootstrap_corpus`.
 >
-> What survives from v4 in 5.0.0: `federation`, `federation_client`,
-> `self_editing`, `block_versioning`, `circuit_breaker`, `feature_flags`.
->
-> This page is kept unedited below the banner because it is the record of what
-> v4.0.0 actually shipped, and rewriting it would falsify that record. Every
-> import example past this point is expected to fail on 5.0.0. See CHANGELOG.md
-> for the removal list and the reasoning.
+> They are back and being wired module by module, flag-gated and default-OFF,
+> with flag-off behaviour byte-identical to 5.0.0. Import examples below are
+> valid again. Where a restored module duplicates a live one, the resolution is
+> substitution or merge — not deletion. See CHANGELOG 5.1.0.
 
 
 Released 2026-05-10. Audience: existing mind-mem v3.x users.

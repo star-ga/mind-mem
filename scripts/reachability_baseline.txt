@@ -1,10 +1,53 @@
-# Reachability debt register -- the file only ever SHRINKS.
+# Reachability debt register — the file only ever SHRINKS.
 #
-# 2026-08-31: emptied. It held 49 modules (~15% of src/mind_mem) that were
-# tested but never invoked by the product. The 5.0.0 sweep resolved every one:
-# 42 deleted in the first wave, 5 more in the cascade wave they orphaned,
-# 2 relocated to benchmarks/ as non-product entry-point scripts.
+# 2026-09-01: re-seeded at 39 after the 5.1.0 RESTORATION.
 #
-# The debt is zero. Any name that appears here again is NEW debt and must
-# carry the roadmap item that will consume it -- an allowlist entry is a
-# promise with an address, not an exemption.
+# 5.0.0 deleted 44 modules (13,594 LOC) as unreachable and emptied this file.
+# That was overturned: "nothing imports it" is evidence about WIRING, never
+# about worth. The modules are restored and are being WIRED, slice by slice,
+# per the architectural plan — so this register goes back to zero by
+# connecting code, not by deleting it.
+#
+# Every name below has a wiring slice assigned. The gate fails only on
+# ADDITIONS, so each slice shrinks this file and CI stays green throughout.
+# Six modules are deliberately not wired and carry a documented re-entry
+# condition rather than a deletion.
+api.grpc_server
+bootstrap_corpus
+consensus_vote
+core_export
+error_codes
+event_fanout
+feature_gate
+governance_raft
+granularity_align
+ingestion_pipeline
+lint_autofix
+llm_noise_profile
+maintenance_migrate
+memory_mesh
+mind_kernels
+mrs
+multi_modal
+online_trainer
+retrieval_trace
+smart_chunker
+storage.sharded_pg
+streaming
+tenant_audit
+tenant_kms
+tracking
+trajectory
+turbo_quant
+uncertainty_propagation
+v4.backpressure
+v4.block_kinds
+v4.block_metadata
+v4.embedding_pipeline
+v4.health
+v4.hnsw_kind_index
+v4.kernels
+v4.kind_summaries
+v4.logging_context
+v4.pq
+v4.vocabulary
