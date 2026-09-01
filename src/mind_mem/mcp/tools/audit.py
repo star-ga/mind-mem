@@ -260,9 +260,152 @@ def list_evidence(
     )
 
 
+def _anchor_history_path(ws: str) -> str:
+    """Where the local anchor trail lives for workspace *ws*."""
+    return os.path.join(ws, "maintenance", "ledger_anchors.jsonl")
+
+
+@mcp_tool_observe
+def anchor_root(chain: str = "local", tx_hash: str = "", block_height: int = 0) -> str:
+    """Record the CURRENT Merkle root in the local external-anchor trail.
+
+    This is the step that turns "tamper-evident locally" into "anchored
+    externally": ``verify_merkle`` and ``verify_chain`` prove the store is
+    internally consistent, but a holder of the store could in principle rebuild
+    a consistent history. An anchor pins a root to a point in time outside the
+    store, so a later rewrite is detectable even by someone who trusts nothing
+    in the workspace.
+
+    The root is computed here from the live block index rather than accepted
+    from the caller -- anchoring a root the caller supplied would anchor the
+    caller's claim, not the store's state.
+
+    Posting to a real chain needs web3 keys and network access, which this
+    library deliberately does not carry. When no external poster is wired the
+    entry records ``status="pending"`` with no tx hash and still gives a
+    complete local trail; an integrator wraps their poster around this call and
+    passes ``tx_hash`` once it clears.
+
+    Args:
+        chain: Ledger identifier the root was (or will be) posted to.
+        tx_hash: Transaction hash from an external poster. Empty means the
+            anchor is pending.
+        block_height: External ledger height, when known.
+
+    Returns:
+        JSON with ``ok``, the anchored ``root``, and the recorded ``entry``.
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(chain, str) or not chain.strip():
+        return json.dumps({"ok": False, "error": "chain must be a non-empty string"})
+    if not isinstance(block_height, int) or isinstance(block_height, bool) or block_height < 0:
+        return json.dumps({"ok": False, "error": "block_height must be a non-negative integer"})
+    if not isinstance(tx_hash, str):
+        return json.dumps({"ok": False, "error": "tx_hash must be a string"})
+
+    try:
+        from mind_mem.merkle_tree import MerkleTree
+        from mind_mem.sqlite_index import merkle_leaves
+
+        leaves = merkle_leaves(ws)
+    except (ImportError, AttributeError):
+        leaves = []
+
+    if not leaves:
+        return json.dumps(
+            {"ok": False, "error": "no block index available -- run 'mind-mem-scan' first"}
+        )
+
+    tree = MerkleTree()
+    tree.build(leaves)
+
+    try:
+        from mind_mem.ledger_anchor import AnchorHistory
+        from mind_mem.ledger_anchor import anchor_root as _record
+
+        history = AnchorHistory(_anchor_history_path(ws))
+        entry = _record(
+            history,
+            tree.root_hash,
+            block_height=block_height,
+            chain=chain.strip(),
+            tx_hash=tx_hash.strip() or None,
+        )
+    except Exception as exc:
+        _log.warning("anchor_root_failed", error=str(exc))
+        return json.dumps({"ok": False, "error": f"anchor failed: {exc}"})
+
+    metrics.inc("mcp_anchor_root")
+    _log.info("mcp_anchor_root", root=tree.root_hash, chain=chain, status=entry.status)
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "ok": True,
+            "root": tree.root_hash,
+            "leaves": len(leaves),
+            "entry": entry.as_dict(),
+        },
+        indent=2,
+    )
+
+
+@mcp_tool_observe
+def anchor_history(limit: int = 20) -> str:
+    """List recorded external anchors, newest last, with integrity problems.
+
+    ``problems`` is not decoration: the trail is append-only JSONL, so a
+    truncated or hand-edited line is exactly the tampering an anchor exists to
+    reveal. Damaged lines are REPORTED rather than silently skipped -- a trail
+    that quietly drops what it cannot parse is worse than no trail.
+
+    Args:
+        limit: Maximum entries to return (most recent).
+
+    Returns:
+        JSON with ``entries``, ``count``, ``latest`` and ``problems``.
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+        return json.dumps({"ok": False, "error": "limit must be a positive integer"})
+
+    try:
+        from mind_mem.ledger_anchor import AnchorHistory
+
+        history = AnchorHistory(_anchor_history_path(ws))
+        entries = history.all()
+        problems = history.problems()
+        latest = history.latest()
+    except Exception as exc:
+        _log.warning("anchor_history_failed", error=str(exc))
+        return json.dumps({"ok": False, "error": f"anchor history unreadable: {exc}"})
+
+    metrics.inc("mcp_anchor_history")
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "ok": True,
+            "count": len(entries),
+            "entries": [e.as_dict() for e in entries[-limit:]],
+            "latest": latest.as_dict() if latest else None,
+            "problems": problems,
+        },
+        indent=2,
+    )
+
+
 def register(mcp) -> None:
     """Wire the audit tools onto *mcp*."""
     mcp.tool(verify_merkle)
     mcp.tool(mind_mem_verify)
     mcp.tool(verify_chain)
     mcp.tool(list_evidence)
+    mcp.tool(anchor_root)
+    mcp.tool(anchor_history)

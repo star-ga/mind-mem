@@ -12,7 +12,14 @@ want baked into a retrieval library. Instead we ship:
   record carries ``status="pending"`` and ``tx_hash=None``, still
   giving a complete local audit trail.
 - :func:`anchor_root` — append an entry and return the manifest.
-- ``anchor_history`` MCP tool (registered in mcp_server).
+- ``anchor_root`` / ``anchor_history`` MCP tools, registered on the audit
+  tool family (``mind_mem.mcp.tools.audit``) and ACL-classified there.
+
+  This docstring claimed that registration from v2.0.0rc1 while it was
+  false: nothing in ``src/`` imported this module, so the capability was
+  unreachable from the product for three minor versions even though these
+  tests passed. Wired for real in 5.0.0. If you are reading this because
+  you are about to move the tools, the claim has to move with them.
 
 Callers integrating with a real chain wrap their poster around
 :func:`anchor_root` and pass the transaction hash when it clears.

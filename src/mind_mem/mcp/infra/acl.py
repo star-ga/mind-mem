@@ -58,6 +58,10 @@ ADMIN_TOOLS = frozenset(
         "reindex",
         "export_memory",
         "verify_chain",
+        # anchor_root APPENDS to the workspace anchor trail, so it is a write
+        # even though it reads the Merkle root to do it. Admin, like the rest
+        # of the chain-mutating surface.
+        "anchor_root",
         "compact",
         "encrypt_file",
         "decrypt_file",
@@ -152,6 +156,8 @@ USER_TOOLS = frozenset(
         "report_outcome",
         "outcome_stats",
         "list_evidence",
+        # Read-only view of the anchor trail (and its integrity problems).
+        "anchor_history",
         "get_block",
         "memory_health",
         "traverse_graph",
