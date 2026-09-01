@@ -50,7 +50,7 @@ In Claude Desktop, you should now see MIND-Mem tools available:
 - **scan** — Run integrity scan
 - **hybrid_search** — BM25+Vector+RRF fusion search
 - **intent_classify** — Classify query intent
-- ...and many more (89 distinct tools / 90 registrations, plus 8 resources)
+- ...and many more (98 distinct tools / 99 registrations, plus 8 resources)
 
 ## Step 5: Test
 

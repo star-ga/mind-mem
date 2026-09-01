@@ -150,7 +150,7 @@ cross-model review.
 Builds on **v3.12.1** (2026-05-10) — patched eval, model card honesty.
 Builds on **v3.12.0** (2026-05-09) — strict quality gate, lineage→staleness.
 Builds on **v3.11.0** (2026-05-08) — typed lineage edges, recall explainability.
-Builds on **v3.9.0** — 4000+ tests, native MCP for 17 AI clients, **96 tools**,
+Builds on **v3.9.0** — **81 tools**, 4000+ tests, native MCP for 17 AI clients,
 Postgres+pgvector, full-fine-tune local model, at-rest encryption, tier
 decay, governance alerting, MIC/MAP wire format, HTTP transport, daemon,
 inbox ingestion, pipeline hash, persona projection, Kahn walkthrough.
@@ -164,9 +164,11 @@ src/mind_mem/           — Main package (src layout; flat modules, not
     alerting.py, governance_gate.py — governance: contradiction/drift
                           detection, proposals, audit chain, alerting hooks
   _recall_core.py, hybrid_recall.py, recall_vector.py — retrieval core
-  mcp_server.py         — MCP server monolith (96 tools, 8 resources)
+  mcp_server.py         — MCP server monolith (98 tools, 8 resources)
   mcp/                  — per-domain MCP tool modules (mcp.tools.*)
-  ingestion_pipeline.py, inbox.py, entity_ingest.py — auto-ingestion
+  inbox.py, entity_ingest.py — auto-ingestion (ingestion_pipeline.py was
+                          removed in 5.0.0: an unreachable webhook write
+                          path that would have bypassed the HITL gate)
   skill_opt/            — Skill optimization
   hook_installer.py     — Client hook installation (v3.1.1+)
   http_transport.py     — Stdlib HTTP REST adapter (v3.9.0)
@@ -178,23 +180,19 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   quality_gate.py       — Deterministic quality validation (v3.11.0)
   block_lineage.py      — Typed relationship edges (v3.11.0)
   lineage_staleness.py  — BFS staleness propagation (v3.12.0)
-  v4/  — v4.0.0 surfaces (all flag-gated), each file under src/mind_mem/v4/ —
-  cognitive_kernel.py   — KernelKind enum + mind_recall (v4.0.0)
-  surprise_retrieval.py — compute_surprise + FallbackPolicy (v4.0.0)
-  block_kinds.py        — Multi-label block_kind_tags table (v4.0.0)
-  block_metadata.py     — Tag + TTL + schema validators (v4.0.0)
-  kind_summaries.py     — Per-kind global summaries (v4.0.0)
-  embedding_pipeline.py — Pluggable embedder + 3-gram default (v4.0.0)
+  v4/  — the v4.0.0 surfaces that SURVIVED the 5.0.0 reachability sweep.
+         Eleven more shipped here and were removed in 5.0.0 because nothing in
+         the product ever imported them (cognitive_kernel, surprise_retrieval,
+         block_kinds, block_metadata, kind_summaries, embedding_pipeline, pq,
+         hnsw_kind_index, backpressure, health, logging_context, observability).
+         They had tests -- up to 29 files each -- which is exactly why test
+         count is not evidence of reachability. See scripts/check_reachable_modules.py.
   federation.py         — VClock + conflict log + MergeStrategy (v4.0.0)
+  federation_client.py  — federation transport client
   self_editing.py       — block_edits + propose/approve/reject (v4.0.0)
-  pq.py                 — Product Quantization M=32 K=256 (v4.0.0)
-  hnsw_kind_index.py    — kind-partitioned kNN, brute-force cosine (v4.0.0)
+  block_versioning.py   — block version history
   circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
-  backpressure.py       — BackpressureController + hysteresis (v4.0.0)
-  health.py             — health_check + 7 probes + register (v4.0.0)
-  observability.py      — counter/gauge/histogram + @timed (v4.0.0)
-  logging_context.py    — contextvar stack + StructuredLogFilter (v4.0.0)
-  feature_flags.py      — 35 flags + is_enabled/require_enabled (v4.0.0)
+  feature_flags.py      — 35 flags + is_enabled/require_enabled
 tests/                  — pytest suite (4000+ tests + 376 v4 unit
                           + 38 concurrency + 22 paraphrase probes)
 mind/                   — MIND scoring kernels (.mind)
@@ -234,7 +232,7 @@ docs/                   — User + integration docs (35+ files)
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
   `docs/client-integrations.md`.
 
-### MCP Tools (96)
+### MCP Tools (98)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, prefetch, propose_update, approve_apply,
@@ -243,7 +241,8 @@ create_snapshot, list_snapshots, restore_snapshot, briefing,
 category_summary, cross_encoder_rerank, find_similar, memory_evolution,
 delete_memory, export_memory, import_memory, intent_classify,
 retrieval_diagnostics, get_mind_kernel, list_mind_kernels,
-verify_chain, audit_replay, tier_decay_apply, encrypt_status,
+verify_chain, audit_replay, anchor_root, anchor_history,
+tier_decay_apply, encrypt_status,
 alerts_subscribe, mic_convert_tool, mic_inspect_tool,
 compile_truth_walkthrough, recall_with_persona, pipeline_status,
 reindex_dirty, and more.

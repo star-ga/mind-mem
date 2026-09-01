@@ -19,6 +19,10 @@ This module is the "answer view" builder for mind-mem recall results:
   recall(query) -> hits -> pack_evidence(hits, query_type) -> packed_context
 """
 
+# bench-support: consumed by benchmarks/locomo_judge.py (canonical LoCoMo
+# reproduce path, docs/benchmarks.md); no product-path caller; do not delete
+# without retiring the published 73.8%.
+
 from __future__ import annotations
 
 import re

@@ -4,6 +4,81 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Removed
+
+* **BREAKING: 47 unreachable modules deleted (~13k LOC).** A reachability
+  audit found 49 modules under `src/mind_mem` -- roughly 15% of the package --
+  that no product code imported: not from any other module, not from
+  `__init__.py`, not from any of the 17 `console_scripts`, and not through any
+  dynamic-import path. They could not execute in a running mind-mem.
+
+  Those 49 resolved as 42 deleted, 2 relocated to `benchmarks/`, 1 wired
+  (`ledger_anchor`, below), and 4 kept because a live benchmark consumer does
+  import them. Deleting the 42 then orphaned 5 more whose only importers had
+  just gone -- the sweep cascades -- and those 5 went in a second wave, for 47
+  removed in total.
+
+  **Every one of them had tests** -- between 1 and 29 test files each,
+  `v4/health.py` alone had 29. The suite was green and coverage looked healthy
+  the entire time. That is the lesson worth carrying out of this release: test
+  count says nothing about whether code is reachable, and a tested, wired-to-
+  nothing subsystem is more expensive than no subsystem, because it looks
+  maintained. The gate that now enforces this is
+  `scripts/check_reachable_modules.py` ("no caller, no tick"), and this sweep
+  is its first payout.
+
+  Removed:
+
+  `api.grpc_server`, `bootstrap_corpus`, `check_version`, `consensus_vote`,
+  `core_export`, `error_codes`, `event_fanout`, `feature_gate`,
+  `governance_raft`, `granularity_align`, `ingestion_pipeline`, `lint`,
+  `lint_autofix`, `llm_noise_profile`, `maintenance_migrate`, `memory_mesh`,
+  `mind_kernels`, `mrs`, `multi_modal`, `online_trainer`,
+  `retrieval_trace`, `self_update`, `session_summarizer`, `smart_chunker`,
+  `storage.sharded_pg`, `streaming`, `tenant_audit`, `tenant_kms`,
+  `tracking`, `trajectory`, `turbo_quant`, `uncertainty_propagation`,
+  `usage_meter`, `v4.backpressure`, `v4.block_kinds`, `v4.block_metadata`,
+  `v4.cognitive_kernel`, `v4.embedding_pipeline`, `v4.health`, `v4.hnsw_kind_index`,
+  `v4.kernels`, `v4.kind_summaries`, `v4.logging_context`, `v4.observability`,
+  `v4.pq`, `v4.surprise_retrieval`, `v4.vocabulary`.
+
+  Kept, and why, since "unreachable" was wrong for six of them:
+  `bench.locomo_suite` and `bench.recompaction_bench` moved to `benchmarks/`
+  (outside the wheel) rather than dying -- they are benchmark entry-point
+  scripts, not product code, and they reproduce published numbers.
+  `evidence_packer`, `iterative_recall`, `observation_compress` and
+  `temporal_metadata` stay in `src/`: `benchmarks/locomo_judge.py`, the
+  documented reproduce path for the published 73.8% LoCoMo figure, calls all
+  four, so deleting them would have made a published number unreproducible.
+  They now carry a `bench-support:` header saying so. And `entity_ingest`
+  survived a near miss -- see Fixed.
+
+  If you imported any module above directly, it is gone in 5.0.0 and there is
+  no shim. `git revert` of the sweep commit restores the whole set.
+
+### Added
+
+* **External-ledger anchoring is reachable for the first time (`anchor_root`,
+  `anchor_history`).** `ledger_anchor` shipped in v2.0.0rc1 and its docstring
+  claimed an `anchor_history` MCP tool was "registered in mcp_server". It was
+  not. Nothing imported the module, so the capability sat unreachable for three
+  minor versions while its own tests passed -- the same defect class as the
+  sweep above, in the one module that was worth wiring instead of deleting.
+
+  Both tools now hang off the audit family beside `verify_merkle` /
+  `verify_chain` / `list_evidence`, and are ACL-classified (`anchor_root` is
+  admin: it appends to the trail; `anchor_history` is read-only). Registering
+  without classifying would have left them unreachable a second way --
+  `mcp_tool_observe` rejects any tool in neither `ADMIN_TOOLS` nor `USER_TOOLS`.
+
+  `anchor_root` computes the Merkle root from the live index rather than
+  accepting one from the caller: anchoring a caller-supplied root would anchor
+  the caller's claim about the store, not the store's state, which is worth
+  nothing against the adversary an anchor exists to catch. With no external
+  poster wired the entry records `status="pending"`; an integrator wraps their
+  poster around it and supplies `tx_hash` when it clears. MCP tool count:
+  96 -> 98.
+
 ### Added
 
 * **Content-provenance tags on block writes (T-001) — `ContentSource`

@@ -1,9 +1,24 @@
 # Setting up the mind-mem-4b model
 
+> **Tool-surface drift as of 5.0.0 — read this before trusting the model on
+> surfaces.** The shipped v4 weights were trained against a 96-tool surface.
+> The live server now exposes **98** (`anchor_root` and `anchor_history`, added
+> when external-ledger anchoring was wired onto the audit family), and 5.0.0
+> removed 47 unreachable modules. So the local model will happily describe
+> surfaces that no longer exist — `v4.health`, `v4.pq`, `KernelKind`,
+> `FallbackPolicy` and friends — and does not know the two anchor tools at all.
+>
+> The number below is left at 96 deliberately: it is a fact about the WEIGHTS,
+> not about the server, and editing it to 98 would state something untrue about
+> the model you are running. The corpus is regenerated and the model retrained
+> as a separate, sequenced piece of work; until then treat model answers about
+> module names as advisory and check them against `mm doctor` or the live tool
+> list.
+
 `star-ga/mind-mem-4b` is the **fully trained** mind-mem:4b model —
 all ~4.2B parameters trained on the MIND-Mem domain (not a LoRA
 adapter). The current revision (v4 weights, shipped alongside the
-**v4.0.0** library release on 2026-05-11) knows the 96 MCP tools (incl.
+**v4.0.0** library release on 2026-05-11) knows v4.0.0's 96 MCP tools (incl.
 `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`,
 `reindex_dirty`, `validate_block`, `block_lineage`, `add_block_edge`,
 MIC/MAP serialization, governance hooks), block schemas including the
@@ -239,7 +254,7 @@ Typical stack:
 ```
 ┌──────────────┐       ┌─────────────────┐       ┌──────────────────────┐
 │  Claude Code │──────▶│ mind-mem MCP    │──────▶│ SQLite + FTS + vec   │
-│ (or any CLI) │       │  (96 tools)     │       │   OR                 │
+│ (or any CLI) │       │  (98 tools)     │       │   OR                 │
 └──────────────┘       └────────┬────────┘       │ Postgres + pgvector  │
                                 │                │   + HNSW + GIN       │
                                 ▼                └──────────────────────┘

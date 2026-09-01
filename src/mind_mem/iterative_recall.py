@@ -19,6 +19,10 @@ needed", the loop terminates early.
 Public entry: :func:`iterative_retrieve`.
 """
 
+# bench-support: consumed by benchmarks/locomo_judge.py (canonical LoCoMo
+# reproduce path, docs/benchmarks.md); no product-path caller; do not delete
+# without retiring the published 73.8%.
+
 from __future__ import annotations
 
 import json

@@ -4271,6 +4271,47 @@ named in any public artifact.
 
 ---
 
+## Reachability sweep — 5.0.0 (2026-08-31)
+
+- [x] **The "no caller, no tick" gate paid out: 47 modules deleted, ~13k LOC.**
+  The audit found 49 modules under `src/mind_mem` (~15% of the package) that no
+  product code imported — not from another module, not from `__init__.py`, not
+  from any of the 17 `console_scripts`, not via any dynamic-import path. All 49
+  had tests, 1–29 files each. Resolution: 42 deleted, 5 more deleted in the
+  cascade wave they orphaned, 2 relocated to `benchmarks/` (out of the wheel),
+  1 wired (`ledger_anchor` → `anchor_root` / `anchor_history` on the audit tool
+  family), 4 kept because `benchmarks/locomo_judge.py` — the documented
+  reproduce path for the published 73.8% — imports them.
+  `scripts/reachability_baseline.txt` is now **empty**: the debt register reads
+  zero for the first time.
+
+- [x] **Gate hardened against its own blind spots, twice, both earned.** The
+  scan walked only `src/` for referencers, so any module whose sole caller lived
+  in `benchmarks/`, `train/` or `examples/` read as dead — that defect nearly
+  deleted four modules on the canonical LoCoMo path. Those trees are now parsed
+  as referencer trees. Separately, the gate is AST-only and therefore blind to
+  string dispatch: `entity_ingest` (wave 1) and `transcript_capture` (wave 2)
+  are live daemon jobs reached by name through `cron_runner.JOB_DEFS` as
+  `python -m mind_mem.<mod>`, with no importer by design. Both are allowlisted
+  with `JOB_DEFS` named as the caller. Two runtime-breaking false positives in
+  two waves, same root cause.
+
+- [x] **Standing policy: iterate to a fixed point, one ruled wave per commit,
+  and never delete a wave the tool computed without a manual dynamic-surface
+  pass over it** — checking each wave against the known blind-spot classes
+  (`JOB_DEFS` / `python -m` subprocess dispatch, string-built `__import__`, MCP
+  tool registration, `console_scripts`, `init_workspace` scaffold lists).
+  One-wave-and-stop is the dishonest option once you know the rest is dead;
+  raw fixed-point iteration is the unsafe one.
+
+- [ ] **Regenerate the `mind-mem-4b` training corpus.** `train/build_corpus.py`
+  and `train/eval_harness.py` carry extensive Q&A probes *about* the deleted v4
+  surfaces (`KernelKind`, health probes, `FallbackPolicy`). They are strings,
+  not imports, so this is not a reachability defect — but the shipped model is
+  now trained to describe phantom modules and does not know `anchor_root` /
+  `anchor_history`. Folded into the retrain, not into the sweep.
+  `docs/mind-mem-4b-setup.md` documents the drift in the meantime.
+
 ## Deliberately not pursued (architectural audit, 2026-08-31)
 
 An architectural audit of all 122 open items found that roughly a quarter of

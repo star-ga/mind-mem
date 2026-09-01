@@ -380,9 +380,9 @@ Static-typing cleanup. The 39 pre-existing mypy errors across 14
 modules are resolved (explicit constructor casts, corrected
 argument types on two call sites, and narrowed annotations where
 `Any` was leaking into the signature). `typecheck` is now a real
-gate in CI. GitHub repository **About** refreshed to match v3.1.x
-reality (96 MCP tools, 17 native AI-client integrations, 4B local
-model, zero core deps).
+gate in CI. GitHub repository **About** refreshed to match
+v3.1.x reality (57 MCP tools, 17 native AI-client integrations, 4B
+local model, zero core deps).
 
 ## v3.1.6 (Released 2026-04-18)
 
@@ -412,9 +412,9 @@ CI-layer patch release: ruff lint + format cleared across the repo,
 
 ## v3.1.2 (Released 2026-04-18)
 
-Docs + metadata alignment to v3.1.x. README badges corrected
-(`tests-3610`, `MCP_tools-96`), stale "release local (no Actions)"
-badge removed. `CLAUDE.md` and `docs/roadmap.md` refreshed.
+Docs + metadata alignment to v3.1.x. README badges corrected to
+v3.1.2 reality (`MCP_tools-57`, `tests-3610`), stale "release local
+(no Actions)" badge removed. `CLAUDE.md` and `docs/roadmap.md` refreshed.
 
 ## v3.1.1 (Released 2026-04-15)
 

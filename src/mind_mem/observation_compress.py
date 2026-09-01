@@ -15,6 +15,10 @@ Zero external dependencies beyond stdlib (uses the same _llm_chat as the
 benchmark harness).
 """
 
+# bench-support: consumed by benchmarks/locomo_judge.py (canonical LoCoMo
+# reproduce path, docs/benchmarks.md); no product-path caller; do not delete
+# without retiring the published 73.8%.
+
 from __future__ import annotations
 
 COMPRESS_SYSTEM_PROMPT = """\

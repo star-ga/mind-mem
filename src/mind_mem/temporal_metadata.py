@@ -18,6 +18,10 @@ overridden for deterministic benches.
 Public entry: :func:`annotate_with_temporal_metadata`.
 """
 
+# bench-support: consumed by benchmarks/locomo_judge.py (canonical LoCoMo
+# reproduce path, docs/benchmarks.md); no product-path caller; do not delete
+# without retiring the published 73.8%.
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

@@ -136,6 +136,16 @@ def _version_qualifies(line: str, match: "re.Match[str]") -> bool:
     hi = min(len(line), match.end() + _VERSION_PROXIMITY)
     return _LINE_VERSIONED.search(line, lo, hi) is not None
 
+# "89 distinct tools" / "89 distinct tool names". A modifier between the count
+# and the noun defeats _CLAIM_RE (which requires them adjacent, or separated only
+# by "MCP"), and this is not hypothetical: README, docs/api-reference.md and
+# docs/claude-desktop-setup.md all sat at "89 distinct tools / 90 registrations"
+# long after the surface reached 98 -- README said it four lines under its own
+# "### MCP Server (98 tools, 8 resources)" heading, and the gate reported
+# agreement. Only this one spelling is added: widening to any modifier matches
+# "17 AI development tools", which counts editors, not MCP tools.
+_DISTINCT_RE = re.compile(r"\b(\d{2,3})\s+distinct\s+tools?\b", re.IGNORECASE)
+
 # A parenthesised count in a heading: "### MCP Tools (97)". This form slipped
 # past the prose and badge patterns entirely -- a live "(90)" claim sat in
 # CLAUDE.md while both other checks reported agreement.
@@ -205,7 +215,7 @@ def check_docs(expected: int) -> list[str]:
         for lineno, line in enumerate(text.splitlines(), 1):
             if _LINE_TRANSITION.search(line):
                 continue
-            for regex in (_CLAIM_RE, _BADGE_RE, _HEADING_RE):
+            for regex in (_CLAIM_RE, _BADGE_RE, _HEADING_RE, _DISTINCT_RE):
                 for match in regex.finditer(line):
                     # Checked PER CLAIM, not per line -- see _version_qualifies.
                     if _version_qualifies(line, match):

@@ -45,3 +45,29 @@ class TestVersionExemptionIsScopedToTheClaim:
         from scripts.count_mcp_tools import check_docs, count_tools
 
         assert check_docs(count_tools()) == []
+
+
+class TestAModifierDoesNotHideACount:
+    """"89 distinct tools" is a claim, and the gate used to miss it.
+
+    `_CLAIM_RE` requires the count and the noun to be adjacent (or separated
+    only by "MCP"), so a single modifier hid real drift: README,
+    `docs/api-reference.md` and `docs/claude-desktop-setup.md` all said
+    "89 distinct tools / 90 registrations" long after the surface reached 98 --
+    README four lines under its own "### MCP Server (98 tools, 8 resources)"
+    heading -- and `--check-docs` reported agreement.
+    """
+
+    def test_the_distinct_spelling_is_a_gated_claim(self):
+        from scripts.count_mcp_tools import _DISTINCT_RE
+
+        m = _DISTINCT_RE.search("server with 89 distinct tools and 8 read-only resources")
+        assert m is not None, "the modifier spelling must be gated"
+        assert m.group(1) == "89"
+
+    def test_the_widening_stays_narrow(self):
+        """Any-modifier matching would flag "17 AI development tools", which
+        counts editors, not MCP tools. Only "distinct" is admitted."""
+        from scripts.count_mcp_tools import _DISTINCT_RE
+
+        assert _DISTINCT_RE.search("wired into 17 AI development tools") is None
