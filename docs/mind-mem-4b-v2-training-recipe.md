@@ -174,7 +174,7 @@ After HF upload:
    ```json
    {"llm": {"backend": "ollama", "model": "mind-mem-4b-v2:latest"}}
    ```
-3. `mm install-all --force` to rewire all 16 clients.
+3. `mm install-all --force` to rewire all 19 clients.
 4. Smoke-test with `mm recall "test query"` — first response ≤ 3s.
 
 ## Cost summary

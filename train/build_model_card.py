@@ -347,7 +347,13 @@ def main() -> None:
     # version. Bump these two together, and only when a retrain actually
     # ships.
     trained_on_version = os.environ.get("MM_TRAINED_ON_VERSION", "4.0.0")
-    trained_on_tools = os.environ.get("MM_TRAINED_ON_TOOLS", "84")
+    # 96, not 84. The shipped v4 weights were trained against a 96-tool
+    # surface -- both train/HF_MODEL_CARD_v4.md and docs/mind-mem-4b-setup.md
+    # say so. The 84 default predates that checkpoint, so an unparameterised
+    # regeneration would have published an understated tool count on a public
+    # model card. Bump this WITH trained_on_version, and only when a retrain
+    # actually ships.
+    trained_on_tools = os.environ.get("MM_TRAINED_ON_TOOLS", "96")
     current_tools = _current_tool_count()
     today = dt.date.today().isoformat()
     OUT.write_text(

@@ -42,7 +42,7 @@ Package is a flat `src/mind_mem/` — there is no `governance/` subpackage.
 | Component | Source | Notes |
 |---|---|---|
 | MCP server entry | `src/mind_mem/mcp_server.py` | 102 tools across recall / write / governance / observability / audit. |
-| Native MCP integration (18 clients) | `src/mind_mem/hook_installer.py` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw + 9 more. |
+| Native MCP integration (19 clients) | `src/mind_mem/hook_installer.py` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw + 10 more. |
 | Multi-backend LLM extractor | `src/mind_mem/llm_extractor.py` | ollama / openai-compatible / vLLM / exllamav2 backends selected by `backend="auto"`. |
 
 ### MIND scoring kernels

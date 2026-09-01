@@ -49,6 +49,28 @@ revision pointer, prior revisions pinned at `v4.1.0`, `v4.0.0-base`,
 
 ## What v4 knows
 
+> **Surface drift as of mind-mem 5.0.1 — read before trusting the model on
+> module names.** These weights were trained against a **96-tool** surface.
+> The live server now exposes **102**, so the model does not know the newest
+> tools at all.
+>
+> The module landscape has moved TWICE, and the current state is not the
+> obvious one. 5.0.0 deleted 47 modules as "unreachable"; for that release the
+> model was describing surfaces that no longer existed (`v4.health`, `v4.pq`,
+> `KernelKind`, `FallbackPolicy`). **5.0.1 restored all 47 and wired 41 of
+> them**, so those names are real again and the model's descriptions of them
+> are broadly right once more. What it cannot know is the *wiring*: which
+> surface each module now hangs off, that most sit behind default-OFF `v4.*`
+> flags, and that 6 modules are deliberately unwired with a recorded trigger.
+>
+> The **96 below is deliberate and correct**: it is a fact about these
+> WEIGHTS, not about the server. Editing it to 102 would state something
+> untrue about the model you are running. The corpus is regenerated and the
+> model retrained as separate, sequenced work — and it must be regenerated
+> against **5.0.1**, not a 5.0.0 checkout, which is missing capability the
+> product ships again. Until then, treat model answers about module names as
+> advisory and check them against `mm doctor` or the live tool list.
+
 v4 knows all 96 MCP tools from v3.x, plus the following v4 surfaces:
 
 **Cognition**
@@ -181,9 +203,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 MODEL = "star-ga/mind-mem-4b"
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL)
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL, torch_dtype="bfloat16", device_map="auto"
-)
+model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype="bfloat16", device_map="auto")
 
 messages = [
     {
@@ -197,11 +217,9 @@ messages = [
     },
     {"role": "user", "content": "What did Alice say about the OAuth migration?"},
 ]
-inputs = tokenizer.apply_chat_template(
-    messages, add_generation_prompt=True, return_tensors="pt"
-).to(model.device)
+inputs = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt").to(model.device)
 out = model.generate(inputs, max_new_tokens=128, do_sample=False)
-print(tokenizer.decode(out[0][inputs.shape[1]:], skip_special_tokens=True))
+print(tokenizer.decode(out[0][inputs.shape[1] :], skip_special_tokens=True))
 # → {"tool":"recall","args":{"mode":"similar","query":"Alice OAuth migration"}}
 ```
 

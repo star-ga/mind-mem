@@ -326,6 +326,21 @@ providers.
 Same pattern as Cursor / Windsurf. Qodo picks it up when the plugin
 parses workspace rules.
 
+## Grok Build CLI (xAI)
+
+| | |
+|---|---|
+| Config path | `<ws>/AGENTS.md` |
+| Format | Markdown block |
+| MCP config | `~/.grok/config.toml` (`mcp-toml-codex` shape, same as Codex CLI) |
+| Detected by | the `grok` binary on `PATH` |
+| Install | `mm install grok-build` |
+
+Writes the memory-protocol block into the workspace `AGENTS.md` and registers
+mind-mem as a native MCP server in `~/.grok/config.toml`. Because the file is
+shared with other tools that read `AGENTS.md`, the block is fenced by the
+`# mind-mem` marker and rewritten in place rather than appended.
+
 ## Running `install-all` end-to-end
 
 The typical first-time flow after installing mind-mem:
