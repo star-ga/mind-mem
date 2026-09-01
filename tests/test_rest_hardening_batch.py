@@ -10,7 +10,7 @@ import stat
 from typing import Any, Generator
 
 import pytest
-from _platform_compat import is_root
+from _platform_compat import chmod_denies_write, is_root
 
 fastapi = pytest.importorskip("fastapi", reason="fastapi not installed; skipping REST API tests")
 
@@ -117,6 +117,8 @@ def test_unopenable_api_key_store_is_not_reported_as_unconfigured(tmp_path: Any,
     locked = tmp_path / "locked"
     locked.mkdir()
     db_path = locked / "keys.db"
+    if not chmod_denies_write(tmp_path):
+        pytest.skip("this filesystem does not enforce the write bit (e.g. Windows)")
     os.chmod(locked, stat.S_IRUSR | stat.S_IXUSR)  # r-x------ : cannot create files
     monkeypatch.setenv("MIND_MEM_API_KEY_DB", str(db_path))
     try:

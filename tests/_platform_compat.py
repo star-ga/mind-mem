@@ -21,6 +21,7 @@ import os
 __all__ = [
     "append_only_settable_unprivileged",
     "chmod_denies_read",
+    "chmod_denies_write",
     "assert_owner_only",
     "is_root",
     "posix_creation_modes_honored",
@@ -168,6 +169,43 @@ def chmod_denies_read(tmp_dir) -> bool:
             pass
         try:
             os.remove(inner)
+            os.rmdir(probe)
+        except OSError:
+            pass
+
+
+def chmod_denies_write(tmp_dir) -> bool:
+    """True when clearing the write bit actually blocks creating a file here.
+
+    Distinct from :func:`chmod_denies_read`: several tests set a directory to
+    ``r-x------`` and assert the product NOTICED it could not write there.
+    Windows ignores POSIX mode bits, so the create succeeds and the expected
+    error never arrives -- "DID NOT RAISE", for a reason that is about the
+    runner rather than the product.
+    """
+    probe = os.path.join(str(tmp_dir), ".write-probe")
+    os.makedirs(probe, exist_ok=True)
+    try:
+        os.chmod(probe, 0o500)  # r-x------
+        try:
+            with open(os.path.join(probe, "canary"), "w", encoding="utf-8") as handle:
+                handle.write("x")
+            return False  # write went through -> bits not enforced
+        except (PermissionError, OSError):
+            return True
+    except OSError:
+        return False
+    finally:
+        try:
+            os.chmod(probe, 0o700)
+        except OSError:
+            pass
+        for name in ("canary",):
+            try:
+                os.remove(os.path.join(probe, name))
+            except OSError:
+                pass
+        try:
             os.rmdir(probe)
         except OSError:
             pass
