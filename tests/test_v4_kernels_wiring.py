@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""``v4.kernels`` is WIRED — 5.1.0 restoration slice.
+"""``v4.kernels`` is WIRED — 5.0.1 restoration slice.
 
 The module holds the four named retrieval strategies
 (``surprise_weighted`` / ``lineage_first`` / ``contradicts_first`` /
@@ -75,7 +75,7 @@ def _seed_co_retrieval(root: Path) -> None:
 
 def _write_config(root: Path, *, kernels: bool) -> Path:
     cfg = root / "mind-mem.json"
-    body: dict = {"version": "5.1.0", "recall": {"backend": "scan"}, "cache": {"enabled": False}}
+    body: dict = {"version": "5.0.1", "recall": {"backend": "scan"}, "cache": {"enabled": False}}
     if kernels:
         body["v4"] = {"cognitive_kernel": {"enabled": True}}
     cfg.write_text(json.dumps(body), encoding="utf-8")

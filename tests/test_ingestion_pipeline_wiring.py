@@ -1,4 +1,4 @@
-"""The webhook ingest door — wiring proof for `mm ingest-serve` (5.1.0).
+"""The webhook ingest door — wiring proof for `mm ingest-serve` (5.0.1).
 
 `ingestion_pipeline` shipped a queue, a WAL and an HTTP endpoint with **no
 consumer**: events arrived and stopped. Wiring the consumer is what makes the
@@ -174,7 +174,7 @@ class TestFlagOffChangesNothing:
         assert sorted(p.name for p in Path(ws).iterdir()) == before, "the probe created a file"
 
     def test_the_transport_itself_is_unchanged(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """serve_webhook keeps its pre-5.1.0 behaviour: accept, WAL, no block.
+        """serve_webhook keeps its pre-5.0.1 behaviour: accept, WAL, no block.
 
         Only the CONSUMER is new and gated. The endpoint answers 202 and
         fsyncs to the WAL exactly as it did before, and — with the flag off —

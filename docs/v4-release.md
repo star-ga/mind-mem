@@ -1,6 +1,6 @@
 # v4.0.0 Release Notes
 
-> **These surfaces were removed in 5.0.0 and RESTORED for 5.1.0.**
+> **These surfaces were removed in 5.0.0 and RESTORED for 5.0.1.**
 > The 5.0.0 reachability sweep deleted them because no product code imported
 > them. That was overturned: "nothing imports it" is evidence about WIRING, not
 > about worth, and the sweep removed 14,711 lines of working capability on that
@@ -11,7 +11,7 @@
 > They are back and being wired module by module, flag-gated and default-OFF,
 > with flag-off behaviour byte-identical to 5.0.0. Import examples below are
 > valid again. Where a restored module duplicates a live one, the resolution is
-> substitution or merge — not deletion. See CHANGELOG 5.1.0.
+> substitution or merge — not deletion. See CHANGELOG 5.0.1.
 
 
 Released 2026-05-10. Audience: existing mind-mem v3.x users.
@@ -392,7 +392,7 @@ touches no store; it paces loops that already own their governed write
 path. It sheds RATE, never DATA — a throttled tick defers work to the
 next tick and no input is dropped.
 
-*(The pre-5.1.0 snippet here imported `mind_mem.backpressure`, called
+*(The pre-5.0.1 snippet here imported `mind_mem.backpressure`, called
 `controller` as if it were an instance, invoked a `record_write()` that
 does not exist, and divided the result by 1000. `recommended_pause`
 returns SECONDS. Corrected above.)*
@@ -401,7 +401,7 @@ returns SECONDS. Corrected above.)*
 returns it AND advances the exponential backoff, so observability code
 must use the former or watching the system would change it.
 
-**Wired producers (5.1.0)**
+**Wired producers (5.0.1)**
 
 | Producer | Loop | Behaviour while overloaded |
 |---|---|---|
@@ -483,7 +483,7 @@ Flag: `v4.logging_context`
 Contextvar-backed key-value stack. Values propagate across `await`
 boundaries automatically.
 
-Wired in 5.1.0: with the flag on, `mind_mem.observability` installs
+Wired in 5.0.1: with the flag on, `mind_mem.observability` installs
 `StructuredLogFilter` on the handler its `StructuredLogger` owns, and the
 MCP tool decorator (`mcp_tool_observe`) runs every tool call inside a fresh
 `with_correlation_id` scope. Two concurrent recalls therefore tag every log
@@ -513,7 +513,7 @@ two blocks end up making the same claim at different levels of abstraction
 ("use Q16.16 for determinism" / "all scoring must use fixed-point
 arithmetic"). Neither is wrong, both pollute ranking.
 
-Wired in 5.1.0: with the flag on, the `plan_consolidation` MCP tool carries
+Wired in 5.0.1: with the flag on, the `plan_consolidation` MCP tool carries
 an extra `granularity_align` section listing the merge candidates
 `find_merge_candidates` detects, each with the merged block `merge_blocks`
 would produce.
@@ -554,7 +554,7 @@ The image / audio block schema shipped with no caller: `ImageBlock`,
 isolation and invoked by nothing, while the two places they belonged sat a
 few lines apart in the same package.
 
-Wired in 5.1.0, in both places:
+Wired in 5.0.1, in both places:
 
 * `inbox._ingest_image` / `_ingest_audio` no longer raise. A drop is
   accepted when the operator supplies a **sidecar** — `board.png` beside

@@ -50,7 +50,7 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     # Group A — cognition / model layer
     "cognitive_kernel",
     "surprise_retrieval",
-    # 5.1.0: per-provider / per-domain reliability EMA fed by report_outcome
+    # 5.0.1: per-provider / per-domain reliability EMA fed by report_outcome
     # and persisted to intelligence/llm_profiles.json; surfaced in
     # calibration_stats. Sidecar only — nothing on the scored path reads it.
     "llm_noise_profile",
@@ -101,27 +101,27 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "typed_edges",  # first-class typed relation layer + proposal-gated writes (roadmap §a)
     "entity_observations",  # per-entity accreted-facts field on the entity registry (roadmap §b)
     "core_export",  # .mmcore static export (OKF / JSON-LD / markdown) + governed OKF re-import
-    # 5.1.0: MIND kernels. Turns the hash-chain import door from a
+    # 5.0.1: MIND kernels. Turns the hash-chain import door from a
     # per-entry check into a SEQUENCE check, so a v3->v1 entry-hash
     # downgrade inside an imported segment is refused at the door
     # instead of being written and only discovered by a later
     # verify_chain(). Default OFF; see hash_chain_v2.import_jsonl.
     "mind_kernels",
-    # 5.1.0: trajectory memory. Capture half writes a TRAJ- sidecar per
+    # 5.0.1: trajectory memory. Capture half writes a TRAJ- sidecar per
     # report_outcome; recall half is the similar_trajectories MCP tool. The
     # sidecar is never served by recall() and never bypasses the HITL gate.
     "trajectory",
-    # 5.1.0: pack_recall_budget sizes its budget to the TARGET MODEL's real
+    # 5.0.1: pack_recall_budget sizes its budget to the TARGET MODEL's real
     # context window instead of to whatever number the caller typed.
     "context_budget",
-    # 5.1.0: measured retrieval quality in index_stats — weekly MRR drift
+    # 5.0.1: measured retrieval quality in index_stats — weekly MRR drift
     # from the signal ledger, and the packed-vs-referenced token ratio.
     "retrieval_metrics",
-    # 5.1.0: online training. Harvest half is a dream_cycle pass draining the
+    # 5.0.1: online training. Harvest half is a dream_cycle pass draining the
     # interaction-signal ledger into admission-filtered training tuples;
     # registry half is model_gate's persisted weight-promotion ledger.
     "online_training",
-    # 5.1.0: v4/health's probe sweep folded into the `memory_health` MCP tool.
+    # 5.0.1: v4/health's probe sweep folded into the `memory_health` MCP tool.
     # The flag gates the CALL SITE, not the check: `health.health_check` is
     # deliberately never flag-gated (an operator debugging a failure needs it
     # regardless) and each of its probes reports "disabled" for its own OFF

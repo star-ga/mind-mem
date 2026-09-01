@@ -1,6 +1,6 @@
 # Restore-44 Wiring Plan — from restored to reachable-and-working
 
-> Architectural plan for mind-mem 5.1.0, produced 2026-09-01. Saved here because
+> Architectural plan for mind-mem 5.0.1, produced 2026-09-01. Saved here because
 > the session that produced it had no write permission.
 >
 > **Operator amendments to §4, which override the plan's recommendation:**
@@ -14,7 +14,7 @@
 >    not-wired list rather than the deleted one.
 
 
-Ships as **5.1.0** on top of the published 5.0.0. Everything lands flag-gated default-OFF; flag-off behaviour byte-identical to 5.0.0.
+Ships as **5.0.1** on top of the published 5.0.0. Everything lands flag-gated default-OFF; flag-off behaviour byte-identical to 5.0.0.
 
 ## Ground truth you need before executing (some of it corrects the brief)
 

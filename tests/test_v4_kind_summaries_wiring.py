@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""``v4.kind_summaries`` is WIRED — 5.1.0 restoration slice.
+"""``v4.kind_summaries`` is WIRED — 5.0.1 restoration slice.
 
 Two halves, both reached from a real entry point:
 
@@ -52,7 +52,7 @@ def _write_config(root: Path, *, kinds: bool, summaries: bool) -> Path:
         v4["block_kinds"] = {"enabled": True}
     if summaries:
         v4["kind_summaries"] = {"enabled": True}
-    body: dict = {"version": "5.1.0", "recall": {"backend": "scan"}}
+    body: dict = {"version": "5.0.1", "recall": {"backend": "scan"}}
     if v4:
         body["v4"] = v4
     cfg.write_text(json.dumps(body), encoding="utf-8")

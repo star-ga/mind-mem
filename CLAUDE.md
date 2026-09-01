@@ -169,7 +169,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   inbox.py, entity_ingest.py, ingestion_pipeline.py — auto-ingestion.
                           ingestion_pipeline was deleted in 5.0.0 as an
                           unreachable webhook write path; RESTORED and WIRED
-                          in 5.1.0, and the concern that justified deleting it
+                          in 5.0.1, and the concern that justified deleting it
                           is answered by construction: the drain path IS the
                           gate, so every event goes through admit_block.
   skill_opt/            — Skill optimization
@@ -187,7 +187,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
          the product imported them (cognitive_kernel, surprise_retrieval,
          block_kinds, block_metadata, kind_summaries, embedding_pipeline, pq,
          hnsw_kind_index, backpressure, health, logging_context, observability).
-         ALL are restored and wired as of 5.1.0. They had tests -- up to 29
+         ALL are restored and wired as of 5.0.1. They had tests -- up to 29
          files each -- which was read at the time as evidence that test count
          does not prove reachability. True, and it proves nothing about WORTH
          either, which is the mistake that cost 47 modules.

@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""Acceptance gate for the ``tracking`` wiring (5.1.0 restoration slice 5).
+"""Acceptance gate for the ``tracking`` wiring (5.0.1 restoration slice 5).
 
 ``tracking`` shipped in 2.1.0 with four independent pieces and no caller
 for any of them, so 5.0.0 deleted it as unreachable. It also shipped with

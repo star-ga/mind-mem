@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""Acceptance gate for the ``llm_noise_profile`` wiring (5.1.0 restoration, slice 5).
+"""Acceptance gate for the ``llm_noise_profile`` wiring (5.0.1 restoration, slice 5).
 
 ``llm_noise_profile`` shipped a complete per-provider / per-domain EMA and a
 JSON persistence layer, kept 40-odd unit tests of its own, and was imported by

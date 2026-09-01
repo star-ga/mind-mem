@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""``v4.health`` is WIRED — 5.1.0 restoration slice.
+"""``v4.health`` is WIRED — 5.0.1 restoration slice.
 
 The module is a never-raising probe sweep: one small check per v4 surface,
 reporting ``ok`` / ``missing`` / ``disabled`` / ``error: ...`` and an
@@ -47,7 +47,7 @@ def _write_config(root: Path, *, health_on: bool, block_kinds_on: bool = False) 
         v4["health"] = {"enabled": True}
     if block_kinds_on:
         v4["block_kinds"] = {"enabled": True}
-    body: dict = {"version": "5.1.0", "recall": {"backend": "scan"}}
+    body: dict = {"version": "5.0.1", "recall": {"backend": "scan"}}
     if v4:
         body["v4"] = v4
     cfg.write_text(json.dumps(body), encoding="utf-8")

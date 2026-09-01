@@ -144,7 +144,7 @@ class TestQualityGateConfigKeyDocs:
 # 3. Docs that describe REMOVED surfaces must say so
 # ---------------------------------------------------------------------------
 
-#: v4 modules that were deleted by the 5.0.0 sweep and RESTORED for 5.1.0.
+#: v4 modules that were deleted by the 5.0.0 sweep and RESTORED for 5.0.1.
 #: The sweep removed them as unreachable; the operator's ruling was that
 #: "nothing imports it" was never sufficient grounds, and they are being wired
 #: rather than deleted. This tuple now pins the RESTORATION, not the removal.

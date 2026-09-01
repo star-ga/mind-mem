@@ -499,7 +499,7 @@ the transcript content-hash dedup stops a second run from rewriting it.
 
 Per-client rate limiting for the `POST /ingest` webhook (`mm ingest-serve`).
 Off unless `streaming.enabled` is `true`; with it off the webhook has no
-rate-limit leg at all and behaves exactly as it did before 5.1.0.
+rate-limit leg at all and behaves exactly as it did before 5.0.1.
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |

@@ -11,7 +11,7 @@ Four pieces:
 4. **The drain consumer** (:func:`drain_once` / :func:`replay_wal`) —
    the piece that turns an accepted event into a block.
 
-Until 5.1.0 the first three shipped with **no consumer at all**: events
+Until 5.0.1 the first three shipped with **no consumer at all**: events
 reached a queue and a WAL and stopped there. That is why the door was
 safe, and it is also why it did nothing. Writing the consumer is the
 whole risk of this module, because a consumer is a new way for content
@@ -208,7 +208,7 @@ class WriteAheadLog:
                     out.append(obj)
         return out
 
-    # ─── applied-offset checkpoint (5.1.0) ───────────────────────────
+    # ─── applied-offset checkpoint (5.0.1) ───────────────────────────
     #
     # ``replay()`` alone cannot say what a previous run already applied,
     # so a restart either re-applies the whole log or the operator

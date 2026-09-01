@@ -3,7 +3,7 @@
 
 MIND kernels are **optional** in mind-mem: no wheel ships a
 ``libmindmem.so`` and the package is fully functional without one. This
-module is what the runtime falls back to, and since 5.1.0 it is the
+module is what the runtime falls back to, and since 5.0.1 it is the
 *only* fallback — :func:`mind_mem.mind_ffi.load_kernels` binds it
 directly, so there is one loader and one Python implementation of each
 kernel instead of a compiled path and a drifting shadow copy.

@@ -255,7 +255,7 @@ documented normal case, not a failure.
 **The path is allowlisted.** `MIND_MEM_LIB` and `MIND_MEM_KERNELS_SO`
 (and an explicit `load_kernels(path=...)`) are honoured only when they
 resolve inside one of the package's `lib/` directories; anything else is
-refused and the rejection is logged with the reason. Before 5.1.0 a
+refused and the rejection is logged with the reason. Before 5.0.1 a
 second loader handed `MIND_MEM_KERNELS_SO` straight to `ctypes.CDLL`, so
 any path in the environment could pull arbitrary native code into the
 process. That loader is gone.

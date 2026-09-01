@@ -1,4 +1,4 @@
-"""Rate-limited front gate for the ingest webhook (v3.3.0, wired 5.1.0).
+"""Rate-limited front gate for the ingest webhook (v3.3.0, wired 5.0.1).
 
 Two halves, and only one of them is live.
 
@@ -599,7 +599,7 @@ def stream_door_snapshot() -> dict[str, Any] | None:
     """Gate counters for ``stream_status``, or ``None`` when there is no gate.
 
     ``None`` is what keeps the flag-off contract: ``stream_status`` adds no
-    key at all, so its payload stays byte-identical to the pre-5.1.0 one.
+    key at all, so its payload stays byte-identical to the pre-5.0.1 one.
     """
     gate = current_stream_gate()
     return None if gate is None else gate.snapshot().as_dict()

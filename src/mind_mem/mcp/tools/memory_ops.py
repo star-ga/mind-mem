@@ -157,7 +157,7 @@ _BLOCK_PREFIX_MAP = {
     # Migration importers (roadmap Group G) (`mm import --from ...`). Keep in
     # lockstep with ``block_store._BLOCK_PREFIX_MAP``.
     "IMP": ("memory", "IMPORTED.md"),
-    # 5.1.0: `mm ingest-serve` webhook door. Keep in lockstep with
+    # 5.0.1: `mm ingest-serve` webhook door. Keep in lockstep with
     # ``block_store._BLOCK_PREFIX_MAP``.
     "INGEST": ("memory", "INGEST.md"),
 }

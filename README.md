@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v5.1.0</code> &mdash; the 47 modules 5.0.0 deleted as "unreachable" are restored and being wired, the reachability report now separates a recorded decision from undeclared debt, and a flag-off build is inert again &mdash; measured, not asserted &mdash;
+  <strong>Current release:</strong> <code>v5.0.1</code> &mdash; the 47 modules 5.0.0 deleted as "unreachable" are restored and being wired, the reachability report now separates a recorded decision from undeclared debt, and a flag-off build is inert again &mdash; measured, not asserted &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -65,7 +65,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v5.1.0** — a restoration release. 5.0.0 deleted 47 modules (14,711 LOC) because nothing imported them; that reasoning was wrong — **"nothing imports it" is evidence about wiring, never about worth** — and all 47 are back, with all 43 of their test files, being wired one at a time behind default-OFF flags. Two of them were never unreachable at all: an import scan cannot see shell dispatch. The gate that produced this now reports *not wired, deliberately waiting* (with the condition that flips it) separately from *not wired, no recorded decision*. The 5.0.0 governance guarantees are unchanged: no block reaches the store without a gate receipt, and `RECALL_ATTEST_v2` still binds the query to a rank-ordered digest of the served set.</sub>
+<sub>Current release: **v5.0.1** — a restoration release. 5.0.0 deleted 47 modules (14,711 LOC) because nothing imported them; that reasoning was wrong — **"nothing imports it" is evidence about wiring, never about worth** — and all 47 are back, with all 43 of their test files, being wired one at a time behind default-OFF flags. Two of them were never unreachable at all: an import scan cannot see shell dispatch. The gate that produced this now reports *not wired, deliberately waiting* (with the condition that flips it) separately from *not wired, no recorded decision*. The 5.0.0 governance guarantees are unchanged: no block reaches the store without a gate receipt, and `RECALL_ATTEST_v2` still binds the query to a rank-ordered digest of the served set.</sub>
 
 ### Substrate Properties
 

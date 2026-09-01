@@ -28,7 +28,7 @@ def get_pyproject_version() -> str | None:
             version = data.get("project", {}).get("version")
             return str(version) if version is not None else None
         # Regex fallback for Python <3.11 (no tomllib)
-        content = Path("pyproject.toml").read_text()
+        content = Path("pyproject.toml").read_text(encoding="utf-8")
         m = re.search(r'^\[project\].*?^version\s*=\s*"([^"]+)"', content, re.MULTILINE | re.DOTALL)
         return m.group(1) if m else None
     except FileNotFoundError:
@@ -38,7 +38,7 @@ def get_pyproject_version() -> str | None:
 def get_init_version() -> str | None:
     """Read __version__ from src/mind_mem/__init__.py."""
     try:
-        content = Path("src/mind_mem/__init__.py").read_text()
+        content = Path("src/mind_mem/__init__.py").read_text(encoding="utf-8")
         m = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
         return m.group(1) if m else None
     except FileNotFoundError:
@@ -48,7 +48,7 @@ def get_init_version() -> str | None:
 def get_changelog_version() -> str | None:
     """Read latest version header from CHANGELOG.md."""
     try:
-        content = Path("CHANGELOG.md").read_text()
+        content = Path("CHANGELOG.md").read_text(encoding="utf-8")
         m = re.search(r"##\s+\[?v?(\d+\.\d+\.\d+(?:[a-zA-Z0-9.+_-]*)?)", content)
         return m.group(1) if m else None
     except FileNotFoundError:

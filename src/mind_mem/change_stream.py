@@ -35,7 +35,7 @@ events as a matter of course — its consumption is the callback, not the
 queue. Read ``dropped`` against ``poll`` usage, never as "events the
 listener missed".
 
-Backpressure (5.1.0)
+Backpressure (5.0.1)
 --------------------
 ``queue_depth`` was a number an operator could read and nothing could
 act on. With ``v4.backpressure`` enabled, every publish reports that

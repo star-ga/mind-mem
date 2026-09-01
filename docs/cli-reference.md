@@ -27,7 +27,7 @@ mm recall "authentication strategy" --limit 5 --active-only
 |------|---------|-------------|
 | `--limit N` | 10 | Maximum results |
 | `--active-only` | off | Restrict to active blocks |
-| `--kernel NAME` | off | Route through a v4 cognitive-kernel strategy instead of plain recall (5.1.0) |
+| `--kernel NAME` | off | Route through a v4 cognitive-kernel strategy instead of plain recall (5.0.1) |
 
 `--kernel` takes one of `default`, `surprise_weighted`, `lineage_first`,
 `contradicts_first`, `graph_walk` and requires
@@ -368,7 +368,7 @@ containing `tool`, `duration_ms`, `success`, and optionally `result_size`.
 
 ---
 
-## Block-kind subcommands (5.1.0)
+## Block-kind subcommands (5.0.1)
 
 The v4 block-kind taxonomy's operator surface. Requires
 `"v4": {"block_kinds": {"enabled": true}}` in `mind-mem.json`; every command
@@ -477,7 +477,7 @@ mm mic inspect graph.micb --json
 
 ---
 
-## `mind-mem-bootstrap` — one-shot corpus backfill (5.1.0)
+## `mind-mem-bootstrap` — one-shot corpus backfill (5.0.1)
 
 A separate console script rather than an `mm` subcommand, because it is a
 one-time post-`mind-mem-init` operation and not part of the daily loop.

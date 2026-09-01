@@ -255,7 +255,7 @@ _BLOCK_PREFIX_MAP: dict[str, tuple[str, str]] = {
     "MSG": ("memory", "MESSAGES.md"),
     # Migration importers (roadmap Group G) (`mm import --from ...`) write here.
     "IMP": ("memory", "IMPORTED.md"),
-    # 5.1.0: the `mm ingest-serve` webhook door. Under memory/ like every
+    # 5.0.1: the `mm ingest-serve` webhook door. Under memory/ like every
     # other untrusted drop corpus, so a release decision can name these ids
     # (``admissibility._releasable_id_pattern`` derives the releasable set
     # from this table).
@@ -342,7 +342,7 @@ def _neutralise_value(value: str) -> str:
     ``---`` line was returned by ``recall``, with no proposal and no
     release. Every door that writes attacker-supplied text through this
     renderer had the same hole (inbox, agent messages, importers, the
-    5.1.0 webhook), so the fix belongs here rather than in any one door.
+    5.0.1 webhook), so the fix belongs here rather than in any one door.
 
     The escape is a single leading space, matching the ``\n[`` precedent:
     the parser's separator rule is ``line.startswith("---")``, so an

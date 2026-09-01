@@ -150,7 +150,7 @@ def load_pinned_models(config_path: str | os.PathLike[str]) -> list[PinnedModel]
     if not p.is_file():
         return []
     try:
-        cfg = json.loads(p.read_text())
+        cfg = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise PinnedConfigError(f"could not read {p}: {exc}") from exc
 

@@ -1859,7 +1859,7 @@ def _cmd_inbox_watch(args: argparse.Namespace) -> int:
 
 
 def _cmd_ingest_serve(args: argparse.Namespace) -> int:
-    """Serve the POST /ingest webhook door and drain it through the gate (5.1.0).
+    """Serve the POST /ingest webhook door and drain it through the gate (5.0.1).
 
     The drain consumer is the point of this command. Every accepted event
     becomes a block only via ``admit_block(tier=EXTERNAL_INGEST)``, so it
@@ -3420,7 +3420,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_inbox.add_argument("--once", action="store_true", help="Drain inbox once and exit.")
     p_inbox.set_defaults(func=_cmd_inbox_watch)
 
-    # ingest-serve — 5.1.0 webhook ingest door + governed drain consumer
+    # ingest-serve — 5.0.1 webhook ingest door + governed drain consumer
     p_ingest = sub.add_parser(
         "ingest-serve",
         help=(

@@ -20,7 +20,7 @@ This module ships a thread-safe :class:`BackpressureController` with:
 
 Feature-flag gated under ``v4.backpressure``.
 
-Producer wiring (5.1.0)
+Producer wiring (5.0.1)
 -----------------------
 A controller nothing reports into is a thermometer in a drawer. The
 bottom half of this module is the seam the real producer loops use:

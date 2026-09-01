@@ -2,7 +2,15 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
-## [5.1.0] - 2026-09-01
+## [5.0.1] - 2026-09-01
+
+> **A 5.1.0 was published to PyPI in error and has been yanked.** Its contents
+> are exactly this release; only the version number was wrong. Recorded here
+> rather than quietly renumbered, because a version that briefly existed on a
+> public index is a fact about the world, and anyone who pulled it in that
+> window should know what they have: 5.1.0 == 5.0.1, minus the Windows
+> text-encoding fixes below, which landed after it.
+
 
 ### Restored
 
@@ -37,6 +45,30 @@ All notable changes to MIND-Mem are documented in this file.
   15. Every one of those files had been deleted — and the 5.0.0 commit titled
   *"align every claim with reality"* missed all of them.
 
+### Fixed — Windows: text I/O never named its encoding (43 sites)
+
+* **`rollback_proposal` was broken on Windows for any non-ASCII byte.** Python
+  picks the *locale* encoding when ``encoding=`` is omitted — UTF-8 on Linux,
+  **cp1252 on Windows**. ``apply_engine._mark_proposal_status`` WROTE with
+  ``encoding="utf-8"`` and READ without it, so on Windows mind-mem wrote UTF-8
+  and read it back as cp1252: every rollback against a proposal containing so
+  much as a ✅ died with ``'charmap' codec can't decode byte 0x9d``. The
+  asymmetry inside one function is the tell — the write side had been fixed and
+  the read side had not.
+
+  37 bare ``open`` sites across 11 modules had it, plus 6
+  ``Path.read_text``/``write_text`` calls — including the **signing manifest**
+  in ``model_signing``, which on Windows verified against different bytes than
+  it wrote. Our corpus routinely contains emoji. A Linux-only gate cannot see
+  any of this; it surfaced only on the Windows CI matrix.
+
+  ``tests/test_text_io_is_utf8.py`` is the guard. It parses with ``ast`` rather
+  than grepping, so the two docstrings that deliberately describe the dangerous
+  pattern are not mistaken for calls, and it exempts ``tarfile.open``/
+  ``gzip.open`` (whose mode is a compression mode, not a text mode) and
+  ``importlib.metadata``'s ``read_text(name)``. Both scanners carry a mutation
+  control, because a guard that silently stops detecting is worse than none.
+
 ### Fixed — latent bugs found while restoring
 
 * **`trajectory.py` never read its config.** It resolved
@@ -57,7 +89,7 @@ All notable changes to MIND-Mem are documented in this file.
   content came straight back out of `recall`, with no proposal, no release and
   no chain entry naming an admission. Measured on the live inbox door: a
   dropped file containing a `---` line was returned by `recall`; the agent-
-  message door had it too. Found while wiring the 5.1.0 webhook door, whose
+  message door had it too. Found while wiring the 5.0.1 webhook door, whose
   own forgery test caught it.
 
   Fixed in the renderer, not in any one door: `_neutralise_value` now escapes a
@@ -209,7 +241,7 @@ All notable changes to MIND-Mem are documented in this file.
 * **BREAKING: 47 modules deleted (14,711 LOC, plus 43 test files /
   11,911 LOC).** This entry originally said "44 modules, 13,594 LOC";
   both numbers were wrong and are corrected here rather than left to
-  stand. Every one of them was restored in 5.1.0. A reachability
+  stand. Every one of them was restored in 5.0.1. A reachability
   audit found 49 modules under `src/mind_mem` -- roughly 15% of the package --
   that no product code imported: not from any other module, not from
   `__init__.py`, not from any of the 17 `console_scripts`, and not through any

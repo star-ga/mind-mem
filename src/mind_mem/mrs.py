@@ -10,7 +10,7 @@ flagging any SLI that crossed its threshold.
 Pure stdlib. Alert delivery (email, Slack, PagerDuty) is intentionally
 out of scope — callers wire whatever transport they already have.
 
-Wiring (5.1.0)
+Wiring (5.0.1)
 --------------
 The scoring core above is a pure function of the readings it is handed.
 Everything that turns a *workspace* into readings lives in the

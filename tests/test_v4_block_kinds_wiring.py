@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""``v4.block_kinds`` is WIRED — 5.1.0 restoration slice.
+"""``v4.block_kinds`` is WIRED — 5.0.1 restoration slice.
 
 The 5.0.0 sweep deleted this module because nothing imported it. It is back,
 and this file is the evidence that it is *reached and doing work*, not merely
@@ -60,7 +60,7 @@ def _build_workspace(root: Path) -> None:
 
 def _write_config(root: Path, *, block_kinds_on: bool) -> Path:
     cfg = root / "mind-mem.json"
-    body: dict = {"version": "5.1.0", "recall": {"backend": "scan"}}
+    body: dict = {"version": "5.0.1", "recall": {"backend": "scan"}}
     if block_kinds_on:
         body["v4"] = {"block_kinds": {"enabled": True}}
     cfg.write_text(json.dumps(body), encoding="utf-8")

@@ -78,7 +78,7 @@ _log = get_logger("category_distiller")
 # Optional MIND kernel acceleration. Resolved through the package's ONE
 # loader (mind_ffi.load_kernels) rather than constructing MindMemKernel here:
 # a module-level `MindMemKernel()` was a third probe with its own error
-# handling, and the point of the 5.1.0 kernel work is that there is exactly
+# handling, and the point of the 5.0.1 kernel work is that there is exactly
 # one door. Same resolution, same silence when no .so exists.
 _mind_ffi = None
 try:

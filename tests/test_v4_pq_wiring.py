@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""``v4.pq`` is WIRED — 5.1.0 restoration slice.
+"""``v4.pq`` is WIRED — 5.0.1 restoration slice.
 
 Product quantization compresses a stored embedding from ``4 * dim`` bytes to
 one byte per subvector position. The consumer is
@@ -72,7 +72,7 @@ def _build_workspace(root: Path) -> None:
 
 def _write_config(root: Path, *, pq_on: bool) -> Path:
     cfg = root / "mind-mem.json"
-    body: dict = {"version": "5.1.0", "recall": {"backend": "scan"}}
+    body: dict = {"version": "5.0.1", "recall": {"backend": "scan"}}
     if pq_on:
         body["v4"] = {"pq": {"enabled": True}}
     cfg.write_text(json.dumps(body), encoding="utf-8")

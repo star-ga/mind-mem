@@ -1,7 +1,7 @@
 # Copyright 2026 STARGA, Inc.
 """mind_kernels wiring — one loader, parity with the incumbents, downgrade refusal.
 
-Slice 5 of the 5.1.0 restoration. ``mind_kernels`` was deleted in 5.0.0 for
+Slice 5 of the 5.0.1 restoration. ``mind_kernels`` was deleted in 5.0.0 for
 having no importer; it is back, and these tests exist to prove it is
 *connected* rather than merely present:
 

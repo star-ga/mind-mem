@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""Acceptance gate for the ``trajectory`` wiring (5.1.0 restoration slice 5).
+"""Acceptance gate for the ``trajectory`` wiring (5.0.1 restoration slice 5).
 
 ``trajectory.py`` shipped in 1.2.0 with 19 unit tests and no caller at all:
 it parsed, validated, formatted and scored trajectory blocks that nothing
@@ -72,7 +72,7 @@ def _ws(*, flag_on: bool, kernel: str = "") -> str:
     canonical ``get_mind_dir`` resolver prefers.
     """
     workspace = tempfile.mkdtemp(prefix="mm_traj_")
-    config: dict[str, Any] = {"version": "5.1.0"}
+    config: dict[str, Any] = {"version": "5.0.1"}
     if flag_on:
         config["v4"] = {"trajectory": {"enabled": True}}
     with open(os.path.join(workspace, "mind-mem.json"), "w", encoding="utf-8") as handle:

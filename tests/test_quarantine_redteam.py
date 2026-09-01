@@ -384,7 +384,7 @@ class TestEveryWriteDoorStillWithholds:
 class TestConsolidationDoesNotBypassAdmission:
     """`plan_consolidation` surfaced quarantined block TEXT. Regression pin.
 
-    Found while wiring `granularity_align` in 5.1.0. Its block loader ran
+    Found while wiring `granularity_align` in 5.0.1. Its block loader ran
     ``SELECT id, status, tags, json_blob ...`` and never filtered on the status
     it had just selected, so QUARANTINED and PENDING content came back verbatim
     through a USER-scope MCP tool — untrusted content readable without ever
@@ -468,7 +468,7 @@ class TestConsolidationDoesNotBypassAdmission:
 
 
 # ---------------------------------------------------------------------------
-# Door 3 — the ingest webhook (`mm ingest-serve`, 5.1.0)
+# Door 3 — the ingest webhook (`mm ingest-serve`, 5.0.1)
 # ---------------------------------------------------------------------------
 
 

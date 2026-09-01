@@ -1,7 +1,7 @@
 # Copyright 2026 STARGA, Inc.
 """The ingest webhook's front gate — 429s, and content that stays withheld.
 
-``streaming`` was restored in 5.1.0 and wired as the per-client rate limiter
+``streaming`` was restored in 5.0.1 and wired as the per-client rate limiter
 that fronts ``POST /ingest``. It is deliberately NOT a second write path: the
 webhook has exactly one write funnel (``ingestion_pipeline._write_admitted``,
 admitting under ``IngestTier.EXTERNAL_INGEST``), and this module decides only
@@ -470,7 +470,7 @@ class TestDeprecatedQueue:
         assert "IngestionQueue" in doc
 
     def test_the_old_queue_still_works(self) -> None:
-        """Deprecated is not deleted — that distinction is the whole 5.1.0 point."""
+        """Deprecated is not deleted — that distinction is the whole 5.0.1 point."""
         queue = streaming.build_queue_from_config({"streaming": {"enabled": True, "capacity": 4}})
         assert queue is not None
         assert queue.enqueue(streaming.IngestEvent(payload={"n": 1})).accepted is True

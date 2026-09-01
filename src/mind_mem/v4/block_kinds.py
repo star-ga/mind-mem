@@ -34,12 +34,12 @@ predate the column ignore it.
 and leaves the column alone — the two surfaces stay independent — so a
 workspace that has never been backfilled reads :data:`DEFAULT_KIND` from
 :func:`get_block_kind` and ``[]`` from :func:`list_blocks_by_kind`, and both
-are behaving as written rather than failing. What changed in 5.1.0 is that
+are behaving as written rather than failing. What changed in 5.0.1 is that
 a backfill now exists to run: :mod:`mind_mem.v4.kind_backfill` calls
 :func:`classify_block` over the *admitted* corpus and writes both surfaces.
 
 The deferred note that used to sit here — *"the single-label column has a
-reader and no in-package writer"* — is CLOSED as of 5.1.0: the first of its
+reader and no in-package writer"* — is CLOSED as of 5.0.1: the first of its
 two named upgrade paths is now implemented as :func:`set_block_kind`, which
 writes the ``blocks`` row and its ``kind`` column beside the tag set. Its
 caller is :mod:`mind_mem.v4.kind_backfill`, reached from ``mm kinds
@@ -58,7 +58,7 @@ Two retrieval modes coexist downstream (landed in
 
 This module ships the type surface, the read surface
 (:class:`BlockKind` enum, :func:`ensure_block_kind_column`,
-:func:`get_block_kind`, :func:`list_blocks_by_kind`) and, since 5.1.0, the
+:func:`get_block_kind`, :func:`list_blocks_by_kind`) and, since 5.0.1, the
 write surface (:func:`set_block_kind`, :func:`set_block_kinds`) plus the
 deterministic :func:`classify_block` that decides what to write. The fusion / merge
 side (``propose_fuse``, multi-page entity reconciliation) lands in
@@ -99,7 +99,7 @@ __all__ = [
     "get_block_kind_tags",
     "ensure_block_kind_tags_table",
     # The single-label WRITER the deferred note above asked for, plus the
-    # deterministic corpus classifier that feeds it. Wired 5.1.0 through
+    # deterministic corpus classifier that feeds it. Wired 5.0.1 through
     # ``mind_mem.v4.kind_backfill`` (`mm kinds backfill`).
     "set_block_kind",
     "classify_block",
@@ -428,7 +428,7 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Single-label writer  (5.1.0 — closes this module's own deferred note)
+# Single-label writer  (5.0.1 — closes this module's own deferred note)
 # ---------------------------------------------------------------------------
 
 

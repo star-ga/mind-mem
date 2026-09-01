@@ -609,7 +609,7 @@ class TestTierEvents:
         assert _CAPTURED[1].payload["reason_code"] == DemotionReason.STALE.value
 
     def test_a_manager_without_a_workspace_is_exactly_the_old_behaviour(self, tmp_path) -> None:
-        """The default is None, so every pre-5.1.0 construction site is inert."""
+        """The default is None, so every pre-5.0.1 construction site is inert."""
         from mind_mem.memory_tiers import MemoryTier, TierManager
 
         ws = _make_ws(tmp_path, events=_capture_events())

@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""``v4.embedding_pipeline`` is WIRED — 5.1.0 restoration slice.
+"""``v4.embedding_pipeline`` is WIRED — 5.0.1 restoration slice.
 
 The module exists to close the "caller-supplied embeddings" gap: every v4
 surface that wants a vector took one as an argument, so nothing could derive
@@ -62,7 +62,7 @@ def _write_config(root: Path, *, pipeline: bool) -> Path:
     v4: dict = {"block_kinds": {"enabled": True}, "hnsw_kind_index": {"enabled": True}}
     if pipeline:
         v4["embedding_pipeline"] = {"enabled": True}
-    cfg.write_text(json.dumps({"version": "5.1.0", "recall": {"backend": "scan"}, "v4": v4}), encoding="utf-8")
+    cfg.write_text(json.dumps({"version": "5.0.1", "recall": {"backend": "scan"}, "v4": v4}), encoding="utf-8")
     return cfg
 
 

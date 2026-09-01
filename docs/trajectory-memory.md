@@ -119,7 +119,7 @@ on directory iteration.
 A knob whose value will not coerce keeps its default: a typo in a kernel
 must not take the surface down.
 
-> **Historical note.** Until 5.1.0 these knobs were unreachable. The loader
+> **Historical note.** Until 5.0.1 these knobs were unreachable. The loader
 > resolved `dirname(__file__)/../mind/trajectory.mind`, which is `src/mind/`
 > — a directory that has never existed — so every knob silently fell back to
 > its default. The bug was invisible because the shipped kernel's values

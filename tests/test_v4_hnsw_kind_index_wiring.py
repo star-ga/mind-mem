@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""``v4.hnsw_kind_index`` is WIRED — 5.1.0 restoration slice.
+"""``v4.hnsw_kind_index`` is WIRED — 5.0.1 restoration slice.
 
 Three call sites, all reachable:
 
@@ -57,7 +57,7 @@ def _write_config(root: Path, *, hnsw: bool) -> Path:
     v4: dict = {"block_kinds": {"enabled": True}, "embedding_pipeline": {"enabled": True}}
     if hnsw:
         v4["hnsw_kind_index"] = {"enabled": True}
-    cfg.write_text(json.dumps({"version": "5.1.0", "recall": {"backend": "scan"}, "v4": v4}), encoding="utf-8")
+    cfg.write_text(json.dumps({"version": "5.0.1", "recall": {"backend": "scan"}, "v4": v4}), encoding="utf-8")
     return cfg
 
 

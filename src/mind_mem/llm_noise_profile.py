@@ -137,7 +137,7 @@ class LLMNoiseProfiler:
             was_correct: True if the LLM's output was correct/useful.
             at: Injectable observation instant (UTC epoch seconds) recorded
                 as ``last_calibrated``. Defaults to the wall clock, which is
-                what every pre-5.1.0 caller gets. Injecting it makes the
+                what every pre-5.0.1 caller gets. Injecting it makes the
                 persisted profile a pure function of the outcome stream —
                 the same reports replayed on another machine produce the
                 same file, byte for byte. The value is provenance only: no
@@ -278,10 +278,10 @@ class LLMNoiseProfiler:
 
 
 # ---------------------------------------------------------------------------
-# Wiring: the ``report_outcome`` → profile leg (5.1.0 restoration, slice 5)
+# Wiring: the ``report_outcome`` → profile leg (5.0.1 restoration, slice 5)
 # ---------------------------------------------------------------------------
 #
-# Until 5.1.0 this module had no production caller: everything above was
+# Until 5.0.1 this module had no production caller: everything above was
 # imported only by ``tests/test_llm_noise_profile.py``. The event source it
 # was always missing is outcome attribution — ``report_outcome`` already
 # carries a verdict ("did acting on these blocks actually work?") plus the

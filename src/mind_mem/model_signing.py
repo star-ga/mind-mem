@@ -215,7 +215,7 @@ def sign_model(
         manifest_path = root / MANIFEST_FILENAME
         signature_path = root / SIGNATURE_FILENAME
         pubkey_path = root / PUBKEY_FILENAME
-        manifest_path.write_text(manifest_text)
+        manifest_path.write_text(manifest_text, encoding="utf-8")
         signature_path.write_bytes(signature)
         pubkey_path.write_bytes(public_key)
 
@@ -284,7 +284,7 @@ def verify_model(
             PUBKEY_FILENAME,
         )
 
-    stored_manifest = manifest_path.read_text()
+    stored_manifest = manifest_path.read_text(encoding="utf-8")
     stored_signature = signature_path.read_bytes()
 
     # Recompute the manifest from disk and compare to the stored one.

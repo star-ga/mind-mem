@@ -101,3 +101,49 @@ def test_the_detector_actually_detects() -> None:
 
     binary = ast.parse('with open(p, "rb") as f:\n    pass\n')
     assert _text_opens_without_encoding(binary) == [], "binary must not be flagged"
+
+
+#: ``importlib.metadata`` Distribution.read_text(NAME) takes a FILENAME and has
+#: no encoding kwarg -- "fixing" it would be an error, so it is exempt by
+#: location rather than by guessing from the call shape.
+_READ_TEXT_EXEMPT = {("self_update.py", "read_text")}
+
+
+def _path_text_calls_without_encoding(tree: ast.AST, filename: str) -> list[int]:
+    """``Path.read_text()`` / ``.write_text()`` with no encoding.
+
+    Same defect as a bare ``open``: both default to the locale encoding, so
+    both read cp1252 on Windows. ``model_signing`` wrote a signing manifest
+    this way -- on Windows that verifies against different bytes than it wrote.
+    """
+    bad: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr not in ("read_text", "write_text"):
+            continue
+        if (filename, node.func.attr) in _READ_TEXT_EXEMPT:
+            continue
+        if any(k.arg == "encoding" for k in node.keywords):
+            continue
+        bad.append(node.lineno)
+    return bad
+
+
+def test_no_path_text_helper_omits_its_encoding() -> None:
+    offenders: list[str] = []
+    for path in _modules():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for line in _path_text_calls_without_encoding(tree, path.name):
+            offenders.append(f"{path.relative_to(SRC)}:{line}")
+    assert offenders == [], (
+        "Path.read_text()/write_text() without encoding= — same locale-default defect as a bare open():\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_the_path_detector_actually_detects() -> None:
+    """Mutation control for the scanner above."""
+    bad = ast.parse("p.read_text()\n")
+    assert _path_text_calls_without_encoding(bad, "x.py") == [1]
+    good = ast.parse('p.read_text(encoding="utf-8")\n')
+    assert _path_text_calls_without_encoding(good, "x.py") == []

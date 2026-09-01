@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""Acceptance gate for the ``granularity_align`` wiring (5.1.0 restoration, slice 2).
+"""Acceptance gate for the ``granularity_align`` wiring (5.0.1 restoration, slice 2).
 
 ``granularity_align`` shipped in v4.0.x, kept its own tests, and was called by
 nothing — which is why 5.0.0 deleted it. The module was restored and is now
@@ -111,7 +111,7 @@ CORPUS: tuple[tuple[str, str], ...] = (
 def _write_config(ws: Path, settings: object) -> None:
     """Write ``mind-mem.json`` into the workspace with the given flag value."""
     ws.joinpath("mind-mem.json").write_text(
-        json.dumps({"version": "5.1.0", "v4": {"granularity_align": settings}}),
+        json.dumps({"version": "5.0.1", "v4": {"granularity_align": settings}}),
         encoding="utf-8",
     )
 

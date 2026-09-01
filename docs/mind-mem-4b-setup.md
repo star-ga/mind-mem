@@ -1,6 +1,6 @@
 # Setting up the mind-mem-4b model
 
-> **Tool-surface drift as of 5.1.0 — read this before trusting the model on
+> **Tool-surface drift as of 5.0.1 — read this before trusting the model on
 > surfaces.** The shipped v4 weights were trained against a 96-tool surface.
 > The live server now exposes **102**, so the model does not know the newest
 > tools at all.
@@ -8,7 +8,7 @@
 > The module drift has moved TWICE and the current state is not the obvious
 > one. 5.0.0 deleted 47 modules as unreachable; this note then warned that the
 > model would describe surfaces that no longer existed — `v4.health`, `v4.pq`,
-> `KernelKind`, `FallbackPolicy` and friends. **5.1.0 restored all 47 and wired
+> `KernelKind`, `FallbackPolicy` and friends. **5.0.1 restored all 47 and wired
 > them**, so those names are real again and the model's descriptions of them
 > are roughly right once more. What the model still cannot know is the wiring:
 > which surface each module now hangs off, that most sit behind default-OFF v4
@@ -19,7 +19,7 @@
 > about the model you are running. The corpus is regenerated and the model
 > retrained as a separate, sequenced piece of work — and the corpus that
 > generated these weights described the pre-5.0.0 tree, so it needs
-> regenerating against 5.1.0 rather than against either earlier state. Until
+> regenerating against 5.0.1 rather than against either earlier state. Until
 > then treat model answers about module names as advisory and check them
 > against `mm doctor` or the live tool list.
 

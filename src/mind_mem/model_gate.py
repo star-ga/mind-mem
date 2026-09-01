@@ -110,7 +110,7 @@ def _load_registry() -> dict[str, dict[str, Any]]:
     if not p.is_file():
         return {}
     try:
-        data = json.loads(p.read_text())
+        data = json.loads(p.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {}
     if not isinstance(data, dict):
@@ -124,7 +124,7 @@ def _atomic_write_json(path: Path, payload: Any) -> None:
     """Atomically write *payload* as JSON — write-temp + os.replace.
 
     Extracted from ``_save_registry`` so the promotion ledger added in
-    5.1.0 gets the same crash-safety the gate registry has always had,
+    5.0.1 gets the same crash-safety the gate registry has always had,
     rather than a second, weaker writer. Serialisation is unchanged
     (``indent=2, sort_keys=True`` + trailing newline), so the registry
     file is byte-for-byte what it was before the extraction.
@@ -360,7 +360,7 @@ def gate_remove(path: str | Path) -> bool:
 # Weight-promotion ledger — the registry half of ``online_trainer``
 # ---------------------------------------------------------------------------
 #
-# 5.1.0. ``online_trainer.WeightRegistry`` shipped a SECOND registry: active /
+# 5.0.1. ``online_trainer.WeightRegistry`` shipped a SECOND registry: active /
 # candidate / rollback slots plus a revert log, all in a process-local dict
 # behind an ``RLock``, with no test and no persistence. A promotion decision
 # that does not survive the process is not an audit trail — a swap that

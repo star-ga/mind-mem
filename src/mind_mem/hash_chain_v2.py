@@ -525,7 +525,7 @@ class HashChainV2:
         message and line number; the flag only ever refuses MORE.
 
         deferred: with the flag OFF the disagreement above is still live.
-        It is not fixed unconditionally only because 5.1.0's restoration
+        It is not fixed unconditionally only because 5.0.1's restoration
         lands every wiring default-OFF and byte-identical. Upgrade path:
         default ``v4.mind_kernels`` to ON, then delete the flag and make
         the sequence check unconditional.

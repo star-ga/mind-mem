@@ -224,7 +224,7 @@ class TierManager:
         # Optional, and None by default: this class is addressed by DB PATH, and
         # a workspace cannot be inferred from one without guessing. A caller
         # that has the workspace passes it and gets tier events; a caller that
-        # does not gets exactly the pre-5.1.0 behaviour, since ``emit_event``
+        # does not gets exactly the pre-5.0.1 behaviour, since ``emit_event``
         # with no workspace is a no-op.
         self._workspace = workspace
 

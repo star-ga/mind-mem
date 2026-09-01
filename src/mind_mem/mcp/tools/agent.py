@@ -270,7 +270,7 @@ def stream_status() -> str:
     object: queue depth and capacity, the per-client 429 count, and how
     many streamed events have been admitted to the store QUARANTINED. Same
     absent-when-off rule as ``backpressure``, so with both flags off -- the
-    default -- this payload is byte-identical to the pre-5.1.0 one.
+    default -- this payload is byte-identical to the pre-5.0.1 one.
 
     No new tool, and no new ACL row: both objects are queue telemetry about
     buses this tool already reports on. They carry counters and watermarks

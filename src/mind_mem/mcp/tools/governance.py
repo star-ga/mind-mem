@@ -964,7 +964,7 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     # v3.2.1: invalidate recall cache only on a real (non-dry-run) apply.
     if success and not dry_run:
         _invalidate_recall_cache()
-        # 5.1.0: one event per REAL apply. Deliberately not on a dry run —
+        # 5.0.1: one event per REAL apply. Deliberately not on a dry run —
         # "applied" must mean the corpus changed, or a subscriber that acts on
         # the event acts on a change that never happened. Emission is the last
         # thing this branch does and cannot raise, so a dead subscriber leaves

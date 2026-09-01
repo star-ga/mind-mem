@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""Acceptance gate for the ``core_export`` wiring (5.1.0 restoration slice 2).
+"""Acceptance gate for the ``core_export`` wiring (5.0.1 restoration slice 2).
 
 ``core_export`` shipped in 2.3.0 and no product code ever called it, so
 5.0.0 deleted it as unreachable. Restoring the file is not the fix —

@@ -5,7 +5,7 @@ The roadmap calls for LoRA fine-tuning of a local embedding model and a
 graceful weight swap. Actually *running* the trainer needs PyTorch +
 Qwen3-Embedding + ms-marco-MiniLM, which this codebase won't bundle. What
 mind-mem owns is the two halves either side of that gradient step, and
-5.1.0 wires both:
+5.0.1 wires both:
 
 **Harvest** — :func:`run_harvest_job` drains the live
 :mod:`~mind_mem.interaction_signals` ledger into
