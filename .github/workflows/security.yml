@@ -24,16 +24,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
         with:
           languages: python
           queries: +security-extended
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4
+        uses: github/codeql-action/autobuild@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
         with:
           category: /language:python
 
@@ -91,7 +91,7 @@ jobs:
         run: bandit -r src -f sarif -o bandit.sarif || true
 
       - name: Upload SARIF to GitHub code scanning
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
         with:
           sarif_file: bandit.sarif
           category: bandit
@@ -142,7 +142,7 @@ jobs:
 
       - name: Attach SBOM to release (tag pushes only)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228  # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v2
         with:
           files: sbom.cdx.json
 
@@ -197,7 +197,7 @@ jobs:
 
       - name: Upload Trivy SARIF
         if: always() && steps.df_changed.outputs.changed == 'true'
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
         with:
           sarif_file: trivy-image.sarif
           category: trivy
