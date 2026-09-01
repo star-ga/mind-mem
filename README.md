@@ -1527,6 +1527,15 @@ MIND-Mem makes **zero network calls** from its core. No telemetry, no phoning ho
 
 ### mind-mem:4b — Purpose-Trained LLM
 
+> **⏳ Coming: a retrained `mind-mem-4b`.** The weights published today are a full
+> fine-tune of **Qwen3.5-4B**, trained against an earlier state of this repo. A full
+> retrain on a **newer base model** is planned, generated from the current tool
+> surface — several upcoming MIND-Mem features depend on it, because the shipped
+> weights predate the surfaces those features expose. Until it lands, the current
+> model remains the recommended one and everything below applies to it. The
+> throughput figures in this section were measured on the **current** weights and
+> will be restated when the new model ships. Not released yet; no date promised.
+
 For best LLM extraction quality, use **[mind-mem:4b](https://huggingface.co/star-ga/mind-mem-4b)** — a full fine-tune of Qwen3.5-4B on MIND-Mem's 8 extraction tasks (entity extraction, fact extraction, observation compression, contradiction detection, governance analysis, intent classification, axis-aware retrieval, LLM reranking). Empirical on RTX 3080 (Q4_K_M, 2.6GB VRAM): **104 tok/s generation, 1585 tok/s prefill**.
 
 **Ollama (recommended):**

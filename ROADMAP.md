@@ -20,6 +20,17 @@ Surfaced at the top so the actual remaining work is visible without
 scrolling 1500 lines of historical sections. Each item is followed
 by its full description below.
 
+### Model — retrained `mind-mem-4b` (1 item, not started)
+
+- [ ] **Retrain `mind-mem-4b` on a newer base model.** The published weights are a
+  full fine-tune of Qwen3.5-4B built against an earlier tree, so they describe a tool
+  surface that has since moved. Several planned features depend on a model trained
+  against the current surface. Full fine-tune (not QLoRA), corpus regenerated from a
+  current checkout; pipeline already in-tree under `train/`. On ship: regenerate the
+  GGUF, refresh the HF model card, restate the throughput numbers in `README.md`
+  (they are measurements of the *current* weights), and re-verify `mm install-model`.
+  Requires rented GPU — a 4B full fine-tune does not fit local hardware.
+
 ### Group D — Network hardening (3 items; +1 shipped in v4.0.14)
 
 - *(tracked below — see “TLS 1.3 minimum + cert pinning” in the status section; listed twice, counted once)*

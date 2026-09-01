@@ -2,6 +2,12 @@
 
 Scripts to retrain the [`star-ga/mind-mem-4b`](https://huggingface.co/star-ga/mind-mem-4b) governance-aware memory-assistant model on a fresh checkout of the MIND-Mem repo.
 
+> **⏳ A retrain is planned.** The published `mind-mem-4b` is a full fine-tune of
+> Qwen3.5-4B built against an earlier checkout. The next model is a full retrain on a
+> newer base, with the corpus regenerated from the current tool surface — it is what
+> several upcoming features depend on. Use this pipeline for that run; regenerate the
+> corpus from a current checkout rather than reusing an older `corpus.jsonl`.
+
 Training artifacts land in `~/mm-train-output/`, which is gitignored — the repo only carries the scripts, not the weights.
 
 ## Pipeline
