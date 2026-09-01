@@ -2,6 +2,81 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## [5.1.0] - 2026-09-01
+
+### Restored
+
+* **All 44 modules deleted in 5.0.0 are back (13,594 LOC), with their 39 test
+  files.** The 5.0.0 sweep removed them because no product code imported them.
+  That reasoning was wrong: **"nothing imports it" is evidence about WIRING,
+  never about worth.** Unreachability was verified and then reported as if it
+  settled the question of value. A finished feature that was never connected is
+  both unreachable and valuable.
+
+  They are being WIRED, slice by slice, each flag-gated and default-OFF with
+  flag-off behaviour byte-identical to 5.0.0. Where a restored module duplicates
+  a live one the resolution is substitution or merge — never deletion.
+
+* **Two of the 44 were not unreachable at all.** `session_summarizer` had a
+  shell caller (`hooks/session-end.sh` runs `python3 -m
+  mind_mem.session_summarizer`) *and* a Python importer. An AST import scan
+  cannot see shell dispatch, so the sweep did not either.
+
+### Fixed — defects 5.0.0 shipped
+
+* **`hooks/session-end.sh` called a module that no longer existed.** It failed
+  on every session end and the error was swallowed by its own
+  `|| echo "(non-fatal)"`. Silent for the whole release.
+* **`protection.py` listed the deleted `storage/sharded_pg.py` in
+  `_CRITICAL_MODULES`**, and a test allowlisting a class inside it was
+  therefore **passing vacuously**.
+* **Broken references in current docs**: `SPEC.md` linked to `core_export.py`
+  and named `maintenance_migrate`; `README.md` called `mind_kernels.py` "the
+  authoritative implementation today"; `docs/protection.md` listed
+  `tenant_kms.py` and `tenant_audit.py` as shipped protection measures 14 and
+  15. Every one of those files had been deleted — and the 5.0.0 commit titled
+  *"align every claim with reality"* missed all of them.
+
+### Fixed — latent bugs found while restoring
+
+* **`trajectory.py` never read its config.** It resolved
+  `dirname(__file__)/../mind/trajectory.mind`, which is `src/mind/` — a
+  directory that has never existed, since the kernels live at the repo root.
+  Every knob in that module silently fell back to its default. Two dots, not
+  one.
+* **`ALL_V4_FLAGS` was missing `cognitive_kernel`, `surprise_retrieval` and
+  `lint`**, removed during the sweep, so `require_enabled()` raised
+  unknown-flag for all three.
+* **A flag probe was observable when the flag was off.** The `logging_context`
+  check called a helper that logs `v4_config_unreadable` on a malformed config,
+  so flag-off emitted a line the unwired build did not. A probe deciding
+  whether a feature is on must not itself be observable when the answer is no.
+
+### Wired
+
+* `uncertainty_propagation` → graph recall and `traverse_graph`. **This is a
+  real correctness fix**: a 3-hop chain previously reported hop-3 confidence as
+  if it were hop-1. Confidence now decays per hop and sub-threshold branches
+  truncate.
+* `retrieval_trace` → per-request step attribution through hybrid recall, on the
+  pre-existing `retrieval.trace_attribution` key the module already read and
+  nothing ever set.
+* `maintenance_migrate` → the `apply_engine` call site **its own docstring had
+  promised and nobody ever wrote**, plus `mm migrate --maintenance`.
+* `v4/logging_context` → correlation ids across concurrent recalls. The filter
+  installs on mind-mem's own handler, not the root logger: `propagate = False`
+  makes a root install a silent no-op, which is what the module's own docstring
+  wrongly recommended.
+
+### Notes
+
+* The reachability register now returns to zero by **connecting** code, not by
+  deleting it. No module is given an allowlist entry as its wiring; the
+  allowlist is only for genuine string dispatch an AST scan cannot see.
+* Modules not yet wired stay in the tree as documented debt with re-entry
+  conditions — see `docs/plans/RESTORE-44-WIRING-PLAN.md`. "Not wired yet" is
+  not the same as "not needed".
+
 ## [5.0.0] - 2026-09-01
 
 ### Removed
