@@ -21,9 +21,9 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/tests-8%2C200%2B-brightgreen?style=flat-square" alt="Tests: 8,200+">
+  <img src="https://img.shields.io/badge/tests-7%2C500%2B-brightgreen?style=flat-square" alt="Tests: 7,500+">
   <img src="https://img.shields.io/badge/MCP_tools-98-blue?style=flat-square" alt="MCP Tools: 98">
-  <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
+  <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
   <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>

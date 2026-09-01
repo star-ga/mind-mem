@@ -2,7 +2,7 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
-## [Unreleased]
+## [5.0.0] - 2026-09-01
 
 ### Removed
 
@@ -351,8 +351,6 @@ All notable changes to MIND-Mem are documented in this file.
   vacuous `if pyproject.is_file():` guard — under which the assertions
   simply never executed and the test passed having checked nothing — now
   skips loudly instead.
-
-## [5.0.0] - 2026-08-30
 
 ### Added
 
