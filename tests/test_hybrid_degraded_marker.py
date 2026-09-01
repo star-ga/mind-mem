@@ -92,20 +92,45 @@ def test_vector_leg_failure_degrades_and_marks(monkeypatch):
 
 
 def test_vector_leg_timeout_degrades_and_marks(monkeypatch):
-    import time as _time
+    """A vector leg that outlives its deadline degrades to BM25 and says so.
+
+    The leg blocks on an Event this test never sets, rather than sleeping a
+    fixed 0.5s. That is not a style preference -- the sleep version was a RACE
+    and it failed on Windows.
+
+    ``search`` submits both legs to the pool, then waits on BM25 *first* and
+    only afterwards applies the vector deadline. So the vector leg is already
+    running during the BM25 work, and a fixed sleep only survives while BM25
+    stays much faster than it. On the Windows runner BM25 (SQLite + filesystem)
+    outlasted the 0.5s sleep, so ``_slow`` had already RETURNED by the time the
+    0.05s deadline was applied: ``result(timeout=...)`` handed back [] instead
+    of raising, and ``degraded`` was None. Nothing about the product was wrong;
+    the test was asserting that one wall-clock beat another.
+
+    Blocking until the test releases it removes the race entirely: the future
+    cannot complete early on any machine, at any speed.
+    """
+    import threading
 
     ws = _make_workspace()
     hb = HybridBackend({"vector_enabled": True})
     hb._vector_available = True
     monkeypatch.setattr(hb, "_vector_deadline_seconds", lambda: 0.05)
 
-    def _slow(*a, **k):
-        _time.sleep(0.5)
+    release = threading.Event()
+
+    def _blocks_until_released(*a, **k):
+        # Bounded so a failing test cannot leak a thread forever; the bound is
+        # far above any plausible deadline, never a second timing assumption.
+        release.wait(timeout=30)
         return []
 
-    monkeypatch.setattr(hb, "_vector_search", _slow)
-    results = hb.search("capital of France", ws, limit=5)
-    assert results.degraded == {"leg": "vector", "reason": "deadline_exceeded"}
+    monkeypatch.setattr(hb, "_vector_search", _blocks_until_released)
+    try:
+        results = hb.search("capital of France", ws, limit=5)
+        assert results.degraded == {"leg": "vector", "reason": "deadline_exceeded"}
+    finally:
+        release.set()
 
 
 def test_healthy_vector_leg_not_marked(monkeypatch):
