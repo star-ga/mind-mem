@@ -23,10 +23,7 @@ by its full description below.
 ### Group D — Network hardening (3 items; +1 shipped in v4.0.14)
 
 - [ ] **TLS 1.3 minimum + cert pinning** on REST / gRPC / MCP-HTTP
-- [ ] **mTLS for service-to-service** between mind-mem nodes
-- [ ] **Public / private workspaces** (`workspace.mode = public | private | mixed`)
 - [x] **Audit headers** (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`) — **shipped v4.0.14** (REST middleware; gRPC parity TODO when gRPC surface gets the same treatment)
-- [ ] **ActivityPub federation interop** (optional bridge; low priority)
 
 ### Group B — Knowledge graph (2 items)
 
@@ -59,20 +56,14 @@ by its full description below.
 - [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters
 - [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies
 - [x] **Provenance-rich blocks** — `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`
-- [ ] **Row-level encryption on top of tenant KMS** — per-tenant KMS envelope keys **ship** (`tenant_kms.py`, real AESGCM); the open half is wiring row-level encryption over those keys
-- [ ] **C2PA content provenance** — signed manifests on synthesis blocks
 
 ### Group G — Ecosystem (9 items, mostly SDK fan-out)
 
 - [ ] **JavaScript / TypeScript SDK** — client **exists in-tree** (`sdk/js/`); open work is packaging/publishing it as `@star-ga/mind-mem-client` on npm
-- [ ] **Browser-native WebAssembly bundle**
-- [ ] **Go SDK publish + Rust / Java / Ruby SDK stubs** — Go client **exists in-tree** (`sdk/go/`, with tests); open work is module publishing; Rust/Java/Ruby not started
+- [ ] **Publish the Go client as a Go module** — `sdk/go/` exists in-tree with tests; only the publish step is open. Kept from the cut SDK fan-out (the JS publish is tracked separately above); the Rust/Java/Ruby STUBS were inventory and are cut.
 - [ ] **OpenAPI + AsyncAPI specs** (single source of truth for SDK generation)
 - [ ] **Migration importers** — `mm import --from {chroma|mem0|letta} <dump.json>` **ships** (file-based subset: `src/mind_mem/importers/`, `IMP-` blocks in `memory/IMPORTED.md`, `imported:<system>` provenance, idempotent re-import). Open half is the endpoint-backed systems — pinecone / weaviate / qdrant need a live endpoint + credential and are refused with an explicit deferred message
 - [x] **Model-call token metering** — `mm usage` **ships** (`src/mind_mem/usage_meter.py`, wired into `mm_cli.py` with `CAP_EXIT_CODE`; per-day token counter + optional daily cap). The quota/spending-alert surface was deliberately dropped: self-hosted mind-mem has no spend outside model calls.
-- [ ] **SLSA build provenance level 3**
-- [ ] **Plugin SDK** — stable API for custom rules / block kinds / detectors
-- [ ] **Chaos testing harness**
 
 ### Group RA — Retrieval accountability (proposed 2026-08-28; **revised after audit**, 5 items)
 
@@ -606,18 +597,12 @@ HITL gate deliberately refuses.
 ### v4.0.x federation transport hardening (3 items; +1 shipped in v4.0.14)
 
 - [ ] **Per-peer identity beyond bearer token** (token → agent_id binding, signed-write envelopes)
-- [ ] **mTLS + cert pinning on `FederationClient`**
 - [x] **Operator-side peer allowlist** (`MIND_MEM_FED_PEERS=10.0.0.5,…`) — **shipped v4.0.14**
 - [x] **Token rotation primitive** (N-of-K active tokens, `mm token rotate`)
   - Residual: the grace window is ADVISORY. `grace_seconds` is printed and the operator must run the emitted `shell_final` export; the server never timestamps or auto-expires an old token, so the "then expires" half of the original line is not implemented.
 
 ### Cross-cutting (deferred infrastructure)
 
-- [ ] **Kubernetes operator + Helm chart**
-- [ ] **Byzantine-safe consensus (PBFT)** — opt-in, long-horizon
-- [ ] **Edge deployment mode** — PyOxidizer single-binary
-- [ ] **Managed-service console** — multi-tenant dashboard
-- [ ] **Kafka / NATS event fan-out**
 
 ### Pure-MIND Core Port (long-horizon architectural goal — PLANNED, not started)
 
@@ -676,11 +661,6 @@ pin a state the toolchain cannot yet satisfy.
 
 ### Advanced Agent Memory Primitives (5 planned block types, future)
 
-- [ ] **`[CAUSAL]` block type** — world-model storage for learned state transitions
-- [ ] **`[SKILL]` block type** — named strategy captures with preconditions / effects / success-rate
-- [ ] **Cross-domain recall adapter** — surface most-similar `[TRAJECTORY]` / `[SKILL]` blocks across environments
-- [ ] **`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory
-- [ ] **Evidence-chain submission format** — tamper-evident per-episode export
 
 ### Companion Tools (0 items; +1 doc shipped)
 
@@ -1620,11 +1600,9 @@ doesn't accidentally implement them.
 #### Defer to v3.3.x / quarter (real cost, real benefit only at
 multi-tenant scale)
 
-- [ ] **T-008: SQLCipher coverage for FTS5 + sqlite-vec indices.**
   Today only Markdown is wrapped. For hosted/multi-tenant deploys
   this is a real gap; for localhost it's documented in code.
   Decision deferred until we have a multi-tenant deploy target.
-- [ ] **WORM audit chain.** Beyond append-only flag — separate
   storage class, only relevant for compliance customers.
 - [x] **gRPC surface audit.** Done once the REST changes settled
   (N-12/N-13, above). The finding: REST *refuses* to open a network port
@@ -1819,7 +1797,6 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (same model as answerer 
 - [x] **Probabilistic truth score** — shipped in `src/mind_mem/truth_score.py` (commit `e98c144`). Bayesian posterior ``prior × age_decay − contradiction_mass + access_bonus``, clamped [0.01, 0.99]. Exposed via ``annotate_results(results, contradiction_graph=…)``; caller surfaces as ``block.truth_score``. Feeds into EvidenceBundle confidence. 22 tests.
 - [x] **Streaming ingest + back-pressure queue** — shipped in `src/mind_mem/streaming.py` (commit `9956b7a`). Bounded mpsc deque with drop-oldest policy + per-client token bucket. ``build_queue_from_config`` opt-in via ``streaming.enabled``. Thread-safe multi-producer. 14 tests including a 4-thread concurrency test.
 - [x] **Consensus voting** — shipped in `src/mind_mem/consensus_vote.py` (commit `f644096`). ``reach_consensus(votes, quorum_threshold, min_votes)`` returns a typed ``ConsensusDecision(winner, margin, confidence, reason, vote_counts)``; trust weights pulled from ``Vote.trust_weight`` or ``namespaces.<id>.trust_weight``; 0-weight excludes. 14 tests.
-- [ ] **Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0. v3.2.0 already emits `[[wikilinks]]` on `vault_sync` so an Obsidian-mounted vault gets a graph view for free; this web UI is the non-Obsidian alternative. **Frontend work — separate from the retrieval shipments above.**
 - [ ] **mind-mem-4b v2 retrain — rebase to Qwen3.8-4B + catch up to the current surface** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **NOT required by the v4.5.0 recall-noise fix or the v4.6.0 validity gate** — both are backend / flag-gated and add no MCP tool, and the 4b is only the swappable KG-extraction/dispatch model (recall + hybrid *scoring* is the `mind/*.mind` kernels + Python, never the 4b). The refresh is warranted because the current 4b was trained knowing ~84 tools while the live surface is now **90** (the typed-edge KG tools — `propose_edge` / `approve_edge` / `reject_edge` / `list_edge_proposals` / `entity_add_observation` — landed in v4.3/v4.4 *after* the 4b was trained). New model = **full retrain on a Qwen3.8-4B base** (up from Qwen3.5-4B) over the surface + v3.2.x dispatchers + v3.3.0/v4.x retrieval shapes (incl. the validity-gate config, OKF v0.2, and hybrid fusion-provenance fields) + LoCoMo replay. **Sequencing (operator decision 2026-08-18): deferred to AFTER the full Pure-MIND port** — do the Qwen3.8-4B rebase + retrain once, over the *post-port* tool/surface, bundled with that milestone rather than now. **The current 4b keeps working in the meantime with zero functional loss**: it is the swappable KG-extraction/dispatch model (never on the recall-scoring path — that is the `mind/*.mind` kernels + Python), and the ~6 newer tools it was not trained on still execute normally when called; only *proactive* suggestion of them is affected. Runpod H200 kickoff (~$55, 8-12 hr external GPU) runs on operator approval at that time.
 
 **Estimated (v3.3.0):** ~2400 lines retrieval (Tier 1+2+3) + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`, `mind-mem[rerank-ensemble]` (Tier 4).
@@ -2296,15 +2273,7 @@ default story is two laptops talking to each other.
 **Open (genuine network-hardening gaps):**
 
 - [ ] **TLS 1.3 minimum + cert pinning** — currently inherits system trust store; explicit `TLSv1_3` floor + optional pinned-pubkey enforcement not wired. Tracked.
-- [ ] **mTLS for service-to-service** — mutual auth between mind-mem nodes not implemented; today's threat model is single-operator shared-secret. Tracked.
-- [ ] **Public / private workspaces** — `workspace.mode = public | private | mixed` configuration not surfaced. Tracked.
-- [ ] **ActivityPub federation interop** — optional bridge dep not built. Tracked (low priority).
 - [ ] **Audit headers (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`)** — not yet propagated end-to-end across REST/gRPC. Tracked (small, well-defined).
-- [ ] **Kubernetes operator + Helm chart** — `operator/` + `deploy/helm/` not shipped. Tracked.
-- [ ] **Byzantine-safe consensus** — PBFT for adversarial-quorum deployments not implemented. Tracked (long-horizon).
-- [ ] **Edge deployment mode** — `mind-mem-edge` PyOxidizer binary not built. Tracked.
-- [ ] **Managed-service console** — `web/console/` multi-tenant dashboard not built. Tracked.
-- [ ] **Kafka / NATS event fan-out** — governance events as streams not exposed. Tracked.
 - [ ] **Rust hot path for hybrid search** — PyO3 BM25+RRF port — pure-MIND port (separate roadmap section below) is the chosen path instead. Marking as ⊘ superseded by Pure-MIND Core Port.
 
 ### E. Compliance-sensitive opt-in extensions (partial — 5 open)
@@ -2322,8 +2291,6 @@ default story is two laptops talking to each other.
 - [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters exposed on `recall(...)` (v4.0.15), applied via `_apply_post_filters` in `_recall_core.py`.
 - [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies not wired into `validate_block`. Tracked.
 - [x] **Provenance-rich blocks** — `actor_id`/`actor_role`/`session_id`/`tool_id`/`purpose` fields gated by `provenance: off|recommended|required` not added. Tracked.
-- [ ] **Row-level encryption over tenant KMS** — `src/mind_mem/tenant_kms.py` ships per-tenant AESGCM envelope keys; the row-level encryption layer above the existing `EncryptedBlockStore` is the open half. Tracked.
-- [ ] **C2PA content provenance** — C2PA-signed manifests on chat-layer synthesis blocks not implemented. Tracked (depends on chat layer above).
 
 ### G. Observability, reliability, ecosystem (partial — 7 open)
 
@@ -2337,14 +2304,10 @@ default story is two laptops talking to each other.
 **Open:**
 
 - [ ] **JavaScript / TypeScript SDK** — client code ships in-tree at `sdk/js/`; the npm publish as `@star-ga/mind-mem-client` is the open step. Tracked.
-- [ ] **Browser-native WebAssembly bundle** — WASM read-only client not built. Tracked.
 - [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
 - [ ] **OpenAPI + AsyncAPI specs** — declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
 - [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Endpoint-backed (pinecone / weaviate / qdrant) still deferred — they need a live endpoint + API credential.
 - [ ] **Model-call token metering** — per-day token counter + optional daily cap behind `mm usage`. Tracked.
-- [ ] **SLSA build provenance level 3** — partial via Sigstore; isolated-builder attestations not yet wired. Tracked.
-- [ ] **Plugin SDK** — stable plug-in API for custom rules / block kinds / decay schedules / redaction detectors not formalised. Tracked.
-- [ ] **Chaos testing harness** — automated fault injection for federated deployments not built. Tracked.
 
 ### F. Anti-patterns explicitly forbidden
 
@@ -2477,11 +2440,6 @@ MIND-Mem is designed as a governed-memory substrate for autonomous agents operat
 
 ### Planned block types and adapters
 
-- [ ] **`[CAUSAL]` block type** — world-model storage for learned state transitions (observation → action → next-observation); consumed by the host agent's planner during multi-step lookahead
-- [ ] **`[SKILL]` block type** — named strategy captures with preconditions, effects, and success-rate metadata; retrievable by skill-name or by applicable-context similarity
-- [ ] **Cross-domain recall adapter** — given a novel environment, surface the most similar `[TRAJECTORY]` / `[SKILL]` blocks from unrelated environments by feature-embedding similarity rather than exact environment-id match
-- [ ] **`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory; enables "I've seen this state before" recall across environments
-- [ ] **Evidence-chain submission format** — tamper-evident export of an agent's full decision history per episode, ready for third-party scorecard verification
 
 ---
 
@@ -3130,14 +3088,56 @@ edge confidence and attestation verdicts. Ontology validation is a
 replace or weaken it. Order: extraction → ontology validation → governance
 approval → authoritative graph.
 
-- [ ] **Make the ontology executable on write paths** — call ontology
+- [ ] **GATE — re-open K.2 only after the K.0 backfill produces a populated graph.**
+  Collapsed from 14 committed checkboxes on 2026-08-31 after an architectural
+  audit. The design itself is careful and was NOT the problem — the SHACL-vs-
+  entailment split, fail-closed-independent-of-mode, and `SAME_AS`-never-rewrites-
+  an-ID are all the right calls. The problem is that it specifies a deductive
+  database for a typed graph holding **103 edges**, which by this roadmap's own
+  verification has never been populated on the dev box.
+
+  Built as specified it reproduces this codebase's measured disease at 50x the
+  size: a tested, wired-to-nothing reasoner, a write gate gating a trickle, and
+  temporal-closure logic with no queries to serve. The reachability gate
+  (`scripts/check_reachable_modules.py`) already records `ontology.py` as
+  imported by no write path — K.2 would add thirteen more of those.
+
+  This roadmap already admitted K.0 is "the true blocker, not a sequencing
+  preference" and then kept 14 boxes anyway. **Re-open when there is a populated
+  graph AND a measured duplicate / unmatched-surface-form rate**, starting from
+  the revised-first-slice order already written below, which is preserved
+  verbatim as the design record.
+
+  The same reasoning collapses Group K's resolution-at-scale pipeline: 52
+  entities do not have a scale problem. The deterministic-scoring-first item
+  (nickname dictionary + Fellegi-Sunter band) is the single survivor there.
+
+<details><summary>The 14 collapsed items, preserved as the design record</summary>
+
+- **Make the ontology executable on write paths** — call ontology
+- **Relation schemas in `ontology.py`** — add `domain`, `range`,
+- **Closed-world shape validator (the actual write gate)** — the
+- **Persist the active ontology per workspace** — currently
+- **Bounded deterministic reasoner (OWL-RL-lite / Datalog-style, not
+- **Closure must respect time — it currently ignores it** — edges
+- **Canonical derivation, so "same query → same answer" is
+- **Graph pattern query planning** — extend `graph_query` beyond
+- **`GraphEvidencePack` — edge-grounded context packing** — return the
+- **`GraphBackend` protocol + reproducible graph benchmarks** — keep
+- **Ontology drift as a continuous, per-ingest concern (not a
+- **Resolution as reversible `SAME_AS` edges, never ID rewriting** —
+- **Deterministic scoring first; the model only in the gray band** —
+- **Decide merges on store-held state, never on model-supplied
+- **Land the write gate in `dry-run` mode before it rejects** —
+- **Close the `Predicate.register()` contradiction (open, contradicts
+
+</details>
       validation inside `graph_ingest`, `propose_edge`, `approve_edge`,
       direct-admin `graph_add_edge`, and entity-observation writes. An
       invalid triple becomes an explicit governance finding; it never
       silently enters the authoritative graph. Bind every entity/edge to
       an ontology version + hash. Custom predicates must be declared in
       the workspace ontology before they are authoritative.
-- [ ] **Relation schemas in `ontology.py`** — add `domain`, `range`,
       `inverse`, `symmetric`, `transitive`, `functional`, disjoint entity
       types, and optional cardinality. Prerequisite for both the write
       gate above and any entailment below. Declaring a predicate both
@@ -3145,7 +3145,6 @@ approval → authoritative graph.
       its component of the graph into one equivalence class where
       everything reaches everything; such combinations are rejected at
       ontology-load time, not discovered at query time.
-- [ ] **Closed-world shape validator (the actual write gate)** — the
       rejecting half of the pair above. Per the write-avoidance ladder,
       evaluate `pyshacl` before hand-rolling; adopt only if it can be
       driven deterministically and offline (no network, no wall-clock),
@@ -3153,11 +3152,9 @@ approval → authoritative graph.
       cardinality, disjointness) directly against SQLite. A hand-rolled
       validator is acceptable; a hand-rolled *entailment* engine is not
       when `owlrl` exists.
-- [ ] **Persist the active ontology per workspace** — currently
       process-local via `OntologyRegistry`; an ontology that governs
       authoritative writes cannot live only in process memory. Ontology
       migrations must be explicit, versioned, and replayable.
-- [ ] **Bounded deterministic reasoner (OWL-RL-lite / Datalog-style, not
       full OWL)** — subclass inheritance, inverse/symmetric/transitive
       predicates, domain/range inference. Derived facts are views, never
       writes, and each carries its full derivation path. Type-disjointness
@@ -3165,7 +3162,6 @@ approval → authoritative graph.
       contradiction/governance system. Over SQLite the transitive closure
       is a `WITH RECURSIVE` view, not a new subsystem — reach for a
       dependency only where recursion alone is insufficient.
-- [ ] **Closure must respect time — it currently ignores it** — edges
       already carry `valid_from` / `valid_until` (`knowledge_graph.py`),
       but nothing in the entailment spec above consumes them. Composing
       `A PART_OF B` (valid 2024–2025) with `B PART_OF C` (valid from 2026)
@@ -3174,7 +3170,6 @@ approval → authoritative graph.
       derived view carries the *intersection* of its source edges'
       validity intervals; an empty intersection means the rule does not
       fire. A closure that ignores time silently manufactures history.
-- [ ] **Canonical derivation, so "same query → same answer" is
       falsifiable** — recursive CTEs return rows in unspecified order and
       a fact reachable by several paths has several equally valid
       derivations. Without a rule, two runs can return the same answer
@@ -3184,20 +3179,17 @@ approval → authoritative graph.
       *explanation* is bit-identical run to run, not merely the conclusion
       — the same discipline the compiler's byte-identity gate applies to
       output.
-- [ ] **Graph pattern query planning** — extend `graph_query` beyond
       `entity + depth + predicate` into a bounded pattern API with typed
       variable constraints, traversing graph indexes only (never grepping
       Markdown/YAML). Score paths on edge confidence, provenance quality,
       temporal validity, contradiction state, and hop penalty, under hard
       bounds on hops/fan-out/budget.
-- [ ] **`GraphEvidencePack` — edge-grounded context packing** — return the
       minimal supporting triples + citations rather than pulling whole
       source blocks into the recall set (today's `kg_fusion` path finds an
       edge, then hydrates the source block). Fetch full blocks only on
       explicit demand. This is the K.2 half of the Group L
       utility-per-context-token metric: measure **tokens consumed per
       correctly answered graph question**.
-- [ ] **`GraphBackend` protocol + reproducible graph benchmarks** — keep
       SQLite as the zero-infrastructure backend; prove equivalent scale via
       a second backend (PostgreSQL recursive CTEs or a graph adapter).
       Benchmark 1-hop / 2-hop / 3–5-hop, high-fanout nodes, temporal edges,
@@ -3206,7 +3198,6 @@ approval → authoritative graph.
       nodes visited, and context tokens. **The benchmark must distinguish
       lexical retrieval from genuine relational reasoning** — otherwise it
       measures the retriever, not the graph.
-- [ ] **Ontology drift as a continuous, per-ingest concern (not a
       design-time one)** — the items above treat schema conformance as a
       gate applied to a corpus; in practice every new ingest *re-opens*
       the resolution question. `EntityRegistry.resolve()` mints a fresh
@@ -3225,7 +3216,6 @@ approval → authoritative graph.
       Depends on the description-grounded resolver and blocking +
       LLM-arbitration items in Group K; this entry is the *when*, those
       are the *how*.
-- [ ] **Resolution as reversible `SAME_AS` edges, never ID rewriting** —
       the Group K resolver items imply an approved merge collapses two
       entities into one id. That is the one irreversible mutation in an
       otherwise append-only store: it destroys the distinction it acted
@@ -3237,7 +3227,6 @@ approval → authoritative graph.
       derived-views-never-mutate rule the reasoner already obeys — the
       original entry simply failed to apply it to entity resolution,
       which is where it matters most.
-- [ ] **Deterministic scoring first; the model only in the gray band** —
       `_canonicalise()` is lowercase + whitespace-collapse only
       (`knowledge_graph.py`; its own docstring says "no fuzzy matching, no
       embeddings"), so `Dave` and `David Smith` mint two entities. Most of
@@ -3250,7 +3239,6 @@ approval → authoritative graph.
       between**. This narrows the LLM's role from "resolve entities" to
       "adjudicate the ambiguous band," which is the only part needing
       judgment.
-- [ ] **Decide merges on store-held state, never on model-supplied
       labels** — a merge proposal must be evaluated against the canonical
       record the store holds for each entity id, not against the
       proposing model's *description* of what it is merging. A gate that
@@ -3258,7 +3246,6 @@ approval → authoritative graph.
       not the action, and is decorative under an adversarial or merely
       sloppy proposer. Proposals reference opaque entity ids; the
       reviewer's rendering is resolved server-side at review time.
-- [ ] **Land the write gate in `dry-run` mode before it rejects** —
       every item above describes a validator that *refuses* a
       non-conforming write. There is no described way to turn it on. On a
       populated graph the first enforcing build rejects some fraction of
@@ -3280,7 +3267,6 @@ approval → authoritative graph.
       happens to the *write*, never what happens to a *broken rule* — an
       unparseable or absent shape still refuses. Cross-repo: this is the
       mind-mem half of naestro **R87**.
-- [ ] **Close the `Predicate.register()` contradiction (open, contradicts
       the gate above)** — this entry states custom predicates "must be
       declared in the workspace ontology before they are authoritative."
       That is **false today**: `Predicate.register()`
@@ -4282,3 +4268,106 @@ truth into an artifact outside the store — i.e. it has the breadth signal
 because it has no governance layer to put it in. We have the governance layer
 and lacked the signal. Idea only — no code adopted, no dependency added, nothing
 named in any public artifact.
+
+---
+
+## Deliberately not pursued (architectural audit, 2026-08-31)
+
+An architectural audit of all 122 open items found that roughly a quarter of
+them were **distribution fantasy for customers who do not exist**, and that each
+open checkbox is a standing claim that we intend to build it. They are captured
+here with the reasoning, in the same spirit as the "Don't bother" list above, so
+a future review pass does not re-litigate them.
+
+The common test applied: *is there a user, a deployment, or a threat model for
+this?* For everything below the answer was no.
+
+- ~~**mTLS for service-to-service** between mind-mem nodes~~
+  **Why not:** The 'Don't bother' section already rejected mTLS-on-stdio with the right reasoning. The federation is our own machines behind a bearer token plus the shipped peer allowlist.
+- ~~**Public / private workspaces** (`workspace.mode = public | private | mixed`)~~
+  **Why not:** Multi-tenant-shaped config with no second tenant.
+- ~~**ActivityPub federation interop** (optional bridge; low priority)~~
+  **Why not:** A memory store is not a fediverse server. The roadmap itself said 'low priority'; it should say nothing.
+- ~~**Row-level encryption on top of tenant KMS** — per-tenant KMS envelope keys **ship** (`tenant_kms.py`, real AESGCM); the open half is wiring row-level encryption over those keys~~
+  **Why not:** tenant_kms.py already shipped real AESGCM envelope keys for tenants that do not exist. Do not build the second storey of an empty building.
+- ~~**C2PA content provenance** — signed manifests on synthesis blocks~~
+  **Why not:** A media-industry manifest standard bolted onto markdown blocks. The native hash chain plus evidence objects is STRONGER provenance than C2PA would add.
+- ~~**Browser-native WebAssembly bundle**~~
+  **Why not:** Every consumer is a CLI agent over MCP. No browser client exists or is planned.
+- ~~**Go SDK publish + Rust / Java / Ruby SDK stubs** — Go client **exists in-tree** (`sdk/go/`, with tests); open work is module publishing; Rust/Java/Ruby not started~~
+  **Why not:** Stubs are inventory, not product. MCP IS the SDK: 96 tools reachable from 15+ clients today. The two real in-tree clients (JS, Go) plus the OpenAPI spec are the honest surface.
+  **Kept from this item:** publishing the two REAL in-tree clients survives as its own
+  entry below -- only the stub fan-out is cut.
+
+- ~~**SLSA build provenance level 3**~~
+  **Why not:** L3 specifically requires hosted isolated builders. Sigstore signing (shipped) already covers the honest claim for a PyPI package.
+- ~~**Plugin SDK** — stable API for custom rules / block kinds / detectors~~
+  **Why not:** Stabilising a public extension API is the opposite of what this codebase needs -- unbounded surface growth is already its measured disease. No third-party plugin author exists.
+- ~~**Chaos testing harness**~~
+  **Why not:** Scoped to federated deployments, which do not exist.
+- ~~**mTLS + cert pinning on `FederationClient`**~~
+  **Why not:** Same reasoning as mTLS service-to-service. Keep only the one-line TLS 1.3 floor, and keep per-peer identity, which is an ATTRIBUTION feature and stays.
+- ~~**Kubernetes operator + Helm chart**~~
+  **Why not:** No cluster, no second deployment, and the product's ethos is zero-dependency localhost. A hosted customer would re-justify it; a roadmap slot does not.
+- ~~**Byzantine-safe consensus (PBFT)** — opt-in, long-horizon~~
+  **Why not:** The threat model is a single operator with a shared secret. PBFT needs 3f+1 mutually-distrusting nodes; here the HITL human IS the consensus mechanism.
+- ~~**Edge deployment mode** — PyOxidizer single-binary~~
+  **Why not:** The 'edge deployment' of a localhost tool is localhost, and the Pure-MIND port is already the chosen single-binary endgame. This duplicates it, worse.
+- ~~**Managed-service console** — multi-tenant dashboard~~
+  **Why not:** A business-model claim, not a feature. There is no service and no tenant #2.
+- ~~**Kafka / NATS event fan-out**~~
+  **Why not:** Governance-event volume for one operator is a webhook, and alerting.py already ships webhooks. A broker is an ops dependency that contradicts the product.
+- ~~**`[CAUSAL]` block type** — world-model storage for learned state transitions~~
+  **Why not:** ARC-AGI-3 harness work that wandered into the memory layer's roadmap. Belongs in the consumer repo.
+- ~~**`[SKILL]` block type** — named strategy captures with preconditions / effects / success-rate~~
+  **Why not:** Duplicates Group L2, which already holds the idea at EVALUATE with the sharper observation that a strategy's staleness is harder to detect than a fact's.
+- ~~**Cross-domain recall adapter** — surface most-similar `[TRAJECTORY]` / `[SKILL]` blocks across environments~~
+  **Why not:** Same ARC-AGI-3 bleed-through as the block types above.
+- ~~**`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory~~
+  **Why not:** Grid-state embeddings in a governed store for CODING agents answer no question any consumer asks.
+- ~~**Evidence-chain submission format** — tamper-evident per-episode export~~
+  **Why not:** Per-episode export for the ARC harness, not for this product.
+- ~~**T-008: SQLCipher coverage for FTS5 + sqlite-vec indices.**~~
+  **Why not:** Deferred 'until a multi-tenant deploy target', and the operator runs Postgres, where it does not apply.
+- ~~**WORM audit chain.** Beyond append-only flag — separate~~
+  **Why not:** Its own text says 'only relevant for compliance customers'. Note the irony: its honest sibling append_only shipped and is inert.
+- ~~**Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0. v3.2.0 already emits `[[wikilinks]]` on `vault_sync` so an Obsidian-mounted vault gets a graph view for free; this web UI is the non-Obsidian alternative. **Frontend work — separate from the retrieval shipments above.**~~
+  **Why not:** Three viewer items exist (this Next.js app, `mm view`, and RA.5's dashboard). One local stdlib viewer serves a single operator; render RA.5 inside `mm view`.
+- ~~**mTLS for service-to-service** — mutual auth between mind-mem nodes not implemented; today's threat model is single-operator shared-secret. Tracked.~~
+  **Why not:** The 'Don't bother' section already rejected mTLS-on-stdio with the right reasoning. The federation is our own machines behind a bearer token plus the shipped peer allowlist.
+- ~~**Public / private workspaces** — `workspace.mode = public | private | mixed` configuration not surfaced. Tracked.~~
+  **Why not:** Multi-tenant-shaped config with no second tenant.
+- ~~**ActivityPub federation interop** — optional bridge dep not built. Tracked (low priority).~~
+  **Why not:** A memory store is not a fediverse server. The roadmap itself said 'low priority'; it should say nothing.
+- ~~**Kubernetes operator + Helm chart** — `operator/` + `deploy/helm/` not shipped. Tracked.~~
+  **Why not:** No cluster, no second deployment, and the product's ethos is zero-dependency localhost. A hosted customer would re-justify it; a roadmap slot does not.
+- ~~**Byzantine-safe consensus** — PBFT for adversarial-quorum deployments not implemented. Tracked (long-horizon).~~
+  **Why not:** The threat model is a single operator with a shared secret. PBFT needs 3f+1 mutually-distrusting nodes; here the HITL human IS the consensus mechanism.
+- ~~**Edge deployment mode** — `mind-mem-edge` PyOxidizer binary not built. Tracked.~~
+  **Why not:** The 'edge deployment' of a localhost tool is localhost, and the Pure-MIND port is already the chosen single-binary endgame. This duplicates it, worse.
+- ~~**Managed-service console** — `web/console/` multi-tenant dashboard not built. Tracked.~~
+  **Why not:** A business-model claim, not a feature. There is no service and no tenant #2.
+- ~~**Kafka / NATS event fan-out** — governance events as streams not exposed. Tracked.~~
+  **Why not:** Governance-event volume for one operator is a webhook, and alerting.py already ships webhooks. A broker is an ops dependency that contradicts the product.
+- ~~**Row-level encryption over tenant KMS** — `src/mind_mem/tenant_kms.py` ships per-tenant AESGCM envelope keys; the row-level encryption layer above the existing `EncryptedBlockStore` is the open half. Tracked.~~
+  **Why not:** tenant_kms.py already shipped real AESGCM envelope keys for tenants that do not exist. Do not build the second storey of an empty building.
+- ~~**C2PA content provenance** — C2PA-signed manifests on chat-layer synthesis blocks not implemented. Tracked (depends on chat layer above).~~
+  **Why not:** A media-industry manifest standard bolted onto markdown blocks. The native hash chain plus evidence objects is STRONGER provenance than C2PA would add.
+- ~~**Browser-native WebAssembly bundle** — WASM read-only client not built. Tracked.~~
+  **Why not:** Every consumer is a CLI agent over MCP. No browser client exists or is planned.
+- ~~**SLSA build provenance level 3** — partial via Sigstore; isolated-builder attestations not yet wired. Tracked.~~
+  **Why not:** L3 specifically requires hosted isolated builders. Sigstore signing (shipped) already covers the honest claim for a PyPI package.
+- ~~**Plugin SDK** — stable plug-in API for custom rules / block kinds / decay schedules / redaction detectors not formalised. Tracked.~~
+  **Why not:** Stabilising a public extension API is the opposite of what this codebase needs -- unbounded surface growth is already its measured disease. No third-party plugin author exists.
+- ~~**Chaos testing harness** — automated fault injection for federated deployments not built. Tracked.~~
+  **Why not:** Scoped to federated deployments, which do not exist.
+- ~~**`[CAUSAL]` block type** — world-model storage for learned state transitions (observation → action → next-observation); consumed by the host agent's planner during multi-step lookahead~~
+  **Why not:** ARC-AGI-3 harness work that wandered into the memory layer's roadmap. Belongs in the consumer repo.
+- ~~**`[SKILL]` block type** — named strategy captures with preconditions, effects, and success-rate metadata; retrievable by skill-name or by applicable-context similarity~~
+  **Why not:** Duplicates Group L2, which already holds the idea at EVALUATE with the sharper observation that a strategy's staleness is harder to detect than a fact's.
+- ~~**Cross-domain recall adapter** — given a novel environment, surface the most similar `[TRAJECTORY]` / `[SKILL]` blocks from unrelated environments by feature-embedding similarity rather than exact environment-id match~~
+  **Why not:** Same ARC-AGI-3 bleed-through as the block types above.
+- ~~**`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory; enables "I've seen this state before" recall across environments~~
+  **Why not:** Grid-state embeddings in a governed store for CODING agents answer no question any consumer asks.
+- ~~**Evidence-chain submission format** — tamper-evident export of an agent's full decision history per episode, ready for third-party scorecard verification~~
+  **Why not:** Per-episode export for the ARC harness, not for this product.
