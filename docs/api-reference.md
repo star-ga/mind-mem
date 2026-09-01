@@ -59,9 +59,9 @@ Useful if you're writing a custom MCP config writer.
 
 ---
 
-## MCP Server (98 tools, 8 resources)
+## MCP Server (101 tools, 8 resources)
 
-The MCP server exposes 98 distinct tools via JSON-RPC (99 `mcp.tool` registrations; the consolidated `recall` dispatcher shadows the base `recall`). See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
+The MCP server exposes 101 distinct tools via JSON-RPC (102 `mcp.tool` registrations; the consolidated `recall` dispatcher shadows the base `recall`). See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
 
 ### Starting the Server
 
@@ -116,6 +116,20 @@ python3 mcp_server.py --workspace /path/to/workspace
 | `validate_block` | Deterministic quality gate: validate schema, coherence, reference integrity | `block_id` |
 | `block_lineage` | Retrieve typed relationship edges for a block (cites/implements/refines/contradicts/cooccurrence) | `block_id`, `direction` (`forward`/`backward`/`both`) |
 | `add_block_edge` | Create a typed relationship edge between two blocks | `source_block_id`, `target_block_id`, `relationship` (`cites`/`implements`/`refines`/`contradicts`/`cooccurrence`) |
+
+#### Corpus Lint (`v4.lint`, default OFF)
+
+Post-storage scan of the governed corpus, and the one governed way to repair
+what it finds. Complementary to `validate_block`, not a replacement: the
+quality gate filters a *candidate* before it is staged, the lint scans blocks
+that are already stored, and the two share no rule. Both tools return a
+structured `v4.lint is disabled` payload until the flag is set in
+`mind-mem.json`.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `lint` | Report deterministic corpus defects — `stale_date`, `missing_metadata`, `duplicate_block` — each with a stable content-addressed `LF-xxxxxxxx` id. Read-only | `rule` (optional single rule) |
+| `lint_autofix` | Stage a repair **proposal** for one finding. Never writes the corpus; `approve_apply` remains the only thing that changes a block (ADMIN) | `finding_id` |
 
 #### MIND Kernels
 

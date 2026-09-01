@@ -179,6 +179,7 @@ from mind_mem.mcp.tools.consolidation import (  # noqa: E402, F401
 )
 from mind_mem.mcp.tools.core import (  # noqa: E402, F401
     build_core,
+    export_core,
     list_cores,
     load_core,
     unload_core,

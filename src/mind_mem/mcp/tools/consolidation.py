@@ -4,7 +4,9 @@ Extracted from ``mcp_server.py`` per docs/v3.2.0-mcp-decomposition-plan.md
 (PR-3 slice, consolidation domain). Four tools cover the "memory
 settles over time" surface:
 
-* ``plan_consolidation`` — dry-run of the cognitive-forgetting cycle.
+* ``plan_consolidation`` — dry-run of the cognitive-forgetting cycle,
+  optionally carrying a proposal-only ``granularity_align`` section
+  (``v4.granularity_align``, default OFF).
 * ``propagate_staleness`` — diffusion of staleness scores over xrefs.
 * ``project_profile`` — structured session-start intelligence
   summary.
@@ -59,6 +61,15 @@ def plan_consolidation(
     byte-for-byte what it was before the gate existed. Turning it on holds
     back blocks below ``min_maturity`` and any block on a live contradiction,
     and adds a ``maturity_gate`` report section to the response.
+
+    A second, independently gated section — ``granularity_align`` — appears
+    only when ``v4.granularity_align`` is on in the workspace's (or the
+    ambient) ``mind-mem.json``. It lists pairs of blocks that say the same
+    thing at different levels of abstraction, together with the merged block
+    each pair would collapse to. It is **proposal-only**: the section is data,
+    nothing is written, and a merge reaches the corpus only by being routed
+    through ``propose_update`` and executed by ``approve_apply``. With the
+    flag off the section is absent and no extra byte is read or emitted.
     """
     from mind_mem.cognitive_forget import (
         BlockCognition,
@@ -133,10 +144,18 @@ def plan_consolidation(
         "_schema_version": "1.0",
     }
 
+    # v4.granularity_align plug point. The probe below is quiet and
+    # fail-closed: with the flag off nothing is read from the corpus, no key
+    # is added, and the JSON stays byte-for-byte what it was.
+    granularity = _granularity_settings(ws)
+    granularity_on = isinstance(granularity, dict) and granularity.get("enabled") is True
+
     if not maturity_gate:
         # Default path — no gate object is ever built, so the response is
         # identical to the pre-gate implementation.
         payload["plan"] = _plan(blocks, config=cfg).as_dict()
+        if granularity_on:
+            payload["granularity_align"] = _granularity_section(db_path, granularity)
         return json.dumps(payload, indent=2)
 
     from mind_mem.consolidation_maturity_gate import (
@@ -158,6 +177,8 @@ def plan_consolidation(
     decision = gate.evaluate(blocks)
     payload["plan"] = _plan(blocks, config=cfg, gate=gate).as_dict()
     payload["maturity_gate"] = {"min_maturity": gate_cfg.min_maturity, **decision.as_dict()}
+    if granularity_on:
+        payload["granularity_align"] = _granularity_section(db_path, granularity)
     return json.dumps(payload, indent=2)
 
 
@@ -193,6 +214,217 @@ def _load_block_meta(db_path: str) -> dict[str, dict[str, Any]]:
         entry["Status"] = r["status"] or entry.get("Status", "")
         meta[r["id"]] = entry
     return meta
+
+
+# ---------------------------------------------------------------------------
+# v4.granularity_align — proposal-only merge candidates (default OFF)
+# ---------------------------------------------------------------------------
+
+#: v4 feature flag gating the ``granularity_align`` section of the plan.
+_GRANULARITY_FLAG = "granularity_align"
+
+#: Frontmatter fields, in a fixed order, whose text carries the claim a block
+#: makes. Fixed order because the concatenation feeds a similarity score, and a
+#: score that depended on dict iteration order would not be reproducible.
+_GRANULARITY_TEXT_FIELDS = ("Statement", "Title", "Summary", "Description", "Context", "Name")
+
+#: Default ceiling on blocks compared per call. Candidate detection is O(n^2)
+#: in the number of blocks, so an unbounded scan would turn one MCP call into a
+#: multi-minute pin of the server on a large corpus. Raise it deliberately via
+#: the flag's ``max_blocks`` key, with that cost in mind.
+_GRANULARITY_MAX_BLOCKS = 400
+
+#: Default ceiling on returned candidates (the module's own default is 50).
+_GRANULARITY_MAX_CANDIDATES = 20
+
+
+def _granularity_settings(ws: str) -> dict[str, Any]:
+    """Read ``v4.granularity_align`` for *ws* — fail-closed and QUIET.
+
+    Workspace config first, ambient config second, exactly as
+    :func:`mind_mem.maintenance_migrate.flag_enabled` resolves its own flag:
+    this tool's whole subject is one explicit workspace directory, so that
+    directory's ``mind-mem.json`` outranks whatever the process environment
+    happens to point at — while ``MIND_MEM_CONFIG`` still works for a caller
+    that sets it.
+
+    Deliberately does NOT call ``feature_flags.is_enabled``. That helper logs
+    ``v4_config_unreadable`` when the config will not parse, and this probe
+    runs on the DEFAULT path of the tool — so with the flag off and a
+    malformed ``mind-mem.json`` the wired build would emit a line the unwired
+    build does not. A probe deciding whether a feature is on must not itself
+    be observable when the answer is no; ``flag_config(..., quiet=True)`` is
+    the same lookup with the logging and the warning-dedup bookkeeping
+    skipped.
+
+    Returns the raw sub-config (possibly empty). The caller applies the
+    canonical ``{"enabled": true}`` test, so a bare ``true`` — or any other
+    truthy shape — still cannot switch the surface on.
+    """
+    try:
+        with open(os.path.join(ws, "mind-mem.json"), encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        data = None
+    if isinstance(data, dict):
+        block = data.get("v4")
+        if isinstance(block, dict) and isinstance(block.get(_GRANULARITY_FLAG), dict):
+            return dict(block[_GRANULARITY_FLAG])
+
+    try:
+        from mind_mem.v4.feature_flags import flag_config
+
+        ambient = flag_config(_GRANULARITY_FLAG, quiet=True)
+    except Exception:
+        # Unimportable registry, unreadable config, a non-dict v4 block: every
+        # one of them means "off", and none of them may be announced here.
+        return {}
+    return dict(ambient) if isinstance(ambient, dict) else {}
+
+
+def _bounded_float(raw: Any, default: float, low: float, high: float) -> float:
+    """Coerce a config value into ``[low, high]``, falling back to *default*."""
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if value != value:  # NaN — comparisons below would silently pass it through
+        return default
+    return max(low, min(high, value))
+
+
+def _bounded_int(raw: Any, default: int, low: int, high: int) -> int:
+    """Coerce a config value into ``[low, high]``, falling back to *default*."""
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, value))
+
+
+def _load_granularity_blocks(db_path: str, limit: int) -> list[dict[str, Any]]:
+    """Read the block text granularity alignment compares. Flag-gated caller only.
+
+    Top-level blocks only (``parent_id = ''``): the sub-blocks are extracted
+    fact cards, and proposing a merge of two fact cards would propose editing
+    something no file holds.
+
+    ``ORDER BY id LIMIT ?`` — a deterministic prefix, so the same corpus and
+    the same cap always compare the same blocks. No clock is read here or
+    anywhere below it.
+
+    Never raises: an index that cannot be read degrades to an empty list, and
+    an empty list yields no candidates, which is the safe direction for a
+    surface whose output is a proposal.
+
+    **Admission-filtered.** The rows go through ``admit_corpus`` before any
+    text is read out of them. Without that this leg surfaced QUARANTINED and
+    PENDING block text verbatim through ``plan_consolidation`` -- a USER-scope
+    MCP tool -- which is a quarantine bypass: untrusted content became readable
+    without ever passing admission. Selecting ``status`` is not filtering on
+    it. Every other block-reading leg in the package calls ``admit_corpus``
+    (entity_prefetch, graph_recall, kg_fusion, _recall_core, hybrid_recall);
+    this one is now one of them.
+    """
+    import sqlite3 as _sqlite3
+
+    blocks: list[dict[str, Any]] = []
+    if not os.path.isfile(db_path):
+        return blocks
+    try:
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT id, status, tags, json_blob FROM blocks WHERE parent_id = '' ORDER BY id LIMIT ?",
+                (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+    except _sqlite3.Error as exc:
+        _log.warning("granularity_align_read_failed", error=str(exc))
+        return blocks
+
+    # ADMISSION GATE. Selecting `status` is not filtering on it: without this
+    # call the leg surfaced QUARANTINED and PENDING block text verbatim through
+    # plan_consolidation, a USER-scope MCP tool -- untrusted content readable
+    # without ever passing admission. Every other block-reading leg in the
+    # package filters here (entity_prefetch, graph_recall, kg_fusion,
+    # _recall_core, hybrid_recall); this one is now one of them.
+    from mind_mem.admissibility import admit_corpus
+
+    admitted = admit_corpus([{"_id": r["id"], "Status": r["status"], "_row": r} for r in rows])
+
+    for _entry in admitted:
+        r = _entry["_row"]
+        try:
+            raw = json.loads(r["json_blob"] or "{}")
+        except (json.JSONDecodeError, TypeError, ValueError):
+            raw = {}
+        if not isinstance(raw, dict):
+            raw = {}
+        text = " ".join(str(raw[field]) for field in _GRANULARITY_TEXT_FIELDS if isinstance(raw.get(field), str) and raw[field])
+        entry: dict[str, Any] = {
+            "_id": r["id"],
+            "content": text,
+            "tags": r["tags"] or str(raw.get("Tags") or ""),
+            "Status": r["status"] or str(raw.get("Status") or ""),
+        }
+        if "Maturity" in raw:
+            entry["Maturity"] = raw["Maturity"]
+        blocks.append(entry)
+    return blocks
+
+
+def _granularity_section(db_path: str, settings: dict[str, Any]) -> dict[str, Any]:
+    """Build the proposal-only merge-candidate section of the plan.
+
+    Runs only with ``v4.granularity_align`` on. Every value here is a pure
+    function of (indexed blocks, settings): :mod:`mind_mem.granularity_align`
+    reads no clock and draws no randomness, and the candidate order is the
+    module's own deterministic sort.
+
+    **This function never writes.** It reads the index read-only and returns
+    data. ``applied`` is a constant ``false`` and ``route`` names the only
+    path a merge may take to the corpus — ``propose_update`` then
+    ``approve_apply`` — because the merged block in each entry is a
+    *suggestion*, and the HITL gate is what turns a suggestion into a write.
+    """
+    from mind_mem.granularity_align import (
+        DEFAULT_MIN_SIMILARITY,
+        find_merge_candidates,
+        merge_blocks,
+    )
+
+    min_similarity = _bounded_float(settings.get("min_similarity", DEFAULT_MIN_SIMILARITY), DEFAULT_MIN_SIMILARITY, 0.0, 1.0)
+    max_candidates = _bounded_int(settings.get("max_candidates", _GRANULARITY_MAX_CANDIDATES), _GRANULARITY_MAX_CANDIDATES, 0, 500)
+    max_blocks = _bounded_int(settings.get("max_blocks", _GRANULARITY_MAX_BLOCKS), _GRANULARITY_MAX_BLOCKS, 1, 5000)
+
+    blocks = _load_granularity_blocks(db_path, max_blocks)
+    candidates = find_merge_candidates(blocks, min_similarity=min_similarity, max_candidates=max_candidates)
+
+    entries: list[dict[str, Any]] = []
+    for cand in candidates:
+        merged = merge_blocks(cand.block_a, cand.block_b, strategy=cand.suggested_strategy)
+        entry = cand.to_dict()
+        entry["merged"] = {
+            "block_id": str(merged.get("_id", "")),
+            "merged_from": [str(bid) for bid in merged.get("_merged_from", [])],
+            "tags": str(merged.get("tags", "")),
+            "statement": str(merged.get("content") or merged.get("excerpt") or "")[:500],
+        }
+        entries.append(entry)
+
+    return {
+        "min_similarity": min_similarity,
+        "max_candidates": max_candidates,
+        "max_blocks": max_blocks,
+        "scanned_blocks": len(blocks),
+        "truncated": len(blocks) >= max_blocks,
+        "candidates": entries,
+        "applied": False,
+        "route": "propose_update -> approve_apply",
+    }
 
 
 @mcp_tool_observe

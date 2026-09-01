@@ -76,6 +76,9 @@ from mind_mem.mcp.tools import (
     lineage as _tools_lineage,
 )
 from mind_mem.mcp.tools import (
+    lint as _tools_lint,
+)
+from mind_mem.mcp.tools import (
     memory_ops as _tools_memory_ops,
 )
 from mind_mem.mcp.tools import (
@@ -142,6 +145,7 @@ _tools_mic_map.register(mcp)
 _tools_walkthrough_persona.register(mcp)
 _tools_pipeline.register(mcp)
 _tools_quality.register(mcp)
+_tools_lint.register(mcp)
 _tools_lineage.register(mcp)
 _tools_chat.register(mcp)
 

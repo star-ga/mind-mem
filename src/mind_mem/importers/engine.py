@@ -32,6 +32,7 @@ from ..block_provenance import attach_provenance
 from ..capture import content_hash
 from ..enums import IngestTier
 from ..observability import get_logger
+from .okf_source import OKF_SYSTEM
 from .quarantine import (
     BATCH_FIELD,
     QUARANTINE_STATUS,
@@ -119,6 +120,14 @@ def load_source(system: str, path: str) -> Any:
         ImportParseError: the source is missing, the wrong kind of path,
             oversized, or malformed for its shape.
     """
+    if system == OKF_SYSTEM:
+        # Not folded into DIRECTORY_SYSTEMS: that frozenset is a public,
+        # test-pinned constant naming the note-tree formats, and okf is a
+        # FLAG-GATED source (see importers.resolve_system). Widening a
+        # published constant would change what a flag-off build reports.
+        from .okf_source import load_okf_bundle
+
+        return load_okf_bundle(path)
     if system in DIRECTORY_SYSTEMS:
         from .fs_source import load_note_tree
 

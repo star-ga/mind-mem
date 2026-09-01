@@ -47,6 +47,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any, Iterable
 
+from .feature_gate import FeatureGate, FieldSpec, multi_hop_detector, strict_int, strict_number
 from .observability import get_logger
 
 _log = get_logger("graph_recall")
@@ -279,6 +280,42 @@ def graph_expand(
     return list(results) + appended
 
 
+#: The ``retrieval.multi_hop`` gate, declared once.
+#:
+#: This module used to carry its own copy of the enable/resolve pair every
+#: v3.3.0 retrieval feature shipped. The copies had drifted (bounds checked
+#: in one, skipped in another), so the shared resolver in
+#: :mod:`mind_mem.feature_gate` now owns the mechanism and this declaration
+#: owns the policy. ``implicit_section=True`` keeps the historical reading of
+#: a config that has a ``retrieval`` block but no ``multi_hop`` key: the old
+#: ``retrieval.get("multi_hop", {})`` treated that as an empty section, so
+#: auto-enable still fired on a multi-hop query. The ceiling of 3 on
+#: ``max_hops`` (config-driven-DoS guard, security review 2026-04-20) rides
+#: in the coercion so it survives the move.
+GRAPH_EXPAND_GATE = FeatureGate(
+    name="multi_hop",
+    fields={
+        "max_hops": FieldSpec(
+            default=2,
+            coerce=lambda v: min(3, strict_int(v)),
+            validate=lambda v: v > 0,
+        ),
+        "decay": FieldSpec(
+            default=0.5,
+            coerce=strict_number,
+            validate=lambda v: 0 < v <= 1,
+        ),
+        "max_neighbors_per_hop": FieldSpec(
+            default=5,
+            coerce=strict_int,
+            validate=lambda v: v > 0,
+        ),
+    },
+    auto_detector=multi_hop_detector,
+    implicit_section=True,
+)
+
+
 def is_graph_expand_enabled(
     config: dict[str, Any] | None,
     query: str | None = None,
@@ -289,27 +326,11 @@ def is_graph_expand_enabled(
       1. ``retrieval.multi_hop.enabled: true`` — always on.
       2. ``retrieval.multi_hop.auto_enable: false`` — always off.
       3. Auto-enable when the query classifies as multi-hop.
-    """
-    if not config or not isinstance(config, dict):
-        return False
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return False
-    mh = retrieval.get("multi_hop", {})
-    if not isinstance(mh, dict):
-        return False
-    if mh.get("enabled", False):
-        return True
-    if not mh.get("auto_enable", True):
-        return False
-    if not query:
-        return False
-    try:
-        from ._recall_detection import detect_query_type
 
-        return detect_query_type(query) == "multi-hop"
-    except Exception:  # pragma: no cover
-        return False
+    Delegates to :data:`GRAPH_EXPAND_GATE`; the priority order above is
+    the gate's, not a second implementation of it.
+    """
+    return GRAPH_EXPAND_GATE.is_enabled(config, query=query)
 
 
 def _uncertainty_block(config: dict[str, Any] | None) -> dict[str, Any]:
@@ -382,33 +403,15 @@ def resolve_chain_decay(config: dict[str, Any] | None) -> float:
 def resolve_graph_config(config: dict[str, Any] | None) -> dict[str, Any]:
     """Extract graph-expansion parameters from config with defaults.
 
-    The uncertainty keys are emitted **only** when the surface is enabled,
-    so the flag-off return value is exactly the three-key dict it has
-    always been and ``graph_expand`` is called with its historical
+    The three walk knobs come from :data:`GRAPH_EXPAND_GATE`. The
+    uncertainty keys stay hand-read here because they live one level
+    deeper (``retrieval.multi_hop.uncertainty``) than the one section a
+    gate addresses, and they are emitted **only** when that surface is
+    enabled — so the flag-off return value is exactly the three-key dict
+    it has always been and ``graph_expand`` is called with its historical
     argument set.
     """
-    defaults: dict[str, Any] = {
-        "max_hops": 2,
-        "decay": 0.5,
-        "max_neighbors_per_hop": 5,
-    }
-    if not config or not isinstance(config, dict):
-        return defaults
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return defaults
-    mh = retrieval.get("multi_hop", {})
-    if not isinstance(mh, dict):
-        return defaults
-    out = dict(defaults)
-    if isinstance(mh.get("max_hops"), int) and mh["max_hops"] > 0:
-        # Hard ceiling of 3 — defends against config-driven DoS
-        # via wide graphs (security review 2026-04-20).
-        out["max_hops"] = min(3, int(mh["max_hops"]))
-    if isinstance(mh.get("decay"), (int, float)) and 0 < mh["decay"] <= 1:
-        out["decay"] = float(mh["decay"])
-    if isinstance(mh.get("max_neighbors_per_hop"), int) and mh["max_neighbors_per_hop"] > 0:
-        out["max_neighbors_per_hop"] = int(mh["max_neighbors_per_hop"])
+    out: dict[str, Any] = GRAPH_EXPAND_GATE.resolve(config)
     if is_uncertainty_enabled(config):
         out["uncertainty"] = True
         out.update(resolve_uncertainty_params(config))
@@ -416,6 +419,7 @@ def resolve_graph_config(config: dict[str, Any] | None) -> dict[str, Any]:
 
 
 __all__ = [
+    "GRAPH_EXPAND_GATE",
     "graph_expand",
     "is_graph_expand_enabled",
     "is_uncertainty_enabled",

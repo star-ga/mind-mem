@@ -44,7 +44,6 @@ from ._recall_detection import (
     _INTENT_TO_QUERY_TYPE,
     _QUERY_TYPE_PARAMS,
     _parse_speaker_from_tags,
-    chunk_text,
     decompose_query,
     detect_query_type,
     extract_field_tokens,
@@ -66,6 +65,7 @@ from .enums import TaskStatus
 from .guardrail_surface import apply_guardrail_surfacing
 from .guardrails import GuardrailContext, GuardrailPolicy
 from .observability import get_logger, metrics
+from .recall_smart_chunk import chunk_statement, resolve_smart_chunking_config
 from .retrieval_graph import (
     feedback_quality_credit,
     get_hard_negative_ids,
@@ -1113,7 +1113,14 @@ def recall(
     _stage_counts["corpus_loaded"] = len(all_blocks)
 
     # --- Overlapping chunk expansion (1.7) — config-gated ---
-    _chunk_recall_cfg = _get_config(workspace).get("recall", {})
+    _recall_config = _get_config(workspace)
+    _chunk_recall_cfg = _recall_config.get("recall", {})
+
+    # Boundary source for the chunk-scoring boost below. Resolved ONCE, outside
+    # the per-block loop, from the already-cached config: a pure read that
+    # cannot log, raise, or touch the clock. Default-off — see
+    # recall_smart_chunk.resolve_smart_chunking_config.
+    _smart_chunk_cfg = resolve_smart_chunking_config(_recall_config)
     _chunk_overlap = 0
     _chunk_max_tokens = 400
     try:
@@ -1213,7 +1220,7 @@ def recall(
         # For long blocks, check if a sub-chunk scores higher than the whole
         statement = block.get("Statement", "") or block.get("Title", "") or ""
         if len(statement) > 200:
-            chunks = chunk_text(statement)
+            chunks = chunk_statement(statement, _smart_chunk_cfg)
             if len(chunks) > 1:
                 best_chunk_score = 0.0
                 for chunk in chunks:

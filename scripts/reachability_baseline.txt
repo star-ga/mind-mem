@@ -1,6 +1,6 @@
 # Reachability debt register — the file only ever SHRINKS.
 #
-# 2026-09-01: re-seeded after the 5.1.0 RESTORATION.
+# 2026-09-01: 39 -> 35 (slice 1) -> 30 (slice 2). Re-seeded after the 5.1.0 RESTORATION.
 #
 # 5.0.0 deleted 44 modules (13,594 LOC) as unreachable and emptied this file.
 # That was overturned: "nothing imports it" is evidence about WIRING, never
@@ -12,3 +12,33 @@
 # ADDITIONS, so each slice shrinks this file and CI stays green throughout.
 # Six modules are deliberately not wired and carry a documented re-entry
 # condition rather than a deletion.
+api.grpc_server
+bootstrap_corpus
+consensus_vote
+error_codes
+event_fanout
+governance_raft
+ingestion_pipeline
+llm_noise_profile
+memory_mesh
+mind_kernels
+mrs
+multi_modal
+online_trainer
+storage.sharded_pg
+streaming
+tenant_audit
+tenant_kms
+tracking
+trajectory
+turbo_quant
+v4.backpressure
+v4.block_kinds
+v4.block_metadata
+v4.embedding_pipeline
+v4.health
+v4.hnsw_kind_index
+v4.kernels
+v4.kind_summaries
+v4.pq
+v4.vocabulary

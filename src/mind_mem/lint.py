@@ -45,7 +45,8 @@ from dataclasses import dataclass
 from typing import Final, Mapping, Sequence
 
 from .block_parser import parse_file
-from .v4.feature_flags import FeatureDisabledError, is_enabled
+from .v4.feature_flags import FeatureDisabledError
+from .validate_py import REQUIRED_FIELDS_BY_PREFIX
 
 __all__ = [
     "Finding",
@@ -56,6 +57,8 @@ __all__ = [
     "RULE_MISSING_METADATA",
     "RULE_STALE_DATE",
     "find_finding",
+    "flag_enabled",
+    "is_finding_id",
     "lint",
 ]
 
@@ -76,12 +79,15 @@ _LINTED_FILES: Final[tuple[tuple[str, str], ...]] = (
     ("tasks/TASKS.md", "T"),
 )
 
-#: Schema-required fields per id prefix — copied from ``validate_py``'s
-#: ``_check_decisions`` / ``_check_tasks`` required lists.
-_REQUIRED_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
-    "D": ("Date", "Status", "Scope", "Statement", "Rationale", "Supersedes", "Tags", "Sources"),
-    "T": ("Date", "Title", "Status", "Priority", "Project", "Owner", "Sources"),
-}
+#: Schema-required fields per id prefix — the incumbent's own lists, NOT a
+#: copy of them. ``validate_py`` is the SPEC.md enforcement engine; a lint
+#: that disagrees with it about which fields are required is advising against
+#: a different schema than the one the gate applies. The copy that used to sit
+#: here had already drifted: it named 7 task fields where ``_check_tasks``
+#: requires 12, so ``missing_metadata`` stayed silent on ``Due``, ``Context``,
+#: ``Next``, ``Dependencies`` and ``History`` — five fields the validator
+#: fails a corpus for.
+_REQUIRED_FIELDS: Final[Mapping[str, tuple[str, ...]]] = REQUIRED_FIELDS_BY_PREFIX
 
 #: The only defaults the lint is willing to propose. Both are closed-set
 #: schema sentinels, not content — inventing a ``Statement`` or a
@@ -292,31 +298,68 @@ def _scan_duplicate_block(blocks: Sequence[dict], rel_path: str, prefix: str) ->
     return out
 
 
-def _flag_enabled(workspace: str) -> bool:
+def _ambient_flag_enabled() -> bool:
+    """``v4.lint`` from the AMBIENT config, read fail-closed and QUIET.
+
+    Deliberately NOT ``feature_flags.is_enabled``. That helper logs
+    ``v4_config_unreadable`` when the active config will not parse, and this
+    probe is what the CLI and the MCP tools consult to decide whether the
+    surface is on at all — so on a workspace with a malformed
+    ``mind-mem.json`` and the flag OFF, the wired build would emit a stderr
+    line the unwired build does not. A probe deciding whether a feature is on
+    must not itself be observable when the answer is no.
+
+    The canonical resolver is reused, so ``MIND_MEM_CONFIG`` and the workspace
+    search order still apply, as is the canonical ``{"enabled": true}``
+    interpretation, so a bare truthy value still cannot switch the surface on.
+    """
+    try:
+        from .v4.feature_flags import _config_path
+
+        path = _config_path()
+        if not path.is_file():
+            return False
+        data = json.loads(path.read_text(encoding="utf-8"))
+        block = data.get("v4") if isinstance(data, dict) else None
+        sub = block.get("lint") if isinstance(block, dict) else None
+        return isinstance(sub, dict) and sub.get("enabled") is True
+    except Exception:
+        return False
+
+
+def flag_enabled(workspace: str) -> bool:
     """``v4.lint`` state for *workspace*, falling back to ambient config.
 
     ``feature_flags.is_enabled`` resolves config from the environment,
     which is right for process-wide surfaces but wrong for an API that
     takes an explicit workspace — so the workspace's own
     ``mind-mem.json`` is consulted first.
+
+    Reads only, logs nothing, raises nothing: a caller can ask "is this
+    surface on?" without the asking being observable. Unset (the default)
+    → ``False``.
     """
     config_path = os.path.join(workspace, "mind-mem.json")
     try:
         with open(config_path, encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, ValueError):
-        return is_enabled("lint")
-    block = data.get("v4")
+        return _ambient_flag_enabled()
+    block = data.get("v4") if isinstance(data, dict) else None
     if isinstance(block, dict):
         sub = block.get("lint")
         if isinstance(sub, dict):
             return sub.get("enabled") is True
-    return is_enabled("lint")
+    return _ambient_flag_enabled()
+
+
+#: Historical private name — kept so callers written against it keep working.
+_flag_enabled = flag_enabled
 
 
 def require_lint_enabled(workspace: str) -> None:
     """Raise :class:`FeatureDisabledError` when ``v4.lint`` is OFF."""
-    if not _flag_enabled(workspace):
+    if not flag_enabled(workspace):
         raise FeatureDisabledError(
             'mind-mem v4 surface \'lint\' is disabled. Enable via mind-mem.json: "v4": { "lint": { "enabled": true } }'
         )

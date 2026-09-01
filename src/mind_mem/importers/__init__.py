@@ -81,6 +81,7 @@ from .records import (
 __all__ = [
     "SUPPORTED_SYSTEMS",
     "DEFERRED_SYSTEMS",
+    "GATED_SYSTEMS",
     "DIRECTORY_SYSTEMS",
     "ALL_SYSTEMS",
     "IMPORT_BLOCK_PREFIX",
@@ -101,6 +102,7 @@ __all__ = [
     "admitted_import_ids",
     "batch_id_for",
     "block_id_for",
+    "enabled_gated_systems",
     "build_import_block",
     "is_quarantined",
     "load_dump",
@@ -129,25 +131,55 @@ DEFERRED_SYSTEMS: dict[str, str] = {
 
 ALL_SYSTEMS: tuple[str, ...] = tuple(sorted(SUPPORTED_SYSTEMS + tuple(DEFERRED_SYSTEMS)))
 
+# Importers that exist but are reachable only while a feature flag is ON.
+# Deliberately NOT merged into SUPPORTED_SYSTEMS / ALL_SYSTEMS: those are
+# published constants (and the ``mm import --from`` choice list is pinned
+# to them), so a flag-off build must report exactly the set it reported
+# before this importer existed.
+#
+#   okf -> mind_mem.importers.okf_source, gated on v4 ``core_export``.
+GATED_SYSTEMS: dict[str, str] = {"okf": "core_export"}
+
+
+def enabled_gated_systems() -> tuple[str, ...]:
+    """The gated importers whose flag is currently ON, sorted.
+
+    Empty — and byte-for-byte free of side effects — when every gate is
+    off: the probe is :func:`~mind_mem.v4.feature_flags.is_enabled_quiet`,
+    which emits nothing on a missing or malformed config. A probe that
+    decides whether a feature is on must not itself be observable when
+    the answer is no.
+    """
+    from ..v4.feature_flags import is_enabled_quiet
+
+    return tuple(sorted(slug for slug, flag in GATED_SYSTEMS.items() if is_enabled_quiet(flag)))
+
 
 def resolve_system(system: str) -> str:
     """Normalize and validate a ``--from`` value.
 
     Returns:
         The canonical lowercase slug of a supported, locally-readable
-        system (a JSON dump or a directory of notes).
+        system (a JSON dump or a directory of notes), or of a
+        :data:`GATED_SYSTEMS` importer whose flag is ON.
 
     Raises:
         UnsupportedSystemError: the system is one of the deferred
-            endpoint-backed systems, or is not recognised at all. The
-            message names the system and the supported set explicitly.
+            endpoint-backed systems, is gated behind a flag that is OFF,
+            or is not recognised at all. The message names the system and
+            the supported set explicitly.
     """
     if not isinstance(system, str):
         raise UnsupportedSystemError(f"source system must be a string, got {type(system).__name__}")
     slug = system.strip().lower()
     if slug in SUPPORTED_SYSTEMS:
         return slug
-    supported = ", ".join(SUPPORTED_SYSTEMS)
+    gated = enabled_gated_systems()
+    if slug in gated:
+        return slug
+    # Appended, never substituted, so the flag-off message is character-for-
+    # character the one this function has always produced.
+    supported = ", ".join(SUPPORTED_SYSTEMS + gated)
     if slug in DEFERRED_SYSTEMS:
         raise UnsupportedSystemError(
             f"import from {slug!r} is DEFERRED and not supported: {DEFERRED_SYSTEMS[slug]}. "

@@ -143,6 +143,22 @@ def rerank_by_trust(results: list[dict], *, weight: float = DEFAULT_RERANK_WEIGH
 # --- config + orchestration -------------------------------------------------
 
 
+# deferred: the other five ``retrieval.*`` features now resolve their gate
+# through :class:`mind_mem.feature_gate.FeatureGate`; this one deliberately
+# does not, and the two obstacles are specific, not stylistic.
+#   1. This reader's contract is ``Mapping``, not ``dict`` — a config that is
+#      a Mapping but not a dict resolves here and would stop resolving under
+#      the gate, whose section lookup is ``isinstance(..., dict)``. Widening
+#      the gate instead would silently change the answer for the five
+#      features already on it, which is the opposite of a behaviour-identical
+#      migration.
+#   2. Three of the four knobs are booleans read as ``bool(section.get(k, d))``.
+#      ``FieldSpec`` maps an explicit ``None`` to the *default*, so a config
+#      carrying ``use_calibration: null`` would flip False → True.
+# Upgrade path: give ``FieldSpec`` an explicit "present-but-null" policy and
+# ``FeatureGate`` a Mapping-typed section lookup opted into per gate, then
+# move this reader over field-by-field against the tests in
+# tests/test_trust_scores.py::TestFlagOffIsByteIdentical.
 def resolve_trust_config(config: Mapping[str, Any] | None) -> TrustConfig:
     """Read ``retrieval.trust_scores`` defensively; unknown shapes → defaults."""
     if not isinstance(config, Mapping):

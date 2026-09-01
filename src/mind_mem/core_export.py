@@ -156,6 +156,13 @@ _ID_PREFIX_TYPE = {
     "GR-": "guardrail",
     "TF-": "task_frame",
     "DE-": "dead_end",
+    # `TRAJ-YYYYMMDD-NNN` is a real, written corpus prefix
+    # (:mod:`mind_mem.trajectory`), and it was the only one of them missing
+    # here: a trajectory block exported as OKF resolved to the generic
+    # "concept" type, so the round trip could not tell it apart from an
+    # untyped note. The reverse map (_TYPE_ID_PREFIX) gains the same entry,
+    # so an imported `trajectory` unit is re-prefixed correctly.
+    "TRAJ-": "trajectory",
 }
 
 
@@ -690,7 +697,13 @@ def export_to_markdown(core: LoadedCore) -> str:
         block_id = block.get("_id") or block.get("id") or "?"
         block_type = block.get("type", "block")
         lines.append(f"### {block_type} — {block_id}")
-        text = block.get("text") or block.get("excerpt") or block.get("statement") or block.get("content") or ""
+        # Probe the CAPITALISED corpus keys first. The block grammar is
+        # `^[A-Z][A-Za-z]+:` (`Statement`, `Excerpt`, ...), so the original
+        # lowercase-only probe matched nothing a real mind-mem block carries
+        # and every body came out empty — a silent, total content drop that
+        # only surfaced once something actually called this function. The
+        # OKF exporter has always probed both cases; this now shares its list.
+        text = _first(block, _OKF_DESC_KEYS) or ""
         if text:
             lines.append("")
             lines.append(str(text).strip())

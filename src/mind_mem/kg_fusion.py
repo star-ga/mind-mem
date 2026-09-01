@@ -34,6 +34,7 @@ from collections import deque
 from typing import Any, Optional
 
 from .admissibility import admit_corpus, count_unresolved
+from .feature_gate import FeatureGate, FieldSpec, strict_int, strict_number
 from .knowledge_graph import EntityRegistry, KnowledgeGraph
 from .observability import get_logger
 
@@ -50,39 +51,48 @@ _DEFAULTS: dict[str, Any] = {
 }
 
 
+#: The ``retrieval.kg_fusion`` gate, declared once.
+#:
+#: No ``auto_detector`` and no ``implicit_section``: fusion has always been
+#: explicit-``enabled``-only, so an absent section, an empty one and an
+#: ``auto_enable`` of any value all leave it OFF. That is the *stricter* of
+#: the two shapes in this family, and it is preserved exactly rather than
+#: harmonised with the auto-enabling ones.
+KG_FUSION_GATE = FeatureGate(
+    name="kg_fusion",
+    fields={
+        "max_hops": FieldSpec(
+            default=_DEFAULTS["max_hops"],
+            coerce=lambda v: min(_MAX_HOPS_CEILING, strict_int(v)),
+            validate=lambda v: v > 0,
+        ),
+        "decay": FieldSpec(
+            default=_DEFAULTS["decay"],
+            coerce=strict_number,
+            validate=lambda v: 0 < v <= 1,
+        ),
+        "max_neighbors_per_hop": FieldSpec(
+            default=_DEFAULTS["max_neighbors_per_hop"],
+            coerce=strict_int,
+            validate=lambda v: v > 0,
+        ),
+        "max_total_added": FieldSpec(
+            default=_DEFAULTS["max_total_added"],
+            coerce=strict_int,
+            validate=lambda v: v > 0,
+        ),
+    },
+)
+
+
 def is_kg_fusion_enabled(config: Optional[dict]) -> bool:
     """Resolve the ``retrieval.kg_fusion.enabled`` gate. Default False."""
-    if not config or not isinstance(config, dict):
-        return False
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return False
-    kf = retrieval.get("kg_fusion", {})
-    if not isinstance(kf, dict):
-        return False
-    return bool(kf.get("enabled", False))
+    return KG_FUSION_GATE.is_enabled(config)
 
 
 def resolve_kg_fusion_config(config: Optional[dict]) -> dict[str, Any]:
     """Extract fusion parameters with validated defaults."""
-    out = dict(_DEFAULTS)
-    if not config or not isinstance(config, dict):
-        return out
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return out
-    kf = retrieval.get("kg_fusion", {})
-    if not isinstance(kf, dict):
-        return out
-    if isinstance(kf.get("max_hops"), int) and kf["max_hops"] > 0:
-        out["max_hops"] = min(_MAX_HOPS_CEILING, int(kf["max_hops"]))
-    if isinstance(kf.get("decay"), (int, float)) and 0 < kf["decay"] <= 1:
-        out["decay"] = float(kf["decay"])
-    if isinstance(kf.get("max_neighbors_per_hop"), int) and kf["max_neighbors_per_hop"] > 0:
-        out["max_neighbors_per_hop"] = int(kf["max_neighbors_per_hop"])
-    if isinstance(kf.get("max_total_added"), int) and kf["max_total_added"] > 0:
-        out["max_total_added"] = int(kf["max_total_added"])
-    return out
+    return KG_FUSION_GATE.resolve(config)
 
 
 def resolve_query_entities(query: str, registry: EntityRegistry) -> list[str]:
@@ -214,6 +224,7 @@ def kg_expand(
 
 
 __all__ = [
+    "KG_FUSION_GATE",
     "is_kg_fusion_enabled",
     "resolve_kg_fusion_config",
     "resolve_query_entities",

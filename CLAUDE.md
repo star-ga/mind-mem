@@ -164,7 +164,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
     alerting.py, governance_gate.py — governance: contradiction/drift
                           detection, proposals, audit chain, alerting hooks
   _recall_core.py, hybrid_recall.py, recall_vector.py — retrieval core
-  mcp_server.py         — MCP server monolith (98 tools, 8 resources)
+  mcp_server.py         — MCP server monolith (101 tools, 8 resources)
   mcp/                  — per-domain MCP tool modules (mcp.tools.*)
   inbox.py, entity_ingest.py — auto-ingestion (ingestion_pipeline.py was
                           removed in 5.0.0: an unreachable webhook write
@@ -232,7 +232,7 @@ docs/                   — User + integration docs (35+ files)
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
   `docs/client-integrations.md`.
 
-### MCP Tools (98)
+### MCP Tools (101)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, find_similar, prefetch, intent_classify,
@@ -243,8 +243,8 @@ category_summary, verify_chain, verify_merkle, list_evidence, anchor_root,
 anchor_history, get_mind_kernel, list_mind_kernels, mic_convert_tool,
 mic_inspect_tool, compile_truth_walkthrough, recall_with_persona,
 pipeline_status, encrypt_file, decrypt_file, graph_query, traverse_graph,
-ontology_load,
-and 62 more (98 total). Verified against the registry by
+ontology_load, lint, lint_autofix,
+and 62 more (101 total). Verified against the registry by
 `scripts/check_tool_surface.py --check-doc-names`, which fails on a tool
 name that no longer exists -- this list previously carried 11 ghosts
 (create_snapshot, briefing, import_memory, audit_replay, ...).

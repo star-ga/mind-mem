@@ -7,12 +7,12 @@ provides. See [setup.md](setup.md) first.
 
 | Surface | When to use |
 |---|---|
-| **MCP server** | Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, OpenClaw, any MCP agent. 98 tools. |
+| **MCP server** | Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, OpenClaw, any MCP agent. 101 tools. |
 | **`mm` CLI** | Non-MCP agents: codex, gemini CLI, Cursor, Windsurf, Aider, plain shell. |
 | **`mind-mem-verify` CLI** | Third-party integrity audits. Standalone; no network. |
 | **Python library** | Direct import from your own code. |
 
-## MCP tool index (98 tools)
+## MCP tool index (101 tools)
 
 ### Retrieval
 - `recall(query, limit, active_only, backend)` — BM25 / hybrid / auto
@@ -50,9 +50,24 @@ provides. See [setup.md](setup.md) first.
 - `load_core(filename)` — mount a core
 - `unload_core(namespace)` — unmount
 - `list_cores()` — active cores + stats
+- `export_core(name, format)` — render a core into a static interchange
+  format under `memory/cores/exports/`: `okf` (a conformant Open
+  Knowledge Format bundle), `jsonld`, or `markdown`. Requires the v4
+  `core_export` flag (`mind-mem.json`: `v4.core_export.enabled = true`);
+  it is inert while the flag is off.
+
+  OKF is a round trip. `export_core(name, "okf")` writes a bundle, and
+  `mm import --from okf <bundle-dir>` — the same flag gates the importer
+  slug — reads one back in. The import direction is deliberately NOT an
+  MCP tool: a foreign bundle is external ingest, so it goes through the
+  normal importer and lands **quarantined** (`Status: quarantined`,
+  `IngestTier: external-ingest`), withheld from recall until a governed
+  release proposal is approved. See `docs/governance.md`.
 
 ### Cognitive memory (v2.4)
 - `plan_consolidation(importance_threshold, stale_days, archive_after_days, grace_days)` — dry-run the forget cycle
+  (with `v4.granularity_align` on, also returns proposal-only merge candidates for blocks that
+  restate each other; nothing is written until `approve_apply` runs — see `docs/v4-release.md`)
 - `pack_recall_budget(query, max_tokens, limit)` — recall + token-budget packing
 
 ### Ontology + streaming (v2.5)
@@ -68,6 +83,10 @@ provides. See [setup.md](setup.md) first.
 - `agent_inject(query, agent, limit)` — render context for any CLI
 - `vault_scan(vault_root, sync_dirs)`
 - `vault_sync(vault_root, block_id, relative_path, body, …)`
+
+### Corpus lint (v4, flag-gated)
+- `lint(rule)` — deterministic corpus defects with stable `LF-` finding ids
+- `lint_autofix(finding_id)` — stage a repair proposal for one finding (admin scope)
 
 ### Interaction signals (v2.1)
 - `observe_signal(session_id, previous_query, new_query, previous_results)`
@@ -96,6 +115,10 @@ mm inbox --to S1                                # read your mail + broadcasts
 
 # Status of current workspace
 mm status
+
+# Corpus lint (requires "v4": { "lint": { "enabled": true } } in mind-mem.json)
+mm lint                       # report findings as JSON; exit 1 if any
+mm lint --fix LF-b07a317a     # stage ONE repair proposal, then approve_apply it
 
 # Vault sync
 mm vault scan /path/to/obsidian/vault

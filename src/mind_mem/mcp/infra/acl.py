@@ -80,6 +80,12 @@ ADMIN_TOOLS = frozenset(
         "reject_edge",
         # Entity observation writes mutate the entity registry.
         "entity_add_observation",
+        # lint_autofix STAGES a repair proposal in intelligence/proposed/ —
+        # it never writes the corpus, but putting an item in front of the
+        # operator's approval gate is the same class of act as
+        # propose_update, which is admin here. Its read-only twin ``lint``
+        # is user-scope; see USER_TOOLS.
+        "lint_autofix",
         # Consolidated dispatchers that can reach an admin capability.
         # Both invoke their callee through ``__wrapped__``, which strips
         # ``@mcp_tool_observe`` — the only place per-tool ACL runs — so
@@ -113,6 +119,9 @@ USER_TOOLS = frozenset(
     {
         "recall",
         "recall_with_axis",
+        # Deterministic corpus lint — reads the corpus, writes nothing and
+        # proposes nothing. The repair half (lint_autofix) is admin-scoped.
+        "lint",
         "verify_merkle",
         "mind_mem_verify",
         "observe_signal",
@@ -127,6 +136,12 @@ USER_TOOLS = frozenset(
         "entity_observations",
         "build_core",
         "load_core",
+        # export_core RENDERS a loaded bundle into a static interchange
+        # format under memory/cores/exports/. It reads the corpus snapshot
+        # a user-scope build_core already produced and writes only an
+        # export artifact — never the corpus, never a proposal — so it
+        # carries build_core's scope, not admin.
+        "export_core",
         "unload_core",
         "list_cores",
         "plan_consolidation",

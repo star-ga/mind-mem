@@ -29,6 +29,52 @@ from .enums import TaskStatus
 
 _log = logging.getLogger("mind_mem.validate_py")
 
+# ---------------------------------------------------------------------------
+# Schema-required fields — the single definition
+# ---------------------------------------------------------------------------
+# These lists are the SPEC.md required-field sets this validator enforces.
+# They live at module scope because a second consumer needs the same answer:
+# ``mind_mem.lint``'s ``missing_metadata`` rule reports a required field that
+# is empty, and "required" has to mean the same thing in both places or the
+# lint's advice and the validator's verdict disagree. It shipped with a COPY,
+# and the copy had already drifted — 7 task fields against the 12 below — so
+# the lint stayed silent on five fields the validator fails on.
+
+#: Required fields on a ``[D-YYYYMMDD-NNN]`` decision block.
+DECISION_REQUIRED_FIELDS = (
+    "Date",
+    "Status",
+    "Scope",
+    "Statement",
+    "Rationale",
+    "Supersedes",
+    "Tags",
+    "Sources",
+)
+
+#: Required fields on a ``[T-YYYYMMDD-NNN]`` task block.
+TASK_REQUIRED_FIELDS = (
+    "Date",
+    "Title",
+    "Status",
+    "Priority",
+    "Project",
+    "Due",
+    "Owner",
+    "Context",
+    "Next",
+    "Dependencies",
+    "Sources",
+    "History",
+)
+
+#: Required fields keyed by canonical-id prefix, for callers that hold a
+#: block id rather than a corpus file.
+REQUIRED_FIELDS_BY_PREFIX = {
+    "D": DECISION_REQUIRED_FIELDS,
+    "T": TASK_REQUIRED_FIELDS,
+}
+
 
 class Validator:
     def __init__(self, workspace):
@@ -200,7 +246,7 @@ class Validator:
 
     def _check_decisions(self):
         self.section("1. DECISIONS - IDs, fields, values")
-        required = ["Date", "Status", "Scope", "Statement", "Rationale", "Supersedes", "Tags", "Sources"]
+        required = list(DECISION_REQUIRED_FIELDS)
         valid_status = {"active", "superseded", "revoked"}
 
         blocks = self._check_blocks(
@@ -230,20 +276,7 @@ class Validator:
 
     def _check_tasks(self):
         self.section("2. TASKS - IDs, fields, values")
-        required = [
-            "Date",
-            "Title",
-            "Status",
-            "Priority",
-            "Project",
-            "Due",
-            "Owner",
-            "Context",
-            "Next",
-            "Dependencies",
-            "Sources",
-            "History",
-        ]
+        required = list(TASK_REQUIRED_FIELDS)
         valid_status = {s.value for s in TaskStatus}
 
         def extra(blocks):

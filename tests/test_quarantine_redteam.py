@@ -294,3 +294,94 @@ class TestEveryWriteDoorStillWithholds:
 
         missing = [t for t in IngestTier if t not in INITIAL_STATUS]
         assert not missing, f"ingest tiers with no declared initial status: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Content-returning tools beyond the recall family
+# ---------------------------------------------------------------------------
+
+
+class TestConsolidationDoesNotBypassAdmission:
+    """`plan_consolidation` surfaced quarantined block TEXT. Regression pin.
+
+    Found while wiring `granularity_align` in 5.1.0. Its block loader ran
+    ``SELECT id, status, tags, json_blob ...`` and never filtered on the status
+    it had just selected, so QUARANTINED and PENDING content came back verbatim
+    through a USER-scope MCP tool — untrusted content readable without ever
+    passing admission.
+
+    Selecting a status is not filtering on it.
+
+    The read-surface tripwire above did not catch this because it enumerates the
+    RECALL tool family, and consolidation is not in it. That was the real gap:
+    the property is "no tool returns unadmitted block content", not "no recall
+    tool does". Any future tool that reads block text belongs here too.
+    """
+
+    def _seed(self, ws, statuses) -> None:
+        import json as _json
+
+        from mind_mem import sqlite_index as si
+
+        conn = si._connect(str(ws))
+        si._init_schema(conn)
+        for i, status in enumerate(statuses):
+            conn.execute(
+                "INSERT OR REPLACE INTO blocks "
+                "(id,type,file,line,status,date,speaker,tags,dia_id,parent_id,json_blob) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    f"DEC-2026010{i}-001",
+                    "decision",
+                    "decisions/DECISIONS.md",
+                    1,
+                    status,
+                    "2026-01-01",
+                    "",
+                    "",
+                    "",
+                    "",
+                    _json.dumps({"Statement": f"{CANARY} withheld statement number {i}"}),
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+    def _plan(self, ws) -> str:
+        import json as _json
+
+        from mind_mem.mcp.infra.workspace import use_workspace
+        from mind_mem.mcp.tools.consolidation import plan_consolidation
+
+        with use_workspace(str(ws)):
+            return _json.dumps(_json.loads(plan_consolidation()))
+
+    def _ws(self, tmp_path, *, granularity: bool):
+        import json as _json
+
+        ws = tmp_path / "ws"
+        (ws / ".mind-mem-index").mkdir(parents=True)
+        (ws / "decisions").mkdir(parents=True)
+        cfg = {"v4": {"granularity_align": {"enabled": True}}} if granularity else {}
+        (ws / "mind-mem.json").write_text(_json.dumps(cfg), encoding="utf-8")
+        return ws
+
+    def test_quarantined_text_never_reaches_the_consolidation_plan(self, tmp_path, monkeypatch) -> None:
+        ws = self._ws(tmp_path, granularity=True)
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
+        monkeypatch.setenv("MIND_MEM_CONFIG", str(ws / "mind-mem.json"))
+        self._seed(ws, ["quarantined", "quarantined", "pending", "pending"])
+
+        payload = self._plan(ws)
+        assert CANARY not in payload, "plan_consolidation surfaced withheld block text — admission bypassed"
+
+    def test_the_positive_control_holds(self, tmp_path, monkeypatch) -> None:
+        """Blocks really were written, so the assertion above is not vacuous."""
+        import sqlite3
+
+        ws = self._ws(tmp_path, granularity=True)
+        self._seed(ws, ["quarantined", "pending"])
+        conn = sqlite3.connect(ws / ".mind-mem-index" / "recall.db")
+        n = conn.execute("SELECT COUNT(*) FROM blocks").fetchone()[0]
+        conn.close()
+        assert n == 2, "the canary blocks were never written; the test proves nothing"

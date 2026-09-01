@@ -456,6 +456,47 @@ def handle_request(...):       # by nested calls that already have one
 on the root logger: `StructuredLogger` sets `propagate = False`, so a
 root-logger install never sees a mind-mem record.
 
+### `granularity_align.py`
+
+Flag: `v4.granularity_align`
+
+Named merge operation for the duplicate-memory pain: as a workspace grows,
+two blocks end up making the same claim at different levels of abstraction
+("use Q16.16 for determinism" / "all scoring must use fixed-point
+arithmetic"). Neither is wrong, both pollute ranking.
+
+Wired in 5.1.0: with the flag on, the `plan_consolidation` MCP tool carries
+an extra `granularity_align` section listing the merge candidates
+`find_merge_candidates` detects, each with the merged block `merge_blocks`
+would produce.
+
+```json
+{
+  "v4": {
+    "granularity_align": {
+      "enabled": true,
+      "min_similarity": 0.75,
+      "max_candidates": 20,
+      "max_blocks": 400
+    }
+  }
+}
+```
+
+`min_similarity` is the term-frequency cosine threshold (default 0.75);
+`max_candidates` caps the returned pairs (0 means no cap, matching the
+module's own contract); `max_blocks` caps how many top-level blocks are
+compared, because candidate detection is O(n²) in that count. The flag is
+read from the *workspace's* `mind-mem.json` first and the ambient config
+second, the same resolution `maintenance_migrate` uses.
+
+**Proposal-only.** The section is data: `applied` is always `false` and
+`route` names the only path to the corpus — `propose_update`, then
+`approve_apply`. `plan_consolidation` opens the index `mode=ro` and writes
+nothing, so a merge reaches a block only after a human approves it. With the
+flag off the section is absent and the tool's JSON is byte-identical to what
+it was before the wiring existed.
+
 ---
 
 ## Foundation

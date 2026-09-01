@@ -42,6 +42,7 @@ import re
 from typing import Any
 
 from .admissibility import admit_corpus
+from .feature_gate import FeatureGate, FieldSpec, always_detector, strict_int, strict_number
 from .observability import get_logger
 
 _log = get_logger("entity_prefetch")
@@ -294,47 +295,52 @@ def prefetch_entity_blocks(
     return out
 
 
+#: The ``retrieval.entity_prefetch`` gate, declared once.
+#:
+#: Prefetch has no query-shape or result-shape precondition: its ancestor
+#: ended on ``return bool(ep.get("auto_enable", True))``, so the section
+#: existing (or being implied by ``implicit_section``) is the whole test.
+#: :func:`~mind_mem.feature_gate.always_detector` spells that out — leaving
+#: ``auto_detector`` unset would mean the opposite, an auto-enable that can
+#: never fire.
+ENTITY_PREFETCH_GATE = FeatureGate(
+    name="entity_prefetch",
+    fields={
+        "max_entities": FieldSpec(
+            default=3,
+            coerce=strict_int,
+            validate=lambda v: v > 0,
+        ),
+        # Zero hops is meaningful here — prefetch the entity blocks
+        # themselves and walk nothing — so the bound is >= 0, not > 0.
+        "max_hops": FieldSpec(
+            default=1,
+            coerce=strict_int,
+            validate=lambda v: v >= 0,
+        ),
+        "entity_score": FieldSpec(
+            default=5.0,
+            coerce=strict_number,
+            validate=lambda v: v > 0,
+        ),
+    },
+    auto_detector=always_detector,
+    implicit_section=True,
+)
+
+
 def is_entity_prefetch_enabled(config: dict[str, Any] | None) -> bool:
     """Whether entity prefetch should fire for the current call."""
-    if not config or not isinstance(config, dict):
-        return False
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return False
-    ep = retrieval.get("entity_prefetch", {})
-    if not isinstance(ep, dict):
-        return False
-    if ep.get("enabled", False):
-        return True
-    return bool(ep.get("auto_enable", True))
+    return ENTITY_PREFETCH_GATE.is_enabled(config)
 
 
 def resolve_entity_prefetch_config(config: dict[str, Any] | None) -> dict[str, Any]:
     """Pull prefetch parameters from config with safe defaults."""
-    defaults: dict[str, Any] = {
-        "max_entities": 3,
-        "max_hops": 1,
-        "entity_score": 5.0,
-    }
-    if not config or not isinstance(config, dict):
-        return defaults
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return defaults
-    ep = retrieval.get("entity_prefetch", {})
-    if not isinstance(ep, dict):
-        return defaults
-    out = dict(defaults)
-    if isinstance(ep.get("max_entities"), int) and ep["max_entities"] > 0:
-        out["max_entities"] = int(ep["max_entities"])
-    if isinstance(ep.get("max_hops"), int) and ep["max_hops"] >= 0:
-        out["max_hops"] = int(ep["max_hops"])
-    if isinstance(ep.get("entity_score"), (int, float)) and ep["entity_score"] > 0:
-        out["entity_score"] = float(ep["entity_score"])
-    return out
+    return ENTITY_PREFETCH_GATE.resolve(config)
 
 
 __all__ = [
+    "ENTITY_PREFETCH_GATE",
     "extract_entity_candidates",
     "prefetch_entity_blocks",
     "is_entity_prefetch_enabled",

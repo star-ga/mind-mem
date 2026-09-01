@@ -732,6 +732,55 @@ mutating the workspace.
 
 ---
 
+## Structure-Aware Chunk Scoring (`retrieval.smart_chunking`)
+
+Recall scores a long `Statement` twice — once whole, once as its best-scoring
+sub-chunk — and blends the two, so a block whose match is concentrated in one
+part is not penalised for everything around it. The sub-chunks are a
+three-sentence sliding window, which knows nothing about the document: a window
+routinely spans a markdown header, mixing two sections into one scoring unit.
+
+Enabling this key takes the boundaries from `smart_chunker` instead, so a
+chunk is a *section*. **Off by default** — chunk boundaries feed ranking, and
+turning them over silently would change recall results for every existing
+workspace.
+
+```json
+{
+  "retrieval": {
+    "smart_chunking": {
+      "enabled": true
+    }
+  }
+}
+```
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `retrieval.smart_chunking.enabled` | bool | `false` | Master switch. Must be literal `true`; a truthy string or `1` leaves it off. |
+| `retrieval.smart_chunking.max_chunk_size` | int | `1500` | Hard ceiling in characters. A chunk is never larger. |
+| `retrieval.smart_chunking.soft_max_chunk_size` | int | `1` | Arm the soft ceiling after this many characters, so a strong structural boundary closes a chunk instead of the character budget. `0` disables it, which makes short statements come back as a single chunk. |
+| `retrieval.smart_chunking.soft_max_boundary_score` | float | `0.5` | Minimum boundary strength (0.0–1.0) that honours the soft ceiling. At `0.5` a markdown header splits and running prose does not. |
+| `retrieval.smart_chunking.min_chunk_size` | int | `0` | Merge chunks below this size into a neighbour. `0` keeps the section split intact; raising it can re-merge a short section with the next one. |
+| `retrieval.smart_chunking.overlap_sentences` | int | `0` | Trailing sentences repeated into the next chunk. `0` keeps sections from bleeding into each other's scores. |
+
+Notes:
+
+- **No LLM.** `smart_chunker` can refine boundaries with a local model. That is
+  pinned off here and is deliberately not configurable: recall is a pure
+  function of (corpus, config, scoring instant), and a model call on the scored
+  path would break it.
+- **Blank lines are reconstructed.** The block format drops blank lines inside
+  a field, so a statement read back from the corpus has no paragraph gaps left.
+  The gap in front of each markdown header is restored before chunking —
+  without it the structure-aware split would never fire at all.
+- **Header-less text is unaffected.** When no structural boundary is found, the
+  sentence window is used, so enabling the key never *removes* a chunk boost.
+- This is a scoring surface only. Chunks are never stored, surfaced, or written
+  back to the corpus.
+
+---
+
 ## Tier-Aware Retrieval Scoring — removed (RA.0)
 
 `retrieval.tier_boost` and `retrieval.tier_boost_weights` no longer exist.

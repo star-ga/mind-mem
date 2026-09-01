@@ -38,6 +38,7 @@ import re
 from collections import Counter
 from typing import Any
 
+from .feature_gate import FeatureGate, FieldSpec, strict_int, strict_number
 from .observability import get_logger
 
 _log = get_logger("session_boost")
@@ -134,6 +135,38 @@ def apply_session_boost(
     return out
 
 
+def _has_session_info(query: str | None, results: list[dict] | None) -> bool:
+    """Auto-enable detector: does the head of the result set carry sessions?
+
+    Reads at most the top 10 hits and nothing else — no clock, no disk, no
+    log line. A probe that decides a feature is OFF must leave no trace
+    that it ran, or "off" stops meaning "as if unwired".
+    """
+    if not results:
+        return False
+    return any(_session_of(b) for b in results[:10])
+
+
+#: The ``retrieval.session_boost`` gate, declared once.
+SESSION_BOOST_GATE = FeatureGate(
+    name="session_boost",
+    fields={
+        "top_seed_count": FieldSpec(
+            default=3,
+            coerce=strict_int,
+            validate=lambda v: v > 0,
+        ),
+        "boost": FieldSpec(
+            default=0.3,
+            coerce=strict_number,
+            validate=lambda v: 0 < v <= 5,
+        ),
+    },
+    auto_detector=_has_session_info,
+    implicit_section=True,
+)
+
+
 def is_session_boost_enabled(config: dict[str, Any] | None, results: list[dict] | None = None) -> bool:
     """Decide whether session_boost should fire.
 
@@ -141,46 +174,15 @@ def is_session_boost_enabled(config: dict[str, Any] | None, results: list[dict] 
     True by default) and at least one result carries session info —
     avoids wasting cycles on non-LoCoMo workspaces.
     """
-    if not config or not isinstance(config, dict):
-        return False
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return False
-    sb = retrieval.get("session_boost", {})
-    if not isinstance(sb, dict):
-        return False
-    if sb.get("enabled", False):
-        return True
-    if not sb.get("auto_enable", True):
-        return False
-    # Auto-enable only if the result set has session info — otherwise
-    # nothing to boost.
-    if results:
-        for b in results[:10]:
-            if _session_of(b):
-                return True
-    return False
+    return SESSION_BOOST_GATE.is_enabled(config, results=results)
 
 
 def resolve_session_boost_config(config: dict[str, Any] | None) -> dict[str, Any]:
-    defaults: dict[str, Any] = {"top_seed_count": 3, "boost": 0.3}
-    if not config or not isinstance(config, dict):
-        return defaults
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return defaults
-    sb = retrieval.get("session_boost", {})
-    if not isinstance(sb, dict):
-        return defaults
-    out = dict(defaults)
-    if isinstance(sb.get("top_seed_count"), int) and sb["top_seed_count"] > 0:
-        out["top_seed_count"] = int(sb["top_seed_count"])
-    if isinstance(sb.get("boost"), (int, float)) and 0 < sb["boost"] <= 5:
-        out["boost"] = float(sb["boost"])
-    return out
+    return SESSION_BOOST_GATE.resolve(config)
 
 
 __all__ = [
+    "SESSION_BOOST_GATE",
     "apply_session_boost",
     "is_session_boost_enabled",
     "resolve_session_boost_config",

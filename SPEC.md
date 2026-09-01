@@ -92,7 +92,20 @@ adopted as an **import/export interchange** with three surfaces in
 - `import_okf_bundle()` — reads an OKF bundle back into mind-mem blocks,
   uppercasing OKF's lowercase keys to satisfy the `^[A-Z][A-Za-z]+:`
   field grammar. Imported blocks enter through the normal HITL-gated
-  path, never as trusted source-of-truth.
+  path, never as trusted source-of-truth. Concretely: it is reached
+  through the migration importer (`mm import --from okf <bundle-dir>`,
+  gated on the v4 `core_export` flag), so every concept lands
+  `Status: quarantined` + `IngestTier: external-ingest`, is withheld
+  from `recall`, and becomes servable only when a
+  `propose_import_release` → `approve_apply` decision admits it. A
+  bundle's own OKF trust fields (`verified` / `generated` / `status` /
+  `receipt`) are preserved as `OkfClaim*` **claims** and never mapped
+  onto a mind-mem governance field.
+
+The export direction is exposed as the `export_core(name, format)` MCP
+tool (`okf` | `jsonld` | `markdown`), behind the same flag. The import
+direction deliberately is **not** a tool: a foreign corpus must arrive
+through the quarantine gate, not through a callable write.
 
 **Trust is derived, never self-asserted.** OKF's trust tier is a
 producer's self-declaration: a `generated`/`verified` actor string is

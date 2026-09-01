@@ -61,6 +61,7 @@ from ._shared import (
     require_mapping as _require_mapping,
 )
 from .note_parsers import parse_agent_memory, parse_chat_json, parse_markdown_vault
+from .okf_source import OKF_SYSTEM, parse_okf
 from .records import ImportParseError, ImportRecord
 
 __all__ = ["MAX_METADATA_KEYS", "MAX_METADATA_VALUE_LEN", "PARSERS", "parse_payload"]
@@ -284,6 +285,9 @@ PARSERS: dict[str, Callable[[Any], tuple[ImportRecord, ...]]] = {
     "letta": parse_letta,
     "markdown": parse_markdown_vault,
     "mem0": parse_mem0,
+    # Flag-gated (v4 ``core_export``): unreachable unless resolve_system
+    # lets the slug through, so a registered parser is not a live source.
+    OKF_SYSTEM: parse_okf,
 }
 
 

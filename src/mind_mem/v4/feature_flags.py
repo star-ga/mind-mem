@@ -75,6 +75,7 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "embedding_pipeline",  # auto-derive embeddings (round 2 audit 4/4)
     "kind_summaries",  # GraphRAG-style per-kind summaries (round 2 audit 3/4)
     "self_editing",  # MemGPT-style propose_edit / approve_edit (round 2 audit 2/4)
+    "granularity_align",  # named merge operation surfaced in plan_consolidation (proposal-only)
     "observability",  # counters / gauges / histograms (round 3 audit 4/4)
     "logging_context",  # correlation-ID + kv context on every log line (round 4 audit)
     "backpressure",  # ingestion overload signal (round 4 audit, DeepSeek 9.75→10)
@@ -92,6 +93,7 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "contraindicates_edges",
     "typed_edges",  # first-class typed relation layer + proposal-gated writes (roadmap §a)
     "entity_observations",  # per-entity accreted-facts field on the entity registry (roadmap §b)
+    "core_export",  # .mmcore static export (OKF / JSON-LD / markdown) + governed OKF re-import
 )
 
 
@@ -139,7 +141,7 @@ def _config_path() -> Path:
     return user
 
 
-def _read_v4_block() -> tuple[dict, str]:
+def _read_v4_block(*, quiet: bool = False) -> tuple[dict, str]:
     """Return ``(v4 block, error)`` for the active config.
 
     ``error`` is ``""`` when the config was read successfully (including
@@ -148,33 +150,76 @@ def _read_v4_block() -> tuple[dict, str]:
     difference: an unparseable config turns *every* v4 surface off at
     once, which is indistinguishable from every flag being unset unless
     the parse failure is carried out of here.
+
+    ``quiet=True`` is for a PROBE — a caller asking "is this surface on?"
+    whose answer, when it is *no*, must leave no trace. The loud path logs
+    ``v4_config_unreadable`` on a malformed config, so a probe running on a
+    default-OFF code path would emit a line the unwired build never emitted;
+    that is a flag-off behaviour difference, and the whole restoration lands
+    under "flag-off is byte-identical". A quiet read therefore neither logs
+    nor touches ``_last_config_warning`` — it is a pure function of the file,
+    indistinguishable from not having been called at all, so it can never
+    swallow (or provoke) a warning the loud path owes its caller.
     """
     global _last_config_warning
     p = _config_path()
     if not p.is_file():
-        _last_config_warning = None
+        if not quiet:
+            _last_config_warning = None
         return {}, ""
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         error = f"{p}: {exc}"
-        if _last_config_warning != (str(p), str(exc)):
+        if not quiet and _last_config_warning != (str(p), str(exc)):
             _last_config_warning = (str(p), str(exc))
             _log.warning("v4_config_unreadable", path=str(p), error=str(exc))
         return {}, error
-    _last_config_warning = None
+    if not quiet:
+        _last_config_warning = None
     block = data.get("v4") if isinstance(data, dict) else None
     return (block if isinstance(block, dict) else {}), ""
 
 
-def _load_v4_block() -> dict:
+def _load_v4_block(*, quiet: bool = False) -> dict:
     """Return the ``v4`` block from active config, or ``{}`` if absent."""
-    return _read_v4_block()[0]
+    return _read_v4_block(quiet=quiet)[0]
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def is_enabled_quiet(flag: str) -> bool:
+    """:func:`is_enabled`, but guaranteed to emit nothing.
+
+    Same resolver (``_config_path``, so ``MIND_MEM_CONFIG`` and the workspace
+    search order still apply) and the same fail-closed
+    ``{"enabled": true}`` interpretation — only the logging is skipped.
+
+    Use this, never :func:`is_enabled`, for a PROBE that decides whether a
+    feature is on. ``is_enabled`` goes through ``_read_v4_block``, which
+    ``_log.warning("v4_config_unreadable", ...)`` on a malformed config; a
+    probe on an OFF path that logs makes the flag-off build observably
+    different from the build that never had the feature. (Caught in slice 1
+    against a pristine tree: ``v4.logging_context``'s probe emitted a stderr
+    line with the flag off.) A feature that is ON is free to call
+    ``is_enabled`` afterwards and get the warning.
+    """
+    if flag not in ALL_V4_FLAGS:
+        return False
+    try:
+        path = _config_path()
+        if not path.is_file():
+            return False
+        block = json.loads(path.read_text(encoding="utf-8")).get("v4") or {}
+        sub = block.get(flag) if isinstance(block, dict) else None
+        return isinstance(sub, dict) and sub.get("enabled") is True
+    except Exception:
+        # Missing, unreadable, or malformed config; a non-dict v4 block; a
+        # resolver failure. Every one of them means "off", silently.
+        return False
 
 
 def is_enabled(flag: str) -> bool:
@@ -216,16 +261,27 @@ def require_enabled(flag: str) -> None:
     )
 
 
-def flag_config(flag: str) -> dict:
+def flag_config(flag: str, *, quiet: bool = False) -> dict:
     """Return the full sub-config dict for a flag (e.g.
     ``{"enabled": true, "max_tokens": 32000}``), or ``{}`` if unset.
 
     Surfaces use this to read their own tunables alongside the enable
     bit. Always returns a dict; never raises for missing flags.
+
+    ``quiet=True`` suppresses the ``v4_config_unreadable`` warning and the
+    warning-dedup bookkeeping — see :func:`_read_v4_block`. Use it when the
+    call is the probe that decides whether an OFF-by-default surface runs at
+    all, so answering "off" stays unobservable.
+
+    The enable bit is NOT interpreted here: the result may be any JSON value
+    the config holds under *flag*. Callers deciding whether a surface is on
+    must apply the canonical ``isinstance(sub, dict) and sub.get("enabled")
+    is True`` test themselves (or call :func:`is_enabled`), so a bare
+    ``true`` still cannot switch a surface on.
     """
     if flag not in ALL_V4_FLAGS:
         return {}
-    return _load_v4_block().get(flag, {}) or {}
+    return _load_v4_block(quiet=quiet).get(flag, {}) or {}
 
 
 def config_error() -> str:
@@ -242,6 +298,7 @@ __all__ = [
     "FeatureDisabledError",
     "config_error",
     "is_enabled",
+    "is_enabled_quiet",
     "require_enabled",
     "flag_config",
 ]

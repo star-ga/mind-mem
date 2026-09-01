@@ -45,6 +45,7 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
+from .feature_gate import FeatureGate
 from .observability import get_logger
 
 _log = get_logger("truth_score")
@@ -198,19 +199,20 @@ def annotate_results(
     return results
 
 
+#: The ``retrieval.truth_score`` gate, declared once.
+#:
+#: Explicit-``enabled``-only, like ``kg_fusion``: no detector, so
+#: ``auto_enable`` can never turn it on, and no tuning knobs — the scoring
+#: parameters are function arguments, not config.
+TRUTH_SCORE_GATE = FeatureGate(name="truth_score")
+
+
 def is_truth_score_enabled(config: dict[str, Any] | None) -> bool:
-    if not config or not isinstance(config, dict):
-        return False
-    retrieval = config.get("retrieval", {})
-    if not isinstance(retrieval, dict):
-        return False
-    ts = retrieval.get("truth_score", {})
-    if not isinstance(ts, dict):
-        return False
-    return bool(ts.get("enabled", False))
+    return TRUTH_SCORE_GATE.is_enabled(config)
 
 
 __all__ = [
+    "TRUTH_SCORE_GATE",
     "truth_score",
     "annotate_results",
     "is_truth_score_enabled",

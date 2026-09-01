@@ -901,6 +901,80 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_lint(args: argparse.Namespace) -> int:
+    """``mm lint`` — deterministic corpus lint; ``--fix`` stages one repair.
+
+    Read-only by default: the lint reports content-addressed findings
+    (``LF-xxxxxxxx``) and touches nothing. ``--fix LF-xxxxxxxx`` hands one
+    finding to ``lint_autofix``, which stages a governance PROPOSAL and stops
+    there — the block of record changes only when a human runs
+    ``approve_apply``. There is deliberately no ``--fix-all`` and no direct
+    write: the whole point of the finding id is that a person names the one
+    repair they reviewed.
+
+    Gated on ``v4.lint``, probed quietly (:func:`mind_mem.lint.flag_enabled`)
+    so that asking the question emits nothing when the answer is no.
+
+    Exit codes:
+        0  clean (no findings), or a repair was staged
+        1  findings reported, the flag is off, or the repair was refused
+    """
+    from mind_mem.lint import LintError, flag_enabled, lint
+    from mind_mem.lint_autofix import LintAutofixError, lint_autofix
+
+    ws = _workspace()
+    if not flag_enabled(ws):
+        print(
+            json.dumps(
+                {
+                    "workspace": ws,
+                    "error": "v4.lint is disabled",
+                    "enable": 'mind-mem.json: "v4": { "lint": { "enabled": true } }',
+                },
+                indent=2,
+            )
+        )
+        return 1
+
+    if args.fix:
+        try:
+            proposal_id = lint_autofix(ws, args.fix)
+        except (LintAutofixError, LintError) as exc:
+            print(json.dumps({"workspace": ws, "finding_id": args.fix, "error": str(exc)}, indent=2))
+            return 1
+        print(
+            json.dumps(
+                {
+                    "workspace": ws,
+                    "finding_id": args.fix,
+                    "staged": proposal_id,
+                    "next_step": f"Review it, then apply with approve_apply {proposal_id} (nothing has changed yet).",
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    try:
+        findings = lint(ws)
+    except LintError as exc:
+        print(json.dumps({"workspace": ws, "error": str(exc)}, indent=2))
+        return 1
+
+    print(
+        json.dumps(
+            {
+                "workspace": ws,
+                "count": len(findings),
+                "autofixable": sum(1 for f in findings if f.autofixable),
+                "findings": [f.as_dict() for f in findings],
+            },
+            indent=2,
+        )
+    )
+    return 1 if findings else 0
+
+
 def _cmd_detect(args: argparse.Namespace) -> int:
     """List AI clients detected on the current machine."""
     from mind_mem.hook_installer import AGENT_REGISTRY, detect_installed_agents
@@ -960,9 +1034,32 @@ _IMPORT_SYSTEM_CHOICES: tuple[str, ...] = (
     "weaviate",
 )
 
+# Flag-gated importers: a slug the parser offers only while its v4 flag is
+# ON. Literal for the same reason as _IMPORT_SYSTEM_CHOICES (parser build
+# stays import-light — reaching ``mind_mem.importers`` here would cost ~10 ms
+# on every ``mm`` invocation); the lockstep with
+# ``importers.GATED_SYSTEMS`` is test-enforced.
+_IMPORT_GATED_CHOICES: dict[str, str] = {"okf": "core_export"}
+
 # Exit codes for ``mm import`` (documented in the subcommand help).
 IMPORT_EXIT_UNSUPPORTED = 2
 IMPORT_EXIT_BAD_DUMP = 3
+
+
+def _import_system_choices() -> tuple[str, ...]:
+    """``--from`` choices: the fixed set, plus any gated slug whose flag is ON.
+
+    With every gate OFF this returns :data:`_IMPORT_SYSTEM_CHOICES`
+    unchanged, so ``mm import --help`` and the argparse choice error are
+    byte-identical to a build without the gated importer. The probe is
+    ``is_enabled_quiet``: a flag lookup that decides whether to OFFER a
+    feature must not log on a malformed config, or a flag-off run becomes
+    observably different from one that never had the feature.
+    """
+    from mind_mem.v4.feature_flags import is_enabled_quiet
+
+    enabled = tuple(sorted(slug for slug, flag in _IMPORT_GATED_CHOICES.items() if is_enabled_quiet(flag)))
+    return _IMPORT_SYSTEM_CHOICES + enabled
 
 
 def _cmd_import(args: argparse.Namespace) -> int:
@@ -2719,6 +2816,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_wsmigrate.set_defaults(func=_cmd_migrate)
 
+    # lint — deterministic corpus lint + one-finding governed repair
+    p_lint = sub.add_parser(
+        "lint",
+        help="Report deterministic corpus defects; --fix stages one repair proposal.",
+    )
+    p_lint.add_argument(
+        "--fix",
+        metavar="LF-ID",
+        default=None,
+        help="Stage a repair PROPOSAL for one finding id (never writes the corpus). Requires v4.lint.",
+    )
+    p_lint.set_defaults(func=_cmd_lint)
+
     # detect — list AI coding clients present on the machine
     p_detect = sub.add_parser(
         "detect",
@@ -2863,7 +2973,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--from",
         dest="source_system",
         required=True,
-        choices=_IMPORT_SYSTEM_CHOICES,
+        choices=_import_system_choices(),
         help=(
             "Source format. Note directories: markdown (vault / note tree), agentmem (auto-memory "
             "directory). JSON dumps: chatjson (session transcript), mem0, letta, chroma (low value — "
