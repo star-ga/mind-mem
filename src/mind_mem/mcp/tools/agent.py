@@ -40,8 +40,28 @@ def _vault_allowlist() -> list[str]:
     raw = os.environ.get("MIND_MEM_VAULT_ALLOWLIST", "").strip()
     if not raw:
         return []
-    sep = ";" if ";" in raw else ":"
-    return [os.path.realpath(p.strip()) for p in raw.split(sep) if p.strip()]
+    # Split on os.pathsep plus ";".
+    #
+    # The old rule was `";" if ";" in raw else ":"`, which silently destroys
+    # every Windows path: `C:\\Users\\me\\vault` has no semicolon, so it split on
+    # the DRIVE-LETTER colon into ["C", "\\Users\\me\\vault"] and the allowlist
+    # then matched nothing -- every vault call on Windows was refused as
+    # "outside MIND_MEM_VAULT_ALLOWLIST", including one pointing at the
+    # allowlisted directory itself.
+    #
+    # os.pathsep is the platform's own answer (";" on Windows, ":" on POSIX),
+    # so drive letters are safe there. ";" stays accepted everywhere so a POSIX
+    # operator who already writes the list that way is not broken by the fix.
+    seps = {os.pathsep, ";"}
+    parts, current = [], []
+    for ch in raw:
+        if ch in seps:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    parts.append("".join(current))
+    return [os.path.realpath(part.strip()) for part in parts if part.strip()]
 
 
 def _vault_allow_any() -> bool:
