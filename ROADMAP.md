@@ -3437,7 +3437,41 @@ entry previously defined. That document is the highest-leverage unblocking item
 in either group, and it is also the one most likely to be built badly, since a
 mislabelled eval set still produces confident numbers.
 
-- [ ] **M1 — Embedded-field / query-vocabulary alignment (highest value).**
+- [x] **M1 — Embedded-field / query-vocabulary alignment — MEASURED 2026-08-31.**
+  Closed with a number, which was the whole point. A/B in
+  `benchmarks/embed_augmentation_ab.py`, pinned by
+  `tests/test_embedding_augmentation_probe.py`, all-MiniLM-L6-v2:
+
+  | corpus | | top1 | mean margin | inter-block spread |
+  |---|---|---|---|---|
+  | symptom query vs resolution text | raw | 80% | +0.0944 | 0.1083 |
+  | | augmented | 80% | **+0.1156** | 0.1068 |
+  | near-duplicate boilerplate (512-mind shape) | raw | 12% | −0.0067 | 0.0021 |
+  | | augmented | 25% | −0.0056 | **0.0012** |
+
+  **Finding 1 — the suspicion was wrong, and that is a result.** Augmentation
+  does NOT cause the vocabulary-mismatch collapse. It is mildly POSITIVE on
+  ordinary content: identical top1, margin better by +0.021. The negative
+  finding stands with evidence instead of the previous state of no number.
+
+  **Finding 2 — the real exposure is boilerplate, and it is worse than
+  suspected.** 12.5% top1 over 8 blocks is EXACTLY random, the mean margin is
+  NEGATIVE (the right block scores below the best distractor), and an
+  inter-block cosine spread of 0.002 means the vectors are indistinguishable.
+  The vector leg contributes nothing there and BM25 silently does all the work.
+  Augmentation makes the spread WORSE (0.0021 → 0.0012) by adding still more
+  shared text to records that were already near-identical. This is the shape
+  `512-mind/src/memory.mind` actually writes, so it is a live consumer, not a
+  hypothetical.
+
+  Both are pinned as tests, including the boilerplate case as a KNOWN
+  LIMITATION — if a later change makes it rank properly the test fails and the
+  claim must be updated, rather than the limitation quietly disappearing.
+
+  **Follow-on, not done here:** the fix for finding 2 is an embed-vs-store
+  split in the store's own API (embed a designated field, carry the rest as
+  sibling keys that are stored and returned but never vectorised). That is a
+  surface change and belongs behind its own Fable ruling.
   A vector store retrieves on whatever field carries the vector. If the embedded
   text is phrased in the vocabulary of the *answer* while queries arrive phrased
   in the vocabulary of the *problem*, the vectors never meet: nothing errors, no
