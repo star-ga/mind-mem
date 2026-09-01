@@ -542,7 +542,13 @@ class TestFlagOff:
             # byte-identity, it is testing how fast the machine is.
             result.pop("log", None)
             result["message"] = result["message"].replace(ws, "<ws>")
-            result["message"] = re.sub(r"/applied/\d{8}-\d{6}/", "/applied/<stamp>/", result["message"])
+            # Separator-agnostic on purpose. The first version matched only
+            # "/applied/<stamp>/" and so did nothing on Windows, where the same
+            # path renders with BACKSLASHES -- and with a mix of both, because
+            # part of it is joined by os.path and part is a literal in the
+            # message. Anchoring on the stamp itself, not on its surrounding
+            # separators, is what makes this portable.
+            result["message"] = re.sub(r"\d{8}-\d{6}", "<stamp>", result["message"])
             results[name] = result
             corpora[name] = Path(ws, "decisions", "DECISIONS.md").read_text(encoding="utf-8")
 
