@@ -10,11 +10,26 @@
 
 ## Currently shipping
 
-See `CHANGELOG.md` for the per-version detail (latest: v4.9.1) and the
-canonical current PyPI release; this roadmap covers forward-looking work,
+**Latest release: v5.0.1** (PyPI). See `CHANGELOG.md` for the per-version
+detail and the canonical record; this roadmap covers forward-looking work,
 not history.
 
-## Genuinely Open Items (post-v4.4.0 reality)
+> **5.0.0 / 5.0.1 — read this before planning anything.** 5.0.0 deleted 47
+> modules (14,711 LOC) plus 43 test files on the argument "nothing imports it".
+> That argument was wrong: **"nothing imports it" is evidence about WIRING,
+> never about worth.** 5.0.1 restored all 47 and wired 41 behind default-OFF
+> flags; the remaining 6 are deliberately unwired, each with a written trigger
+> in `scripts/reachability_baseline.txt`.
+>
+> Two consequences for anyone working this roadmap:
+> 1. An item whose code EXISTS but has no caller is **built-but-unwired**, not
+>    done and not worthless. Wiring it is usually far cheaper than the roadmap
+>    entry implies — check before estimating.
+> 2. `scripts/check_reachable_modules.py --list` now separates *deliberately
+>    waiting* (a decision, with its trigger) from *no recorded decision* (an
+>    open question). Never let the second silently become a deletion.
+
+## Genuinely Open Items (post-5.0.1 reality)
 
 Surfaced at the top so the actual remaining work is visible without
 scrolling 1500 lines of historical sections. Each item is followed
