@@ -33,7 +33,7 @@ All notable changes to MIND-Mem are documented in this file.
   also said "16 AI coding clients" against a registry of 19.
 * `docs/hf-mind-mem-4b-v2-README.md` now opens with a HISTORICAL banner; it
   documents the v2 weights against the v3.3.0 surface and read as current.
-* **Four live docs described a CI matrix that has not been run in months.**
+* **Four live docs described a CI matrix that is not the one CI runs.**
   `docs/faq.md`, `docs/development.md`, `docs/testing-guide.md` and
   `docs/ci-workflows.md` all enumerated Python "3.10, 3.12, 3.13, 3.14" —
   missing 3.11 since that row was added — and `docs/testing-guide.md` then
@@ -71,6 +71,16 @@ All notable changes to MIND-Mem are documented in this file.
   as a third `--backend` choice, with its own row in `docs/storage-backends.md`,
   since v3.0.0. A badge that understates is the same defect as one that
   overstates: it is a claim nothing checked.
+* Three historical v4 entries credited an internal review tool by name. Design
+  provenance does not belong in a public changelog; the entries now say the
+  change was architecture-reviewed before landing, which is the fact a reader
+  needs. No claim about any release changed.
+* **`docs/status.md` filed a shipped capability as "not yet shipped".** Model
+  provenance sat under "Experimental (in-tree, behind feature flags) — active
+  development on local main" while `audit_model_tool`, `sign_model_tool` and
+  `verify_model_tool` were registered unconditionally, counted in the 102 the
+  README badge advertises, covered by 28 tests, and gated by their own
+  `Audit Pinned Models` workflow. Moved to the implemented table.
 
 ### Added
 
@@ -97,7 +107,7 @@ All notable changes to MIND-Mem are documented in this file.
   cross-product is a finding. Two of these legs exist because mutating the doc
   back and watching the gate stay green showed the earlier line-oriented scan
   could not see either one.
-* A `**Module:** \`path\` (N lines, M tests, ...)` header is now checked against
+* A module doc header of the form **Module:** *path* (N lines, M tests, ...) is now checked against
   the module and its test file, so a per-module fact cannot drift silently on
   the next edit.
 * "Python 3.10+" — the single most-repeated claim in the docs, on nine live
@@ -107,6 +117,9 @@ All notable changes to MIND-Mem are documented in this file.
   something that cannot run.
 * The storage badge is held to `init_workspace.SUPPORTED_BACKENDS`, so the set
   of backends it advertises is the set `mind-mem-init --backend` accepts.
+* A capability claim gets the same treatment as a count: nothing under an
+  "Experimental" / "not yet shipped" heading in `docs/status.md` may name an
+  MCP tool module whose tools are in the registry the tool badge counts.
 
 ## [5.0.1] - 2026-09-01
 
@@ -1472,8 +1485,8 @@ suite today: **3.12**.
   `stage_counts` column), **no new MCP tool**. Fully **deterministic** — pure
   arithmetic over the already-deterministic credits plus a constant lookup;
   flag-off is a structural no-op. Lands the Group I "recall-sufficiency" roadmap
-  item — the novel product metric to report beside raw block counts. Fable-spec'd;
-  regression-gated by `tests/test_recall_sufficiency.py` (flag-off no-op +
+  item — the novel product metric to report beside raw block counts.
+  Architecture-reviewed before landing; regression-gated by `tests/test_recall_sufficiency.py` (flag-off no-op +
   enough-vs-starved discrimination driven purely by query class + determinism);
   the v4.7.0 / v4.6.0 tests pass **unchanged**. No `mind-mem-4b` retraining.
 
@@ -1496,7 +1509,7 @@ suite today: **3.12**.
   latest-per-block). Fully **deterministic** — no clock/rand on the scored
   preimage; disabled is a **complete no-op** (byte-identical output, no DB reads).
   Lands the Group I "do-first, cheapest, makes the rest measurable" roadmap item.
-  Fable-spec'd; regression-gated by `tests/test_feedback_credit.py` (opt-in no-op
+  Architecture-reviewed before landing; regression-gated by `tests/test_feedback_credit.py` (opt-in no-op
   + per-component discrimination + shared-helper contract + determinism), and
   `tests/test_validity_gate.py` passes **unchanged** — the proof the shared-helper
   refactor is behavior-preserving. Full non-stress suite green (`6128 passed`). No
@@ -1523,7 +1536,7 @@ suite today: **3.12**.
   Disabled is a **complete no-op** — no annotation, no DB reads, byte-identical to
   prior output. Optional `threshold` / `demotion` overrides are validated to the
   half-open `(0, 1]` range. Lands the Group I "validity gate wired into fusion"
-  roadmap item; Fable-spec'd. Regression-gated by `tests/test_validity_gate.py`
+  roadmap item; architecture-reviewed before landing. Regression-gated by `tests/test_validity_gate.py`
   (opt-in no-op + discrimination + determinism); full non-stress suite green
   (`6127 passed`). No `mind-mem-4b` retraining — backend-only, adds no MCP tool.
   **Retrain note:** the current 4b (trained knowing ~84 tools) already lags the

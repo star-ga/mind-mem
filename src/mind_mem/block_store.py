@@ -834,31 +834,67 @@ class MarkdownBlockStore:
         journal is local recovery; the chain record the scope writes
         from :meth:`~mind_mem.admission.AdmissionReceipt.record_removal`
         is the audit fact.
+
+        Resolution is by :meth:`_delete_candidates`, not by the prefix
+        map alone: a block this store can *read* must be a block it can
+        *remove*, or a governed delete becomes a governed refusal to
+        delete.
         """
         receipt = require_delete_admission(str(block_id))
-        target = _resolve_block_file(self._workspace, block_id)
-        if target is None or not os.path.isfile(target):
-            return False
+        for target in self._delete_candidates(str(block_id)):
+            with FileLock(target):
+                with open(target, "r", encoding="utf-8") as fh:
+                    text = fh.read()
+                loc = _locate_block_in_text(text, block_id)
+                if loc is None:
+                    continue
+                start, end, removed = loc
+                lines = text.split("\n")
+                new_lines = lines[:start] + lines[end:]
+                new_text = "\n".join(new_lines)
+                if new_text and not new_text.endswith("\n"):
+                    new_text += "\n"
+                _record_deletion(self._workspace, block_id, removed)
+                _atomic_write(target, new_text)
 
-        with FileLock(target):
-            with open(target, "r", encoding="utf-8") as fh:
-                text = fh.read()
-            loc = _locate_block_in_text(text, block_id)
-            if loc is None:
-                return False
-            start, end, removed = loc
-            lines = text.split("\n")
-            new_lines = lines[:start] + lines[end:]
-            new_text = "\n".join(new_lines)
-            if new_text and not new_text.endswith("\n"):
-                new_text += "\n"
-            _record_deletion(self._workspace, block_id, removed)
-            _atomic_write(target, new_text)
+            receipt.record_removal(str(block_id), removed)
+            self.invalidate_cache()
+            _log.info("block_store_delete", block_id=block_id, file=os.path.relpath(target, self._workspace))
+            return True
+        return False
 
-        receipt.record_removal(str(block_id), removed)
-        self.invalidate_cache()
-        _log.info("block_store_delete", block_id=block_id, file=os.path.relpath(target, self._workspace))
-        return True
+    def _delete_candidates(self, block_id: str) -> list[str]:
+        """Files that could hold *block_id*, canonical one first.
+
+        :func:`_resolve_block_file` answers only for the prefixes in
+        :data:`_BLOCK_PREFIX_MAP`, and its own docstring says so: it
+        "returns ``None`` for unrecognised prefixes. Callers must fall
+        back to full-corpus scan when the mapping is absent (e.g.,
+        signals, one-off entity types not in the prefix map)."
+        ``delete_block`` did not fall back, so a block the store could
+        read was a block it refused to delete — measured: a ``SIG-…``
+        block sitting in ``entities/signals.md`` is returned by
+        ``get_by_id`` and served by recall, while ``DELETE
+        /memories/{id}`` answered ``404 block not found`` and ``POST
+        /clear`` reported ``ok`` and left it behind. A *partial* purge
+        reported as a whole one, and an id an operator cannot destroy
+        through any door — which for a memory product is the shape of an
+        undeletable record.
+
+        The canonical file is tried first, so a mapped prefix costs
+        exactly what it cost before: one open. Everything else is walked
+        only when that misses — a path that previously returned the wrong
+        answer, so the scan is spent on the cases it fixes rather than on
+        the common one.
+        """
+        candidates: list[str] = []
+        mapped = _resolve_block_file(self._workspace, block_id)
+        if mapped is not None and os.path.isfile(mapped):
+            candidates.append(mapped)
+        for path in self._discover_files():
+            if path not in candidates and os.path.isfile(path):
+                candidates.append(path)
+        return candidates
 
     # ─── snapshot surface (v3.2.0 §1.4 PR-3) ────────────────────────────
 

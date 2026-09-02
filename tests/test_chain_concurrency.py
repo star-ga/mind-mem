@@ -38,6 +38,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 
 import pytest
@@ -49,6 +50,7 @@ from mind_mem.evidence_objects import (
     EvidenceChain,
     EvidenceChainCompromisedError,
 )
+from mind_mem.mind_filelock import FileLock, LockTimeout
 
 # ---------------------------------------------------------------------------
 # The writer that runs in each child process
@@ -825,8 +827,13 @@ if defeat:
             except OSError:
                 return (0, 0)
 
+    def _v501_break(self, identity=None):
+        """v5.0.1 _break_stale: unlink the path, arbitrated by nothing."""
+        _v501_unlink(self, identity)
+
     mfl.FileLock._unlink_if_ours = _v501_unlink
     mfl.FileLock._stale_identity = _v501_stale
+    mfl.FileLock._break_stale = _v501_break
 
 holder = target + ".holder"
 violations = 0
@@ -900,20 +907,329 @@ class TestTheStoreLockActuallyExcludes:
         assert violations == 0, f"two processes held the same lock {violations} times"
 
 
-class TestStoreLockMutationTwin:
-    """The same probe against the v5.0.1 lock, which must come out broken."""
+def _v501_stale_identity(self):
+    """The v5.0.1 ``_is_stale`` verdict, in this code's identity protocol.
 
-    def test_the_v501_lock_lets_two_processes_in(self, tmp_path):
-        # A race needs sampling: the window is real but narrow, so the
-        # control is allowed to look more than once before concluding it
-        # cannot see the defect. It is never allowed to pass without
-        # observing one.
-        seen = 0
-        for attempt in range(3):
-            violations, codes, reported = _run_lock_probe(tmp_path, defeat=True, tag=f"defeat{attempt}")
-            assert codes == (0,) * _LOCK_PROCS, f"a control worker failed: {codes}"
-            assert reported == _LOCK_PROCS, f"the control did not run: {reported}/{_LOCK_PROCS}"
-            seen += violations
-            if seen:
-                break
-        assert seen > 0, "the v5.0.1 lock excluded correctly — this probe cannot see the defect it is here to catch"
+    Empty or missing was read as "the owner is gone" — the two states a
+    lock being *taken* passes through.
+    """
+    try:
+        with open(self.lock_path, "r", encoding="utf-8") as fh:
+            pid_str = fh.read().strip()
+        if not pid_str:
+            return (0, 0)
+        pid = int(pid_str)
+        try:
+            os.kill(pid, 0)
+            return None
+        except ProcessLookupError:
+            return (0, 0)
+        except PermissionError:
+            return None
+    except (OSError, ValueError):
+        return (0, 0)
+
+
+def _v501_break(self, identity=None):
+    """v5.0.1 ``_break_stale``: unlink the path, arbitrated by nothing."""
+    try:
+        os.unlink(self.lock_path)
+    except OSError:
+        pass
+
+
+class TestAnEmptyLockfileIsNotACorpse:
+    """A lockfile is created and *then* written, so it is briefly empty.
+
+    Reading that as an abandoned lock is how a waiter walked into a
+    critical section somebody else was in the middle of claiming. This is
+    the deterministic statement of it — no timing, no sampling.
+    """
+
+    def test_a_lock_being_taken_is_not_judged_abandoned(self, tmp_path):
+        target = tmp_path / "contested.dat"
+        target.write_text("", encoding="utf-8")
+        lock = FileLock(str(target), timeout=0.2)
+        lockfile = tmp_path / "contested.dat.lock"
+
+        # Positive control: this lock DOES recognise a genuinely dead owner,
+        # so the refusal below is about the state and not a verdict that
+        # never fires.
+        lockfile.write_text(_IMPOSSIBLE_PID + "\n", encoding="utf-8")
+        assert lock._stale_identity() is not None
+
+        lockfile.write_text("", encoding="utf-8")  # created, pid not yet written
+        assert lock._stale_identity() is None, "a lock mid-handshake was read as abandoned"
+
+        # And the acquire waits it out rather than stealing it.
+        with pytest.raises(LockTimeout):
+            lock.acquire()
+        assert lockfile.exists(), "the acquire removed a lockfile it did not own"
+
+
+class TestStoreLockMutationTwin:
+    """The v5.0.1 verdict against the same file, which must come out wrong."""
+
+    def test_the_v501_verdict_steals_a_lock_that_is_being_taken(self, tmp_path, monkeypatch):
+        target = tmp_path / "contested.dat"
+        target.write_text("", encoding="utf-8")
+        lockfile = tmp_path / "contested.dat.lock"
+        lockfile.write_text("", encoding="utf-8")
+
+        monkeypatch.setattr(FileLock, "_stale_identity", _v501_stale_identity)
+        monkeypatch.setattr(FileLock, "_break_stale", _v501_break)
+
+        thief = FileLock(str(target), timeout=0.2)
+        thief.acquire()  # v5.0.1: breaks a lock that was mid-handshake
+        try:
+            assert int(lockfile.read_text(encoding="utf-8").strip()) == os.getpid(), (
+                "the v5.0.1 verdict did not steal the lock — this twin proves nothing"
+            )
+        finally:
+            thief.release()
+
+
+# ---------------------------------------------------------------------------
+# Breaking a crashed holder's lock: the hand-off nobody watches
+# ---------------------------------------------------------------------------
+
+#: A holder that dies leaves its lockfile behind, and the next writers must
+#: break it to make progress. That break is the one moment the protocol
+#: deliberately deletes a file it does not own, so it is the one moment two
+#: waiters can both act. Each round of this probe plants a lockfile owned by
+#: a pid that cannot exist and releases every worker at once, so the
+#: hand-off is exercised on every round rather than once at startup.
+_STALE_RACE_SOURCE = """\
+import os, sys, time
+import mind_mem.mind_filelock as mfl
+
+target, tag, rounds, bdir, nprocs, evidence = (
+    sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4],
+    int(sys.argv[5]), sys.argv[6],
+)
+
+breaks = [0]
+_real_break = mfl.FileLock._break_stale
+
+
+def _counted(self, identity=None):
+    breaks[0] += 1
+    return _real_break(self, identity)
+
+
+mfl.FileLock._break_stale = _counted
+
+holder = target + ".holder"
+violations = 0
+for r in range(rounds):
+    open(os.path.join(bdir, "ready-%d-%s" % (r, tag)), "w").close()
+    go = os.path.join(bdir, "go-%d" % r)
+    deadline = time.monotonic() + 60.0
+    while not os.path.exists(go):
+        if time.monotonic() > deadline:
+            raise SystemExit("go timeout at round %d" % r)
+        time.sleep(0.001)
+    with mfl.FileLock(target, timeout=30.0):
+        with open(holder, "w", encoding="utf-8") as fh:
+            fh.write(tag)
+        time.sleep(0.0008)
+        with open(holder, encoding="utf-8") as fh:
+            got = fh.read()
+        if got != tag:
+            violations += 1
+            with open(evidence, "a", encoding="utf-8") as fh:
+                fh.write("round=%d tag=%s read=%s\\n" % (r, tag, got))
+with open(evidence + ".counts", "a", encoding="utf-8") as fh:
+    fh.write("%s %d %d\\n" % (tag, violations, breaks[0]))
+"""
+
+#: A pid no process can have, so ``os.kill(pid, 0)`` is a definite
+#: "this owner is gone" rather than a guess.
+_IMPOSSIBLE_PID = "999999999"
+_RACE_PROCS = 6
+_RACE_ROUNDS = 60
+
+
+def _run_stale_race(tmp_path, *, tag: str) -> tuple[int, int, tuple, str]:
+    """Return (violations, stale_breaks, exit codes, evidence)."""
+    worker = tmp_path / f"stale_race_{tag}.py"
+    worker.write_text(_STALE_RACE_SOURCE, encoding="utf-8")
+    bdir = tmp_path / f"barrier_stale_{tag}"
+    bdir.mkdir()
+    target = tmp_path / f"contested_{tag}.dat"
+    target.write_text("", encoding="utf-8")
+    evidence = tmp_path / f"overlaps_{tag}.txt"
+    evidence.write_text("", encoding="utf-8")
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+    env["MIND_MEM_LOG_LEVEL"] = "error"
+
+    running = [
+        subprocess.Popen(
+            [
+                sys.executable,
+                str(worker),
+                str(target),
+                f"w{i}",
+                str(_RACE_ROUNDS),
+                str(bdir),
+                str(_RACE_PROCS),
+                str(evidence),
+            ],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for i in range(_RACE_PROCS)
+    ]
+    try:
+        for rnd in range(_RACE_ROUNDS):
+            prefix = f"ready-{rnd}-"
+            deadline = time.monotonic() + 120.0
+            while sum(1 for f in os.listdir(bdir) if f.startswith(prefix)) < _RACE_PROCS:
+                if time.monotonic() > deadline:
+                    break  # a worker died; the exit codes below will say so
+                time.sleep(0.001)
+            # The crashed holder: a lockfile naming an owner that is gone.
+            (target.parent / (target.name + ".lock")).write_text(_IMPOSSIBLE_PID + "\n", encoding="utf-8")
+            (bdir / f"go-{rnd}").write_text("", encoding="utf-8")
+    finally:
+        codes = []
+        for proc in running:
+            try:
+                proc.communicate(timeout=300)
+            except subprocess.TimeoutExpired:  # pragma: no cover - worker wedged
+                proc.kill()
+                proc.communicate()
+            codes.append(proc.returncode)
+
+    counts = tmp_path / f"overlaps_{tag}.txt.counts"
+    lines = [ln.split() for ln in counts.read_text(encoding="utf-8").splitlines() if ln.strip()] if counts.exists() else []
+    violations = sum(int(parts[1]) for parts in lines)
+    breaks = sum(int(parts[2]) for parts in lines)
+    return violations, breaks, tuple(codes), evidence.read_text(encoding="utf-8")
+
+
+class TestBreakingACrashedHoldersLockHasOneWinner:
+    def test_no_two_waiters_break_the_same_lock(self, tmp_path):
+        violations, breaks, codes, evidence = _run_stale_race(tmp_path, tag="fixed")
+
+        # Positive control: the break path has to have been walked, or a
+        # clean result says nothing. Every round plants a lockfile that
+        # somebody must break before anyone can enter.
+        assert codes == (0,) * _RACE_PROCS, f"a worker failed: {codes}"
+        assert breaks >= _RACE_ROUNDS, f"only {breaks} stale breaks over {_RACE_ROUNDS} rounds — the path was not exercised"
+
+        assert violations == 0, f"two processes held the same lock {violations} times:\n{evidence}"
+
+
+def _break_and_claim(lock: FileLock, lock_path: str) -> tuple[int, int] | None:
+    """A second breaker doing exactly what the protocol allows it to do.
+
+    It takes the OS lock on the abandoned file before removing it, then
+    creates its own claim — the winning half of a stale break. Returns the
+    new claim's identity, or ``None`` when the arbitration refused it
+    because somebody else is already breaking that file.
+    """
+    fd = os.open(lock_path, os.O_RDWR)
+    try:
+        if lock._try_os_lock(fd) is not True:
+            return None
+        os.unlink(lock_path)
+        lock._os_unlock(fd)
+    finally:
+        os.close(fd)
+    claim = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    try:
+        os.write(claim, f"{os.getpid()}\n".encode())
+        st = os.fstat(claim)
+    finally:
+        os.close(claim)
+    return (st.st_dev, st.st_ino)
+
+
+class _CompetingBreaker:
+    """Runs a second breaker in the gap between a ``stat`` and the unlink.
+
+    Two waiters confirm the same abandoned lockfile; the first unlinks it
+    and creates its own claim; the second — whose ``stat`` already said
+    "yes, that is the dead one" — unlinks by path and deletes the winner's
+    claim. Driving the interleaving from the ``stat`` makes it a fact
+    rather than a sampling exercise, and the competitor still has to pass
+    the same arbitration a real one would.
+    """
+
+    def __init__(self, lock: FileLock) -> None:
+        self.lock = lock
+        self.lock_path = lock.lock_path
+        self.real_stat = os.stat
+        self.attempts = 0
+        self.winner: tuple[int, int] | None = None
+
+    def __call__(self, path, *args, **kwargs):
+        st = self.real_stat(path, *args, **kwargs)
+        if self.attempts == 0 and str(path) == self.lock_path:
+            self.attempts = 1
+            self.winner = _break_and_claim(self.lock, self.lock_path)
+        return st
+
+
+def _plant_a_crashed_holder(tmp_path) -> tuple[FileLock, str, tuple[int, int]]:
+    target = tmp_path / "contested.dat"
+    target.write_text("", encoding="utf-8")
+    lock = FileLock(str(target), timeout=0.2)
+    with open(lock.lock_path, "w", encoding="utf-8") as fh:
+        fh.write(_IMPOSSIBLE_PID + "\n")
+    identity = lock._stale_identity()
+    assert identity is not None, "the planted lockfile must read as abandoned"
+    return lock, lock.lock_path, identity
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot unlink a lockfile that is still open")
+class TestBreakingIsAtomicAgainstAHandOff:
+    """Only one waiter may break a crashed holder's lock."""
+
+    def test_a_second_breaker_is_refused_while_the_break_is_in_progress(self, tmp_path, monkeypatch):
+        lock, lock_path, identity = _plant_a_crashed_holder(tmp_path)
+        competitor = _CompetingBreaker(lock)
+        monkeypatch.setattr(os, "stat", competitor)
+
+        lock._break_stale(identity)
+
+        monkeypatch.undo()
+        # Positive control: the competitor has to have tried, or "it did not
+        # get in" is a statement about a competitor that never ran.
+        assert competitor.attempts == 1, "the competitor never ran — the interleaving was not exercised"
+        assert competitor.winner is None, "a second breaker got in and replaced the lockfile mid-break"
+        assert not os.path.exists(lock_path), "the abandoned lockfile was not broken"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot unlink a lockfile that is still open")
+class TestStaleBreakMutationTwin:
+    """Why the identity check alone was not enough, stated as a measurement.
+
+    :meth:`FileLock._unlink_if_ours` is the shipped helper and it is
+    correct where :meth:`FileLock.release` uses it — a live owner's
+    lockfile cannot be swapped, because swapping it means breaking it and
+    breaking it means the owner is dead. As the *break* primitive it is
+    not correct, and this is the run that says so: it holds no OS lock, so
+    the competing breaker walks straight in.
+    """
+
+    def test_check_then_unlink_deletes_the_winners_claim(self, tmp_path, monkeypatch):
+        lock, lock_path, identity = _plant_a_crashed_holder(tmp_path)
+        competitor = _CompetingBreaker(lock)
+        monkeypatch.setattr(os, "stat", competitor)
+
+        lock._unlink_if_ours(identity)  # stat says "the corpse", then unlink by path
+
+        monkeypatch.undo()
+        assert competitor.attempts == 1, "the competitor never ran — the twin proves nothing"
+        assert competitor.winner is not None, (
+            "the competitor was refused — check-then-unlink cannot have deleted a claim that was never made"
+        )
+        assert not os.path.exists(lock_path), (
+            "check-then-unlink left the winner's claim alone — this twin cannot see the defect it is here to catch"
+        )

@@ -294,17 +294,99 @@ class FileLock:
         return self._stale_identity() is not None
 
     def _break_stale(self, identity: tuple[int, int] | None = None) -> None:
-        """Remove an abandoned lock file.
+        """Remove an abandoned lock file — as one atomic winner, not several.
 
-        *identity* is the lockfile :meth:`_stale_identity` judged, and the
-        unlink happens only while that is still the file on disk. Without
-        the check, the gap between judging and breaking is long enough for
-        the dead owner's successor to have created a fresh lockfile, and
-        the break would delete a live claim.
+        *identity* is the lockfile :meth:`_stale_identity` judged. Checking
+        it before unlinking is necessary and, on its own, not sufficient:
+        ``stat`` then ``unlink`` is two syscalls, so two waiters can both
+        confirm the dead file, the first can unlink it and create its own
+        live claim, and the second's unlink — still aimed at the path —
+        removes that claim. Both then create a lockfile and both believe
+        they hold the lock. Measured with the identity check alone: four
+        overlaps in 4320 acquisitions, down from ~3% but not gone.
+
+        So the break is arbitrated by the OS lock, which is the only thing
+        here that is atomic. A breaker must first take the OS lock on the
+        abandoned file; the dead owner's is released by the kernel, so it
+        succeeds for exactly one waiter, and while it is held nobody else
+        can break that inode. The path cannot change underneath it either:
+        replacing it requires unlinking this inode first, and that is what
+        we hold. A filesystem with no OS locking degrades to the identity
+        check alone — the same portability fallback :meth:`_os_lock`
+        documents, and no worse than before.
         """
         if identity is None:
             identity = self._stale_identity()
-        self._unlink_if_ours(identity)
+        if identity is None:
+            return
+        try:
+            fd = os.open(self.lock_path, os.O_RDWR)
+        except OSError:
+            return  # vanished: nothing to break
+        try:
+            # Identity BEFORE the lock, never after: between judging the
+            # file and opening it, its owner may have unlinked it and an
+            # acquirer created a fresh one at the same path. Locking that
+            # stranger's inode — even for the moment it takes to notice —
+            # makes its creator's own OS lock fail EWOULDBLOCK and its
+            # perfectly ordinary acquire raise.
+            st = os.fstat(fd)
+            if (st.st_dev, st.st_ino) != identity:
+                return  # not the file we judged
+            held = self._try_os_lock(fd)
+            if held is None:
+                self._unlink_if_ours(identity)  # no OS locking here
+                return
+            if not held:
+                return  # a live process holds it after all
+            try:
+                on_path = os.stat(self.lock_path)
+            except OSError:
+                return  # already unlinked by its owner
+            if (on_path.st_dev, on_path.st_ino) != identity:
+                return  # the path names somebody else's claim now
+            try:
+                os.unlink(self.lock_path)
+            except OSError:
+                pass
+        finally:
+            try:
+                self._os_unlock(fd)
+            except OSError:
+                pass
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def _try_os_lock(self, fd: int) -> bool | None:
+        """Take the OS lock without waiting.
+
+        ``True`` when this process now holds it, ``False`` when another
+        live process does, and ``None`` when the filesystem does not
+        implement advisory locking at all — the three answers
+        :meth:`_break_stale` has to tell apart, where :meth:`_os_lock`
+        raises for the second and silently succeeds for the third.
+        """
+        try:
+            import fcntl
+        except ImportError:
+            pass
+        else:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return True
+            except OSError as e:
+                return None if e.errno in _UNSUPPORTED_LOCK_ERRNOS else False
+        try:
+            import msvcrt
+        except ImportError:
+            return None
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
+            return True
+        except OSError as e:
+            return None if e.errno in _UNSUPPORTED_LOCK_ERRNOS else False
 
     @staticmethod
     def _pid_exists_win(pid: int) -> bool:

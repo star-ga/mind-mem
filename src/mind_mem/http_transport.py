@@ -724,6 +724,19 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> t
         present only when the corpus held blocks with no id: an
         incomplete wipe must be visibly incomplete, and a key nobody has
         to read is the additive way to say so.
+
+    Scope, stated because a wipe that is narrower than its name is the
+    same failure in a smaller box: "the corpus" is whatever
+    ``store.get_all`` returns, and on the Markdown backends that is the
+    four ``CORPUS_DIRS`` (``decisions``, ``tasks``, ``entities``,
+    ``intelligence``), non-recursively. Measured: a block in
+    ``memory/INBOX.md`` is invisible to ``get_all`` and ``get_by_id``
+    alike, so this endpoint does not take it — the inbox, agent-message,
+    imported and ingest corpora under ``memory/`` are outside every read
+    surface the store offers, and widening the wipe past what the store
+    can read would destroy content no reader can see. ``DELETE
+    /memories/{id}`` still removes those by id, because the prefix map
+    resolves them directly.
     """
     rationale = body.get("rationale")
     confirm = body.get("confirm")

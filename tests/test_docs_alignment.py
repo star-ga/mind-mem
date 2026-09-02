@@ -733,6 +733,22 @@ class TestCIPythonListClaims:
     def test_a_single_version_is_not_an_enumeration(self):
         assert self.scan_lines(["Core requires only Python 3.10+ stdlib; CI covers more."]) == []
 
+    def test_fix_rewrites_the_whole_enumeration_in_place(self, tmp_path):
+        """The finding's span covers the whole list, so --fix can replace it."""
+        (tmp_path / "docs").mkdir(parents=True)
+        doc = tmp_path / "docs" / "faq.md"
+        doc.write_text("Python 3.10, 3.12, 3.13, and 3.14 are tested in CI.\n", encoding="utf-8")
+        findings = cda.scan_ci_python_lists("docs/faq.md", doc.read_text(encoding="utf-8").splitlines(), make_authorities())
+        fixed, skipped = cda.apply_fixes(findings, tmp_path)
+        assert (fixed, skipped) == (1, [])
+        assert doc.read_text(encoding="utf-8") == "Python 3.10, 3.11, 3.12, 3.13, and 3.14 are tested in CI.\n"
+
+    def test_a_one_interpreter_matrix_suggests_no_separator(self):
+        """A matrix cut to one row must not suggest ", and 3.12" as the fix."""
+        auth = make_authorities(ci_python_versions=("3.12",))
+        found = self.scan_lines(["tested in CI: 3.10, 3.11, and 3.12"], auth=auth)
+        assert [f.actual for f in found] == ["3.12"]
+
 
 class TestWorkflowTableCheck:
     def make_doc(self, tmp_path: Path, rows: str) -> Path:
@@ -808,6 +824,15 @@ class TestEvalClaims:
     def test_the_harness_probe_line_is_gated(self, tmp_path):
         root = self.write_card(tmp_path, "Harness: `train/eval_harness.py` — **109 probes** (95 v3.x + 14)\n")
         assert [(f.claimed, f.actual) for f in cda.check_eval_claims(make_authorities(), root)] == [("109", "111")]
+
+    def test_the_holdout_probe_sentence_is_gated(self, tmp_path):
+        root = self.write_card(tmp_path, "Held-out paraphrase eval (`train/eval_holdout.py` — 19 probes that\n")
+        assert [(f.claimed, f.actual) for f in cda.check_eval_claims(make_authorities(), root)] == [("19", "22")]
+
+    def test_a_per_category_probe_count_elsewhere_is_not_gated(self, tmp_path):
+        """ "3 probes, 95 % threshold" is about one category, not the holdout set."""
+        root = self.write_card(tmp_path, "Transform-hash has 3 probes at a 95% threshold.\n")
+        assert cda.check_eval_claims(make_authorities(), root) == []
 
     def test_the_true_totals_pass(self, tmp_path):
         body = (
@@ -1109,3 +1134,53 @@ class TestBackendsBadge:
     def test_the_backends_authority_is_load_bearing(self):
         mutated = cda.Authorities(**{**real_auth_kwargs(), "backends": ("markdown", "postgres")})
         assert cda.check_backends_badge(mutated, ROOT) != []
+
+
+class TestExperimentalIsNotShipped:
+    """A capability claim with an authority: the tool registry says what shipped.
+
+    ``docs/status.md`` filed model provenance under "Experimental ... not yet
+    shipped" while ``audit_model_tool``/``sign_model_tool``/``verify_model_tool``
+    were registered unconditionally and counted in the tool badge.
+    """
+
+    def build(self, tmp_path: Path, status_body: str, tool_body: str) -> Path:
+        (tmp_path / "docs").mkdir(parents=True)
+        (tmp_path / "docs" / "status.md").write_text(status_body, encoding="utf-8")
+        (tmp_path / "src" / "mind_mem" / "mcp" / "tools").mkdir(parents=True)
+        (tmp_path / "src" / "mind_mem" / "mcp" / "tools" / "widget.py").write_text(tool_body, encoding="utf-8")
+        return tmp_path
+
+    # ``count_mcp_tools._tool_names`` reads ``mcp.tool(<fn>)`` REGISTRATION
+    # calls, not decorators -- the same rule the 102 comes from, so this stub
+    # is registered by exactly the definition of "registered" the badge uses.
+    REGISTERED = "def widget_tool(x):\n    return x\n\n\ndef register(mcp):\n    mcp.tool(widget_tool)\n"
+    UNREGISTERED = "def widget_helper(x):\n    return x\n"
+
+    def test_a_registered_module_under_experimental_is_caught(self, tmp_path):
+        status = "## Experimental (in-tree, behind feature flags)\n\n| A | `src/mind_mem/mcp/tools/widget.py` | not yet shipped |\n"
+        found = cda.check_experimental_is_not_shipped(make_authorities(), self.build(tmp_path, status, self.REGISTERED))
+        assert [f.kind for f in found] == ["shipped_not_experimental"]
+        assert "widget_tool" in found[0].actual
+
+    def test_a_module_registering_nothing_is_left_alone(self, tmp_path):
+        status = "## Experimental (in-tree, behind feature flags)\n\n| A | `src/mind_mem/mcp/tools/widget.py` | not yet shipped |\n"
+        assert cda.check_experimental_is_not_shipped(make_authorities(), self.build(tmp_path, status, self.UNREGISTERED)) == []
+
+    def test_the_same_module_under_an_implemented_heading_is_fine(self, tmp_path):
+        status = "## Implemented now (operational, tested)\n\n| A | `src/mind_mem/mcp/tools/widget.py` | ships |\n"
+        assert cda.check_experimental_is_not_shipped(make_authorities(), self.build(tmp_path, status, self.REGISTERED)) == []
+
+    def test_the_experimental_scope_closes_at_the_next_heading(self, tmp_path):
+        status = (
+            "## Experimental (in-tree, behind feature flags)\n\n| A | `nothing` | x |\n\n"
+            "## Implemented now\n\n| B | `src/mind_mem/mcp/tools/widget.py` | ships |\n"
+        )
+        assert cda.check_experimental_is_not_shipped(make_authorities(), self.build(tmp_path, status, self.REGISTERED)) == []
+        # Positive control: move the row back under the experimental heading and
+        # the same code path fires, so the scope is scoping rather than muting.
+        moved = "## Experimental (in-tree, behind feature flags)\n\n| B | `src/mind_mem/mcp/tools/widget.py` | x |\n"
+        assert cda.check_experimental_is_not_shipped(make_authorities(), self.build(tmp_path / "second", moved, self.REGISTERED)) != []
+
+    def test_the_shipped_status_page_makes_no_unshipped_claim_about_a_live_tool(self):
+        assert cda.check_experimental_is_not_shipped(cda.Authorities(**real_auth_kwargs()), ROOT) == []

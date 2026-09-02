@@ -262,6 +262,46 @@ def test_a_wipe_takes_the_withheld_blocks_as_well(workspace: str) -> None:
     assert _live_ids(workspace) == set()
 
 
+def test_clear_empties_an_encrypted_corpus_too(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The wrapper reads ids off ciphertext, so the fix is not Markdown-only.
+
+    The encrypted backend is where an enumeration mistake hides best: the
+    corpus on disk is opaque, so "the clear reported success" is all an
+    operator can see without the passphrase.
+    """
+    from mind_mem.block_store_encrypted import encrypt_workspace
+
+    ws = tmp_path / "enc"
+    for sub in ("memory", "decisions", "tasks", "entities", "intelligence"):
+        (ws / sub).mkdir(parents=True, exist_ok=True)
+    (ws / "mind-mem.json").write_text(
+        json.dumps({"workspace_path": str(ws), "block_store": {"backend": "encrypted"}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MIND_MEM_ENCRYPTION_PASSPHRASE", "governed-clear-conformance-passphrase")
+    for i, bid in enumerate(ACTIVE_IDS, start=1):
+        _seed(str(ws), bid, f"sealed content {i}")
+    assert encrypt_workspace(str(ws))["encrypted"] >= 1, "the corpus was never sealed, so this is the Markdown test again"
+
+    try:
+        store = get_block_store(str(ws))
+        ids, unreachable = _corpus_block_ids(store)
+        # Positive control on both halves: the wrapper can read its own
+        # ciphertext, and the file on disk really is ciphertext.
+        assert sorted(ids) == sorted(ACTIVE_IDS)
+        assert unreachable == 0
+        raw = (ws / "decisions" / "DECISIONS.md").read_bytes()
+        assert ACTIVE_IDS[0].encode() not in raw, "the corpus is plaintext, so nothing about encryption was tested"
+
+        status, body = _handle_clear(str(ws), CLEAR_BODY, actor="alice")
+
+        assert status == 200
+        assert body["deleted"] == len(ACTIVE_IDS)
+        assert _corpus_block_ids(get_block_store(str(ws)))[0] == []
+    finally:
+        evict_gate(str(ws))
+
+
 def test_an_unreachable_block_is_reported_on_the_response(workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """A partial wipe must be visibly partial."""
 

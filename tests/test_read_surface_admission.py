@@ -547,9 +547,10 @@ def test_the_binding_detector_sees_a_rejected_call(seed_template: str) -> None:
     try:
         missing_arg = _call("arch_baseline", {"repo": workspace}, workspace, "admin")
         bogus_kwarg = _call("index_stats", {"no_such_parameter": 1}, workspace, "admin")
+        well_formed = _call("index_stats", {}, workspace, "admin")
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
     assert _is_binding_error(missing_arg), f"a missing required argument was not detected: {missing_arg!r}"
     assert _is_binding_error(bogus_kwarg), f"an unexpected keyword was not detected: {bogus_kwarg!r}"
-    assert not _is_binding_error(_call("index_stats", {}, seed_template, "admin")), "a well-formed call was flagged as a binding error"
+    assert not _is_binding_error(well_formed), f"a well-formed call was flagged as a binding error: {well_formed[:200]!r}"

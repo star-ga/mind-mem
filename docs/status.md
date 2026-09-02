@@ -44,6 +44,7 @@ Package is a flat `src/mind_mem/` — there is no `governance/` subpackage.
 | MCP server entry | `src/mind_mem/mcp_server.py` | 102 tools across recall / write / governance / observability / audit. |
 | Native MCP integration (19 clients) | `src/mind_mem/hook_installer.py` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw + 10 more. |
 | Multi-backend LLM extractor | `src/mind_mem/llm_extractor.py` | ollama / openai-compatible / vLLM / exllamav2 backends selected by `backend="auto"`. |
+| Model provenance (audit / sign / verify) | `src/mind_mem/model_provenance.py`, `src/mind_mem/mcp/tools/model.py` | `audit_model_tool`, `sign_model_tool`, `verify_model_tool` are in the shipped tool surface — no feature flag — with 28 tests and their own `Audit Pinned Models` workflow. This row said "not yet shipped" while all three were counted in the tool badge. |
 
 ### MIND scoring kernels
 
@@ -66,7 +67,6 @@ Kernel sources live in `mind/` (repo root), not `kernels/`.
 
 | Component | Source | Status |
 |---|---|---|
-| Model provenance v1.0 (in-flight) | `src/mind_mem/model_provenance.py`, `src/mind_mem/mcp/tools/model.py`, `tests/test_model_provenance.py` | Active development on local main; not yet shipped. |
 | Adversarial-memory + Jepsen stress tests | _(planned — no dedicated suite yet)_ | v3.0.0+; gated on long-haul CI runner. |
 
 ## Future roadmap (alignment-driven)

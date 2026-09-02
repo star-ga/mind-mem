@@ -68,10 +68,20 @@ v4 feature flags       ``ALL_V4_FLAGS``, live and at ``<TRAINED_REVISION>``
 CI Python / OS / jobs  the ``test`` job's ``strategy.matrix`` in
                        ``.github/workflows/ci.yml`` (jobs = the cross-product)
 workflow table         every file in ``.github/workflows`` and its ``name:``
+supported Python       ``requires-python`` (the floor) and the
+                       ``Programming Language :: Python ::`` classifiers (the
+                       advertised range)
+storage backends       ``init_workspace.SUPPORTED_BACKENDS``
+module facts           the module's own line count, and the ``def test_*``
+                       functions in ``tests/test_<stem>.py``
+shipped vs experimental  the MCP tool registry: nothing under an
+                       "Experimental" heading may name a registered module
 =====================  =====================================================
 
 An authority that cannot be computed exits **2**, never 0 with an empty
-finding list: a verifier that died is not a verifier that passed.
+finding list: a verifier that died is not a verifier that passed. Two of them
+read the TRAINED revision out of git history, so a shallow CI checkout exits 2
+with a message naming ``fetch-depth: 0`` rather than reporting agreement.
 
 Usage:
     python3 scripts/check_docs_alignment.py                  # report + exit 1 on drift
@@ -622,7 +632,14 @@ def _ci_scopes(lines: list[str]) -> list[bool]:
 
 
 def _render_version_list(versions: tuple[str, ...], template: str) -> str:
-    """Re-render *versions* in the separator style the claim already used."""
+    """Re-render *versions* in the separator style the claim already used.
+
+    A one-element authority (a matrix cut back to a single interpreter) takes
+    no separator at all: the Oxford-comma branch would otherwise suggest
+    ", and 3.12" as the replacement text.
+    """
+    if len(versions) == 1:
+        return versions[0]
     if "/" in template:
         return "/".join(versions)
     if re.search(r",\s*and\s", template):
@@ -684,6 +701,7 @@ def scan_docs(auth: Authorities, root: Path | None = None) -> list[Finding]:
     findings.extend(check_workflow_table(auth, root))
     findings.extend(check_ci_matrix_grid(auth, root))
     findings.extend(check_module_facts(auth, root))
+    findings.extend(check_experimental_is_not_shipped(auth, root))
     findings.extend(check_eval_claims(auth, root))
     return findings
 
@@ -852,6 +870,59 @@ def check_module_facts(auth: Authorities, root: Path | None = None) -> list[Find
     return out
 
 
+# A CAPABILITY claim, not a count: `docs/status.md` filed model provenance under
+# "Experimental (in-tree, behind feature flags) ... not yet shipped" while its
+# three tools were registered unconditionally, counted in the 102 the README
+# badge advertises, covered by 28 tests, and gated by their own workflow. The
+# tool registry is the authority for what shipped, so a doc cannot call a
+# registered surface unshipped.
+_STATUS_DOC = "docs/status.md"
+_EXPERIMENTAL_HEADING = re.compile(r"^(?P<hashes>\s{0,3}#{1,6})\s+(?P<title>.*)$")
+_TOOL_MODULE_REF = re.compile(r"`(?P<path>src/mind_mem/mcp/tools/[A-Za-z0-9_]+\.py)`")
+
+
+def check_experimental_is_not_shipped(auth: Authorities, root: Path | None = None) -> list[Finding]:
+    """No component under an "Experimental"/"not yet shipped" heading may be live."""
+    root = root or _project_root()
+    path = root / _STATUS_DOC
+    if not path.is_file():
+        return []
+    out: list[Finding] = []
+    in_experimental = False
+    level = 0
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        heading = _EXPERIMENTAL_HEADING.match(line)
+        if heading is not None:
+            depth = len(heading.group("hashes").strip())
+            title = heading.group("title")
+            if re.search(r"\b(experimental|planned|not yet shipped|roadmap)\b", title, re.IGNORECASE):
+                in_experimental, level = True, depth
+            elif in_experimental and depth <= level:
+                in_experimental = False
+            continue
+        if not in_experimental:
+            continue
+        for match in _TOOL_MODULE_REF.finditer(line):
+            module = root / match.group("path")
+            if not module.is_file():
+                continue
+            names = sorted(cmt._tool_names(module))
+            if names:
+                out.append(
+                    Finding(
+                        _STATUS_DOC,
+                        lineno,
+                        "shipped_not_experimental",
+                        match.group("path"),
+                        f"registered and counted in the {auth.live_tools}-tool surface: {', '.join(names)}",
+                        line[:120],
+                        0,
+                        0,
+                    )
+                )
+    return out
+
+
 # The 4b eval totals. Every per-category row in the model card already matched
 # the harness; the TOTALS are what drifted -- ``docs/mind-mem-4b-setup.md``
 # advertised 109/109, the score of the ``v4.0.0-base`` archive two revisions
@@ -864,6 +935,10 @@ _EVAL_TOTAL_ROW = re.compile(r"\*\*Total (?P<which>main|holdout)\*\*\s*\|\s*\*\*
 # green, which is the only reason this is not still a per-line regex.
 _EVAL_GRAND = re.compile(r"(?:Grand total|Eval score)[^:]{0,120}?:?\s*\**(?P<n>\d+)\s*/\s*(?P<d>\d+)")
 _EVAL_HARNESS_PROBES = re.compile(r"Harness:[^\n]*?\*\*(?P<n>\d+) probes\*\*")
+# "(`train/eval_holdout.py` -- 22 probes that do **not** appear verbatim...)".
+# Anchored on the harness filename so it cannot drift onto a per-category
+# "3 probes" elsewhere on the page.
+_EVAL_HOLDOUT_PROBES = re.compile(r"eval_holdout\.py`?[^\n]{0,20}?(?P<n>\d+)\s+probes\b")
 
 
 def check_eval_claims(auth: Authorities, root: Path | None = None) -> list[Finding]:
@@ -879,6 +954,7 @@ def check_eval_claims(auth: Authorities, root: Path | None = None) -> list[Findi
             (_EVAL_TOTAL_ROW, lambda m: auth.eval_main_probes if m.group("which") == "main" else auth.eval_holdout_probes),
             (_EVAL_GRAND, lambda m: auth.eval_total_probes),
             (_EVAL_HARNESS_PROBES, lambda m: auth.eval_main_probes),
+            (_EVAL_HOLDOUT_PROBES, lambda m: auth.eval_holdout_probes),
         ):
             for match in pattern.finditer(text):
                 expected = expected_for(match)
