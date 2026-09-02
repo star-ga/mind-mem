@@ -1,0 +1,330 @@
+{
+  "_provenance": "THE DANGEROUS CASE: a workflow run whose own conclusion is 'success' while one of its jobs concluded 'failure', which is exactly what ci.yml's continue-on-error: ${{ matrix.python-version == '3.14' }} produced. No natural instance exists to capture: every one of the 83 success-concluded CI runs in the last 200 (2026-05-24 to 2026-09-02) has all 31 jobs green, so this run is CONSTRUCTED -- the job list is the real, unaltered list from green run 33511997100 with run_id renumbered and exactly one row, 'test (ubuntu-latest, 3.14)', set to conclusion 'failure'. That is the value a real red continue-on-error row carries: in run 33386877502 the job 'test (windows-latest, 3.14)' reports conclusion 'failure' at the job level while the ubuntu and macos 3.14 rows report 'success'. The run object below keeps conclusion 'success', which is what GitHub records when the only red jobs are continue-on-error ones.",
+  "workflow_runs": [
+    {
+      "id": 90000000001,
+      "head_sha": "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeeabcd",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "created_at": "2026-09-02T03:00:00Z",
+      "run_started_at": "2026-09-02T03:00:00Z",
+      "updated_at": "2026-09-02T03:31:00Z"
+    }
+  ],
+  "90000000001": {
+    "total_count": 31,
+    "jobs": [
+      {
+        "id": 99869685642,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "postgres backend",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:29Z",
+        "completed_at": "2026-09-01T13:15:36Z"
+      },
+      {
+        "id": 99869685857,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (ubuntu-latest, 3.12)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:19:23Z"
+      },
+      {
+        "id": 99869685873,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "pinned-requirements",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:31Z",
+        "completed_at": "2026-09-01T13:14:00Z"
+      },
+      {
+        "id": 99869685912,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (ubuntu-latest, 3.13)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:29Z",
+        "completed_at": "2026-09-01T13:17:32Z"
+      },
+      {
+        "id": 99869685917,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "typecheck",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:29Z",
+        "completed_at": "2026-09-01T13:15:25Z"
+      },
+      {
+        "id": 99869685939,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "author-identity",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:34Z"
+      },
+      {
+        "id": 99869685963,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (macos-latest, 3.12)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:32Z",
+        "completed_at": "2026-09-01T13:18:34Z"
+      },
+      {
+        "id": 99869685975,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "install.sh smoke (pip)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:52Z"
+      },
+      {
+        "id": 99869685979,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (windows-latest, 3.13)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:32:38Z"
+      },
+      {
+        "id": 99869685981,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "validate",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:40Z"
+      },
+      {
+        "id": 99869685984,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (ubuntu-latest, 3.14)",
+        "status": "completed",
+        "conclusion": "failure",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:17:53Z"
+      },
+      {
+        "id": 99869685991,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": ".[mcp] installs",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:13:00Z"
+      },
+      {
+        "id": 99869686004,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (macos-latest, 3.11)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:31Z",
+        "completed_at": "2026-09-01T13:17:56Z"
+      },
+      {
+        "id": 99869686010,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "version-check",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:44Z"
+      },
+      {
+        "id": 99869686031,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (windows-latest, 3.11)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:31Z",
+        "completed_at": "2026-09-01T13:28:12Z"
+      },
+      {
+        "id": 99869686054,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "docker-build",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:13:36Z"
+      },
+      {
+        "id": 99869686067,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (windows-latest, 3.10)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:28:06Z"
+      },
+      {
+        "id": 99869686072,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (macos-latest, 3.14)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:32Z",
+        "completed_at": "2026-09-01T13:18:39Z"
+      },
+      {
+        "id": 99869686073,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (ubuntu-latest, 3.10)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:17:30Z"
+      },
+      {
+        "id": 99869686092,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "install.sh smoke (pipx)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:56Z"
+      },
+      {
+        "id": 99869686125,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "compose-config (defaults)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:36Z"
+      },
+      {
+        "id": 99869686135,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (macos-latest, 3.10)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:18:14Z"
+      },
+      {
+        "id": 99869686208,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (macos-latest, 3.13)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:17:57Z"
+      },
+      {
+        "id": 99869686218,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": ".[embeddings] installs",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:47Z"
+      },
+      {
+        "id": 99869686230,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (windows-latest, 3.14)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:29Z",
+        "completed_at": "2026-09-01T13:28:15Z"
+      },
+      {
+        "id": 99869686238,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": ".[all] installs",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:33Z",
+        "completed_at": "2026-09-01T13:14:08Z"
+      },
+      {
+        "id": 99869686244,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:40Z"
+      },
+      {
+        "id": 99869686258,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (ubuntu-latest, 3.11)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:17:18Z"
+      },
+      {
+        "id": 99869686329,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "compose-config (overrides, alice, factsdb)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:29Z",
+        "completed_at": "2026-09-01T13:12:33Z"
+      },
+      {
+        "id": 99869686461,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": ".[api] installs",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:12:47Z"
+      },
+      {
+        "id": 99869686713,
+        "run_id": 90000000001,
+        "run_attempt": 1,
+        "name": "test (windows-latest, 3.12)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-09-01T13:12:30Z",
+        "completed_at": "2026-09-01T13:29:14Z"
+      }
+    ]
+  }
+}

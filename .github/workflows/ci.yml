@@ -29,9 +29,41 @@ jobs:
       # which spontaneously turns this job red on untouched code. Bump
       # deliberately (and run `ruff check --fix && ruff format` once) when raising.
       - run: pip install ruff==0.15.15
-      - run: ruff check src/ tests/
+      # Lint the WHOLE repository, not just src/ tests/. The old two-path scope
+      # left 62 of the 903 tracked .py files unlinted: 6 root-level (conftest.py,
+      # conftest_trace.py, mcp_server.py, setup.py, generate_mind7b_training.py,
+      # train_mind7b_runpod.py), benchmarks/ 32, train/ 17, scripts/ 5,
+      # examples/ 2. That blind spot was not hypothetical -- it hid 9 real
+      # errors in conftest_trace.py (E401 x1, I001 x1, E701 x6, E702 x1) for as
+      # long as the file existed, and `ruff check src/ tests/` reported "All
+      # checks passed" the whole time. scripts/ is the most costly omission of
+      # the five: several release/CI gates are implemented there, so the code
+      # that guards the release was itself unguarded.
+      # Measured on the committed tree (1ec7f63) before widening: `ruff check .`
+      # finds exactly those 9 errors and nothing else -- benchmarks/, train/,
+      # scripts/ and examples/ each report zero -- so with conftest_trace.py
+      # fixed this widening is clean at zero cost and can only ratchet.
+      - run: ruff check .
       - name: Format check
-        run: python3 -m ruff format --check src/ tests/
+        # Deliberately narrower than `ruff check .` above. This is a staging
+        # decision with a counted reason, not a tolerated ignore list:
+        # `ruff format` is whitespace normalisation, and on the committed tree
+        # (1ec7f63) 29 of the 903 tracked .py files predate it. 27 of those 29
+        # are the two excluded directories -- benchmarks/ 15 of 32 (554 diff
+        # lines) and train/ 12 of 17 (944 diff lines), 1498 lines of pure
+        # formatting churn that buys no correctness and would bury the changes
+        # that matter -- so those two are staged for a separate formatting-only
+        # pass; they remain fully covered by `ruff check .` above.
+        # The other 2 (conftest_trace.py, examples/mic_map_quickstart.py) are
+        # FIXED rather than excluded, which is what lets this step be a ratchet
+        # at zero: with them formatted, src/ (322 files), tests/ (519),
+        # scripts/ (5), examples/ (2) and the 6 root-level files all report
+        # "already formatted" -- 854 files, no exceptions.
+        # Written as "." minus two named directories rather than as a list of
+        # included paths on purpose: an include-list is exactly what produced
+        # the blind spot above, because it never grew when new directories did.
+        # This form covers any new file or directory by default.
+        run: python3 -m ruff format --check . --exclude benchmarks --exclude train
 
   typecheck:
     # v3.7.0 M5: typecheck is now blocking (was continue-on-error: true).
@@ -57,12 +89,32 @@ jobs:
     # v3.7.0 M5: every advertised OS/Python combination must pass —
     # "advertised" means the classifiers in pyproject.toml, which stop at 3.13.
     runs-on: ${{ matrix.os }}
-    # Python 3.14 is deliberately NOT advertised: its classifier was dropped in
-    # 4.10.0 because the suite segfaults on 3.14 during anyio/TestClient
-    # teardown (see the CHANGELOG "Known issue — Python 3.14"). The 3.14 rows
-    # stay in the matrix as an early-warning signal but remain advisory
-    # (continue-on-error); the 3.10/3.12/3.13 rows gate the workflow.
-    continue-on-error: ${{ matrix.python-version == '3.14' }}
+    # NO row is advisory. The 3.14 rows used to carry
+    # `continue-on-error: ${{ matrix.python-version == '3.14' }}`, which makes a
+    # job fail visibly red while the run it belongs to still concludes
+    # `success` — so a red row read as a pass, both in the UI and in every gate
+    # that consults the run conclusion.
+    #
+    # Measured before removing it, over the 198 runs of this workflow with job
+    # data between 2026-05-24 and 2026-09-02 (`gh api .../actions/runs/<id>/jobs`):
+    #   * 83 runs concluded `success`, and ZERO of them contain a single
+    #     non-success job — so removing the forgiveness would not have turned
+    #     one green run red;
+    #   * ZERO runs had 3.14 rows as their ONLY red jobs — so in that whole
+    #     window the setting never once changed a run's conclusion. It was not
+    #     protecting anything; it was only hiding rows;
+    #   * a 3.14 row failed while its same-OS 3.13 row passed 4 times (most
+    #     recently run 33271995016, 2026-08-29), and every one of those runs was
+    #     already red for other reasons. So 3.14 can still fail on its own, and
+    #     from now on that failure stops the workflow instead of being filed as
+    #     an advisory — which is the point: a red row is not green.
+    #   * at HEAD (run 33579619488) all three 3.14 rows are green.
+    #
+    # The CHANGELOG "Known issue — Python 3.14" (anyio/TestClient teardown
+    # segfault) is why 3.14 is still not in the pyproject classifiers. That is a
+    # question about what we ADVERTISE; it is not a licence to run a row and
+    # then ignore its answer. If the segfault resurfaces, this matrix goes red
+    # and someone decides deliberately — fix it, or drop the row entirely.
     strategy:
       fail-fast: false
       matrix:
@@ -80,8 +132,14 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
+          # No `allow-prereleases`. With it, a row named "3.14" could resolve to
+          # a pre-release build, so the thing CI proved and the thing users run
+          # would differ silently. Verified against actions/python-versions
+          # versions-manifest.json on 2026-09-02: stable 3.14.7 publishes
+          # linux-24.04/x64, darwin/arm64+x64 and win32/x64 builds, i.e. every
+          # platform in this matrix, so every row resolves to a released
+          # interpreter without it.
           python-version: ${{ matrix.python-version }}
-          allow-prereleases: true
       - run: pip install -e ".[test]"
       - name: Unit tests with coverage (ubuntu-3.12 only)
         # v4.0.9: coverage instrumentation across 5000+ tests is the

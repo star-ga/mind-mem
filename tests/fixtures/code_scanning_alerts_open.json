@@ -1,0 +1,42 @@
+[
+  {
+    "number": 239,
+    "state": "open",
+    "rule": {
+      "id": "py/path-injection",
+      "severity": "error",
+      "security_severity_level": "high"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "location": {
+        "path": "src/mind_mem/apply_engine.py",
+        "start_line": 1768,
+        "end_line": 1768,
+        "start_column": 37,
+        "end_column": 49
+      }
+    },
+    "html_url": "https://github.com/star-ga/mind-mem/security/code-scanning/239"
+  },
+  {
+    "number": 238,
+    "state": "open",
+    "rule": {
+      "id": "B110",
+      "severity": "note",
+      "security_severity_level": null
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "location": {
+        "path": "src/mind_mem/event_fanout.py",
+        "start_line": 508,
+        "end_line": 509,
+        "start_column": 9,
+        "end_column": 17
+      }
+    },
+    "html_url": "https://github.com/star-ga/mind-mem/security/code-scanning/238"
+  }
+]

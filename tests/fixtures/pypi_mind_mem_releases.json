@@ -1,0 +1,72 @@
+{
+  "info": {
+    "name": "mind-mem",
+    "version": "5.0.1"
+  },
+  "releases": {
+    "4.1.1": [
+      {
+        "filename": "mind_mem-4.1.1-py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+        "upload_time_iso_8601": "2026-06-23T10:02:40.992294Z",
+        "yanked": false,
+        "yanked_reason": null
+      },
+      {
+        "filename": "mind_mem-4.1.1.tar.gz",
+        "packagetype": "sdist",
+        "upload_time_iso_8601": "2026-06-23T10:02:43.458001Z",
+        "yanked": false,
+        "yanked_reason": null
+      }
+    ],
+    "5.0.0": [
+      {
+        "filename": "mind_mem-5.0.0-py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+        "upload_time_iso_8601": "2026-09-01T13:34:50.424740Z",
+        "yanked": false,
+        "yanked_reason": null
+      },
+      {
+        "filename": "mind_mem-5.0.0.tar.gz",
+        "packagetype": "sdist",
+        "upload_time_iso_8601": "2026-09-01T13:34:52.485716Z",
+        "yanked": false,
+        "yanked_reason": null
+      }
+    ],
+    "5.0.1": [
+      {
+        "filename": "mind_mem-5.0.1-py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+        "upload_time_iso_8601": "2026-09-01T22:27:03.478969Z",
+        "yanked": false,
+        "yanked_reason": null
+      },
+      {
+        "filename": "mind_mem-5.0.1.tar.gz",
+        "packagetype": "sdist",
+        "upload_time_iso_8601": "2026-09-01T22:31:07.052520Z",
+        "yanked": false,
+        "yanked_reason": null
+      }
+    ],
+    "5.1.0": [
+      {
+        "filename": "mind_mem-5.1.0-py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+        "upload_time_iso_8601": "2026-09-01T20:47:06.746060Z",
+        "yanked": true,
+        "yanked_reason": null
+      },
+      {
+        "filename": "mind_mem-5.1.0.tar.gz",
+        "packagetype": "sdist",
+        "upload_time_iso_8601": "2026-09-01T20:47:08.471132Z",
+        "yanked": true,
+        "yanked_reason": null
+      }
+    ]
+  }
+}

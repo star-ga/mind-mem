@@ -1,0 +1,61 @@
+{
+  "1ec7f63e011443eca2e63299b08c51241fa09915": {
+    "label": "failing-windows-3.10-only",
+    "total_count": 1,
+    "workflow_runs": [
+      {
+        "conclusion": "failure",
+        "created_at": "2026-09-02T01:29:54Z",
+        "head_sha": "1ec7f63e011443eca2e63299b08c51241fa09915",
+        "html_url": "https://github.com/star-ga/mind-mem/actions/runs/33579619488",
+        "id": 33579619488,
+        "name": "CI",
+        "run_attempt": 1,
+        "run_started_at": "2026-09-02T01:29:54Z",
+        "status": "completed",
+        "updated_at": "2026-09-02T02:02:44Z"
+      }
+    ]
+  },
+  "313134b66d99b9ebaed8af77fb0092a6b5115c53": {
+    "label": "no-run-recorded",
+    "total_count": 0,
+    "workflow_runs": []
+  },
+  "a0850815782277b17fbd1243fd0f084d51a0e651": {
+    "label": "failing-all-windows-rows",
+    "total_count": 1,
+    "workflow_runs": [
+      {
+        "conclusion": "failure",
+        "created_at": "2026-09-01T22:25:51Z",
+        "head_sha": "a0850815782277b17fbd1243fd0f084d51a0e651",
+        "html_url": "https://github.com/star-ga/mind-mem/actions/runs/33566252435",
+        "id": 33566252435,
+        "name": "CI",
+        "run_attempt": 1,
+        "run_started_at": "2026-09-01T22:25:51Z",
+        "status": "completed",
+        "updated_at": "2026-09-01T22:41:35Z"
+      }
+    ]
+  },
+  "ba4cd4e12de5091b38d971b0ee921f47effd2acd": {
+    "label": "green",
+    "total_count": 1,
+    "workflow_runs": [
+      {
+        "conclusion": "success",
+        "created_at": "2026-09-01T13:12:25Z",
+        "head_sha": "ba4cd4e12de5091b38d971b0ee921f47effd2acd",
+        "html_url": "https://github.com/star-ga/mind-mem/actions/runs/33511997100",
+        "id": 33511997100,
+        "name": "CI",
+        "run_attempt": 1,
+        "run_started_at": "2026-09-01T13:12:25Z",
+        "status": "completed",
+        "updated_at": "2026-09-01T13:32:39Z"
+      }
+    ]
+  }
+}

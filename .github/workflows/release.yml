@@ -5,6 +5,29 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      # The ONLY escape hatch on the code-scanning gate below, and it is
+      # deliberately awkward. It exists because the gate now fails closed: if
+      # the repository were made private without an Advanced Security licence,
+      # or a fork ran this workflow with scanning off, a gate that can never
+      # pass would block every release until someone edited a security check
+      # under release pressure -- which is exactly when checks get weakened.
+      #
+      # Three properties make this safe to have:
+      #   * it is a per-run input with an empty default, not a repository
+      #     variable, so nothing sticky can silently skip a later release;
+      #   * a tag push carries no inputs at all, so the normal release trigger
+      #     (push: tags: v*) has no bypass path whatsoever;
+      #   * it clears ONLY the "code scanning is not producing results" state.
+      #     It cannot launder an open alert and it cannot paper over a missing
+      #     permission -- see scripts/check_code_scanning_alerts.py.
+      code_scanning_bypass:
+        description: >-
+          Leave EMPTY. Type I-ACCEPT-AN-UNGATED-RELEASE only when code scanning
+          is genuinely disabled for this repository. Ignored for open alerts and
+          for authorization errors. Logged against your username.
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -16,41 +39,208 @@ jobs:
   # the moment of tag push. Past releases (v4.0.12) tagged "all green"
   # while two new alerts were live on main; this gate prevents that drift.
   #
+  # (i) Rewritten 2026-09-02 to fail CLOSED. The previous version ended its
+  # unreadable-API branch with
+  #
+  #     echo "::warning::code-scanning alerts API not readable; failing open"
+  #     exit 0
+  #
+  # so a 403, a 404, a job missing `security-events: read`, a rate limit or a
+  # network blip all produced a GREEN gate, and the release shipped with its
+  # only security check having never run. That is the same shape of failure
+  # that let 5.0.1 ship from a commit whose CI had failed every Windows matrix
+  # row: the release path looked for a problem, could not look, and carried on.
+  # A verifier that died is not a verifier that passed. It was also, after
+  # release-preflight landed, the ONLY fail-open gate left in the release path.
+  #
+  # The four outcomes are now distinct, and only the first passes:
+  #   clean        API answered, zero open alerts, AND an analysis exists
+  #   alerts-open  one or more open alerts -> FAIL, listed. Never bypassable.
+  #   not-enabled  the API says there is nothing to read -> FAIL by default;
+  #                the only state the workflow_dispatch bypass input clears.
+  #   unreadable   any other status/error/shape -> FAIL, naming the status.
+  #                Never bypassable: every cause is our own misconfiguration.
+  #
+  # A zero also needs a positive control, so the checker additionally requires
+  # that at least one code-scanning analysis exists. Otherwise a repository
+  # whose scanner silently stopped uploading results would report "0 open
+  # alerts" and read as clean -- a negative assertion with nothing proving the
+  # search happened. Measured 2026-09-02: code scanning IS enabled here
+  # (advanced setup, CodeQL + a Bandit SARIF upload), alerts endpoint returns
+  # HTTP 200 `[]`, 3 analyses recorded. So the ordinary answer to "can this
+  # gate run?" is yes, and no bypass is needed for a normal release.
+  #
   # If you need to ship despite an open alert (deferred / accepted risk),
   # dismiss it via the GitHub Security UI with a documented rationale and
-  # then re-push the tag.
+  # then re-push the tag. There is no workflow input for that, on purpose.
   alerts-gate:
     runs-on: ubuntu-latest
     permissions:
+      # Needed to check out the in-tree checker. Read-only.
+      contents: read
+      # Reads code-scanning alerts AND analyses. Both endpoints accept the same
+      # scope set (verified against their X-Accepted-Oauth-Scopes headers), so
+      # this one permission covers the check and its positive control.
       security-events: read
     steps:
-      - name: Block release if open code-scanning alerts exist
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Block release unless the code-scanning gate ran and found nothing
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Passed through the environment rather than interpolated into the
+          # shell: `inputs.*` is attacker-influencable text, and a `${{ }}`
+          # expansion inside `run:` is a script-injection surface. On a tag
+          # push the `inputs` context is empty, which is what makes the normal
+          # release trigger structurally unbypassable.
+          RELEASE_REPO: ${{ github.repository }}
+          CODE_SCANNING_BYPASS: ${{ inputs.code_scanning_bypass }}
+          BYPASS_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
-          # ``--paginate`` walks every page; ``-q`` filters open alerts
-          # by their explicit ``state`` field; ``wc -l`` gives an exact
-          # count that survives multi-page result sets.
-          if ! payload=$(gh api "repos/${{ github.repository }}/code-scanning/alerts" --paginate -q '.[] | select(.state=="open") | .number' 2>err.log); then
-            # 403/404 here means code-scanning is not enabled on this
-            # repo (or the token cannot read it). In that case we cannot
-            # gate — fail open with a clear warning, not silently.
-            echo "::warning::code-scanning alerts API not readable; failing open"
-            cat err.log
-            exit 0
+          python scripts/check_code_scanning_alerts.py \
+            --repo "${RELEASE_REPO}" \
+            --bypass "${CODE_SCANNING_BYPASS:-}" \
+            --bypass-actor "${BYPASS_ACTOR:-}"
+
+  # ── Release preflight: everything that must be true BEFORE anything is built ──
+  # Added 2026-09-02 after the 5.1.0 incident. Before this job the release path
+  # ran ZERO tests -- its only gate was the code-scanning alert count above --
+  # which is how 5.0.1 shipped from a commit whose CI failed all five Windows
+  # matrix rows, and how 5.1.0 was published and then had to be yanked. Each
+  # step below names the specific failure it would have caught.
+  #
+  # Every step fails closed: a check that cannot determine its answer exits
+  # non-zero rather than passing. That is deliberate. The gates that existed
+  # before this job were all of the "look for a problem, and if you cannot look,
+  # carry on" shape, and that shape is what let a broken release through.
+  release-preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Needed by gate (c) to read the recorded conclusion of the CI workflow
+      # for this exact commit. Read-only.
+      actions: read
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          # Gate (b) needs real history to answer "is this commit on main?", and
+          # the A/B bench harness tests in gate (e) run `git log <sha>` against
+          # this repository's own history (see the same note in ci.yml).
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # (a) The tag, pyproject.toml and __version__ must be one string.
+      #     Would have caught: a tag whose name disagrees with the version baked
+      #     into the wheel, which produces a GitHub Release called vX and an
+      #     artifact that reports Y. Also blocks a manual dispatch on a branch:
+      #     the github-release job derives its version with
+      #     ${GITHUB_REF#refs/tags/v}, which on a branch ref silently yields the
+      #     literal string "refs/heads/main" as the release name.
+      - name: "Gate (a) — version triple agreement (tag == pyproject == __version__)"
+        id: tag
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF}" in
+            refs/tags/v*) ;;
+            *)
+              echo "::error::Release ref is '${GITHUB_REF}', not refs/tags/v*. The tag is one leg of the version triple, so this gate cannot answer without it. Dispatch this workflow on a tag ref, or push the tag."
+              exit 1
+              ;;
+          esac
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ -z "${TAG_VERSION}" ]; then
+            echo "::error::Tag '${GITHUB_REF}' carries no version after the 'v' prefix."
+            exit 1
           fi
-          count=$(printf '%s\n' "$payload" | grep -c . || true)
-          echo "Open code-scanning alerts: ${count}"
-          if [ "${count}" -gt 0 ]; then
-            echo "::error::Release blocked — ${count} open code-scanning alert(s). Close or dismiss them before tagging."
-            gh api "repos/${{ github.repository }}/code-scanning/alerts" --paginate \
-              -q '.[] | select(.state=="open") | "  #\(.number) [\(.rule.severity)] \(.rule.id) — \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
+          echo "version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
+          # The in-tree checker already compares pyproject.toml, __init__.py and
+          # CHANGELOG.md and fails on any unreadable source; --expect adds the
+          # tag as a fourth member of the same set.
+          python src/mind_mem/check_version.py --expect "${TAG_VERSION}"
+
+      # (b) The tagged commit must be an ancestor of origin/main.
+      #     Would have caught: a tag pushed from a local branch, a stale clone,
+      #     or a commit that was rebased away -- releasing code that no reviewer
+      #     ever saw on main and that no future `git log main` will show.
+      - name: "Gate (b) — the tagged commit must be an ancestor of origin/main"
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --quiet origin '+refs/heads/main:refs/remotes/origin/main'
+          COMMIT="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          echo "releasing commit: ${COMMIT}"
+          echo "origin/main:      $(git rev-parse refs/remotes/origin/main)"
+          set +e
+          git merge-base --is-ancestor "${COMMIT}" refs/remotes/origin/main
+          rc=$?
+          set -e
+          if [ "${rc}" -eq 0 ]; then
+            echo "OK: ${COMMIT} is an ancestor of origin/main"
+          elif [ "${rc}" -eq 1 ]; then
+            echo "::error::Commit ${COMMIT} is NOT an ancestor of origin/main. Refusing to release code that is not on the mainline."
+            exit 1
+          else
+            echo "::error::git merge-base --is-ancestor exited ${rc} (an error, not an answer). Failing closed."
             exit 1
           fi
 
+      # (c) CI must have concluded success for THIS EXACT sha.
+      #     Would have caught: 5.0.1, released from a085081, whose CI run
+      #     33566252435 failed all five Windows matrix rows. Also catches the
+      #     quieter version of the same thing -- run 33579619488 on 1ec7f63
+      #     failed only windows 3.10 while 3.11 through 3.14 passed -- and the
+      #     case with no evidence at all: commits 313134b and 4c869f7 are both
+      #     on main with ZERO recorded CI runs, because a batched push produces
+      #     one run for its tip only. "CI is green on main" is a claim about a
+      #     branch tip, not about the commit being released.
+      - name: "Gate (c) — CI concluded success for this commit"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check_ci_green.py --sha "${GITHUB_SHA}" --repo "${{ github.repository }}" --workflow ci.yml
+
+      # (d) The version must be absent from the index in ANY state, yanked
+      #     included.
+      #     Would have caught: a re-attempt of 5.1.0, which was published and
+      #     then yanked on 2026-09-01. A yank does not free the number -- the
+      #     index refuses a re-upload of those filenames -- and combined with
+      #     skip-existing:true below, a re-pushed v5.1.0 tag would have produced
+      #     an all-green release run that uploaded nothing at all.
+      - name: "Gate (d) — version is not on the index, including yanked"
+        run: python scripts/check_index_absence.py --version "${{ steps.tag.outputs.version }}"
+
+      # (e) Run the unit suite here, on the release path.
+      #     Would have caught: 5.0.1 shipping untested. Gate (c) proves CI
+      #     recorded a pass for this sha; this step proves the suite still
+      #     passes for the tree being packaged, so the two are independent
+      #     failures rather than one shared assumption. Selector copied verbatim
+      #     from the ci.yml non-coverage row (the cov-fail-under gate stays in
+      #     CI, where it runs once).
+      - name: "Gate (e) — install the test extra"
+        run: pip install -e ".[test]"
+
+      - name: "Gate (e) — unit tests (same selector as ci.yml)"
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 -m pytest tests/ --ignore=tests/integration --maxfail=50 -q -m "not stress" --timeout=120 --timeout-method=thread
+
+      - name: "Gate (e) — integration tests (same selector as ci.yml)"
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 -m pytest tests/integration/ -v -m "not stress"
+
   build:
-    needs: alerts-gate
+    # Nothing is built, signed, published or released until release-preflight
+    # passes, so every downstream job inherits all five preflight gates.
+    needs: [alerts-gate, release-preflight]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
@@ -155,11 +345,15 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1
         with:
           print-hash: true
-          # Idempotent: a tag re-push or a local `twine upload` that
-          # raced ahead of this workflow leaves the version already on
-          # PyPI; treat that as success instead of failing the job
-          # with a 400.
-          skip-existing: true
+          # (f) Was `true`. Idempotence here was a false economy: a version
+          # already on the index means the tag is re-attempting a spent number,
+          # and skipping the upload turned that into an all-green release run
+          # that uploaded nothing. That is exactly the shape a re-pushed v5.1.0
+          # would have had -- green badge, yanked version still yanked, every
+          # consumer pinned >=5.1.0 still broken. A collision must be loud.
+          # Gate (d) in release-preflight should make this unreachable; this is
+          # the second line of defence, not the first.
+          skip-existing: false
           # Attestations (PEP 740) are generated automatically by pypi-publish
           # when id-token: write is present and the package is uploaded from
           # a trusted publisher environment.
@@ -170,7 +364,13 @@ jobs:
 
   # ── GitHub Release (dist + SBOM + signatures) ────────────────────────────────
   github-release:
-    needs: [build, sign, sbom]
+    # (g) `publish-pypi` added 2026-09-02. Without it these two jobs ran in
+    # parallel, and that structural gap is how the current half-done state
+    # arose: the index withdrew 5.1.0 while a live, non-draft GitHub Release
+    # went on serving the withdrawn wheel and sdist from the same tag. The
+    # harmful direction of divergence is "GitHub serves what the index
+    # refuses", so the release notes now wait for the upload to succeed.
+    needs: [build, sign, sbom, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -216,3 +416,78 @@ jobs:
           files: |
             dist/*
             sbom.cdx.json
+
+  # ── Post-publish proof: install the released version from the index ──────────
+  # (h) Every gate above this line reasons about the tree, the tag or the API.
+  # None of them proves the artifact the index now serves is the one intended.
+  # This job installs `mind-mem==<tag>` from the real index into a throwaway
+  # virtualenv -- no checkout, so nothing local can shadow the download -- and
+  # asserts both the distribution metadata and the imported __version__ equal
+  # the tag. 5.0.1 was verified by reading the workflow log; this reads the
+  # index.
+  #
+  # Deliberately parallel to github-release rather than upstream of it: a slow
+  # index propagation should not strand a successfully uploaded artifact with no
+  # release notes. A failure here turns the whole run red, which is the signal.
+  verify-published:
+    needs: [release-preflight, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the released version from the index and verify it
+        env:
+          RELEASE_VERSION: ${{ needs.release-preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_VERSION}" ]; then
+            echo "::error::release-preflight produced no version output; cannot verify what was published."
+            exit 1
+          fi
+          python -m venv /tmp/verify-venv
+          /tmp/verify-venv/bin/python -m pip install --quiet --upgrade pip
+          # A freshly uploaded version can take a short while to appear on every
+          # index mirror. Retry the install only -- never the assertion below --
+          # so propagation lag reads as "not there yet" and a genuinely wrong
+          # version still fails on the first attempt.
+          installed=""
+          for attempt in 1 2 3 4 5 6; do
+            echo "install attempt ${attempt} for mind-mem==${RELEASE_VERSION}"
+            if /tmp/verify-venv/bin/python -m pip install --no-cache-dir "mind-mem==${RELEASE_VERSION}"; then
+              installed="yes"
+              break
+            fi
+            sleep 30
+          done
+          if [ -z "${installed}" ]; then
+            echo "::error::mind-mem==${RELEASE_VERSION} could not be installed from the index after 6 attempts. The publish step reported success, so the index and this workflow disagree about what exists."
+            exit 1
+          fi
+          /tmp/verify-venv/bin/python - <<'PY'
+          import importlib.metadata
+          import os
+          import sys
+
+          import mind_mem
+
+          expected = os.environ["RELEASE_VERSION"]
+          dist = importlib.metadata.version("mind-mem")
+          attr = getattr(mind_mem, "__version__", None)
+          print(f"expected (tag):        {expected}")
+          print(f"installed dist:        {dist}")
+          print(f"imported __version__:  {attr}")
+          problems = []
+          if dist != expected:
+              problems.append(f"distribution metadata reports {dist!r}, not {expected!r}")
+          if attr != expected:
+              problems.append(f"imported mind_mem.__version__ is {attr!r}, not {expected!r}")
+          if problems:
+              for problem in problems:
+                  print(f"::error::post-publish proof failed: {problem}")
+              sys.exit(1)
+          print(f"OK: the index serves mind-mem {expected} and it imports as {expected}")
+          PY
