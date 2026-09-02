@@ -2,6 +2,49 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+* **The published model card claimed a tool count no revision ever had.** The
+  card on the hub said the v4 weights know **84** MCP tools; `train/HF_MODEL_CARD_v4.md`
+  said **96**. Two numbers for one fact, and both wrong. Applying the live
+  counter's AST rule to the trained revision (`v4.1.1`) gives **83** distinct
+  tools. The 84 was that revision's *registration* total — `recall` is
+  registered in both `public.py` and `recall.py` and exposed once — and the
+  same off-by-one produced v3.9's "81" and the "81 + 3 = 84" arithmetic the
+  card then rounded to 96. The surface actually went 80 → 83 → 89 → 94 → 98 →
+  102. Corrected in `train/HF_MODEL_CARD_v4.md`, `docs/mind-mem-4b-setup.md`
+  and the `MM_TRAINED_ON_TOOLS` default in `train/build_model_card.py`.
+  **The live hub card still says 84** and must be re-uploaded.
+* **The README tests badge rendered green while stating a false number**
+  (`9,366`; the CI selector collected 9,701 when this was found). A badge whose
+  claim is false is a defect, not cosmetics. `docs/governance.md` advertised
+  "7,500+ tests"; CLAUDE.md said "4000+" in two places. All four now come from
+  one authority and are refreshed with
+  `python3 scripts/check_docs_alignment.py --fix`.
+* **Three docs undercounted the MCP-aware client surface** (8, actually 11):
+  `copilot-cli`, `grok-build` and `vibe` gained MCP writers without
+  `docs/api-reference.md`, `docs/setup.md` or `docs/client-integrations.md`
+  noticing. The per-client format table gained the three missing rows.
+* **Two live docs claimed an "89-tool surface"** in the hyphenated spelling
+  that `scripts/count_mcp_tools.py --check-docs` cannot match, so that gate
+  reported green over them for three releases. `docs/client-integrations.md`
+  also said "16 AI coding clients" against a registry of 19.
+* `docs/hf-mind-mem-4b-v2-README.md` now opens with a HISTORICAL banner; it
+  documents the v2 weights against the v3.3.0 surface and read as current.
+
+### Added
+
+* `scripts/check_docs_alignment.py` — recomputes every counted doc claim from
+  its authority (pytest collection with CI's selector; the MCP tool registry
+  live and at the trained revision; `hook_installer.AGENT_REGISTRY`;
+  `mcp.resource(...)` registrations; `__version__`; `[project] dependencies`)
+  and fails on any surface that disagrees, naming file, line, claimed value
+  and true value. `--fix` rewrites the stale numbers. An authority that cannot
+  be computed exits 2 rather than reporting an empty finding list, because a
+  verifier that died is not a verifier that passed.
+
 ## [5.0.1] - 2026-09-01
 
 > **A 5.1.0 was published to PyPI in error and has been yanked.** Its contents
