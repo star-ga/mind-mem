@@ -1,5 +1,5 @@
 # Copyright 2026 STARGA, Inc.
-"""Admission receipts — proof that a block write passed the governance gate.
+"""Admission receipts — proof that a block mutation passed the governance gate.
 
 The product claim is that every write goes through
 ``propose_update`` → ``approve_apply`` and lands in an append-only hash
@@ -43,18 +43,49 @@ status is decided; :func:`require_admission` refuses a write whose
 ``Status`` is servable under a tier that cannot mint one, so a
 quarantine-tier door cannot carry an ``active`` block in.
 
-This module imports nothing from ``mind_mem`` except the leaf
-``enums`` module — no I/O, no config, no other package import — so the
-write surface can depend on it without dragging the whole governance
-stack, and its private state cannot be reached from anywhere else.
+**A receipt names the operation it authorises.** ``operation`` is
+:data:`OP_WRITE` or :data:`OP_DELETE`, and :func:`require_admission`
+refuses a receipt whose operation is not the one the caller is
+performing. A write receipt therefore cannot be reused to delete, which
+matters because the two scopes are opened by different doors for
+different reasons: a WRITE scope is opened by an ingest path that has
+content to land, a DELETE scope by an operator or an HTTP door that has
+a rationale for removing some. Before this field, ``delete_block`` had no
+admission check at all in any of the five stores — an ungated delete
+returned ``True`` and the block was gone, with no receipt and no chain
+record. See :func:`require_delete_admission`.
+
+**A DELETE scope reports back what it removed.** The store calls
+:meth:`AdmissionReceipt.record_removal` with the content it actually
+took out; the gate reads that ledger when the scope closes and writes
+ONE chain record covering it. The alternative — every door remembering
+to write its own record — is the shape that produced the ungated delete
+in the first place.
+
+**Reads have an admission too.** :func:`admit_read` and
+:func:`admit_read_one` expose the decision the recall legs already make
+(``admissibility.admit_leg``) so a tool handler applies the *same*
+predicate rather than its own status check, and can report how many
+items were withheld. A read surface that routes through them cannot
+serve quarantined content by forgetting a filter, because the filter is
+the only path to the rows.
+
+This module imports nothing from ``mind_mem`` at module scope except the
+leaf ``enums`` module — no I/O, no config, no other package import — so
+the write surface can depend on it without dragging the whole governance
+stack, and its private state cannot be reached from anywhere else. The
+two functions that need the egress predicate (:func:`admit_read` and
+:func:`_require_status_within_tier`) import ``admissibility`` inside the
+function body, deliberately, to keep that true.
 """
 
 from __future__ import annotations
 
+import hashlib
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Final, Iterator, Optional
+from typing import Any, Final, Iterator, Mapping, Optional, Sequence
 
 from .enums import INITIAL_STATUS, IngestTier, is_servable
 
@@ -63,10 +94,18 @@ __all__ = [
     "BATCH",
     "BLOCK",
     "GovernanceBypassError",
+    "OP_DELETE",
+    "OP_WRITE",
     "PROPOSAL",
+    "ReadAdmission",
+    "RemovalLedger",
+    "UngatedDeleteError",
     "UngatedWriteError",
+    "admit_read",
+    "admit_read_one",
     "current_admission",
     "require_admission",
+    "require_delete_admission",
 ]
 
 
@@ -86,11 +125,30 @@ class GovernanceBypassError(Exception):
 
 
 class UngatedWriteError(GovernanceBypassError):
-    """A block write was attempted with no governance admission open.
+    """A block mutation was attempted with no governance admission open.
 
     A subclass of :class:`GovernanceBypassError` because that is what it
     is: the apply engine already aborts an apply when that class escapes,
     and an ungated write is a bypass by any other name.
+
+    Named for writes because writes are all it could mean when it was
+    introduced. It is now the base for the delete side as well
+    (:class:`UngatedDeleteError`), so a handler that already catches this
+    class keeps catching every ungated mutation without being edited —
+    which is the forward-compatible direction, and the reason the
+    inheritance runs this way round rather than through a new common
+    parent that existing ``except`` clauses would miss.
+    """
+
+
+class UngatedDeleteError(UngatedWriteError):
+    """A block delete was attempted with no DELETE admission open.
+
+    Raised when nothing is open, when the open receipt authorises writes
+    rather than deletes, when its chain entry was never confirmed, or
+    when it does not cover the id being removed. Deliberately raised
+    *before* the store resolves the target, so a probe for "does this id
+    exist" and a probe for "is this door gated" fail identically.
     """
 
 
@@ -113,9 +171,95 @@ BATCH: Final = "batch"
 PROPOSAL: Final = "proposal"
 
 
+# ---------------------------------------------------------------------------
+# Operations. `kind` says how much a receipt covers; `operation` says what it
+# lets the holder DO with that coverage. They are orthogonal and both are
+# checked: a BATCH/WRITE receipt authorises writes to a fixed id set, a
+# BATCH/DELETE receipt authorises deletes of one.
+# ---------------------------------------------------------------------------
+
+#: Receipt authorises ``BlockStore.write_block`` for the ids it covers.
+OP_WRITE: Final = "write"
+
+#: Receipt authorises ``BlockStore.delete_block`` for the ids it covers.
+OP_DELETE: Final = "delete"
+
+#: The closed set. A receipt naming anything else is refused at construction:
+#: an operation nobody has classified authorises nothing, which is the
+#: fail-closed direction.
+OPERATIONS: Final[frozenset[str]] = frozenset({OP_WRITE, OP_DELETE})
+
+
+class RemovalLedger:
+    """What a DELETE scope actually removed, reported back by the store.
+
+    The gate authorises a delete *before* the store resolves the target,
+    so at admission time it does not yet know what content it is about to
+    lose. The store reports it here — one call per removed block — and
+    the gate reads the ledger when the scope closes, writing exactly one
+    chain record over the whole set. A ``/clear`` that removes ten
+    thousand blocks therefore produces one record, not ten thousand
+    unlinked ones.
+
+    Mutable by design, and the only mutable thing a receipt carries. It
+    is excluded from equality and ``repr`` so a receipt still compares by
+    its identity fields.
+
+    **Memory is bounded.** The raw content of the *first* removal is kept
+    (a single-block delete records the removed content's own hash as its
+    payload); from the second removal on only ``(block_id, sha256)``
+    leaves are kept and the raw copy is dropped, so clearing a corpus
+    costs one hash per block rather than the corpus in RAM.
+    """
+
+    __slots__ = ("_leaves", "_sole_content")
+
+    def __init__(self) -> None:
+        self._leaves: list[tuple[str, str]] = []
+        self._sole_content: Optional[str] = None
+
+    def record(self, block_id: str, content: str) -> None:
+        """Record that *block_id* was removed, carrying *content*."""
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        self._leaves.append((str(block_id), digest))
+        self._sole_content = content if len(self._leaves) == 1 else None
+
+    @property
+    def leaves(self) -> list[tuple[str, str]]:
+        """``(block_id, sha256(content))`` per removal, in removal order.
+
+        The shape :class:`~mind_mem.merkle_tree.MerkleTree` builds from,
+        so the chain record can carry a root the removed set verifies
+        against.
+        """
+        return list(self._leaves)
+
+    @property
+    def sole_content(self) -> Optional[str]:
+        """The removed content when exactly one block was removed."""
+        return self._sole_content
+
+    @property
+    def block_ids(self) -> tuple[str, ...]:
+        """Ids removed, in removal order."""
+        return tuple(bid for bid, _ in self._leaves)
+
+    def __len__(self) -> int:
+        return len(self._leaves)
+
+    def __bool__(self) -> bool:
+        return bool(self._leaves)
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostic only
+        return f"RemovalLedger(removed={len(self._leaves)})"
+
+
 @dataclass(frozen=True)
 class AdmissionReceipt:
-    """Immutable proof that :meth:`GovernanceGate.admit` accepted a write.
+    """Immutable proof that :meth:`GovernanceGate.admit` accepted a mutation.
+
+    A write or a delete — ``operation`` says which, and the two are not
+    interchangeable.
 
     Attributes:
         entry_id: ``HashEntry.entry_id`` of the chain entry the gate
@@ -135,22 +279,88 @@ class AdmissionReceipt:
             default: a door with no :class:`~mind_mem.enums.IngestTier`
             cannot get a receipt, and without a receipt it cannot write.
             Its :data:`~mind_mem.enums.INITIAL_STATUS` row decides the
-            status the write may carry.
+            status the write may carry. ``None`` on — and only on — a
+            :data:`OP_DELETE` receipt: a deletion has no ingest source,
+            and inventing a tier for it would put a false claim about
+            provenance in the audit record.
+        operation: :data:`OP_WRITE` or :data:`OP_DELETE`. Checked by
+            :func:`require_admission`, so a write receipt cannot
+            authorise a delete and a delete receipt cannot authorise a
+            write. Defaults to :data:`OP_WRITE`, which is what every
+            receipt minted before this field existed was.
+        removals: The :class:`RemovalLedger` a DELETE scope's store
+            reports into. Empty for a write.
     """
 
     entry_id: str
     content_hash: str
     kind: str
-    tier: IngestTier
+    tier: Optional[IngestTier]
     covers: frozenset[str] = field(default_factory=frozenset)
     chain_verified: bool = False
     actor: str = ""
+    operation: str = OP_WRITE
+    removals: RemovalLedger = field(default_factory=RemovalLedger, compare=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Refuse a receipt whose operation and tier disagree.
+
+        Structural rather than defensive: the combinations refused here
+        are the ones that would let a receipt claim something untrue
+        about itself, and there is no code path that legitimately builds
+        one. Raising ``ValueError`` at construction means the gate cannot
+        mint a malformed receipt even by mistake.
+        """
+        if self.operation not in OPERATIONS:
+            raise ValueError(f"admission receipt names operation {self.operation!r}, which is not one of {sorted(OPERATIONS)}")
+        if self.operation == OP_WRITE:
+            if self.tier is None:
+                raise ValueError(
+                    "a WRITE receipt must name the ingest tier its status is minted from; None is only valid for a DELETE receipt"
+                )
+            return
+        if self.tier is not None:
+            raise ValueError(
+                f"a DELETE receipt names no ingest tier (got {self.tier!r}): removing content is not "
+                "an ingest, and the audit record must not claim it was"
+            )
+        if self.kind == PROPOSAL:
+            raise ValueError(
+                "a DELETE receipt may not be proposal-scoped: a PROPOSAL receipt authorises every "
+                "id it is asked about, which is ambient authority to delete anything"
+            )
 
     def authorizes(self, block_id: str) -> bool:
-        """True when this receipt permits a write to *block_id*."""
+        """True when this receipt permits its operation on *block_id*."""
         if self.kind == PROPOSAL:
             return True
         return block_id in self.covers
+
+    def record_removal(self, block_id: str, content: str) -> None:
+        """Report that *block_id* was removed, carrying *content*.
+
+        Called by ``BlockStore.delete_block`` immediately after the block
+        is gone, inside the scope that authorised it. The gate turns the
+        ledger into one chain record when the scope closes.
+
+        Raises:
+            UngatedDeleteError: On a write receipt (a write removes
+                nothing), or for an id this receipt does not cover — a
+                removal outside the admitted set must not be recorded
+                under it, because the record would then name a scope that
+                never authorised the removal.
+        """
+        if self.operation != OP_DELETE:
+            raise UngatedDeleteError(
+                f"admission {self.entry_id} authorises a {self.operation}, not a delete; it cannot record the removal of {block_id!r}"
+            )
+        bid = str(block_id)
+        if not self.authorizes(bid):
+            covered = ", ".join(sorted(self.covers)[:8]) or "(none)"
+            raise UngatedDeleteError(
+                f"admission {self.entry_id} does not cover block {bid!r} (covers: {covered}); refusing to record its removal"
+            )
+        self.removals.record(bid, content)
 
 
 # ---------------------------------------------------------------------------
@@ -178,8 +388,39 @@ def current_admission() -> Optional[AdmissionReceipt]:
     return _active_admission.get()
 
 
-def require_admission(block_id: str, *, status: object = None) -> AdmissionReceipt:
-    """Return the open receipt authorising a write to *block_id*.
+def _ungated(operation: str, message: str) -> UngatedWriteError:
+    """The refusal class for *operation* — delete gets its own subclass."""
+    if operation == OP_DELETE:
+        return UngatedDeleteError(message)
+    return UngatedWriteError(message)
+
+
+def require_delete_admission(block_id: str) -> AdmissionReceipt:
+    """Return the open receipt authorising a delete of *block_id*.
+
+    The delete-side twin of :func:`require_admission`, and the first line
+    of every ``BlockStore.delete_block`` implementation. Call it *before*
+    resolving the target: a delete of a non-existent id inside a scope
+    that covers it returns ``False`` from the store, while a delete of
+    any id with no scope open raises — so the two are told apart by
+    whether the caller was authorised, never by whether the block was
+    there.
+
+    A named function rather than a keyword because it is what the delete
+    surface greps for, the same way ``require_admission`` is what the
+    write surface greps for; both structural tests read the call, not the
+    argument.
+
+    Raises:
+        UngatedDeleteError: No admission is open, the open one authorises
+            writes rather than deletes, its chain entry was never
+            verified, or it does not cover *block_id*.
+    """
+    return require_admission(block_id, operation=OP_DELETE)
+
+
+def require_admission(block_id: str, *, status: object = None, operation: str = OP_WRITE) -> AdmissionReceipt:
+    """Return the open receipt authorising *operation* on *block_id*.
 
     Called at the top of every ``BlockStore.write_block`` implementation,
     which passes the block's ``Status`` field as *status*. The check is
@@ -192,26 +433,52 @@ def require_admission(block_id: str, *, status: object = None) -> AdmissionRecei
     Every ``write_block`` implementation is required to pass *status*;
     ``tests/test_governed_write_paths.py`` fails the build on one that
     does not, so the default here is a signature convenience and not an
-    opt-out.
+    opt-out. *status* is meaningless for a delete and is not consulted
+    there — a removal cannot escalate a status it is taking away.
+
+    Args:
+        operation: :data:`OP_WRITE` (default) or :data:`OP_DELETE`. The
+            open receipt must name the same one. Delete surfaces should
+            call :func:`require_delete_admission` instead of passing this
+            by hand.
 
     Raises:
-        UngatedWriteError: no admission is open, the open admission does
-            not cover *block_id*, its chain entry was never verified, or
-            the block's status outranks what its tier can mint.
+        UngatedWriteError: no admission is open, the open admission
+            authorises the other operation, it does not cover *block_id*,
+            its chain entry was never verified, or the block's status
+            outranks what its tier can mint. A refused *delete* raises the
+            :class:`UngatedDeleteError` subclass, so a caller that catches
+            the base class is unaffected.
     """
+    if operation not in OPERATIONS:
+        raise ValueError(f"require_admission asked for operation {operation!r}, which is not one of {sorted(OPERATIONS)}")
     receipt = _active_admission.get()
     if receipt is None:
-        raise UngatedWriteError(
-            f"ungated write to {block_id!r}: no governance admission is open. "
+        raise _ungated(
+            operation,
+            f"ungated {operation} of {block_id!r}: no governance admission is open. "
             "Every block write must run inside GovernanceGate.admit_block / "
-            "admit_batch / admit_proposal. See docs/GOVERNED_WRITES.md."
+            "admit_batch / admit_proposal, and every block delete inside "
+            "GovernanceGate.admit_delete / admit_delete_batch. See "
+            "docs/GOVERNED_WRITES.md.",
+        )
+    if receipt.operation != operation:
+        raise _ungated(
+            operation,
+            f"admission {receipt.entry_id} authorises a {receipt.operation}, not a {operation}, "
+            f"so it does not cover {block_id!r}. Open a "
+            f"{'delete' if operation == OP_DELETE else 'write'} scope for this operation; a "
+            "receipt is not transferable between them.",
         )
     if not receipt.chain_verified:
-        raise UngatedWriteError(f"admission {receipt.entry_id} for {block_id!r} was never confirmed in the hash chain; refusing the write")
+        raise _ungated(
+            operation, f"admission {receipt.entry_id} for {block_id!r} was never confirmed in the hash chain; refusing the {operation}"
+        )
     if not receipt.authorizes(block_id):
         covered = ", ".join(sorted(receipt.covers)[:8]) or "(none)"
-        raise UngatedWriteError(f"admission {receipt.entry_id} does not cover block {block_id!r} (covers: {covered})")
-    _require_status_within_tier(receipt, block_id, status)
+        raise _ungated(operation, f"admission {receipt.entry_id} does not cover block {block_id!r} (covers: {covered})")
+    if operation == OP_WRITE:
+        _require_status_within_tier(receipt, block_id, status)
     return receipt
 
 
@@ -237,6 +504,14 @@ def _require_status_within_tier(receipt: AdmissionReceipt, block_id: str, status
     """
     from .admissibility import is_admissible_status
 
+    if receipt.tier is None:
+        # Unreachable through the gate: __post_init__ refuses a WRITE
+        # receipt with no tier, and only a WRITE receipt reaches here.
+        # Kept because "no tier" must never read as "no constraint" —
+        # the one direction this check must not fail in is open.
+        raise UngatedWriteError(
+            f"admission {receipt.entry_id} for {block_id!r} names no ingest tier, so no status rule applies to it; refusing the write"
+        )
     row = INITIAL_STATUS[receipt.tier]
     if row is None or is_servable(row):
         return
@@ -248,3 +523,131 @@ def _require_status_within_tier(receipt: AdmissionReceipt, block_id: str, status
             f"({status!r}) and recall would serve it. Stamp {row.value!r} at the "
             "door and release it through a governance proposal instead."
         )
+
+
+# ---------------------------------------------------------------------------
+# Read admission — the egress half of the seam
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ReadAdmission:
+    """The servable subset of what a read surface was about to return.
+
+    Attributes:
+        admitted: The items a caller may be shown, order preserved,
+            copied so the caller cannot mutate the source rows.
+        withheld: How many items were dropped. A count, never the ids —
+            a list surface that named what it withheld would leak the
+            existence of quarantined blocks to every caller, which is
+            most of what withholding them was for. The one-block form is
+            different and deliberately so: the caller already named the
+            id, so ``withheld == 1`` there tells it nothing it did not
+            supply, and it is what lets ``get_block`` answer "withheld"
+            rather than the false "not found".
+    """
+
+    admitted: list[dict]
+    withheld: int = 0
+
+    @property
+    def sole(self) -> Optional[dict]:
+        """The single admitted item, or ``None`` — for one-block reads."""
+        return self.admitted[0] if self.admitted else None
+
+    def __bool__(self) -> bool:
+        return bool(self.admitted)
+
+    def __len__(self) -> int:
+        return len(self.admitted)
+
+
+def admit_read(
+    items: Sequence[Mapping[str, Any]],
+    *,
+    workspace: Optional[str] = None,
+    status_key: str = "Status",
+    allow: frozenset[str] = frozenset(),
+    surface: Optional[str] = None,
+) -> ReadAdmission:
+    """The subset of *items* a read surface may serve, and how many it may not.
+
+    This is the recall pipeline's own egress decision, exposed so every
+    other content-returning surface reaches the *same* verdict instead of
+    writing its own status check. It is the whole decision, not the
+    predicate alone, because the three parts have to run together and in
+    order:
+
+    1. **Refresh cached statuses** (when *workspace* is given). An index
+       caches ``status``, and it goes stale in the fail-OPEN direction —
+       a block quarantined after it was indexed still reads ``active``
+       there. A surface reading rows out of an index and not refreshing
+       serves what the corpus has already withdrawn.
+    2. **Allow-list the status.** ``admissibility.is_admissible_status``
+       is an allow-list, so a status nobody has named is withheld.
+    3. **Resolve the release set** — but only after step 2 has failed for
+       something, so an all-servable list touches no disk.
+
+    Args:
+        items: Rows carrying a status under *status_key*, and their block
+            id under ``"_id"`` — the key ``admissibility`` reads. A row
+            keyed some other way still gets the status check; it just
+            cannot be matched against the release set, which withholds it
+            rather than serving it, so the mismatch fails safe and stays
+            visible in ``withheld``. Blocks parsed off disk carry
+            ``"Status"``; index rows carry ``"status"``.
+        workspace: Enables steps 1 and 3. Omit only when the caller
+            parsed the blocks itself *and* no release decision can apply
+            — the release set can readmit a quarantined block, so leaving
+            this out is the strict direction, never the permissive one.
+        allow: Statuses to readmit for this call. A per-call widening
+            with an operator behind it (``recall(include_pending=True)``
+            is the precedent), never a default.
+        surface: Name recorded on the withheld metric, for the same
+            reason ``admit_leg`` takes ``leg``.
+
+    Returns:
+        A :class:`ReadAdmission`. ``withheld`` is the number of items
+        dropped, which a tool handler should report so an incomplete
+        answer is visibly incomplete rather than silently short.
+
+    Raises:
+        Whatever the status refresh raises. Deliberately not swallowed: a
+        surface that cannot confirm a status must fail rather than serve
+        the cached copy it could not check.
+    """
+    from .admissibility import admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
+
+    rows: list[Mapping[str, Any]] = list(items)
+    if not rows:
+        return ReadAdmission([], 0)
+    if workspace is not None:
+        rows = list(with_live_statuses([dict(r) for r in rows], live_statuses(workspace), status_key=status_key))
+    if all(is_admissible_status(row.get(status_key)) for row in rows):
+        return ReadAdmission([dict(row) for row in rows], 0)
+    releases: frozenset[str] = frozenset()
+    if workspace is not None:
+        releases = workspace_release_ids(workspace)
+    kept = admit_leg(rows, status_key=status_key, releases=releases, allow=allow, leg=surface or "read")
+    return ReadAdmission(kept, len(rows) - len(kept))
+
+
+def admit_read_one(
+    block: Optional[Mapping[str, Any]],
+    *,
+    workspace: Optional[str] = None,
+    status_key: str = "Status",
+    allow: frozenset[str] = frozenset(),
+    surface: Optional[str] = None,
+) -> ReadAdmission:
+    """:func:`admit_read` for a surface that resolved exactly one block.
+
+    ``block is None`` (nothing there) returns an empty admission with
+    ``withheld == 0``; a block that exists but is not servable returns
+    one with ``withheld == 1``. Those two are different answers and a
+    single-block tool needs to tell them apart — "not found" and
+    "withheld" are both refusals, but only one of them is true.
+    """
+    if block is None:
+        return ReadAdmission([], 0)
+    return admit_read([block], workspace=workspace, status_key=status_key, allow=allow, surface=surface)
