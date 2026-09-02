@@ -5,8 +5,9 @@ Extracted from ``mcp_server.py`` per docs/v3.2.0-mcp-decomposition-plan.md
 lifecycle + introspection surface:
 
 * ``index_stats`` / ``reindex`` — FTS5 index state + rebuild.
-* ``delete_memory_item`` — atomic admin-scope block removal with
-  an append-only recovery log.
+* ``delete_memory_item`` — governed admin-scope block removal: one
+  ``admit_delete`` scope, one authorisation record, one removal record,
+  plus the append-only local recovery log.
 * ``export_memory`` — JSONL dump of every block with configurable
   metadata + size cap.
 * ``get_block`` / ``memory_health`` / ``compact`` / ``stale_blocks`` —
@@ -26,7 +27,7 @@ import sqlite3
 import tempfile
 from typing import Any
 
-from mind_mem.admission import admit_read, admit_read_one
+from mind_mem.admission import AdmissionReceipt, admit_read, admit_read_one
 from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file
 from mind_mem.corpus_registry import CORPUS_DIRS
 from mind_mem.mind_ffi import get_mind_dir
@@ -518,86 +519,84 @@ def reindex(include_vectors: bool = False) -> str:
     return json.dumps(results, indent=2)
 
 
-@mcp_tool_observe
-def delete_memory_item(block_id: str) -> str:
-    """Delete a block by ID from the workspace's blocks of record (admin-scope).
+#: Rationale recorded for a ``delete_memory_item`` call that carried none.
+#:
+#: An MCP tool call arrives from an agent, not from a form: it carries no
+#: reason of its own unless the caller passes one, and a plausible
+#: sentence invented here would put a justification in the audit chain
+#: that nobody ever gave. Naming the door is the honest floor — the same
+#: decision, for the same reason, as
+#: :data:`mind_mem.http_transport.DEFAULT_DELETE_RATIONALE`. A caller that
+#: does have a reason passes ``rationale`` and it reaches the record
+#: verbatim.
+DEFAULT_DELETE_RATIONALE = "mcp-delete-memory-item"
 
-    Backend-aware: the Markdown / encrypted corpus is edited in place
-    (line-splice + atomic replace, with a recovery journal); every other
-    backend deletes through its own block store.
+
+def _delete_from_store(ws: str, block_id: str, backend: str, receipt: AdmissionReceipt) -> str:
+    """Remove *block_id* through the configured block store.
+
+    Runs inside the caller's open ``admit_delete`` scope. The store owns
+    both halves of the delete contract —
+    :func:`~mind_mem.admission.require_delete_admission` as its first
+    statement and
+    :meth:`~mind_mem.admission.AdmissionReceipt.record_removal` on
+    success — so this leg neither checks admission nor records the
+    removal itself; doing either here would be a second implementation of
+    the seam.
+
+    Audit bug #5: on a non-Markdown backend (e.g. Postgres) the block of
+    record lives in the store; the local corpus files are empty init
+    templates. Markdown line-splicing would then report "Source file not
+    found" while the block stayed in the store — a delete that reports
+    the ID as wrong and removes nothing.
     """
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-
-    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9-]+$", block_id):
+    try:
+        removed = get_block_store(ws).delete_block(block_id)
+    except Exception as exc:
+        _log.warning("mcp_delete_memory_item_store_failed", block_id=block_id, error=str(exc))
         return json.dumps(
             {
                 "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"Invalid block ID format: {block_id}",
-            }
-        )
-
-    # Audit bug #5: on a non-Markdown backend (e.g. Postgres) the block of
-    # record lives in the store; the local corpus files are empty init
-    # templates. The Markdown line-splicing below would then report
-    # "Source file not found" / "Block not found in DECISIONS.md" while the
-    # block stayed in the store — a delete that reports the ID as wrong and
-    # removes nothing. Route through the store, which owns its own deletion
-    # journal (``deleted_blocks``).
-    if not _is_markdown_backend(ws):
-        backend = _backend_name(ws)
-        try:
-            removed = get_block_store(ws).delete_block(block_id)
-        except Exception as exc:
-            _log.warning("mcp_delete_memory_item_store_failed", block_id=block_id, error=str(exc))
-            return json.dumps(
-                {
-                    "_schema_version": MCP_SCHEMA_VERSION,
-                    "error": f"Delete failed on the {backend} block store: {exc}",
-                    "block_id": block_id,
-                }
-            )
-        if not removed:
-            return json.dumps(
-                {
-                    "_schema_version": MCP_SCHEMA_VERSION,
-                    "error": f"Block {block_id} not found in the block store.",
-                    "block_id": block_id,
-                }
-            )
-        metrics.inc("mcp_delete_memory_item")
-        _log.info("mcp_delete_memory_item", block_id=block_id, backend=backend)
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "status": "deleted",
-                "block_id": block_id,
-                "backend": backend,
-            },
-            indent=2,
-        )
-
-    filepath = _find_block_file(ws, block_id)
-    if filepath is None:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"Unrecognized block ID prefix: {block_id}",
-                "hint": "Supported prefixes: " + ", ".join(sorted(_BLOCK_PREFIX_MAP.keys())),
-            }
-        )
-
-    if not os.path.isfile(filepath):
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"Source file not found: {filepath}",
+                "error": f"Delete failed on the {backend} block store: {exc}",
                 "block_id": block_id,
             }
         )
+    if not removed:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Block {block_id} not found in the block store.",
+                "block_id": block_id,
+            }
+        )
+    metrics.inc("mcp_delete_memory_item")
+    _log.info("mcp_delete_memory_item", block_id=block_id, backend=backend, admission=receipt.entry_id)
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "deleted",
+            "block_id": block_id,
+            "backend": backend,
+            "admission": receipt.entry_id,
+        },
+        indent=2,
+    )
 
+
+def _delete_from_corpus(ws: str, block_id: str, filepath: str, receipt: AdmissionReceipt) -> str:
+    """Splice *block_id* out of the Markdown corpus of record.
+
+    Runs inside the caller's open ``admit_delete`` scope. Unlike the store
+    leg this one edits the file itself, so it owes the *second* half of
+    the delete contract directly: once the atomic replace lands, the
+    block is gone and
+    :meth:`~mind_mem.admission.AdmissionReceipt.record_removal` reports
+    what died, at the same point in the sequence
+    ``MarkdownBlockStore.delete_block`` reports it — after the replace,
+    outside the file lock. Without that call the scope would close with an
+    empty ledger and the chain would carry an authorisation for a death it
+    never recorded.
+    """
     with FileLock(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
@@ -675,8 +674,14 @@ def delete_memory_item(block_id: str) -> str:
                 pass
             raise
 
+    # The block is gone from disk. Report it under the scope that
+    # authorised it: the gate turns this ledger into the one chain record
+    # naming what died when the scope closes. The local journal above is
+    # recovery; this is the audit fact.
+    receipt.record_removal(block_id, deleted_content)
+
     metrics.inc("mcp_delete_memory_item")
-    _log.info("mcp_delete_memory_item", block_id=block_id, file=os.path.basename(filepath))
+    _log.info("mcp_delete_memory_item", block_id=block_id, file=os.path.basename(filepath), admission=receipt.entry_id)
 
     return json.dumps(
         {
@@ -685,9 +690,132 @@ def delete_memory_item(block_id: str) -> str:
             "block_id": block_id,
             "file": os.path.basename(filepath),
             "lines_removed": block_end - block_start,
+            "admission": receipt.entry_id,
         },
         indent=2,
     )
+
+
+@mcp_tool_observe
+def delete_memory_item(block_id: str, rationale: str = "") -> str:
+    """Delete a block by ID from the workspace's blocks of record (admin-scope).
+
+    **One governed death, one chain record** — the third and last door
+    that reached a delete without one. ``DELETE /memories/{id}`` and
+    ``POST /clear`` were closed in 5.0.2; this tool was not, and the two
+    legs failed differently. Measured by live probe on a workspace built
+    by ``mind-mem-init`` (backend ``markdown``, the zero-config default):
+    the Markdown leg never called ``delete_block`` at all, so the
+    store-side gate could not see it — it returned ``{"status":
+    "deleted"}``, the block left the corpus, and the evidence chain held
+    **zero** rows. The store leg, by contrast, did call the now-gated
+    ``delete_block``; its ``UngatedDeleteError`` came back to the caller
+    as ``{"error": "Delete failed on the <backend> block store: ungated
+    delete of ..."}`` and the block survived — fail-closed, which is the
+    right direction, but not a working delete surface.
+
+    Both legs now run inside one
+    :meth:`~mind_mem.governance_gate.GovernanceGate.admit_delete` scope —
+    a single call site, the same shape ``_handle_delete_memory`` uses —
+    so the authorisation record is written before anything is touched and
+    the removal record when something actually goes. The store leg
+    inherits ``record_removal`` from the store; the Markdown leg reports
+    its own removal, because it is the code that does the removing.
+
+    A refused scope is reported as a refusal, never as a deletion: the
+    block is still there, and telling a caller their content is gone when
+    it is not is the one answer a memory product must never give.
+
+    Backend-aware: the Markdown / encrypted corpus is edited in place
+    (line-splice + atomic replace, with a recovery journal); every other
+    backend deletes through its own block store.
+
+    Args:
+        block_id: The block to remove.
+        rationale: Why it is being removed. Optional, and empty records
+            :data:`DEFAULT_DELETE_RATIONALE` — the door's own name rather
+            than a reason nobody gave. See that constant.
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9-]+$", block_id):
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Invalid block ID format: {block_id}",
+            }
+        )
+
+    markdown = _is_markdown_backend(ws)
+    backend = _backend_name(ws)
+
+    # Routing, not existence: both refusals below are decided by the
+    # block id's prefix and by whether the corpus file exists, neither of
+    # which says whether the block is there. They stay outside the scope
+    # so an id this door cannot route mints no authorisation record.
+    filepath: str | None = None
+    if markdown:
+        filepath = _find_block_file(ws, block_id)
+        if filepath is None:
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "error": f"Unrecognized block ID prefix: {block_id}",
+                    "hint": "Supported prefixes: " + ", ".join(sorted(_BLOCK_PREFIX_MAP.keys())),
+                }
+            )
+
+        if not os.path.isfile(filepath):
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "error": f"Source file not found: {filepath}",
+                    "block_id": block_id,
+                }
+            )
+
+    # Imported here, as ``http_transport._handle_delete_memory`` does:
+    # the governance layer is not a dependency of importing the MCP tool
+    # module, only of running a delete.
+    from mind_mem.governance_gate import GovernanceBypassError, get_gate
+
+    try:
+        with get_gate(ws).admit_delete(
+            block_id,
+            rationale=rationale.strip() or DEFAULT_DELETE_RATIONALE,
+            # Empty lets the gate resolve the caller, exactly as
+            # ``_handle_delete_memory`` does: the authenticated REST agent
+            # when the REST layer is in front, else that contextvar's
+            # ``"anonymous"`` default, else ``"system"`` when the API
+            # module is absent (measured: an MCP stdio delete records
+            # ``anonymous``). A stdio call has no authenticated identity
+            # to pass, and recording the ACL scope ("admin") instead would
+            # put a role in the actor field and call it a name.
+            actor="",
+            target_file=os.path.relpath(filepath, ws) if filepath else "",
+            metadata={"door": "mcp.delete_memory_item", "backend": backend},
+        ) as receipt:
+            if markdown:
+                # ``filepath`` is not None on this branch — the routing
+                # checks above return before reaching here.
+                return _delete_from_corpus(ws, block_id, str(filepath), receipt)
+            return _delete_from_store(ws, block_id, backend, receipt)
+    except GovernanceBypassError as exc:
+        # The block is still there. Reporting a refused authorisation as
+        # a completed deletion is the fail-open direction, and the gate
+        # exists to make that impossible.
+        _log.error("mcp_delete_memory_item_refused", block_id=block_id, error=str(exc))
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "Delete refused by governance.",
+                "detail": str(exc),
+                "block_id": block_id,
+            }
+        )
 
 
 @mcp_tool_observe
