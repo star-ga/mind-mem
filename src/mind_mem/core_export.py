@@ -650,7 +650,9 @@ def import_okf_bundle(bundle_dir: str | Path) -> list[dict[str, Any]]:
             )
             skipped.append(str(md.relative_to(root)))
             continue
-        concept_id = str(md.relative_to(root).with_suffix(""))
+        # ``as_posix``: this path becomes the block id, and a bundle must
+        # import to the SAME ids on every operating system.
+        concept_id = md.relative_to(root).with_suffix("").as_posix()
         block: dict[str, Any] = {"type": str(fm["type"])}
         for okf_key, mm_key in _OKF_IMPORT_FIELD.items():
             if okf_key in fm and fm[okf_key] not in (None, "", []):

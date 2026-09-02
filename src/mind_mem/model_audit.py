@@ -428,7 +428,10 @@ def compute_manifest(root: Path) -> tuple[dict[str, str], int]:
             while chunk := f.read(1 << 20):
                 h.update(chunk)
                 total += len(chunk)
-        manifest[str(p.relative_to(root))] = h.hexdigest()
+        # POSIX keys, matching ``model_signing.compute_manifest_text``: a
+        # manifest is checked on a machine that is not the one that built
+        # it, so os-native separators would mismatch every nested path.
+        manifest[p.relative_to(root).as_posix()] = h.hexdigest()
     return manifest, total
 
 

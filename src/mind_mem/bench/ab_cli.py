@@ -89,7 +89,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     meta = {
         "agent": {"name": args.agent, "argv": list(args.agent_argv), "env_passthrough_keys": sorted(passthrough)},
         "task_set": {
-            "path": os.path.relpath(path, args.repo),
+            # POSIX separators, matching ``ab_arms``/``ab_grade``: this key is
+            # published in the run artifact and is covered by its digest, so an
+            # os-native separator would make the same run hash differently on
+            # Windows than on Linux.
+            "path": os.path.relpath(path, args.repo).replace(os.sep, "/"),
             "sha256": file_sha256(path),
             "selection": args.select,
             "n_selected": len(tasks),

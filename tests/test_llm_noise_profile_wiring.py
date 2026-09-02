@@ -125,7 +125,7 @@ def _events(buffer: io.StringIO) -> list[str]:
 
 
 def _tree_digest(root: Path) -> dict[str, str]:
-    """SHA-256 of every regular file under *root*, keyed by relative path.
+    """SHA-256 of every regular file under *root*, keyed by POSIX relative path.
 
     SQLite's ``-wal`` / ``-shm`` sidecars are skipped: opening a WAL database
     creates them, so their presence is a property of having connected at all.
@@ -137,7 +137,11 @@ def _tree_digest(root: Path) -> dict[str, str]:
             if name.endswith(("-wal", "-shm")):
                 continue
             path = Path(dirpath) / name
-            digest[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+            # ``as_posix()``, never ``str()``: os-native separators would key
+            # this map with backslashes on Windows, so every membership test
+            # against a forward-slash constant would miss and the comparison
+            # would silently lose its teeth.
+            digest[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return digest
 
 
