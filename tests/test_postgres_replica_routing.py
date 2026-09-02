@@ -2,10 +2,27 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
+from pathlib import Path
+from typing import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from mind_mem.governance_gate import get_gate
+
+
+@contextlib.contextmanager
+def _deleting(tmp_path: Path, block_id: str) -> Iterator[None]:
+    """The DELETE admission the replica adapter requires from 5.0.2 on.
+
+    Enforced on the adapter as well as the primary, for the same reason
+    ``write_block`` is: a caller holding only the replica must not get a
+    laxer mutation surface than one holding the primary.
+    """
+    with get_gate(str(tmp_path)).admit_delete(block_id, rationale="unit test removal", actor="pytest"):
+        yield
 
 
 @pytest.fixture
@@ -101,8 +118,9 @@ class TestWriteRouting:
         for rep in rep_store._replicas:
             rep.store.write_block.assert_not_called()
 
-    def test_delete_block_always_primary(self, rep_store) -> None:
-        rep_store.delete_block("D-1")
+    def test_delete_block_always_primary(self, rep_store, tmp_path: Path) -> None:
+        with _deleting(tmp_path, "D-1"):
+            rep_store.delete_block("D-1")
         rep_store._primary.delete_block.assert_called_once_with("D-1")
 
     def test_snapshot_always_primary(self, rep_store) -> None:

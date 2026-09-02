@@ -30,6 +30,15 @@ from pathlib import Path
 from typing import Final
 
 from ..observability import get_logger
+from .flag_registry import (
+    FLAG_STATES,
+    KILL_SWITCH,
+    UNIMPLEMENTED,
+    FlagState,
+    UnimplementedCapabilityError,
+    require_implemented,
+    state_of,
+)
 
 _log = get_logger("v4_feature_flags")
 
@@ -39,6 +48,12 @@ _log = get_logger("v4_feature_flags")
 #: parse error. Cleared on a successful read, so a re-break is reported
 #: again.
 _last_config_warning: tuple[str, str] | None = None
+
+#: Last set of enabled-but-unimplemented flags warned about. A flag with no
+#: consumer cannot announce itself — nothing reads it — so the config reader
+#: announces it once instead, on the LOUD path only. Reset to ``None`` when a
+#: read finds none, so fixing and then re-breaking the config warns again.
+_last_unimplemented_warning: tuple[str, ...] | None = None
 
 # ---------------------------------------------------------------------------
 # Registry
@@ -213,7 +228,70 @@ def _read_v4_block(*, quiet: bool = False) -> tuple[dict, str]:
     if not quiet:
         _last_config_warning = None
     block = data.get("v4") if isinstance(data, dict) else None
-    return (block if isinstance(block, dict) else {}), ""
+    resolved = block if isinstance(block, dict) else {}
+    if not quiet:
+        _warn_unimplemented(resolved, p)
+    return resolved, ""
+
+
+def _flag_is_on(block: dict, flag: str) -> bool:
+    """The canonical enable test, applied to an already-parsed ``v4`` block.
+
+    ON is the nested ``{"enabled": true}`` shape and nothing else: a bare
+    ``true``, a truthy string, or a non-dict section all read as OFF, so a
+    typo cannot switch a surface on.
+    """
+    sub = block.get(flag)
+    return isinstance(sub, dict) and sub.get("enabled") is True
+
+
+def enabled_unimplemented_flags() -> tuple[str, ...]:
+    """Declared-but-unimplemented flags the active config switches on.
+
+    Empty on any healthy config. Non-empty means the operator asked for a
+    capability that does not exist, and — because an unimplemented flag by
+    definition has no consumer — nothing else in the process will ever
+    mention it.
+    """
+    block, _error = _read_v4_block()
+    return tuple(sorted(f for f in UNIMPLEMENTED if _flag_is_on(block, f)))
+
+
+def require_valid_flag_config() -> None:
+    """Raise if the active config enables a capability that does not exist.
+
+    The whole-config counterpart to :func:`require_implemented`, for a
+    start-up or ``doctor``-style check that wants to refuse once rather
+    than at the first read of one particular flag.
+    """
+    offenders = enabled_unimplemented_flags()
+    if not offenders:
+        return
+    listed = ", ".join(offenders)
+    raise UnimplementedCapabilityError(
+        f"mind-mem v4 config enables {len(offenders)} flag(s) with nothing behind them: {listed}. "
+        "Each is declared but has no consumer, so enabling it changes nothing. Remove them from the "
+        '"v4" block, or wire a consumer and move them out of mind_mem.v4.flag_registry.UNIMPLEMENTED.'
+    )
+
+
+def _warn_unimplemented(block: dict, path: Path) -> None:
+    """Announce enabled-but-unimplemented flags once per distinct set.
+
+    Loud path only. The quiet probe must stay unobservable — a default-OFF
+    build that logs is no longer indistinguishable from the build that
+    never had the feature — and it is never the probe that discovers this
+    anyway: a flag with no consumer has no probe.
+    """
+    global _last_unimplemented_warning
+    offenders = tuple(sorted(f for f in UNIMPLEMENTED if _flag_is_on(block, f)))
+    if not offenders:
+        _last_unimplemented_warning = None
+        return
+    if _last_unimplemented_warning == offenders:
+        return
+    _last_unimplemented_warning = offenders
+    _log.warning("v4_unimplemented_flags_enabled", path=str(path), flags=list(offenders))
 
 
 def _load_v4_block(*, quiet: bool = False) -> dict:
@@ -298,10 +376,55 @@ def is_enabled(flag: str) -> bool:
     if flag not in ALL_V4_FLAGS:
         return False
     cfg = _load_v4_block()
-    sub = cfg.get(flag)
-    if not isinstance(sub, dict):
+    if not _flag_is_on(cfg, flag):
         return False
-    return sub.get("enabled") is True
+    require_implemented(flag)
+    return True
+
+
+def is_kill_switch_active(flag: str) -> bool:
+    """Default-ON read: True unless config says ``{"enabled": false}``.
+
+    The mirror of :func:`is_enabled_quiet`, for a flag the registry
+    declares ``KILL_SWITCH`` — a feature that already ships ungated, where
+    the operative setting is turning it OFF. With the key absent the answer
+    is True, so adding a kill switch to a shipping feature is additive by
+    construction and the flag-off build stays byte-identical.
+
+    The fail direction is inverted on purpose, and this is the whole point
+    of having a second resolver rather than a ``default=True`` argument on
+    the first. :func:`is_enabled` fails **closed** — an unknown name, an
+    unreadable config, or a malformed section must never switch a surface
+    on. A kill switch fails **ON** for the same reason: a typo in a flag
+    name, or a config that stops parsing, must never silently disable a
+    feature that is running today.
+
+    Quiet, like every probe: reads only, logs nothing, raises nothing, and
+    answers from the stat-keyed cache so a per-event caller does not pay a
+    parse per call.
+
+    Calling this on a flag the registry does not declare ``KILL_SWITCH``
+    inverts that flag's meaning with nothing at runtime able to notice, so
+    ``tests/test_flag_registry.py`` walks every call site in ``src/`` by
+    AST and fails the build on a mismatch — a check that costs nothing here.
+    """
+    if flag not in ALL_V4_FLAGS:
+        # An undeclared name is a typo, and a typo must never be the thing
+        # that disables a shipping feature. Same guard as ``is_enabled``,
+        # opposite answer, for the same reason.
+        return True
+    try:
+        path = _config_path()
+        st = path.stat()
+        block = _quiet_block(path, st.st_mtime_ns, st.st_size)
+        sub = block.get(flag) if isinstance(block, dict) else None
+    except Exception:
+        # Missing, unreadable, or malformed config; a non-dict v4 block; a
+        # resolver failure. None of them is an operator asking for OFF.
+        return True
+    if not isinstance(sub, dict):
+        return True
+    return sub.get("enabled") is not False
 
 
 def require_enabled(flag: str) -> None:
@@ -315,6 +438,7 @@ def require_enabled(flag: str) -> None:
     in the file — the flag is not the problem, the trailing comma is, and
     a message that names the wrong cause sends the diagnosis the wrong way.
     """
+    require_implemented(flag)
     if is_enabled(flag):
         return
     _block, error = _read_v4_block()
@@ -417,11 +541,21 @@ def config_error() -> str:
 
 __all__ = [
     "ALL_V4_FLAGS",
+    "FLAG_STATES",
+    "KILL_SWITCH",
+    "UNIMPLEMENTED",
     "FeatureDisabledError",
+    "FlagState",
+    "UnimplementedCapabilityError",
     "config_error",
+    "enabled_unimplemented_flags",
     "is_enabled",
     "is_enabled_quiet",
+    "is_kill_switch_active",
     "require_enabled",
+    "require_implemented",
+    "require_valid_flag_config",
+    "state_of",
     "flag_config",
     "flag_config_for_workspace",
     "is_enabled_for_workspace",

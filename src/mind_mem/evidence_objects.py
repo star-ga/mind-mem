@@ -47,10 +47,11 @@ import os
 import threading
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Union
+from typing import NoReturn, Union
 from uuid import uuid4
 
 from .admission import GovernanceBypassError
+from .mind_filelock import FileLock, LockTimeout
 from .observability import get_logger, metrics
 from .preimage import preimage
 from .q1616 import hex_q16_16
@@ -59,6 +60,22 @@ _log = get_logger("evidence_objects")
 
 # Genesis seed — matches audit_chain.py convention
 _GENESIS_HASH = "0" * 64
+
+#: Schema tag stamped into ``metadata`` of every record this release writes.
+#: The preimage already covers ``metadata``, so the tag is tamper-evident for
+#: free. Absence of the key means a record written before the tag existed —
+#: readers must treat a missing tag as "<= v3.0", never as an error.
+EVIDENCE_SCHEMA_VERSION = "v3.1"
+
+#: Seconds a writer waits for the cross-process append lock before giving up.
+#: Generous: a governance chain is low-volume, and a writer that gives up
+#: early would be back to guessing the tail — the thing this lock exists to
+#: stop.
+_APPEND_LOCK_TIMEOUT_SECONDS = 30.0
+
+#: Bytes read per backwards step when resolving the on-disk tail record, so
+#: the cost of an append does not grow with the length of the chain.
+_TAIL_CHUNK_BYTES = 8192
 
 
 # ---------------------------------------------------------------------------
@@ -90,8 +107,55 @@ class EvidenceChainCompromisedError(GovernanceBypassError):
 # ---------------------------------------------------------------------------
 
 
+class UnknownAction(str):
+    """A governance verb this reader has no member for.
+
+    A newer writer may record an action a older reader was never taught.
+    Strict parsing (``EvidenceAction(raw)``) turns that into a
+    ``ValueError``, which :meth:`EvidenceChain._load_from_file` reads as
+    "unreadable record" and answers by freezing the whole chain — so one
+    new verb would take the ledger offline for every older process
+    sharing the workspace.
+
+    So the action is **verified from its raw string** (it always was:
+    the preimage hashes ``action.value``) and only *dispatched* through
+    the enum. An unrecognised verb round-trips byte-identically and
+    verifies; code that needs semantics matches on
+    :class:`EvidenceAction` members and treats an ``UnknownAction`` as
+    "something happened that I do not model", never as absence.
+
+    A ``str`` subclass carrying the enum's ``.value``/``.name`` shape,
+    following the ``Predicate.register`` precedent in
+    ``knowledge_graph.py``.
+    """
+
+    __slots__ = ()
+
+    @property
+    def value(self) -> str:
+        """The raw recorded verb — the same shape as ``EvidenceAction.value``."""
+        return str(self)
+
+    @property
+    def name(self) -> str:
+        """The raw recorded verb — the same shape as ``EvidenceAction.name``."""
+        return str(self)
+
+    def __repr__(self) -> str:
+        return f"UnknownAction({str(self)!r})"
+
+
 class EvidenceAction(str, Enum):
-    """Enumeration of governance actions that produce evidence records."""
+    """Enumeration of governance actions that produce evidence records.
+
+    Adding a member is additive for writers and **breaking for a reader
+    that parses strictly**; every reader in this package goes through
+    :meth:`parse`, which never raises. A release older than the one that
+    introduced :class:`UnknownAction` still parses strictly, so a chain
+    carrying a member added after it will freeze *that* reader — which is
+    why a new member and the writer that emits it are separate landings,
+    reader first.
+    """
 
     PROPOSE = "PROPOSE"
     APPLY = "APPLY"
@@ -100,6 +164,19 @@ class EvidenceAction(str, Enum):
     DRIFT = "DRIFT"
     RESOLVE = "RESOLVE"
     VERIFY = "VERIFY"
+
+    @classmethod
+    def parse(cls, raw: str) -> Union["EvidenceAction", UnknownAction]:
+        """Return the member for *raw*, or an :class:`UnknownAction` sentinel.
+
+        Never raises. This is the only supported way to turn a recorded
+        action string back into something dispatchable.
+        """
+        try:
+            return cls(raw)
+        except ValueError:
+            metrics.inc("evidence_unknown_action_read")
+            return UnknownAction(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -221,8 +298,14 @@ class EvidenceObject:
     timestamp: datetime
     """UTC datetime when this evidence was created."""
 
-    action: EvidenceAction
-    """Governance action that generated this evidence."""
+    action: Union[EvidenceAction, UnknownAction]
+    """Governance action that generated this evidence.
+
+    An :class:`EvidenceAction` member when this reader models the verb,
+    an :class:`UnknownAction` when a newer writer recorded one it does
+    not. Both expose ``.value``, and the raw string is what the hash
+    covers, so an unmodelled verb still verifies.
+    """
 
     actor: str
     """Who/what triggered this action (e.g. "user", "auto_resolver")."""
@@ -270,7 +353,7 @@ class EvidenceObject:
         return cls(
             evidence_id=d["evidence_id"],
             timestamp=datetime.fromisoformat(d["timestamp"]),
-            action=EvidenceAction(d["action"]),
+            action=EvidenceAction.parse(d["action"]),
             actor=d["actor"],
             target_block_id=d["target_block_id"],
             target_file=d["target_file"],
@@ -302,6 +385,17 @@ class EvidenceChain:
     the history.  Reads still work and :meth:`verify_chain` still reports
     the failure.
 
+    **Cross-process safety.** A store file is shared by every process
+    that opens the same workspace, so an in-memory tail is only ever a
+    guess about what is on disk. Each persisted append therefore takes
+    the cross-process :class:`~mind_mem.mind_filelock.FileLock` on the
+    store, absorbs whatever other writers appended
+    (:meth:`_refresh_from_store`), and cross-checks its tail against the
+    record actually last on disk before linking to it. A writer that
+    still believes it is at genesis while the store holds records is
+    refused rather than allowed to start a second chain behind the first
+    — the fork that leaves a file full of zero-``previous_hash`` rows.
+
     Args:
         store_path: Optional path to a JSONL file for persistence.
                     The directory is created if it does not exist.
@@ -315,11 +409,32 @@ class EvidenceChain:
         # Serialize concurrent create() calls so the in-memory chain and the
         # on-disk JSONL cannot interleave entries or diverge from each other.
         self._lock = threading.RLock()
+        # Bytes of the store this chain has already read. Everything past it
+        # was appended by somebody else and must be absorbed before we can
+        # know the tail. 0 for "nothing read yet", which is also the truth
+        # for a store that does not exist.
+        self._store_offset: int = 0
 
         if store_path is not None:
             os.makedirs(os.path.dirname(os.path.abspath(store_path)), exist_ok=True)
             if os.path.isfile(store_path):
-                self._load_from_file(store_path)
+                try:
+                    # Under the same lock the writers use: a load racing an
+                    # append would otherwise read a half-written last line
+                    # and freeze a perfectly healthy chain.
+                    with self._store_lock():
+                        self._read_store(store_path)
+                except (OSError, LockTimeout):
+                    # Reading is allowed to degrade; writing is not. A chain
+                    # archived read-only after a re-anchor is exactly the
+                    # thing an auditor must still be able to verify, and it
+                    # is a directory no lockfile can be created in. Loading
+                    # unlocked is what every release before this one did, so
+                    # the fallback is never worse than the status quo — while
+                    # create() keeps failing closed on the same condition,
+                    # because an unserialised append is how the ledger forks.
+                    _log.info("evidence_load_without_lock", path=store_path)
+                    self._read_store(store_path)
 
     # ------------------------------------------------------------------
     # Public API
@@ -353,8 +468,13 @@ class EvidenceChain:
 
         Raises:
             EvidenceChainCompromisedError: If the stored chain did not load
-                intact. Appending is refused rather than forking the ledger.
+                intact, if another writer's records do not link, or if this
+                writer's view of the store is stale (including the genesis
+                case: this chain believes it is empty while the store holds
+                records). Appending is refused rather than forking the ledger.
             ValueError: If confidence is outside [0.0, 1.0].
+            LockTimeout: If the cross-process append lock on the store could
+                not be taken within ``_APPEND_LOCK_TIMEOUT_SECONDS``.
         """
         # Refuse BEFORE validating arguments: a chain that could not be read
         # in full has no trustworthy tail to link to, so there is no such
@@ -372,49 +492,50 @@ class EvidenceChain:
         effective_metadata: dict = dict(metadata or {})
         if spec_hash is not None:
             effective_metadata["spec_hash"] = spec_hash
+        # Stamp the schema this record was written under. setdefault, not
+        # assignment: a deliberate re-anchoring operation writes its own tag
+        # and must not have it silently overwritten.
+        effective_metadata.setdefault("evidence_schema", EVIDENCE_SCHEMA_VERSION)
         metadata = effective_metadata
 
+        payload_hash = _compute_payload_hash(payload)
+
         with self._lock:
-            evidence_id = str(uuid4())
-            now = datetime.now(timezone.utc)
-            timestamp_iso = now.isoformat()
-
-            payload_hash = _compute_payload_hash(payload)
-            previous_hash = self._entries[-1].evidence_hash if self._entries else _GENESIS_HASH
-
-            evidence_hash = _compute_evidence_hash(
-                evidence_id,
-                timestamp_iso,
-                action.value,
-                actor,
-                target_block_id,
-                payload_hash,
-                previous_hash,
-                target_file=target_file,
-                metadata=metadata or {},
-                confidence=confidence,
-            )
-
-            ev = EvidenceObject(
-                evidence_id=evidence_id,
-                timestamp=now,
-                action=action,
-                actor=actor,
-                target_block_id=target_block_id,
-                target_file=target_file,
-                payload_hash=payload_hash,
-                previous_hash=previous_hash,
-                evidence_hash=evidence_hash,
-                metadata=metadata or {},
-                confidence=confidence,
-            )
-
-            # Persist to disk FIRST so an I/O failure cannot leave in-memory
-            # state ahead of the on-disk chain. Only append to _entries once
-            # the durable write has landed.
-            if self._store_path is not None:
-                self._append_to_file(ev)
-            self._entries.append(ev)
+            if self._store_path is None:
+                # Memory-only chain: no file, so nothing to serialise against
+                # and no disk tail to consult.
+                ev = self._forge(
+                    previous_hash=(self._entries[-1].evidence_hash if self._entries else _GENESIS_HASH),
+                    action=action,
+                    actor=actor,
+                    target_block_id=target_block_id,
+                    target_file=target_file,
+                    payload_hash=payload_hash,
+                    metadata=metadata,
+                    confidence=confidence,
+                )
+                self._entries.append(ev)
+            else:
+                # One writer at a time, across processes, for the whole
+                # read-tail → compute → append sequence. Splitting the read
+                # from the append is what let two processes each believe they
+                # owned the tail.
+                with self._store_lock():
+                    ev = self._forge(
+                        previous_hash=self._linkable_previous_hash(),
+                        action=action,
+                        actor=actor,
+                        target_block_id=target_block_id,
+                        target_file=target_file,
+                        payload_hash=payload_hash,
+                        metadata=metadata,
+                        confidence=confidence,
+                    )
+                    # Persist FIRST so an I/O failure cannot leave in-memory
+                    # state ahead of the on-disk chain. Only append to
+                    # _entries once the durable write has landed.
+                    self._append_to_file(ev)
+                    self._entries.append(ev)
 
         _log.info("evidence_created", action=action.value, actor=actor, target_block_id=target_block_id)
         metrics.inc("evidence_objects_created")
@@ -592,6 +713,12 @@ class EvidenceChain:
         could not be read, and that file — not the imported one — is what
         :meth:`create` would append to. Repair the store instead.
 
+        Nor does it make the imported history appendable to a *different*
+        store: the next :meth:`create` resolves its link against the
+        store's own last record, so importing a foreign chain (or an
+        empty one) over a populated store is refused at the next append
+        rather than silently forking it.
+
         Args:
             path: JSONL file path to import.
 
@@ -640,6 +767,225 @@ class EvidenceChain:
         self._load_failure = reason
         metrics.inc("evidence_load_integrity_compromised")
 
+    def _read_store(self, store_path: str) -> None:
+        """Load the stored chain and record how far into the file we read."""
+        self._load_from_file(store_path)
+        try:
+            self._store_offset = os.path.getsize(store_path)
+        except OSError:  # pragma: no cover - stat failing right after a read
+            self._store_offset = 0
+
+    def _store_lock(self) -> FileLock:
+        """The cross-process lock guarding this chain's store file.
+
+        Every reader and writer of the store takes it, so a load never
+        observes a half-written line and two appends can never resolve the
+        same tail. ``FileLock``'s per-path thread lock is **not**
+        reentrant, so this must never be nested with itself.
+        """
+        return FileLock(str(self._store_path), timeout=_APPEND_LOCK_TIMEOUT_SECONDS)
+
+    def _freeze_and_raise(self, reason: str) -> NoReturn:
+        """Freeze the chain for *reason* and refuse the write.
+
+        Every caller has established that the real tail of the stored
+        chain is not what this process thought it was. Writing anyway is
+        exactly the fork this class exists to prevent, and repairing the
+        history by rewriting hashes is never this code's decision.
+        """
+        self._mark_compromised(reason)
+        raise EvidenceChainCompromisedError(
+            f"EvidenceChain refuses to append to {self._store_path!r}: {reason}. "
+            "No hash is ever rewritten to repair this — archive the stored "
+            "chain and re-anchor it as a deliberate operation."
+        )
+
+    def _read_disk_tail_hash(self) -> str | None:
+        """``evidence_hash`` of the last record on disk, or None if there is none.
+
+        Reads backwards from the end so an append does not cost a pass
+        over the whole chain. ``None`` means the store holds no record
+        (absent, empty, or nothing but blank lines) — never "could not
+        tell": a tail that exists but cannot be parsed freezes the chain,
+        because a writer that treated it as absence would restart at
+        genesis behind it.
+
+        Caller holds :meth:`_store_lock`.
+        """
+        path = self._store_path
+        if path is None:
+            return None
+        buf = b""
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(0, os.SEEK_END)
+                pos = fh.tell()
+                while pos > 0:
+                    step = min(_TAIL_CHUNK_BYTES, pos)
+                    pos -= step
+                    fh.seek(pos)
+                    buf = fh.read(step) + buf
+                    # A newline before the final byte means the last
+                    # non-blank line is bounded on both sides and therefore
+                    # complete; otherwise keep walking backwards.
+                    if b"\n" in buf[:-1]:
+                        break
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            self._freeze_and_raise(f"the store could not be read ({exc})")
+        lines = [line for line in buf.split(b"\n") if line.strip()]
+        if not lines:
+            return None
+        try:
+            record = json.loads(lines[-1].decode("utf-8"))
+            return str(record["evidence_hash"])
+        except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError) as exc:
+            self._freeze_and_raise(f"the store's last line is not a readable evidence record ({exc})")
+
+    def _refresh_from_store(self) -> None:
+        """Absorb records other writers appended since this chain last read.
+
+        The append lock serialises writers, but each still holds its own
+        copy of the chain in memory. Without this, a second writer's idea
+        of the tail stays whatever it read at construction time — the
+        stale tail that forks the ledger.
+
+        Only the bytes past :attr:`_store_offset` are read, so following a
+        busy store costs the new records, not the whole file. Every
+        absorbed record is verified and linked; anything else freezes the
+        chain rather than being skipped.
+
+        Caller holds :meth:`_store_lock`.
+        """
+        path = self._store_path
+        if path is None:
+            return
+        try:
+            size = os.path.getsize(path)
+        except FileNotFoundError:
+            if self._entries:
+                self._freeze_and_raise("the store this chain was loaded from no longer exists")
+            self._store_offset = 0
+            return
+        except OSError as exc:
+            self._freeze_and_raise(f"the store could not be stat'd ({exc})")
+        if size == self._store_offset:
+            return
+        if size < self._store_offset:
+            self._freeze_and_raise(f"the store shrank from {self._store_offset} to {size} bytes — append-only history was rewritten")
+
+        prev_hash = self._entries[-1].evidence_hash if self._entries else _GENESIS_HASH
+        absorbed: list[EvidenceObject] = []
+        with open(path, "rb") as fh:
+            fh.seek(self._store_offset)
+            for raw in fh:
+                stripped = raw.strip()
+                if not stripped:
+                    continue
+                try:
+                    ev = EvidenceObject.from_dict(json.loads(stripped.decode("utf-8")))
+                except (json.JSONDecodeError, UnicodeDecodeError, KeyError, ValueError) as exc:
+                    self._freeze_and_raise(f"a record appended by another writer is unreadable ({exc})")
+                if not self.verify(ev):
+                    self._freeze_and_raise(f"a record appended by another writer fails its own hash (evidence_id={ev.evidence_id})")
+                if ev.previous_hash != prev_hash:
+                    self._freeze_and_raise(f"a record appended by another writer does not link (evidence_id={ev.evidence_id})")
+                prev_hash = ev.evidence_hash
+                absorbed.append(ev)
+
+        self._entries.extend(absorbed)
+        self._store_offset = size
+        if absorbed:
+            metrics.inc("evidence_records_absorbed")
+            _log.info("evidence_chain_absorbed", records=len(absorbed), path=path)
+
+    def _linkable_previous_hash(self) -> str:
+        """The hash the next record must carry as ``previous_hash``.
+
+        Resolved against the store, never taken on trust from memory:
+        the in-memory tail is refreshed from disk first and then checked
+        against the record actually last on disk.
+
+        Two disagreements are refused, and they are different failures:
+
+        * **genesis into a non-empty chain** — this writer believes the
+          chain is empty while the store holds records. That is the live
+          fork signature: every such writer restarts at
+          ``_GENESIS_HASH`` and the file ends up holding several chains
+          rooted at genesis. Reachable without any concurrency at all
+          (``import_jsonl`` of an empty file leaves exactly this state).
+        * **a tail that is not the store's tail** — this writer has
+          history the store does not, or a different history.
+
+        Caller holds :meth:`_store_lock`.
+        """
+        self._refresh_from_store()
+        disk_tail = self._read_disk_tail_hash()
+        memory_tail = self._entries[-1].evidence_hash if self._entries else None
+
+        if memory_tail is None:
+            if disk_tail is not None:
+                self._freeze_and_raise(
+                    "genesis into non-empty chain — this writer holds no history "
+                    f"while the store's last record is {disk_tail[:16]}…; appending "
+                    "would root a second chain at the genesis hash behind the first"
+                )
+            return _GENESIS_HASH
+
+        if memory_tail != disk_tail:
+            self._freeze_and_raise(
+                f"this writer's tail {memory_tail[:16]}… is not the store's last "
+                f"record ({'nothing on disk' if disk_tail is None else disk_tail[:16] + '…'})"
+            )
+        return memory_tail
+
+    def _forge(
+        self,
+        *,
+        previous_hash: str,
+        action: EvidenceAction,
+        actor: str,
+        target_block_id: str,
+        target_file: str,
+        payload_hash: str,
+        metadata: dict,
+        confidence: float,
+    ) -> EvidenceObject:
+        """Build one self-hashing record linked to *previous_hash*.
+
+        Pure construction — no I/O, no chain state — so the caller decides
+        under which locks the record is minted and appended.
+        """
+        evidence_id = str(uuid4())
+        now = datetime.now(timezone.utc)
+        timestamp_iso = now.isoformat()
+        evidence_hash = _compute_evidence_hash(
+            evidence_id,
+            timestamp_iso,
+            action.value,
+            actor,
+            target_block_id,
+            payload_hash,
+            previous_hash,
+            target_file=target_file,
+            metadata=metadata,
+            confidence=confidence,
+        )
+        return EvidenceObject(
+            evidence_id=evidence_id,
+            timestamp=now,
+            action=action,
+            actor=actor,
+            target_block_id=target_block_id,
+            target_file=target_file,
+            payload_hash=payload_hash,
+            previous_hash=previous_hash,
+            evidence_hash=evidence_hash,
+            metadata=metadata,
+            confidence=confidence,
+        )
+
     def _raise_if_compromised(self, operation: str) -> None:
         """Refuse *operation* when the stored chain did not load intact."""
         if self._integrity_compromised:
@@ -656,12 +1002,20 @@ class EvidenceChain:
 
         Writes are flushed and fsync'd so that a crash between create() and
         the next event cannot lose the record. Callers must hold self._lock
-        to prevent interleaved writes from parallel create() calls.
+        *and* :meth:`_store_lock` — the first stops parallel create() calls
+        in this process interleaving, the second stops another process
+        appending between our tail read and our write.
+
+        The record we just wrote is one this chain has read, so
+        :attr:`_store_offset` moves past it; otherwise the next append
+        would re-absorb our own record and see it as somebody else's.
         """
+        line = json.dumps(ev.to_dict(), separators=(",", ":")) + "\n"
         with open(self._store_path, "a", encoding="utf-8") as fh:  # type: ignore[arg-type]
-            fh.write(json.dumps(ev.to_dict(), separators=(",", ":")) + "\n")
+            fh.write(line)
             fh.flush()
             os.fsync(fh.fileno())
+        self._store_offset += len(line.encode("utf-8"))
 
     _MAX_LOAD_ENTRIES: int = 1_000_000
     _MAX_LOAD_LINE_BYTES: int = 1_048_576  # 1 MiB per JSONL line

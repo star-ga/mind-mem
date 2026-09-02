@@ -2,15 +2,32 @@
 
 from __future__ import annotations
 
+import contextlib
+from pathlib import Path
+from typing import Iterator
 from unittest.mock import MagicMock
 
 import pytest
 
+from mind_mem.governance_gate import get_gate
 from mind_mem.storage.sharded_pg import (
     ShardConfig,
     ShardedPostgresBlockStore,
     ShardRouter,
 )
+
+
+@contextlib.contextmanager
+def _deleting(tmp_path: Path, block_id: str) -> Iterator[None]:
+    """The DELETE admission the sharded wrapper requires from 5.0.2 on.
+
+    The wrapper checks before the fan-out rather than leaving it to the
+    owning shard: with no shard resolved for the tenant the loop body
+    never runs, and an ungated delete would come back as a quiet
+    ``False`` instead of a refusal.
+    """
+    with get_gate(str(tmp_path)).admit_delete(block_id, rationale="unit test removal", actor="pytest"):
+        yield
 
 
 class TestShardConfig:
@@ -88,11 +105,12 @@ class TestShardedPostgresBlockStore:
         # Exactly one underlying shard got the write.
         assert (a.write_block.call_count + b.write_block.call_count) == 1
 
-    def test_delete_routes_to_single_shard(self) -> None:
+    def test_delete_routes_to_single_shard(self, tmp_path: Path) -> None:
         store, a, b = self._build()
         a.delete_block.return_value = True
         b.delete_block.return_value = True
-        store.delete_block("D-1", tenant_id="acme")
+        with _deleting(tmp_path, "D-1"):
+            store.delete_block("D-1", tenant_id="acme")
         assert (a.delete_block.call_count + b.delete_block.call_count) == 1
 
     def test_search_fans_out_and_fuses(self) -> None:
@@ -225,12 +243,13 @@ class TestNamespaceRoutingSymmetry:
 
         assert [b["_id"] for b in found] == ["D-1"]
 
-    def test_delete_reaches_a_block_written_under_another_namespace(self, admitted) -> None:
+    def test_delete_reaches_a_block_written_under_another_namespace(self, admitted, tmp_path: Path) -> None:
         store, stores, router = _cluster()
         ns = _namespace_off_the_default_shard(router, "acme")
         store.write_block({"_id": "D-1", "_tenant": "acme", "_namespace": ns})
 
-        assert store.delete_block("D-1", tenant_id="acme") is True
+        with _deleting(tmp_path, "D-1"):
+            assert store.delete_block("D-1", tenant_id="acme") is True
         assert store.get_by_id("D-1") is None
 
     def test_tenant_scoped_get_all_excludes_other_tenants(self, admitted) -> None:

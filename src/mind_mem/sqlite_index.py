@@ -30,6 +30,7 @@ import sqlite3
 import threading
 from datetime import date, datetime
 
+from .admissibility import is_admissible_status, workspace_release_ids
 from .block_parser import parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
 from .connection_manager import ConnectionManager
@@ -90,6 +91,81 @@ def _bm25_weights() -> str:
 # Only allow alphanumeric tokens (plus _ - .) through to FTS5 queries
 # to prevent wildcard injection (e.g. "*" matching entire corpus)
 _FTS5_SAFE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+
+# ---------------------------------------------------------------------------
+# Admission — which blocks the index may carry statistics for
+# ---------------------------------------------------------------------------
+#
+# The searchable table (``blocks_fts``) is the STATISTICS surface: SQLite's
+# ``bm25()`` computes IDF and the average document length over every row in
+# it, corpus-wide, and no ``WHERE`` clause narrows that. So a withheld block
+# sitting in ``blocks_fts`` moves the score of every *admitted* result — for
+# terms it shares AND for terms it does not, through the document count and
+# the length average. Measured on a 12-block corpus: adding one quarantined
+# block moved a shared term's bm25 from -1.9688 to -1.6026 and an unrelated
+# term's from -2.8718 to -3.1645. That is the withheld content shaping what a
+# caller sees, which is exactly what the gate exists to prevent.
+#
+# So ``blocks_fts`` carries the ADMITTED set only. ``blocks``, ``index_meta``
+# and ``xref_edges`` still carry every block, which is what keeps the two
+# properties the old design was protecting: the attested index anchor
+# (:func:`merkle_leaves` reads ``index_meta``) does not churn, and a release
+# is a membership flip on one table rather than a re-parse of the corpus.
+
+
+def _release_set(workspace: str | None) -> frozenset[str]:
+    """Governance release set for *workspace*; empty and never raising.
+
+    An unreadable decisions file admits nothing — the fail-closed
+    direction, matching :func:`admissibility.workspace_release_ids`.
+    """
+    if not workspace:
+        return frozenset()
+    try:
+        return workspace_release_ids(workspace)
+    except Exception as exc:  # pragma: no cover — defensive
+        _log.warning("release_lookup_failed", error=str(exc))
+        return frozenset()
+
+
+def _admit_ids(
+    pairs: list[tuple[str, object]],
+    *,
+    workspace: str | None = None,
+    releases: frozenset[str] | None = None,
+) -> set[str]:
+    """The ids in ``(block_id, status)`` *pairs* the index may serve.
+
+    The predicate is :func:`admissibility.is_admissible_status` — the one
+    allow-list — plus the governance release set. Nothing here restates
+    the status vocabulary, so a tier that mints a new withheld status
+    withholds its blocks from the index with no edit in this module.
+
+    The release set is resolved **lazily**: an all-admissible batch
+    returns without touching the filesystem, so the common case pays no
+    probe. Pass *releases* when the caller already resolved it once for a
+    whole index pass.
+    """
+    kept: set[str] = set()
+    withheld = 0
+    for bid, status in pairs:
+        if is_admissible_status(status):
+            kept.add(bid)
+        else:
+            withheld += 1
+    if not withheld:
+        return kept
+    if releases is None:
+        releases = _release_set(workspace)
+    if releases:
+        kept |= {bid for bid, _status in pairs if bid in releases}
+    return kept
+
+
+def _release_set_hash(releases: frozenset[str]) -> str:
+    """Stable digest of the release set, for build-to-build comparison."""
+    return hashlib.sha256("\x00".join(sorted(releases)).encode("utf-8")).hexdigest()
 
 
 def _db_path(workspace: str) -> str:
@@ -306,20 +382,45 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             block_id     TEXT NOT NULL,
             content_hash TEXT NOT NULL,
             indexed_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+            admitted     INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (file_path, block_id)
         );
     """)
 
-    # Create standalone FTS5 virtual table (we manage sync ourselves)
+    # Create standalone FTS5 virtual tables (we manage sync ourselves).
+    #
+    # TWO of them, and the split is the admission boundary. ``bm25()``
+    # averages over every row of the table it is given and no WHERE clause
+    # narrows that, so which table a block sits in IS the decision about
+    # whether it shapes other blocks' scores. ``blocks_fts`` holds the
+    # admitted set and is what queries score against; ``blocks_fts_withheld``
+    # holds the rest, so a governance release can still surface a block with
+    # no reindex (see ``query_index``) without that block having contributed
+    # a single document to the statistics of the corpus it was withheld from.
+    # A block is in exactly one of the two, never both.
     cols = ", ".join(col for col, _ in FTS5_COLUMNS)
-    conn.execute(f"""
-        CREATE VIRTUAL TABLE IF NOT EXISTS blocks_fts
-        USING fts5(block_id, {cols}, tokenize='porter unicode61')
-    """)
+    for _fts_table in ("blocks_fts", "blocks_fts_withheld"):
+        conn.execute(f"""
+            CREATE VIRTUAL TABLE IF NOT EXISTS {_fts_table}
+            USING fts5(block_id, {cols}, tokenize='porter unicode61')
+        """)
 
     # Migration: add parent_id column if missing (existing databases)
     try:
         conn.execute("ALTER TABLE blocks ADD COLUMN parent_id TEXT NOT NULL DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # 5.0.2 migration: record the ADMISSION verdict beside the content hash.
+    # Content-hash equality is not enough to decide whether a block still
+    # belongs in ``blocks_fts``: a governance release (or a quarantine) flips
+    # admissibility with the block's bytes untouched, so without this column
+    # an incremental pass would classify it "unchanged" and the membership
+    # flip would never land. Legacy rows default to 1 (admitted), which is
+    # what they were: the recorded verdict then disagrees with the computed
+    # one for exactly the withheld blocks, and the first pass corrects them.
+    try:
+        conn.execute("ALTER TABLE index_meta ADD COLUMN admitted INTEGER NOT NULL DEFAULT 1")
     except sqlite3.OperationalError:
         pass  # Column already exists
 
@@ -519,24 +620,34 @@ def _index_file(
     rel_path: str,
     all_block_ids: set,
     force: bool = False,
+    releases: frozenset[str] | None = None,
 ) -> dict:
     """Index a single corpus file with block-level incremental updates.
 
     Returns dict with counts: new, modified, deleted, unchanged, total.
     When force=True, skips hash comparison and re-indexes all blocks.
+
+    *releases* is the workspace's governance release set, resolved once
+    per build pass by :func:`build_index`. A block is admitted to the
+    searchable table when :func:`_admit_ids` says so; a block whose
+    admission verdict changed since the last pass counts as **modified**
+    even when its bytes did not, because that is the only way a release
+    or a quarantine reaches ``blocks_fts``.
     """
     ws = os.path.abspath(workspace)
     full_path = os.path.join(ws, rel_path)
 
     counts = {"new": 0, "modified": 0, "deleted": 0, "unchanged": 0, "total": 0}
 
-    # Load existing block hashes for this file
+    # Load existing block hashes + admission verdicts for this file
     existing_hashes = {}
+    existing_admitted: dict[str, bool] = {}
     for row in conn.execute(
-        "SELECT block_id, content_hash FROM index_meta WHERE file_path = ?",
+        "SELECT block_id, content_hash, admitted FROM index_meta WHERE file_path = ?",
         (rel_path,),
     ).fetchall():
         existing_hashes[row["block_id"]] = row["content_hash"]
+        existing_admitted[row["block_id"]] = bool(row["admitted"])
 
     # Handle deleted file
     if not os.path.isfile(full_path):
@@ -561,6 +672,13 @@ def _index_file(
             continue
         current_blocks[bid] = (block, _compute_block_hash(block))
 
+    # ADMISSION. Decided here, once, off the block headers this pass just
+    # parsed — the same allow-list every other egress path uses.
+    admitted_ids = _admit_ids(
+        [(bid, blk.get("Status")) for bid, (blk, _hash) in current_blocks.items()],
+        releases=releases if releases is not None else frozenset(),
+    )
+
     current_ids = set(current_blocks.keys())
     existing_ids = set(existing_hashes.keys())
 
@@ -572,7 +690,8 @@ def _index_file(
     modified_ids = set()
     unchanged_ids = set()
     for bid in common_ids:
-        if force or current_blocks[bid][1] != existing_hashes[bid]:
+        admission_flipped = (bid in admitted_ids) != existing_admitted.get(bid, True)
+        if force or current_blocks[bid][1] != existing_hashes[bid] or admission_flipped:
             modified_ids.add(bid)
         else:
             unchanged_ids.add(bid)
@@ -588,12 +707,12 @@ def _index_file(
     # Insert new + modified blocks
     for bid in new_ids | modified_ids:
         block, content_hash = current_blocks[bid]
-        _insert_block(conn, block, bid, rel_path, all_block_ids)
+        _insert_block(conn, block, bid, rel_path, all_block_ids, admitted=bid in admitted_ids)
         conn.execute(
             """INSERT OR REPLACE INTO index_meta
-               (file_path, block_id, content_hash)
-               VALUES (?, ?, ?)""",
-            (rel_path, bid, content_hash),
+               (file_path, block_id, content_hash, admitted)
+               VALUES (?, ?, ?, ?)""",
+            (rel_path, bid, content_hash, 1 if bid in admitted_ids else 0),
         )
 
     # Update index_meta for unchanged blocks (keep existing entries)
@@ -623,11 +742,22 @@ def _insert_block(
     bid: str,
     rel_path: str,
     all_block_ids: set,
+    admitted: bool = True,
 ) -> None:
     """Insert a single block into blocks, blocks_fts, and xref_edges.
 
     Also extracts atomic fact cards from the block's Statement field and indexes
     them as sub-blocks (parent_id = bid) for small-to-big retrieval.
+
+    *admitted* is the egress verdict from :func:`_admit_ids`, and it
+    routes the searchable text to ``blocks_fts`` or to the withheld
+    shadow ``blocks_fts_withheld``. ``blocks``, ``index_meta`` and
+    ``xref_edges`` carry every block either way — the index knows the
+    whole corpus, so the attested anchor covers it and a release is a
+    membership flip rather than a re-parse. What the withheld block does
+    NOT do is contribute a document to the ``bm25()`` statistics that
+    shape every admitted result's score. Its fact sub-blocks inherit the
+    verdict, for the same reason.
     """
     tags_str = block.get("Tags", "")
     speaker = _parse_speaker_from_tags(tags_str)
@@ -651,11 +781,12 @@ def _insert_block(
         ),
     )
 
+    fts_table = "blocks_fts" if admitted else "blocks_fts_withheld"
     fts = _extract_fts_fields(block)
     conn.execute(
-        """INSERT INTO blocks_fts (block_id, statement, title, name,
+        f"""INSERT INTO {fts_table} (block_id, statement, title, name,
            description, tags, context, all_text)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",  # nosec B608 — fts_table is one of two literals chosen by the admission verdict, never user input
         (
             bid,
             fts["statement"],
@@ -720,9 +851,9 @@ def _insert_block(
             )
             fact_fts = _extract_fts_fields(fact_block)
             conn.execute(
-                """INSERT INTO blocks_fts (block_id, statement, title, name,
+                f"""INSERT INTO {fts_table} (block_id, statement, title, name,
                    description, tags, context, all_text)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",  # nosec B608 — see above: two literals, chosen by the admission verdict
                 (
                     fact_id,
                     fact_fts["statement"],
@@ -760,7 +891,10 @@ def _delete_blocks(
     all_ph = ",".join("?" for _ in all_ids)
 
     conn.execute(f"DELETE FROM blocks WHERE id IN ({all_ph})", all_ids)  # nosec B608 — placeholders is `? * N`, values passed as bind params
+    # Both FTS tables: a block moves between them when its admission verdict
+    # flips, and a delete that only cleared one would leave the stale twin.
     conn.execute(f"DELETE FROM blocks_fts WHERE block_id IN ({all_ph})", all_ids)  # nosec B608 — same as above
+    conn.execute(f"DELETE FROM blocks_fts_withheld WHERE block_id IN ({all_ph})", all_ids)  # nosec B608 — same as above
     conn.execute(
         f"DELETE FROM xref_edges WHERE src IN ({all_ph}) OR dst IN ({all_ph})",  # nosec B608 — same as above
         all_ids + all_ids,
@@ -811,11 +945,21 @@ def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: dat
     # propagate and no markdown-template rows linger (drift fix).
     conn.execute("DELETE FROM blocks")
     conn.execute("DELETE FROM blocks_fts")
+    conn.execute("DELETE FROM blocks_fts_withheld")
     conn.execute("DELETE FROM xref_edges")
     conn.execute("DELETE FROM index_meta")
     conn.execute("DELETE FROM file_state")
 
     all_block_ids = {b.get("_id", "") for b in blocks if b.get("_id")}
+
+    # ADMISSION, on the store path too. ``iter_active_blocks`` filters on the
+    # store's own notion of "active", which is not the egress allow-list, so
+    # the gate runs here rather than being assumed upstream.
+    releases = _release_set(workspace)
+    admitted_ids = _admit_ids(
+        [(b.get("_id", ""), b.get("Status")) for b in blocks if b.get("_id")],
+        releases=releases,
+    )
 
     indexed = 0
     for block in blocks:
@@ -823,10 +967,10 @@ def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: dat
         if not bid:
             continue
         rel_path = block.get("_source_file", "") or ""
-        _insert_block(conn, block, bid, rel_path, all_block_ids)
+        _insert_block(conn, block, bid, rel_path, all_block_ids, admitted=bid in admitted_ids)
         conn.execute(
-            "INSERT OR REPLACE INTO index_meta (file_path, block_id, content_hash) VALUES (?, ?, ?)",
-            (rel_path, bid, _compute_block_hash(block)),
+            "INSERT OR REPLACE INTO index_meta (file_path, block_id, content_hash, admitted) VALUES (?, ?, ?, ?)",
+            (rel_path, bid, _compute_block_hash(block), 1 if bid in admitted_ids else 0),
         )
         indexed += 1
 
@@ -837,6 +981,10 @@ def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: dat
     conn.execute(
         "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
         ("build_mode", "store-full"),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+        ("release_set_hash", _release_set_hash(releases)),
     )
     conn.commit()
 
@@ -911,14 +1059,47 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
                     except (OSError, UnicodeDecodeError, ValueError) as e:
                         _log.debug("xref_scan_parse_failed", file=rel_path, error=str(e))
 
+            # The governance release set decides admissibility alongside the
+            # block's own status, so it is resolved ONCE per pass and threaded
+            # into every file.
+            releases = _release_set(workspace)
+            release_hash = _release_set_hash(releases)
+
             force = not incremental
             if incremental:
                 changed = _get_changed_files(conn, workspace)
+                # A release names ids in decisions/DECISIONS.md but ADMITS
+                # blocks that live in another file — memory/INBOX.md, say —
+                # whose bytes never moved. Change detection is per file, so
+                # without this the released block's file is never revisited
+                # and the admission flip never reaches ``blocks_fts``. Rare
+                # (a release is a governed act) and cheap: every file is
+                # re-parsed, but only the blocks whose verdict actually
+                # flipped are rewritten.
+                prior = conn.execute("SELECT value FROM meta WHERE key = 'release_set_hash'").fetchone()
+                if (prior["value"] if prior else None) != release_hash:
+                    _log.info("release_set_changed", workspace=ws, files=len(CORPUS_FILES))
+                    changed = list(CORPUS_FILES.items())
             else:
                 changed = list(CORPUS_FILES.items())
-                # Clear file_state and index_meta for full rebuild
+                # Clear the index for a full rebuild — the SAME set of tables
+                # ``_build_index_from_store`` clears, which is where this list
+                # comes from. Clearing only file_state/index_meta made every
+                # block "new" while its old rows survived, and ``blocks_fts``
+                # has no primary key to absorb the second copy: three full
+                # rebuilds of a one-block corpus left blocks=1 and
+                # blocks_fts=3 (measured). Duplicated documents inflate the
+                # bm25 document count and the length average — the same
+                # corpus-statistics distortion this module's admission split
+                # exists to prevent, arriving from the other direction — and
+                # they double up in the result list. Stale rows for blocks
+                # since deleted from the corpus were never dropped either.
                 conn.execute("DELETE FROM file_state")
                 conn.execute("DELETE FROM index_meta")
+                conn.execute("DELETE FROM blocks")
+                conn.execute("DELETE FROM blocks_fts")
+                conn.execute("DELETE FROM blocks_fts_withheld")
+                conn.execute("DELETE FROM xref_edges")
 
             total_blocks = 0
             total_new = 0
@@ -926,7 +1107,7 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
             total_deleted = 0
             total_unchanged = 0
             for label, rel_path in changed:
-                counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force)
+                counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force, releases=releases)
                 total_blocks += counts["total"]
                 total_new += counts["new"]
                 total_modified += counts["modified"]
@@ -951,6 +1132,10 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                 ("build_mode", "incremental" if incremental else "full"),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                ("release_set_hash", release_hash),
             )
 
             conn.commit()
@@ -988,6 +1173,7 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
 def _aggregate_facts_to_parents(
     conn: sqlite3.Connection,
     results: list[dict],
+    workspace: str | None = None,
 ) -> list[dict]:
     """Merge fact sub-block scores into their parent blocks.
 
@@ -996,6 +1182,13 @@ def _aggregate_facts_to_parents(
     2. Boosts parent score by the best fact sub-block score
     3. Removes fact sub-blocks from results (folded into parent)
     4. If a parent is not already in results, fetches it from the DB
+
+    Step 4 reads ``blocks``, which carries the WHOLE corpus including
+    what admission withholds, so the injected parents run through the
+    same allow-list on the way out. A fact card whose parent is withheld
+    cannot normally reach here (it inherits the parent's verdict and so
+    is absent from ``blocks_fts``), but an index whose cached status has
+    gone stale is exactly the case a backstop is for.
 
     Returns results with fact sub-blocks replaced by boosted parents.
     """
@@ -1040,7 +1233,10 @@ def _aggregate_facts_to_parents(
             f"SELECT * FROM blocks WHERE id IN ({placeholders}) AND parent_id = ''",  # nosec B608 — placeholders is `? * N`, values passed as bind params
             list(missing),
         ).fetchall()
+        admitted = _admit_ids([(r["id"], r["status"]) for r in rows], workspace=workspace)
         for row in rows:
+            if row["id"] not in admitted:
+                continue
             block_data = json.loads(row["json_blob"]) if row["json_blob"] else {}
             regular.append(
                 {
@@ -1092,14 +1288,16 @@ def query_index(
     rather than reading its own clock. ``None`` resolves to today in UTC.
 
     .. warning::
-       Raw, UNFILTERED index primitive. It does not apply the admissibility
-       allow-list, by design: withheld blocks stay INDEXED so that releasing
-       one never requires a reindex (the index anchor is attested, and a
-       release must not churn it). Admissibility is enforced on the way out —
-       per leg before fusion in ``hybrid_recall``, and at the recall funnels
-       by ``_recall_core._withhold_inadmissible``. Any NEW caller that
-       surfaces these rows to a user or an agent must route them through that
-       filter first, or it will leak withheld blocks into recall.
+       Admitted **as of the last index pass**, not as of now. ``blocks_fts``
+       carries the admitted set only (see the admission section at the top of
+       this module), so a block withheld when the index was built contributes
+       neither a candidate nor a byte of ``bm25()`` corpus statistics. What
+       this function cannot see is a status that changed *since* that pass:
+       the ``status`` column is a cache, and it goes stale in the fail-OPEN
+       direction. Callers must still route these rows through
+       ``_recall_core._withhold_inadmissible`` (which refreshes from
+       ``admissibility.live_statuses`` first), exactly as the legs before
+       fusion in ``hybrid_recall`` and the recall funnels do.
     """
     # Re-entrancy guard: if this thread is already inside query_index for the
     # same workspace (can happen when the index-missing fallback calls recall()
@@ -1190,18 +1388,21 @@ def query_index(
         #
         # bm25() weights must align to the blocks_fts columns
         # (block_id first, then FTS5_COLUMNS); see _bm25_weights().
-        # deferred: BM25 statistics here come from the PREBUILT FTS5 index,
-        # which indexes withheld blocks too (see the warning above), so a
-        # withheld document still contributes to the corpus-level term
-        # weights bm25() computes. It cannot contribute a candidate or a
-        # byte of content — the allow-list runs on every row that leaves
-        # this function — so what leaks is a second-order effect on the
-        # RANKING of admitted documents, not their identity. The in-memory
-        # scan leg has no such residual: it computes IDF over the admitted
-        # corpus because the filter runs before the document-frequency pass.
-        # Upgrade path: carry `status` into a filtered FTS5 shadow table, or
-        # move to an index that supports per-query document restriction, and
-        # recompute IDF over the admissible subset.
+        # BM25 statistics come from the PREBUILT FTS5 index, and no WHERE
+        # clause narrows what bm25() averages over — so index membership IS
+        # the statistics decision. ``blocks_fts`` therefore carries the
+        # admitted set only, which puts this leg's IDF and length-average on
+        # the same corpus the in-memory scan leg computes over.
+        #
+        # Residual, stated honestly: membership is decided at index time, so
+        # a block quarantined AFTER the last pass still contributes until the
+        # next one. That window is the ordinary stale-index window — it is
+        # detected by ``is_stale`` (logged as ``index_stale``, counted as
+        # ``index_stale_queries``, both a few lines above), it closes on any
+        # incremental build, and the CONTENT of such a block is withheld
+        # throughout by the live-status refresh in
+        # ``_recall_core._withhold_inadmissible``. What remains inside it is
+        # a second-order effect on the ranking of admitted documents.
         weights = _bm25_weights()
         rows = conn.execute(
             f"""SELECT b.*, f.rank as fts_rank,
@@ -1213,6 +1414,7 @@ def query_index(
                 LIMIT ?""",  # nosec B608 — `weights` is a comma-separated list of floats derived from FTS5_COLUMNS (a static constant), never from user input
             (fts_query, max(retrieve_wide_k, limit)),
         ).fetchall()
+        rows = list(rows) + _released_withheld_rows(conn, workspace, fts_query, weights, max(retrieve_wide_k, limit))
     except sqlite3.OperationalError as e:
         _log.warning(
             "fts_query_error_fallback",
@@ -1300,11 +1502,11 @@ def query_index(
         results.append(result)
 
     # --- Feature 2: Aggregate fact sub-blocks to parents (small-to-big) ---
-    results = _aggregate_facts_to_parents(conn, results)
+    results = _aggregate_facts_to_parents(conn, results, workspace)
 
     # Graph boost
     if graph_boost and results:
-        _apply_graph_boost(conn, results, query_type)
+        _apply_graph_boost(conn, results, query_type, workspace)
 
     # Note: read connection is managed by ConnectionManager — not closed here (#466)
 
@@ -1349,12 +1551,80 @@ def query_index(
     return top
 
 
+def _released_withheld_rows(
+    conn: sqlite3.Connection,
+    workspace: str,
+    fts_query: str,
+    weights: str,
+    limit: int,
+) -> list:
+    """Hits for blocks a governance RELEASE has admitted since the last index pass.
+
+    A release names ids in ``decisions/DECISIONS.md``; it does not touch
+    the file holding the released block, and it must take effect with no
+    reindex — the index anchor is attested and a release must not churn
+    it. Those blocks live in ``blocks_fts_withheld``, so this is where
+    they come back from.
+
+    They are matched in their own table, which is the point: a withheld
+    document must not be a document of the admitted corpus, whatever the
+    release set later says, or the corpus statistics would leak it in the
+    window before the release. The consequence is that a just-released
+    block is scored against the withheld pool until the next index pass
+    moves it across — a transient scoring difference for the released
+    block alone, never a perturbation of the admitted blocks' scores.
+
+    Costs nothing when nothing is withheld: one indexed probe of an empty
+    table, and the release set (a ``stat``, cached) is resolved only if
+    that probe finds something. An index built before this table existed
+    raises ``OperationalError``, which is caught here rather than
+    escaping into the caller's full-scan fallback — such an index still
+    carries withheld blocks in ``blocks_fts``, where the release path
+    worked without any help from this function.
+    """
+    try:
+        if conn.execute("SELECT 1 FROM blocks_fts_withheld LIMIT 1").fetchone() is None:
+            return []
+        released = _release_set(workspace)
+        if not released:
+            return []
+        ids = sorted(released)
+        placeholders = ",".join("?" for _ in ids)
+        return list(
+            conn.execute(
+                f"""SELECT b.*, f.rank as fts_rank,
+                           -bm25(blocks_fts_withheld, {weights}) as bm25_score
+                    FROM blocks_fts_withheld f
+                    JOIN blocks b ON b.id = f.block_id
+                    WHERE blocks_fts_withheld MATCH ? AND b.id IN ({placeholders})
+                    ORDER BY bm25_score DESC
+                    LIMIT ?""",  # nosec B608 — `weights` is floats from the static FTS5_COLUMNS; `placeholders` is `? * N` with every id bound
+                [fts_query, *ids, limit],
+            ).fetchall()
+        )
+    except sqlite3.OperationalError as exc:
+        _log.debug("withheld_release_probe_skipped", error=str(exc))
+        return []
+
+
 def _apply_graph_boost(
     conn: sqlite3.Connection,
     results: list[dict],
     query_type: str,
+    workspace: str | None = None,
 ) -> None:
-    """Apply cross-reference graph boost to results using xref_edges table."""
+    """Apply cross-reference graph boost to results using xref_edges table.
+
+    ``xref_edges`` spans the whole corpus, withheld blocks included — that
+    is deliberate, so a release does not have to rebuild the graph. It
+    also means an unfiltered traversal would let a quarantined block both
+    RECEIVE a score (and be injected into the result list with its
+    excerpt) and PASS one on to its admitted neighbours. The second half
+    is the subtler leak: it survives any downstream content filter,
+    because what it moves is the ranking of blocks that are allowed to be
+    served. So the allow-list runs on every edge destination before a
+    boost is computed.
+    """
     from .recall import GRAPH_BOOST_FACTOR
 
     score_by_id = {r["_id"]: r["score"] for r in results}
@@ -1377,10 +1647,17 @@ def _apply_graph_boost(
             break
 
         placeholders = ",".join("?" for _ in seed_ids)
-        edges = conn.execute(
-            f"SELECT src, dst FROM xref_edges WHERE src IN ({placeholders})",  # nosec B608 — placeholders is `? * N`, values passed as bind params; seed_ids sanitized above
+        edge_rows = conn.execute(
+            f"""SELECT e.src AS src, e.dst AS dst, b.status AS dst_status
+                FROM xref_edges e JOIN blocks b ON b.id = e.dst
+                WHERE e.src IN ({placeholders})""",  # nosec B608 — placeholders is `? * N`, values passed as bind params; seed_ids sanitized above
             seed_ids,
         ).fetchall()
+        # ADMISSION. Destinations only: a seed is either an FTS hit (already
+        # admitted, since blocks_fts carries the admitted set) or a neighbour
+        # this same filter let through on an earlier hop.
+        admitted_dst = _admit_ids([(e["dst"], e["dst_status"]) for e in edge_rows], workspace=workspace)
+        edges = [e for e in edge_rows if e["dst"] in admitted_dst]
 
         hop_added = 0
         for edge in edges:
@@ -1401,7 +1678,9 @@ def _apply_graph_boost(
             r["score"] = round(r["score"] + neighbor_scores[r["_id"]], 4)
             r["via_graph"] = True
 
-    # Add new graph-discovered results
+    # Add new graph-discovered results. No second admission pass: every id in
+    # ``neighbor_scores`` arrived as an edge destination the allow-list above
+    # already cleared, off the same ``blocks.status`` column this SELECT reads.
     if neighbor_scores:
         new_ids = [nid for nid in neighbor_scores if nid not in result_ids]
         if new_ids:
@@ -1502,8 +1781,48 @@ def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
             conn.close()
 
 
-def index_status(workspace: str) -> dict:
+def _indexed_block_counts(conn: sqlite3.Connection, workspace: str) -> tuple[int, int]:
+    """``(admitted, withheld)`` row counts over the index's ``blocks`` table.
+
+    Read-only: two SELECTs, no DDL, safe on a ``mode=ro`` connection.
+
+    The status vocabulary is not restated here — the distinct statuses are
+    grouped in SQL and each is put to :func:`admissibility.is_admissible_status`,
+    so a tier that mints a new withheld status is counted as withheld with
+    no edit in this module. The release set is read only when something
+    actually failed the allow-list, so an all-admitted index pays no probe.
+    """
+    groups = conn.execute("SELECT status AS status, COUNT(*) AS cnt FROM blocks GROUP BY status").fetchall()
+    total = sum(g["cnt"] for g in groups)
+    withheld_statuses = [g["status"] for g in groups if not is_admissible_status(g["status"])]
+    if not withheld_statuses:
+        return total, 0
+    placeholders = ",".join("?" for _ in withheld_statuses)
+    rows = conn.execute(
+        f"SELECT id FROM blocks WHERE status IN ({placeholders})",  # nosec B608 — placeholders is `? * N`, values passed as bind params
+        withheld_statuses,
+    ).fetchall()
+    releases = _release_set(workspace)
+    withheld = sum(1 for r in rows if r["id"] not in releases)
+    return total - withheld, withheld
+
+
+def index_status(workspace: str, *, include_withheld: bool = False) -> dict:
     """Return index status: exists, block count, last build time, staleness.
+
+    ``blocks`` counts the **admitted** rows. It used to be
+    ``SELECT COUNT(*) FROM blocks``, which moved by one every time a
+    quarantined block was indexed — and this number is served to user
+    scope by the ``index_stats`` and ``memory_health`` MCP tools, so the
+    existence of withheld content was readable straight off a statistic
+    by a caller the gate refuses to show that content to. A count that
+    tracks withheld blocks is the same disclosure as the blocks.
+
+    *include_withheld* is the governed widening, matching the store read
+    seam: an ADMIN caller that is entitled to know asks for it by name
+    and gets ``blocks`` over the whole index plus an explicit
+    ``withheld`` key. It is never a default, and there is no call site
+    for it in the default surface.
 
     Read-only safe (audit bugs 13 & 14). ``recall.db`` is frequently
     created by side-tables (calibration, retrieval_log) *before*
@@ -1537,20 +1856,22 @@ def index_status(workspace: str) -> dict:
                 "schema_built": False,
             }
 
-        row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
-        block_count = row["cnt"]
+        admitted_count, withheld_count = _indexed_block_counts(conn, workspace)
 
         last_build = conn.execute("SELECT value FROM meta WHERE key = 'last_build'").fetchone()
 
         changed = _get_changed_files(conn, workspace)
 
-        return {
+        status: dict = {
             "exists": True,
-            "blocks": block_count,
+            "blocks": admitted_count + withheld_count if include_withheld else admitted_count,
             "last_build": last_build["value"] if last_build else None,
             "stale_files": len(changed),
             "db_size_bytes": os.path.getsize(db_path),
         }
+        if include_withheld:
+            status["withheld"] = withheld_count
+        return status
     finally:
         if conn is not None:
             conn.close()

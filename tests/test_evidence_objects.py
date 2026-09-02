@@ -9,6 +9,7 @@ import os
 import pytest
 
 from mind_mem.evidence_objects import (
+    EVIDENCE_SCHEMA_VERSION,
     EvidenceAction,
     EvidenceChain,
     EvidenceObject,
@@ -175,7 +176,12 @@ class TestEvidenceObjectCreation:
     def test_metadata_stored(self, chain):
         meta = {"detail": "some info", "count": 3}
         ev = _make_evidence(chain, metadata=meta)
-        assert ev.metadata == meta
+        # Every caller key survives verbatim...
+        assert meta.items() <= ev.metadata.items()
+        # ...alongside the schema tag every record written by this release
+        # carries, so a reader can tell which vocabulary produced it.
+        assert ev.metadata["evidence_schema"] == EVIDENCE_SCHEMA_VERSION
+        assert set(ev.metadata) == set(meta) | {"evidence_schema"}
 
     def test_payload_hash_is_sha256(self, chain):
         ev = _make_evidence(chain, payload=b"test payload")

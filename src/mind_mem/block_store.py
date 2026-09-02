@@ -17,7 +17,7 @@ import warnings
 from datetime import datetime, timezone
 from typing import Any, Optional, Protocol, runtime_checkable
 
-from .admission import require_admission
+from .admission import require_admission, require_delete_admission
 from .block_parser import get_active, get_by_id, parse_file
 from .corpus_registry import SNAPSHOT_DIRS, SNAPSHOT_EXCLUDE_DIRS
 from .mind_filelock import FileLock
@@ -546,7 +546,17 @@ class BlockStore(Protocol):
     def delete_block(self, block_id: str) -> bool:
         """Remove a block. Returns True if a block was removed.
 
-        Implementations should log the deletion so operators can
+        Implementations must call
+        :func:`~mind_mem.admission.require_delete_admission` as their
+        **first** statement — before resolving the target — and report
+        the removed text back through
+        :meth:`~mind_mem.admission.AdmissionReceipt.record_removal` when
+        one is actually removed. That ordering is what makes a missing
+        id and an ungated caller fail differently by *authorisation*
+        rather than by *existence*, and it is what puts the removed
+        content's hash into the evidence chain.
+
+        Implementations should also log the deletion so operators can
         recover removed content if needed.
         """
         ...
@@ -811,11 +821,21 @@ class MarkdownBlockStore:
     def delete_block(self, block_id: str) -> bool:
         """Remove a block by ID. Returns True if a block was removed.
 
+        Requires an open ``DELETE`` admission covering *block_id*
+        (:meth:`~mind_mem.governance_gate.GovernanceGate.admit_delete`).
+        The check runs before the target is resolved, so a delete of an
+        id that is not here returns ``False`` while a delete with no
+        scope open raises — existence never leaks through the refusal.
+
         Logs the removed content to ``memory/deleted_blocks.jsonl``
         so the deletion is recoverable. The journal format matches
         what :func:`mcp.tools.memory_ops.delete_memory_item` writes —
-        both write paths converge on the same recovery record.
+        both write paths converge on the same recovery record. The
+        journal is local recovery; the chain record the scope writes
+        from :meth:`~mind_mem.admission.AdmissionReceipt.record_removal`
+        is the audit fact.
         """
+        receipt = require_delete_admission(str(block_id))
         target = _resolve_block_file(self._workspace, block_id)
         if target is None or not os.path.isfile(target):
             return False
@@ -835,6 +855,7 @@ class MarkdownBlockStore:
             _record_deletion(self._workspace, block_id, removed)
             _atomic_write(target, new_text)
 
+        receipt.record_removal(str(block_id), removed)
         self.invalidate_cache()
         _log.info("block_store_delete", block_id=block_id, file=os.path.relpath(target, self._workspace))
         return True

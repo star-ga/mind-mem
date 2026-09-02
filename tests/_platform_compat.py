@@ -10,22 +10,49 @@ to be in front of the author:
   takes the whole module down rather than one test.
 * ``datetime.UTC`` arrived in 3.11, but ``requires-python`` is ``>=3.10``
   and the matrix runs 3.10.
+* a subprocess environment scrubbed down to a hand-written POSIX dict
+  (``PATH=/usr/bin:/bin``, ``HOME=...``) does not start an interpreter on
+  Windows at all -- see :func:`minimal_child_env`.
 
-Neither is a product limitation; both are tests asserting the host.
+None of these is a product limitation; all are tests asserting the host.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 
 __all__ = [
     "append_only_settable_unprivileged",
+    "child_import_path",
+    "child_pythonpath",
     "chmod_denies_read",
     "chmod_denies_write",
     "assert_owner_only",
     "is_root",
+    "minimal_child_env",
     "posix_creation_modes_honored",
 ]
+
+# The variables Windows itself needs in a child environment BEFORE any test
+# code runs. Every entry carries its reason; nothing is here "just in case".
+#
+#   SYSTEMROOT  BCryptGenRandom is reached through %SystemRoot%. Without it
+#               ``_Py_HashRandomization_Init: failed to get random numbers to
+#               initialize Python`` kills the interpreter before it executes
+#               a single line -- the exact failure this list exists to fix.
+#   PATH        Windows resolves ``python3XX.dll``, the CRT, and the DLLs the
+#               stdlib extension modules link against through the process
+#               search path. POSIX uses the ELF loader instead, which is why
+#               a POSIX-only dict got away with a fabricated PATH.
+#   PATHEXT     ``shutil.which()`` and ``subprocess`` find no executable at
+#               all without it, so a child that shells out degrades silently
+#               instead of failing loudly.
+#   COMSPEC     the ``cmd.exe`` path any ``shell=True`` spawn beneath us needs.
+#   TEMP, TMP   ``tempfile.gettempdir()`` reads these first on Windows; with
+#               neither present it falls through to hardcoded candidates such
+#               as ``C:\temp`` that need not exist on a runner.
+_WINDOWS_CHILD_ENV = ("SYSTEMROOT", "PATH", "PATHEXT", "COMSPEC", "TEMP", "TMP")
 
 
 def is_root() -> bool:
@@ -209,3 +236,84 @@ def chmod_denies_write(tmp_dir) -> bool:
             os.rmdir(probe)
         except OSError:
             pass
+
+
+def child_import_path() -> str:
+    """The ``sys.path`` entry a child interpreter needs to import ``mind_mem``.
+
+    Derived from the package the PARENT actually imported, so a spawned
+    interpreter measures the code under test rather than whichever copy it
+    happens to find.
+
+    This exists because a test that redirects ``HOME`` silently redirects
+    Python's USER site-packages with it: ``~/.local/lib/pythonX.Y/
+    site-packages`` is computed from the home directory, so a child launched
+    under a sandboxed home cannot import a user-installed ``mind_mem`` and
+    dies with ``ModuleNotFoundError``. CI never sees it -- there the package
+    is installed system-wide, where the home directory is irrelevant -- so
+    the divergence shows up only on a developer's box, which is the worst
+    place for a suite to disagree with its own CI.
+    """
+    import mind_mem
+
+    return os.path.dirname(os.path.dirname(os.path.abspath(mind_mem.__file__)))
+
+
+def child_pythonpath(existing: str | None = None) -> str:
+    """:func:`child_import_path` prepended to *existing* ``PYTHONPATH``.
+
+    *existing* defaults to the parent's own ``PYTHONPATH``. Prepending rather
+    than replacing keeps a caller-supplied path (an editable checkout, a
+    coverage shim) reachable.
+    """
+    if existing is None:
+        existing = os.environ.get("PYTHONPATH", "")
+    head = child_import_path()
+    parts = [head] + [p for p in existing.split(os.pathsep) if p and p != head]
+    return os.pathsep.join(parts)
+
+
+def minimal_child_env(home, **extra: str) -> dict[str, str]:
+    """A SCRUBBED child environment that still starts an interpreter.
+
+    For tests whose claim is about a fresh process -- "an interpreter that
+    imports only X sees only Y" -- which cannot be shown in-process because
+    the state under test is module-global. Those tests must NOT inherit
+    ``os.environ``; that is the isolation they exist to create.
+
+    Hand-writing the dict instead went wrong on two axes at once:
+
+    * ``{"PATH": "/usr/bin:/bin", "HOME": ...}`` omits ``SystemRoot``, and
+      Windows needs it to seed hash randomization. The child died in
+      ``_Py_HashRandomization_Init`` before running any test code -- a fatal
+      interpreter error reported as a plain assertion failure.
+    * ``HOME`` is not the home variable on Windows (``expanduser`` reads
+      ``USERPROFILE``), and it relocates user site-packages on POSIX, which
+      is why the same test also failed locally with ``ModuleNotFoundError``.
+
+    So: the OS minimum for the host we are on (see ``_WINDOWS_CHILD_ENV`` for
+    the per-variable justification), both home variables pointed at *home*,
+    an import path that survives the home redirect, and whatever the caller
+    passes in ``extra``. Nothing else -- ``extra`` is where the test's own
+    variables go, and no other parent variable comes through.
+    """
+    env: dict[str, str] = {}
+    if sys.platform == "win32":
+        for name in _WINDOWS_CHILD_ENV:
+            value = os.environ.get(name)
+            if value is not None:
+                env[name] = value
+    else:
+        # Meaningful on POSIX, and deliberately not the parent's PATH: the
+        # child resolves its interpreter by absolute path, so this only has
+        # to cover a ``which`` lookup beneath us.
+        env["PATH"] = "/usr/bin:/bin"
+    home = os.fspath(home)
+    # Both, always: ``posixpath.expanduser`` reads HOME and
+    # ``ntpath.expanduser`` reads USERPROFILE, so setting one leaves the
+    # other platform looking at the real user's home.
+    env["HOME"] = home
+    env["USERPROFILE"] = home
+    env["PYTHONPATH"] = child_import_path()
+    env.update(extra)
+    return env

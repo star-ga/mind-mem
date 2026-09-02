@@ -131,7 +131,18 @@ def test_postgres_replicas_must_be_list(tmp_path):
 
 
 def test_postgres_replicas_filtered_to_strings(tmp_path):
-    """Non-string entries in the replicas list are silently dropped."""
+    """Non-string entries in the replicas list are silently dropped.
+
+    deferred: needs psycopg importable, never a live server (the store
+    constructs lazily and no query is made). psycopg ships only in the
+    ``[postgres]`` extra, which no matrix row installs, and the "postgres
+    backend" job picks its files by grepping tests/ for its DSN environment
+    variable -- a name this file has no reason to mention. So this runs on
+    ZERO CI rows. Upgrade path: add psycopg to the ``[test]`` extra, or make
+    that job's file list explicit rather than text-derived. Deliberately NOT
+    fixed by writing that variable's name into this docstring: CI selection
+    must not turn on prose.
+    """
     pytest.importorskip("psycopg")
     pytest.importorskip("psycopg_pool")
     ws = _make_workspace(tmp_path)

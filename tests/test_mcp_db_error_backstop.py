@@ -48,7 +48,20 @@ def test_sqlite_error_becomes_structured_response(monkeypatch) -> None:
 
 
 def test_psycopg_operationalerror_becomes_structured_response(monkeypatch) -> None:
-    """The exact incident class: a psycopg error reaching the decorator."""
+    """The exact incident class: a psycopg error reaching the decorator.
+
+    deferred: this needs psycopg IMPORTABLE, not a live server -- it only
+    raises the exception class. But psycopg is in the ``[postgres]`` extra,
+    which no matrix row installs, and the dedicated "postgres backend" job
+    selects its files by grepping tests/ for its DSN environment variable --
+    a name this file has no reason to mention. Net: this assertion runs on
+    ZERO CI rows. Upgrade path (one line, in ci.yml or pyproject.toml): add
+    psycopg to the ``[test]`` extra, or make the postgres job's file list
+    explicit instead of deriving it from a text search. Deliberately NOT
+    fixed by writing that variable's name into this docstring: CI selection
+    must not turn on prose, and a comment that silently changes which tests
+    run is the same defect class in a nicer costume.
+    """
     psycopg = pytest.importorskip("psycopg")
 
     def boom_pg():

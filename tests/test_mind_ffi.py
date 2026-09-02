@@ -99,15 +99,26 @@ def test_env_lib_outside_allowlist_is_reported(monkeypatch, tmp_path):
     assert "outside allowed directories" in rejected[0]["reason"]
 
 
-def test_env_lib_missing_file_is_reported(monkeypatch, tmp_path):
+def test_env_lib_missing_file_is_reported(monkeypatch):
+    """An in-allowlist path that does not exist must be reported as missing.
+
+    This used to ``pytest.skip`` unless a compiled ``libmindmem.so`` happened
+    to be on disk, and NO workflow builds one -- ``libmindmem`` appears in
+    ``.github/`` only inside a release.yml comment recording that the file was
+    dropped. So the assertion executed on no CI row at all while every row
+    still reported green: a skip counts beside the passes.
+
+    The kernel was never needed. ``allowed_lib_dirs()`` names the three
+    ``lib/`` roots by construction and ``resolve_allowlisted_lib`` resolves
+    non-strictly, so an allowlisted path with nothing behind it is precisely
+    the branch under test. Gating it on a build made the *missing file* case
+    require a present file.
+    """
     import mind_mem.mind_ffi as ffi
 
-    lib_dir = _kernel_lib_path()
-    if lib_dir is None:
-        import pytest
-
-        pytest.skip("no compiled MIND kernel in the search path")
-    ghost = lib_dir.parent / "libmindmem-does-not-exist.so"
+    allowed_dir = ffi.allowed_lib_dirs()[0]
+    ghost = allowed_dir / "libmindmem-does-not-exist.so"
+    assert not ghost.exists(), f"fixture invalid: {ghost} must not exist for this test to mean anything"
     monkeypatch.setenv("MIND_MEM_LIB", str(ghost))
 
     recorder = _RecordingLog()
@@ -120,11 +131,27 @@ def test_env_lib_missing_file_is_reported(monkeypatch, tmp_path):
     rejected = [kw for event, kw in recorder.events if event == "ffi_env_lib_rejected"]
     assert rejected, f"no rejection reported; events={recorder.events}"
     assert "does not exist" in rejected[0]["reason"]
+    # Discriminating assertion: the resolver has two rejection reasons, and
+    # "outside allowed directories" would also satisfy a loose check while
+    # proving the opposite -- that the path never reached the missing-file
+    # branch at all.
+    assert "outside allowed directories" not in rejected[0]["reason"], (
+        f"path was rejected as out-of-allowlist, not as missing: {rejected[0]['reason']}"
+    )
 
 
 def test_version_gate_reads_the_exported_symbol_and_keeps_the_verdict(monkeypatch):
     """The gate probed 'mindmem_get_version', which no build exports, and then
-    threw away the bool it computed. Both halves were dead."""
+    threw away the bool it computed. Both halves were dead.
+
+    deferred: unlike the missing-file test above, this one genuinely needs a
+    built ``libmindmem.so``. ``lib/*.so`` is gitignored and no workflow
+    compiles it (``libmindmem`` appears in .github/ only in a release.yml
+    comment recording that the artifact was dropped), so this assertion runs
+    on no CI row. Upgrade path: a job that builds lib/kernels.c into
+    lib/libmindmem.so and runs this file, failing if the .so is absent rather
+    than skipping.
+    """
     import pytest
 
     from mind_mem.mind_ffi import MindMemKernel

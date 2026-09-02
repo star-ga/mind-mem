@@ -7,8 +7,8 @@ help: ## Show this help
 test: ## Run all 1352 tests
 	python3 -m pytest tests/ -x -q
 
-lint: ## Run ruff linter
-	ruff check src/ tests/ mcp_server.py
+lint: ## Run ruff linter (whole repo — same scope as the CI lint job)
+	ruff check .
 
 bench: ## Run performance benchmark (no API key needed)
 	python3 benchmarks/bench_kernels.py --iterations 50 --sizes 100,500,1000
@@ -58,8 +58,8 @@ docs: ## Validate documentation links
 	@echo "Checking markdown links..."
 	@find docs/ -name '*.md' -exec grep -l 'http' {} \;
 
-format: ## Auto-format code
-	python3 -m ruff format src/ tests/
+format: ## Auto-format code (same scope as the CI format check)
+	python3 -m ruff format . --exclude benchmarks --exclude train
 
 typecheck: ## Run type checking (if mypy installed)
 	python3 -m mypy src/ --ignore-missing-imports --no-error-summary 2>/dev/null || echo "mypy not installed — skipping"

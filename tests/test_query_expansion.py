@@ -202,13 +202,17 @@ class TestLLMQueryExpander(unittest.TestCase):
         import os
 
         # Ensure the env var is not set
-        env_key = "ANTHROPIC_API_KEY_TEST_DUMMY_12345"
+        env_key = "MIND_MEM_TEST_DUMMY_API_KEY_12345"
         old_val = os.environ.pop(env_key, None)
         try:
             expander = LLMQueryExpander(
                 config={
+                    # Fully configured EXCEPT for the key, so the missing
+                    # API key is the only reason expansion can fail.
+                    "base_url": "https://endpoint.invalid/v1",
+                    "model": "test-model-1",
                     "api_key_env": env_key,
-                    "provider": "anthropic",
+                    "provider": "test-provider",
                 }
             )
             result = expander.expand("find errors", max_expansions=3)
@@ -225,18 +229,27 @@ class TestLLMQueryExpander(unittest.TestCase):
         result = expander.expand("")
         self.assertEqual(len(result), 1)
 
-    def test_unsupported_provider(self):
-        """Unsupported provider should fall back to NLP."""
+    def test_unconfigured_endpoint_falls_back(self):
+        """No configured endpoint/model should fall back to NLP.
+
+        Renamed from ``test_unsupported_provider``: ``provider`` is no
+        longer a routing key (it is a free-form log label), so the case
+        that used to be "provider we have no branch for" is now "endpoint
+        the operator never named". Same assertions, and it additionally
+        proves the expander does NOT substitute a built-in host when the
+        API key alone is present.
+        """
         import os
 
         os.environ["TEST_DUMMY_KEY_QE_99"] = "test-key"
         try:
             expander = LLMQueryExpander(
                 config={
-                    "provider": "unsupported_provider",
+                    "provider": "unconfigured_provider",
                     "api_key_env": "TEST_DUMMY_KEY_QE_99",
                 }
             )
+            self.assertEqual(expander.missing_config(), ["base_url", "model"])
             result = expander.expand("test query", max_expansions=2)
             # Should fall back to NLP
             self.assertGreaterEqual(len(result), 1)

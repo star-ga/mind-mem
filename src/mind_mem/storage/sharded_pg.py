@@ -50,7 +50,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-from ..admission import require_admission
+from ..admission import require_admission, require_delete_admission
 from ..block_store import BlockStoreError
 
 _log = logging.getLogger("mind_mem.storage.sharded_pg")
@@ -232,7 +232,15 @@ class ShardedPostgresBlockStore:
         deletion. Returning ``False`` while the block survives on
         another shard would report a completed erasure that did not
         happen.
+
+        Admission is required here, before the fan-out, rather than left
+        to whichever shard happens to own the block: with no shard
+        configured for the tenant the loop body never runs, so a router
+        that resolves to nothing would otherwise turn an ungated delete
+        into a quiet ``False`` instead of a refusal. This wrapper opens
+        no scope and records no removal — the owning shard does both.
         """
+        require_delete_admission(str(block_id))
         tid = tenant_id or self._default_tenant
         for idx in self._shard_indices(tid, namespace):
             if bool(self._stores[idx].delete_block(block_id)):

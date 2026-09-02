@@ -24,7 +24,7 @@ import json
 import os
 import uuid
 from pathlib import Path
-from typing import Generator
+from typing import TYPE_CHECKING, Generator
 
 import pytest
 
@@ -107,18 +107,35 @@ def test_get_active_blocks_alias_matches(tmp_path: Path) -> None:
 
 
 # ─── Postgres backend (live DB; skips cleanly when unavailable) ───────────────
+#
+# The Postgres gate below is deliberately PER-TEST, not module-level. It used
+# to be a module-scope ``pytest.importorskip("psycopg")`` plus a module-wide
+# ``pytestmark``, and each of those took the five Markdown-backend tests ABOVE
+# with it: ``pytestmark`` applies to every test in the module no matter where
+# in the file it is assigned, and a module-scope importorskip aborts the whole
+# import. Those five tests need no database at all, yet they were skipped on
+# every OS/Python matrix row (none of which installs the ``[postgres]`` extra)
+# and ran only inside the single "postgres backend" job — so the DEFAULT
+# Markdown backend went unverified on 15 of the 16 rows while every one of
+# them still reported green. A skip reads as a pass, which is exactly why the
+# gate has to name only the tests that actually need the database.
 
-psycopg = pytest.importorskip("psycopg", reason="psycopg not installed; skipping Postgres tests")
+try:
+    import psycopg
+except ImportError:  # pragma: no cover - the rows without the [postgres] extra
+    psycopg = None  # type: ignore[assignment]
 
-from mind_mem.block_store_postgres import PostgresBlockStore  # noqa: E402
+if TYPE_CHECKING:  # pragma: no cover - annotations only; no psycopg at runtime
+    from mind_mem.block_store_postgres import PostgresBlockStore
 
-# Honour the standard test DSN env var first; fall back to the local
-# audit DSN. The schema is always a unique scratch schema we create and
-# drop — the production ``mind_mem`` schema is never touched.
+# The schema is always a unique scratch schema we create and drop — the
+# production ``mind_mem`` schema is never touched.
 _DSN = os.environ.get("MIND_MEM_TEST_PG_DSN")
 
 
-def _pg_available(dsn: str) -> bool:
+def _pg_available(dsn: str | None) -> bool:
+    if psycopg is None or not dsn:
+        return False
     try:
         conn = psycopg.connect(dsn, connect_timeout=3)
         conn.close()
@@ -127,15 +144,17 @@ def _pg_available(dsn: str) -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
+requires_pg = pytest.mark.skipif(
     not _pg_available(_DSN),
-    reason="no live Postgres available at the test DSN",
+    reason="psycopg not installed, or no live Postgres at MIND_MEM_TEST_PG_DSN",
 )
 
 
 @pytest.fixture
 def pg_workspace(tmp_path: Path) -> Generator[tuple[str, PostgresBlockStore], None, None]:
     """A workspace configured for Postgres on an isolated scratch schema."""
+    from mind_mem.block_store_postgres import PostgresBlockStore
+
     schema = f"mm_fix_{uuid.uuid4().hex[:12]}"
     ws = tmp_path / "pgws"
     _write_workspace(ws, block_store={"backend": "postgres", "dsn": _DSN, "schema": schema})
@@ -154,6 +173,7 @@ def pg_workspace(tmp_path: Path) -> Generator[tuple[str, PostgresBlockStore], No
             pass
 
 
+@requires_pg
 @pytest.mark.usefixtures("admitted")
 def test_postgres_iter_active_blocks_sees_store_blocks(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     ws, store = pg_workspace
@@ -189,11 +209,13 @@ def test_postgres_iter_active_blocks_sees_store_blocks(pg_workspace: tuple[str, 
     assert "D-20260613-102" not in ids
 
 
+@requires_pg
 def test_postgres_empty_store_returns_empty(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     ws, _store = pg_workspace
     assert iter_active_blocks(ws) == []
 
 
+@requires_pg
 @pytest.mark.usefixtures("admitted")
 def test_postgres_alias_matches(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     ws, store = pg_workspace

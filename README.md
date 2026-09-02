@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/tests-9%2C366-brightgreen?style=flat-square" alt="Tests: 9,366">
+  <img src="https://img.shields.io/badge/tests-10%2C265-brightgreen?style=flat-square" alt="Tests: 10,265">
   <img src="https://img.shields.io/badge/MCP_tools-102-blue?style=flat-square" alt="MCP Tools: 102">
   <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
@@ -917,7 +917,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **102 tools**   |
-| MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
+| MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **26 MIND kernels**  |
 
 ### The Gap MIND-Mem Fills
 

@@ -20,6 +20,13 @@ pipeline_tag: text-generation
 
 # mind-mem-4b v2 (2026-04-21)
 
+> **HISTORICAL RECORD — superseded.** This is the model card as published for
+> the **v2** weights against the **v3.3.0** surface. Every number below (the 7
+> consolidated dispatchers, the tool counts, the eval scores) is a fact about
+> v2 and is deliberately left as it was; do not update it. The current card is
+> [`train/HF_MODEL_CARD_v4.md`](../train/HF_MODEL_CARD_v4.md), and the current
+> setup guide is [`docs/mind-mem-4b-setup.md`](mind-mem-4b-setup.md).
+
 A governance-aware memory-assistant model for [MIND-Mem](https://github.com/star-ga/mind-mem) — an auditable, contradiction-safe memory layer for coding agents (MCP-compatible).
 
 **v2 supersedes v1.** This checkpoint is a **full fine-tune** of the v1 `star-ga/mind-mem-4b` checkpoint (itself QLoRA-merged from `Qwen/Qwen3.5-4B`), retrained on the v3.3.0 MCP surface: the 7 consolidated dispatcher tool-calls, query decomposition / reformulation, entity extraction, and evidence-bundle consumption.

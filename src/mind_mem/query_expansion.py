@@ -6,8 +6,11 @@ recall by matching documents that use different terminology or phrasing.
 Two expansion modes:
   - NLP-based (default): synonym substitution, query decomposition, and
     morphological variants using zero external dependencies.
-  - LLM-backed (optional): uses a configurable LLM provider to generate
-    rephrasings. Disabled by default; enable via config.
+  - LLM-backed (optional): calls whatever HTTP endpoint the operator
+    configures. Disabled by default; enable via config. There is no
+    built-in provider, endpoint or model — every one of those is
+    configuration, so the code privileges no vendor and contacts no
+    host the operator did not name.
 
 Configuration (mind-mem.json):
     {
@@ -17,18 +20,48 @@ Configuration (mind-mem.json):
           "max_expansions": 3,
           "llm": {
             "enabled": false,
-            "provider": "anthropic",
-            "model": "claude-haiku",
-            "api_key_env": "ANTHROPIC_API_KEY"
+            "base_url": "https://your-endpoint.example/v1",
+            "model": "your-model-id",
+            "api_key_env": "YOUR_API_KEY_ENV_VAR",
+            "provider": "whatever-you-call-it",
+            "endpoint_path": "/chat/completions",
+            "auth_header": "Authorization",
+            "auth_prefix": "Bearer ",
+            "headers": {},
+            "response_path": ["choices", 0, "message", "content"],
+            "response_item_filter": {}
           }
         }
       }
     }
+
+``base_url``, ``model`` and ``api_key_env`` are REQUIRED. With any of them
+missing the expander logs ``llm_expander_unconfigured`` / raises an
+actionable error and falls back to the NLP expander — it never guesses an
+endpoint. ``provider`` is a free-form label used only in log lines.
+
+The remaining keys describe the REQUEST SHAPE as data; their defaults (shown
+above) describe the widely implemented chat-completions shape, and the code
+has no per-endpoint branch. ``response_path`` walks the decoded JSON reply:
+strings are dict keys, integers are list indices, and ``"*"`` iterates a list
+and concatenates the text found at the remainder of the path.
+``response_item_filter`` restricts which items of that list contribute (every
+key/value pair must match). So an endpoint that answers with a list of typed
+content parts, and authenticates with a bare key header plus a static version
+header, is reachable purely by configuration:
+
+    "endpoint_path": "<the path that endpoint documents>",
+    "auth_header": "x-api-key",
+    "auth_prefix": "",
+    "headers": {"<header that endpoint requires>": "<value>"},
+    "response_path": ["content", "*", "text"],
+    "response_item_filter": {"type": "text"}
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Any, Protocol, runtime_checkable
 
 from .observability import get_logger
@@ -331,19 +364,56 @@ class NLPQueryExpander:
 
 
 class LLMQueryExpander:
-    """Generate alternative query phrasings using an LLM.
+    """Generate alternative query phrasings using a configured HTTP endpoint.
 
-    Requires an API key and network access. Disabled by default.
-    Falls back to NLP expansion on any failure.
+    Requires ``base_url``, ``model`` and ``api_key_env`` in config plus
+    network access. Disabled by default. Falls back to NLP expansion on any
+    failure — including the "not configured" failure, so an operator who
+    flips ``llm.enabled`` without supplying an endpoint gets a logged
+    warning and working NLP expansion, never a request to a host the code
+    picked on its own.
+
+    The request shape is data (see the module docstring): endpoint path,
+    auth header name, auth prefix, extra static headers and the response
+    text location all come from config, so an endpoint whose shape differs
+    from chat-completions needs configuration, not a code branch.
     """
+
+    #: Defaults describing the widely implemented chat-completions shape.
+    #: These are SHAPE defaults, not endpoint defaults — there is
+    #: deliberately no default ``base_url``, ``model`` or ``api_key_env``.
+    DEFAULT_ENDPOINT_PATH = "/chat/completions"
+    DEFAULT_AUTH_HEADER = "Authorization"
+    DEFAULT_AUTH_PREFIX = "Bearer "
+    DEFAULT_RESPONSE_PATH: tuple[Any, ...] = ("choices", 0, "message", "content")
+
+    #: Config keys with no default — absence is a configuration error.
+    REQUIRED_KEYS = ("base_url", "model", "api_key_env")
 
     def __init__(self, config: dict[str, Any] | None = None):
         cfg = config or {}
-        self.provider: str = cfg.get("provider", "anthropic")
-        self.model: str = cfg.get("model", "claude-haiku")
-        self.api_key_env: str = cfg.get("api_key_env", "ANTHROPIC_API_KEY")
-        self.base_url: str = cfg.get("base_url", "https://api.openai.com/v1")
+        # Free-form operator label; used only for log lines.
+        self.provider: str = str(cfg.get("provider", "") or "")
+        # No vendor default: an unset value is a configuration error that
+        # surfaces at call time (see ``_require_configured``).
+        self.model: str = str(cfg.get("model", "") or "")
+        self.api_key_env: str = str(cfg.get("api_key_env", "") or "")
+        self.base_url: str = str(cfg.get("base_url", "") or "")
+        # Request-shape data.
+        self.endpoint_path: str = str(cfg.get("endpoint_path", self.DEFAULT_ENDPOINT_PATH) or "")
+        self.auth_header: str = str(cfg.get("auth_header", self.DEFAULT_AUTH_HEADER) or "")
+        self.auth_prefix: str = str(cfg.get("auth_prefix", self.DEFAULT_AUTH_PREFIX))
+        extra = cfg.get("headers", {})
+        self.headers: dict[str, str] = {str(k): str(v) for k, v in extra.items()} if isinstance(extra, dict) else {}
+        path = cfg.get("response_path", self.DEFAULT_RESPONSE_PATH)
+        self.response_path: tuple[Any, ...] = tuple(path) if isinstance(path, (list, tuple)) else self.DEFAULT_RESPONSE_PATH
+        item_filter = cfg.get("response_item_filter", {})
+        self.response_item_filter: dict[str, Any] = dict(item_filter) if isinstance(item_filter, dict) else {}
         self._fallback = NLPQueryExpander()
+
+    def missing_config(self) -> list[str]:
+        """Return the required config keys that were not supplied."""
+        return [key for key in self.REQUIRED_KEYS if not getattr(self, key)]
 
     def expand(self, query: str, max_expansions: int = 3) -> list[str]:
         """Generate alternative phrasings via LLM, with NLP fallback.
@@ -385,13 +455,32 @@ class LLMQueryExpander:
 
         return results[:max_expansions]
 
+    def _require_configured(self) -> None:
+        """Raise an actionable error when the endpoint was never configured.
+
+        Deliberately NOT a fallback to some built-in host: the operator
+        asked for LLM expansion without saying where, and the honest
+        answer is to say which keys are missing.
+        """
+        missing = self.missing_config()
+        if missing:
+            keys = ", ".join(f"recall.query_expansion.llm.{key}" for key in missing)
+            raise RuntimeError(
+                f"LLM query expansion is not configured: set {keys} in mind-mem.json "
+                f"(there is no built-in endpoint or model default)"
+            )
+
     def _call_llm(self, query: str, n: int) -> list[str]:
-        """Call the configured LLM to generate alternative phrasings.
+        """Call the configured endpoint to generate alternative phrasings.
 
         Returns a list of alternative query strings (not including the original).
         Raises on any failure (caller handles fallback).
         """
+        import json as _json
         import os as _os
+        import urllib.request
+
+        self._require_configured()
 
         api_key = _os.environ.get(self.api_key_env)
         if not api_key:
@@ -405,69 +494,15 @@ class LLMQueryExpander:
             f"Query: {query}"
         )
 
-        if self.provider == "anthropic":
-            return self._call_anthropic(api_key, prompt)
-        else:
-            # All other providers use OpenAI-compatible chat completions API
-            return self._call_openai_compatible(api_key, prompt)
-
-    def _call_anthropic(self, api_key: str, prompt: str) -> list[str]:
-        """Call Anthropic API for query expansion."""
-        import json as _json
-        import urllib.request
-
-        url = "https://api.anthropic.com/v1/messages"
-        headers = {
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        }
-        body = _json.dumps(
-            {
-                "model": self.model,
-                "max_tokens": 256,
-                "messages": [{"role": "user", "content": prompt}],
-            }
-        ).encode("utf-8")
-
-        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — URL is hardcoded to https://api.anthropic.com (constant, always https)
-            data = _json.loads(resp.read().decode("utf-8"))
-
-        text = ""
-        for block in data.get("content", []):
-            if block.get("type") == "text":
-                text += block.get("text", "")
-
-        return [line.strip() for line in text.strip().splitlines() if line.strip()]
-
-    def _call_openai_compatible(self, api_key: str, prompt: str) -> list[str]:
-        """Call an OpenAI-compatible chat completions API for query expansion.
-
-        Works with OpenAI, xAI, Mistral, DeepSeek, NVIDIA NIM, and any other
-        provider exposing the ``/chat/completions`` endpoint.
-
-        Args:
-            api_key: Bearer token for the API.
-            prompt: The expansion prompt.
-
-        Returns:
-            List of alternative query strings parsed from the response.
-
-        Raises:
-            RuntimeError: On network or parsing failures.
-        """
-        import json as _json
-        import urllib.request
-
         base = self.base_url.rstrip("/")
         if not base.startswith(("http://", "https://")):
             raise ValueError(f"LLMQueryExpander: invalid URL scheme for base_url: {base!r}")
-        url = f"{base}/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
+        url = f"{base}{self.endpoint_path}"
+
+        headers = {"Content-Type": "application/json"}
+        headers.update(self.headers)
+        headers[self.auth_header] = f"{self.auth_prefix}{api_key}"
+
         body = _json.dumps(
             {
                 "model": self.model,
@@ -480,13 +515,7 @@ class LLMQueryExpander:
         with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — scheme validated above to http/https only
             data = _json.loads(resp.read().decode("utf-8"))
 
-        # Extract text from the first choice
-        choices = data.get("choices", [])
-        if not choices:
-            return []
-        message = choices[0].get("message", {})
-        text = message.get("content", "")
-
+        text = _extract_response_text(data, self.response_path, self.response_item_filter)
         return [line.strip() for line in text.strip().splitlines() if line.strip()]
 
 
@@ -498,6 +527,54 @@ class LLMQueryExpander:
 def _normalize_for_dedup(text: str) -> str:
     """Normalize query text for deduplication comparison."""
     return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def _extract_response_text(
+    data: Any,
+    path: Sequence[Any],
+    item_filter: dict[str, Any],
+) -> str:
+    """Pull the generated text out of a decoded JSON response by data path.
+
+    This is what replaces the per-endpoint response parsers. ``path``
+    elements are dict keys (str), list indices (int), or the wildcard
+    ``"*"``, which iterates the list at that position, keeps the items
+    matching every key/value pair in ``item_filter``, resolves the rest of
+    the path against each, and concatenates the strings.
+
+    Returns "" for any path that does not resolve — a malformed or empty
+    response yields no alternatives rather than an exception, matching the
+    previous per-endpoint parsers.
+    """
+    node: Any = data
+    for idx, step in enumerate(path):
+        if step == "*":
+            if not isinstance(node, list):
+                return ""
+            rest = tuple(path)[idx + 1 :]
+            parts: list[str] = []
+            for item in node:
+                if item_filter:
+                    if not isinstance(item, dict):
+                        continue
+                    if any(item.get(key) != value for key, value in item_filter.items()):
+                        continue
+                piece = _extract_response_text(item, rest, {})
+                if piece:
+                    parts.append(piece)
+            return "".join(parts)
+        if isinstance(step, bool):
+            return ""
+        if isinstance(step, int):
+            if not isinstance(node, list) or not -len(node) <= step < len(node):
+                return ""
+            node = node[step]
+            continue
+        if isinstance(node, dict) and step in node:
+            node = node[step]
+            continue
+        return ""
+    return node if isinstance(node, str) else ""
 
 
 # ---------------------------------------------------------------------------
@@ -521,8 +598,21 @@ def create_expander(config: dict[str, Any] | None = None) -> QueryExpander:
 
     llm_cfg = config.get("llm", {})
     if isinstance(llm_cfg, dict) and llm_cfg.get("enabled", False):
-        _log.info("using_llm_expander", provider=llm_cfg.get("provider", "anthropic"))
-        return LLMQueryExpander(config=llm_cfg)
+        expander = LLMQueryExpander(config=llm_cfg)
+        missing = expander.missing_config()
+        if missing:
+            # Say it once, at wiring time, with the keys to add — rather
+            # than only on the first query, and never by substituting an
+            # endpoint the operator did not choose.
+            _log.warning(
+                "llm_expander_unconfigured",
+                missing=missing,
+                fallback="nlp",
+                hint="set recall.query_expansion.llm.{" + ",".join(missing) + "} in mind-mem.json",
+            )
+        else:
+            _log.info("using_llm_expander", provider=expander.provider or "unspecified")
+        return expander
 
     return NLPQueryExpander()
 

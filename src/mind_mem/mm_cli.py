@@ -1828,6 +1828,26 @@ def _cmd_pipeline_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_accountability(args: argparse.Namespace) -> int:
+    """RA.2 — retrieval accountability: precision + waste, as derived views.
+
+    Read-only by construction. :mod:`mind_mem.accountability_views` opens
+    every database ``mode=ro`` and writes no row anywhere, so this verb can
+    be run against a live workspace without changing it — a precision number
+    that persisted would be a per-block score with a storage model, which is
+    the thing the RA ruling refuses.
+
+    Two views: ``precision_by_intent`` (credited-over-served per intent
+    type) and ``waste`` (admitted blocks with no serve evidence in the
+    observed window, split by retention class — PROTECTED blocks are listed
+    under their own key and are never counted as waste).
+    """
+    from mind_mem.accountability_views import accountability_report
+
+    print(json.dumps(accountability_report(_workspace()), indent=2, sort_keys=True))
+    return 0
+
+
 def _cmd_inbox_watch(args: argparse.Namespace) -> int:
     """Watch an inbox directory and route files into the workspace (v3.9)."""
     import time as _time
@@ -3505,6 +3525,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_pipeline.add_argument("--list-dirty", action="store_true", help="List the block ids whose transform_hash is stale.")
     p_pipeline.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     p_pipeline.set_defaults(func=_cmd_pipeline_status)
+
+    # accountability — RA.2 precision + waste, derived views over stored rows
+    p_acct = sub.add_parser(
+        "accountability",
+        help=(
+            "RA.2 retrieval accountability: precision (credited/served per intent) "
+            "and waste (admitted blocks with no serve evidence). Derived views, "
+            "recomputed on every call and never stored."
+        ),
+    )
+    p_acct.set_defaults(func=_cmd_accountability)
 
     # audit-model — static security scan of any local model checkpoint
     p_audit = sub.add_parser(

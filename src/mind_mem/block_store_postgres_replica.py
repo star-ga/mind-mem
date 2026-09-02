@@ -38,7 +38,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from .admission import require_admission
+from .admission import require_admission, require_delete_admission
 from .block_store import BlockStore
 from .block_store_postgres import PostgresBlockStore
 from .observability import get_logger, metrics
@@ -204,6 +204,16 @@ class ReplicatedPostgresBlockStore:
         return cast(dict[str, Any], self._primary.ping(timeout=timeout))
 
     def delete_block(self, block_id: str) -> bool:
+        """Route a delete to the primary, refusing an ungated one here.
+
+        Enforced here as well as on the primary, for the same reason
+        :meth:`write_block` enforces it: this adapter is a ``BlockStore``
+        in its own right, so a caller holding only the replica must not
+        get a laxer mutation surface than one holding the primary. It
+        opens no scope and records no removal — the primary does both,
+        so a delete leaves one chain record however it was reached.
+        """
+        require_delete_admission(str(block_id))
         metrics.inc("replica_write_primary")
         return self._primary.delete_block(block_id)
 

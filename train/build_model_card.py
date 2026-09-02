@@ -19,6 +19,13 @@ now comes from ``scripts/count_mcp_tools.py``, the authoritative counter,
 and the count the MODEL knows is separate from it -- the card states the
 gap instead of hiding it.
 
+Both halves of that gap are now gated. ``scripts/check_docs_alignment.py``
+recomputes ``trained_on_tools`` by running the live counter's AST rule over
+``git show <trained revision>:src/mind_mem/mcp/`` and fails CI when this
+file's default, the in-tree card, or the 4b setup guide disagrees with it.
+That is how the 96 here was caught: no revision of mind-mem ever exposed
+96 distinct tools.
+
 Eval scores are loaded from ``train-output/eval_report.json`` when present.
 """
 
@@ -67,7 +74,7 @@ This checkpoint is **fully trained mind-mem:4b** (every one of the ~4 B paramete
 
 | Axis | v3.0 | v3.9 | Delta |
 |---|---|---|---|
-| MCP tools | 57 | **{trained_on_tools}** | +24 |
+| MCP tools | 57 | **{trained_on_tools}** | +{tools_delta} |
 | Block fields | base | base + `TransformHash` | +1 schema field |
 | Transports | MCP only | MCP + HTTP + inbox + daemon | +3 surfaces |
 | Backends | Markdown, sqlite-vec | Markdown, sqlite-vec, replicated Postgres | +1 routing layer |
@@ -223,11 +230,12 @@ Apache-2.0 (same as the mind-mem Python package).
   typed-lineage edges (`cites` / `implements` / `refines` /
   `contradicts` / `cooccurrence`), v3.12 strict quality-gate
   surface, lineage→staleness BFS propagator, and the
-  `block_staleness` table. **96 MCP tools** (84 = 81 v3.9 + 3 v3.11
-  surfaces: `validate_block`, `block_lineage`, `add_block_edge`).
+  `block_staleness` table. **{trained_on_tools} distinct MCP tools**
+  (80 from v3.9 plus 3 v3.11 surfaces: `validate_block`,
+  `block_lineage`, `add_block_edge`).
   Corpus: 4 392 examples. **Patched eval: 95/95 = 100 %** across
   ten categories (two probes softened — see Known model errors).
-- **v3.9.0:** Full retrain covering 81 MCP tools, v3.9
+- **v3.9.0:** Full retrain covering 80 distinct MCP tools, v3.9
   `TransformHash` schema, HTTP/daemon/inbox transports.
 - **v3.0.0:** Full retrain covering 57 MCP tools, 14 block schemas,
   governance workflows. Pinned at `revision="v3.0.0"`.
@@ -347,20 +355,32 @@ def main() -> None:
     # version. Bump these two together, and only when a retrain actually
     # ships.
     trained_on_version = os.environ.get("MM_TRAINED_ON_VERSION", "4.0.0")
-    # 96, not 84. The shipped v4 weights were trained against a 96-tool
-    # surface -- both train/HF_MODEL_CARD_v4.md and docs/mind-mem-4b-setup.md
-    # say so. The 84 default predates that checkpoint, so an unparameterised
-    # regeneration would have published an understated tool count on a public
-    # model card. Bump this WITH trained_on_version, and only when a retrain
-    # actually ships.
-    trained_on_tools = os.environ.get("MM_TRAINED_ON_TOOLS", "96")
+    # 83 -- MEASURED, not asserted. This default used to be 84 and then 96,
+    # each picked to agree with whatever a doc happened to say; the published
+    # card on the hub carried 84 while the in-tree card carried 96, two
+    # numbers for one fact. 83 is what count_mcp_tools' AST rule -- the rule
+    # that produces the live count -- returns for
+    # `git show v4.1.1:src/mind_mem/mcp/`. The 84 was that revision's
+    # REGISTRATION total: `recall` is registered in both public.py and
+    # recall.py and exposed once, the same off-by-one that made v3.9 "81".
+    # scripts/check_docs_alignment.py recomputes this from TRAINED_REVISION
+    # and fails CI if this literal drifts from it -- so bump it WITH
+    # trained_on_version, and only when a retrain actually ships.
+    trained_on_tools = os.environ.get("MM_TRAINED_ON_TOOLS", "83")
     current_tools = _current_tool_count()
+    # Derived, never typed: the row read "+24" next to a hardcoded 96, which
+    # is not 96 - 57 and was not 83 - 57 either.
+    try:
+        tools_delta = str(int(trained_on_tools) - 57)
+    except ValueError:
+        tools_delta = "?"
     today = dt.date.today().isoformat()
     OUT.write_text(
         MODEL_CARD.format(
             package_version=package_version,
             trained_on_version=trained_on_version,
             trained_on_tools=trained_on_tools,
+            tools_delta=tools_delta,
             current_tools=current_tools,
             today=today,
             **_load_eval_scores(),

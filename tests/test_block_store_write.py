@@ -2,12 +2,33 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
+from typing import Iterator
 
 import pytest
 
 from mind_mem.block_store import MarkdownBlockStore
+from mind_mem.governance_gate import get_gate
+
+
+@contextlib.contextmanager
+def deleting(ws: Path, *block_ids: str) -> Iterator[None]:
+    """Open the DELETE admission every ``delete_block`` now requires.
+
+    5.0.2 routes deletes through the same gate writes go through, so a
+    unit test of the removal mechanics has to authorise the removal the
+    way a real caller does. ``admit_delete`` writes a real chain entry;
+    nothing here forges a receipt.
+    """
+    gate = get_gate(str(ws))
+    if len(block_ids) == 1:
+        with gate.admit_delete(block_ids[0], rationale="unit test removal", actor="pytest"):
+            yield
+    else:
+        with gate.admit_delete_batch("unit-test-batch", block_ids, rationale="unit test removal", actor="pytest"):
+            yield
 
 
 @pytest.fixture
@@ -156,7 +177,8 @@ class TestDeleteBlock:
         store.write_block({"_id": "D-20260420-001", "Statement": "keep", "Status": "active"})
         store.write_block({"_id": "D-20260420-002", "Statement": "remove", "Status": "superseded"})
 
-        assert store.delete_block("D-20260420-002") is True
+        with deleting(ws, "D-20260420-002"):
+            assert store.delete_block("D-20260420-002") is True
 
         content = (ws / "decisions" / "DECISIONS.md").read_text()
         assert "[D-20260420-002]" not in content
@@ -165,16 +187,19 @@ class TestDeleteBlock:
     def test_missing_block_returns_false(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "D-20260420-001", "Statement": "only", "Status": "active"})
-        assert store.delete_block("D-20260420-999") is False
+        with deleting(ws, "D-20260420-999"):
+            assert store.delete_block("D-20260420-999") is False
 
     def test_unknown_prefix_returns_false(self, ws: Path) -> None:
         store = MarkdownBlockStore(str(ws))
-        assert store.delete_block("ZZZ-20260420-001") is False
+        with deleting(ws, "ZZZ-20260420-001"):
+            assert store.delete_block("ZZZ-20260420-001") is False
 
     def test_records_deletion_to_recovery_journal(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "D-20260420-001", "Statement": "about to be deleted", "Status": "active"})
-        store.delete_block("D-20260420-001")
+        with deleting(ws, "D-20260420-001"):
+            store.delete_block("D-20260420-001")
 
         log_path = ws / "memory" / "deleted_blocks.jsonl"
         assert log_path.is_file()

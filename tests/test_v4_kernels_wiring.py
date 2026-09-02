@@ -28,6 +28,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
+from _platform_compat import minimal_child_env
 
 from mind_mem import mm_cli
 from mind_mem.v4 import cognitive_kernel
@@ -189,12 +190,17 @@ class TestImportingIsWhatRegisters:
             [sys.executable, "-c", script],
             capture_output=True,
             text=True,
-            env={
-                "PATH": "/usr/bin:/bin",
-                "MIND_MEM_WORKSPACE": str(armed),
-                "MIND_MEM_CONFIG": str(armed / "mind-mem.json"),
-                "HOME": str(armed),
-            },
+            # Scrubbed, NOT inherited -- the whole claim is about a fresh
+            # process. ``minimal_child_env`` adds only what the host needs
+            # to start an interpreter at all (on Windows that is
+            # ``SystemRoot``, without which the child dies in
+            # ``_Py_HashRandomization_Init``) plus an import path that
+            # survives pointing the home directory at a tmp dir.
+            env=minimal_child_env(
+                armed,
+                MIND_MEM_WORKSPACE=str(armed),
+                MIND_MEM_CONFIG=str(armed / "mind-mem.json"),
+            ),
             timeout=120,
         )
         assert out.returncode == 0, out.stderr

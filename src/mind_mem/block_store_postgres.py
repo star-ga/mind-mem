@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     pass  # No runtime-only type imports needed; psycopg is a dynamic dependency.
 
-from .admission import require_admission
+from .admission import require_admission, require_delete_admission
 from .block_store import BlockStoreError  # noqa: F401  (re-exported for convenience)
 
 _log = logging.getLogger("mind_mem.block_store_postgres")
@@ -1223,10 +1223,18 @@ class PostgresBlockStore:
     def delete_block(self, block_id: str) -> bool:
         """Delete a block by id. Returns True if a row was removed.
 
+        Requires an open ``DELETE`` admission covering *block_id*
+        (:meth:`~mind_mem.governance_gate.GovernanceGate.admit_delete`).
+        Checked before the schema is touched, so an ungated caller
+        cannot learn from a timing or error difference whether the row
+        was there.
+
         Logs to ``<schema>.deleted_blocks`` if that table exists;
         otherwise the deletion is silently recorded only in the
-        application log.
+        application log. That journal is local recovery — the audit fact
+        is the chain record written from the removal reported here.
         """
+        receipt = require_delete_admission(str(block_id))
         self._ensure_schema()
         pool = self._get_pool()
         sql_delete = _sql(
@@ -1258,6 +1266,10 @@ class PostgresBlockStore:
                                 cur.execute(sql_log, (block_id, deleted_content))
                         except Exception as exc:
                             _log.debug("deletion_journal_skipped block_id=%s: %s", block_id, exc)  # journal table absent — non-fatal
+            # Reported after the transaction commits: a removal recorded
+            # for a DELETE that then rolled back would put a death in the
+            # chain that never happened.
+            receipt.record_removal(str(block_id), deleted_content if isinstance(deleted_content, str) else str(deleted_content))
             _log.debug("block_store_delete", extra={"block_id": block_id})
             return True
         except Exception as exc:

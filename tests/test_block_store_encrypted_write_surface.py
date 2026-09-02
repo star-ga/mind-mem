@@ -90,6 +90,18 @@ def _admitted(workspace: Path, proposal_id: str = "P-TEST") -> Iterator[None]:
         yield
 
 
+@contextlib.contextmanager
+def _deleting(workspace: Path, block_id: str) -> Iterator[None]:
+    """The DELETE admission ``delete_block`` requires from 5.0.2 on.
+
+    A proposal-apply receipt is deliberately *not* enough: it authorises
+    every id it is asked about, which would be ambient authority to
+    destroy anything, so a delete needs its own named scope.
+    """
+    with get_gate(str(workspace)).admit_delete(block_id, rationale="unit test removal", actor="pytest"):
+        yield
+
+
 def _write_message(workspace: Path, store: EncryptedBlockStore) -> None:
     """Write one MSG block — its target file (memory/MESSAGES.md) starts absent."""
     with get_gate(str(workspace)).admit_block(action="WRITE", block_id="MSG-20260410-001", content="hello", tier=IngestTier.AGENT_MESSAGE):
@@ -179,7 +191,8 @@ class TestWriteSurface:
     def test_delete_block_keeps_the_file_encrypted(self, workspace: Path, store: EncryptedBlockStore) -> None:
         with _admitted(workspace):
             store.write_block({"_id": "D-20260410-002", "Date": "2026-04-13", "Status": "active", "Rationale": "second"})
-        assert store.delete_block("D-20260410-002") is True
+        with _deleting(workspace, "D-20260410-002"):
+            assert store.delete_block("D-20260410-002") is True
         assert _head(_decisions(workspace)) == _MAGIC
         assert [b["_id"] for b in store.get_all()] == ["D-20260410-001"]
 

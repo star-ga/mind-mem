@@ -44,10 +44,10 @@ def build_residual_block() -> Graph:
             Arg(name="X", type_idx=0),
             Param(name="W", type_idx=0),
             Param(name="b", type_idx=1),
-            Node(opcode="m", inputs=(0, 1)),     # matmul X @ W
-            Node(opcode="+", inputs=(3, 2)),     # + bias
-            Node(opcode="r", inputs=(4,)),       # relu
-            Node(opcode="+", inputs=(5, 0)),     # residual: + X
+            Node(opcode="m", inputs=(0, 1)),  # matmul X @ W
+            Node(opcode="+", inputs=(3, 2)),  # + bias
+            Node(opcode="r", inputs=(4,)),  # relu
+            Node(opcode="+", inputs=(5, 0)),  # residual: + X
         ],
         output=6,
     )
@@ -60,7 +60,7 @@ def main() -> None:
     text = emit_mic2(g)
     binary = emit_micb(g)
     print(f"mic@2 text:   {len(text.encode('utf-8'))} bytes")
-    print(f"mic-b binary: {len(binary)} bytes  ({len(binary)/len(text.encode('utf-8')):.0%})")
+    print(f"mic-b binary: {len(binary)} bytes  ({len(binary) / len(text.encode('utf-8')):.0%})")
 
     # ---- round-trip ---------------------------------------------------
     assert parse_mic2(text) == g

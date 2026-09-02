@@ -29,6 +29,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from _platform_compat import child_pythonpath
 
 from mind_mem.cron_runner import ALL_JOBS, JOB_DEFS, KNOWN_JOBS, OPT_IN_JOB_DEFS, PACKAGE, is_job_enabled, run_job
 from mind_mem.cron_runner import main as cron_main
@@ -92,6 +93,13 @@ def planted_transcript(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # user profile -- the fake home is never consulted and the fixture
     # finds nothing. Both must be set for this redirect to hold.
     monkeypatch.setenv("USERPROFILE", str(home))
+    # Redirecting the home directory also relocates Python's USER
+    # site-packages, which is derived from it -- so the job's subprocess
+    # could no longer import the ``mind_mem`` this very test imported, and
+    # every assertion below failed on ``ModuleNotFoundError``. Invisible on
+    # CI, where the package is installed system-wide; a hard failure on any
+    # box where it is a user install.
+    monkeypatch.setenv("PYTHONPATH", child_pythonpath())
     return transcript
 
 

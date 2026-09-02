@@ -1,9 +1,18 @@
 # Setting up the mind-mem-4b model
 
 > **Tool-surface drift as of 5.0.1 — read this before trusting the model on
-> surfaces.** The shipped v4 weights were trained against a 96-tool surface.
+> surfaces.** The shipped v4 weights were trained against an 83-tool surface.
 > The live server now exposes **102**, so the model does not know the newest
 > tools at all.
+>
+> **Correction (2026-09-01): this note said 96 and the published model card on
+> the hub said 84.** Both were wrong. 83 is measured — `count_mcp_tools.py`'s
+> AST rule, the one that produces the live 102, applied to
+> `git show v4.1.1:src/mind_mem/mcp/`. The 84 was that revision's
+> *registration* total, which counts `recall` twice because it is registered
+> in both `public.py` and `recall.py` and exposed once.
+> `scripts/check_docs_alignment.py` recomputes it from the trained revision on
+> every CI run.
 >
 > The module drift has moved TWICE and the current state is not the obvious
 > one. 5.0.0 deleted 47 modules as unreachable; this note then warned that the
@@ -14,10 +23,11 @@
 > which surface each module now hangs off, that most sit behind default-OFF v4
 > flags, and that six modules are deliberately unwired with a recorded trigger.
 >
-> The number below is left at 96 deliberately: it is a fact about the WEIGHTS,
-> not about the server, and editing it to 102 would state something untrue
-> about the model you are running. The corpus is regenerated and the model
-> retrained as a separate, sequenced piece of work — and the corpus that
+> The number below is left at the trained-on 83 deliberately: it is a fact
+> about the WEIGHTS, not about the server, and editing it to the live count of
+> 102 would state something untrue about the model you are running. The
+> corpus is regenerated and the model retrained as a separate, sequenced
+> piece of work — and the corpus that
 > generated these weights described the pre-5.0.0 tree, so it needs
 > regenerating against 5.0.1 rather than against either earlier state. Until
 > then treat model answers about module names as advisory and check them
@@ -26,7 +36,7 @@
 `star-ga/mind-mem-4b` is the **fully trained** mind-mem:4b model —
 all ~4.2B parameters trained on the MIND-Mem domain (not a LoRA
 adapter). The current revision (v4 weights, shipped alongside the
-**v4.0.0** library release on 2026-05-11) knows v4.0.0's 96 MCP tools (incl.
+**v4.0.0** library release on 2026-05-11) knows v4.0.0's 83 MCP tools (incl.
 `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`,
 `reindex_dirty`, `validate_block`, `block_lineage`, `add_block_edge`,
 MIC/MAP serialization, governance hooks), block schemas including the

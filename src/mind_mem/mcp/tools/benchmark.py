@@ -13,7 +13,10 @@ Extracted from ``mcp_server.py`` per docs/v3.2.0-mcp-decomposition-plan.md
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
+
+from mind_mem.admission import admit_read
 
 from ..infra.config import _get_limits, _load_extra_categories
 from ..infra.constants import MCP_SCHEMA_VERSION
@@ -22,6 +25,66 @@ from ..infra.workspace import _workspace
 from ._helpers import get_logger, metrics
 
 _log = get_logger("mcp_server")
+
+#: A category file's per-block section header, written by
+#: ``CategoryDistiller._write_category_file`` as ``### <block_id>``.
+_SECTION_HEADER = re.compile(r"^### (\S+)[ \t]*$", re.MULTILINE)
+
+#: Status stamped on a section whose block id resolves to nothing in the
+#: corpus. It is deliberately not a status anybody recognises, so
+#: ``is_admissible_status`` (an allow-list) withholds it. That is what makes
+#: a FORGED section fail closed: a quarantined block whose Statement text
+#: contains a ``### D-FAKE`` line would otherwise split into a section of its
+#: own carrying whatever status it cared to print.
+_UNRESOLVED_STATUS = "__unresolved__"
+
+
+def _category_sections(context: str) -> tuple[str, list[tuple[str, str]]]:
+    """Split a rendered category context into a preamble and block sections.
+
+    Returns ``(preamble, [(block_id, section_text), ...])``. The preamble is
+    everything before the first ``### `` header — the category titles and the
+    distiller's own banner, which carry no block content.
+    """
+    matches = list(_SECTION_HEADER.finditer(context))
+    if not matches:
+        return context, []
+    sections: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(context)
+        sections.append((match.group(1), context[match.start() : end]))
+    return context[: matches[0].start()], sections
+
+
+def _admit_category_context(workspace: str, context: str) -> tuple[str, int]:
+    """Drop the sections of *context* whose blocks are not servable.
+
+    Category files are a DERIVED artifact: the distiller reads the corpus and
+    writes each block's ``Statement`` into ``categories/<name>.md``. It does
+    not filter on admission, so a quarantined inbox drop's statement is copied
+    into a file this tool then serves verbatim to a USER-scope caller — the
+    same leak as ``get_block``, one artifact removed. (The root fix belongs in
+    the distiller, which should categorise only the admitted corpus; this is
+    the egress half, and it holds even for category files written before that
+    lands or by an older release.)
+
+    The status printed in the file is NOT trusted — it is a copy that went
+    stale the moment a block was quarantined, and it sits inside attacker-
+    supplied text. Every section id is re-resolved against the block store and
+    the answer comes from :func:`admit_read`, the same seam recall uses.
+    """
+    preamble, sections = _category_sections(context)
+    if not sections:
+        return context, 0
+
+    from mind_mem.storage import get_block_store
+
+    live = {str(block.get("_id")): block.get("Status") for block in get_block_store(workspace).get_all(active_only=False)}
+    rows = [{"_id": block_id, "Status": live.get(block_id, _UNRESOLVED_STATUS)} for block_id, _ in sections]
+    decision = admit_read(rows, workspace=workspace, surface="category_summary")
+    servable = {str(row["_id"]) for row in decision.admitted}
+    kept = "".join(text for block_id, text in sections if block_id in servable)
+    return preamble + kept, decision.withheld
 
 
 def _kind_summaries_section(ws: str) -> list[dict] | None:
@@ -88,17 +151,21 @@ def governance_health_bench() -> str:
 
 @mcp_tool_observe
 def category_summary(topic: str, limit: int = 3) -> str:
-    """Returns category summaries relevant to a given topic.
+    """Returns category summaries for the ADMITTED blocks matching a topic.
 
-    Uses the category distiller to find and return thematic summary files
-    matching the topic. Categories are auto-generated from memory blocks.
+    Uses the category distiller to find thematic summary files matching the
+    topic. Those files are derived from the corpus and the distiller copies
+    every block's statement into them, quarantined ones included, so the
+    per-block sections are re-checked against admission here before anything
+    is served and ``withheld_count`` reports how many were dropped.
 
     Args:
         topic: Topic or query to find relevant categories for.
         limit: Maximum number of category summaries to return (default: 3).
 
     Returns:
-        Concatenated category summaries with block references.
+        Concatenated category summaries with block references, plus
+        ``withheld_count``.
     """
     ws = _workspace()
     limits = _get_limits(ws)
@@ -108,6 +175,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
         extra_cats = _load_extra_categories(ws)
         distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
         context = distiller.get_category_context(topic, ws, limit=max(1, min(limit, limits["max_category_results"])))
+        context, withheld = _admit_category_context(ws, context)
         cats = distiller.get_categories_for_query(topic)
         metrics.inc("mcp_category_summary")
         _log.info("mcp_category_summary", topic=topic, matched_categories=cats[:limit])
@@ -119,6 +187,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
                 "status": "no_categories",
                 "hint": "Run reindex to generate category files, or add blocks with matching tags.",
             }
+            empty["withheld_count"] = withheld
             if kind_sections is not None:
                 empty["kind_summaries"] = kind_sections
             return json.dumps(empty, indent=2)
@@ -126,6 +195,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
             "_schema_version": MCP_SCHEMA_VERSION,
             "topic": topic,
             "matched_categories": cats[:limit],
+            "withheld_count": withheld,
             "content": context,
         }
         if kind_sections is not None:

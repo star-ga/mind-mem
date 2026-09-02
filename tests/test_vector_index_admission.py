@@ -116,8 +116,14 @@ class TestRebuildIndexAdmission:
             pytest.skip(f"vector backend unavailable in this environment: {exc}")
 
         blob = _index_text(ws)
-        if not blob:
-            pytest.skip("no index.json produced; nothing to assert against")
+        # NOT a skip. ``rebuild_index`` returned without raising, so the vector
+        # backend is present and working here -- an empty index at this point
+        # means the product wrote nothing, which is a defect and not a property
+        # of the host. Skipping would have jumped over the positive control
+        # below and reported a green "the canary is not in the index" for an
+        # index that contains nothing at all: exactly the vacuous pass this
+        # module's docstring promises never to produce.
+        assert blob, "rebuild_index produced no index.json, so neither assertion below can mean anything"
 
         assert CANARY not in blob, (
             "a quarantined block was written into the vector index -- it is reachable by similarity while every text path withholds it"

@@ -48,8 +48,11 @@ class TestSyncDirs:
         anywhere.
         """
         probe = vault / "notes"
-        if not probe.is_dir():  # pragma: no cover - fixture guarantees it
-            pytest.skip("fixture layout changed")
+        # An assertion, not a skip: the fixture creates this directory
+        # unconditionally, so its absence is a broken fixture -- and a broken
+        # fixture that reports "skipped" is indistinguishable from a pass in
+        # every summary line the suite prints.
+        assert probe.is_dir(), "fixture layout changed: the vault has no notes/ directory to probe"
         if (vault / "NOTES").is_dir():
             pytest.skip("case-insensitive filesystem: 'Notes' and 'notes' are one directory")
         bridge = VaultBridge(vault_root=str(vault))

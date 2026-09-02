@@ -26,6 +26,7 @@ import sqlite3
 import tempfile
 from typing import Any
 
+from mind_mem.admission import admit_read, admit_read_one
 from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file
 from mind_mem.corpus_registry import CORPUS_DIRS
 from mind_mem.mind_ffi import get_mind_dir
@@ -691,7 +692,31 @@ def delete_memory_item(block_id: str) -> str:
 
 @mcp_tool_observe
 def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blocks: int = 10000) -> str:
-    """Export all workspace blocks as JSONL."""
+    """Export every ADMITTED workspace block as JSONL.
+
+    "Every block" used to mean every block: a quarantined inbox drop or an
+    unreviewed agent message came out of here verbatim, so an export was a
+    way around the admission gate that ``recall`` enforces. Export now runs
+    the same egress decision as recall (``admission.admit_read``) and the
+    envelope carries ``withheld_count`` so a short export is visibly short
+    rather than silently incomplete.
+
+    There is deliberately **no bypass parameter**. A full-fidelity copy of
+    the corpus, withheld content included, is ``snapshot()`` — a backup
+    surface with its own governance — not a tool any caller can point at
+    the corpus. An admin reviewing quarantined content uses the governance
+    tools, which read the store directly.
+
+    Args:
+        format: Only ``"jsonl"`` is supported.
+        include_metadata: Keep underscore-prefixed internal fields.
+        max_blocks: Size cap applied AFTER admission, so the two refusals
+            (withheld vs truncated) stay distinguishable in the envelope.
+
+    Returns:
+        JSON envelope with ``block_count``, ``withheld_count`` and the
+        JSONL payload.
+    """
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
@@ -743,6 +768,21 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
         for block in store.get_all(active_only=False):
             all_blocks.append(_strip_internal(block))
 
+    # EGRESS GATE. Export used to hand out every parsed block verbatim,
+    # quarantined ones included -- the same defect class as ``get_block``
+    # below, one surface out. It runs BEFORE truncation so ``withheld_count``
+    # counts what admission refused rather than what the size cap dropped;
+    # the two are different refusals and an operator needs to tell them apart.
+    #
+    # No bypass parameter, deliberately: a full-fidelity copy of the corpus is
+    # ``snapshot()``, which is a backup surface with its own governance, not a
+    # tool that serves unadmitted content to whoever calls it.
+    decision = admit_read(all_blocks, workspace=ws, surface="export_memory")
+    all_blocks = decision.admitted
+    withheld = decision.withheld
+    if withheld:
+        _log.info("export_memory_withheld", withheld=withheld)
+
     truncated = False
     total = len(all_blocks)
     if len(all_blocks) > max_blocks:
@@ -760,6 +800,7 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
         "_schema_version": MCP_SCHEMA_VERSION,
         "format": format,
         "block_count": len(all_blocks),
+        "withheld_count": withheld,
         "data": jsonl_output,
     }
     if truncated:
@@ -770,7 +811,18 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
 
 @mcp_tool_observe
 def get_block(block_id: str) -> str:
-    """Retrieve a single block by its ID with full content."""
+    """Retrieve a single ADMITTED block by its ID, with full content.
+
+    A block that exists but has not passed admission answers
+    ``{"found": false, "withheld": true}`` -- no content, no status, no
+    source file. That is a different answer from "not found", and both
+    are refusals, but only one of them is true: telling the caller "not
+    found" for a block it named would be a lie an operator cannot debug.
+
+    Scope does not widen this. Quarantine is a property of the content,
+    not of the caller's role, so an admin sees the same refusal here and
+    reviews withheld content through the governance tools instead.
+    """
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
         return json.dumps(
             {
@@ -784,49 +836,90 @@ def get_block(block_id: str) -> str:
     if ws_err:
         return ws_err
 
-    def _found(block: dict) -> str:
+    block, where = _resolve_block_for_read(ws, block_id)
+
+    # EGRESS GATE. Resolution above says whether the bytes EXIST; this says
+    # whether this caller may see them. ``get_block`` is a USER-scope tool and
+    # it used to answer the first question only, so a quarantined inbox drop
+    # came back verbatim to anyone who knew (or guessed) its id -- while
+    # ``recall`` withheld the same block. One resolved block, one decision,
+    # taken here rather than at each of the three resolution sites, because
+    # three decisions is how the third one gets forgotten.
+    decision = admit_read_one(block, workspace=ws, surface="get_block")
+    admitted = decision.sole
+    if admitted is not None:
         metrics.inc("mcp_get_block")
         return json.dumps(
             {
                 "_schema_version": MCP_SCHEMA_VERSION,
                 "block_id": block_id,
                 "found": True,
-                "block": block,
+                "block": admitted,
             },
             indent=2,
             default=str,
         )
 
-    # Audit bug #5: a non-Markdown backend (e.g. Postgres) keeps the block
-    # of record in the store, not in local Markdown files, so the
-    # corpus-file resolution below would never find it. Query the store
-    # directly by primary key.
-    if not _is_markdown_backend(ws):
-        store = get_block_store(ws)
-        block = store.get_by_id(block_id)
-        if block is not None:
-            return _found(block)
-        metrics.inc("mcp_get_block_miss")
+    if decision.withheld:
+        # "withheld", not "not found". The caller supplied the id, so saying
+        # the block exists tells it nothing it did not already have, and the
+        # honest answer is the one an operator can act on. No content, no
+        # status detail, no source file.
+        metrics.inc("mcp_get_block_withheld")
+        _log.info("mcp_get_block_withheld", block_id=block_id)
         return json.dumps(
             {
                 "_schema_version": MCP_SCHEMA_VERSION,
                 "block_id": block_id,
                 "found": False,
-                "error": f"Block {block_id} not found in the block store.",
-                "hint": "Check the block ID and ensure the workspace is initialized.",
+                "withheld": True,
+                "error": f"Block {block_id} has not passed admission and is not servable.",
+                "hint": "Content from an untrusted door stays withheld until a governed release admits it.",
             },
             indent=2,
         )
 
+    metrics.inc("mcp_get_block_miss")
+    missing_in = "the block store" if where == "store" else "any corpus file"
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "block_id": block_id,
+            "found": False,
+            "error": f"Block {block_id} not found in {missing_in}.",
+            "hint": "Check the block ID and ensure the workspace is initialized.",
+        },
+        indent=2,
+    )
+
+
+def _resolve_block_for_read(ws: str, block_id: str) -> tuple[dict | None, str]:
+    """Find *block_id*'s block dict, and name where we looked for it.
+
+    Resolution only -- no admission decision, no metrics, no envelope. The
+    caller applies the egress gate to whatever comes back, which is what
+    keeps the gate on ONE path instead of once per resolution branch.
+
+    Returns:
+        ``(block, where)`` with *where* in ``{"store", "corpus"}``. The
+        not-found message differs between the two backends and a caller
+        that could not tell them apart would report the wrong one.
+    """
+    # Audit bug #5: a non-Markdown backend (e.g. Postgres) keeps the block
+    # of record in the store, not in local Markdown files, so the
+    # corpus-file resolution below would never find it. Query the store
+    # directly by primary key.
+    if not _is_markdown_backend(ws):
+        return get_block_store(ws).get_by_id(block_id), "store"
+
     filepath = _find_block_file(ws, block_id)
     if filepath and os.path.isfile(filepath):
         try:
-            blocks = parse_file(filepath)
-            for block in blocks:
+            for block in parse_file(filepath):
                 if block.get("_id") == block_id:
                     rel_path = os.path.relpath(filepath, ws)
                     block["_source_file"] = rel_path.replace(os.sep, "/")
-                    return _found(block)
+                    return block, "corpus"
         except (OSError, ValueError, BlockCorruptedError) as exc:
             _log.debug("get_block_parse_failed", file=filepath, error=str(exc))
 
@@ -841,25 +934,14 @@ def get_block(block_id: str) -> str:
             if fpath == filepath:
                 continue
             try:
-                blocks = parse_file(fpath)
-                for block in blocks:
+                for block in parse_file(fpath):
                     if block.get("_id") == block_id:
                         block["_source_file"] = f"{subdir}/{fn}"
-                        return _found(block)
+                        return block, "corpus"
             except (OSError, ValueError, BlockCorruptedError):
                 continue
 
-    metrics.inc("mcp_get_block_miss")
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "block_id": block_id,
-            "found": False,
-            "error": f"Block {block_id} not found in any corpus file.",
-            "hint": "Check the block ID and ensure the workspace is initialized.",
-        },
-        indent=2,
-    )
+    return None, "corpus"
 
 
 @mcp_tool_observe

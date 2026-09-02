@@ -5,8 +5,9 @@ primitive. Three graph sizes — small (residual block, 7 values),
 medium (a transformer-like layer with ~30 values), and large
 (deep stack with 200 values) — exercised through both formats.
 
-Skipped unless ``pytest-benchmark`` is installed (declared in the
-``[benchmark]`` extras). Run with::
+Only the four ``*Bench`` classes need ``pytest-benchmark`` (declared
+in the ``[benchmark]`` extra), so only those are gated on it. Run
+them with::
 
     pytest tests/test_mic_map_bench.py --benchmark-only
 
@@ -15,15 +16,32 @@ the floors are deliberately conservative so a 2-3× speedup from a
 future Cython port is visible. Floors apply to single-core
 operation; they bound the *worst* acceptable throughput, not the
 *expected* throughput.
+
+``TestThroughputFloors`` and ``TestMemoryCeiling`` use no plugin at
+all — ``time.perf_counter`` and ``len()`` — and are NOT gated. The
+gate used to be a module-scope ``pytest.importorskip`` that took
+them with it, and the result was that all 20 tests in this file ran
+nowhere: no CI row installs ``[benchmark]``, and the one workflow
+that does selects tests with ``-k "benchmark or perf"``, which
+matches none of the ids here (measured: "no tests collected (20
+deselected)"). The eight throughput/size tests below had therefore
+never executed in CI while the run reported green.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import time
 
 import pytest
 
-pytest.importorskip("pytest_benchmark")
+# Gate ONLY what actually needs the plugin: the ``benchmark`` fixture. Keeping
+# this off module scope is what lets the throughput floors and the memory
+# ceiling below run on every matrix row.
+requires_pytest_benchmark = pytest.mark.skipif(
+    importlib.util.find_spec("pytest_benchmark") is None,
+    reason="pytest-benchmark not installed (declared in the [benchmark] extra)",
+)
 
 from mind_mem.mic_map import (  # noqa: E402
     Arg,
@@ -149,6 +167,7 @@ def large_graph() -> Graph:
 # ---------------------------------------------------------------------------
 
 
+@requires_pytest_benchmark
 class TestEmitMic2Bench:
     def test_small(self, benchmark, small_graph: Graph) -> None:
         benchmark(emit_mic2, small_graph)
@@ -160,6 +179,7 @@ class TestEmitMic2Bench:
         benchmark(emit_mic2, large_graph)
 
 
+@requires_pytest_benchmark
 class TestEmitMicbBench:
     def test_small(self, benchmark, small_graph: Graph) -> None:
         benchmark(emit_micb, small_graph)
@@ -171,6 +191,7 @@ class TestEmitMicbBench:
         benchmark(emit_micb, large_graph)
 
 
+@requires_pytest_benchmark
 class TestParseMic2Bench:
     def test_small(self, benchmark, small_graph: Graph) -> None:
         text = emit_mic2(small_graph)
@@ -185,6 +206,7 @@ class TestParseMic2Bench:
         benchmark(parse_mic2, text)
 
 
+@requires_pytest_benchmark
 class TestParseMicbBench:
     def test_small(self, benchmark, small_graph: Graph) -> None:
         b = emit_micb(small_graph)

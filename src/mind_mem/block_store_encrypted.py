@@ -42,7 +42,7 @@ import os
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, cast
 
-from .admission import require_admission
+from .admission import require_admission, require_delete_admission
 from .block_parser import get_active, get_by_id, parse_file
 from .block_store import BlockStore, BlockStoreError, MarkdownBlockStore, _resolve_block_file
 from .corpus_registry import CORPUS_DIRS
@@ -199,7 +199,17 @@ class EncryptedBlockStore:
         That is the inner store's recovery contract, unchanged here and
         stated so an operator can decide about the journal rather than
         discover it.
+
+        The admission check runs **before** the unseal for the same
+        reason :meth:`write_block` checks before it: ``_decrypted_target``
+        writes the corpus file back out in plaintext for the duration of
+        the operation, so relying on the inner store to refuse would let
+        an ungated caller put plaintext on disk first and be told "no"
+        second. This wrapper opens no scope of its own and records no
+        removal — the inner store does both, so a delete leaves exactly
+        one chain record however it was reached.
         """
+        require_delete_admission(str(block_id))
         with self._decrypted_target(str(block_id)):
             return self._inner.delete_block(block_id)
 

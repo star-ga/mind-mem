@@ -41,6 +41,7 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import logging
@@ -508,6 +509,24 @@ def _handle_consolidate(workspace: str, body: dict[str, Any]) -> tuple[int, dict
 
 _BLOCK_ID_MAX = 256
 
+#: Rationale recorded for a ``DELETE /memories/{id}`` that carried none.
+#: The route takes no body, so the record names the door rather than
+#: claiming a reason nobody gave. Kept as a constant so the audit record
+#: and the tests read the same string.
+DEFAULT_DELETE_RATIONALE = "http-delete"
+
+
+def _clear_batch_id(block_ids: list[str]) -> str:
+    """A stable subject id for one ``POST /clear`` decision.
+
+    Derived from the frozen id set, not from a clock: the evidence
+    record already carries its own timestamp, and a subject id that
+    changes between two identical calls tells an auditor nothing while
+    making the record impossible to reproduce.
+    """
+    digest = hashlib.sha256("\n".join(block_ids).encode("utf-8")).hexdigest()
+    return f"clear-{digest[:16]}"
+
 
 def _valid_block_id(block_id: str) -> bool:
     """Audit S-5: shared guard for any user-supplied block_id reaching
@@ -522,11 +541,37 @@ def _valid_block_id(block_id: str) -> bool:
     return True
 
 
-def _handle_delete_memory(workspace: str, block_id: str) -> tuple[int, dict[str, Any]]:
-    """``DELETE /memories/{id}``."""
+def _handle_delete_memory(
+    workspace: str,
+    block_id: str,
+    *,
+    actor: str = "",
+    rationale: str | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """``DELETE /memories/{id}`` — one governed death, one chain record.
+
+    The route sends no body, so it carries no reason of its own; the
+    scope records :data:`DEFAULT_DELETE_RATIONALE` unless a caller passes
+    one. Naming the door is the honest floor — an audit record that
+    cannot say why content was destroyed is most of the way to no record,
+    and "a human typed a reason" is a claim this route cannot make.
+
+    Args:
+        actor: Identity to attribute the deletion to. Empty lets the gate
+            resolve the authenticated REST agent, then ``"system"``. The
+            dispatcher does not yet have an authenticated agent id to
+            pass (RM-1718); this keyword is where it lands when it does,
+            without reshaping the handler again.
+        rationale: Overrides :data:`DEFAULT_DELETE_RATIONALE`.
+
+    Returns 403 when governance refuses the scope: the block is still
+    there, which is the fail-closed direction — a refused authorisation
+    must never be reported as a completed deletion.
+    """
     if not _valid_block_id(block_id):
         return (400, {"error": "invalid block id"})
 
+    from .governance_gate import GovernanceBypassError, get_gate
     from .storage import get_block_store
 
     try:
@@ -554,10 +599,27 @@ def _handle_delete_memory(workspace: str, block_id: str) -> tuple[int, dict[str,
             extra={"error": _safe_log(exc), "block_id": _safe_log(block_id)},
         )
 
+    admission_id = ""
     try:
-        removed = store.delete_block(block_id)
+        gate = get_gate(workspace)
+        with gate.admit_delete(
+            block_id,
+            rationale=rationale or DEFAULT_DELETE_RATIONALE,
+            actor=actor,
+        ) as receipt:
+            admission_id = receipt.entry_id
+            removed = store.delete_block(block_id)
     except (FileNotFoundError, KeyError):
         return (404, {"error": "block not found", "id": block_id})
+    except GovernanceBypassError as exc:
+        # The block is still there. Reporting this as anything but a
+        # refusal would tell a caller their content is gone when it is
+        # not, which is the one answer a memory product must never give.
+        _log.error(
+            "delete_memory_refused",
+            extra={"error": _safe_log(exc), "block_id": _safe_log(block_id)},
+        )
+        return (403, {"error": "delete refused by governance", "id": block_id})
     except Exception as exc:
         _log.error(
             "delete_memory_failed",
@@ -567,15 +629,33 @@ def _handle_delete_memory(workspace: str, block_id: str) -> tuple[int, dict[str,
 
     if not removed:
         return (404, {"error": "block not found", "id": block_id})
-    return (200, {"ok": True, "id": block_id})
+    return (200, {"ok": True, "id": block_id, "admission": admission_id})
 
 
-def _handle_clear(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> tuple[int, dict[str, Any]]:
     """``POST /clear`` — wipe workspace contents (governance-protected).
 
     Requires a non-empty ``rationale`` per v3.6.x mandatory rationale
     binding. Refuses unless ``confirm`` is the literal string
     ``"yes-i-really-want-to-clear"``.
+
+    **One decision, one authorisation, one removal record.** The wipe
+    runs inside a single
+    :meth:`~mind_mem.governance_gate.GovernanceGate.admit_delete_batch`
+    scope over the exact set the loop will iterate, frozen before the
+    first removal — so a block written *while* the clear runs is outside
+    the receipt and cannot be taken by it. Per-block scopes would leave N
+    unlinked records in a chain built for low-volume decisions, and
+    nothing in them would say the removals were one operation.
+
+    The covered set is whatever ``list_blocks()`` returns, because that
+    is what the loop deletes; the scope covers the iterated set by
+    construction rather than by a second enumeration that could drift
+    from it.
+
+    Args:
+        actor: See :func:`_handle_delete_memory`. Empty lets the gate
+            resolve the authenticated REST agent, then ``"system"``.
     """
     rationale = body.get("rationale")
     confirm = body.get("confirm")
@@ -590,25 +670,51 @@ def _handle_clear(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
             },
         )
 
+    from .governance_gate import GovernanceBypassError, get_gate
     from .storage import get_block_store
 
     try:
         store = get_block_store(workspace)
-        block_ids = store.list_blocks()
-        deleted = 0
-        for bid in block_ids:
-            try:
-                if store.delete_block(bid):
-                    deleted += 1
-            except Exception as block_exc:
-                # One bad block must not abort the wipe — record the
-                # failure at debug so the operator can investigate
-                # individual failures without losing the bulk-clear.
-                _log.debug(
-                    "clear_block_skip",
-                    extra={"block_id": _safe_log(bid), "error": _safe_log(block_exc)},
-                )
-                continue
+        block_ids = list(store.list_blocks())
+    except Exception as exc:
+        _log.error("clear_failed", extra={"error": str(exc)})
+        return (500, {"error": "internal block store error"})
+
+    if not block_ids:
+        # No scope: a receipt covering nothing authorises nothing, and
+        # minting one would put a decision in the chain that never had a
+        # subject. Nothing died, so there is nothing to record.
+        return (200, {"ok": True, "deleted": 0, "rationale": rationale, "admission": None})
+
+    batch_id = _clear_batch_id(block_ids)
+    deleted = 0
+    admission_id = ""
+    try:
+        gate = get_gate(workspace)
+        with gate.admit_delete_batch(batch_id, block_ids, rationale=rationale, actor=actor) as receipt:
+            admission_id = receipt.entry_id
+            for bid in block_ids:
+                try:
+                    if store.delete_block(bid):
+                        deleted += 1
+                except GovernanceBypassError:
+                    # Never swallowed. A store refusing a block this
+                    # scope was supposed to cover means the receipt and
+                    # the loop disagree about what was authorised, which
+                    # is exactly the failure the scope exists to catch.
+                    raise
+                except Exception as block_exc:
+                    # One bad block must not abort the wipe — record the
+                    # failure at debug so the operator can investigate
+                    # individual failures without losing the bulk-clear.
+                    _log.debug(
+                        "clear_block_skip",
+                        extra={"block_id": _safe_log(bid), "error": _safe_log(block_exc)},
+                    )
+                    continue
+    except GovernanceBypassError as exc:
+        _log.error("clear_refused", extra={"error": _safe_log(exc)})
+        return (403, {"error": "clear refused by governance"})
     except Exception as exc:
         _log.error("clear_failed", extra={"error": str(exc)})
         return (500, {"error": "internal block store error"})
@@ -621,7 +727,7 @@ def _handle_clear(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
             "rationale": _safe_log(rationale, max_len=120),
         },
     )
-    return (200, {"ok": True, "deleted": deleted, "rationale": rationale})
+    return (200, {"ok": True, "deleted": deleted, "rationale": rationale, "admission": admission_id})
 
 
 # ---------------------------------------------------------------------------

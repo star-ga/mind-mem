@@ -28,12 +28,18 @@ Opt-in via:
           "rerankers": ["cross_encoder", "bge", "llm"],
           "top_k": 10,
           "llm": {
-            "base_url": "http://127.0.0.1:8766/v1/chat/completions",
-            "model": "claude-proxy/claude-opus-4-8"
+            "base_url": "http://127.0.0.1:<port>/v1/chat/completions",
+            "model": "your-model-id"
           }
         }
       }
     }
+
+The ``llm`` member has no built-in endpoint or model: ``base_url`` and
+``model`` are required, and the member is skipped (with a log entry) when
+either is absent, so the ensemble never posts to a host the operator did
+not name. ``base_url`` is loopback-only unless
+``llm.allow_external: true`` is set.
 
 Heavy dependencies (sentence-transformers / BGE) ship behind the
 existing ``mind-mem[cross-encoder]`` extra; operators that don't
@@ -236,21 +242,39 @@ def _build_bge() -> Reranker | None:
         return None
 
 
+#: ``llm`` member config keys that have no default — absence means the
+#: member is not configured, and an unconfigured member is skipped rather
+#: than pointed at some endpoint the code picked on the operator's behalf.
+_LLM_REQUIRED_KEYS = ("base_url", "model")
+
+
 def _build_llm(llm_cfg: dict[str, Any]) -> Reranker | None:
-    """LLM-as-reranker using claude-proxy / OpenAI-compatible endpoint.
+    """LLM-as-reranker over an operator-configured chat-completions endpoint.
 
     Pairs (query, candidate) are scored via a single structured prompt;
     the response is parsed to a 0-100 relevance score per candidate.
-    Skips when the configured base_url fails the SSRF allowlist check.
+
+    Returns None (member skipped) when ``base_url`` or ``model`` is absent
+    from config — there is no built-in endpoint or model — and when the
+    configured base_url fails the SSRF allowlist check.
     """
     try:
         from .query_planner import _validate_base_url  # reuse SSRF guard
 
-        base_url = llm_cfg.get("base_url", "http://127.0.0.1:8766/v1/chat/completions")
+        missing = [key for key in _LLM_REQUIRED_KEYS if not llm_cfg.get(key)]
+        if missing:
+            _log.info(
+                "ensemble_llm_unconfigured",
+                missing=missing,
+                hint="set retrieval.reranker_ensemble.llm.{" + ",".join(missing) + "} in mind-mem.json",
+            )
+            return None
+
+        base_url = str(llm_cfg["base_url"])
         allow_external = bool(llm_cfg.get("allow_external", False))
         _validate_base_url(base_url, allow_external=allow_external)
 
-        model = llm_cfg.get("model", "claude-proxy/claude-opus-4-8")
+        model = str(llm_cfg["model"])
         timeout = float(llm_cfg.get("timeout", 30.0))
 
         class LLMRerankerAdapter:
@@ -287,7 +311,7 @@ def _build_llm(llm_cfg: dict[str, Any]) -> Reranker | None:
                     headers={"Content-Type": "application/json"},
                 )
                 try:
-                    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — base_url is from trusted mind-mem.json config, enforced to http/https by LLMReranker.__init__
+                    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — base_url is from trusted mind-mem.json config and passed _validate_base_url in _build_llm (http/https + loopback allowlist)
                         body = json.loads(resp.read().decode("utf-8"))
                     text = body["choices"][0]["message"]["content"].strip()
                     # Best-effort JSON parse — accept first {...} block.

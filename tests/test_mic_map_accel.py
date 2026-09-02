@@ -89,10 +89,23 @@ class TestModuleShape:
 
 
 class TestEquivalence:
-    """When the accelerator is built (CI's ``[accelerated]`` job),
-    these tests run the full graph through both paths and assert
-    they agree. When the accelerator isn't built, the tests are
-    skipped (the pure-Python path is the only path)."""
+    """When the accelerator is built, these tests run the full graph
+    through both paths and assert they agree. When it isn't built, they
+    skip (the pure-Python path is the only path).
+
+    deferred: this docstring used to name "CI's ``[accelerated]`` job".
+    No such job exists -- grepping .github/ and the Makefile for
+    "accelerated" or "cython" returns nothing, and every CI row installs only
+    ``.[test]``, which has no Cython. So ``_ACCEL_AVAILABLE`` is False on
+    all 15 matrix rows and these five tests, the ONLY assertion that the
+    shipped accelerator is byte-identical to the fallback, have never
+    executed in CI while every run reported green. Upgrade path: add a
+    job that runs ``pip install -e ".[test,accelerated]"``, asserts
+    ``mind_mem.mic_map._ACCEL_AVAILABLE is True`` (so a silently
+    unbuilt extension fails the job instead of skipping it), then runs
+    this file. Until that job exists the byte-identity contract of the
+    accelerated codec is asserted nowhere.
+    """
 
     def setup_method(self) -> None:
         if not _ACCEL_AVAILABLE:

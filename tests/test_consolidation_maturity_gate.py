@@ -212,13 +212,32 @@ class TestFlagOffIsByteIdentical:
     def test_matches_pre_gate_implementation_from_git(self, tmp_path) -> None:
         """Load ``main``'s cognitive_forget verbatim and diff the outputs."""
         repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        try:
-            blob = subprocess.run(
-                ["git", "-C", repo, "show", "main:src/mind_mem/cognitive_forget.py"],
-                capture_output=True,
-                check=True,
-            ).stdout
-        except (OSError, subprocess.CalledProcessError):  # pragma: no cover
+        # ``origin/main`` FIRST, and only then the local ``main``. On a
+        # pull_request build ``actions/checkout`` fetches
+        # ``+refs/heads/*:refs/remotes/origin/*`` and then checks out
+        # ``refs/remotes/pull/N/merge`` in DETACHED HEAD -- no local ``main``
+        # branch is ever created, so ``git show main:...`` exits non-zero and
+        # this control skipped on every PR row. Measured in the checkout step
+        # of the two runs: push build 33579619488 logs
+        # ``git checkout --force -B main refs/remotes/origin/main`` (local
+        # ``main`` exists), PR build 33464529393 logs
+        # ``git checkout --force refs/remotes/pull/561/merge`` (it does not).
+        # The byte-identity control therefore ran only AFTER the merge that
+        # could break it, never on the change proposing it. ``origin/main``
+        # resolves in both, and the local ``main`` stays as the fallback for a
+        # developer clone with no remote configured.
+        blob = None
+        for ref in ("origin/main", "main"):
+            try:
+                blob = subprocess.run(
+                    ["git", "-C", repo, "show", f"{ref}:src/mind_mem/cognitive_forget.py"],
+                    capture_output=True,
+                    check=True,
+                ).stdout
+                break
+            except (OSError, subprocess.CalledProcessError):
+                continue
+        if blob is None:  # pragma: no cover - no git at all, or no main anywhere
             pytest.skip("git reference revision unavailable")
 
         ref_path = tmp_path / "pre_gate_cognitive_forget.py"

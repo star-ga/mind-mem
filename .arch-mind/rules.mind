@@ -6,6 +6,17 @@
 //
 // Q16.16 fixed-point thresholds in [0, 10000].
 //
+// Scan precondition (2026-09-01): the fixture must be produced with
+// nested working trees pruned. A `git worktree` checkout below the
+// repo root (`.wt/`, `.claude/worktrees/`, any other naming) holds a
+// second copy of this source, is untracked here, and appears and
+// vanishes as parallel agents run — so indexing one makes every score
+// a function of scan-time filesystem state instead of repository
+// content. Measured on this commit: three such checkouts moved
+// module_count 388 -> 1299, modularity_q16 10000 -> 2155 and
+// mcp_tool_isolation 9800 -> 9400. Both readings were artefacts; no
+// threshold below is calibrated to them.
+//
 // Copyright 2026 STARGA, Inc. — Apache-2.0.
 
 [protection]
@@ -57,13 +68,31 @@ module mind_mem_rules {
     [arch_rule(governance_kernel_coverage, ge)]
     const GOVERNANCE_FLOOR: i32 = 0
 
-    // Currently 10000 (post-test-filter). Tests/benches/examples are
-    // no longer counted as architectural; the remaining 56 dep-edges
-    // are all intra-package (mcp/tools using ._helpers re-exports).
+    // Verified 10000 on 2026-09-01: all 75 architectural dependency
+    // edges are intra-package (`intra_package_edges == total_edges`).
+    // `eq` is deliberate and is NOT a tightened floor: the rule name
+    // says what it means — zero cross-package edges — and a repo whose
+    // production surface is one package either has that property or
+    // has lost it. Softening this to a floor would also destroy its
+    // second, load-bearing job: it is the canary for a scan that
+    // measured something other than this repository, because a second
+    // copy of the tree resolves its imports to the same canonical
+    // module names and every one of those lands as a cross-package
+    // edge. Enforced in CI by tests/test_arch_mind_rules_gate.py,
+    // which additionally measures the invariant straight from the
+    // import graph so a stale fixture cannot make it look true.
     [arch_rule(modularity_q16, eq)]
     const NO_CROSS_PKG: i32 = 10000
 
-    // Currently 9800 (max overlap > 0 across 29 MCP tools).
+    // Verified 9800 on 2026-09-01: max transitive-dependency overlap
+    // is 2 across 40 MCP-tool modules, so the floor tolerates three
+    // more shared dependencies before it bites. The two pairs sitting
+    // at 2 are mcp.tools.governance / mcp.tools.memory_ops (sharing
+    // block_parser + storage) and mcp.resources / mcp.tools.recall
+    // (sharing recall + sqlite_index) — shared infrastructure, not
+    // tool-to-tool coupling. A reading of 9400 means overlap 6, which
+    // on this repo has only ever come from MCP tool modules being
+    // paired against copies of themselves in a nested working tree.
     [arch_rule(mcp_tool_isolation, ge)]
     const MCP_ISOLATION_FLOOR: i32 = 9500
 

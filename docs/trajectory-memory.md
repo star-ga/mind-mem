@@ -43,7 +43,7 @@ Reward: 1.0
 Context: sess-7
 Outcome_Id: 9f2c...
 Lessons:
-  - all 8691 tests green
+  - all tests green
 ```
 
 * The `report_outcome` verdict vocabulary is **mapped**, not passed through:
