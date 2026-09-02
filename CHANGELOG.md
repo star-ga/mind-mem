@@ -4,6 +4,49 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Corrections to this changelog's own record
+
+Commit `6a8854f`, whose message describes closing the governance enter and
+leave halves, ALSO contains a 622-line rewrite of the file-lock primitive
+(`mind_filelock.py` and its tests) that the message does not mention. Two lanes
+landed in the same window and the lock work was swept in. The code is correct
+and was verified byte-identical to what its author signed off, but a reader of
+that message would not know the concurrency primitive changed under it, so it
+is named here rather than left for someone to discover from a diff.
+
+### Fixed — stale-lock recovery on Windows
+
+Breaking an abandoned lock unlinked the file while holding it open. POSIX
+permits that; Windows does not, so a crashed holder's lock could never be
+broken there and every waiter spun to its timeout. The unlink was not
+incidental — it was arbitrated by the OS lock, and the alternative had been
+measured at four overlaps in 4320 acquisitions — so the fix could not simply
+reorder the close.
+
+The winner of that arbitration now ADOPTS the file instead of removing it: it
+truncates, writes its own pid, keeps the descriptor and the lock, and reports
+the lock acquired rather than re-entering the create race. Losers see a live
+pid on their next poll. This is stronger than what it replaces, not merely
+portable, because the break winner no longer competes with every ordinary
+waiter after breaking.
+
+A companion change makes all three lock calls seek to one fixed offset first.
+Windows locks byte ranges from the current file position, so a holder that had
+written its pid was locking a different region than a breaker starting at zero,
+and the two never contended. The guarantee the docstring claimed was therefore
+already vacuous on Windows against a live holder, before any of this. That is a
+pre-existing defect, and the docstrings now state per-platform only what has
+been measured.
+
+### Known, not fixed
+
+Five of the six Windows test failures in this area are NOT explained by the
+unlink. Under a simulation of Windows unlink semantics they pass; two of them
+never construct a lock at all. Their cause is unknown and is recorded as
+unknown rather than assumed closed. Fixing the lock will not by itself turn the
+matrix green, and this note exists so that is not misread when it does not.
+
+
 ### Fixed
 
 * **The published model card claimed a tool count no revision ever had.** The
