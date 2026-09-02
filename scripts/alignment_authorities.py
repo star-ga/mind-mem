@@ -20,6 +20,7 @@ import subprocess  # nosec B404 - fixed argv, no shell, repo-local commands only
 import sys
 import tarfile
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 from scripts import count_mcp_tools as cmt
@@ -134,6 +135,31 @@ def live_tool_count() -> int:
     return cmt.count_tools()
 
 
+def _safe_members(tar: tarfile.TarFile, dest: Path) -> Iterator[tarfile.TarInfo]:
+    """Yield only members that land inside *dest*, as regular files or dirs.
+
+    Refuses an absolute path, a path that escapes *dest* through ``..`` or a
+    symlink, and any member that is not a file or a directory. Raising rather
+    than skipping is deliberate: this reads a revision to COUNT something, so
+    a surprising archive means the count would be wrong, and a wrong count
+    quietly published on a model card is the failure this module exists to
+    prevent.
+    """
+    root = dest.resolve()
+    for member in tar:
+        if member.issym() or member.islnk():
+            raise AuthorityError(f"archive member {member.name!r} is a link; refusing to unpack")
+        if not (member.isfile() or member.isdir()):
+            raise AuthorityError(f"archive member {member.name!r} is not a file or directory")
+        target = Path(member.name)
+        if target.is_absolute() or target.drive or target.root:
+            raise AuthorityError(f"archive member {member.name!r} is an absolute path")
+        resolved = (root / target).resolve()
+        if resolved != root and root not in resolved.parents:
+            raise AuthorityError(f"archive member {member.name!r} escapes the extraction directory")
+        yield member
+
+
 def trained_tool_count(revision: str = TRAINED_REVISION, root: Path | None = None) -> int:
     """Distinct MCP tool names at the revision the weights were trained from.
 
@@ -162,15 +188,19 @@ def trained_tool_count(revision: str = TRAINED_REVISION, root: Path | None = Non
             )
         # ``tarfile`` rather than a ``tar`` subprocess: this runs on the
         # Windows matrix rows too, and the stdlib already does the job.
-        # ``filter=`` landed in 3.12 and this package supports 3.10+, so it is
-        # passed only where it exists. The archive is produced by ``git
-        # archive`` from this repository's own history -- no external input.
+        #
+        # Every member is checked before extraction, on EVERY version. The
+        # previous form passed ``filter="data"`` on 3.12+ and nothing at all
+        # on 3.10/3.11, resting on an argument about the caller: the archive
+        # comes from ``git archive`` over this repository's own history, so
+        # there is no external input. That argument is true today and is the
+        # wrong shape -- it makes the safety a property of who calls this
+        # rather than of what it does, and the two supported versions with no
+        # protection are the two the argument was quietly covering for.
+        # Code scanning called it (py/tarslip) and it was right to.
         try:
             with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r|") as tar:
-                if sys.version_info >= (3, 12):
-                    tar.extractall(tmp, filter="data")  # nosec B202
-                else:
-                    tar.extractall(tmp)  # nosec B202
+                tar.extractall(tmp, members=_safe_members(tar, Path(tmp)))  # nosec B202
         except (OSError, tarfile.TarError, ValueError) as exc:
             raise AuthorityError(f"could not unpack revision {revision}: {exc}") from exc
         base = Path(tmp)
