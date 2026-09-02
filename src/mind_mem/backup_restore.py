@@ -17,14 +17,16 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
 import tarfile
 from datetime import datetime
 
-from .block_parser import parse_file
-from .corpus_registry import BACKUP_DIRS
+from .block_parser import parse_blocks, parse_file
+from .corpus_registry import BACKUP_DIRS, is_ledger_path, iter_ledger_paths
+from .enums import IngestTier
 from .observability import get_logger, metrics
 
 _log = get_logger("backup_restore")
@@ -32,6 +34,37 @@ _log = get_logger("backup_restore")
 # BACKUP_DIRS imported from corpus_registry
 
 BACKUP_FILES = ["mind-mem.json", "mind-mem-acl.json"]
+
+#: Where the append-only ledgers ride in the archive.
+#:
+#: Not their live path, and that is the whole point. ``BACKUP_DIRS``
+#: includes ``memory/``, so before 5.0.2 an archive held
+#: ``memory/hash_chain_v2.db`` under its real name and ``restore --force``
+#: wrote it straight back over the live chain: measured evidence −1,
+#: hash_chain −1, and a block written after the backup gone with no record
+#: it had existed.
+#:
+#: Excluding the ledgers outright would have closed the rewind by throwing
+#: away a real capability — a backup is how an audit chain survives a lost
+#: machine. Relocating closes it instead: the live path is *absent from the
+#: archive*, so no restore can write it however hard it tries, while the
+#: bytes are still there for an operator to take out by hand::
+#:
+#:     tar -xzf backup.tar.gz ledger-archive/
+#:
+#: :func:`restore_workspace` never extracts this prefix; it names it in the
+#: result so the operator knows the chain is in the archive and where.
+LEDGER_ARCHIVE_PREFIX = "ledger-archive"
+
+#: Verb the recorded restore writes. Classified by
+#: ``governance_gate._ACTION_MAP`` onto the EXISTING ``ROLLBACK`` evidence
+#: action, so no enum member is added and a 5.0.1 reader parses it.
+RESTORE_VERB = "RESTORE"
+
+
+def _exclude_ledgers(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    """``tar.add`` filter: drop any member whose name is a ledger path."""
+    return None if is_ledger_path(tarinfo.name) else tarinfo
 
 
 # ---------------------------------------------------------------------------
@@ -250,11 +283,17 @@ def backup_workspace(workspace: str, output: str, *, allow_empty: bool = False) 
         raise FileNotFoundError(f"workspace is not a directory: {ws}")
 
     archived: list[str] = []
+    #: Ledgers ride under :data:`LEDGER_ARCHIVE_PREFIX`, and deliberately do
+    #: NOT count towards ``archived``: a directory holding nothing but a
+    #: hash chain is still a workspace this backup captured no corpus from,
+    #: and letting a ledger satisfy the non-empty guard would turn the
+    #: mistyped-path check into a no-op.
+    ledgers = iter_ledger_paths(ws)
     with tarfile.open(output, "w:gz") as tar:
         for d in BACKUP_DIRS:
             path = os.path.join(ws, d)
             if os.path.isdir(path):
-                tar.add(path, arcname=d)
+                tar.add(path, arcname=d, filter=_exclude_ledgers)
                 archived.append(d)
 
         for f in BACKUP_FILES:
@@ -262,6 +301,9 @@ def backup_workspace(workspace: str, output: str, *, allow_empty: bool = False) 
             if os.path.isfile(path):
                 tar.add(path, arcname=f)
                 archived.append(f)
+
+        for rel in ledgers:
+            tar.add(os.path.join(ws, rel), arcname=f"{LEDGER_ARCHIVE_PREFIX}/{rel}")
 
     if not archived and not allow_empty:
         _log.error("backup_empty", workspace=ws, output=output)
@@ -273,7 +315,14 @@ def backup_workspace(workspace: str, output: str, *, allow_empty: bool = False) 
         raise ValueError(f"backup captured nothing from {ws} — no corpus directory or config file found (expected one of: {expected})")
 
     size = os.path.getsize(output)
-    _log.info("backup_created", output=output, size_bytes=size, members=len(archived))
+    _log.info(
+        "backup_created",
+        output=output,
+        size_bytes=size,
+        members=len(archived),
+        ledgers_relocated=len(ledgers),
+        ledger_prefix=LEDGER_ARCHIVE_PREFIX,
+    )
     metrics.inc("backups_created")
     return output
 
@@ -353,8 +402,99 @@ def _is_safe_tar_member(member: tarfile.TarInfo, ws: str) -> bool:
     return True
 
 
+#: Members this restore parses to name the blocks it is putting back.
+#: Bounded so a crafted archive cannot make the pre-scan read an arbitrary
+#: amount into memory before a single byte has been written.
+_MAX_PRESCAN_MEMBER_BYTES = 8 * 1024 * 1024
+
+
+def _block_ids_in_archive(tar: tarfile.TarFile, ws: str) -> list[str]:
+    """Block ids the archive will reinstate, read from the archive itself.
+
+    Read *before* extraction, because the scope has to be open before the
+    workspace changes and afterwards the archive's version and the live
+    version are the same thing.
+    """
+    ids: list[str] = []
+    seen: set[str] = set()
+    for member in tar.getmembers():
+        if not member.isfile() or not member.name.endswith(".md"):
+            continue
+        if member.name.startswith(LEDGER_ARCHIVE_PREFIX + "/") or is_ledger_path(member.name):
+            continue
+        if not _is_safe_tar_member(member, ws) or member.size > _MAX_PRESCAN_MEMBER_BYTES:
+            continue
+        handle = tar.extractfile(member)
+        if handle is None:
+            continue
+        with handle:
+            try:
+                text = handle.read().decode("utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+        try:
+            blocks = parse_blocks(text)
+        except (ValueError, TypeError):
+            continue
+        for block in blocks:
+            bid = str(block.get("_id", "") or "")
+            if bid and bid not in seen:
+                seen.add(bid)
+                ids.append(bid)
+    return ids
+
+
+#: See ``apply_engine._MAX_IDS_IN_RECORD`` — same reasoning, same cap.
+_MAX_IDS_IN_RECORD = 500
+
+
+def _live_block_ids(ws: str) -> list[str]:
+    """Block ids in the workspace a restore is about to write over."""
+    ids: list[str] = []
+    seen: set[str] = set()
+    for d in BACKUP_DIRS:
+        root_dir = os.path.join(ws, d)
+        if not os.path.isdir(root_dir):
+            continue
+        for dirpath, _dirnames, filenames in os.walk(root_dir):
+            for name in sorted(filenames):
+                if not name.endswith(".md"):
+                    continue
+                try:
+                    blocks = parse_file(os.path.join(dirpath, name))
+                except (OSError, UnicodeDecodeError, ValueError):
+                    continue
+                for block in blocks:
+                    bid = str(block.get("_id", "") or "")
+                    if bid and bid not in seen:
+                        seen.add(bid)
+                        ids.append(bid)
+    return ids
+
+
+def _id_digest(ids: list[str]) -> str:
+    """SHA-256 over the canonical sorted id list."""
+    return hashlib.sha256("\n".join(sorted(ids)).encode("utf-8")).hexdigest()
+
+
 def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> dict:
-    """Restore a workspace from a tar.gz backup.
+    """Restore a workspace from a tar.gz backup, inside a recorded scope.
+
+    Two things this does that the pre-5.0.2 version did not.
+
+    **It cannot rewind the audit chain.** A member whose destination is a
+    ledger of record is refused, whatever the archive says. Archives written
+    from 5.0.2 on hold no such member — the ledgers ride under
+    :data:`LEDGER_ARCHIVE_PREFIX` — but archives already on disk do, and
+    they are exactly the ones an operator reaches for in an emergency.
+    Refusing on the reader side is what makes the older archives safe too.
+
+    **It records itself.** The restore runs inside one
+    ``admit_batch(action="RESTORE")`` scope naming the archive digest and
+    the block ids it reinstates, so a whole-corpus overwrite is an event in
+    the chain rather than an invisible one. The gate refusing means the
+    restore does not run: an unrecordable restore is refused, not performed
+    quietly.
 
     Args:
         workspace: Target workspace path
@@ -362,17 +502,80 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
         force: Overwrite existing files without prompting
 
     Returns:
-        Summary dict
+        Summary dict. ``refused_ledgers`` counts members refused because
+        their destination was a ledger; ``ledger_archive`` counts the
+        relocated copies left in the archive for the operator.
+
+    Raises:
+        GovernanceBypassError: the gate refused; nothing was extracted.
     """
+    from .governance_gate import get_gate
+
     ws = os.path.abspath(workspace)
     backup_path = os.path.abspath(backup_path)
     restored = 0
     skipped = 0
     blocked = 0
+    refused_ledgers = 0
+    ledger_archive = 0
     conflicts: list[str] = []
 
-    with tarfile.open(backup_path, "r:gz") as tar:
+    with open(backup_path, "rb") as fh:
+        archive_digest = hashlib.sha256(fh.read()).hexdigest()
+
+    with tarfile.open(backup_path, "r:gz") as prescan:
+        reinstated = _block_ids_in_archive(prescan, ws)
+
+    # A ``force`` restore overwrites the live corpus with the archive's
+    # version, so anything live and absent from the archive dies here. Only
+    # with ``force``: without it every conflicting member is skipped, so
+    # nothing is withdrawn and claiming otherwise would be a false record.
+    withdrawn = sorted(set(_live_block_ids(ws)) - set(reinstated)) if force else []
+    block_ids = sorted(set(reinstated) | set(withdrawn))
+
+    record = {
+        "archive": os.path.basename(backup_path),
+        "archive_sha256": archive_digest,
+        "reinstated_block_ids": sorted(reinstated),
+        "withdrawn_block_ids": withdrawn,
+    }
+
+    with (
+        tarfile.open(backup_path, "r:gz") as tar,
+        get_gate(ws).admit_batch(
+            action=RESTORE_VERB,
+            batch_id=f"restore:{os.path.basename(backup_path)}",
+            block_ids=block_ids,
+            content=json.dumps(record, sort_keys=True, default=str),
+            tier=IngestTier.RESTAMP,
+            actor="backup_restore",
+            target_file=os.path.basename(backup_path),
+            metadata={
+                "door": "backup_restore.restore_workspace",
+                "archive": os.path.basename(backup_path),
+                "archive_sha256": archive_digest,
+                "reinstated_count": len(reinstated),
+                "reinstated_digest": _id_digest(reinstated),
+                "withdrawn_count": len(withdrawn),
+                "withdrawn_digest": _id_digest(withdrawn),
+                "withdrawn_block_ids": withdrawn[:_MAX_IDS_IN_RECORD],
+                "withdrawn_truncated": len(withdrawn) > _MAX_IDS_IN_RECORD,
+                "force": bool(force),
+            },
+        ) as receipt,
+    ):
         for member in tar.getmembers():
+            # The ledgers ride under a prefix no restore extracts: they are
+            # in the archive for the operator, not for this loop.
+            if member.name == LEDGER_ARCHIVE_PREFIX or member.name.startswith(LEDGER_ARCHIVE_PREFIX + "/"):
+                ledger_archive += 1
+                continue
+            # A pre-5.0.2 archive names the ledgers under their live path.
+            # Writing one back IS the rewind this function exists to stop.
+            if is_ledger_path(member.name):
+                _log.warning("restore_ledger_refused", member=member.name, reason="a restore may not overwrite a ledger of record")
+                refused_ledgers += 1
+                continue
             # Security: validate every member before extraction
             if not _is_safe_tar_member(member, ws):
                 _log.warning("tar_member_blocked", member=member.name, reason="path traversal or unsafe member type")
@@ -401,13 +604,26 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
                     continue
                 restored += 1
 
-    result: dict = {"restored": restored, "skipped": skipped, "blocked": blocked, "conflicts": conflicts}
+        admission = receipt.entry_id
+
+    result: dict = {
+        "restored": restored,
+        "skipped": skipped,
+        "blocked": blocked,
+        "conflicts": conflicts,
+        "refused_ledgers": refused_ledgers,
+        "ledger_archive": ledger_archive,
+        "admission": admission,
+    }
     _log.info(
         "restore_complete",
         restored=restored,
         skipped=skipped,
         blocked=blocked,
         conflicts=len(conflicts),
+        refused_ledgers=refused_ledgers,
+        ledger_archive=ledger_archive,
+        admission=admission,
     )
     return result
 

@@ -44,6 +44,44 @@ class AuthorityError(RuntimeError):
     """
 
 
+def _load_toml(path: Path) -> dict:
+    """Parse a TOML file on every interpreter ``requires-python`` admits.
+
+    ``tomllib`` entered the stdlib in 3.11 and ``requires-python`` is
+    ``>=3.10``, so the bare ``import tomllib`` this replaced turned every
+    pyproject-reading authority into an ``AuthorityError`` on both 3.10 rows
+    of the matrix -- 21 red tests there, and none anywhere else, because the
+    machine the code was written on runs 3.12.
+
+    The fallback costs no new dependency: ``tomli`` is already declared in the
+    ``test`` extra as ``tomli>=2.0,<3.0 ; python_version < '3.11'``, which is
+    what every matrix row installs (verified in the 3.10 job's own pip log:
+    ``tomli-2.4.1``), and ``tests/_toml_compat.py`` already resolves the same
+    pair for the test side. On 3.11+ nothing changes -- ``tomllib`` wins and
+    ``tomli`` is never even imported.
+
+    Neither parser importable still raises :class:`AuthorityError` naming both,
+    rather than returning ``{}``: an authority that could not be computed must
+    stop the gate, and an empty parse would silently report zero dependencies
+    and no classifiers as if they were the truth.
+    """
+    try:
+        import tomllib as _toml  # noqa: PLC0415
+    except ModuleNotFoundError:  # pragma: no cover - 3.10 only
+        try:
+            import tomli as _toml  # type: ignore[no-redef]  # noqa: PLC0415
+        except ModuleNotFoundError as exc:  # pragma: no cover - no parser at all
+            raise AuthorityError(
+                f"no TOML parser to read {path}: tomllib is stdlib only on 3.11+ and tomli is not "
+                f"installed ({exc}). Install the 'test' extra, which declares tomli for python<3.11."
+            ) from exc
+    try:
+        with path.open("rb") as fh:
+            return dict(_toml.load(fh))
+    except (OSError, ValueError) as exc:
+        raise AuthorityError(f"could not parse {path}: {exc}") from exc
+
+
 def collect_test_count(root: Path | None = None, python: str | None = None) -> int:
     """Number of tests CI collects, using CI's exact selector.
 
@@ -246,15 +284,7 @@ def core_dependency_count(root: Path | None = None) -> int:
     """Length of ``[project] dependencies`` -- the "core deps: zero" authority."""
     root = root or _project_root()
     path = root / "pyproject.toml"
-    try:
-        import tomllib  # noqa: PLC0415
-    except ModuleNotFoundError as exc:  # pragma: no cover - py<3.11 only
-        raise AuthorityError(f"tomllib unavailable: {exc}") from exc
-    try:
-        with path.open("rb") as fh:
-            data = tomllib.load(fh)
-    except (OSError, ValueError) as exc:
-        raise AuthorityError(f"could not parse {path}: {exc}") from exc
+    data = _load_toml(path)
     return len(data.get("project", {}).get("dependencies") or [])
 
 
@@ -532,15 +562,7 @@ def python_support(root: Path | None = None) -> tuple[str, str, str]:
     """``(requires-python floor, lowest classifier, highest classifier)``."""
     root = root or _project_root()
     path = root / "pyproject.toml"
-    try:
-        import tomllib  # noqa: PLC0415
-    except ModuleNotFoundError as exc:  # pragma: no cover - py<3.11 only
-        raise AuthorityError(f"tomllib unavailable: {exc}") from exc
-    try:
-        with path.open("rb") as fh:
-            data = tomllib.load(fh)
-    except (OSError, ValueError) as exc:
-        raise AuthorityError(f"could not parse {path}: {exc}") from exc
+    data = _load_toml(path)
     project = data.get("project", {})
     requires = str(project.get("requires-python", ""))
     floor = _REQUIRES_FLOOR.search(requires)

@@ -516,6 +516,7 @@ _PREFIX_KIND: dict[str, BlockKind] = {
     "INC": BlockKind.ENTITY,
     "D": BlockKind.SYNTHESIS,
     "C": BlockKind.SYNTHESIS,
+    "DREF": BlockKind.SYNTHESIS,
     "T": BlockKind.STRUCTURED,
     "SIG": BlockKind.SOURCE,
     "INBOX": BlockKind.SOURCE,

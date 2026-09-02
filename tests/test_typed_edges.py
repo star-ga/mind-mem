@@ -31,8 +31,14 @@ from mind_mem.knowledge_graph import (
 FIVE = ("supports", "contradicts", "refines", "supersedes", "derived_from")
 
 
+# Since 5.0.2 ``KnowledgeGraph.add_edge`` requires an open governance
+# admission, exactly as ``BlockStore.write_block`` does. The ``admitted``
+# fixture (tests/conftest.py) opens a REAL ``admit_proposal`` scope and
+# writes a real chain entry -- there is no test-only bypass, and an
+# invariant with one reserved for tests is not an invariant. The refusal
+# itself is proven in tests/test_governed_signal_and_edge.py.
 @pytest.fixture
-def kg(tmp_path):
+def kg(tmp_path, admitted):
     with KnowledgeGraph(str(tmp_path / "kg.db")) as graph:
         yield graph
 

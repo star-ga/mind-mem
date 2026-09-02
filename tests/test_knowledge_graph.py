@@ -15,8 +15,14 @@ from mind_mem.knowledge_graph import (
 )
 
 
+# Since 5.0.2 ``KnowledgeGraph.add_edge`` requires an open governance
+# admission, exactly as ``BlockStore.write_block`` does. The ``admitted``
+# fixture (tests/conftest.py) opens a REAL ``admit_proposal`` scope and
+# writes a real chain entry -- there is no test-only bypass, and an
+# invariant with one reserved for tests is not an invariant. The refusal
+# itself is proven in tests/test_governed_signal_and_edge.py.
 @pytest.fixture()
-def graph():
+def graph(admitted):
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         yield KnowledgeGraph(str(Path(td) / "kg.db"))
 
@@ -218,7 +224,7 @@ class TestQueries:
         # Value is stringified by json's default=str — safe persistence.
         assert "extracted_at" in edges[0].metadata
 
-    def test_context_manager_closes_connection(self) -> None:
+    def test_context_manager_closes_connection(self, admitted) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = str(Path(td) / "kg.db")
             with KnowledgeGraph(path) as kg:
@@ -325,20 +331,36 @@ class TestStats:
 
 
 class TestConcurrency:
-    def test_concurrent_add_edge_no_corruption(self, graph: KnowledgeGraph) -> None:
+    def test_concurrent_add_edge_no_corruption(self, graph: KnowledgeGraph, tmp_path) -> None:
+        """Eight writers, one graph — and eight admissions, not one.
+
+        ``admission`` publishes its receipt on a ``contextvars`` variable,
+        which does not cross a thread boundary: a background writer must
+        open its own scope inside its own thread. That is fail-closed and
+        deliberate (the alternative, a process-global flag, is the ambient
+        authority the receipt removes), so this test opens one real
+        ``admit_proposal`` per worker before the barrier releases them.
+        """
+        from mind_mem.governance_gate import get_gate
+
         errors: list[BaseException] = []
         barrier = threading.Barrier(8)
 
         def worker(tid: int) -> None:
             try:
-                barrier.wait()
-                for i in range(50):
-                    graph.add_edge(
-                        f"subj-{tid}",
-                        Predicate.DEPENDS_ON,
-                        f"obj-{i}",
-                        source_block_id=f"D-{tid}-{i}",
-                    )
+                with get_gate(str(tmp_path)).admit_proposal(
+                    proposal_id=f"TEST-CONCURRENT-{tid}",
+                    content="[]",
+                    actor="pytest",
+                ):
+                    barrier.wait()
+                    for i in range(50):
+                        graph.add_edge(
+                            f"subj-{tid}",
+                            Predicate.DEPENDS_ON,
+                            f"obj-{i}",
+                            source_block_id=f"D-{tid}-{i}",
+                        )
             except BaseException as exc:
                 errors.append(exc)
 

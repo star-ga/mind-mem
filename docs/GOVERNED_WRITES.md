@@ -57,6 +57,23 @@ Untrusted sources — the inbox drop folder, importers, agent messages — arriv
 `QUARANTINED` with an external-ingest tier and stay invisible to recall until a governance
 proposal releases them.
 
+### Confined tiers
+
+One tier is neither an input door nor a proposal apply. `DETECTOR_FINDING` records the
+integrity scanner's own findings — contradictions and drift signals — and mints
+`Status: open`, which recall recognises. It is allowed to because it is **confined**:
+`enums.TIER_ID_PREFIXES` names the block-id prefixes it may write (`C-`, `DREF-`), and
+`require_admission` refuses its receipt for any other prefix and for any status but the
+one row it mints. Two corpora, one status, no choice.
+
+Confinement narrows *where* a tier may write; it never widens *what* it may mint —
+`SERVABLE` is still `{ACTIVE}` and `admit_block`/`admit_batch` still refuse every tier that
+reaches it. A confined tier's row is also excluded from `admissibility.UNADMITTED`
+(`enums.mints_quarantine`), because `open` is the lifecycle state of one corpus rather than
+a quarantine marker — folding it in would withhold every `open` block in the product.
+`tests/test_quarantine_redteam.py` pins the confined set to exactly one tier, so a second
+one has to be argued for rather than added.
+
 ## Threads
 
 `contextvars` do not cross a new `threading.Thread`. That is fail-closed and correct: a

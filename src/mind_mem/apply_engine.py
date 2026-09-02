@@ -35,6 +35,7 @@ from .block_store import (
     _safe_copy,  # noqa: F401 — re-exported; tests import from apply_engine
 )
 from .corpus_registry import SNAPSHOT_DIRS
+from .enums import IngestTier
 from .mind_filelock import FileLock, LockTimeout
 from .namespaces import NamespaceManager
 from .observability import get_logger
@@ -411,6 +412,124 @@ def _store_for(ws):
         return MarkdownBlockStore(ws)
 
 
+#: Verb every whole-corpus restore records. Classified by
+#: ``governance_gate._ACTION_MAP`` to the EXISTING
+#: :attr:`~mind_mem.evidence_objects.EvidenceAction.ROLLBACK` member — a
+#: restore withdraws every block written since the snapshot — so no enum
+#: member is added and a 5.0.1 reader parses the record unchanged. The raw
+#: verb survives in the hash chain's ``action`` column and in
+#: ``metadata["action_verb"]``, which is what keeps a restore legible as a
+#: restore rather than as the rollback of one proposal.
+RESTORE_VERB = "RESTORE"
+
+#: Verb :func:`rollback` records: the deliberate undo of one applied
+#: proposal. Same evidence class, different fact.
+ROLLBACK_VERB = "ROLLBACK"
+
+
+def _manifest_files(snap_dir):
+    """The snapshot's file list: its MANIFEST.json, or a walk for legacy ones.
+
+    Returns ``(files, source)`` where *source* is ``"manifest"`` or
+    ``"walk"``. ``restore`` treats a snapshot with no MANIFEST.json as a
+    legacy copytree restore, so the record has to describe what that walk
+    will actually put back rather than claim a manifest that is not there.
+    """
+    manifest_data = _read_manifest(snap_dir)
+    if manifest_data is not None:
+        return [str(f) for f in manifest_data.get("files", [])], "manifest"
+    files = []
+    for root, _dirs, names in os.walk(snap_dir):
+        for name in names:
+            if name == "MANIFEST.json":
+                continue
+            files.append(os.path.relpath(os.path.join(root, name), snap_dir).replace(os.sep, "/"))
+    return sorted(files), "walk"
+
+
+def _manifest_digest(snap_dir, files, source):
+    """A content hash naming exactly which snapshot a restore put back.
+
+    Over the raw MANIFEST.json bytes when one exists — that file is the
+    artifact, and hashing it means the record cannot be made to name a
+    different manifest than the one the restore read. Over the canonical
+    sorted walk otherwise.
+    """
+    if source == "manifest":
+        manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+        try:
+            with open(manifest_path, "rb") as fh:
+                return hashlib.sha256(fh.read()).hexdigest()
+        except OSError:
+            pass
+    canonical = "\n".join(sorted(files)).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _block_ids_in_snapshot(snap_dir, files):
+    """Block ids the snapshot will put back, parsed from its own copies.
+
+    The ids come from the snapshot, not from the live workspace: the
+    record has to name the blocks the restore *reinstates*, and the live
+    tree is about to stop being evidence of anything.
+    """
+    ids = []
+    seen = set()
+    for rel in files:
+        if not rel.endswith(".md"):
+            continue
+        path = os.path.join(snap_dir, rel.replace("/", os.sep))
+        if not os.path.isfile(path):
+            continue
+        try:
+            blocks = parse_file(path)
+        except (OSError, UnicodeDecodeError, ValueError):
+            continue
+        for block in blocks:
+            bid = str(block.get("_id", "") or "")
+            if bid and bid not in seen:
+                seen.add(bid)
+                ids.append(bid)
+    return ids
+
+
+#: How many ids a record spells out before it switches to a digest.
+#: The list of *withdrawn* ids is the part of the record nothing else can
+#: reproduce, so it is spelled out; the cap exists so one restore of a very
+#: large corpus cannot write a multi-megabyte row into an append-only
+#: ledger. The digest is always present, so a truncated list can never hide
+#: what went.
+_MAX_IDS_IN_RECORD = 500
+
+
+def _live_block_ids(ws):
+    """Block ids currently in the workspace, before a restore overwrites it.
+
+    Uses the same file listing the orphan sweep is driven from, so the two
+    agree about what a restore reaches.
+    """
+    ids = []
+    seen = set()
+    for rel in sorted(_list_workspace_files(ws)):
+        if not rel.endswith(".md"):
+            continue
+        try:
+            blocks = parse_file(os.path.join(ws, rel))
+        except (OSError, UnicodeDecodeError, ValueError):
+            continue
+        for block in blocks:
+            bid = str(block.get("_id", "") or "")
+            if bid and bid not in seen:
+                seen.add(bid)
+                ids.append(bid)
+    return ids
+
+
+def _id_digest(ids):
+    """SHA-256 over the canonical sorted id list."""
+    return hashlib.sha256("\n".join(sorted(ids)).encode("utf-8")).hexdigest()
+
+
 def create_snapshot(ws, ts, files_touched=None):
     """Create a pre-apply snapshot for rollback. Returns the snap_dir path.
 
@@ -422,12 +541,94 @@ def create_snapshot(ws, ts, files_touched=None):
     return snap_dir
 
 
-def restore_snapshot(ws, snap_dir):
-    """Restore workspace from a snapshot directory.
+def restore_snapshot(ws, snap_dir, *, action=RESTORE_VERB, actor="apply_engine", metadata=None):
+    """Restore workspace from a snapshot directory, inside a recorded scope.
 
     Routes through the configured BlockStore (v3.2.0 §1.4 PR-6).
+
+    A restore is the most destructive operation in the product: it withdraws
+    every block written since the snapshot and reinstates the versions under
+    it. Until 5.0.2 it wrote nothing to either chain, so the chain went on
+    asserting that an apply which had just been undone still stood, and a
+    block written after the snapshot vanished with no record it had existed.
+    The scope is opened *here*, in the one function every apply-engine
+    restore goes through, rather than in each of the four callers — a caller
+    cannot restore without recording it, because recording is not something
+    the caller does.
+
+    The record names the snapshot's manifest digest and the block ids the
+    snapshot holds, so an auditor can tell which restore this was and what
+    it reinstated. It is a carrying tier
+    (:attr:`~mind_mem.enums.IngestTier.RESTAMP`): a restore reinstates
+    blocks that were already admitted once and mints no status of its own.
+
+    Args:
+        action: :data:`RESTORE_VERB` (default) or :data:`ROLLBACK_VERB`.
+            Both classify to the same evidence action; the raw verb is what
+            separates "a failed apply undid itself" from "an operator rolled
+            a proposal back".
+        metadata: merged into the record under the door's own fields. Used
+            by :func:`rollback` to name the proposal and the receipt.
+
+    Raises:
+        GovernanceBypassError: the gate refused. The restore does NOT run —
+            an unrecordable restore is refused rather than performed
+            silently, which is the whole point of the scope.
     """
-    _store_for(ws).restore(snap_dir)
+    from .governance_gate import get_gate
+
+    files, source = _manifest_files(snap_dir)
+    digest = _manifest_digest(snap_dir, files, source)
+    reinstated = _block_ids_in_snapshot(snap_dir, files)
+    # What this restore DESTROYS. Reinstated ids are recoverable from the
+    # snapshot the manifest digest names; withdrawn ids are recoverable from
+    # nothing once the restore lands, so they are the half the record has to
+    # spell out. Computed before the restore, from the live tree.
+    withdrawn = sorted(set(_live_block_ids(ws)) - set(reinstated))
+    block_ids = sorted(set(reinstated) | set(withdrawn))
+    snap_name = os.path.basename(os.path.normpath(snap_dir))
+    record = {
+        "snapshot": snap_name,
+        "manifest_digest": digest,
+        "manifest_source": source,
+        "reinstated_block_ids": sorted(reinstated),
+        "withdrawn_block_ids": withdrawn,
+    }
+    door_metadata = {
+        "door": "apply_engine.restore_snapshot",
+        "snapshot": snap_name,
+        "manifest_digest": digest,
+        "manifest_source": source,
+        "file_count": len(files),
+        "reinstated_count": len(reinstated),
+        "reinstated_digest": _id_digest(reinstated),
+        "withdrawn_count": len(withdrawn),
+        "withdrawn_digest": _id_digest(withdrawn),
+        "withdrawn_block_ids": withdrawn[:_MAX_IDS_IN_RECORD],
+        "withdrawn_truncated": len(withdrawn) > _MAX_IDS_IN_RECORD,
+    }
+    if metadata:
+        door_metadata.update(metadata)
+
+    with get_gate(ws).admit_batch(
+        action=action,
+        batch_id=f"{action.lower()}:{snap_name}",
+        block_ids=block_ids,
+        content=json.dumps(record, sort_keys=True, default=str),
+        tier=IngestTier.RESTAMP,
+        actor=actor,
+        target_file=os.path.relpath(snap_dir, ws) if os.path.isabs(snap_dir) else snap_dir,
+        metadata=door_metadata,
+    ) as receipt:
+        _store_for(ws).restore(snap_dir)
+        _log.info(
+            "restore_recorded",
+            snapshot=snap_name,
+            action=action,
+            reinstated=len(reinstated),
+            withdrawn=len(withdrawn),
+            admission=receipt.entry_id,
+        )
 
 
 def snapshot_diff(ws, snap_dir):
@@ -1693,6 +1894,23 @@ def _mark_proposal_status(source_file, proposal_id, new_status, *, reason=""):
         return False
 
 
+def _proposal_id_from_receipt(receipt_path):
+    """The ``Proposal:`` id an APPLY_RECEIPT.md names, or ``None``.
+
+    Tolerant by design: it feeds an audit record and a status update, and a
+    receipt that cannot be read is a reason to record the rollback without
+    a proposal id, never a reason not to record it.
+    """
+    try:
+        with open(receipt_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("Proposal:"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        return None
+    return None
+
+
 def rollback(ws, receipt_ts, reason="", strict=False):
     """Rollback from a receipt timestamp.
 
@@ -1729,7 +1947,21 @@ def rollback(ws, receipt_ts, reason="", strict=False):
         return False
 
     print(f"Restoring from snapshot: {snap_dir}")
-    restore_snapshot(ws, snap_dir)  # nosec — snap_dir validated by _safe_resolve above
+    # Read the proposal id BEFORE the restore: it belongs in the record the
+    # restore mints, and the receipt is the only place it is written down.
+    rolled_back_proposal = _proposal_id_from_receipt(os.path.join(snap_dir, "APPLY_RECEIPT.md"))
+    restore_snapshot(  # nosec — snap_dir validated by _safe_resolve above
+        ws,
+        snap_dir,
+        action=ROLLBACK_VERB,
+        actor="rollback",
+        metadata={
+            "door": "apply_engine.rollback",
+            "receipt_ts": receipt_ts,
+            "proposal_id": rolled_back_proposal or "",
+            "strict": bool(strict),
+        },
+    )
 
     # Re-run checks
     print("\n--- Post-rollback checks ---")
@@ -1782,12 +2014,7 @@ def rollback(ws, receipt_ts, reason="", strict=False):
                 f"WARNING: Could not acquire lock for rollback receipt {receipt_path}: {exc}",
                 file=sys.stderr,
             )
-        proposal_id = None
-        with open(receipt_path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("Proposal:"):
-                    proposal_id = line.split(":", 1)[1].strip()
-                    break
+        proposal_id = _proposal_id_from_receipt(receipt_path)
         status_persisted = True
         if proposal_id:
             _proposal, source_file = find_proposal(ws, proposal_id)

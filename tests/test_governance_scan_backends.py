@@ -255,12 +255,14 @@ def test_scan_postgres_detects_contradiction(pg_workspace: tuple[str, PostgresBl
 
 @requires_pg
 @pytest.mark.usefixtures("admitted")
-def test_scan_postgres_excludes_deleted_blocks(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
+def test_scan_postgres_excludes_deleted_blocks(pg_workspace: tuple[str, PostgresBlockStore], admit_delete) -> None:
     """A soft-deleted (inactive) row is not counted — active_only contract."""
     ws, store = pg_workspace
     _decision(store, "D-20260613-401", "default backend is Postgres")
     _decision(store, "D-20260613-402", "soon-to-be-deleted block")
-    assert store.delete_block("D-20260613-402") is True
+    # A write receipt does not authorise a delete; open the delete scope.
+    with admit_delete(ws, "D-20260613-402"):
+        assert store.delete_block("D-20260613-402") is True
 
     with use_workspace(ws):
         result = json.loads(scan())

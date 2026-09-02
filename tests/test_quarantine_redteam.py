@@ -319,11 +319,32 @@ class TestEveryWriteDoorStillWithholds:
     a hole: content becomes servable exactly when it has passed the governed
     propose->apply path. If a second exception ever appears here, it needs the
     same argument made explicitly.
+
+    THE SECOND EXCEPTION, 5.0.2 (GAP-1), argued explicitly. `DETECTOR_FINDING`
+    mints `open` -- a status recall RECOGNISES -- for the integrity scanner's
+    contradictions and drift signals. Three facts make it an exception rather
+    than a hole, and each one is asserted below rather than asserted here:
+
+      1. It is not an INPUT door. Every input to a finding is a block already
+         admitted to this corpus; nothing external enters through it. The
+         quarantine axis exists for untrusted input and has nothing to say.
+      2. It is CONFINED (`enums.TIER_ID_PREFIXES`): the receipt is refused for
+         any id but `C-`/`DREF-` and for any status but the one row it mints.
+         Two corpora, one status, no choice -- so it cannot be spent on a
+         decision, a task, an entity or an ingest drop.
+      3. Withholding was never the missing half. Before this the finding was
+         served ANYWAY, spliced straight into CONTRADICTIONS.md with all three
+         ledgers at +0. What the gate adds is the receipt and the chain row;
+         making the finding unrecallable would have removed a capability the
+         product ships without adding one.
+
+    The behavioural half of (2) -- the refusals, each beside the same write
+    succeeding -- is `tests/test_governed_detector_writes.py`.
     """
 
     def test_every_ingest_tier_but_proposal_apply_mints_an_unservable_status(self) -> None:
         from mind_mem.admissibility import UNADMITTED
-        from mind_mem.enums import INITIAL_STATUS, IngestTier, is_servable
+        from mind_mem.enums import INITIAL_STATUS, IngestTier, is_confined, is_servable
 
         # A tier minting None CARRIES the block's existing status rather than
         # setting one -- RESTAMP re-stamps blocks already in the store, and
@@ -332,16 +353,65 @@ class TestEveryWriteDoorStillWithholds:
         # That exemption is pinned separately below, so a NEW None-minting tier
         # cannot inherit it silently.
         carry_only = {t for t, st in INITIAL_STATUS.items() if st is None}
+        # Confined tiers are the second documented exception; pinned to an
+        # exact set below, so a new one cannot inherit this either.
+        confined = {t for t in INITIAL_STATUS if is_confined(t)}
 
         leaky = []
         for tier, status in INITIAL_STATUS.items():
-            if tier is IngestTier.PROPOSAL_APPLY or tier in carry_only:
+            if tier is IngestTier.PROPOSAL_APPLY or tier in carry_only or tier in confined:
                 continue
             if is_servable(status):
                 leaky.append(f"{tier}: mints servable {status.value!r}")
             elif status.value not in UNADMITTED:
                 leaky.append(f"{tier}: {status.value!r} is not in UNADMITTED")
         assert not leaky, f"an ingest tier can write content recall will serve without admission: {leaky}"
+
+    def test_the_confined_tiers_are_exactly_the_one_documented_one(self) -> None:
+        """The second exception is pinned, exactly as the carry-only one is.
+
+        A tier added to `TIER_ID_PREFIXES` skips the UNADMITTED rule above,
+        so it must arrive with the argument in this class's docstring made
+        for it -- not by being added to a table.
+        """
+        from mind_mem.enums import TIER_ID_PREFIXES, IngestTier
+
+        assert set(TIER_ID_PREFIXES) == {IngestTier.DETECTOR_FINDING}, (
+            f"confined tiers changed: {set(TIER_ID_PREFIXES)}. A confined tier may mint a status "
+            "recall recognises; that licence is bought with the prefix confinement and has to be "
+            "argued for per tier."
+        )
+
+    def test_a_confined_tier_still_cannot_mint_a_servable_status(self) -> None:
+        """The one rule confinement does NOT buy: reaching the served set.
+
+        `mints_servable` is the mint allow-list (`SERVABLE == {ACTIVE}`), and
+        `GovernanceGate._check_tier` refuses any tier it names from
+        `admit_block`/`admit_batch`. Confinement narrows WHERE a tier may
+        write; it never widens WHAT it may mint.
+        """
+        from mind_mem.enums import INITIAL_STATUS, TIER_ID_PREFIXES, is_servable, mints_servable
+        from mind_mem.governance_gate import MINTABLE_TIERS
+
+        for tier in TIER_ID_PREFIXES:
+            assert not mints_servable(tier), f"{tier} is confined AND mints a servable status"
+            assert not is_servable(INITIAL_STATUS[tier])
+            assert tier in MINTABLE_TIERS
+
+    def test_a_confined_tier_is_confined_to_prefixes_the_store_can_route(self) -> None:
+        """A confinement naming a prefix nothing routes is a dead tier.
+
+        `TIER_ID_PREFIXES` lives in `enums`, which imports no storage, so the
+        two tables cannot derive from each other. This is the drift guard.
+        """
+        from mind_mem.block_store import _BLOCK_PREFIX_MAP
+        from mind_mem.enums import TIER_ID_PREFIXES
+
+        assert TIER_ID_PREFIXES, "no confined tier at all -- this guard would pass over nothing"
+        for tier, prefixes in TIER_ID_PREFIXES.items():
+            assert prefixes, f"{tier} is confined to no prefix, so it can write nothing"
+            unroutable = sorted(p for p in prefixes if p not in _BLOCK_PREFIX_MAP)
+            assert not unroutable, f"{tier} may mint {unroutable}, which the block store cannot route"
 
     def test_the_carry_only_tiers_are_exactly_the_two_documented_ones(self) -> None:
         """A new tier minting None must be argued for, not inherited.

@@ -240,20 +240,23 @@ tool module writes — they read the corpus back and nothing else.
 
 > **Status (5.0.0): the governed write path is not yet open for these
 > prefixes.** `approve_apply` routes `append_block` through
-> `BlockStore.write_block`, which resolves a block's canonical file from
-> `_BLOCK_PREFIX_MAP` in `block_store.py` and refuses an unrecognised prefix:
+> `BlockStore.write_block`, which resolves a block's canonical file from the
+> one corpus table — `CORPUS_TABLE` in `corpus_registry.py`, projected as
+> `_BLOCK_PREFIX_MAP` in `block_store.py` — and refuses an unrecognised
+> prefix:
 >
 > ```
 > append_block failed: no canonical file mapping for block id
-> 'TF-20260829-001'; add an entry to _BLOCK_PREFIX_MAP to enable writes
+> 'TF-20260829-001'; add a row to corpus_registry.CORPUS_TABLE to enable writes
 > ```
 >
 > Until `TF` and `DE` are added there, frames and dead ends are
 > operator-authored in their workspace files and read back read-only — exactly
 > the position `[GR-...]` guardrails ship in today (see `docs/guardrails.md`
-> §Authoring). `GR`, `TF` and `DE` are all absent from that map; the ten
-> prefixes that carry one are `C`, `D`, `IMP`, `INBOX`, `INC`, `MSG`, `PER`,
-> `PRJ`, `T`, `TOOL`.
+> §Authoring). `GR`, `TF` and `DE` are all absent from that table. The
+> prefixes that do carry a row are whatever `corpus_registry.CORPUS_TABLE`
+> lists — read them from there rather than from a copy here, which is the
+> same reason the table exists: one definition, no second list to go stale.
 >
 > **Two map entries are necessary but not sufficient.** `frames/` is also
 > outside `corpus_registry.SNAPSHOT_DIRS` (`decisions`, `tasks`, `entities`,

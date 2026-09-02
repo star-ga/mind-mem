@@ -180,15 +180,36 @@ def _entry_point_modules() -> set[str]:
     17 of them, declared in pyproject `[project.scripts]`. Counting these as
     unreachable would give the gate 17 false positives on day one, and a gate
     that cries wolf gets ignored -- which is worse than no gate.
+
+    ``tomllib`` is stdlib only from 3.11 and ``requires-python`` is ``>=3.10``,
+    so on a 3.10 interpreter the previous ``return set()`` made this the exact
+    failure it was written to prevent: every console-script route vanished, and
+    the gate reported 17 modules reachable-by-nothing while exiting 0 because
+    only ADDITIONS fail. Two tests caught it -- as "the mind-mem-bootstrap
+    console script is gone", which was never true; the parser had simply not
+    run. ``tomli`` is declared in the ``test`` extra for python<3.11 and is
+    installed on both 3.10 matrix rows, so the fallback costs no dependency.
+
+    With neither parser this now RAISES rather than returning an empty set. A
+    reachability answer computed without the entry points is not a smaller
+    answer, it is a wrong one, and it is wrong in the direction that deletes
+    working code.
     """
     try:
-        import tomllib
-    except ModuleNotFoundError:  # pragma: no cover - 3.10
-        return set()
+        import tomllib as _toml
+    except ModuleNotFoundError:  # pragma: no cover - 3.10 only
+        try:
+            import tomli as _toml  # type: ignore[no-redef]
+        except ModuleNotFoundError as exc:  # pragma: no cover - no parser at all
+            raise RuntimeError(
+                "cannot read [project.scripts]: tomllib is stdlib only on 3.11+ and tomli is not "
+                "installed. Install the 'test' extra (it declares tomli for python<3.11) -- "
+                "without a parser this gate would report every console-script module unreachable."
+            ) from exc
     try:
-        data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    except (OSError, ValueError):  # pragma: no cover
-        return set()
+        data = _toml.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:  # pragma: no cover
+        raise RuntimeError(f"cannot parse {ROOT / 'pyproject.toml'}: {exc}") from exc
     out: set[str] = set()
     for target in data.get("project", {}).get("scripts", {}).values():
         mod = target.split(":", 1)[0]

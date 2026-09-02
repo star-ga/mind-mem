@@ -33,6 +33,9 @@ import ast
 import pytest
 from _write_path_scan import (
     ADMIT_OPENERS,
+    CORPUS_BASENAMES,
+    DELETE_ADMIT_OPENERS,
+    corpus_basenames_from_source,
     find_write_block_calls,
     function_node,
     iter_source_files,
@@ -60,6 +63,12 @@ LOCAL = "local"
 #: whoever called it.
 IMPLEMENTATION = "implementation"
 
+#: The caller opens its own DELETE scope. Distinct from :data:`LOCAL`
+#: because the two are checked against different opener sets: a receipt is
+#: not transferable between a write and a delete, so a corpus writer that
+#: opened only ``admit_delete`` must not satisfy the write-side rule.
+DELETE_LOCAL = "delete-local"
+
 #: ``(file, enclosing qualname) -> LOCAL | IMPLEMENTATION | opener qualname``
 SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     # --- applying an already-approved proposal. One admission per
@@ -73,6 +82,18 @@ SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     # vault cannot become 10k proposals); bought back with
     # QUARANTINE_STATUS + a batch admission. The reference design.
     ("src/mind_mem/importers/engine.py", "_write_batch"): LOCAL,
+    # --- the integrity scanner's own findings (GAP-1). Both detectors
+    # funnel through ONE writer, so there is a single place a finding can
+    # enter and it is inside an admit_batch scope. It sat in
+    # PENDING_CORPUS_WRITERS as "lower severity, internally-derived
+    # content"; provenance was never the axis. A `C-` block lands
+    # `Status: open`, recall RECOGNISES that status, and the measured
+    # result was a served block with all three ledgers at +0 -- reached
+    # from `mind-mem-scan`, the third command of the README demo.
+    # IngestTier.DETECTOR_FINDING is confined by enums.TIER_ID_PREFIXES to
+    # C-/DREF- ids and to the one status it mints, so this scope cannot be
+    # spent on anything but a finding.
+    ("src/mind_mem/intel_scan.py", "_write_findings"): LOCAL,
     # --- the drop folder: untrusted input by construction. Same bargain
     # as the importer — batch admission, lands quarantined.
     ("src/mind_mem/inbox.py", "ingest_text_file"): LOCAL,
@@ -115,6 +136,15 @@ SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     # would silently become a second control arm and the benchmark would
     # report a null result it caused itself.
     ("src/mind_mem/bench/ab_seed.py", "write_seed"): LOCAL,
+    # --- one operator approval of one staged relation signal. The signal
+    # moves from `pending` (withheld) to `applied` (served), which is a mint
+    # of servable content, so the scope is admit_proposal and the block goes
+    # through the store like any other applied proposal. It used to be a
+    # `re.subn` on SIGNALS.md with no scope at all -- measured: served after,
+    # ledgers +0 -- because `write_block` REFUSED every SIG id until the
+    # corpus table gave the prefix a row. See
+    # tests/test_governed_signal_and_edge.py.
+    ("src/mind_mem/graph_ingest.py", "approve_relation_signals"): LOCAL,
     # --- the enforcement point itself, and the three delegating adapters.
     ("src/mind_mem/block_store_postgres_replica.py", "ReplicatedPostgresBlockStore.write_block"): IMPLEMENTATION,
     ("src/mind_mem/storage/sharded_pg.py", "ShardedPostgresBlockStore.write_block"): IMPLEMENTATION,
@@ -161,6 +191,21 @@ SANCTIONED_CORPUS_WRITERS: dict[tuple[str, str], str] = {
     # test_sanctioned_corpus_writers_open_an_admission rather than by that
     # coincidence.
     ("src/mind_mem/session_summarizer.py", "write_summary"): LOCAL,
+    # The signal compaction sweep. It does not MINT into SIGNALS.md -- it
+    # rewrites the file to drop aged signals -- so it is here as a
+    # DELETE_LOCAL: the scanner flags it because it opens SIGNALS.md for
+    # writing, and what it opens in return is admit_delete_batch, not a
+    # write scope.
+    #
+    # It sat in PENDING_CORPUS_WRITERS until 5.0.2 with the upgrade path
+    # "admit the compaction run", and the measured cost of the wait was
+    # exactly what that entry implied: a sweep removed resolved/rejected
+    # signals from a file in CORPUS_FILES -- content recall was serving --
+    # and left ZERO evidence-chain rows and no deleted_blocks.jsonl entry.
+    # One batch scope per sweep now: one authorisation, one removal record
+    # with a Merkle root over what actually went. See
+    # tests/test_governed_delete_compaction.py.
+    ("src/mind_mem/compaction.py", "compact_signals"): DELETE_LOCAL,
 }
 
 #: Known-ungoverned corpus writers, pinned so the set cannot grow while
@@ -169,23 +214,10 @@ SANCTIONED_CORPUS_WRITERS: dict[tuple[str, str], str] = {
 #: channel. Not fixed in this change.
 PENDING_CORPUS_WRITERS: frozenset[tuple[str, str]] = frozenset(
     {
-        # deferred: mints recallable C- blocks (Status "open") into
-        # CONTRADICTIONS.md with no chain entry — upgrade path: wrap the
-        # append in GovernanceGate.admit_batch like the importer does.
-        ("src/mind_mem/intel_scan.py", "write_contradictions"),
-        # deferred: same shape, DRIFT.md. Same upgrade path.
-        ("src/mind_mem/intel_scan.py", "write_drift"),
-        # deferred: rewrites Status in place ("pending" -> "applied") with
-        # no chain entry — upgrade path: route the flip through a
-        # governed op rather than a regex substitution on the file.
-        ("src/mind_mem/graph_ingest.py", "_flip_signal_status"),
         # deferred: appends non-block "## SKILL-..." prose into SIGNALS.md
         # — corpus pollution rather than a block mint. Upgrade path: stop
         # writing to SIGNALS.md and stage a proposal instead.
         ("src/mind_mem/skill_opt/validator.py", "submit_to_governance"),
-        # deferred: rewrites SIGNALS.md wholesale to drop aged signals.
-        # Deletion, not a mint. Upgrade path: admit the compaction run.
-        ("src/mind_mem/compaction.py", "compact_signals"),
         # Bench harness: builds a synthetic eval workspace, never the
         # operator's corpus. Pinned so it stays visible, not fixed.
         ("src/mind_mem/bench/eval_adapters.py", "MindMemAdapter.init"),
@@ -235,6 +267,27 @@ def test_scanner_finds_a_known_call_site(files: tuple[str, ...]) -> None:
     """Positive control: a call site that is definitely present must appear."""
     found = {(rel, qual) for rel, qual, _line in scan_write_block_calls(files)}
     assert ("src/mind_mem/apply_engine.py", "_op_append_block") in found, "the write_block matcher stopped recognising a known call site"
+
+
+def test_scanner_corpus_basenames_match_the_registry() -> None:
+    """The scanner's hand-copied corpus list must equal the real registry.
+
+    Blind-spot guard, not a style check. ``CORPUS_BASENAMES`` is what
+    :func:`scan_corpus_writes` looks for, so a file in ``CORPUS_FILES``
+    that is missing from it is a recallable corpus file no direct-writer
+    scan ever examines — and the scan still reports a clean tree, which
+    is the shape of a check that passes because it looked at nothing.
+
+    Measured: ``INGEST.md`` entered ``CORPUS_FILES`` in 5.0.1 and was
+    absent here until 5.0.2. Latent rather than exploited (the ``INGEST``
+    prefix routes through ``write_block``), and latent only by luck.
+    """
+    derived = corpus_basenames_from_source()
+    assert len(derived) >= 12, f"only {len(derived)} entries parsed out of CORPUS_FILES; the AST reader is broken, not the registry"
+    missing = sorted(derived - CORPUS_BASENAMES)
+    extra = sorted(CORPUS_BASENAMES - derived)
+    assert not missing, f"CORPUS_FILES gained {missing}; the scanner never learned about it, so writers to those files go unscanned"
+    assert not extra, f"the scanner scans {extra}, which CORPUS_FILES no longer registers"
 
 
 def test_matcher_detects_a_synthetic_bypass() -> None:
@@ -405,9 +458,11 @@ def test_sanctioned_corpus_writers_open_an_admission(files: tuple[str, ...]) -> 
     for (rel, qual), scope in sorted(SANCTIONED_CORPUS_WRITERS.items()):
         path = next((p for p in files if relpath(p) == rel), None)
         assert path is not None, f"{rel} is allowlisted but absent"
-        func = function_node(parse(path), qual if scope == LOCAL else scope)
-        if func is None or not opens_admission(func):
-            failures.append(f"  {rel}:{qual} — appends to the corpus but opens no admission scope")
+        openers = DELETE_ADMIT_OPENERS if scope == DELETE_LOCAL else ADMIT_OPENERS
+        func = function_node(parse(path), qual if scope in (LOCAL, DELETE_LOCAL) else scope)
+        if func is None or not opens_admission(func, openers):
+            kind = "delete" if scope == DELETE_LOCAL else "admission"
+            failures.append(f"  {rel}:{qual} — rewrites the corpus but opens no {kind} scope")
     assert not failures, "SANCTIONED BUT UNADMITTED (direct corpus write):\n" + "\n".join(failures)
 
 

@@ -61,6 +61,38 @@ def admitted(tmp_path) -> Iterator[None]:
         yield
 
 
+@pytest.fixture
+def admit_delete():
+    """Open a real ``DELETE`` scope around one block id, for storage tests.
+
+    The delete-side twin of :func:`admitted`, and needed for the same reason:
+    since the delete invariant landed, ``BlockStore.delete_block`` refuses any
+    removal with no ``admit_delete`` scope open, and a WRITE receipt is
+    explicitly not transferable to a delete. Storage-layer tests that remove a
+    row directly therefore have to open the real scope, exactly as the MCP and
+    HTTP delete doors do.
+
+    Measured 2026-09-02: six such tests were red on the ``postgres backend``
+    job -- the only job that runs them, because they gate on
+    ``MIND_MEM_TEST_PG_DSN`` and skip everywhere else, which is why a fully
+    green local gate never saw them.
+
+    Like :func:`admitted`, this mints a genuine receipt through the gate and
+    writes a genuine chain entry. There is no test-only bypass, and there must
+    not be one: an invariant with an escape hatch reserved for tests is not an
+    invariant.
+    """
+    from mind_mem.governance_gate import get_gate
+
+    @contextlib.contextmanager
+    def _scope(workspace: str, block_id: str, *, rationale: str = "storage-layer test removal") -> Iterator[None]:
+        gate = get_gate(workspace)
+        with gate.admit_delete(str(block_id), rationale=rationale, actor="pytest"):
+            yield
+
+    return _scope
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _child_processes_speak_utf8() -> Iterator[None]:
     """Make every subprocess this suite spawns write UTF-8.

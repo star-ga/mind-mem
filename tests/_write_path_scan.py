@@ -23,9 +23,34 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #: Context managers on ``GovernanceGate`` that open an admission scope.
 ADMIT_OPENERS: frozenset[str] = frozenset({"admit_block", "admit_batch", "admit_proposal"})
 
+#: The DELETE-side scopes, kept as a SEPARATE set rather than folded into
+#: :data:`ADMIT_OPENERS`. A receipt is not transferable between the two
+#: operations — ``require_admission`` refuses a delete receipt spent on a
+#: write — so a write surface that opened only a delete scope must still
+#: fail the write-side check. Merging the sets would make that pass.
+DELETE_ADMIT_OPENERS: frozenset[str] = frozenset({"admit_delete", "admit_delete_batch"})
+
 #: Corpus files that hold recallable blocks (``_recall_constants.CORPUS_FILES``
 #: values, by basename). A direct append to one of these mints a block
 #: without ever touching ``BlockStore.write_block``.
+#:
+#: Hand-copied on purpose — this module imports no ``mind_mem``, so the
+#: invariant is checked against the source on disk rather than against
+#: whatever a monkeypatched runtime exposes. The cost of the copy is
+#: drift, and it had already drifted: ``INGEST.md`` joined
+#: ``CORPUS_FILES`` in 5.0.1 and was never added here, so for one release
+#: a direct writer to ``memory/INGEST.md`` was invisible to
+#: ``test_no_unpinned_direct_corpus_writers`` — the scan would have
+#: reported a clean tree it never looked at. Nothing wrote that file by
+#: literal path (the ``INGEST`` prefix routes through ``write_block``), so
+#: the hole was latent rather than exploited.
+#:
+#: :func:`corpus_basenames_from_source` re-derives this set from
+#: ``corpus_registry.CORPUS_TABLE`` by AST — the one definition of the
+#: corpus, which ``_recall_constants.CORPUS_FILES`` is now derived from
+#: rather than duplicating — and
+#: ``test_scanner_corpus_basenames_match_the_registry`` fails the build
+#: when the two disagree. The copy stays; silent drift does not.
 CORPUS_BASENAMES: frozenset[str] = frozenset(
     {
         "DECISIONS.md",
@@ -40,6 +65,7 @@ CORPUS_BASENAMES: frozenset[str] = frozenset(
         "MESSAGES.md",
         "INBOX.md",
         "IMPORTED.md",
+        "INGEST.md",
     }
 )
 
@@ -47,6 +73,46 @@ CORPUS_BASENAMES: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 # Parsing
 # ---------------------------------------------------------------------------
+
+
+def corpus_basenames_from_source() -> frozenset[str]:
+    """Re-derive :data:`CORPUS_BASENAMES` from ``_recall_constants.py``.
+
+    By AST, not by import, so this module keeps its rule of never
+    importing ``mind_mem``: the registry is read as the text on disk.
+    Only ``ast.Constant`` values are collected — a computed entry would
+    be silently skipped, so the count is asserted by the caller rather
+    than trusted here.
+
+    Reads ``corpus_registry.CORPUS_TABLE``, which is where the one
+    definition of the corpus now lives. It used to read a
+    ``CORPUS_FILES`` dict literal in ``_recall_constants``; that name is
+    now DERIVED from this table, so parsing it as a literal failed —
+    the guard broke because the code it guards got better. Following the
+    data to its source is the fix; loosening the parse to accept a
+    computed value would have made the guard unable to see drift at all.
+    """
+    path = os.path.join(SRC_ROOT, "corpus_registry.py")
+    tree = parse(path)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.AnnAssign):
+            continue
+        target = node.target
+        if not isinstance(target, ast.Name) or target.id != "CORPUS_TABLE":
+            continue
+        if not isinstance(node.value, ast.Tuple):
+            break
+        names: set[str] = set()
+        for row in node.value.elts:
+            if not isinstance(row, ast.Call) or not row.args:
+                continue
+            last = row.args[-1]
+            if isinstance(last, ast.Constant) and isinstance(last.value, str):
+                names.add(os.path.basename(last.value))
+        if names:
+            return frozenset(names)
+        break
+    raise AssertionError(f"CORPUS_TABLE is not a tuple of literal rows in {path}; the drift guard cannot read it")
 
 
 def iter_source_files(root: str = SRC_ROOT) -> tuple[str, ...]:
@@ -133,9 +199,14 @@ def function_node(tree: ast.AST, qualname: str) -> ast.AST | None:
     return None
 
 
-def opens_admission(func: ast.AST) -> bool:
-    """True when *func* calls one of :data:`ADMIT_OPENERS` in its own body."""
-    return any(isinstance(n, ast.Call) and called_name(n) in ADMIT_OPENERS for n in ast.walk(func))
+def opens_admission(func: ast.AST, openers: frozenset[str] = ADMIT_OPENERS) -> bool:
+    """True when *func* calls one of *openers* in its own body.
+
+    Defaults to the write-side scopes, so every existing caller keeps the
+    check it had. A delete surface passes :data:`DELETE_ADMIT_OPENERS`
+    explicitly rather than widening the default.
+    """
+    return any(isinstance(n, ast.Call) and called_name(n) in openers for n in ast.walk(func))
 
 
 def calls_require_admission(func: ast.AST) -> bool:

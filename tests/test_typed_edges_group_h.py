@@ -252,7 +252,7 @@ class TestPredicateNewKinds:
     def test_from_str_hyphen_form_derived_from(self) -> None:
         assert Predicate.from_str("derived-from") is Predicate.DERIVED_FROM
 
-    def test_knowledge_graph_add_edge_supports(self, tmp_path) -> None:
+    def test_knowledge_graph_add_edge_supports(self, tmp_path, admitted) -> None:
         with KnowledgeGraph(str(tmp_path / "kg.db")) as kg:
             edge = kg.add_edge(
                 "block A",
@@ -266,7 +266,7 @@ class TestPredicateNewKinds:
             assert len(edges) == 1
             assert edges[0].confidence == 0.9
 
-    def test_knowledge_graph_add_edge_derived_from(self, tmp_path) -> None:
+    def test_knowledge_graph_add_edge_derived_from(self, tmp_path, admitted) -> None:
         with KnowledgeGraph(str(tmp_path / "kg.db")) as kg:
             edge = kg.add_edge(
                 "summary block",

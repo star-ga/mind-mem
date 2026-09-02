@@ -26,6 +26,26 @@ Body limit — every JSON-bodied endpoint refuses payloads larger than
 vector. (Same posture as
 ``ingestion_pipeline.serve_webhook``.)
 
+Read admission — the egress half of the governance seam applies here,
+not only on the MCP surface. Two rules, both structural rather than
+remembered:
+
+* **The route table is the surface.** :data:`ROUTES` is the only thing
+  the dispatcher consults, and every :class:`Route` carries a ``verdict``
+  with no default, so a handler cannot become reachable without someone
+  deciding whether its response can carry workspace block content.
+  ``tests/test_http_read_admission.py`` sweeps every content route with a
+  quarantined canary and asserts the measured reach set equals the
+  declared one.
+* **One reader.** Corpus rows reach a handler only through
+  :func:`_admitted_blocks`, which runs ``admission.admit_read`` — the same
+  predicate the recall legs use — and returns the withheld count so a
+  short answer is visibly short. ``store.get_all`` / ``store.get_by_id``
+  are called directly by exactly three functions in this module, all of
+  them on the *delete* path where reaching a withheld block is the point;
+  the test enumerates them against an allowlist and fails the build on a
+  fourth.
+
 Usage::
 
     from mind_mem.http_transport import serve_http
@@ -49,14 +69,20 @@ import os
 import socket
 import threading
 import time
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from typing import Any, Callable
 
+from .admission import admit_read
 from .protection import AUTH_HEADER
 
 __all__ = [
+    "CONTENT",
     "MAX_BODY_BYTES",
+    "NO_CONTENT",
+    "ROUTES",
+    "Route",
     "serve_http",
     "build_handler",
 ]
@@ -299,6 +325,102 @@ def _parse_query_params(path: str) -> tuple[str, dict[str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# The read seam — the only way a handler here obtains corpus rows
+# ---------------------------------------------------------------------------
+
+
+def _admitted_blocks(workspace: str, *, active_only: bool, surface: str) -> tuple[list[dict[str, Any]], int]:
+    """The corpus rows this transport may serve, and how many it may not.
+
+    ``store.get_all`` answers with everything the store can read —
+    quarantined and pending blocks included — which is correct for a
+    storage adapter and wrong for a transport. Every content-serving
+    handler in this module therefore reads through here, and here calls
+    :func:`~mind_mem.admission.admit_read`: the *same* egress decision the
+    recall legs make, rather than a status check written a second time.
+    A local ``if status != "active"`` would drift from it, and the first
+    thing lost to drift would be the release set — an operator-approved
+    readmission that admission resolves and a hand-rolled check cannot.
+
+    ``workspace`` is passed on deliberately. It buys the two legs that
+    make the answer current rather than cached: a status refresh (the
+    index caches ``status`` and goes stale in the fail-OPEN direction, so
+    a block quarantined after it was indexed still reads ``active``
+    there) and the release set. Omitting it is the permissive direction.
+
+    Args:
+        workspace: Workspace root.
+        active_only: Passed to the store. A *caller's* filter, never the
+            governance decision — admission runs whatever this says, so
+            ``active_only=false`` widens the listing by exactly nothing.
+        surface: Recorded on the withheld metric, for the same reason
+            ``admit_leg`` takes ``leg``.
+
+    Returns:
+        ``(admitted, withheld)`` — the rows a caller may be shown, order
+        preserved, and the number the gate dropped. The count is
+        returned rather than logged because a listing that is silently
+        short reads as a complete corpus to whoever gets it.
+
+    Raises:
+        Whatever the store or the status refresh raises. Deliberately not
+        swallowed: a surface that cannot confirm a status must fail
+        rather than serve the copy it could not check.
+    """
+    from .storage import get_block_store
+
+    store = get_block_store(workspace)
+    blocks = store.get_all(active_only=active_only)
+    admission = admit_read(blocks, workspace=workspace, surface=surface)
+    return admission.admitted, admission.withheld
+
+
+#: Fields a block summary is drawn from, most specific first.
+#:
+#: The listing used to read ``id``/``type``/``subject``/``timestamp``,
+#: none of which is a field any store emits — blocks carry ``_id`` and the
+#: canonical capitalised names (``block_store._CANONICAL_FIELD_ORDER``),
+#: on the Markdown, encrypted, Postgres and sharded backends alike. Every
+#: summary was therefore ``{"id": null, "type": null, ...}``: the endpoint
+#: answered 200 with a list of empty shapes. The subject chain mirrors
+#: ``memory_index._SUMMARY_FIELDS`` so a block's one-line summary is the
+#: same string here as everywhere else it is rendered.
+_SUMMARY_SUBJECT_FIELDS: tuple[str, ...] = ("Statement", "Title", "Name", "Subject", "content")
+_SUMMARY_TYPE_FIELDS: tuple[str, ...] = ("Type", "type", "block_type")
+_SUMMARY_TIMESTAMP_FIELDS: tuple[str, ...] = ("Timestamp", "Date", "timestamp", "_created_at")
+
+
+def _first_field(block: dict[str, Any], fields: tuple[str, ...]) -> Any:
+    """First present, non-empty value among *fields*, else ``None``."""
+    for key in fields:
+        value = block.get(key)
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _summarise(block: dict[str, Any]) -> dict[str, Any]:
+    """One listing row: id, type, category, subject, timestamp.
+
+    The wire keys are unchanged from 5.0.1 — only the fields they are
+    read from are corrected — so a client that parsed the old shape keeps
+    parsing this one, and starts getting values in it.
+    """
+    return {
+        "id": block.get("_id"),
+        "type": _first_field(block, _SUMMARY_TYPE_FIELDS),
+        # No store emits a category field; the category *distiller* files
+        # blocks into ``categories/<name>.md`` without stamping the block.
+        # Kept as a declared null rather than dropped: removing a key is a
+        # breaking change for a client that reads it, and inventing a
+        # value from the id prefix would be reporting a guess as data.
+        "category": block.get("Category"),
+        "subject": _first_field(block, _SUMMARY_SUBJECT_FIELDS),
+        "timestamp": _first_field(block, _SUMMARY_TIMESTAMP_FIELDS),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Endpoint handlers — pure functions of (workspace, body, params)
 # ---------------------------------------------------------------------------
 
@@ -417,7 +539,32 @@ def _handle_query(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
 
 
 def _handle_list_memories(workspace: str, params: dict[str, str]) -> tuple[int, dict[str, Any]]:
-    """``GET /memories?limit=N&active_only=true``."""
+    """``GET /memories?limit=N&active_only=true`` — the admitted listing.
+
+    Reads through :func:`_admitted_blocks`, so a quarantined or pending
+    block cannot leave through this door whatever ``active_only`` says.
+    That parameter is a caller's convenience filter and was never a
+    governance control: it defaults to ``false``, and this endpoint
+    served ``get_all(active_only=False)`` straight onto the wire.
+
+    Three counts, because collapsing them hides the interesting one:
+
+    ``count``
+        rows in this response, after ``limit``.
+    ``total``
+        rows the caller may see, before ``limit`` — the admitted set, not
+        the corpus. It used to be the corpus size, which quietly told
+        every caller how many blocks were being withheld from them.
+    ``withheld``
+        rows admission dropped. Always present, including as ``0``: a key
+        that appears only when something was held back is a key readers
+        learn to ignore, and "silently short" is the failure this endpoint
+        had.
+
+    There is no ``include_withheld`` parameter and adding one would put
+    the leak back behind a keyword — the full-fidelity read is
+    ``snapshot()``, which is not a transport concern.
+    """
     try:
         limit = int(params.get("limit", "100"))
     except ValueError:
@@ -427,26 +574,22 @@ def _handle_list_memories(workspace: str, params: dict[str, str]) -> tuple[int, 
     active_only_str = params.get("active_only", "false").lower()
     active_only = active_only_str in ("1", "true", "yes")
 
-    from .storage import get_block_store
-
     try:
-        store = get_block_store(workspace)
-        blocks = store.get_all(active_only=active_only)
+        blocks, withheld = _admitted_blocks(workspace, active_only=active_only, surface="http:GET /memories")
     except Exception as exc:
-        _log.error("list_memories_failed", extra={"error": str(exc)})
+        _log.error("list_memories_failed", extra={"error": _safe_log(exc)})
         return (500, {"error": "internal block store error"})
 
-    summaries = [
+    summaries = [_summarise(b) for b in blocks[:limit]]
+    return (
+        200,
         {
-            "id": b.get("id"),
-            "type": b.get("type") or b.get("block_type"),
-            "category": b.get("category"),
-            "subject": b.get("Subject") or b.get("subject"),
-            "timestamp": b.get("timestamp") or b.get("Timestamp"),
-        }
-        for b in blocks[:limit]
-    ]
-    return (200, {"count": len(summaries), "total": len(blocks), "memories": summaries})
+            "count": len(summaries),
+            "total": len(blocks),
+            "withheld": withheld,
+            "memories": summaries,
+        },
+    )
 
 
 def _handle_walkthrough(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
@@ -1002,6 +1145,112 @@ def _handle_fed_resolve(workspace: str, body: dict[str, Any]) -> tuple[int, dict
     return (200, out)
 
 
+# ---------------------------------------------------------------------------
+# The route table — the only thing that makes a handler reachable
+# ---------------------------------------------------------------------------
+
+#: The response can carry workspace block content.
+CONTENT = "content"
+#: It cannot. Swept anyway — a misclassification is what the sweep is for.
+NO_CONTENT = "no-content"
+_VERDICTS = frozenset({CONTENT, NO_CONTENT})
+
+#: How the dispatcher builds a handler's second argument.
+_TAKES = frozenset({"workspace", "params", "body", "tail"})
+
+
+@dataclass(frozen=True)
+class Route:
+    """One reachable endpoint, and whether it can serve block content.
+
+    ``verdict`` has **no default**. A new endpoint cannot be routed
+    without someone deciding what it serves, and the sweep in
+    ``tests/test_http_read_admission.py`` measures that decision against
+    a quarantined canary rather than trusting it: the reach set it
+    observes must equal the ``content`` set declared here, both ways
+    round. A route that starts returning block content joins the reach
+    set and fails the build until it is reclassified; a ``content`` route
+    that stops reaching fails too, rather than degrading into a canary
+    check over an error string.
+
+    This is the HTTP twin of the MCP registry sweep. That sweep covers the
+    102 registered tools and nothing else — the whole of this transport,
+    every REST client and every library caller were outside it, which is
+    how ``GET /memories`` served ``get_all(active_only=False)`` for four
+    minor versions with no admission on it at all.
+    """
+
+    method: str
+    path: str
+    handler: Callable[..., tuple[int, dict[str, Any]]]
+    takes: str
+    verdict: str
+    #: Response for a prefix route whose tail is empty, when the handler
+    #: should not be reached at all with a blank id.
+    empty_tail_error: str | None = None
+
+    def __post_init__(self) -> None:
+        # Import-time, not test-time: a malformed route cannot be loaded,
+        # so the module refuses to serve rather than serving something
+        # nobody classified.
+        if self.verdict not in _VERDICTS:
+            raise ValueError(f"route {self.method} {self.path} has verdict {self.verdict!r}; must be one of {sorted(_VERDICTS)}")
+        if self.takes not in _TAKES:
+            raise ValueError(f"route {self.method} {self.path} takes {self.takes!r}; must be one of {sorted(_TAKES)}")
+
+    @property
+    def name(self) -> str:
+        """``"GET /memories"`` — the id the sweep and the metrics use."""
+        return f"{self.method} {self.path}"
+
+
+#: Every reachable endpoint. ``takes="tail"`` is a prefix match; every
+#: other kind is an exact match on the path with the query string split
+#: off. Order is the match order.
+ROUTES: tuple[Route, ...] = (
+    Route("GET", PATH_STATUS, _handle_status, "workspace", NO_CONTENT),
+    Route("GET", PATH_MEMORIES, _handle_list_memories, "params", CONTENT),
+    Route("GET", PATH_FED_CONFLICTS, _handle_fed_conflicts, "params", NO_CONTENT),
+    Route("GET", _FED_VCLOCK_PREFIX, _handle_fed_vclock, "tail", NO_CONTENT, empty_tail_error="block_id required"),
+    Route("POST", PATH_QUERY, _handle_query, "body", CONTENT),
+    Route("POST", PATH_CONSOLIDATE, _handle_consolidate, "body", NO_CONTENT),
+    # MEASURED, not assumed. ``compile_walkthrough`` projects recall rows
+    # into ``{step, block_id, role, score, subject}`` and the rows carry
+    # ``excerpt`` rather than ``Statement``, so the subject comes out
+    # empty and the response is block ids and scores. Same shape, and the
+    # same reasoning, as ``compile_truth_walkthrough`` on the MCP side.
+    # The reach check is what keeps this honest: the day the projection
+    # starts carrying text, the sweep's reach set grows and the build
+    # fails until this row says CONTENT.
+    Route("POST", PATH_WALKTHROUGH, _handle_walkthrough, "body", NO_CONTENT),
+    Route("POST", PATH_CLEAR, _handle_clear, "body", NO_CONTENT),
+    Route("POST", PATH_FED_WRITE, _handle_fed_write, "body", NO_CONTENT),
+    Route("POST", PATH_FED_RESOLVE, _handle_fed_resolve, "body", NO_CONTENT),
+    # The tail is a block id the caller supplied, so an empty one reaches
+    # the handler and is refused there by ``_valid_block_id`` — one
+    # rejection path for a bad id, not two.
+    Route("DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT),
+)
+
+
+def content_routes() -> frozenset[str]:
+    """Names of the routes declared able to serve block content."""
+    return frozenset(route.name for route in ROUTES if route.verdict == CONTENT)
+
+
+def _match_route(method: str, base: str) -> tuple[Route | None, str]:
+    """The route serving ``(method, base)``, and the tail it captured."""
+    for route in ROUTES:
+        if route.method != method:
+            continue
+        if route.takes == "tail":
+            if base.startswith(route.path):
+                return (route, base[len(route.path) :])
+        elif base == route.path:
+            return (route, "")
+    return (None, "")
+
+
 _LOOPBACK_ORIGINS = frozenset(
     {
         "http://127.0.0.1",
@@ -1154,60 +1403,73 @@ def build_handler(
                 return (None, 400)
             return (payload, 0)
 
+        # -- request guards, in one place -------------------------------
+        def _guards_passed(self) -> bool:
+            """Origin, rate limit, peer allowlist, auth — in that order.
+
+            The order is load-bearing and unchanged: a cross-origin
+            request is refused before it consumes rate-limit budget, and
+            the federation peer allowlist is checked *before* auth, so a
+            valid token from an address the operator did not list still
+            gets 403.
+            """
+            if not self._origin_ok():
+                _write_status(self, 403, "cross-origin request rejected")
+                return False
+            if self._rate_limited():
+                return False
+            if not self._peer_allowed():
+                self._reject_peer()
+                return False
+            if not self._authenticated():
+                self._reject_auth()
+                return False
+            return True
+
+        # -- dispatch ---------------------------------------------------
+        def _dispatch(self, method: str, payload: dict[str, Any] | None = None) -> None:
+            """Route one request through :data:`ROUTES`, or 404.
+
+            The table is the only source of reachability. An ``if base ==
+            ...`` chain here would let a handler be served without a
+            classification, which is exactly how this transport ended up
+            outside the read-surface sweep.
+            """
+            base, params = _parse_query_params(self.path)
+            route, tail = _match_route(method, base)
+            if route is None:
+                _write_status(self, 404, "not found")
+                return
+            if route.takes == "tail" and not tail and route.empty_tail_error:
+                _write_status(self, 400, route.empty_tail_error)
+                return
+            if route.takes == "workspace":
+                status, body = route.handler(workspace)
+            elif route.takes == "params":
+                status, body = route.handler(workspace, params)
+            elif route.takes == "body":
+                status, body = route.handler(workspace, payload if payload is not None else {})
+            else:
+                status, body = route.handler(workspace, tail)
+            _write_json(self, status, body)
+
         # -- OPTIONS (CORS preflight reject — S-7) ----------------------
         def do_OPTIONS(self) -> None:
             _write_status(self, 405, "method not allowed")
 
         # -- GET --------------------------------------------------------
         def do_GET(self) -> None:
-            if not self._origin_ok():
-                _write_status(self, 403, "cross-origin request rejected")
+            if not self._guards_passed():
                 return
-            if self._rate_limited():
-                return
-            if not self._peer_allowed():
-                self._reject_peer()
-                return
-            if not self._authenticated():
-                self._reject_auth()
-                return
-            base, params = _parse_query_params(self.path)
-            if base == PATH_STATUS:
-                status, body = _handle_status(workspace)
-                _write_json(self, status, body)
-                return
-            if base == PATH_MEMORIES:
-                status, body = _handle_list_memories(workspace, params)
-                _write_json(self, status, body)
-                return
-            if base == PATH_FED_CONFLICTS:
-                status, body = _handle_fed_conflicts(workspace, params)
-                _write_json(self, status, body)
-                return
-            if base.startswith(_FED_VCLOCK_PREFIX):
-                block_id = base[len(_FED_VCLOCK_PREFIX) :]
-                if not block_id:
-                    _write_status(self, 400, "block_id required")
-                    return
-                status, body = _handle_fed_vclock(workspace, block_id)
-                _write_json(self, status, body)
-                return
-            _write_status(self, 404, "not found")
+            self._dispatch("GET")
 
         # -- POST -------------------------------------------------------
         def do_POST(self) -> None:
-            if not self._origin_ok():
-                _write_status(self, 403, "cross-origin request rejected")
+            if not self._guards_passed():
                 return
-            if self._rate_limited():
-                return
-            if not self._peer_allowed():
-                self._reject_peer()
-                return
-            if not self._authenticated():
-                self._reject_auth()
-                return
-            base, _params = _parse_query_params(self.path)
+            # Body first, route second — unchanged. An oversized body is
+            # a 413 whatever path it was aimed at, so a caller cannot use
+            # an unknown path to smuggle one past the cap.
             payload, err = self._read_json_body()
             if err:
                 _write_status(self, err, "bad request body")
@@ -1217,52 +1479,13 @@ def build_handler(
                 # rather than assert — a stale handler shouldn't 500.
                 _write_status(self, 400, "empty body")
                 return
-            if base == PATH_QUERY:
-                status, body = _handle_query(workspace, payload)
-                _write_json(self, status, body)
-                return
-            if base == PATH_CONSOLIDATE:
-                status, body = _handle_consolidate(workspace, payload)
-                _write_json(self, status, body)
-                return
-            if base == PATH_WALKTHROUGH:
-                status, body = _handle_walkthrough(workspace, payload)
-                _write_json(self, status, body)
-                return
-            if base == PATH_CLEAR:
-                status, body = _handle_clear(workspace, payload)
-                _write_json(self, status, body)
-                return
-            if base == PATH_FED_WRITE:
-                status, body = _handle_fed_write(workspace, payload)
-                _write_json(self, status, body)
-                return
-            if base == PATH_FED_RESOLVE:
-                status, body = _handle_fed_resolve(workspace, payload)
-                _write_json(self, status, body)
-                return
-            _write_status(self, 404, "not found")
+            self._dispatch("POST", payload)
 
         # -- DELETE -----------------------------------------------------
         def do_DELETE(self) -> None:
-            if not self._origin_ok():
-                _write_status(self, 403, "cross-origin request rejected")
+            if not self._guards_passed():
                 return
-            if self._rate_limited():
-                return
-            if not self._peer_allowed():
-                self._reject_peer()
-                return
-            if not self._authenticated():
-                self._reject_auth()
-                return
-            base, _params = _parse_query_params(self.path)
-            if base.startswith(_MEMORY_ID_PREFIX):
-                block_id = base[len(_MEMORY_ID_PREFIX) :]
-                status, body = _handle_delete_memory(workspace, block_id)
-                _write_json(self, status, body)
-                return
-            _write_status(self, 404, "not found")
+            self._dispatch("DELETE")
 
     return Handler
 

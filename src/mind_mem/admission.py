@@ -75,7 +75,7 @@ leaf ``enums`` module — no I/O, no config, no other package import — so
 the write surface can depend on it without dragging the whole governance
 stack, and its private state cannot be reached from anywhere else. The
 two functions that need the egress predicate (:func:`admit_read` and
-:func:`_require_status_within_tier`) import ``admissibility`` inside the
+:func:`_require_write_within_tier`) import ``admissibility`` inside the
 function body, deliberately, to keep that true.
 """
 
@@ -87,7 +87,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Final, Iterator, Mapping, Optional, Sequence
 
-from .enums import INITIAL_STATUS, IngestTier, is_servable
+from .enums import INITIAL_STATUS, TIER_ID_PREFIXES, IngestTier, Status, is_servable
 
 __all__ = [
     "AdmissionReceipt",
@@ -478,14 +478,23 @@ def require_admission(block_id: str, *, status: object = None, operation: str = 
         covered = ", ".join(sorted(receipt.covers)[:8]) or "(none)"
         raise _ungated(operation, f"admission {receipt.entry_id} does not cover block {block_id!r} (covers: {covered})")
     if operation == OP_WRITE:
-        _require_status_within_tier(receipt, block_id, status)
+        _require_write_within_tier(receipt, block_id, status)
     return receipt
 
 
-def _require_status_within_tier(receipt: AdmissionReceipt, block_id: str, status: object) -> None:
-    """Refuse, under a withheld-minting tier, anything recall would serve.
+def _require_write_within_tier(receipt: AdmissionReceipt, block_id: str, status: object) -> None:
+    """Refuse a write the receipt's ingest tier is not entitled to make.
 
-    The predicate is :func:`~mind_mem.admissibility.is_admissible_status`
+    Two rules, and the tier table decides both. **Confinement**
+    (:data:`~mind_mem.enums.TIER_ID_PREFIXES`): a confined tier may write
+    only ids whose prefix it names, and only the one status its
+    ``INITIAL_STATUS`` row mints — that narrowness is what lets
+    ``DETECTOR_FINDING`` mint ``open``, a status recall recognises,
+    without becoming a second ``admit_proposal``. **Status**, for every
+    other tier: under a tier that mints a withheld status, a block must
+    arrive in a state recall will not serve.
+
+    The status predicate is :func:`~mind_mem.admissibility.is_admissible_status`
     — the **same** one the recall allow-list applies — and using it here
     is the whole point. This check used to ask ``is_servable(status)``,
     which is a different question about the same value, and the two
@@ -497,8 +506,7 @@ def _require_status_within_tier(receipt: AdmissionReceipt, block_id: str, status
     gate API and without ever naming a status the gate could refuse.
 
     Asking the reader's question at the writer's door closes it by
-    construction: under a tier that mints a withheld status, a block must
-    arrive in a state recall will not serve. Moving between two withheld
+    construction. Moving between two withheld
     statuses is still not an escalation, and a carrying tier
     (``INITIAL_STATUS`` row ``None``) still constrains nothing.
     """
@@ -512,9 +520,35 @@ def _require_status_within_tier(receipt: AdmissionReceipt, block_id: str, status
         raise UngatedWriteError(
             f"admission {receipt.entry_id} for {block_id!r} names no ingest tier, so no status rule applies to it; refusing the write"
         )
+    confined_to = TIER_ID_PREFIXES.get(receipt.tier)
+    if confined_to is not None:
+        prefix = str(block_id).split("-", 1)[0]
+        if prefix not in confined_to:
+            raise UngatedWriteError(
+                f"block {block_id!r} was admitted under ingest tier {receipt.tier.value!r}, "
+                f"which may only write ids prefixed {sorted(confined_to)} — {prefix!r} is not "
+                "one of them. A confined tier is confined so that the status it mints cannot "
+                "reach a corpus that status does not belong to; open the scope that owns this "
+                "corpus instead."
+            )
     row = INITIAL_STATUS[receipt.tier]
     if row is None or is_servable(row):
         return
+    if confined_to is not None:
+        # A confined tier mints exactly its own row and nothing else, on
+        # ids it is confined to. That is the whole of its licence: it
+        # cannot escalate (the row is not servable, checked above), it
+        # cannot pick a different lifecycle status, and it cannot leave
+        # its corpora. Without this arm the generic rule below would
+        # refuse the tier's OWN status whenever recall recognises it —
+        # which is the case that made the confinement necessary.
+        if _status_is(status, row):
+            return
+        raise UngatedWriteError(
+            f"block {block_id!r} was admitted under ingest tier {receipt.tier.value!r}, "
+            f"which mints exactly {row.value!r}, but the write carries {status!r}. A confined "
+            f"tier has one status to give; stamp {row.value!r} or open a different scope."
+        )
     if is_admissible_status(status):
         served = "a servable status" if is_servable(status) else "no status at all"
         raise UngatedWriteError(
@@ -523,6 +557,23 @@ def _require_status_within_tier(receipt: AdmissionReceipt, block_id: str, status
             f"({status!r}) and recall would serve it. Stamp {row.value!r} at the "
             "door and release it through a governance proposal instead."
         )
+
+
+def _status_is(status: object, row: Status) -> bool:
+    """True when *status* is exactly *row*, on the corpus's spelling terms.
+
+    Same normalisation :func:`~mind_mem.enums.is_servable` applies (case,
+    surrounding space), because a live corpus holds ``Open`` beside
+    ``open`` and they are one state. Anything that is not a string or a
+    :class:`~mind_mem.enums.Status` is not the row — an unstated status
+    included, which is the point: a confined tier cannot land a block
+    with no status any more than an ingest tier can.
+    """
+    if isinstance(status, Status):
+        return status is row
+    if not isinstance(status, str):
+        return False
+    return status.strip().lower() == row.value
 
 
 # ---------------------------------------------------------------------------

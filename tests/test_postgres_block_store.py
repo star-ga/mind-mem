@@ -466,14 +466,20 @@ class TestRoundTrip:
         result = store.get_by_id("D-99999999-999")
         assert result is None
 
-    def test_delete_block_returns_true(self, store: PostgresBlockStore, admitted) -> None:
+    def test_delete_block_returns_true(self, store: PostgresBlockStore, admitted, admit_delete) -> None:
         store.write_block(_make_block("D-20260419-002"))
-        removed = store.delete_block("D-20260419-002")
+        # ``admitted`` authorises the write; a write receipt is deliberately
+        # not spendable on a delete, so the removal opens its own scope.
+        with admit_delete(store._workspace, "D-20260419-002"):
+            removed = store.delete_block("D-20260419-002")
         assert removed is True
         assert store.get_by_id("D-20260419-002") is None
 
-    def test_delete_missing_block_returns_false(self, store: PostgresBlockStore) -> None:
-        removed = store.delete_block("D-99999999-000")
+    def test_delete_missing_block_returns_false(self, store: PostgresBlockStore, admit_delete) -> None:
+        # Inside a covering scope an absent id is a miss, not a refusal —
+        # authorisation decides the outcome, existence never leaks through it.
+        with admit_delete(store._workspace, "D-99999999-000"):
+            removed = store.delete_block("D-99999999-000")
         assert removed is False
 
     def test_get_all_returns_written_blocks(self, store: PostgresBlockStore, admitted) -> None:

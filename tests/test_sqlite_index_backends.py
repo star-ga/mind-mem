@@ -241,7 +241,7 @@ class TestPostgresBuildSourcesStore:
         assert [h["_id"] for h in query_index(ws, "Postgres", limit=5)] == ["D-20260613-301"]
         assert [h["_id"] for h in query_index(ws, "elephant", limit=5)] == ["D-20260613-302"]
 
-    def test_rebuild_drops_blocks_deleted_from_store(self, pg_workspace):
+    def test_rebuild_drops_blocks_deleted_from_store(self, pg_workspace, admit_delete):
         ws, store, _ = pg_workspace
         store.write_block(
             {
@@ -255,7 +255,9 @@ class TestPostgresBuildSourcesStore:
         assert index_status(ws)["blocks"] == 1
 
         # Remove it from the store, then rebuild — the FTS cache must follow.
-        store.delete_block("D-20260613-401")
+        # A write receipt does not authorise a delete; open the delete scope.
+        with admit_delete(ws, "D-20260613-401"):
+            store.delete_block("D-20260613-401")
         summary = build_index(ws, incremental=False)
         assert summary["blocks_indexed"] == 0
         assert index_status(ws)["blocks"] == 0

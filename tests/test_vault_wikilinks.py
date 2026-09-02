@@ -54,7 +54,14 @@ def _read_written(vault_root: str, relative_path: str) -> str:
 
 
 @pytest.fixture()
-def tmp(tmp_path: Path) -> str:
+def tmp(tmp_path: Path, admitted) -> str:
+    """The vault fixtures seed KG edges, and an edge needs an admission.
+
+    ``admitted`` (tests/conftest.py) opens a real ``admit_proposal`` on
+    ``tmp_path`` — a genuine gate call with a genuine chain entry, not a
+    test-only bypass. Requesting it here covers every ``_make_kg`` helper
+    in this file without threading a scope through each one.
+    """
     return str(tmp_path)
 
 

@@ -175,7 +175,7 @@ def pg_workspace(tmp_path: Path) -> Generator[tuple[str, PostgresBlockStore], No
 
 @requires_pg
 @pytest.mark.usefixtures("admitted")
-def test_postgres_iter_active_blocks_sees_store_blocks(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
+def test_postgres_iter_active_blocks_sees_store_blocks(pg_workspace: tuple[str, PostgresBlockStore], admit_delete) -> None:
     ws, store = pg_workspace
     store.write_block(
         {
@@ -197,7 +197,9 @@ def test_postgres_iter_active_blocks_sees_store_blocks(pg_workspace: tuple[str, 
     )
     # The store's ``active_only`` filters the row-level lifecycle flag
     # (set FALSE on delete), the same contract feature code relies on.
-    assert store.delete_block("D-20260613-102") is True
+    # A write receipt does not authorise a delete; open the delete scope.
+    with admit_delete(ws, "D-20260613-102"):
+        assert store.delete_block("D-20260613-102") is True
 
     blocks = iter_active_blocks(ws)
     ids = {b["_id"] for b in blocks}

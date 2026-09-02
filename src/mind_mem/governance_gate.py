@@ -901,6 +901,13 @@ _ACTION_MAP: dict[str, EvidenceAction] = {
     # --- Content withdrawn. ---
     "DELETE": EvidenceAction.ROLLBACK,
     "ROLLBACK": EvidenceAction.ROLLBACK,
+    # A whole-corpus restore withdraws every block written since the
+    # snapshot and resurrects the versions under it. That is the same
+    # coarse class as a rollback and carries no new enum member — a 5.0.1
+    # reader parses the record and sees ``ROLLBACK`` — while the raw verb
+    # in the chain's ``action`` column and in ``metadata["action_verb"]``
+    # keeps a restore distinguishable from the rollback of one proposal.
+    "RESTORE": EvidenceAction.ROLLBACK,
     # --- Governance verbs that own an EvidenceAction member outright. ---
     "PROPOSE": EvidenceAction.PROPOSE,
     "VERIFY": EvidenceAction.VERIFY,

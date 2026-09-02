@@ -93,6 +93,18 @@ class Status(str, Enum):
     QUARANTINED = "quarantined"
     #: Withheld: an auto-captured signal nobody has reviewed yet.
     PENDING = "pending"
+    #: An unresolved detector finding (a contradiction, a drift signal).
+    #:
+    #: NOT a quarantine state and NOT servable in the :data:`SERVABLE`
+    #: sense: ``is_servable(OPEN)`` is False, so no tier minting it can
+    #: reach ``admit_proposal``'s privilege. It is nonetheless a status
+    #: recall RECOGNISES (``admissibility.RECOGNISED_STATUSES``), because
+    #: a contradiction nobody can recall is a finding the product never
+    #: made. The tier that mints it is confined by
+    #: :data:`TIER_ID_PREFIXES` to the two corpora those findings live
+    #: in, so "recall-visible" is bought with a prefix allow-list rather
+    #: than with trust.
+    OPEN = "open"
 
 
 #: The allow-list. A block is servable only when its status is named here.
@@ -187,6 +199,14 @@ class IngestTier(str, Enum):
     STORE_MIGRATION = "store-migration"
     #: Applying an approved proposal. The only tier that reaches ACTIVE.
     PROPOSAL_APPLY = "proposal-apply"
+    #: The integrity scanner's own findings — contradictions and drift.
+    #:
+    #: Derived content: every input is a block already admitted to the
+    #: corpus, so the quarantine axis (which exists for untrusted INPUT)
+    #: has nothing to say about it. What the gate buys here is the
+    #: receipt and the chain row, not withholding. Confined by
+    #: :data:`TIER_ID_PREFIXES` so it can write nothing but a finding.
+    DETECTOR_FINDING = "detector-finding"
 
 
 #: The **only** place an initial status is decided.
@@ -210,8 +230,57 @@ INITIAL_STATUS: Mapping[IngestTier, Optional[Status]] = MappingProxyType(
         IngestTier.RESTAMP: None,
         IngestTier.STORE_MIGRATION: None,
         IngestTier.PROPOSAL_APPLY: Status.ACTIVE,
+        IngestTier.DETECTOR_FINDING: Status.OPEN,
     }
 )
+
+
+#: Block-id prefixes a tier may mint for. A tier listed here is
+#: **confined**: :func:`~mind_mem.admission.require_admission` refuses its
+#: receipt for any id outside the set, and refuses any status but the one
+#: its :data:`INITIAL_STATUS` row names.
+#:
+#: This is what makes :attr:`IngestTier.DETECTOR_FINDING` narrow enough to
+#: mint a status recall recognises. Unconfined tiers are absent from this
+#: table and keep the general rule (a withheld-minting tier may not carry
+#: in anything recall would serve); a confined tier trades that blanket
+#: rule for a much smaller reach — two corpora, one status, no choice.
+#:
+#: Keep in step with ``block_store._BLOCK_PREFIX_MAP``: a prefix here that
+#: the store cannot route is a tier that can write nothing at all
+#: (pinned by ``tests/test_governed_detector_writes.py``).
+TIER_ID_PREFIXES: Mapping[IngestTier, frozenset[str]] = MappingProxyType(
+    {
+        IngestTier.DETECTOR_FINDING: frozenset({"C", "DREF"}),
+    }
+)
+
+
+def is_confined(tier: IngestTier) -> bool:
+    """True when *tier* may only write ids with a named prefix.
+
+    Derived from :data:`TIER_ID_PREFIXES` rather than hand-listed, so a
+    new confined tier is classified the moment it has a row.
+    """
+    return tier in TIER_ID_PREFIXES
+
+
+def mints_quarantine(tier: IngestTier) -> bool:
+    """True when *tier*'s row means "withheld until governance admits it".
+
+    The distinction :data:`INITIAL_STATUS` alone cannot draw. A row is a
+    quarantine marker when the tier is an *input* door: an unconfined
+    tier whose status is not servable. A **confined** tier's row is the
+    lifecycle state of one corpus (an ``open`` contradiction has passed
+    the gate; it is unresolved, not unadmitted), so it is not evidence
+    that a block skipped governance and must not withhold every other
+    block that happens to share the spelling.
+
+    ``admissibility.UNADMITTED`` derives from this, so a new *input* tier
+    still withholds its content with no edit anywhere else.
+    """
+    row = INITIAL_STATUS[tier]
+    return row is not None and not is_servable(row) and not is_confined(tier)
 
 
 def mints_servable(tier: IngestTier) -> bool:
@@ -227,10 +296,13 @@ def mints_servable(tier: IngestTier) -> bool:
 __all__ = [
     "INITIAL_STATUS",
     "SERVABLE",
+    "TIER_ID_PREFIXES",
     "IngestTier",
     "Leg",
     "Status",
     "TaskStatus",
+    "is_confined",
     "is_servable",
+    "mints_quarantine",
     "mints_servable",
 ]

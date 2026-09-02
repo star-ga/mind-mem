@@ -10,11 +10,15 @@ signals, one-off entity types not in the prefix map)."* ``delete_block``
 did not fall back. It returned ``False``.
 
 Measured before the fix, on a corpus holding one ``D-`` block and one
-``SIG-`` block in ``entities/signals.md``:
+unmapped-prefix block in ``entities/signals.md`` (the probe used a
+``SIG-`` id, which 5.0.2 later routed through the prefix map when GAP-2
+made signals writable through the store; the fixture below carries a
+``TRAJ-`` id instead, so it keeps measuring the fallback rather than the
+canonical-file path):
 
-* ``get_by_id`` and ``get_all`` both returned the ``SIG-`` block, so
+* ``get_by_id`` and ``get_all`` both returned the unmapped block, so
   recall served it;
-* ``DELETE /memories/SIG-20260901-007`` answered ``404 block not found``
+* ``DELETE /memories/<unmapped id>`` answered ``404 block not found``
   while the block sat on disk; and
 * ``POST /clear`` answered ``200 {"ok": true, "deleted": 1}`` and left it
   behind — a partial purge reported as a whole one.
@@ -51,10 +55,15 @@ from mind_mem.http_transport import _handle_clear, _handle_delete_memory
 #: In ``_BLOCK_PREFIX_MAP`` — resolves to ``decisions/DECISIONS.md``.
 MAPPED_ID = "D-20260901-001"
 
-#: Not in the map. The prefix the map's own docstring names as the
-#: example of what it does not cover.
-UNMAPPED_ID = "SIG-20260901-007"
-UNMAPPED_ID_2 = "SIG-20260901-008"
+#: Not in the map. ``TRAJ`` blocks are real (``trajectory.py`` writes
+#: them, one file per capture) and no row of ``corpus_registry.CORPUS_TABLE``
+#: gives the prefix a canonical file, so ``_resolve_block_file`` returns
+#: ``None`` for them — which is the whole premise of this file. It used to
+#: be ``SIG``; 5.0.2 mapped that prefix (GAP-2), and
+#: :func:`test_the_unmapped_block_is_real_and_the_prefix_map_does_not_know_it`
+#: is what said so.
+UNMAPPED_ID = "TRAJ-20260901-007"
+UNMAPPED_ID_2 = "TRAJ-20260901-008"
 
 #: A mapped prefix filed somewhere other than its canonical file.
 DISPLACED_ID = "D-20260901-042"
@@ -114,11 +123,11 @@ def _phase(ws: str, phase: str) -> list[dict[str, Any]]:
 def test_the_unmapped_block_is_real_and_the_prefix_map_does_not_know_it(workspace: str) -> None:
     """Positive control for every test below.
 
-    If the prefix map ever grows a ``SIG`` row, this test says so — and
+    If the prefix map ever grows a ``TRAJ`` row, this test says so — and
     the rest of the file would be measuring the mapped path while
     claiming to measure the fallback.
     """
-    assert _resolve_block_file(workspace, UNMAPPED_ID) is None, "SIG is mapped now; pick a prefix that is not"
+    assert _resolve_block_file(workspace, UNMAPPED_ID) is None, "TRAJ is mapped now; pick a prefix that is not"
     assert _resolve_block_file(workspace, MAPPED_ID) is not None
     store = MarkdownBlockStore(workspace)
     assert store.get_by_id(UNMAPPED_ID) is not None, "the store cannot read the block, so nothing here is about deleting it"
@@ -206,8 +215,8 @@ def test_an_absent_id_still_returns_false_after_the_whole_corpus_is_walked(works
     gate = get_gate(workspace)
     before = _ids(workspace)
 
-    with gate.admit_delete("SIG-20260901-999", rationale="deleting an id that is not here"):
-        assert store.delete_block("SIG-20260901-999") is False
+    with gate.admit_delete("TRAJ-20260901-999", rationale="deleting an id that is not here"):
+        assert store.delete_block("TRAJ-20260901-999") is False
 
     assert _ids(workspace) == before, "a miss changed the corpus"
     assert _phase(workspace, PHASE_REMOVED) == [], "a miss recorded a removal"

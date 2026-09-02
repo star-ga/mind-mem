@@ -263,13 +263,15 @@ def test_vault_sync_finds_the_knowledge_graph_in_its_real_location(tmp_path: Pat
     location the product ever creates. The isfile guard had no else, so a
     caller who asked for links got a link-free note and success.
     """
+    from mind_mem.governance_gate import get_gate
     from mind_mem.knowledge_graph import KnowledgeGraph, Predicate
     from mind_mem.mcp.tools.agent import vault_sync
 
     ws = tmp_path / "ws"
     (ws / "memory").mkdir(parents=True)
-    with KnowledgeGraph(str(ws / "memory" / "knowledge_graph.db")) as kg:
-        kg.add_edge("D-20260101-001", Predicate.RELATED_TO, "PRJ-mind-mem", source_block_id="D-20260101-001")
+    with get_gate(str(ws)).admit_proposal(proposal_id="TEST-VAULT-SEED", content="[]", actor="pytest"):
+        with KnowledgeGraph(str(ws / "memory" / "knowledge_graph.db")) as kg:
+            kg.add_edge("D-20260101-001", Predicate.RELATED_TO, "PRJ-mind-mem", source_block_id="D-20260101-001")
 
     vault = tmp_path / "vault"
     vault.mkdir()

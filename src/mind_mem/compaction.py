@@ -8,6 +8,24 @@ Safety: Never deletes source of truth. Archived blocks are moved to
 archive files, not deleted. Snapshots older than retention period are
 removed (they can be recreated by restoring from git history).
 
+**Governance.** Two of the sweeps below rewrite the corpus of record, and
+both now do it under a governance scope opened before a byte moves:
+
+``compact_signals``           removes blocks. One
+                              :meth:`~mind_mem.governance_gate.GovernanceGate.admit_delete_batch`
+                              scope per sweep — one authorisation record,
+                              one removal record over the frozen id set.
+``archive_completed_blocks``  moves blocks between files of record. One
+                              :meth:`~mind_mem.governance_gate.GovernanceGate.admit_batch`
+                              scope per run, on the carrying tier: nothing
+                              dies, so nothing is recorded as a death. The
+                              full argument is in that function's docstring.
+
+The two remaining sweeps (:func:`cleanup_snapshots`,
+:func:`cleanup_daily_logs`) touch no block of record — a snapshot
+directory and a dated log file, neither parsed into blocks nor served by
+recall — so neither opens a scope.
+
 Usage:
     python3 -m mind_mem.compaction [workspace_path]
     python3 -m mind_mem.compaction . --dry-run
@@ -18,6 +36,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -25,11 +44,46 @@ import shutil
 from datetime import datetime, timedelta
 
 from .block_parser import parse_file
-from .enums import TaskStatus
+from .enums import IngestTier, TaskStatus
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
 _log = get_logger("compaction")
+
+#: Rationale recorded for the signals one compaction sweep removes.
+#:
+#: The other three delete doors name themselves when the caller gave no
+#: reason (:data:`mind_mem.http_transport.DEFAULT_DELETE_RATIONALE`,
+#: :data:`mind_mem.mcp.tools.memory_ops.DEFAULT_DELETE_RATIONALE`). This
+#: one has no caller to ask: a sweep is a scheduled retention policy, not
+#: a decision about any particular signal. So the record carries the
+#: door's name and the window that selected the set — never a sentence
+#: invented here about why someone wanted this content gone.
+SIGNAL_SWEEP_RATIONALE = "compaction-signal-sweep"
+
+#: Evidence verb for the archive move.
+#:
+#: ``MIGRATE`` rather than a new member: ``governance_gate._ACTION_MAP``
+#: is an allowlist and adding a verb is a wire change an older reader
+#: cannot parse, while the shape here is the one ``MIGRATE`` already
+#: names — already-governed blocks moved between files of record, as
+#: ``mm migrate-store`` moves them between backends. Emphatically **not**
+#: ``DELETE``: see :func:`archive_completed_blocks` for why recording a
+#: move as a death would be the worse lie.
+ARCHIVE_VERB = "MIGRATE"
+
+
+def _sweep_batch_id(prefix: str, block_ids: list[str]) -> str:
+    """A stable subject id for one compaction decision.
+
+    Derived from the frozen id set, not from a clock, for the reason
+    ``http_transport._clear_batch_id`` gives: the evidence record already
+    carries its own timestamp, and a subject id that changes between two
+    identical runs tells an auditor nothing while making the record
+    impossible to reproduce.
+    """
+    digest = hashlib.sha256("\n".join(block_ids).encode("utf-8")).hexdigest()
+    return f"{prefix}-{digest[:16]}"
 
 
 def _load_config(ws: str) -> dict:
@@ -48,8 +102,44 @@ def archive_completed_blocks(ws: str, days: int = 90, dry_run: bool = False) -> 
 
     Blocks are appended to {file}_ARCHIVE.md, then removed from the
     source file. This keeps source files small while preserving history.
+
+    **A relocation is recorded, and it is recorded as a move.** The
+    thesis is that no content enters, leaves, or dies without a receipt,
+    and this sweep rewrites the corpus of record. Measured on a workspace
+    built by ``mind-mem-init``, before this change: a ``done`` task left
+    ``tasks/TASKS.md``, appeared in ``tasks/TASKS_ARCHIVE.md``, and the
+    evidence chain gained **zero** rows. What the same probe also
+    measured is why this is not a death and must not be recorded as one:
+
+    * ``BlockStore.get_by_id`` still resolves the block afterwards.
+      ``_discover_files`` globs *every* ``.md`` in the corpus dirs, so
+      the archive file is inside the store's read surface — the block
+      stays readable, stays reachable by ``DELETE /memories/{id}`` and
+      ``POST /clear``, and its eventual death still mints a receipt then.
+    * It does leave the *recall* surface: ``_recall_constants.CORPUS_FILES``
+      has no ``*_ARCHIVE.md`` row, so the indexer, the BM25 corpus walk
+      and ``storage.iter_active_blocks`` (scan, drift, export, reindex)
+      all stop seeing it.
+
+    So the honest reading is "still governed, no longer served", and both
+    halves have to survive into the record. A ``DELETE`` receipt would
+    fail the first half: it writes a removal row carrying the content
+    hash of something that is still in the workspace, which makes
+    "removed" mean two different things and leaves a future auditor
+    unable to tell an archive from a destruction. Silence fails the
+    second: a block silently stops being recallable with nothing in the
+    chain naming who moved it or when, and the splice that moves it is
+    the same destructive primitive the delete path uses.
+
+    One :meth:`~mind_mem.governance_gate.GovernanceGate.admit_batch`
+    scope per run, on :attr:`~mind_mem.enums.IngestTier.RESTAMP` — the
+    carrying tier, which mints no status and cannot raise one. That is
+    the shape ``pipeline_hash.reextract_dirty_blocks`` already uses for a
+    bulk rewrite of already-admitted blocks, and an archive is exactly
+    that plus a change of file. The record names every id moved; a
+    ``dry_run`` moves nothing and opens no scope.
     """
-    archived = []
+    archived: list[str] = []
     cutoff = datetime.now() - timedelta(days=days)
     cutoff_str = cutoff.strftime("%Y-%m-%d")
 
@@ -58,73 +148,112 @@ def archive_completed_blocks(ws: str, days: int = 90, dry_run: bool = False) -> 
         "decisions/DECISIONS.md": {"superseded", "revoked"},
     }
 
+    # Plan first, act second. The id set the scope covers is frozen
+    # before a byte moves, exactly as ``POST /clear`` freezes the set it
+    # wipes: a block written into TASKS.md while DECISIONS.md is being
+    # rewritten is outside this run's record, so this run must not move
+    # it. Planning both files also makes the run ONE decision with one
+    # record, rather than one record per file that happened to have work.
+    plan: list[tuple[str, str, str, list[dict]]] = []
     for rel_path, archive_statuses in files_to_compact.items():
         path = os.path.join(ws, rel_path)
         if not os.path.isfile(path):
             continue
+        to_archive = [
+            block
+            for block in parse_file(path)
+            if block.get("Status", "") in archive_statuses and block.get("Date", "9999-99-99") < cutoff_str
+        ]
+        if to_archive:
+            plan.append((rel_path, path, rel_path.replace(".md", "_ARCHIVE.md"), to_archive))
 
-        blocks = parse_file(path)
-        to_archive = []
-        to_keep = []
+    if not plan:
+        return archived
 
-        for block in blocks:
-            status = block.get("Status", "")
-            date = block.get("Date", "9999-99-99")
-            if status in archive_statuses and date < cutoff_str:
-                to_archive.append(block)
-            else:
-                to_keep.append(block)
-
-        if not to_archive:
-            continue
-
-        if dry_run:
+    if dry_run:
+        for rel_path, _path, _archive_rel, to_archive in plan:
             for b in to_archive:
                 archived.append(f"[dry-run] Would archive {b['_id']} ({b.get('Status')}) from {rel_path}")
-            continue
+        return archived
 
-        # Write archived blocks to archive file
-        archive_rel = rel_path.replace(".md", "_ARCHIVE.md")
-        archive_path = os.path.join(ws, archive_rel)
+    moved_ids = [str(b["_id"]) for _rel, _path, _arch, to_archive in plan for b in to_archive]
 
-        with FileLock(path):
-            # Re-read to avoid TOCTOU
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
+    # Imported here, as the delete doors import it: the governance layer
+    # is not a dependency of importing this module, only of running a
+    # sweep that rewrites the corpus.
+    from .governance_gate import get_gate
 
-            # Build archive content
-            archive_lines = []
-            for b in to_archive:
-                # Extract the raw text for this block from the file
-                block_text = _extract_block_text(content, b["_id"])
-                if block_text:
-                    archive_lines.append(block_text)
-
-            if archive_lines:
-                os.makedirs(os.path.dirname(archive_path), exist_ok=True)
-                with open(archive_path, "a", encoding="utf-8") as f:
-                    for text in archive_lines:
-                        f.write(f"\n{text}\n---\n")
-
-                # Remove archived blocks from source
-                new_content = content
-                for b in to_archive:
-                    block_text = _extract_block_text(new_content, b["_id"])
-                    if block_text:
-                        new_content = new_content.replace(block_text, "")
-
-                # Clean up excessive blank lines
-                new_content = re.sub(r"\n{4,}", "\n\n\n", new_content)
-
-                tmp_path = path + ".tmp"
-                with open(tmp_path, "w", encoding="utf-8") as f:
-                    f.write(new_content)
-                os.replace(tmp_path, path)
-
-                for b in to_archive:
-                    archived.append(f"Archived {b['_id']} ({b.get('Status')}) -> {archive_rel}")
+    with get_gate(ws).admit_batch(
+        action=ARCHIVE_VERB,
+        batch_id=_sweep_batch_id("archive", moved_ids),
+        block_ids=moved_ids,
+        content="\n".join(moved_ids),
+        tier=IngestTier.RESTAMP,
+        actor="compaction",
+        metadata={
+            "door": "compaction.archive_completed_blocks",
+            "retention_days": days,
+            "blocks": len(moved_ids),
+            "files": [rel for rel, _p, _a, _t in plan],
+        },
+    ) as receipt:
+        for _rel_path, path, archive_rel, to_archive in plan:
+            archived.extend(_archive_one_file(ws, path, archive_rel, to_archive))
+        _log.info("compaction_archived", blocks=len(archived), admission=receipt.entry_id)
 
     return archived
+
+
+def _archive_one_file(ws: str, path: str, archive_rel: str, to_archive: list[dict]) -> list[str]:
+    """Move *to_archive* out of *path* into *archive_rel*; return the action lines.
+
+    Runs inside the caller's open ``admit_batch`` scope. Split out of
+    :func:`archive_completed_blocks` so the planning half and the moving
+    half are each readable on their own; the body is the pre-5.0.2 move
+    verbatim, because the defect was the missing scope and not this.
+    """
+    moved: list[str] = []
+    archive_path = os.path.join(ws, archive_rel)
+
+    with FileLock(path):
+        # Re-read to avoid TOCTOU
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Build archive content
+        archive_lines = []
+        for b in to_archive:
+            # Extract the raw text for this block from the file
+            block_text = _extract_block_text(content, b["_id"])
+            if block_text:
+                archive_lines.append(block_text)
+
+        if not archive_lines:
+            return moved
+
+        os.makedirs(os.path.dirname(archive_path), exist_ok=True)
+        with open(archive_path, "a", encoding="utf-8") as f:
+            for text in archive_lines:
+                f.write(f"\n{text}\n---\n")
+
+        # Remove archived blocks from source
+        new_content = content
+        for b in to_archive:
+            block_text = _extract_block_text(new_content, b["_id"])
+            if block_text:
+                new_content = new_content.replace(block_text, "")
+
+        # Clean up excessive blank lines
+        new_content = re.sub(r"\n{4,}", "\n\n\n", new_content)
+
+        tmp_path = path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        os.replace(tmp_path, path)
+
+    for b in to_archive:
+        moved.append(f"Archived {b['_id']} ({b.get('Status')}) -> {archive_rel}")
+    return moved
 
 
 def _extract_block_text(content: str, block_id: str) -> str | None:
@@ -216,9 +345,44 @@ def compact_signals(ws: str, days: int = 60, dry_run: bool = False) -> list[str]
 
     Only removes signals with Status: resolved or Status: rejected.
     Pending signals are never removed.
+
+    **The fourth door that killed content with no record**, found while
+    closing the third. Measured on a workspace built by
+    ``mind-mem-init``: a sweep returned ``["Removed signal SIG-…
+    (resolved)"]``, the blocks left ``intelligence/SIGNALS.md`` — a file
+    in ``CORPUS_FILES``, so recall had been serving them — and
+    ``memory/evidence_chain.jsonl`` gained **zero** rows while
+    ``memory/deleted_blocks.jsonl`` gained no entry either. Same defect
+    class as the MCP tool's Markdown leg, for the same reason: this
+    function never called a block store, it spliced the corpus file
+    itself, so the store's ``delete_block`` gate could not see it.
+
+    **A compaction is a batch.** One
+    :meth:`~mind_mem.governance_gate.GovernanceGate.admit_delete_batch`
+    scope covers the whole sweep, so a run that removes forty signals
+    leaves one authorisation record and one removal record carrying a
+    Merkle root over every ``(block_id, content_hash)`` that actually
+    went — not forty unlinked records with nothing saying they were one
+    decision. Same reasoning as ``POST /clear``.
+
+    The id set is frozen before the file is opened, so a signal written
+    *while* the sweep runs is outside the receipt and cannot be taken by
+    it. Eligibility is decided before the scope opens for the same reason
+    the clear endpoint decides it there: a sweep with nothing to remove
+    mints no authorisation, because a receipt covering nothing authorises
+    nothing. ``dry_run`` returns on that same path — it destroys nothing,
+    so it must not put a delete decision in the chain, and ``memory_health``
+    calls it on every dashboard render.
+
+    Raises:
+        GovernanceBypassError: The gate refused the sweep (retired gate,
+            drifted spec binding). Nothing is removed — a refused
+            authorisation must never be reported as a completed
+            compaction.
     """
     cleaned: list[str] = []
-    signals_path = os.path.join(ws, "intelligence", "SIGNALS.md")
+    signals_rel = os.path.join("intelligence", "SIGNALS.md")
+    signals_path = os.path.join(ws, signals_rel)
     if not os.path.isfile(signals_path):
         return cleaned
 
@@ -236,19 +400,58 @@ def compact_signals(ws: str, days: int = 60, dry_run: bool = False) -> list[str]
             cleaned.append(f"[dry-run] Would remove signal {b['_id']} ({b.get('Status')})")
         return cleaned
 
-    with FileLock(signals_path):
-        with open(signals_path, "r", encoding="utf-8") as f:
-            content = f.read()
+    doomed = [str(b["_id"]) for b in removable]
 
-        for b in removable:
-            block_text = _extract_block_text(content, b["_id"])
-            if block_text:
-                content = content.replace(block_text, "")
-                cleaned.append(f"Removed signal {b['_id']} ({b.get('Status')})")
+    # Imported here, as ``memory_ops.delete_memory_item`` imports them:
+    # the governance layer and the block store are dependencies of
+    # *running* a sweep, not of importing this module.
+    from .block_store import _record_deletion
+    from .governance_gate import get_gate
 
-        content = re.sub(r"\n{4,}", "\n\n\n", content)
-        with open(signals_path, "w", encoding="utf-8") as f:
-            f.write(content)
+    removed: list[tuple[str, str]] = []
+    with get_gate(ws).admit_delete_batch(
+        _sweep_batch_id("signal-sweep", doomed),
+        doomed,
+        rationale=f"{SIGNAL_SWEEP_RATIONALE}: resolved/rejected signals older than {days}d",
+        # Empty lets the gate resolve the caller — the authenticated REST
+        # agent when one is in front, else "system". A scheduled sweep has
+        # no human identity to claim, and inventing one would put a name
+        # in the actor field that nobody stood behind.
+        actor="",
+        target_file=signals_rel,
+        metadata={"door": "compaction.compact_signals", "retention_days": days, "eligible": len(doomed)},
+    ) as receipt:
+        with FileLock(signals_path):
+            with open(signals_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            for b in removable:
+                block_text = _extract_block_text(content, b["_id"])
+                if block_text:
+                    content = content.replace(block_text, "")
+                    # Journal-ahead, inside the lock and before the
+                    # rewrite lands, exactly as ``MarkdownBlockStore.
+                    # delete_block`` orders it: a crash between the two
+                    # must leave a recoverable copy of content that may
+                    # be gone, never gone content with no copy.
+                    _record_deletion(ws, str(b["_id"]), block_text)
+                    removed.append((str(b["_id"]), block_text))
+                    cleaned.append(f"Removed signal {b['_id']} ({b.get('Status')})")
+
+            content = re.sub(r"\n{4,}", "\n\n\n", content)
+            with open(signals_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+        # The blocks are gone from disk. Report them under the scope that
+        # authorised it — after the rewrite and outside the file lock, at
+        # the point ``MarkdownBlockStore.delete_block`` reports its own.
+        # The journal above is recovery; this is the audit fact, and the
+        # gate turns the ledger into the one removal record when the
+        # scope closes. A signal whose text was not found removed nothing
+        # and is reported as nothing.
+        for block_id, block_text in removed:
+            receipt.record_removal(block_id, block_text)
+        _log.info("compaction_signals_removed", blocks=len(removed), admission=receipt.entry_id)
 
     return cleaned
 

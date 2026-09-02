@@ -209,6 +209,45 @@ class _FakePool:
         return _FakeConnection(self.rows, self.journal)
 
 
+def _psycopg_importable() -> bool:
+    """Whether ``import psycopg`` succeeds here — asked, never assumed.
+
+    ``psycopg`` is in the ``postgres`` extra, not ``test``, so it is present
+    on the ``postgres backend`` job and on a developer box with the extra, and
+    absent on all fifteen ``os × python`` rows of the matrix. Written as the
+    real import rather than ``importlib.util.find_spec`` because the real
+    import is what ``_sql`` performs, and a probe that asks a different
+    question than the code under test is not a probe.
+    """
+    try:
+        import psycopg  # noqa: F401, PLC0415
+    except ModuleNotFoundError:
+        return False
+    return True
+
+
+def _sql_without_psycopg(schema: str, template: str) -> str:
+    """``block_store_postgres._sql`` with the driver taken out.
+
+    The real one returns a ``psycopg.sql.Composed``; this returns the same
+    statement as a plain string with the schema quoted the same way. It exists
+    so the postgres leg RUNS on a row that has no psycopg rather than skipping
+    there — the alternative measured on 2026-09-02 was three red tests on
+    every matrix row, and a skip would have left this store's delete governance
+    unmeasured on all fifteen of them.
+
+    This moves the double's boundary from "psycopg's pool" to "psycopg", and
+    that is the whole cost: statement composition is driver work, not the
+    admission check, the removal report or the journal savepoint that this
+    suite is about. ``_FakeCursor`` already ``str()``s whatever it is handed
+    and tells the two statements apart by their text, so it cannot tell the
+    difference. Real composition through real psycopg is still exercised —
+    here whenever psycopg is importable, and against a live database by
+    ``tests/test_postgres_block_store.py`` on the ``postgres backend`` job.
+    """
+    return template.format(s=f'"{schema}"')
+
+
 # ---------------------------------------------------------------------------
 # The five cases
 # ---------------------------------------------------------------------------
@@ -290,11 +329,11 @@ def _encrypted_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Case:
     return case
 
 
-def _postgres_case(tmp_path: Path) -> Case:
-    from mind_mem.block_store_postgres import PostgresBlockStore
+def _postgres_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Case:
+    import mind_mem.block_store_postgres as bsp
 
     ws = _fresh_workspace(tmp_path, "postgres")
-    store = PostgresBlockStore(dsn="postgresql://unused", schema="mm_conformance", workspace=ws)
+    store = bsp.PostgresBlockStore(dsn="postgresql://unused", schema="mm_conformance", workspace=ws)
     pool = _FakePool()
     # Drive the real ``delete_block`` body against a stand-in driver: the
     # code under test is the admission check and the removal report, not
@@ -302,6 +341,12 @@ def _postgres_case(tmp_path: Path) -> Case:
     # it is production code.
     store._schema_ready = True  # type: ignore[attr-defined]
     store._pool = pool  # type: ignore[attr-defined]
+    # ``_ensure_schema`` and ``_get_pool`` are already short-circuited by the
+    # two lines above, so ``_sql`` is the single remaining psycopg touch on
+    # this path. Where the driver is installed the real one runs; where it is
+    # not, the leg still runs against the stand-in rather than disappearing.
+    if not _psycopg_importable():
+        monkeypatch.setattr(bsp, "_sql", _sql_without_psycopg)
     case = Case(name="postgres", store=store, workspace=ws, seed=lambda *_: None, present=lambda _b: False)
 
     def seed(bid: str, statement: str) -> None:
@@ -367,7 +412,7 @@ def case(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.Mon
         built.seed(SEED_ID, "the block under test")
         getattr(built, "_seal")()
     elif name == "postgres":
-        built = _postgres_case(tmp_path)
+        built = _postgres_case(tmp_path, monkeypatch)
         built.seed(SEED_ID, "the block under test")
         built.records_removal = True
     elif name == "replica":

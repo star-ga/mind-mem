@@ -19,7 +19,14 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 from .admission import require_admission, require_delete_admission
 from .block_parser import get_active, get_by_id, parse_file
-from .corpus_registry import SNAPSHOT_DIRS, SNAPSHOT_EXCLUDE_DIRS
+from .corpus_registry import (
+    BLOCK_PREFIX_MAP,
+    CORPUS_RELPATHS,
+    SNAPSHOT_DIRS,
+    SNAPSHOT_EXCLUDE_DIRS,
+    assert_ledger_free,
+    is_ledger_path,
+)
 from .mind_filelock import FileLock
 from .observability import get_logger
 
@@ -127,7 +134,15 @@ def _build_cleanup_inventory(ws: str, roots: set[str]) -> dict[str, list[str]]:
 
 
 def _build_manifest(snap_dir: str, files: list[str], cleanup_inventory: dict[str, list[str]] | None = None) -> None:
-    """Write snapshot manifest for efficient delta-based restore."""
+    """Write snapshot manifest for efficient delta-based restore.
+
+    Refuses a file list naming a ledger of record. Every snapshot walk
+    filters for itself, but this is the one call all of them have to make,
+    so a walk that forgets cannot produce an artifact a later restore
+    would rewind the audit chain with. It raises at capture time, when
+    nothing has been lost yet, rather than at the rollback.
+    """
+    assert_ledger_free(files, what=f"snapshot manifest for {snap_dir}")
     normalized = [f.replace(os.sep, "/") for f in files]
     manifest_path = os.path.join(snap_dir, "MANIFEST.json")
     payload: dict[str, Any] = {"files": normalized, "version": 2}
@@ -151,6 +166,41 @@ def _read_manifest(snap_dir: str) -> dict[str, Any] | None:
         "cleanup_inventory": data.get("cleanup_inventory", {}),
         "version": data.get("version", 1),
     }
+
+
+def _is_removable_orphan(rel_posix: str, allowed: set[str]) -> bool:
+    """True when a file under a snapshotted directory must go on restore.
+
+    A ledger of record never qualifies, whatever the manifest says. The
+    snapshot walk refuses to capture the ledgers, so they are absent from
+    every manifest built after 5.0.2 — and *that absence is what would make
+    this sweep delete them*, replacing a rewound chain with no chain at
+    all. The exclusion has to be stated on both sides or the capture-side
+    half is worse than the defect.
+    """
+    return rel_posix not in allowed and not is_ledger_path(rel_posix)
+
+
+def _carry_ledgers_into(ws: str, live_dir: str, staged_dir: str) -> None:
+    """Copy the ledgers under *live_dir* into *staged_dir* before a swap.
+
+    The legacy (pre-manifest) restore replaces a whole directory: copytree
+    into a temp, rmtree the live one, rename the temp over it. ``memory/``
+    holds corpus files *and* the append-only ledgers, so that swap destroys
+    the live chain outright — a harder failure than the rewind this change
+    exists to remove. The snapshot holds no ledger to put back, so the live
+    ones are carried across the swap instead of being restored from it.
+    """
+    if not os.path.isdir(live_dir):
+        return
+    for root, _dirs, files in os.walk(live_dir):
+        for fname in files:
+            live_path = os.path.join(root, fname)
+            if not is_ledger_path(os.path.relpath(live_path, ws)):
+                continue
+            staged_path = os.path.join(staged_dir, os.path.relpath(live_path, live_dir))
+            os.makedirs(os.path.dirname(staged_path), exist_ok=True)
+            shutil.copy2(live_path, staged_path)
 
 
 def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_inventory: dict[str, list[str]] | None = None) -> None:
@@ -220,7 +270,7 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
                         continue
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
-                        if rel.replace(os.sep, "/") not in allowed:
+                        if _is_removable_orphan(rel.replace(os.sep, "/"), allowed):
                             os.remove(os.path.join(root, fname))
         else:
             dirpath = os.path.join(ws, d)
@@ -232,35 +282,25 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
                     dirs[:] = [sub for sub in dirs if not _is_in_excluded_dir(ws, os.path.join(root, sub))]
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
-                        if rel.replace(os.sep, "/") not in allowed:
+                        if _is_removable_orphan(rel.replace(os.sep, "/"), allowed):
                             os.remove(os.path.join(root, fname))
 
 
-# Block-id prefix → (corpus subdir, filename) routing. Shared with
-# ``mcp.tools.memory_ops._BLOCK_PREFIX_MAP``; duplicated here so the
-# write surface doesn't pull an MCP-layer import. Keep in lockstep.
-_BLOCK_PREFIX_MAP: dict[str, tuple[str, str]] = {
-    "D": ("decisions", "DECISIONS.md"),
-    "T": ("tasks", "TASKS.md"),
-    "C": ("intelligence", "CONTRADICTIONS.md"),
-    "INC": ("entities", "incidents.md"),
-    "PRJ": ("entities", "projects.md"),
-    "PER": ("entities", "people.md"),
-    "TOOL": ("entities", "tools.md"),
-    # v3.9: inbox folder ingestion (text + PDF) writes here.
-    "INBOX": ("memory", "INBOX.md"),
-    # v4.0.19: agent-to-agent messaging (`mm send` / `mm inbox`) writes here.
-    # Receive = recall over this corpus; cross-node works because the store
-    # is the shared Postgres hub (claude-peers is banned; this is the channel).
-    "MSG": ("memory", "MESSAGES.md"),
-    # Migration importers (roadmap Group G) (`mm import --from ...`) write here.
-    "IMP": ("memory", "IMPORTED.md"),
-    # 5.0.1: the `mm ingest-serve` webhook door. Under memory/ like every
-    # other untrusted drop corpus, so a release decision can name these ids
-    # (``admissibility._releasable_id_pattern`` derives the releasable set
-    # from this table).
-    "INGEST": ("memory", "INGEST.md"),
-}
+#: Block-id prefix → (corpus subdir, filename) routing.
+#:
+#: Derived, not declared: :data:`corpus_registry.CORPUS_TABLE` is the one
+#: corpus definition, and this is its write-routing projection. It used to be
+#: a literal here, a second literal in ``mcp.tools.memory_ops`` and a third
+#: view of the same corpus in ``_recall_constants.CORPUS_FILES`` — three
+#: tables that disagreed about which files hold blocks, which is how a
+#: released ``INBOX-`` block became readable by recall and unreachable by the
+#: store (see :meth:`MarkdownBlockStore._discover_files`). Adding a corpus is
+#: now one row in the table; there is no second place to forget it.
+#:
+#: Kept under this name because ``admissibility._releasable_id_pattern``,
+#: ``mcp_server`` and several tests import it from here.
+_BLOCK_PREFIX_MAP: dict[str, tuple[str, str]] = BLOCK_PREFIX_MAP
+
 
 _BLOCK_ID_RE = _re.compile(r"^([A-Z]+)-[a-zA-Z0-9_.-]+$")
 
@@ -614,6 +654,14 @@ class MarkdownBlockStore:
 
     def __init__(self, workspace: str, corpus_dirs: tuple[str, ...] | None = None):
         self._workspace = workspace
+        # ``corpus_dirs`` is a *narrowing*: the default (None) is the whole
+        # corpus as ``corpus_registry`` defines it — the CORPUS_DIRS markdown
+        # walk plus every file the corpus table names, wherever it lives. A
+        # caller that passes an explicit tuple is asking for a subset, and
+        # gets the table's files only for the directories it named. Nothing
+        # in ``src/`` narrows; the parameter exists for tests and for a
+        # caller opening one part of a workspace.
+        self._narrowed_to: tuple[str, ...] | None = corpus_dirs
         if corpus_dirs is None:
             from .corpus_registry import CORPUS_DIRS
 
@@ -630,16 +678,61 @@ class MarkdownBlockStore:
         self._lock_target = os.path.join(workspace, ".workspace")
 
     def _discover_files(self) -> list[str]:
-        """Discover all .md files in corpus directories."""
+        """Every file this store can read: the ONE corpus definition (I-14).
+
+        Two sources, unioned:
+
+        * every ``.md`` directly inside :data:`corpus_registry.CORPUS_DIRS`
+          — the historical walk, which also picks up files no prefix routes
+          to (``entities/signals.md``, an archive split out of
+          ``DECISIONS.md``); and
+        * every file :data:`corpus_registry.CORPUS_TABLE` names that exists
+          on disk — which is what adds the four untrusted-ingest corpora
+          under ``memory/`` (``INBOX.md``, ``MESSAGES.md``, ``IMPORTED.md``,
+          ``INGEST.md``).
+
+        The second half is the fix. Those four files are written through the
+        prefix map and served by recall (they are in ``CORPUS_FILES``), while
+        the walk never looked under ``memory/`` — so a released ``INBOX-``
+        block was returned by ``recall()`` and by ``iter_active_blocks``,
+        answered ``None`` from :meth:`get_by_id`, was absent from
+        :meth:`get_all`, and made ``DELETE /memories/{id}`` reply ``404 block
+        not found`` while the block sat on disk and the store's own
+        :meth:`delete_block` removed it fine under a scope. Measured, and the
+        ``POST /clear`` docstring asserted the opposite. The three
+        definitions of "the corpus" disagreeing was the defect; the 404 was a
+        symptom.
+
+        ``memory/`` is **not** walked wholesale — daily logs, the ledgers and
+        the deletion journal live there. Only the files the table names are
+        added, so a new drop corpus is one table row and nothing else is
+        exposed.
+
+        Order is stable and additive: the directory walk first, exactly as
+        before, then any table file the walk did not already produce, in
+        table order. An existing corpus keeps its enumeration order.
+        """
         if self._files is not None:
             return self._files
         files: list[str] = []
+        seen: set[str] = set()
         for d in self._corpus_dirs:
             dir_path = os.path.join(self._workspace, d)
             if os.path.isdir(dir_path):
                 for fname in sorted(os.listdir(dir_path)):
                     if fname.endswith(".md"):
-                        files.append(os.path.join(dir_path, fname))
+                        path = os.path.join(dir_path, fname)
+                        if path not in seen:
+                            seen.add(path)
+                            files.append(path)
+        for rel in CORPUS_RELPATHS:
+            subdir = rel.split("/", 1)[0]
+            if self._narrowed_to is not None and subdir not in self._narrowed_to:
+                continue
+            path = os.path.join(self._workspace, *rel.split("/"))
+            if path not in seen and os.path.isfile(path):
+                seen.add(path)
+                files.append(path)
         self._files = files
         return files
 
@@ -777,7 +870,9 @@ class MarkdownBlockStore:
             raise ValueError(f"invalid block id: {block_id!r}")
         target = _resolve_block_file(self._workspace, block_id)
         if target is None:
-            raise ValueError(f"no canonical file mapping for block id {block_id!r}; add an entry to _BLOCK_PREFIX_MAP to enable writes")
+            raise ValueError(
+                f"no canonical file mapping for block id {block_id!r}; add a row to corpus_registry.CORPUS_TABLE to enable writes"
+            )
 
         rendered = _render_block(block)
         os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -926,6 +1021,8 @@ class MarkdownBlockStore:
                 {p.replace("\\", "/").split("/", 1)[0] for p in files_touched if p},
             )
             for rel_path in files_touched:
+                if is_ledger_path(rel_path):
+                    continue  # a ledger of record is never snapshot content
                 resolved = os.path.realpath(os.path.join(ws_real, rel_path))  # nosec — realpath resolves symlinks; traversal filtered by startswith check below
                 if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
                     continue  # nosec — path escapes workspace; skip it
@@ -945,6 +1042,10 @@ class MarkdownBlockStore:
                         for fname in files:
                             src_file = os.path.join(root, fname)
                             rel = os.path.relpath(src_file, ws)
+                            if is_ledger_path(rel):
+                                # ``memory/`` is corpus AND ledger. Taking the
+                                # ledger is what makes the restore a rewind.
+                                continue
                             dst_file = os.path.join(snap_dir, rel)
                             os.makedirs(os.path.dirname(dst_file), exist_ok=True)
                             _safe_copy(src_file, dst_file)
@@ -1005,6 +1106,11 @@ class MarkdownBlockStore:
             #: put those files back, so they are reported, never counted as
             #: restored.
             missing: list[str] = []
+            #: Ledger entries a pre-5.0.2 manifest named. Reported apart from
+            #: ``missing`` on purpose: a refused ledger is the invariant
+            #: holding, not a damaged snapshot, so it must not make
+            #: ``complete`` read False and drain that signal of meaning.
+            refused_ledgers: list[str] = []
             restored = 0
             for rel_posix in manifest:
                 rel_path = rel_posix.replace("/", os.sep)
@@ -1016,6 +1122,14 @@ class MarkdownBlockStore:
                     dst = _safe_child_path(ws, rel_path)
                 except ValueError as exc:
                     _log.warning("restore_unsafe_manifest_entry", entry=rel_posix, reason=str(exc))
+                    continue
+                if is_ledger_path(rel_posix):
+                    # A snapshot taken before 5.0.2 names the ledgers. Putting
+                    # one back IS the rewind, so the write is refused — but the
+                    # entry stays in ``safe_manifest`` so the orphan sweep does
+                    # not delete the live ledger this branch just spared.
+                    safe_manifest.append(rel_posix)
+                    refused_ledgers.append(rel_posix)
                     continue
                 safe_manifest.append(rel_posix)
                 if os.path.exists(src):  # nosec — src is the resolved absolute path returned by _safe_child_path; path traversal already rejected above
@@ -1044,6 +1158,7 @@ class MarkdownBlockStore:
                 file_count=restored,
                 skipped=len(manifest) - len(safe_manifest),
                 missing=len(missing),
+                refused_ledgers=len(refused_ledgers),
                 complete=not missing,
             )
             return
@@ -1064,6 +1179,9 @@ class MarkdownBlockStore:
                 elif os.path.isdir(tmp_dst):
                     shutil.rmtree(tmp_dst)
                 shutil.copytree(src, tmp_dst)
+                # ``memory/`` is swapped wholesale here; carry the live
+                # ledgers across so the rmtree below cannot destroy them.
+                _carry_ledgers_into(ws, dst, tmp_dst)
                 if os.path.islink(dst):
                     os.unlink(dst)
                 elif os.path.isdir(dst):

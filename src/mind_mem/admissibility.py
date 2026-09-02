@@ -68,7 +68,7 @@ from __future__ import annotations
 import re
 from typing import Any, Final, Iterable, Mapping, Sequence
 
-from .enums import INITIAL_STATUS, TaskStatus, is_servable
+from .enums import INITIAL_STATUS, TaskStatus, is_servable, mints_quarantine
 from .observability import get_logger, metrics
 
 __all__ = [
@@ -123,12 +123,25 @@ UNREADABLE_STATUS: Final = "!unreadable"
 
 #: Statuses meaning "this block has not passed the governance gate".
 #:
-#: Derived from :data:`~mind_mem.enums.INITIAL_STATUS`, never hand-listed:
-#: a tier whose row mints a non-servable status contributes that status
-#: here automatically, so adding a withheld ingest tier needs no edit in
-#: this module.
+#: Derived from :data:`~mind_mem.enums.INITIAL_STATUS` through
+#: :func:`~mind_mem.enums.mints_quarantine`, never hand-listed: a tier
+#: whose row mints a non-servable status contributes that status here
+#: automatically, so adding a withheld ingest tier needs no edit in this
+#: module.
+#:
+#: The predicate is ``mints_quarantine`` rather than ``not is_servable``
+#: because those two questions came apart when a **confined** tier
+#: arrived (``enums.TIER_ID_PREFIXES``). ``DETECTOR_FINDING`` mints
+#: ``open`` on ``C-``/``DREF-`` ids only; ``open`` is a lifecycle state a
+#: live corpus has always held and recall has always served (Task blocks,
+#: open loops), so folding it in here would have withheld every ``open``
+#: block in the product to record one scanner. A confined tier's row is
+#: not evidence that a block skipped the gate — its receipt is evidence
+#: that it did not.
 UNADMITTED: Final[frozenset[str]] = frozenset(
-    status.value for status in INITIAL_STATUS.values() if status is not None and not is_servable(status)
+    INITIAL_STATUS[tier].value  # type: ignore[union-attr]  # mints_quarantine excludes the None rows
+    for tier in INITIAL_STATUS
+    if mints_quarantine(tier)
 )
 
 #: Lifecycle statuses recall recognises. Anything outside this set is

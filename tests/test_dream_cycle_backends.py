@@ -251,7 +251,7 @@ def test_pg_stale_detection_flags_old_block(pg_workspace: tuple[str, PostgresBlo
 
 @_pg_skip
 @pytest.mark.usefixtures("admitted")
-def test_pg_passes_ignore_inactive_blocks(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
+def test_pg_passes_ignore_inactive_blocks(pg_workspace: tuple[str, PostgresBlockStore], admit_delete) -> None:
     """Deleted (inactive) blocks are invisible to every pass (active_only)."""
     ws, store = pg_workspace
     store.write_block(
@@ -262,7 +262,10 @@ def test_pg_passes_ignore_inactive_blocks(pg_workspace: tuple[str, PostgresBlock
             "Date": "2026-06-13",
         }
     )
-    assert store.delete_block("D-20260613-401") is True
+    # The ``admitted`` fixture above authorises the write; a write receipt is
+    # deliberately not spendable on a delete, so the removal opens its own.
+    with admit_delete(ws, "D-20260613-401"):
+        assert store.delete_block("D-20260613-401") is True
     # The dangling ref inside the deleted block must not surface.
     assert all(b.cited_id != "D-20269999-998" for b in pass_citation_repair(ws))
 

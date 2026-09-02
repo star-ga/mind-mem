@@ -12,10 +12,24 @@ writing the graph from an un-reviewed model call:
    ``auto-capture-relation``) via the same ``append_signals`` path the
    entity ingester uses. Nothing touches the graph here.
 3. :func:`approve_relation_signals` is the apply-on-approve step: for
-   each operator-approved signal it calls ``KnowledgeGraph.add_edge``
-   with the real ``source_block_id``, a ``valid_from`` timestamp, and
-   an origin marker, then flips the signal status so approval is
-   idempotent.
+   each operator-approved signal it opens ONE ``admit_proposal`` scope,
+   calls ``KnowledgeGraph.add_edge`` with the real ``source_block_id``,
+   a ``valid_from`` timestamp and an origin marker, and writes the
+   signal back through the block store carrying ``Status: applied`` so
+   approval is idempotent.
+
+**Why the approval is a proposal apply (5.0.2).** ``pending`` is withheld
+by ``admissibility.is_admissible_status``; ``applied`` is served. Moving a
+signal between them is a mint of servable content, and the gate's rule is
+that only an approved proposal mints one. It used to be a ``re.subn`` over
+``SIGNALS.md`` — measured: on-disk ``Status: pending -> applied``, recall
+before "not served" and after "served", **all three ledgers +0**. The
+regex existed because ``write_block`` refused every ``SIG`` id: the prefix
+map had no row for it, so an approval had no store to write through and
+spliced the file itself. The fix removed the reason rather than adding a
+check — ``corpus_registry`` routes ``SIG`` to ``intelligence/SIGNALS.md``,
+this function writes the block through the store inside the scope that
+also lands the edge, and ``_flip_signal_status`` is gone.
 
 The extractor is injected (``extract_fn``) so the loop proves out with
 zero model calls in CI; the default binds to the configured extraction
@@ -25,14 +39,12 @@ model via :func:`mind_mem.llm_extractor.extract_relations`.
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Optional
 
 from .capture import append_signals
-from .knowledge_graph import KnowledgeGraph, Predicate, default_db_path
-from .mind_filelock import FileLock
+from .knowledge_graph import KnowledgeGraph, Predicate, default_db_path, edge_id
 from .observability import get_logger
 
 _log = get_logger("graph_ingest")
@@ -45,6 +57,19 @@ _MAX_ENTITY_NAME_LEN = 512
 _TAG_PREDICATE = "predicate="
 _TAG_SOURCE_BLOCK = "source-block="
 _TAG_CONFIDENCE = "edge-confidence="
+
+#: The status an approved relation signal carries afterwards.
+#:
+#: In ``admissibility.RECOGNISED_STATUSES``, therefore **served** — which
+#: is precisely why writing it is a governed mint and not a file edit. The
+#: signal arrives ``pending`` (``IngestTier.AUTO_CAPTURE``'s row in
+#: ``INITIAL_STATUS``), which is withheld.
+APPLIED_STATUS = "applied"
+
+#: Verb recorded for one relation-signal approval. ``admit_proposal``
+#: hard-codes ``"APPLY"``; this is the id prefix that names *which*
+#: approval, so a chain reader can join the record back to the signal.
+RELATION_APPROVAL_PREFIX = "relsig-"
 
 
 # ---------------------------------------------------------------------------
@@ -204,18 +229,31 @@ def _relation_from_block(block: dict) -> Optional[dict]:
     }
 
 
-def _relation_signal_blocks(workspace: str) -> list[dict]:
+def _relation_signal_entries(workspace: str) -> list[tuple[dict, dict]]:
+    """Every relation signal as ``(decoded, raw parsed block)``.
+
+    The raw block is kept because approving a signal now *writes it back*
+    through the block store rather than rewriting its ``Status:`` line in
+    place, and the store needs the whole block, not the decoded view. Two
+    functions rather than one extra key on the decoded dict: that dict is
+    returned to the CLI and printed, and a caller-visible payload is the
+    wrong place to smuggle internal state.
+    """
     path = _signals_path(workspace)
     if not os.path.isfile(path):
         return []
     from .block_parser import parse_file
 
-    out = []
+    out: list[tuple[dict, dict]] = []
     for block in parse_file(path):
         rel = _relation_from_block(block)
         if rel is not None:
-            out.append(rel)
+            out.append((rel, dict(block)))
     return out
+
+
+def _relation_signal_blocks(workspace: str) -> list[dict]:
+    return [rel for rel, _block in _relation_signal_entries(workspace)]
 
 
 def pending_relation_signals(workspace: str) -> list[dict]:
@@ -264,25 +302,6 @@ def attach_source_excerpts(
 # ---------------------------------------------------------------------------
 
 
-def _flip_signal_status(workspace: str, signal_id: str, new_status: str) -> bool:
-    """Rewrite ``Status:`` for one signal block in SIGNALS.md."""
-    path = _signals_path(workspace)
-    if not os.path.isfile(path):
-        return False
-    with FileLock(path):
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
-        pattern = re.compile(
-            rf"(\[{re.escape(signal_id)}\](?:(?!\n\[)[\s\S])*?\nStatus: )\w+",
-        )
-        new_content, n = pattern.subn(rf"\g<1>{new_status}", content, count=1)
-        if n == 0:
-            return False
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-    return True
-
-
 def approve_relation_signals(
     workspace: str,
     signal_ids: Iterable[str],
@@ -291,51 +310,124 @@ def approve_relation_signals(
 ) -> dict:
     """Apply operator-approved relation signals to the knowledge graph.
 
-    For each signal id: validate it is a pending relation signal,
-    write the edge via ``KnowledgeGraph.add_edge`` (real
-    ``source_block_id``, ``valid_from`` stamped, origin marker in
-    metadata), then flip the signal's status to ``applied``.
+    For each signal id: validate it is a pending relation signal, open one
+    :meth:`~mind_mem.governance_gate.GovernanceGate.admit_proposal` scope
+    named ``relsig-<signal id>``, and inside it write the edge via
+    ``KnowledgeGraph.add_edge`` (real ``source_block_id``, ``valid_from``
+    stamped, origin marker in metadata) **and** the signal block back
+    through the store carrying :data:`APPLIED_STATUS`.
+
+    One scope covers both halves because they are one decision: the
+    authorisation is recorded before either lands, and both land under it.
+    Two stores (SQLite and a Markdown file) cannot be committed atomically,
+    so the order is chosen for the direction its failure falls in — the
+    edge first, because it is idempotent (``INSERT OR IGNORE`` on the
+    tuple), and the served status last. A store write that fails therefore
+    leaves the signal **withheld** and the approval retryable; the reverse
+    order would leave it served with no edge behind it, which is the
+    failure a governed memory must not have.
+
+    Everything that can be refused is checked *before* the scope opens —
+    the id must resolve, the signal must be pending, and the triple must
+    be nameable by :func:`~mind_mem.knowledge_graph.edge_id` (which
+    validates the predicate and the provenance anchor). An approval that
+    cannot happen therefore mints no authorisation record, exactly as the
+    MCP delete door keeps its routing refusals outside its scope.
+
+    The store is the Markdown one by name rather than through
+    ``storage.get_block_store``: this function *reads* the signal by
+    parsing ``intelligence/SIGNALS.md`` off disk (as ``capture`` writes
+    it, on every backend), so the write has to land in the same file. A
+    factory call could route it to Postgres while the on-disk signal
+    stayed ``pending`` — approval would stop being idempotent and the
+    corpus would hold two answers.
+    deferred: move the signal READ onto the store too, then take the
+    factory — upgrade path: give ``_relation_signal_entries`` a store
+    handle and drop the direct construction here.
+
+    Nothing is constructed until a signal actually reaches its scope. That
+    is not tidiness: ``get_gate`` creates ``memory/`` and both ledger files
+    as a side effect of existing, so building it up front would mean a run
+    that approves nothing — a bad id, an empty list, ``mm graph-backfill``
+    with no ``--approve`` — leaves ledger files behind that the pre-5.0.2
+    code never created. A call that changes nothing must touch nothing.
 
     Returns ``{"applied": [...], "errors": {signal_id: reason}}``.
     """
+    from .block_store import MarkdownBlockStore
+    from .governance_gate import GovernanceBypassError, GovernanceGate, get_gate
+
     valid_from = now or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    staged = {r["signal_id"]: r for r in _relation_signal_blocks(workspace)}
+    staged = {rel["signal_id"]: (rel, block) for rel, block in _relation_signal_entries(workspace)}
     applied: list[str] = []
     errors: dict[str, str] = {}
+    gate: Optional[GovernanceGate] = None
+    store: Optional[MarkdownBlockStore] = None
     kg: Optional[KnowledgeGraph] = None
     try:
         for sig_id in signal_ids:
-            rel = staged.get(sig_id)
-            if rel is None:
+            entry = staged.get(sig_id)
+            if entry is None:
                 errors[sig_id] = "no relation signal with this id"
                 continue
+            rel, block = entry
             if rel["status"] != "pending":
                 errors[sig_id] = f"signal is not pending (status={rel['status']!r})"
                 continue
-            if kg is None:
-                kg = KnowledgeGraph(default_db_path(workspace))
             try:
-                kg.add_edge(
-                    rel["subject"],
-                    rel["predicate"],
-                    rel["object"],
-                    source_block_id=rel["source_block_id"],
-                    confidence=rel["confidence"],
-                    valid_from=valid_from,
-                    metadata={"origin": EDGE_ORIGIN, "signal_id": sig_id},
-                )
+                eid = edge_id(rel["subject"], rel["predicate"], rel["object"], rel["source_block_id"])
             except ValueError as exc:
                 errors[sig_id] = str(exc)
                 continue
-            if not _flip_signal_status(workspace, sig_id, "applied"):
-                # Edge landed but the ledger flip failed — surface it
-                # loudly; idempotent add_edge makes a retry safe.
-                errors[sig_id] = "edge written but SIGNALS.md status update failed"
+            if gate is None:
+                gate = get_gate(workspace)
+                store = MarkdownBlockStore(workspace)
+            if kg is None:
+                kg = KnowledgeGraph(default_db_path(workspace))
+            assert store is not None  # nosec B101 — built beside the gate, one line above
+            approved_block = {**block, "Status": APPLIED_STATUS}
+            try:
+                with gate.admit_proposal(
+                    proposal_id=f"{RELATION_APPROVAL_PREFIX}{sig_id}",
+                    content=f"{rel['subject']}\t{rel['predicate']}\t{rel['object']}\t{rel['source_block_id']}",
+                    actor="graph-ingest",
+                    target_file=os.path.relpath(_signals_path(workspace), workspace),
+                    metadata={
+                        "door": "graph_ingest.approve_relation_signals",
+                        "origin": EDGE_ORIGIN,
+                        "signal_id": sig_id,
+                        "edge_id": eid,
+                        "predicate": rel["predicate"],
+                        "source_block_id": rel["source_block_id"],
+                        "status_from": rel["status"],
+                        "status_to": APPLIED_STATUS,
+                    },
+                ):
+                    kg.add_edge(
+                        rel["subject"],
+                        rel["predicate"],
+                        rel["object"],
+                        source_block_id=rel["source_block_id"],
+                        confidence=rel["confidence"],
+                        valid_from=valid_from,
+                        metadata={"origin": EDGE_ORIGIN, "signal_id": sig_id},
+                    )
+                    store.write_block(approved_block)
+            except GovernanceBypassError as exc:
+                # Refused authorisation: no edge, no status change. Reported
+                # per signal rather than raised, because this function's
+                # contract is a per-id error map and a refusal is an
+                # outcome for one id, not a crash for the batch.
+                errors[sig_id] = f"governance refused the approval: {exc}"
+                continue
+            except ValueError as exc:
+                errors[sig_id] = str(exc)
                 continue
             applied.append(sig_id)
             _log.info(
                 "relation_signal_applied",
                 signal_id=sig_id,
+                edge_id=eid,
                 subject=rel["subject"],
                 predicate=rel["predicate"],
                 object=rel["object"],

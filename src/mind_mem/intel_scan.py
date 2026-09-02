@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 # Import block parser from same directory
 from .block_parser import parse_file
-from .enums import TaskStatus
+from .enums import INITIAL_STATUS, IngestTier, TaskStatus
 from .mind_filelock import FileLock
 
 _log = logging.getLogger("mind_mem.intel_scan")
@@ -810,58 +810,158 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
 # ═══════════════════════════════════════════════
 
 
+def _finding_status():
+    """The one status a detector finding may carry.
+
+    Read off the tier table rather than spelled as a literal:
+    :data:`~mind_mem.enums.INITIAL_STATUS` is the only place a status is
+    decided, and ``require_admission`` refuses a confined tier carrying
+    anything else — so a literal here would be a second definition that
+    could only ever drift into a refused write.
+    """
+    status = INITIAL_STATUS[IngestTier.DETECTOR_FINDING]
+    if status is None:  # pragma: no cover - pinned by test_governed_detector_writes
+        raise RuntimeError("IngestTier.DETECTOR_FINDING has no INITIAL_STATUS row; findings cannot be stamped")
+    return status.value
+
+
+def _block_text(block):
+    """A block rendered flat enough for the "already recorded?" substring test.
+
+    Not the storage renderer — this is only ever read back by the
+    duplicate checks below, which ask whether a phrase appears anywhere in
+    what the corpus already holds.
+    """
+    parts = [f"[{block.get('_id', '')}]"]
+    for key, value in block.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(value, (list, tuple)):
+            parts.append(f"{key}:")
+            parts.extend(f"- {item}" for item in value)
+        else:
+            parts.append(f"{key}: {value}")
+    return "\n".join(parts)
+
+
+def _recorded_findings(ws, prefix, path):
+    """``(store, text, highest index used today)`` for findings under *prefix*.
+
+    Read through the block STORE and not the file alone. The store is
+    where the blocks land now, and on a non-Markdown backend the canonical
+    file stays empty — a file-only read (what 5.0.1 did) would restart the
+    daily counter there and let a new finding take an id an existing one
+    already holds. The raw file is still unioned in so the duplicate test
+    keeps seeing exactly what it saw before on the Markdown backend,
+    including prose that sits outside any block.
+    """
+    from .storage import get_block_store
+
+    store = get_block_store(ws)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except FileNotFoundError:
+        text = ""
+
+    today = datetime.now().strftime("%Y%m%d")
+    stamp = f"{prefix}-{today}-"
+    indices = [int(x) for x in re.findall(rf"^\[{prefix}-{today}-(\d{{3}})\]", text, re.MULTILINE)]
+    for block in store.get_all(active_only=False):
+        block_id = str(block.get("_id") or "")
+        if not block_id.startswith(prefix + "-"):
+            continue
+        text += "\n" + _block_text(block)
+        tail = block_id[len(stamp) :]
+        if block_id.startswith(stamp) and tail.isdigit():
+            indices.append(int(tail))
+    return store, text, max(indices, default=0)
+
+
+def _write_findings(ws, store, blocks, *, action, label, target_file, report, summary):
+    """Land detector findings through the store under ONE batch admission.
+
+    The single governed writer for both detectors, and the reason GAP-1 is
+    closed by construction rather than by convention: neither
+    ``write_contradictions`` nor ``write_drift`` can reach a corpus file
+    any more, because neither one opens it. The scope is
+    ``IngestTier.DETECTOR_FINDING``, which is confined by
+    :data:`~mind_mem.enums.TIER_ID_PREFIXES` to ``C-``/``DREF-`` ids and to
+    the one status those findings carry, so this receipt buys nothing else:
+    it cannot land a decision, and it cannot mint ``active``.
+
+    One chain entry per run rather than one per finding, exactly as the
+    bulk importer does: the entry names the id set, and ``write_block``
+    refuses any id it did not name.
+    """
+    from .governance_gate import get_gate
+
+    ids = [str(block["_id"]) for block in blocks]
+    covered = "\n".join(ids)
+    digest = hashlib.sha256(covered.encode("utf-8")).hexdigest()[:16]
+    with get_gate(ws).admit_batch(
+        action=action,
+        batch_id=f"intel-scan-{label}-{digest}",
+        block_ids=ids,
+        content=covered,
+        tier=IngestTier.DETECTOR_FINDING,
+        actor="intel_scan",
+        target_file=target_file,
+        metadata={"detector": label, "findings": len(ids)},
+    ):
+        for block in blocks:
+            store.write_block(block)
+    report.info_msg(summary)
+
+
 def write_contradictions(contradictions, ws, report):
-    """Append new contradictions to CONTRADICTIONS.md."""
+    """Record new contradictions as governed ``C-`` blocks."""
     if not contradictions:
         return
 
     path = f"{ws}/intelligence/CONTRADICTIONS.md"
+    store, existing, existing_max = _recorded_findings(ws, "C", path)
+    today = datetime.now().strftime("%Y%m%d")
 
-    with FileLock(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                existing = f.read()
-        except FileNotFoundError:
-            existing = ""
+    new_blocks = []
+    for i, c in enumerate(contradictions):
+        cid = f"C-{today}-{existing_max + i + 1:03d}"
 
-        today = datetime.now().strftime("%Y%m%d")
-        # Find highest existing index for today to avoid ID collisions
-        existing_ids = re.findall(rf"^\[C-{today}-(\d{{3}})\]", existing, re.MULTILINE)
-        existing_max = max((int(x) for x in existing_ids), default=0)
+        # Skip if signatures already recorded
+        sig_pair = f"{c['sig1']['sig']['id']} vs {c['sig2']['sig']['id']}"
+        if sig_pair in existing:
+            continue
 
-        new_blocks = []
-        for i, c in enumerate(contradictions):
-            cid = f"C-{today}-{existing_max + i + 1:03d}"
+        new_blocks.append(
+            {
+                "_id": cid,
+                "Date": datetime.now().strftime("%Y-%m-%d"),
+                "Severity": c["severity"],
+                "Type": "decision_vs_decision",
+                "Statement": c["reason"],
+                "Objects": [c["sig1"]["decision"], c["sig2"]["decision"]],
+                "Evidence": [
+                    f"{c['sig1']['sig']['id']}: {c['sig1']['sig'].get('domain')}/{c['sig1']['sig'].get('modality')}",
+                    f"{c['sig2']['sig']['id']}: {c['sig2']['sig'].get('domain')}/{c['sig2']['sig'].get('modality')}",
+                ],
+                "ProposedFix": "manual_review",
+                "Status": _finding_status(),
+                "Resolution": "none",
+                "Sources": ["decisions/DECISIONS.md"],
+            }
+        )
 
-            # Skip if signatures already recorded
-            sig_pair = f"{c['sig1']['sig']['id']} vs {c['sig2']['sig']['id']}"
-            if sig_pair in existing:
-                continue
-
-            block = f"""
-[{cid}]
-Date: {datetime.now().strftime("%Y-%m-%d")}
-Severity: {c["severity"]}
-Type: decision_vs_decision
-Statement: {c["reason"]}
-Objects:
-- {c["sig1"]["decision"]}
-- {c["sig2"]["decision"]}
-Evidence:
-- {c["sig1"]["sig"]["id"]}: {c["sig1"]["sig"].get("domain")}/{c["sig1"]["sig"].get("modality")}
-- {c["sig2"]["sig"]["id"]}: {c["sig2"]["sig"].get("domain")}/{c["sig2"]["sig"].get("modality")}
-ProposedFix: manual_review
-Status: open
-Resolution: none
-Sources:
-- decisions/DECISIONS.md"""
-            new_blocks.append(block)
-
-        if new_blocks:
-            with open(path, "a", encoding="utf-8") as f:
-                for block in new_blocks:
-                    f.write(block + "\n")
-            report.info_msg(f"Wrote {len(new_blocks)} new contradiction(s) to CONTRADICTIONS.md")
+    if new_blocks:
+        _write_findings(
+            ws,
+            store,
+            new_blocks,
+            action="CONTRADICT",
+            label="contradictions",
+            target_file="intelligence/CONTRADICTIONS.md",
+            report=report,
+            summary=f"Wrote {len(new_blocks)} new contradiction(s) to CONTRADICTIONS.md",
+        )
 
 
 def _run_semantic_drift_detector(ws, data, report):
@@ -883,54 +983,48 @@ def _run_semantic_drift_detector(ws, data, report):
 
 
 def write_drift(drift_signals, ws, report):
-    """Append new drift signals to DRIFT.md."""
+    """Record new drift signals as governed ``DREF-`` blocks."""
     if not drift_signals:
         return
 
     path = f"{ws}/intelligence/DRIFT.md"
+    store, existing, existing_max = _recorded_findings(ws, "DREF", path)
+    today = datetime.now().strftime("%Y%m%d")
 
-    with FileLock(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                existing = f.read()
-        except FileNotFoundError:
-            existing = ""
+    new_blocks = []
+    for i, signal in enumerate(drift_signals):
+        dref_id = f"DREF-{today}-{existing_max + i + 1:03d}"
 
-        today = datetime.now().strftime("%Y%m%d")
-        existing_ids = re.findall(rf"^\[DREF-{today}-(\d{{3}})\]", existing, re.MULTILINE)
-        existing_max = max((int(x) for x in existing_ids), default=0)
+        # Skip if similar signal already recorded today
+        if signal["signal"] in existing and today[:8] in existing:
+            continue
 
-        new_blocks = []
-        for i, s in enumerate(drift_signals):
-            dref_id = f"DREF-{today}-{existing_max + i + 1:03d}"
+        new_blocks.append(
+            {
+                "_id": dref_id,
+                "Date": datetime.now().strftime("%Y-%m-%d"),
+                "Severity": signal["severity"],
+                "Signal": signal["signal"],
+                "Summary": signal["summary"],
+                "Metrics": ["see snapshot"],
+                "Evidence": list(signal.get("evidence", [])[:10]),
+                "ProposedAction": "manual_review",
+                "Status": _finding_status(),
+                "Sources": ["maintenance/intel-report.txt"],
+            }
+        )
 
-            # Skip if similar signal already recorded today
-            if s["signal"] in existing and today[:8] in existing:
-                continue
-
-            evidence_lines = "\n".join(f"- {e}" for e in s.get("evidence", [])[:10])
-
-            block = f"""
-[{dref_id}]
-Date: {datetime.now().strftime("%Y-%m-%d")}
-Severity: {s["severity"]}
-Signal: {s["signal"]}
-Summary: {s["summary"]}
-Metrics:
-- see snapshot
-Evidence:
-{evidence_lines}
-ProposedAction: manual_review
-Status: open
-Sources:
-- maintenance/intel-report.txt"""
-            new_blocks.append(block)
-
-        if new_blocks:
-            with open(path, "a", encoding="utf-8") as f:
-                for block in new_blocks:
-                    f.write(block + "\n")
-            report.info_msg(f"Wrote {len(new_blocks)} new drift signal(s) to DRIFT.md")
+    if new_blocks:
+        _write_findings(
+            ws,
+            store,
+            new_blocks,
+            action="DRIFT",
+            label="drift",
+            target_file="intelligence/DRIFT.md",
+            report=report,
+            summary=f"Wrote {len(new_blocks)} new drift signal(s) to DRIFT.md",
+        )
 
 
 def write_impact(impacts, ws, report):

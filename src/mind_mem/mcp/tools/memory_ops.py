@@ -147,6 +147,12 @@ _BLOCK_PREFIX_MAP = {
     "D": ("decisions", "DECISIONS.md"),
     "T": ("tasks", "TASKS.md"),
     "C": ("intelligence", "CONTRADICTIONS.md"),
+    # 5.0.2 (GAP-1): drift findings became writable through the store. Keep
+    # in lockstep with ``block_store._BLOCK_PREFIX_MAP``.
+    "DREF": ("intelligence", "DRIFT.md"),
+    # 5.0.2 (GAP-2): captured signals became writable through the store. Keep
+    # in lockstep with ``block_store._BLOCK_PREFIX_MAP``.
+    "SIG": ("intelligence", "SIGNALS.md"),
     "INC": ("entities", "incidents.md"),
     "PRJ": ("entities", "projects.md"),
     "PER": ("entities", "people.md"),

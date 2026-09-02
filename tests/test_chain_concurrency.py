@@ -50,7 +50,7 @@ from mind_mem.evidence_objects import (
     EvidenceChain,
     EvidenceChainCompromisedError,
 )
-from mind_mem.mind_filelock import FileLock, LockTimeout
+from mind_mem.mind_filelock import _BREAK_ADOPTED, _BREAK_NOTHING, _BREAK_REMOVED, FileLock, LockTimeout
 
 # ---------------------------------------------------------------------------
 # The writer that runs in each child process
@@ -828,8 +828,13 @@ if defeat:
                 return (0, 0)
 
     def _v501_break(self, identity=None):
-        """v5.0.1 _break_stale: unlink the path, arbitrated by nothing."""
+        """v5.0.1 _break_stale: unlink the path, arbitrated by nothing.
+
+        Reports the corpse gone, which is what v5.0.1's caller assumed when
+        it looped straight back into the create.
+        """
         _v501_unlink(self, identity)
+        return mfl._BREAK_REMOVED
 
     mfl.FileLock._unlink_if_ours = _v501_unlink
     mfl.FileLock._stale_identity = _v501_stale
@@ -936,6 +941,7 @@ def _v501_break(self, identity=None):
         os.unlink(self.lock_path)
     except OSError:
         pass
+    return _BREAK_REMOVED
 
 
 class TestAnEmptyLockfileIsNotACorpse:
@@ -1043,6 +1049,120 @@ with open(evidence + ".counts", "a", encoding="utf-8") as fh:
     fh.write("%s %d %d\\n" % (tag, violations, breaks[0]))
 """
 
+#: Windows unlink semantics, prepended to a worker so a Linux box can run
+#: the matrix row it does not have. On Windows a file cannot be unlinked
+#: while any handle is open on it unless that handle asked for
+#: ``FILE_SHARE_DELETE``, which CPython's ``os.open`` never does. POSIX
+#: allows it, and that difference is the whole regression: the break used to
+#: unlink the abandoned lockfile *while holding a descriptor on it*, so on
+#: Windows a stale lock could never be broken, every waiter spun to its
+#: timeout, and the test session died rather than failing.
+#:
+#: Fidelity, stated plainly: this refuses unlinks for handles open in **this
+#: process only**, which is exactly the break path. It therefore cannot see
+#: the release-side gap, where another process's open handle refuses a
+#: releasing process's unlink. That one is unmeasured here by construction.
+_WINDOWS_UNLINK_PREAMBLE = """\
+import os as _wos
+
+_real_unlink = _wos.unlink
+
+
+def _windows_unlink(path, *, dir_fd=None):
+    try:
+        target = _wos.stat(path)
+    except OSError:
+        return _real_unlink(path, dir_fd=dir_fd)
+    for entry in _wos.listdir("/proc/self/fd"):
+        try:
+            st = _wos.stat("/proc/self/fd/" + entry)
+        except OSError:
+            continue
+        if (st.st_dev, st.st_ino) == (target.st_dev, target.st_ino):
+            raise PermissionError(
+                32,
+                "The process cannot access the file because it is being used by another process",
+            )
+    return _real_unlink(path, dir_fd=dir_fd)
+
+
+_wos.unlink = _windows_unlink
+
+# Positive control, run before any of the code under test: a green result
+# from a simulation that is not actually refusing anything says nothing at
+# all. Prove the refusal here, and make its absence a worker failure.
+_probe = _wos.path.join(_wos.path.dirname(_wos.path.abspath(__file__)), "winsim-probe-%d" % _wos.getpid())
+_pfd = _wos.open(_probe, _wos.O_CREAT | _wos.O_RDWR, 0o600)
+try:
+    try:
+        _wos.unlink(_probe)
+    except PermissionError:
+        pass
+    else:
+        raise SystemExit("the windows unlink simulation is not refusing anything")
+finally:
+    _wos.close(_pfd)
+_real_unlink(_probe)
+"""
+
+#: The break protocol exactly as it shipped in 5.0.1: OS-lock arbitration,
+#: and then ``unlink`` of the inode **while this process still holds a
+#: descriptor on it**. Legal on POSIX, refused on Windows. Prepended after
+#: :data:`_WINDOWS_UNLINK_PREAMBLE`, it is the mutation that must turn the
+#: simulated-Windows gate red — and if it does not, that gate is not
+#: watching the thing it was written to watch.
+_UNLINK_BREAK_PREAMBLE = """\
+import os as _uos
+import mind_mem.mind_filelock as _umfl
+
+
+def _unlink_break(self, identity=None):
+    if identity is None:
+        identity = self._stale_identity()
+    if identity is None:
+        return _umfl._BREAK_NOTHING
+    try:
+        fd = _uos.open(self.lock_path, _uos.O_RDWR)
+    except OSError:
+        return _umfl._BREAK_NOTHING
+    try:
+        st = _uos.fstat(fd)
+        if (st.st_dev, st.st_ino) != identity:
+            return _umfl._BREAK_NOTHING
+        held = self._try_os_lock(fd)
+        if held is None:
+            self._unlink_if_ours(identity)
+            return _umfl._BREAK_REMOVED
+        if not held:
+            return _umfl._BREAK_NOTHING
+        try:
+            on_path = _uos.stat(self.lock_path)
+        except OSError:
+            return _umfl._BREAK_NOTHING
+        if (on_path.st_dev, on_path.st_ino) != identity:
+            return _umfl._BREAK_NOTHING
+        try:
+            _uos.unlink(self.lock_path)  # the Windows-illegal step
+        except OSError:
+            pass
+        # Unconditionally "the corpse is gone", which is what 5.0.1's caller
+        # assumed when it looped straight back into the create without ever
+        # consulting its own deadline. Hence a spin, not a timeout.
+        return _umfl._BREAK_REMOVED
+    finally:
+        try:
+            self._os_unlock(fd)
+        except OSError:
+            pass
+        try:
+            _uos.close(fd)
+        except OSError:
+            pass
+
+
+_umfl.FileLock._break_stale = _unlink_break
+"""
+
 #: A pid no process can have, so ``os.kill(pid, 0)`` is a definite
 #: "this owner is gone" rather than a guess.
 _IMPOSSIBLE_PID = "999999999"
@@ -1050,10 +1170,17 @@ _RACE_PROCS = 6
 _RACE_ROUNDS = 60
 
 
-def _run_stale_race(tmp_path, *, tag: str) -> tuple[int, int, tuple, str]:
-    """Return (violations, stale_breaks, exit codes, evidence)."""
+def _run_stale_race(tmp_path, *, tag: str, preamble: str = "", budget: float = 240.0) -> tuple[int, int, tuple, str, str]:
+    """Return (violations, stale_breaks, exit codes, evidence, wedged).
+
+    *budget* is a wall-clock bound on the whole race, and *wedged* is the
+    reason it was exceeded (empty when it was not). Without it a lock that
+    can never be broken is not a test failure — it is a hung session that
+    pytest-timeout kills, taking every other test's failure text with it.
+    That is how five Windows failures came back with no assertion text.
+    """
     worker = tmp_path / f"stale_race_{tag}.py"
-    worker.write_text(_STALE_RACE_SOURCE, encoding="utf-8")
+    worker.write_text(preamble + _STALE_RACE_SOURCE, encoding="utf-8")
     bdir = tmp_path / f"barrier_stale_{tag}"
     bdir.mkdir()
     target = tmp_path / f"contested_{tag}.dat"
@@ -1084,14 +1211,20 @@ def _run_stale_race(tmp_path, *, tag: str) -> tuple[int, int, tuple, str]:
         )
         for i in range(_RACE_PROCS)
     ]
+    deadline = time.monotonic() + budget
+    wedged = ""
     try:
         for rnd in range(_RACE_ROUNDS):
             prefix = f"ready-{rnd}-"
-            deadline = time.monotonic() + 120.0
             while sum(1 for f in os.listdir(bdir) if f.startswith(prefix)) < _RACE_PROCS:
                 if time.monotonic() > deadline:
-                    break  # a worker died; the exit codes below will say so
+                    # Either a worker died — the exit codes below will say
+                    # so — or nobody can make progress at all.
+                    wedged = f"the race made no progress past round {rnd} within {budget}s"
+                    break
                 time.sleep(0.001)
+            if wedged:
+                break
             # The crashed holder: a lockfile naming an owner that is gone.
             (target.parent / (target.name + ".lock")).write_text(_IMPOSSIBLE_PID + "\n", encoding="utf-8")
             (bdir / f"go-{rnd}").write_text("", encoding="utf-8")
@@ -1099,22 +1232,28 @@ def _run_stale_race(tmp_path, *, tag: str) -> tuple[int, int, tuple, str]:
         codes = []
         for proc in running:
             try:
-                proc.communicate(timeout=300)
+                proc.communicate(timeout=max(1.0, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:  # pragma: no cover - worker wedged
                 proc.kill()
                 proc.communicate()
+                wedged = wedged or f"a worker had to be killed after {budget}s: it never exited"
             codes.append(proc.returncode)
 
     counts = tmp_path / f"overlaps_{tag}.txt.counts"
     lines = [ln.split() for ln in counts.read_text(encoding="utf-8").splitlines() if ln.strip()] if counts.exists() else []
     violations = sum(int(parts[1]) for parts in lines)
     breaks = sum(int(parts[2]) for parts in lines)
-    return violations, breaks, tuple(codes), evidence.read_text(encoding="utf-8")
+    return violations, breaks, tuple(codes), evidence.read_text(encoding="utf-8"), wedged
 
 
 class TestBreakingACrashedHoldersLockHasOneWinner:
     def test_no_two_waiters_break_the_same_lock(self, tmp_path):
-        violations, breaks, codes, evidence = _run_stale_race(tmp_path, tag="fixed")
+        violations, breaks, codes, evidence, wedged = _run_stale_race(tmp_path, tag="fixed")
+
+        # Bounded time, not a timeout: a lock nobody can break has to come
+        # back as a named failure here, not as a hung session somebody else
+        # has to kill.
+        assert not wedged, wedged
 
         # Positive control: the break path has to have been walked, or a
         # clean result says nothing. Every round plants a lockfile that
@@ -1125,29 +1264,157 @@ class TestBreakingACrashedHoldersLockHasOneWinner:
         assert violations == 0, f"two processes held the same lock {violations} times:\n{evidence}"
 
 
-def _break_and_claim(lock: FileLock, lock_path: str) -> tuple[int, int] | None:
+#: The simulation needs ``/proc/self/fd`` to know which files this process
+#: holds open. Naming the requirement is the point — a gate that quietly
+#: does nothing on a platform is worse than one that says it is not running.
+_HAS_PROCFS = os.path.isdir("/proc/self/fd")
+
+
+@pytest.mark.skipif(not _HAS_PROCFS, reason="the Windows unlink simulation reads /proc/self/fd")
+class TestACrashedHoldersLockIsBreakableUnderWindowsUnlink:
+    """The Windows matrix row, run on a box that is not Windows.
+
+    The property, stated so it can be pinned: *for a lockfile whose owner
+    is confirmed dead and N concurrent waiters, exactly one waiter enters
+    the critical section, it does so within a bounded time (not a timeout),
+    and no syscall in the break path removes or renames the lockfile while
+    the breaker holds a descriptor on it.*
+
+    The last clause is the one a Linux run cannot check by inspection, so
+    the run refuses those unlinks instead — which is what a Windows runner
+    does. Before the break became an adoption this was not a failure but a
+    hang: six workers spinning to a 30 s ``LockTimeout`` while the parent
+    waited on a round barrier that could never fill.
+
+    What this does **not** cover, and only a Windows CI row can: that
+    ``msvcrt.locking`` really does contend and really is released on death
+    across processes, that its mandatory byte-range locks behave as
+    assumed, and the release-side unlink, which is refused by *another*
+    process's handle and so is invisible to a same-process simulation.
+    """
+
+    def test_the_break_never_unlinks_a_file_it_holds_open(self, tmp_path):
+        violations, breaks, codes, evidence, wedged = _run_stale_race(
+            tmp_path,
+            tag="winsim",
+            preamble=_WINDOWS_UNLINK_PREAMBLE,
+        )
+
+        assert not wedged, wedged
+        # Positive control, twice over: the simulation proves itself active
+        # at worker startup (or the worker exits non-zero), and the break
+        # path has to have been walked on every round.
+        assert codes == (0,) * _RACE_PROCS, f"a worker failed: {codes}"
+        assert breaks >= _RACE_ROUNDS, f"only {breaks} stale breaks over {_RACE_ROUNDS} rounds — the path was not exercised"
+
+        assert violations == 0, f"two processes held the same lock {violations} times:\n{evidence}"
+
+
+#: One process, one crashed holder's lockfile, one attempt to take it. The
+#: mutation twin does not need six workers and sixty rounds: under Windows
+#: unlink semantics the pre-adoption protocol does not *sometimes* lose the
+#: race, it can never break the lock at all.
+_CORPSE_PROBE_SOURCE = """\
+import os, sys
+import mind_mem.mind_filelock as mfl
+
+target, marker = sys.argv[1], sys.argv[2]
+with mfl.FileLock(target, timeout=2.0):
+    open(marker, "w").close()
+"""
+
+
+def _try_to_break_a_corpse(tmp_path, *, tag: str, preamble: str, patience: float = 30.0) -> tuple[bool, int | None]:
+    """Plant a crashed holder's lockfile and try once to take the lock.
+
+    Returns ``(entered, exit_code)``. A worker still running when
+    *patience* runs out is killed and reported as not having entered,
+    which is the honest reading of a protocol that cannot break the lock
+    — whether it gives up at its timeout or spins forever without ever
+    consulting one.
+    """
+    worker = tmp_path / f"corpse_probe_{tag}.py"
+    worker.write_text(preamble + _CORPSE_PROBE_SOURCE, encoding="utf-8")
+    target = tmp_path / f"corpse_{tag}.dat"
+    target.write_text("", encoding="utf-8")
+    marker = tmp_path / f"entered_{tag}"
+    (tmp_path / f"corpse_{tag}.dat.lock").write_text(_IMPOSSIBLE_PID + "\n", encoding="utf-8")
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+    env["MIND_MEM_LOG_LEVEL"] = "error"
+    proc = subprocess.Popen(
+        [sys.executable, str(worker), str(target), str(marker)],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        proc.communicate(timeout=patience)
+    except subprocess.TimeoutExpired:  # pragma: no cover - only the mutant gets here
+        proc.kill()
+        proc.communicate()
+    return marker.exists(), proc.returncode
+
+
+@pytest.mark.skipif(not _HAS_PROCFS, reason="the Windows unlink simulation reads /proc/self/fd")
+class TestWindowsUnlinkGateMutationTwin:
+    """Put the unlink back under the simulation, and it must stop working.
+
+    This is the measurement the regression was found by, in its smallest
+    honest form. The protocol that shipped in 5.0.1 breaks a stale lock by
+    unlinking it while holding a descriptor on it. Refuse that unlink, as
+    Windows does, and the corpse is immortal: the acquirer confirms the
+    dead owner, asks for the unlink, is refused, is told the corpse is
+    gone, loops back into the create, and finds it still there — forever,
+    without ever consulting its own timeout. Measured that way: a worker
+    still burning 98% of a core fourteen minutes into a thirty-second
+    ``timeout``.
+    """
+
+    def test_unlinking_under_our_own_descriptor_can_never_break_the_lock(self, tmp_path):
+        # Positive control first: the shipped protocol takes exactly this
+        # planted lock under exactly this simulation. Without it, "the
+        # mutant did not get in" is a statement about a broken harness.
+        entered, code = _try_to_break_a_corpse(tmp_path, tag="shipped", preamble=_WINDOWS_UNLINK_PREAMBLE)
+        assert entered, (
+            f"the shipped break could not take a crashed holder's lock under the simulation (exit {code}) — "
+            "the twin's harness is broken and the comparison below proves nothing"
+        )
+
+        entered, code = _try_to_break_a_corpse(
+            tmp_path,
+            tag="mutant",
+            preamble=_WINDOWS_UNLINK_PREAMBLE + _UNLINK_BREAK_PREAMBLE,
+            patience=6.0,
+        )
+        assert not entered, (
+            "unlinking the lockfile from under our own descriptor still broke the lock under Windows "
+            f"unlink semantics (exit {code}) — this twin cannot see the regression it is here to catch"
+        )
+
+
+def _break_and_claim(lock: FileLock, lock_path: str) -> tuple[int, tuple[int, int]] | None:
     """A second breaker doing exactly what the protocol allows it to do.
 
-    It takes the OS lock on the abandoned file before removing it, then
-    creates its own claim — the winning half of a stale break. Returns the
-    new claim's identity, or ``None`` when the arbitration refused it
-    because somebody else is already breaking that file.
+    It takes the OS lock on the abandoned file and then *adopts* it: same
+    inode, its own pid, its own descriptor, the lock still held. That is
+    the winning half of a stale break under this protocol, and it never
+    unlinks — which is what makes the competitor itself runnable on
+    Windows. Returns ``(fd, identity)`` of the claim it now holds, or
+    ``None`` when the arbitration refused it because somebody else is
+    already breaking that file. The caller owns the returned descriptor.
     """
     fd = os.open(lock_path, os.O_RDWR)
-    try:
-        if lock._try_os_lock(fd) is not True:
-            return None
-        os.unlink(lock_path)
-        lock._os_unlock(fd)
-    finally:
+    if lock._try_os_lock(fd) is not True:
         os.close(fd)
-    claim = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    try:
-        os.write(claim, f"{os.getpid()}\n".encode())
-        st = os.fstat(claim)
-    finally:
-        os.close(claim)
-    return (st.st_dev, st.st_ino)
+        return None
+    os.ftruncate(fd, 0)
+    os.lseek(fd, 0, os.SEEK_SET)
+    os.write(fd, f"{os.getpid()}\n".encode())
+    st = os.fstat(fd)
+    return (fd, (st.st_dev, st.st_ino))
 
 
 class _CompetingBreaker:
@@ -1167,13 +1434,26 @@ class _CompetingBreaker:
         self.real_stat = os.stat
         self.attempts = 0
         self.winner: tuple[int, int] | None = None
+        self.fd: int | None = None
 
     def __call__(self, path, *args, **kwargs):
         st = self.real_stat(path, *args, **kwargs)
         if self.attempts == 0 and str(path) == self.lock_path:
             self.attempts = 1
-            self.winner = _break_and_claim(self.lock, self.lock_path)
+            claimed = _break_and_claim(self.lock, self.lock_path)
+            if claimed is not None:
+                self.fd, self.winner = claimed
         return st
+
+    def close(self) -> None:
+        """Hand back the descriptor and the OS lock an adopter would keep."""
+        if self.fd is not None:
+            try:
+                self.lock._os_unlock(self.fd)
+            except OSError:
+                pass
+            os.close(self.fd)
+            self.fd = None
 
 
 def _plant_a_crashed_holder(tmp_path) -> tuple[FileLock, str, tuple[int, int]]:
@@ -1187,26 +1467,55 @@ def _plant_a_crashed_holder(tmp_path) -> tuple[FileLock, str, tuple[int, int]]:
     return lock, lock.lock_path, identity
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot unlink a lockfile that is still open")
 class TestBreakingIsAtomicAgainstAHandOff:
-    """Only one waiter may break a crashed holder's lock."""
+    """Only one waiter may break a crashed holder's lock.
+
+    No ``skipif`` any more, and that is the point: the break no longer
+    unlinks anything, so there is no step here Windows refuses. The
+    post-condition moved with the protocol — "the lockfile is gone"
+    became "the lockfile is *ours*", which is the stronger of the two:
+    one event now says both that exactly one waiter broke it and that
+    exactly one holder came out of it.
+    """
 
     def test_a_second_breaker_is_refused_while_the_break_is_in_progress(self, tmp_path, monkeypatch):
         lock, lock_path, identity = _plant_a_crashed_holder(tmp_path)
         competitor = _CompetingBreaker(lock)
         monkeypatch.setattr(os, "stat", competitor)
 
-        lock._break_stale(identity)
+        outcome = lock._break_stale(identity)
 
         monkeypatch.undo()
+        competitor.close()
         # Positive control: the competitor has to have tried, or "it did not
         # get in" is a statement about a competitor that never ran.
         assert competitor.attempts == 1, "the competitor never ran — the interleaving was not exercised"
         assert competitor.winner is None, "a second breaker got in and replaced the lockfile mid-break"
-        assert not os.path.exists(lock_path), "the abandoned lockfile was not broken"
+
+        assert outcome == _BREAK_ADOPTED, f"the abandoned lockfile was not broken: {outcome}"
+        assert os.path.exists(lock_path), "the break unlinked the lockfile — the step Windows refuses"
+        assert _identity_of(lock_path) == identity, "the path names a different inode than the one adopted"
+        assert lock._lock_identity == identity, "the adopter did not record the inode it judged"
+        assert lock._lock_fd is not None, "the adopter did not keep the descriptor"
+        with open(lock_path, encoding="utf-8") as fh:
+            assert int(fh.read().strip()) == os.getpid(), "the adopted lockfile does not name us"
+
+        # And it really is locked, not merely rewritten: a fresh descriptor
+        # on the same file is refused while the adopter holds it.
+        probe = os.open(lock_path, os.O_RDWR)
+        try:
+            assert lock._try_os_lock(probe) is False, "the adopter is not holding the OS lock"
+        finally:
+            os.close(probe)
+
+        lock.release()
+        assert not os.path.exists(lock_path), "release did not remove the adopted lockfile"
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot unlink a lockfile that is still open")
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="the mutation itself is the Windows-illegal step: it unlinks the lockfile the adopting competitor holds open",
+)
 class TestStaleBreakMutationTwin:
     """Why the identity check alone was not enough, stated as a measurement.
 
@@ -1226,6 +1535,7 @@ class TestStaleBreakMutationTwin:
         lock._unlink_if_ours(identity)  # stat says "the corpse", then unlink by path
 
         monkeypatch.undo()
+        competitor.close()
         assert competitor.attempts == 1, "the competitor never ran — the twin proves nothing"
         assert competitor.winner is not None, (
             "the competitor was refused — check-then-unlink cannot have deleted a claim that was never made"
@@ -1233,6 +1543,97 @@ class TestStaleBreakMutationTwin:
         assert not os.path.exists(lock_path), (
             "check-then-unlink left the winner's claim alone — this twin cannot see the defect it is here to catch"
         )
+
+
+def _we_hold_it_open(path: str) -> bool:
+    """Whether this process has any descriptor open on *path* right now."""
+    target = os.stat(path)
+    for entry in os.listdir("/proc/self/fd"):
+        try:
+            st = os.stat("/proc/self/fd/" + entry)
+        except OSError:
+            continue
+        if (st.st_dev, st.st_ino) == (target.st_dev, target.st_ino):
+            return True
+    return False
+
+
+class TestAFilesystemThatCannotArbitrateStillBreaksACorpse:
+    """The degraded fallback, where no OS lock exists to arbitrate with.
+
+    NFS and FUSE mounts that answer ENOLCK have nothing atomic to hand, so
+    the break falls back to the identity-checked unlink it always had. Two
+    properties are new and neither is reachable on the OS-locked path, so
+    they are stated here.
+    """
+
+    @pytest.mark.skipif(not _HAS_PROCFS, reason="reads /proc/self/fd to see what this process holds open")
+    def test_it_closes_its_descriptor_before_unlinking(self, tmp_path, monkeypatch):
+        lock, lock_path, identity = _plant_a_crashed_holder(tmp_path)
+        monkeypatch.setattr(FileLock, "_try_os_lock", lambda self, fd: None)
+
+        # Positive control: with the lockfile open, the helper says so — or
+        # "we had nothing open" below is a helper that always says no.
+        held = os.open(lock_path, os.O_RDONLY)
+        try:
+            assert _we_hold_it_open(lock_path), "the open-descriptor probe cannot see an open descriptor"
+        finally:
+            os.close(held)
+
+        seen: dict = {}
+        real_unlink = os.unlink
+
+        def watching_unlink(path, *args, **kwargs):
+            if str(path) == lock_path:
+                seen["open_at_unlink"] = _we_hold_it_open(lock_path)
+            return real_unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(os, "unlink", watching_unlink)
+        outcome = lock._break_stale(identity)
+        monkeypatch.undo()
+
+        assert seen.get("open_at_unlink") is False, (
+            "the fallback unlinked the lockfile while still holding a descriptor on it — the one step Windows refuses"
+        )
+        assert outcome == _BREAK_REMOVED
+        assert not os.path.exists(lock_path), "the corpse was not removed"
+
+    def test_a_refused_unlink_is_never_reported_as_removed(self, tmp_path, monkeypatch):
+        """Otherwise the acquirer loops on it and never reaches its deadline.
+
+        ``_BREAK_REMOVED`` is the one answer that sends the acquirer back
+        into the create with no sleep and no timeout check. Reporting it on
+        the strength of having *asked* for an unlink that was refused is a
+        spin, not a retry — measured as a worker still burning 98% of a core
+        fourteen minutes into a thirty-second ``timeout``.
+        """
+        lock, lock_path, identity = _plant_a_crashed_holder(tmp_path)
+        monkeypatch.setattr(FileLock, "_try_os_lock", lambda self, fd: None)
+
+        real_unlink = os.unlink
+
+        def refusing_unlink(path, *args, **kwargs):
+            if str(path) == lock_path:
+                raise PermissionError(32, "used by another process")
+            return real_unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(os, "unlink", refusing_unlink)
+
+        outcome = lock._break_stale(identity)
+        # Positive control: the refusal has to have taken effect, or this is
+        # a test about an unlink that simply succeeded.
+        assert os.path.exists(lock_path), "the refusing unlink did not refuse"
+        assert outcome == _BREAK_NOTHING, f"a refused unlink was reported as {outcome!r} — the acquirer loops on that answer"
+
+        # End to end: an acquirer meeting an unbreakable corpse gives up at
+        # its own deadline instead of spinning on it forever.
+        waiter = FileLock(lock.path, timeout=0.3)
+        started = time.monotonic()
+        with pytest.raises(LockTimeout):
+            waiter.acquire()
+        assert time.monotonic() - started < 30.0, "the acquirer did not honour its own timeout"
+        monkeypatch.undo()
+        os.unlink(lock_path)
 
 
 def _replace_with_a_fresh_claim(lock_path: str) -> tuple[int, int]:

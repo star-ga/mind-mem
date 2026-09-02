@@ -6,6 +6,30 @@ Uses a two-layer approach:
   1. threading.Lock for same-process (thread) contention
   2. O_CREAT|O_EXCL lockfile + OS-level locks for cross-process contention
 
+Platform status — say only what is measured:
+
+* **POSIX** — verified directly. Six processes, six hundred acquisitions
+  each, zero overlaps; the crashed-holder hand-off measured over sixty
+  rounds with six waiters.
+* **Windows, breaking a crashed holder's lock** — verified only *by
+  simulation* (a Linux run that refuses ``os.unlink`` for any path this
+  process holds open, which is what a Windows runner does). No syscall in
+  the break path removes or renames the lockfile any more: the winner
+  adopts the abandoned file in place. See :meth:`FileLock._break_stale`.
+* **Windows, release** — a **known open gap**, inferred from documented
+  Windows semantics and measured by nothing in this repo: the gate above
+  refuses unlinks only for handles open in the *breaking* process, and this
+  gap needs another process's handle, so it is invisible there by
+  construction. ``os.open``/``open`` never request
+  ``FILE_SHARE_DELETE``, so :meth:`FileLock.release`'s post-close unlink
+  can be refused with ``ERROR_SHARING_VIOLATION`` while any *other*
+  process has the lockfile open — including a waiter inside
+  :meth:`FileLock._stale_identity`'s read. :meth:`FileLock._unlink_if_ours`
+  swallows that error, leaving a lockfile that names a live pid, which
+  nothing here ever breaks until that process exits. This predates the
+  break arbitration and is not closed by it. Do not write "no wedge on
+  Windows" until a cross-process number is 0 and a Windows CI row is green.
+
 Usage:
     from filelock import FileLock
 
@@ -44,6 +68,39 @@ _UNSUPPORTED_LOCK_ERRNOS: frozenset[int] = frozenset(
     )
     if code is not None
 )
+
+#: Byte offset of the one-byte region every OS lock in this module takes.
+#:
+#: ``msvcrt.locking`` locks *from the current file position*. A holder locks
+#: straight after writing its pid, so it would lock at offset ``len(pid)+1``
+#: (``+2`` in the text mode ``os.open`` gives you on Windows); a breaker
+#: opens a fresh descriptor and would lock at 0. Non-overlapping regions do
+#: not contend, so without this seek the arbitration in
+#: :meth:`FileLock._break_stale` is real breaker-vs-breaker and **vacuous**
+#: breaker-vs-live-holder on Windows — the "a live process holds it after
+#: all" branch could never fire for a real holder.
+#:
+#: The offset is far past any pid rather than 0 on purpose. Windows byte
+#: locks are mandatory, so a lock over the bytes a reader's buffered
+#: ``read()`` asks for would make every waiter's
+#: :meth:`FileLock._stale_identity` raise ``PermissionError``. Locking past
+#: end-of-file is permitted and touches nothing anyone reads.
+#:
+#: ``fcntl.flock`` is whole-file and position-independent, so the seek is
+#: only made on the ``msvcrt`` branches — an OFF-platform cost of zero.
+_LOCK_REGION_OFFSET = 1 << 20
+
+#: What a break attempt did, and therefore what the acquirer does next.
+#: Three answers, not two: "I now hold it", "the corpse is gone, retry the
+#: create at once", and "somebody else owns it, go back to the poll".
+_BREAK_ADOPTED = "adopted"
+_BREAK_REMOVED = "removed"
+_BREAK_NOTHING = "nothing"
+
+
+def _seek_lock_region(fd: int) -> None:
+    """Position *fd* on the one region every ``msvcrt`` lock contends for."""
+    os.lseek(fd, _LOCK_REGION_OFFSET, os.SEEK_SET)
 
 
 class LockTimeout(Exception):
@@ -123,8 +180,19 @@ class FileLock:
             except FileExistsError:
                 abandoned = self._stale_identity()
                 if abandoned is not None:
-                    self._break_stale(abandoned)
-                    continue
+                    outcome = self._break_stale(abandoned)
+                    if outcome == _BREAK_ADOPTED:
+                        # We won the arbitration and took the abandoned file
+                        # over in place. "Exactly one breaker" and "exactly
+                        # one holder afterwards" are the same event now, so
+                        # there is no create to race back into.
+                        return
+                    if outcome == _BREAK_REMOVED:
+                        # Verified gone, not merely asked-to-go: this is the
+                        # one path that loops without sleeping or checking
+                        # the deadline, so _break_stale only reports it
+                        # once the corpse is confirmed off the path.
+                        continue
 
                 if self.timeout == 0:
                     raise LockTimeout(f"Could not acquire lock: {self.lock_path}")
@@ -220,7 +288,17 @@ class FileLock:
     _UNREADABLE_LOCK_GRACE_SECONDS = 300
 
     def _unlink_if_ours(self, identity: tuple[int, int] | None) -> None:
-        """Remove the lockfile only while it is still the one in *identity*."""
+        """Remove the lockfile only while it is still the one in *identity*.
+
+        Every caller closes its own descriptor first, so this is legal on
+        Windows as far as *this* process is concerned. It is not legal as
+        far as every other process is concerned: a waiter with the lockfile
+        open inside :meth:`_stale_identity`'s read is enough to make the
+        unlink fail with ``ERROR_SHARING_VIOLATION``, and the ``except
+        OSError: pass`` below then leaves a lockfile naming a live pid that
+        nothing ever breaks. Known open gap, inferred from documented
+        Windows semantics and **not measured** — see the module docstring.
+        """
         if identity is None:
             return
         try:
@@ -285,6 +363,26 @@ class FileLock:
         except PermissionError:
             return None  # alive, just not ours to signal
 
+    def _corpse_is_gone(self, identity: tuple[int, int]) -> bool:
+        """Whether the lockfile in *identity* is really no longer at the path.
+
+        :data:`_BREAK_REMOVED` sends the acquirer straight back into the
+        create with no sleep and no timeout check, so it has to be a
+        verified fact rather than a hope. ``_unlink_if_ours`` swallows a
+        refused unlink — a Windows sharing violation, a read-only
+        directory, an immutable bit — and reporting "removed" on the
+        strength of having *asked* is how an acquirer ends up in a loop
+        that never consults its own deadline. Measured before this check
+        existed, with the pre-adoption break under simulated Windows unlink
+        semantics: a worker still burning 98% of a core fourteen minutes
+        later, never having reached its 30-second timeout.
+        """
+        try:
+            st = os.stat(self.lock_path)
+        except OSError:
+            return True  # gone
+        return (st.st_dev, st.st_ino) != identity  # somebody else's claim now
+
     def _older_than_grace(self, st: os.stat_result) -> bool:
         """True when *st* has been untouched past the abandonment grace."""
         return (time.time() - st.st_mtime) > self._UNREADABLE_LOCK_GRACE_SECONDS
@@ -293,11 +391,16 @@ class FileLock:
         """Whether the existing lockfile is from a process that is gone."""
         return self._stale_identity() is not None
 
-    def _break_stale(self, identity: tuple[int, int] | None = None) -> None:
-        """Remove an abandoned lock file — as one atomic winner, not several.
+    def _break_stale(self, identity: tuple[int, int] | None = None) -> str:
+        """Take an abandoned lock from its dead owner — by *adopting* it.
+
+        Returns one of :data:`_BREAK_ADOPTED` (this instance now holds the
+        lock: ``_lock_fd`` and ``_lock_identity`` are set and the OS lock is
+        held), :data:`_BREAK_REMOVED` (no OS locking on this filesystem, the
+        corpse was unlinked, retry the create) or :data:`_BREAK_NOTHING`.
 
         *identity* is the lockfile :meth:`_stale_identity` judged. Checking
-        it before unlinking is necessary and, on its own, not sufficient:
+        it before acting is necessary and, on its own, not sufficient:
         ``stat`` then ``unlink`` is two syscalls, so two waiters can both
         confirm the dead file, the first can unlink it and create its own
         live claim, and the second's unlink — still aimed at the path —
@@ -309,20 +412,50 @@ class FileLock:
         here that is atomic. A breaker must first take the OS lock on the
         abandoned file; the dead owner's is released by the kernel, so it
         succeeds for exactly one waiter, and while it is held nobody else
-        can break that inode. The path cannot change underneath it either:
-        replacing it requires unlinking this inode first, and that is what
-        we hold. A filesystem with no OS locking degrades to the identity
-        check alone — the same portability fallback :meth:`_os_lock`
-        documents, and no worse than before.
+        can break that inode. Holder and breaker contend for the *same*
+        region on every platform — see :data:`_LOCK_REGION_OFFSET`, without
+        which the Windows arbitration would be vacuous against a live
+        holder.
+
+        **Nothing is unlinked during a break.** The winner truncates the
+        abandoned file, writes its own pid into it, and keeps the
+        descriptor and the OS lock: it does not hand the file back to the
+        ``O_EXCL`` race it just won. That is what makes this legal on
+        Windows, where a file cannot be unlinked while a descriptor is open
+        on it without ``FILE_SHARE_DELETE`` — which CPython never requests,
+        so the old unlink-under-our-own-fd could never succeed there and
+        every waiter spun to its timeout. It is also *stronger* than the
+        unlink: "exactly one breaker" and "exactly one holder afterwards"
+        used to be two events, and are now one.
+
+        Losers of the arbitration return to the poll. The one window worth
+        naming — a loser that read the dead pid before the adopter's
+        rewrite landed — is closed by the same two steps it always was: the
+        identity check says "the inode I judged", and the lock attempt then
+        fails because the adopter holds it. The rewrite is not atomic, but
+        it does not need to be: the adopter holds the OS lock across it, so
+        every state a reader can catch it in (empty, or a truncated pid) is
+        one :meth:`_stale_identity` answers with "wait", and any waiter that
+        does judge it stale is refused here.
+
+        A filesystem with no OS locking has nothing to arbitrate with and
+        degrades to the identity-checked unlink — the same portability
+        fallback :meth:`_os_lock` documents, and no worse than before. That
+        branch closes the descriptor *before* unlinking, so it is legal on
+        Windows too; NTFS never reaches it. It reports
+        :data:`_BREAK_REMOVED` only once :meth:`_corpse_is_gone` confirms
+        the unlink actually happened, because that answer sends the
+        acquirer back into the create with no sleep and no deadline check.
         """
         if identity is None:
             identity = self._stale_identity()
         if identity is None:
-            return
+            return _BREAK_NOTHING
         try:
             fd = os.open(self.lock_path, os.O_RDWR)
         except OSError:
-            return  # vanished: nothing to break
+            return _BREAK_NOTHING  # vanished: nothing to break
+        adopted = False
         try:
             # Identity BEFORE the lock, never after: between judging the
             # file and opening it, its owner may have unlinked it and an
@@ -332,32 +465,43 @@ class FileLock:
             # perfectly ordinary acquire raise.
             st = os.fstat(fd)
             if (st.st_dev, st.st_ino) != identity:
-                return  # not the file we judged
+                return _BREAK_NOTHING  # not the file we judged
             held = self._try_os_lock(fd)
             if held is None:
-                self._unlink_if_ours(identity)  # no OS locking here
-                return
+                # No OS locking here, so nothing can arbitrate. Close first:
+                # the unlink below is the one this module is not allowed to
+                # issue while it holds a descriptor on the file.
+                os.close(fd)
+                fd = -1
+                self._unlink_if_ours(identity)
+                return _BREAK_REMOVED if self._corpse_is_gone(identity) else _BREAK_NOTHING
             if not held:
-                return  # a live process holds it after all
+                return _BREAK_NOTHING  # a live process holds it after all
             try:
                 on_path = os.stat(self.lock_path)
             except OSError:
-                return  # already unlinked by its owner
+                return _BREAK_NOTHING  # already unlinked by its owner
             if (on_path.st_dev, on_path.st_ino) != identity:
-                return  # the path names somebody else's claim now
-            try:
-                os.unlink(self.lock_path)
-            except OSError:
-                pass
+                return _BREAK_NOTHING  # the path names somebody else's claim
+            # Adopt. From here the file is ours: same inode, our pid, our
+            # descriptor, our OS lock. release() unwinds it like any other.
+            os.ftruncate(fd, 0)
+            os.lseek(fd, 0, os.SEEK_SET)
+            os.write(fd, f"{os.getpid()}\n".encode())
+            self._lock_identity = identity
+            self._lock_fd = fd
+            adopted = True
+            return _BREAK_ADOPTED
         finally:
-            try:
-                self._os_unlock(fd)
-            except OSError:
-                pass
-            try:
-                os.close(fd)
-            except OSError:
-                pass
+            if not adopted and fd >= 0:
+                try:
+                    self._os_unlock(fd)
+                except OSError:
+                    pass
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
 
     def _try_os_lock(self, fd: int) -> bool | None:
         """Take the OS lock without waiting.
@@ -383,9 +527,13 @@ class FileLock:
         except ImportError:
             return None
         try:
+            _seek_lock_region(fd)
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
             return True
         except OSError as e:
+            # An lseek failure lands here too. Its errno is not in the
+            # unsupported set, so it reads as "somebody else holds it" —
+            # which is the conservative answer: wait, never break.
             return None if e.errno in _UNSUPPORTED_LOCK_ERRNOS else False
 
     @staticmethod
@@ -428,6 +576,7 @@ class FileLock:
                 import msvcrt
 
                 try:
+                    _seek_lock_region(fd)
                     msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
                 except OSError as e:
                     if e.errno not in _UNSUPPORTED_LOCK_ERRNOS:
@@ -436,7 +585,12 @@ class FileLock:
                 pass
 
     def _os_unlock(self, fd: int) -> None:
-        """Release OS-level lock."""
+        """Release OS-level lock.
+
+        The seek matters here as much as it does on the way in: unlocking a
+        region nobody locked is an error on Windows, and leaves the region
+        that *was* locked held for the life of the descriptor.
+        """
         try:
             import fcntl
 
@@ -445,6 +599,7 @@ class FileLock:
             try:
                 import msvcrt
 
+                _seek_lock_region(fd)
                 msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
             except ImportError:
                 pass

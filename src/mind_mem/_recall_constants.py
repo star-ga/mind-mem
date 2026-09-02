@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from .corpus_registry import CORPUS_FILE_MAP
+
 __all__ = [
     "SEARCH_FIELDS",
     "SIG_FIELDS",
@@ -69,35 +71,20 @@ SEARCH_FIELDS = [
 # Fields from ConstraintSignatures
 SIG_FIELDS = ["subject", "predicate", "object", "domain"]
 
-# Files to scan
-CORPUS_FILES = {
-    "decisions": "decisions/DECISIONS.md",
-    "tasks": "tasks/TASKS.md",
-    "projects": "entities/projects.md",
-    "people": "entities/people.md",
-    "tools": "entities/tools.md",
-    "incidents": "entities/incidents.md",
-    "contradictions": "intelligence/CONTRADICTIONS.md",
-    "drift": "intelligence/DRIFT.md",
-    "signals": "intelligence/SIGNALS.md",
-    # v4.0.19: agent-to-agent messages (`mm send`). Indexed so `mm inbox`
-    # (recall) finds them on the SQLite default, at parity with Postgres.
-    "messages": "memory/MESSAGES.md",
-    # v4.0.19: fixes the pre-existing inbox-invisible-on-SQLite bug — INBOX-
-    # blocks were written to this file but never indexed, so recall returned 0.
-    "inbox": "memory/INBOX.md",
-    # Migration importers (roadmap Group G) (`mm import --from <system>`)
-    # land IMP- blocks here; indexed so imported content is recallable
-    # immediately, at parity with INBOX-/MSG-. Purely additive — a
-    # workspace without the file is skipped exactly as before.
-    "imported": "memory/IMPORTED.md",
-    # 5.0.1: the `mm ingest-serve` webhook door lands INGEST- blocks here.
-    # Registered UNGATED on purpose, unlike the door itself: the file is
-    # inert until the door writes it, and gating the registry on the flag
-    # would make already-RELEASED content vanish the moment an operator
-    # turned the door off. Absent file → skipped, exactly as before.
-    "ingest": "memory/INGEST.md",
-}
+# Files to scan — DERIVED, never declared here.
+#
+# ``corpus_registry.CORPUS_TABLE`` is the one corpus definition; this is its
+# recall/index projection (label → workspace-relative path, in table order).
+# It was a literal, and it disagreed with the two other tables that also
+# claimed to say what "the corpus" is: the store's ``CORPUS_DIRS`` walk could
+# not see the four ``memory/`` files listed here, so recall served blocks
+# ``get_by_id`` swore did not exist and no HTTP door could delete. A corpus
+# registered here and nowhere else is now unrepresentable.
+#
+# The label is written onto every block as ``_source_label`` and is branched
+# on downstream (``storage._iter_markdown_active_blocks`` applies the #429
+# pending-signal rule to ``signals``), so labels and their order are API.
+CORPUS_FILES = CORPUS_FILE_MAP
 
 # BM25 parameters
 BM25_K1 = 1.2  # Term frequency saturation

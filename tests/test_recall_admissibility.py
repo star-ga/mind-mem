@@ -152,8 +152,16 @@ def _leg_kg(tmp_path: Any, monkeypatch: pytest.MonkeyPatch, status: str) -> list
     build_index(ws)
     db = default_db_path(ws)
     os.makedirs(os.path.dirname(db), exist_ok=True)
-    with KnowledgeGraph(db) as kg:
-        kg.add_edge("pineapple", Predicate.RELATED_TO, "protocol", source_block_id=POISON)
+    # An edge is admitted content since 5.0.2, so seeding one opens a real
+    # scope — the same ``admit_proposal`` the approve-edge door opens. The
+    # chain files it writes land in ``<ws>/memory/`` as ``.jsonl``/``.db``,
+    # neither of which any retrieval leg reads, so the served set below is
+    # unaffected by the seeding mechanism.
+    from mind_mem.governance_gate import get_gate
+
+    with get_gate(ws).admit_proposal(proposal_id="TEST-KG-SEED", content="[]", actor="pytest"):
+        with KnowledgeGraph(db) as kg:
+            kg.add_edge("pineapple", Predicate.RELATED_TO, "protocol", source_block_id=POISON)
     backend = HybridBackend(config=cfg)
     _no_vector(backend, monkeypatch)
     return _served_ids(backend.search(QUERY, ws, limit=10))
@@ -276,10 +284,45 @@ def test_a_recognised_lifecycle_status_is_still_served(status: str, tmp_path: An
 def test_the_withheld_set_is_derived_from_the_admission_table() -> None:
     """A new withheld ingest tier withholds its blocks with no edit here."""
     from mind_mem.admissibility import UNADMITTED
-    from mind_mem.enums import INITIAL_STATUS, is_servable
+    from mind_mem.enums import INITIAL_STATUS, mints_quarantine
 
-    assert UNADMITTED == frozenset(s.value for s in INITIAL_STATUS.values() if s is not None and not is_servable(s))
+    assert UNADMITTED == frozenset(INITIAL_STATUS[t].value for t in INITIAL_STATUS if mints_quarantine(t))
     assert UNADMITTED == frozenset({"quarantined", "pending"})
+
+
+def test_a_confined_tier_does_not_drag_its_lifecycle_status_into_the_withheld_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Why the derivation asks ``mints_quarantine`` and not ``not is_servable``.
+
+    ``DETECTOR_FINDING`` (5.0.2, GAP-1) mints ``open`` on ``C-``/``DREF-``
+    ids so the integrity scanner's findings enter through the gate instead
+    of being spliced into the corpus file. ``open`` is a lifecycle status
+    this product has always served — task loops, open contradictions — so
+    the naive derivation would have withheld EVERY open block in every
+    corpus as the price of recording one scanner. A confined tier's row is
+    the state of one corpus, not a quarantine marker; its receipt is what
+    proves the block passed the gate.
+
+    The exclusion is load-bearing rather than decorative, and this proves
+    it: remove the confinement and the same derivation withholds ``open``.
+    """
+    from mind_mem import enums
+    from mind_mem.admissibility import UNADMITTED, is_admissible_status
+    from mind_mem.enums import INITIAL_STATUS, IngestTier, mints_quarantine
+
+    row = INITIAL_STATUS[IngestTier.DETECTOR_FINDING]
+    assert row is not None
+    assert row.value == "open"
+    assert not mints_quarantine(IngestTier.DETECTOR_FINDING)
+    assert row.value not in UNADMITTED
+    assert is_admissible_status(row.value)
+
+    monkeypatch.setattr(enums, "TIER_ID_PREFIXES", {})
+    assert mints_quarantine(IngestTier.DETECTOR_FINDING), (
+        "with the confinement gone the tier is an ordinary withheld ingest door — "
+        "if this does not flip, the exclusion in UNADMITTED is not the thing keeping 'open' served"
+    )
 
 
 def test_the_recognised_vocabulary_covers_every_source_it_claims() -> None:
@@ -486,8 +529,11 @@ def test_an_unresolvable_id_is_dropped_and_counted(tmp_path: Any) -> None:
     corpus = [{"_id": SEED, "Statement": QUERY, "Status": "active"}]
     before = unresolved_count()
 
+    from mind_mem.governance_gate import get_gate
+
     with KnowledgeGraph(db) as kg:
-        kg.add_edge("pineapple", Predicate.RELATED_TO, "protocol", source_block_id="C-ghost-404")
+        with get_gate(ws).admit_proposal(proposal_id="TEST-KG-GHOST", content="[]", actor="pytest"):
+            kg.add_edge("pineapple", Predicate.RELATED_TO, "protocol", source_block_id="C-ghost-404")
         out = kg_expand([{"_id": SEED, "score": 1.0}], corpus, kg, QUERY, max_hops=1)
 
     assert _served_ids(out) == [SEED]

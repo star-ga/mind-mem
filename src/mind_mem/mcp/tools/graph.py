@@ -7,6 +7,17 @@ Extracted from ``mcp_server.py`` per docs/v3.2.0-mcp-decomposition-plan.md
   knowledge-graph edges + N-hop traversal + aggregate stats.
 * ``traverse_graph`` — causal-dependency graph navigation for
   impact analysis on block IDs.
+
+**The two committing doors open a governance scope (5.0.2).** An edge is
+served content, and ``graph_add_edge`` and ``approve_edge`` were both
+landing one with all three ledgers unmoved. ``KnowledgeGraph.add_edge``
+is now the choke point that refuses an unadmitted write, and these two
+doors are what open the scope: one ``admit_proposal`` each, keyed on the
+subject of the decision (the edge id for the direct admin write, the
+staged proposal's id for the approval) with the origin marker in
+metadata — so the chain records that an admin bypassed review, which is
+the fact an audit needs. ``propose_edge`` and ``reject_edge`` open
+nothing: neither lands an edge.
 """
 
 from __future__ import annotations
@@ -43,8 +54,14 @@ def graph_add_edge(
     → ``approve_edge`` instead; user-scope ingestion routes through the
     ``graph_ingest`` signal-staging + approval path. The origin marker is forced
     here and cannot be overridden by the caller.
+
+    Governed since 5.0.2: one ``admit_proposal`` scope per edge, keyed on
+    the deterministic ``edge_id``, carrying ``origin="direct_admin"`` in
+    the record. That is what an audit needs to read — not that an edge
+    appeared, but that an admin put it there without review. A refused
+    authorisation is reported as a refusal and writes no edge.
     """
-    from mind_mem.knowledge_graph import EDGE_ORIGIN_DIRECT_ADMIN, KnowledgeGraph, Predicate
+    from mind_mem.knowledge_graph import EDGE_ORIGIN_DIRECT_ADMIN, KnowledgeGraph, Predicate, edge_id
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -62,18 +79,42 @@ def graph_add_edge(
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
 
-    kg = KnowledgeGraph(_kg_path(ws))
+    # Outside the scope, exactly as ``delete_memory_item`` keeps its
+    # routing refusals outside one: an edge this door cannot even name
+    # must mint no authorisation record.
     try:
-        edge = kg.add_edge(
-            subject,
-            pred,
-            object,
-            source_block_id=source_block_id,
-            confidence=float(confidence),
-            metadata={"origin": EDGE_ORIGIN_DIRECT_ADMIN},
-        )
+        eid = edge_id(subject, pred, object, source_block_id)
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
+
+    from mind_mem.governance_gate import GovernanceBypassError, get_gate
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        with get_gate(ws).admit_proposal(
+            proposal_id=eid,
+            content=f"{subject}\t{pred.value}\t{object}\t{source_block_id}",
+            actor="",
+            metadata={
+                "door": "mcp.graph_add_edge",
+                "origin": EDGE_ORIGIN_DIRECT_ADMIN,
+                "predicate": pred.value,
+                "source_block_id": str(source_block_id),
+            },
+        ):
+            edge = kg.add_edge(
+                subject,
+                pred,
+                object,
+                source_block_id=source_block_id,
+                confidence=float(confidence),
+                metadata={"origin": EDGE_ORIGIN_DIRECT_ADMIN},
+            )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    except GovernanceBypassError as exc:
+        _log.error("mcp_graph_add_edge_refused", edge_id=eid, error=str(exc))
+        return json.dumps({"error": "Edge refused by governance.", "detail": str(exc), "edge_id": eid})
     finally:
         kg.close()
     return json.dumps({**edge.as_dict(), "_schema_version": "1.0"}, indent=2)
@@ -142,8 +183,14 @@ def approve_edge(proposal_id: str) -> str:
     the proposal ``applied``. A rejected proposal cannot be approved. This is an
     explicit operator signal — the source-of-truth edges table is never modified
     without it.
+
+    Governed since 5.0.2: the approval runs inside one ``admit_proposal``
+    scope named after the *staged proposal* — that is the subject of the
+    decision — with the ``edge_id`` it commits in the record's metadata.
+    An unknown or already-rejected proposal is refused **before** the
+    scope opens, so an approval that cannot happen mints no authorisation.
     """
-    from mind_mem.knowledge_graph import KnowledgeGraph
+    from mind_mem.knowledge_graph import EDGE_ORIGIN_HITL_APPROVED, PROPOSAL_REJECTED, KnowledgeGraph, edge_id
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -153,17 +200,46 @@ def approve_edge(proposal_id: str) -> str:
     if not isinstance(proposal_id, str) or not proposal_id.strip():
         return json.dumps({"error": "proposal_id must be a non-empty string"})
 
+    pid = proposal_id.strip()
+    from mind_mem.governance_gate import GovernanceBypassError, get_gate
+
     kg = KnowledgeGraph(_kg_path(ws))
     try:
-        edge = kg.approve_edge(proposal_id.strip())
+        # Resolve first, outside the scope: the id the receipt names is
+        # derived from the proposal's own tuple, and a proposal that
+        # cannot be approved must not leave an authorisation behind. The
+        # same checks run again inside ``approve_edge`` — this one is
+        # about what the record may claim, not about correctness there.
+        prop = kg.get_edge_proposal(pid)
+        if prop is None:
+            return json.dumps({"error": f"unknown edge proposal: {pid!r}"})
+        if prop.status == PROPOSAL_REJECTED:
+            return json.dumps({"error": f"cannot approve a rejected proposal: {pid!r}"})
+        eid = edge_id(prop.subject, prop.predicate, prop.object, prop.source_block_id)
+        with get_gate(ws).admit_proposal(
+            proposal_id=pid,
+            content=f"{prop.subject}\t{prop.predicate.value}\t{prop.object}\t{prop.source_block_id}",
+            actor="",
+            metadata={
+                "door": "mcp.approve_edge",
+                "origin": EDGE_ORIGIN_HITL_APPROVED,
+                "edge_id": eid,
+                "predicate": prop.predicate.value,
+                "source_block_id": prop.source_block_id,
+            },
+        ):
+            edge = kg.approve_edge(pid)
     except KeyError as exc:
         return json.dumps({"error": f"unknown edge proposal: {exc}"})
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
+    except GovernanceBypassError as exc:
+        _log.error("mcp_approve_edge_refused", proposal_id=pid, error=str(exc))
+        return json.dumps({"error": "Approval refused by governance.", "detail": str(exc), "proposal_id": pid})
     finally:
         kg.close()
     return json.dumps(
-        {"approved": proposal_id.strip(), **edge.as_dict(), "_schema_version": "1.0"},
+        {"approved": pid, **edge.as_dict(), "_schema_version": "1.0"},
         indent=2,
     )
 

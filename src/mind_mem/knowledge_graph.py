@@ -17,7 +17,21 @@ Design highlights:
   `confidence` in [0, 1], and optional `valid_from` / `valid_until`
   timestamps so downstream retrieval can weight or filter by freshness.
 
-Pure Python, stdlib-only. Concurrency-safe.
+**An edge is content, so it is admitted like content (5.0.2).** Edges are
+served — ``graph_query`` and ``traverse_graph`` return them and
+``kg_fusion`` splices their endpoints into recall — and until 5.0.2 they
+entered with no receipt and no chain row: the measurement was
+``add_edge(...)`` followed by *evidence +0, hash_chain +0, audit_chain +0*
+through three separate doors. :meth:`KnowledgeGraph.add_edge` now begins
+with :func:`~mind_mem.admission.require_admission` on the deterministic
+:func:`edge_id`, exactly as every ``BlockStore.write_block`` begins with
+it on the block id. The choke point is here rather than at the doors on
+purpose: ``approve_edge`` delegates to ``add_edge``, so does the ingest
+approval and so does the admin tool, and a door added tomorrow inherits
+the refusal instead of having to remember the rule.
+
+Pure Python, stdlib-only except the leaf ``admission`` module (which
+itself imports only ``enums``). Concurrency-safe.
 """
 
 from __future__ import annotations
@@ -31,6 +45,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Mapping, Optional
+
+from .admission import require_admission
 
 # ---------------------------------------------------------------------------
 # Predicate registry
@@ -461,6 +477,51 @@ PROPOSAL_REJECTED = "rejected"
 EDGE_ORIGIN_HITL_APPROVED = "hitl_approved"
 EDGE_ORIGIN_DIRECT_ADMIN = "direct_admin"
 
+#: Domain separator in the :func:`edge_id` preimage. Distinct from the
+#: proposal id's tag so a staged proposal and the edge it commits to can
+#: never collide on one id — the chain has to be able to tell the operator
+#: decision apart from the write it authorised.
+_EDGE_ID_TAG = "mm-edge-v1"
+
+
+def edge_id(subject: str, predicate: "Predicate | str", object_: str, source_block_id: str) -> str:
+    """The id an admission receipt names when it authorises this edge.
+
+    Derived by SHA-256 over a canonical, NUL-separated preimage of the
+    edge tuple — no clock, no counter, no randomness — so a door can
+    compute exactly what :meth:`KnowledgeGraph.add_edge` will demand
+    before it opens a scope, and re-adding the same edge (``INSERT OR
+    IGNORE`` makes that idempotent) asks for the same id twice.
+
+    Canonicalisation matches the storage key: the entity surfaces are
+    folded the way :class:`EntityRegistry` folds them and the predicate
+    through :meth:`Predicate.from_str`, so ``"STARGA"`` and
+    ``"  starga "`` — which land on one row — also land on one id. An id
+    that varied with the caller's spelling would let a receipt cover a
+    write it did not describe.
+
+    ``source_block_id`` is part of the preimage because it is part of the
+    edges primary key: two edges that differ only in provenance are two
+    rows, so they are two admissions.
+
+    Raises:
+        ValueError: an unknown predicate, or a blank ``source_block_id``
+            — both refused here rather than after a scope was opened.
+    """
+    pred = predicate if isinstance(predicate, Predicate) else Predicate.from_str(str(predicate))
+    if not source_block_id or not source_block_id.strip():
+        raise ValueError("source_block_id is required for provenance")
+    preimage = "\x00".join(
+        [
+            _EDGE_ID_TAG,
+            _canonicalise(subject),
+            pred.value,
+            _canonicalise(object_),
+            source_block_id.strip(),
+        ]
+    ).encode("utf-8")
+    return "E-" + hashlib.sha256(preimage).hexdigest()[:16]
+
 
 def _edge_proposal_id(subject: str, predicate_value: str, object_: str, source_block_id: str) -> str:
     """Deterministic id for an edge proposal.
@@ -616,19 +677,46 @@ class KnowledgeGraph:
         valid_until: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> Edge:
-        """Resolve both ends via the registry, then insert the edge.
+        """Admit the edge, resolve both ends via the registry, then insert it.
 
         Duplicate edges with the same ``(subject, predicate, object,
         source_block_id)`` tuple collapse to a single row; the ``INSERT
         OR IGNORE`` ensures repeated ingestion is idempotent.
+
+        This is the governance choke point for the graph, and the only
+        one: :meth:`approve_edge`, ``graph_ingest.approve_relation_signals``
+        and the admin ``graph_add_edge`` tool all land their edge through
+        here, so a receipt is required once instead of at three doors that
+        each have to remember.
+
+        The admission check runs **before** ``entities.resolve``, which
+        writes rows of its own — an ungated call must leave the database
+        exactly as it found it, not half-populated with entities for an
+        edge that was refused. ``source_block_id`` is validated first
+        because the id is derived from it.
+
+        A receipt carries no ``status`` for an edge (there is no such
+        field), and ``require_admission`` reads an unstated status as
+        servable — which is the truth here, since ``graph_query`` serves
+        every edge it finds. The consequence is deliberate: a tier that
+        mints a withheld status (external ingest, agent message, auto
+        capture) **cannot** land an edge, and the scopes that can are the
+        proposal apply and the carrying tiers.
+
+        Raises:
+            UngatedWriteError: no admission scope is open, or the open one
+                does not cover this edge's :func:`edge_id`.
+            ValueError: unknown predicate, blank ``source_block_id``,
+                out-of-range confidence, or malformed validity timestamps.
         """
         import json as _json
 
         pred = predicate if isinstance(predicate, Predicate) else Predicate.from_str(predicate)
-        s_id = self.entities.resolve(subject)
-        o_id = self.entities.resolve(object)
         if not source_block_id or not source_block_id.strip():
             raise ValueError("source_block_id is required for provenance")
+        require_admission(edge_id(subject, pred, object, source_block_id))
+        s_id = self.entities.resolve(subject)
+        o_id = self.entities.resolve(object)
         if not 0.0 <= confidence <= 1.0:
             raise ValueError(f"confidence must be in [0, 1], got {confidence!r}")
         # Validate timestamps up front so malformed ISO 8601 is caught
@@ -837,6 +925,15 @@ class KnowledgeGraph:
         from one written through the direct admin-scoped :meth:`add_edge`
         path (which stamps ``"direct_admin"``). This closes the audit gap
         where an approved edge and a directly-added edge were byte-identical.
+
+        Governance: this opens no scope of its own — it commits through
+        :meth:`add_edge`, so it runs inside the caller's. The door is
+        ``mcp.tools.graph.approve_edge``, which opens ``admit_proposal``
+        over :func:`edge_id` of the proposal's own tuple (computable from
+        the proposal before this is called, because both ids are derived
+        from the same canonical preimage). An approval with no scope open
+        raises :class:`~mind_mem.admission.UngatedWriteError` and leaves
+        the proposal ``staged``.
         """
         prop = self.get_edge_proposal(proposal_id)
         if prop is None:
