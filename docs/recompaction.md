@@ -1,6 +1,6 @@
 # Iterative Re-Compression Engine (Recompaction)
 
-**Module:** `src/mind_mem/recompaction.py` (268 lines, 18 tests, 99% coverage)
+**Module:** `src/mind_mem/recompaction.py` (265 lines, 18 tests, 99% coverage)
 
 **Status:** The re-compression engine is **fully implemented and tested**, and the injected compressor now has concrete implementations (`compressors.py`: `EchoCompressor` control + `OllamaCompressor`) plus a fact-retention benchmark (`bench/recompaction_bench.py`) driven by an autoresearch harness against the real corpus. **What is NOT yet wired: a `mm recompact` CLI command that clusters and routes results through `propose_update`, and a before/after recall benchmark on the governed corpus.**
 

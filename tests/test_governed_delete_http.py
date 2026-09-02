@@ -25,14 +25,17 @@ Every refusal here is paired with a positive control, and the two
 ``TestMutation*`` classes restore the pre-5.0.2 shape and show the
 protective test going red — a gate never observed failing is not a gate.
 
-A note on ``POST /clear`` and the corpus it enumerates: the loop iterates
-``store.list_blocks()``, which every store in the tree implements as the
-list of *artifacts* (``.md`` paths, ``file_path`` values) rather than
-block ids. That is a pre-existing defect of the endpoint, verified by
-live probe, and it is not this file's to fix — the property tested here
-is the one the scope guarantees regardless: **the receipt covers exactly
-the set the loop iterates**, whatever that set turns out to mean, so the
-scope can never drift from the deletions it authorises.
+A note on ``POST /clear`` and the corpus it enumerates: the loop used to
+iterate ``store.list_blocks()``, which every store in the tree implements
+as the list of *artifacts* (``.md`` paths, ``file_path`` values) rather
+than block ids, so the endpoint removed nothing at all. That defect is
+closed — the loop now walks
+:func:`~mind_mem.http_transport._corpus_block_ids`, and
+``tests/test_governed_delete_clear_enumeration.py`` proves it against a
+real Markdown corpus. The property tested *here* is the one the scope
+guarantees whatever the enumeration returns: **the receipt covers exactly
+the set the loop iterates**, so the scope can never drift from the
+deletions it authorises.
 """
 
 from __future__ import annotations
@@ -114,20 +117,30 @@ def _present(ws: str, bid: str) -> bool:
 
 
 class _CorpusStore:
-    """A store whose ``list_blocks`` returns block ids, and whose deletes work.
+    """A store the ``/clear`` loop can enumerate, and whose deletes work.
 
-    Stands in for the corpus the ``/clear`` loop is *meant* to enumerate
-    (see the module docstring). It obeys the delete contract — check
-    first, report the removal on success — so the bulk-record assertions
-    below measure the door, not a permissive double.
+    ``get_all`` is what the door reads (block dicts carrying ``_id``, the
+    protocol shape every real store returns); ``list_blocks`` stays the
+    artifact list the protocol documents, so the double cannot make the
+    door look right by handing it ids through the wrong method. It obeys
+    the delete contract — check first, report the removal on success — so
+    the bulk-record assertions below measure the door, not a permissive
+    double.
     """
 
     def __init__(self, rows: dict[str, str]) -> None:
         self.rows = dict(rows)
         self.attempts: list[str] = []
 
-    def list_blocks(self) -> list[str]:
+    def get_all(self, *, active_only: bool = False) -> list[dict[str, Any]]:
+        return [{"_id": bid, "Statement": self.rows[bid], "Status": "active"} for bid in sorted(self.rows)]
+
+    def block_ids(self) -> list[str]:
+        """The ids the door will enumerate — the test's read of the same set."""
         return sorted(self.rows)
+
+    def list_blocks(self) -> list[str]:
+        return [f"decisions/{bid}.md" for bid in sorted(self.rows)]
 
     def delete_block(self, block_id: str) -> bool:
         self.attempts.append(block_id)
@@ -257,11 +270,11 @@ def test_clear_writes_one_bulk_record_over_everything_it_removed(workspace: str,
 def test_the_clear_scope_covers_exactly_what_the_loop_iterates(workspace: str, corpus: _CorpusStore) -> None:
     """The receipt and the loop can never disagree about the id set.
 
-    Whatever ``list_blocks`` returns, the scope is opened over that exact
-    sequence and the loop walks the same one — so the authorisation
-    always names the deletions it authorised.
+    Whatever the corpus enumeration returns, the scope is opened over
+    that exact sequence and the loop walks the same one — so the
+    authorisation always names the deletions it authorised.
     """
-    enumerated = corpus.list_blocks()
+    enumerated = corpus.block_ids()
     status, _body = _handle_clear(workspace, CLEAR_BODY)
     assert status == 200
     assert corpus.attempts == enumerated
@@ -277,7 +290,7 @@ def test_a_block_written_during_the_clear_is_outside_the_receipt(workspace: str,
     """
     from mind_mem.admission import UngatedDeleteError
 
-    original = corpus.list_blocks()
+    original = corpus.block_ids()
     real_delete = corpus.delete_block
     intruder = "D-20260901-777"
     #: What the open receipt said about the intruder, checked from inside
@@ -343,7 +356,7 @@ def test_a_store_refusing_a_covered_block_aborts_the_clear(workspace: str, corpu
     from mind_mem.admission import UngatedDeleteError
 
     real_delete = corpus.delete_block
-    target = corpus.list_blocks()[2]
+    target = corpus.block_ids()[2]
 
     def refuse_one(block_id: str) -> bool:
         if block_id == target:
@@ -368,7 +381,7 @@ def test_a_store_refusing_a_covered_block_aborts_the_clear(workspace: str, corpu
 def test_a_block_that_merely_errors_does_not_abort_the_clear(workspace: str, corpus: _CorpusStore) -> None:
     """Positive control for the test above: an ordinary failure is skipped."""
     real_delete = corpus.delete_block
-    target = corpus.list_blocks()[2]
+    target = corpus.block_ids()[2]
 
     def blow_up_on_one(block_id: str) -> bool:
         if block_id == target:
@@ -423,7 +436,7 @@ class TestMutationTwins:
         is therefore load-bearing and observably failable.
         """
         gate = get_gate(workspace)
-        for bid in corpus.list_blocks():
+        for bid in corpus.block_ids():
             with gate.admit_delete(bid, rationale="the pre-batch shape, one scope per block"):
                 corpus.delete_block(bid)
 

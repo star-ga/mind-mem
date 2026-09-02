@@ -211,24 +211,74 @@ def content_tools() -> set[str]:
 #: Placeholder substituted with the seeded workspace path at call time.
 WS = "$WS"
 
-#: v4 flags the sweep turns ON. A surface answering "disabled" is not a surface
-#: the sweep has checked, so every gated tool that can be reached offline is
-#: reached. Pinned here rather than left to a default so the sweep's coverage
-#: is a committed fact.
+#: v4 flags the sweep turns ON: **every registered flag**, not a chosen few.
+#: A surface answering "disabled" is not a surface the sweep has checked, so a
+#: content path behind an off-by-default flag is dark to the canary in exactly
+#: the way the whole read surface was dark to the one-module tripwire this file
+#: replaced. That was not hypothetical here -- the first version of this sweep
+#: turned on 14 of the 52 registered flags, leaving 38 flag-gated paths
+#: (``long_context_recall``, ``streaming_recall``, ``surprise_retrieval``,
+#: ``fusion``, ``context_budget``, ``ingest_serve`` among them) never exercised.
+#:
+#: Pinned as a literal rather than computed at import, so the sweep's coverage
+#: is a committed fact a reader can diff. ``test_no_registered_flag_is_left_dark``
+#: checks it against :data:`mind_mem.v4.feature_flags.ALL_V4_FLAGS`, one way
+#: round: every registered flag must appear here, and a name here that is no
+#: longer registered is harmless (it sets a config key nobody reads) rather than
+#: a failure, so a flag deleted elsewhere cannot red-light this file.
 SWEEP_FLAGS: tuple[str, ...] = (
+    "backpressure",
+    "block_kinds",
     "block_metadata",
+    "bootstrap_corpus",
     "chat",
+    "circuit_breaker",
+    "cognitive_kernel",
     "compliance_export",
+    "context_budget",
+    "contradiction_states",
+    "contradiction_stream",
+    "contraindicates_edges",
     "core_export",
+    "embedding_fallback",
+    "embedding_pipeline",
     "entity_observations",
     "evidence",
+    "federation",
+    "fusion",
     "granularity_align",
+    "health",
+    "hnsw_kind_index",
+    "idle_ingest",
+    "ingest_serve",
     "kind_summaries",
     "lint",
+    "llm_noise_profile",
+    "logging_context",
+    "long_context_recall",
+    "maintenance_layout",
+    "mind_kernels",
+    "multi_modal",
+    "observability",
+    "online_training",
+    "pq",
+    "prompt_schema",
     "provenance",
     "redaction",
+    "retrieval_metrics",
+    "rust_hot_path",
+    "self_editing",
+    "self_heal",
+    "streaming_recall",
+    "surprise_retrieval",
+    "tenant_chains",
+    "tenant_kms",
+    "time_bounded_recall",
     "trajectory",
     "typed_edges",
+    "viewer",
+    "vocabulary",
+    "world_staleness",
 )
 
 #: Block ids seeded by the sweep. ``ACTIVE_ID`` is never passed as an argument
@@ -250,12 +300,17 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "add_block_edge": ({"src": QUARANTINED_ID, "dst": PENDING_ID, "kind": "derives"},),
     "approve_apply": ({"proposal_id": "no-such-proposal", "dry_run": True},),
     "approve_edge": ({"proposal_id": "no-such-proposal"},),
-    "arch_baseline": ({"repo": WS},),
-    "arch_check_rules": ({"repo": WS},),
+    # The fixture path is required, not optional: without it these four bound
+    # nothing and every call died in ``TypeError: ... missing 1 required
+    # positional argument`` before the tool body ran. Four "no canary" rows
+    # measuring the signature. ``test_no_invocation_is_rejected_by_the_signature``
+    # is the tripwire that found it and keeps it found.
+    "arch_baseline": ({"repo": WS, "fixture": f"{WS}/.arch-mind/fixture.json"},),
+    "arch_check_rules": ({"repo": WS, "fixture": f"{WS}/.arch-mind/fixture.json", "rules": None, "mode": "report"},),
     "arch_delta": ({"repo": WS, "before": "", "after": ""},),
-    "arch_metric_explain": ({"metric": "coupling", "fixture": ""},),
-    "arch_session_end": ({"repo": WS},),
-    "arch_session_start": ({"repo": WS},),
+    "arch_metric_explain": ({"metric": "coupling", "fixture": f"{WS}/.arch-mind/fixture.json"},),
+    "arch_session_end": ({"repo": WS, "fixture": f"{WS}/.arch-mind/fixture.json"},),
+    "arch_session_start": ({"repo": WS, "fixture": f"{WS}/.arch-mind/fixture.json", "agent_id": "sweep", "commit_sha": "0" * 40},),
     "compiled_truth_add_evidence": ({"entity_id": "frost", "observation": "a swept observation", "source": QUARANTINED_ID},),
     "decrypt_file": ({"file_path": "decisions/DECISIONS.md"},),
     "graph_add_edge": ({"subject": "a", "predicate": "relates_to", "object": "b", "source_block_id": QUARANTINED_ID},),
@@ -268,7 +323,10 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "rollback_proposal": ({"receipt_ts": "1970-01-01T00:00:00Z", "reason": "swept"},),
     "sign_model_tool": ({"path": WS},),
     "vault_sync": ({"vault_root": WS, "block_id": QUARANTINED_ID, "relative_path": "swept.md", "body": "swept"},),
-    "agent_inject": ({"query": "architecture decision", "agent": "claude-code", "limit": 10},),
+    "agent_inject": (
+        {"query": "architecture decision", "agent": "claude-code", "limit": 10},
+        {"query": "frost telemetry", "agent": "generic", "limit": 10, "scoring_instant": "2026-06-01"},
+    ),
     "anchor_history": ({"limit": 10},),
     "anchor_root": ({"chain": "test", "tx_hash": "0x1", "block_height": 1},),
     "arch_history": ({"repo": WS},),
@@ -278,7 +336,10 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "calibration_feedback": ({"query_id": "q1", "block_ids_useful": QUARANTINED_ID},),
     "calibration_stats": ({},),
     "category_summary": ({"topic": "architecture", "limit": 10}, {"topic": "frost telemetry", "limit": 10}),
-    "chat_with_memory": ({"question": "architecture decision", "limit": 5},),
+    "chat_with_memory": (
+        {"question": "architecture decision", "limit": 5},
+        {"question": "frost telemetry", "limit": 5, "generator": "extractive", "on_invalid": "raise", "require_in_evidence": True},
+    ),
     "check_dead_ends": ({"tool": "bash", "command": "ls", "intent": "architecture decision"},),
     "check_guardrails": ({"tool": "bash", "command": "ls", "intent": "architecture decision"},),
     "compact": ({"dry_run": True},),
@@ -293,7 +354,10 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "entity_add_observation": ({"entity": "frost", "fact": "a swept fact"},),
     "entity_observations": ({"entity": "frost"},),
     "export_core": ({"name": "sweep-1.0.mmcore", "format": "markdown"},),
-    "export_memory": ({},),
+    "export_memory": (
+        {},
+        {"format": "jsonl", "include_metadata": True, "max_blocks": 10000},
+    ),
     "find_similar": ({"block_id": QUARANTINED_ID, "limit": 10},),
     "get_block": ({"block_id": ACTIVE_ID}, {"block_id": PENDING_ID}, {"block_id": QUARANTINED_ID}),
     "get_mind_kernel": ({"name": "recall"},),
@@ -301,7 +365,10 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "graph": ({"action": "stats"},),
     "graph_query": ({"entity": "frost", "depth": 2},),
     "graph_stats": ({},),
-    "hybrid_search": ({"query": "architecture decision", "limit": 10},),
+    "hybrid_search": (
+        {"query": "architecture decision", "limit": 10},
+        {"query": "frost telemetry", "limit": 10, "active_only": True, "explain": True, "scoring_instant": "2026-06-01"},
+    ),
     "index_stats": ({},),
     "intent_classify": ({"query": "architecture decision"},),
     "kernels": ({"action": "list"},),
@@ -320,17 +387,61 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "observe_signal": ({"session_id": "s", "previous_query": "frost", "new_query": "frost telemetry"},),
     "ontology_validate": ({"block": '{"_id": "' + QUARANTINED_ID + '"}', "type_name": "decision"},),
     "outcome_stats": ({"top_n": 10},),
-    "pack_recall_budget": ({"query": "architecture decision", "max_tokens": 2000},),
+    "pack_recall_budget": (
+        {"query": "architecture decision", "max_tokens": 2000},
+        {"query": "frost telemetry", "max_tokens": 2000, "limit": 20, "model": "generic", "scoring_instant": "2026-06-01"},
+    ),
     "pipeline_status": ({},),
     "plan_consolidation": ({},),
-    "prefetch": ({"signals": "architecture decision"},),
+    "prefetch": ({"signals": "architecture decision"}, {"signals": "frost telemetry", "limit": 5}),
     "project_profile": ({"name": "frost", "top_k": 5},),
     "propagate_staleness": ({"seed_block_ids": QUARANTINED_ID},),
     "propose_update": ({"block_type": "decision", "statement": "a swept statement", "rationale": "swept"},),
-    "recall": ({"query": "architecture decision", "limit": 10},),
-    "recall_with_axis": ({"query": "architecture decision", "limit": 10},),
-    "recall_with_guardrails": ({"query": "architecture decision", "limit": 10},),
-    "recall_with_persona": tuple({"query": "architecture decision", "persona": p, "limit": 10} for p in PERSONAS_SWEPT),
+    # Every dispatch mode, not just the default one. ``recall`` in ``public.py``
+    # is a nine-mode dispatcher, and a sweep that calls ``mode="auto"`` only is
+    # the same defect one level down from the one-module tripwire: it enumerates
+    # one leg of the surface it claims to cover. ``test_every_recall_mode_is_swept``
+    # reads the mode list out of the dispatcher's own source, so a tenth mode
+    # fails the build until it is swept.
+    "recall": (
+        {"query": "architecture decision", "limit": 10},
+        {"query": "frost telemetry", "mode": "bm25", "active_only": False, "scoring_instant": "2026-06-01"},
+        {"query": "frost telemetry", "mode": "hybrid", "active_only": True},
+        {"query": "frost telemetry", "backend": "hybrid"},
+        {"query": "frost telemetry", "mode": "similar", "block_id": QUARANTINED_ID},
+        {"query": "frost telemetry", "mode": "axis", "axes": "lexical,semantic", "weights": "0.5,0.5"},
+        {"query": "frost telemetry", "mode": "pack", "max_tokens": 2000},
+        {"query": "frost telemetry", "mode": "prefetch", "signals": "architecture decision"},
+        {"query": "frost telemetry", "mode": "classify"},
+        {"query": "frost telemetry", "mode": "diagnostics"},
+    ),
+    "recall_with_axis": (
+        {"query": "architecture decision", "limit": 10},
+        {
+            "query": "frost telemetry",
+            "axes": "lexical,semantic",
+            "weights": "0.5,0.5",
+            "limit": 10,
+            "active_only": True,
+            "adversarial": True,
+            "allow_rotation": False,
+            "scoring_instant": "2026-06-01",
+        },
+    ),
+    "recall_with_guardrails": (
+        {"query": "architecture decision", "limit": 10},
+        {
+            "query": "frost telemetry",
+            "tool": "bash",
+            "command": "ls",
+            "intent": "architecture decision",
+            "paths": ["src/"],
+            "limit": 10,
+            "active_only": True,
+        },
+    ),
+    "recall_with_persona": tuple({"query": "architecture decision", "persona": p, "limit": 10} for p in PERSONAS_SWEPT)
+    + ({"query": "frost telemetry", "persona": "detailed", "limit": 10, "active_only": True, "scoring_instant": "2026-06-01"},),
     "reindex": ({},),
     "reindex_dirty": ({"dry_run": True},),
     "report_outcome": ({"block_ids": QUARANTINED_ID, "outcome": "success"},),
@@ -496,3 +607,214 @@ def test_every_registered_tool_has_an_invocation() -> None:
 #: set is pinned: a fourth tool joining it is a decision somebody makes on
 #: purpose, not a diff nobody reads.
 ID_DISCLOSING: frozenset[str] = frozenset({"lint", "pipeline_status", "reindex_dirty"})
+
+
+# ---------------------------------------------------------------------------
+# Tripwire C — no registered flag leaves a content path dark
+# ---------------------------------------------------------------------------
+
+
+def test_no_registered_flag_is_left_dark() -> None:
+    """Every v4 flag is ON during the sweep.
+
+    A content path behind an off-by-default flag is invisible to a canary that
+    never turns it on -- the same blindness, one layer in, as a tripwire that
+    enumerated one module. Checked one way round on purpose: a flag registered
+    and not swept is a hole, a name swept and no longer registered is inert.
+    """
+    from mind_mem.v4.feature_flags import ALL_V4_FLAGS
+
+    dark = sorted(set(ALL_V4_FLAGS) - set(SWEEP_FLAGS))
+    assert not dark, f"registered v4 flags the sweep never enables: {dark}. Add each to SWEEP_FLAGS so the paths they gate are exercised."
+
+
+def test_tripwire_c_fails_on_a_flag_the_sweep_leaves_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.modules[__name__], "SWEEP_FLAGS", tuple(f for f in SWEEP_FLAGS if f != "streaming_recall"))
+    with pytest.raises(AssertionError, match="streaming_recall"):
+        test_no_registered_flag_is_left_dark()
+
+
+# ---------------------------------------------------------------------------
+# Tripwire D — a content tool is swept across its whole argument space
+# ---------------------------------------------------------------------------
+
+
+def swept_parameters(tool: str) -> set[str]:
+    """Every keyword the sweep passes to *tool*, across all its invocations."""
+    invocations = TOOL_INVOCATIONS.get(tool, ())
+    keys: set[str] = set()
+    for kwargs in invocations:
+        keys |= set(kwargs)
+    return keys
+
+
+def tool_parameters(tool: str) -> set[str]:
+    """The live signature's named parameters."""
+    import importlib
+    import inspect
+
+    fn = getattr(importlib.import_module(tool_module(tool)), tool)
+    return {
+        p.name
+        for p in inspect.signature(fn).parameters.values()
+        if p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+    }
+
+
+def test_every_content_tool_sweeps_its_whole_parameter_space() -> None:
+    """One argument set is one leg of a surface, not the surface.
+
+    A parameter that changes WHAT a tool serves -- ``active_only``, ``mode``,
+    ``format``, ``include_metadata``, ``block_id`` -- is a separate read path,
+    and a canary that never passes it has not checked it. Requiring every
+    named parameter of every ``content`` tool to appear in at least one
+    invocation makes a NEW parameter on a content tool fail the build until
+    somebody sweeps it, which is the same contract the classification table
+    imposes on a new tool.
+    """
+    gaps = {}
+    for tool in sorted(content_tools()):
+        missing = sorted(tool_parameters(tool) - swept_parameters(tool))
+        if missing:
+            gaps[tool] = missing
+    assert not gaps, f"content tools with parameters the canary sweep never passes: {gaps}"
+
+
+def test_tripwire_d_fails_on_an_unswept_parameter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The test-of-the-test: drop a swept keyword, watch it go red."""
+    trimmed = dict(TOOL_INVOCATIONS)
+    trimmed["export_memory"] = ({},)
+    monkeypatch.setattr(sys.modules[__name__], "TOOL_INVOCATIONS", trimmed)
+    with pytest.raises(AssertionError, match="include_metadata"):
+        test_every_content_tool_sweeps_its_whole_parameter_space()
+
+
+# ---------------------------------------------------------------------------
+# Tripwire E — every dispatch mode of the recall dispatcher is swept
+# ---------------------------------------------------------------------------
+
+
+def declared_recall_modes() -> set[str]:
+    """The mode names ``public.recall`` itself declares valid.
+
+    Read out of the dispatcher's own ``valid_modes=[...]`` error payload by AST
+    rather than copied into this file, so a tenth mode is swept the day it is
+    added instead of the day somebody remembers this list exists.
+    """
+    import ast
+
+    source = (_ROOT / "src" / "mind_mem" / "mcp" / "tools" / "public.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    target = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "recall")
+    modes: set[str] = set()
+    for node in ast.walk(target):
+        if isinstance(node, ast.keyword) and node.arg == "valid_modes" and isinstance(node.value, ast.List):
+            modes |= {elt.value for elt in node.value.elts if isinstance(elt, ast.Constant) and isinstance(elt.value, str)}
+    assert modes, "could not read valid_modes out of public.recall; the mode tripwire would be vacuous"
+    return modes
+
+
+def swept_recall_modes() -> set[str]:
+    """The modes the sweep actually dispatches, default included.
+
+    ``backend=`` is the v3.1.x alias the dispatcher folds into ``mode`` when
+    ``mode`` is left at ``auto``, so it counts as the mode it becomes.
+    """
+    modes: set[str] = set()
+    for kwargs in TOOL_INVOCATIONS["recall"]:
+        mode = kwargs.get("mode", "auto")
+        if mode == "auto" and kwargs.get("backend"):
+            mode = kwargs["backend"]
+        modes.add(mode)
+    return modes
+
+
+def test_every_recall_mode_is_swept() -> None:
+    unswept = sorted(declared_recall_modes() - swept_recall_modes())
+    assert not unswept, f"recall dispatch modes the canary sweep never calls: {unswept}"
+
+
+def test_tripwire_e_fails_on_an_unswept_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    trimmed = dict(TOOL_INVOCATIONS)
+    trimmed["recall"] = tuple(kw for kw in TOOL_INVOCATIONS["recall"] if kw.get("mode") != "axis")
+    monkeypatch.setattr(sys.modules[__name__], "TOOL_INVOCATIONS", trimmed)
+    with pytest.raises(AssertionError, match="axis"):
+        test_every_recall_mode_is_swept()
+
+
+# ---------------------------------------------------------------------------
+# Tripwire F — a shadowed tool name is swept as the SERVER serves it
+# ---------------------------------------------------------------------------
+
+
+def _registration_order() -> list[str]:
+    """Tool module stems in the order ``mcp/server.py`` registers them.
+
+    Pure AST over the server source: the ``from mind_mem.mcp.tools import (x as
+    _alias)`` bindings, then the ``_alias.register(mcp)`` call sequence.
+    """
+    import ast
+
+    source = (_ROOT / "src" / "mind_mem" / "mcp" / "server.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    alias_to_stem: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "mind_mem.mcp.tools":
+            for alias in node.names:
+                alias_to_stem[alias.asname or alias.name] = alias.name
+    order: list[str] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "register"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in alias_to_stem
+        ):
+            order.append(alias_to_stem[node.func.value.id])
+    assert order, "could not read the registration order out of mcp/server.py"
+    return order
+
+
+def _modules_defining(name: str) -> list[str]:
+    from count_mcp_tools import _tool_names, _tool_source_files
+
+    return [path.stem for path in _tool_source_files() if name in _tool_names(path)]
+
+
+def test_a_shadowed_tool_name_is_swept_as_the_server_serves_it() -> None:
+    """``recall`` is registered twice. The sweep must exercise the winner.
+
+    ``public.recall`` (the nine-mode dispatcher) and ``recall.recall`` (the
+    ranked-pipeline leg) share a name. FastMCP keeps the LAST registration --
+    measured, not assumed: importing ``mind_mem.mcp.server`` logs "Component
+    already exists: tool:recall" and ``get_tool("recall").fn`` resolves to
+    ``mind_mem.mcp.tools.public``, which is why ``server.py`` registers
+    ``public`` last on purpose.
+
+    ``tool_module`` resolves by sorted filename, and today that agrees by
+    coincidence (``public.py`` sorts before ``recall.py``). Rename either file
+    and the sweep would start exercising the shadowed function while the server
+    served the other one -- 121 green rows over a tool nobody calls. This pins
+    the agreement instead of relying on the alphabet.
+    """
+    order = _registration_order()
+    mismatched = {}
+    for name in sorted(registered_tools()):
+        defining = _modules_defining(name)
+        if len(defining) < 2:
+            continue
+        winner = max(defining, key=lambda stem: order.index(stem) if stem in order else -1)
+        swept = tool_module(name).rsplit(".", 1)[-1]
+        if swept != winner:
+            mismatched[name] = {"server serves": winner, "sweep exercises": swept}
+    assert not mismatched, f"shadowed tool names the sweep resolves differently from the server: {mismatched}"
+
+
+def test_tripwire_f_would_catch_a_reordered_registration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Flip the registration order; the sweep's resolution must go stale."""
+    reordered = [stem for stem in _registration_order() if stem != "public"]
+    reordered.insert(0, "public")
+    monkeypatch.setattr(sys.modules[__name__], "_registration_order", lambda: reordered)
+    with pytest.raises(AssertionError, match="recall"):
+        test_a_shadowed_tool_name_is_swept_as_the_server_serves_it()

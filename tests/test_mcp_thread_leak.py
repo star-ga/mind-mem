@@ -190,7 +190,19 @@ def test_fake_pool_reused_across_repeated_factory_calls(tmp_path, fake_psycopg_p
 # Live Postgres integration test (opt-in, matches test_postgres_block_store.py)
 # ---------------------------------------------------------------------------
 
-psycopg = pytest.importorskip("psycopg", reason="psycopg not installed; skipping Postgres thread-leak test")
+# The Postgres gate below is deliberately PER-TEST, not a module-scope
+# ``pytest.importorskip("psycopg")``. It used to be one, sitting part-way down
+# the file, and a module-scope importorskip aborts the whole import -- so every
+# test ABOVE it went with it. Those tests need no database: they exercise the
+# default Markdown/SQLite path. None of the 15 OS/Python matrix rows installs
+# the ``[postgres]`` extra, so they ran only inside the single "postgres
+# backend" job while all 15 rows reported green with them silently withdrawn.
+# MEASURED across the seven files that had this shape, on a row with the driver
+# blocked: 7 skipped / 0 passed before, 57 passed / 28 skipped after.
+try:
+    import psycopg
+except ImportError:  # pragma: no cover - the matrix rows without the [postgres] extra
+    psycopg = None  # type: ignore[assignment]
 
 from mind_mem.block_store_postgres import PostgresBlockStore  # noqa: E402
 
@@ -198,6 +210,8 @@ _DSN_ENV = "MIND_MEM_TEST_PG_DSN"
 
 
 def _require_dsn() -> str:
+    if psycopg is None:
+        pytest.skip("psycopg not installed (the [postgres] extra); no Postgres driver available")
     dsn = os.environ.get(_DSN_ENV)
     if not dsn:
         pytest.skip(f"{_DSN_ENV} not set — no live Postgres available")

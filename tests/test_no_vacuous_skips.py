@@ -45,17 +45,28 @@ lives in the root ``conftest.py`` and is applied programmatically behind a
 runtime sqlite probe (``_sqlite_has_load_extension``); it is a conditional
 skip expressed as a marker object, not an unconditional decorator, and it is
 out of this scanner's directory on purpose rather than by exemption.
+
+There are two ratchets here, and the second is the one that caught real
+coverage loss.  ``TestTestSuiteHasNoVacuousSkips`` bans skips that run
+nowhere *by construction*.  ``TestModuleScopeGatesAreSatisfiableSomewhere``
+bans the far more common kind that runs nowhere *by configuration* — a
+module-scope ``importorskip`` naming a dependency no CI job installs, which
+withdraws an entire file while every run still reports green.  Its long
+preamble records the two measured instances that motivated it.
 """
 
 from __future__ import annotations
 
 import ast
+import re
+import sys
 import textwrap
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 import pytest
+from _toml_compat import load_pyproject
 
 TESTS_DIR = Path(__file__).resolve().parent
 
@@ -399,3 +410,233 @@ class TestTestSuiteHasNoVacuousSkips:
         findings, _ = scan_tree(TESTS_DIR)
         offenders = [f for f in findings if f.kind == "reasonless-skip"]
         assert offenders == [], "\n".join(f"{f.path}:{f.line} {f.src}" for f in offenders)
+
+
+# ---------------------------------------------------------------------------
+# Second ratchet: a module-scope gate must be satisfiable on SOME CI job
+# ---------------------------------------------------------------------------
+#
+# The ratchet above bans skips that run nowhere *by construction*. This one
+# bans the kind that runs nowhere *by configuration*, which the 5.0.2 audit
+# found is where the real coverage went:
+#
+#   * ``tests/test_mic_map_bench.py`` opened with a module-scope
+#     ``pytest.importorskip("pytest_benchmark")``. No CI job installs the
+#     ``[benchmark]`` extra on the matrix, so the import aborted the module on
+#     every row -- taking with it eight throughput/size tests that need no
+#     plugin at all. Twenty tests, zero executions, every run green.
+#   * ``tests/test_iter_active_blocks.py`` opened with a module-scope
+#     ``pytest.importorskip("psycopg")``. The five Markdown-backend tests above
+#     it -- the DEFAULT backend -- were skipped on all 15 matrix rows.
+#
+# A module-scope ``importorskip`` is the highest-leverage skip in the suite:
+# one line silently withdraws an entire file. So each one has to name a
+# dependency that at least one CI job actually installs, for a file that job
+# actually selects. Everything the audit classified as legitimate passes this:
+# ``fastapi`` / ``httpx`` / ``jose`` / ``hypothesis`` / ``sentence_transformers``
+# / ``cryptography`` ship in the ``[test]`` extra that every matrix row
+# installs, and ``psycopg`` ships in ``[postgres]``, installed by the dedicated
+# "postgres backend" job -- which selects its files by grepping tests/ for its
+# DSN environment variable, so file selection is checked too, not just the
+# extra.
+#
+# Scope is module-scope ``importorskip`` only, and that is a deliberate line,
+# not an exemption: a module-level ``pytestmark = pytest.mark.skipif(<expr>)``
+# withdraws a file just as thoroughly, but ``<expr>`` is arbitrary Python and
+# mapping it back to a distribution would be guesswork. A gate that guesses
+# gets argued with and then loosened. This one only asserts what it can read.
+
+CI_WORKFLOW = TESTS_DIR.parent / ".github" / "workflows" / "ci.yml"
+PYPROJECT = TESTS_DIR.parent / "pyproject.toml"
+
+# Distribution name -> import name, only where they differ beyond ``-``/``_``.
+# Kept explicit rather than resolved from installed metadata: this check has to
+# give the same answer on a runner that does NOT have the package installed,
+# which is precisely the situation it exists to reason about.
+_IMPORT_NAME = {
+    "python-jose": "jose",
+    "pyyaml": "yaml",
+    "opentelemetry-api": "opentelemetry",
+    "opentelemetry-sdk": "opentelemetry",
+    "opentelemetry-exporter-otlp": "opentelemetry",
+}
+# Keys are matched AFTER any ``[extra]`` suffix is stripped, so write
+# ``psycopg``, never ``psycopg[binary]`` — the bracketed form would be a dead
+# entry that reads as coverage. A requirement's bracketed extras also
+# contribute their own names (``python-jose[cryptography]`` -> ``cryptography``,
+# which is exactly right); a few of those are build flavours rather than
+# importable modules (``psycopg[binary]`` -> ``binary``). That only ever makes
+# the available-set slightly larger, and no real gate imports a name like that.
+
+# The file-selection predicate of the "postgres backend" job. That job runs
+# `grep -rl "MIND_MEM_TEST_PG_DSN" tests/`, so a file it never selects gets no
+# benefit from the extra it installs.
+_PG_JOB_SELECTOR = "MIND_MEM_TEST_PG_DSN"
+
+
+def _requirement_import_names(spec: str) -> set[str]:
+    """Import names a single requirement string makes available."""
+    spec = spec.split(";")[0].strip()  # drop environment markers
+    for sep in ("==", ">=", "<=", "~=", "!=", ">", "<", " "):
+        spec = spec.split(sep)[0]
+    spec = spec.strip()
+    names: set[str] = set()
+    if "[" in spec:
+        base, _, rest = spec.partition("[")
+        for extra in rest.rstrip("]").split(","):
+            extra = extra.strip()
+            if extra:
+                names.add(_IMPORT_NAME.get(extra.lower(), extra.replace("-", "_").lower()))
+        spec = base
+    key = spec.lower()
+    names.add(_IMPORT_NAME.get(key, key.replace("-", "_")))
+    return {n for n in names if n}
+
+
+def _extra_import_names(extra: str) -> set[str]:
+    """Import names installed by ``pip install -e '.[<extra>]'``."""
+    data = load_pyproject()
+    assert data is not None, "cannot read pyproject.toml; this gate cannot run vacuously"
+    reqs = data["project"]["optional-dependencies"][extra]
+    names: set[str] = set()
+    for req in reqs:
+        names |= _requirement_import_names(req)
+    return names
+
+
+@lru_cache(maxsize=1)
+def _ci_installed_extras() -> frozenset[str]:
+    """Extras named in any ``pip install -e ".[...]"`` line in ci.yml."""
+    text = CI_WORKFLOW.read_text(encoding="utf-8")
+    found: set[str] = set()
+    for match in re.finditer(r'pip install -e "?\.\[([^\]]+)\]', text):
+        for extra in match.group(1).split(","):
+            found.add(extra.strip())
+    return frozenset(found)
+
+
+def _module_scope_importorskips(path: Path) -> list[tuple[int, str]]:
+    """``(lineno, module)`` for every module-scope ``importorskip`` in *path*."""
+    out: list[tuple[int, str]] = []
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for stmt in tree.body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue  # not module scope: costs one test, not the file
+        for node in ast.walk(stmt):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "importorskip"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
+                out.append((node.lineno, node.args[0].value))
+    return out
+
+
+def _unsatisfiable_module_gates(root: Path) -> tuple[list[str], int]:
+    """(findings, files_scanned) for module-scope gates no CI job can satisfy.
+
+    The glob is ``test_*.py`` because that is pytest's own ``python_files``
+    setting: this gate reasons about what the default collector picks up, and a
+    file it never collects cannot be withdrawn from a run it was never in.
+    Exactly one file in the tree is excluded by that boundary --
+    ``tests/red_team/behavioral_audit.py``, whose module-scope
+    ``importorskip("inspect_petri")`` is genuinely unsatisfiable under ci.yml.
+    It is named here rather than exempted: it is run by path from the separate
+    (advisory, `continue-on-error`) red-team workflow, which installs the
+    ``[red-team]`` extra, so its gate answers to that workflow's configuration
+    and not to this one's model of the matrix.
+    """
+    matrix_names = _extra_import_names("test")
+    pg_names = matrix_names | _extra_import_names("postgres")
+    stdlib = set(sys.stdlib_module_names)
+    findings: list[str] = []
+    files = 0
+    for path in sorted(root.rglob("test_*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        gates = _module_scope_importorskips(path)
+        if not gates:
+            continue
+        files += 1
+        text = path.read_text(encoding="utf-8")
+        available = pg_names if _PG_JOB_SELECTOR in text else matrix_names
+        for lineno, module in gates:
+            root_name = module.split(".")[0]
+            if root_name in stdlib or root_name == "mind_mem" or root_name in available:
+                continue
+            findings.append(
+                f"{path.relative_to(root)}:{lineno} module-scope importorskip({module!r}): "
+                "no CI job installs it for this file, so the whole module is withdrawn on "
+                "every row while the run reports green. Put the dependency in an extra a "
+                "job installs, or move the gate onto the individual tests that need it."
+            )
+    return findings, files
+
+
+class TestModuleScopeGatesAreSatisfiableSomewhere:
+    def test_the_ci_workflow_is_readable_and_installs_what_we_think(self) -> None:
+        """Non-vacuity: every assertion below rests on these three reads."""
+        extras = _ci_installed_extras()
+        assert "test" in extras, f"ci.yml no longer installs the [test] extra: {sorted(extras)}"
+        assert "postgres" in extras, f"ci.yml no longer installs the [postgres] extra: {sorted(extras)}"
+        assert _PG_JOB_SELECTOR in CI_WORKFLOW.read_text(encoding="utf-8"), (
+            "the postgres job no longer selects files by that env var; this gate's "
+            "file-selection model is stale and must be re-derived, not relaxed"
+        )
+        names = _extra_import_names("test")
+        assert {"pytest", "fastapi", "jose", "sentence_transformers"} <= names, sorted(names)
+        assert "psycopg" in _extra_import_names("postgres")
+        # The two-tier model (matrix rows vs the one job with the extra) is only
+        # meaningful while [postgres] supplies something [test] does not. If a
+        # future release folds the driver into [test] that is a FIX, not a
+        # breakage -- so this asserts the model is still needed, and says so,
+        # rather than asserting the driver stayed out of [test].
+        assert _extra_import_names("postgres") - names, (
+            "the [postgres] extra now adds nothing beyond [test]; the file-selection leg of this "
+            "gate is dead code and should be removed, not worked around"
+        )
+
+    def test_control_tree_detects_an_unsatisfiable_gate(self, tmp_path: Path) -> None:
+        """Positive control: the scanner must see a true positive."""
+        root = tmp_path / "gates"
+        root.mkdir()
+        (root / "test_bad_gate.py").write_text(
+            'import pytest\n\ntorch = pytest.importorskip("torch")\n\n\ndef test_x() -> None:\n    assert True\n',
+            encoding="utf-8",
+        )
+        (root / "test_good_gate.py").write_text(
+            'import pytest\n\nfastapi = pytest.importorskip("fastapi")\n\n\ndef test_y() -> None:\n    assert True\n',
+            encoding="utf-8",
+        )
+        (root / "test_good_pg.py").write_text(
+            'import os\n\nimport pytest\n\npsycopg = pytest.importorskip("psycopg")\n'
+            '_DSN = os.environ.get("MIND_MEM_TEST_PG_DSN")\n\n\ndef test_z() -> None:\n    assert True\n',
+            encoding="utf-8",
+        )
+        # Same driver as test_good_pg.py, but the file never mentions the env
+        # var the "postgres backend" job greps for, so that job never selects
+        # it and the extra it installs does this file no good. This is the
+        # file-selection leg, and it is the exact shape of a real finding
+        # (tests/test_mcp_db_error_backstop.py) -- kept as a control because
+        # without it the leg could rot into a no-op unnoticed.
+        (root / "test_unselected_pg.py").write_text(
+            'import pytest\n\npsycopg = pytest.importorskip("psycopg")\n\n\ndef test_v() -> None:\n    assert True\n',
+            encoding="utf-8",
+        )
+        (root / "test_in_function.py").write_text(
+            'import pytest\n\n\ndef test_w() -> None:\n    pytest.importorskip("torch")\n    assert True\n',
+            encoding="utf-8",
+        )
+        findings, files = _unsatisfiable_module_gates(root)
+        assert files == 4, f"expected 4 gated files scanned, got {files}"
+        flagged = sorted(f.split(":")[0] for f in findings)
+        assert flagged == ["test_bad_gate.py", "test_unselected_pg.py"], findings
+
+    def test_no_module_scope_gate_runs_nowhere(self) -> None:
+        """Ratchet at zero over the real suite."""
+        findings, files = _unsatisfiable_module_gates(TESTS_DIR)
+        assert files >= 15, f"only {files} files with module-scope gates found; the scan is broken"
+        assert findings == [], "\n".join(findings)

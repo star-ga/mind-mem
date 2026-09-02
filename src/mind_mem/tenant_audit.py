@@ -216,7 +216,21 @@ def verify_tenant(
         # truthy, so (False, ["prev_hash mismatch"]) would export a
         # tampered chain as verified.
         if isinstance(result, dict):
-            ok = bool(result.get("verified", True))
+            # A summary dict with no ``verified`` key is a shape this façade
+            # does not understand, and an unread verification is not a passed
+            # one. Defaulting to True here made a chain impl that answers
+            # ``{"records": 5}`` — or one whose key was renamed — export as
+            # verified without anything ever having checked it, which is the
+            # single worst direction for a compliance surface to fail in.
+            if "verified" not in result:
+                _log.warning(
+                    "tenant_audit_verify_shape_unknown",
+                    tenant_id=tenant_id,
+                    keys=",".join(sorted(str(k) for k in result)[:8]),
+                )
+                ok = False
+            else:
+                ok = bool(result["verified"])
             records = int(result.get("records", 0))
         elif isinstance(result, tuple):
             ok = bool(result[0]) if result else False

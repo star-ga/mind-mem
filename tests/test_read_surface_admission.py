@@ -207,6 +207,18 @@ def test_the_seeded_statuses_are_the_ones_admission_withholds() -> None:
 # ---------------------------------------------------------------------------
 
 
+#: The two ways Python refuses a call before the function body runs. A tool
+#: that never ran cannot have leaked, so its green row measures the signature
+#: rather than the surface -- the vacuous-pass shape that a verifier which died
+#: presents as a pass. Four ``arch_*`` invocations were in exactly this state
+#: when the check was written.
+_BINDING_PHRASES = ("required positional argument", "unexpected keyword argument", "positional arguments but")
+
+
+def _is_binding_error(text: str) -> bool:
+    return text.startswith("TypeError:") and any(phrase in text for phrase in _BINDING_PHRASES)
+
+
 def _call(tool: str, kwargs: dict, workspace: str, scope: str) -> str:
     """Invoke one tool and return everything the caller would see, as text.
 
@@ -226,7 +238,10 @@ def _call(tool: str, kwargs: dict, workspace: str, scope: str) -> str:
 
     module = importlib.import_module(tool_module(tool))
     fn = getattr(module, tool)
-    resolved = {k: (workspace if v == WS else v) for k, v in kwargs.items()}
+    # Substring substitution, not equality: a tool that needs a path INSIDE the
+    # workspace (the arch-mind fixture) writes it as f"{WS}/.arch-mind/..." and
+    # an equality check would hand it the literal "$WS/..." instead.
+    resolved = {k: (v.replace(WS, workspace) if isinstance(v, str) else v) for k, v in kwargs.items()}
     previous = os.environ.get("MIND_MEM_SCOPE")
     os.environ["MIND_MEM_SCOPE"] = scope
     os.environ["MIND_MEM_WORKSPACE"] = workspace
@@ -258,6 +273,7 @@ def sweep(seed_template: str) -> dict[str, dict[str, Any]]:
                 finally:
                     shutil.rmtree(workspace, ignore_errors=True)
         blob = "\n".join(text for _, _, text in outputs)
+        binding = [(scope, kwargs, text) for scope, kwargs, text in outputs if _is_binding_error(text)]
         # Naming a withheld block's ID is a weaker disclosure than serving its
         # text, and a different one: it says the block exists. Measured only
         # over invocations that did NOT pass that id in, so an echo of the
@@ -269,6 +285,7 @@ def sweep(seed_template: str) -> dict[str, dict[str, Any]]:
             "reached": CANARIES["active"] in blob,
             "names_withheld_ids": any(wid in unprompted for wid in (PENDING_ID, QUARANTINED_ID)),
             "id_only": ACTIVE_ID in blob and CANARIES["active"] not in blob,
+            "binding_errors": binding,
         }
     return results
 
@@ -497,3 +514,42 @@ def test_export_memory_admits_through_the_shared_seam() -> None:
     source = inspect.getsource(memory_ops.export_memory)
     assert "admit_read(" in source, "export_memory does not call the shared read-admission seam"
     assert memory_ops.admit_read.__module__ == "mind_mem.admission"
+
+
+# ---------------------------------------------------------------------------
+# The sweep has to have actually run
+# ---------------------------------------------------------------------------
+
+
+def test_no_invocation_is_rejected_by_the_signature(sweep: dict[str, dict[str, Any]]) -> None:
+    """A call Python refused to bind is not a tool the sweep has checked.
+
+    ``arch_baseline``, ``arch_check_rules``, ``arch_session_start`` and
+    ``arch_session_end`` all take a required ``fixture`` the invocation table
+    did not pass. Every call raised ``TypeError`` before the body ran, the
+    captured message carried no canary, and all four rows were green -- four
+    tools whose "no-content" verdict rested on a call that never happened.
+    Absence of a finding is only evidence when the search actually ran.
+    """
+    broken = {tool: result["binding_errors"] for tool, result in sweep.items() if result["binding_errors"]}
+    assert not broken, f"invocations the signature rejected, so the tool body never ran: {broken}"
+
+
+def test_the_binding_detector_sees_a_rejected_call(seed_template: str) -> None:
+    """Positive control for the check above: it must catch a real refusal.
+
+    Two shapes, both produced by really calling a real tool -- a missing
+    required argument and a keyword the tool does not take -- so the detector
+    is tested against the messages Python actually emits rather than against a
+    string this test wrote.
+    """
+    workspace = _fresh(seed_template)
+    try:
+        missing_arg = _call("arch_baseline", {"repo": workspace}, workspace, "admin")
+        bogus_kwarg = _call("index_stats", {"no_such_parameter": 1}, workspace, "admin")
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+
+    assert _is_binding_error(missing_arg), f"a missing required argument was not detected: {missing_arg!r}"
+    assert _is_binding_error(bogus_kwarg), f"an unexpected keyword was not detected: {bogus_kwarg!r}"
+    assert not _is_binding_error(_call("index_stats", {}, seed_template, "admin")), "a well-formed call was flagged as a binding error"

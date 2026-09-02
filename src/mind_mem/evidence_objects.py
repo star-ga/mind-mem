@@ -365,6 +365,22 @@ class EvidenceObject:
         )
 
 
+def _same_file(a: str, b: str) -> bool:
+    """True when *a* and *b* name the same file on disk.
+
+    ``os.path.samefile`` is the authority when both paths exist — it
+    compares device and inode, so a symlink or a hard link to the store
+    is caught as well as a differently spelt path to it. When the
+    destination does not exist yet there is no inode to compare, so fall
+    back to comparing resolved paths, which still catches ``./chain.jsonl``
+    against an absolute store path and a symlinked parent directory.
+    """
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.realpath(a) == os.path.realpath(b)
+
+
 # ---------------------------------------------------------------------------
 # EvidenceChain
 # ---------------------------------------------------------------------------
@@ -686,16 +702,52 @@ class EvidenceChain:
     def export_jsonl(self, path: str) -> None:
         """Export the chain as JSONL (one JSON object per line).
 
+        The chain is refreshed from its store first, so what lands in
+        *path* is the whole history and not merely the prefix this
+        process happened to load. An exporter that cannot take the store
+        lock exports what it holds — the read-only archive an auditor
+        verifies has no concurrent writer to miss.
+
         Args:
-            path: Output file path.
+            path: Output file path. It may not be this chain's own store;
+                see below.
 
         Raises:
             EvidenceChainCompromisedError: If the stored chain did not load
                 intact — the in-memory chain is then empty, and writing it
-                out would publish that emptiness as the history (and would
-                truncate the store outright were *path* the store itself).
+                out would publish that emptiness as the history.
+            ValueError: If *path* is this chain's store. Exporting opens the
+                destination with ``"w"``, so aiming it at the store truncates
+                an append-only ledger down to whatever this process holds in
+                memory — measured: a store carrying five records, two of them
+                appended by a second writer, came back three records long and
+                still verified clean, because a shortened chain links exactly
+                as well as a whole one. Nothing downstream can tell that
+                history was destroyed, which is precisely why the call is
+                refused here rather than reported later. Re-anchoring a
+                ledger onto a shorter history is an operator decision made
+                deliberately on an archived copy, never a side effect of
+                naming the wrong output file.
         """
         self._raise_if_compromised("export")
+        if self._store_path is not None and _same_file(path, self._store_path):
+            raise ValueError(
+                f"refusing to export onto the chain's own store {self._store_path!r}: "
+                "the export would truncate an append-only ledger to this process's "
+                "in-memory view and the result would still verify. Export to a "
+                "different path; re-anchor only as a deliberate operation."
+            )
+        # Absorb anything other writers appended, so the export is the
+        # history rather than our stale prefix. Best effort: a store whose
+        # lock cannot be taken (a read-only archive) exports as before —
+        # never worse than the status quo, and it has no live writer to
+        # fall behind.
+        if self._store_path is not None:
+            try:
+                with self._store_lock():
+                    self._refresh_from_store()
+            except (OSError, LockTimeout):
+                _log.info("evidence_export_without_lock", path=self._store_path)
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             for ev in self._entries:

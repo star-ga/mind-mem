@@ -133,18 +133,22 @@ def test_postgres_replicas_must_be_list(tmp_path):
 def test_postgres_replicas_filtered_to_strings(tmp_path):
     """Non-string entries in the replicas list are silently dropped.
 
-    deferred: needs psycopg importable, never a live server (the store
-    constructs lazily and no query is made). psycopg ships only in the
-    ``[postgres]`` extra, which no matrix row installs, and the "postgres
-    backend" job picks its files by grepping tests/ for its DSN environment
-    variable -- a name this file has no reason to mention. So this runs on
-    ZERO CI rows. Upgrade path: add psycopg to the ``[test]`` extra, or make
-    that job's file list explicit rather than text-derived. Deliberately NOT
-    fixed by writing that variable's name into this docstring: CI selection
-    must not turn on prose.
+    This used to open with ``pytest.importorskip("psycopg")`` +
+    ``importorskip("psycopg_pool")``, on the belief that the assertion needed
+    the driver importable. It does not, and the skip was therefore pure lost
+    coverage: psycopg ships only in the ``[postgres]`` extra, which no
+    OS/Python matrix row installs, and the dedicated "postgres backend" job
+    selects its files by grepping tests/ for its DSN environment variable — a
+    name this file has no reason to mention. So the gate ran on ZERO CI rows
+    while every row still reported green.
+
+    MEASURED before removing it, with ``psycopg``, ``psycopg_pool`` and
+    ``pgvector`` blocked at ``sys.meta_path``: ``mind_mem.block_store_postgres``
+    imports cleanly (it guards its own driver import) and
+    ``get_block_store(...)`` returns a ``PostgresBlockStore`` — the store
+    constructs lazily and no query is made, so nothing here ever touches the
+    driver. The test now runs on all 15 matrix rows.
     """
-    pytest.importorskip("psycopg")
-    pytest.importorskip("psycopg_pool")
     ws = _make_workspace(tmp_path)
     # We can't actually connect, but we can verify the factory accepts
     # the shape without raising on the validation step. PostgresBlockStore

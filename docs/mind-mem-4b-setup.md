@@ -47,11 +47,16 @@ quality gate + lineage→staleness BFS propagator, and all the new v4
 surfaces (cognitive kernel + `KernelKind`, tier memory + CAS, surprise
 retrieval + `FallbackPolicy`, block kinds, schema validators,
 `EvictionPlan`/`debug_plan`, circuit breaker, backpressure, health
-probes, observability primitives, 35 v4 feature flags).
+probes, observability primitives, and the 38 v4 feature flags the trained
+revision declared).
 
-Eval score: **109/109 = 100%** across eleven categories on the
-un-softened harness. See the HF model card for the held-out paraphrase
-test results and the documented known limitations.
+Eval score for the weights `main` currently points at (`v4.1.1`):
+**133/133 = 100%** on the un-softened harness — every
+`train/eval_harness.py` category plus the held-out paraphrase set
+(`train/eval_holdout.py`). The 109/109 this guide used to quote was the
+`v4.0.0-base` archive, two revisions back. The per-category breakdown lives
+in the HF model card, where each row is checked against the harness, along
+with the documented known limitations.
 
 You don't *need* this model to use MIND-Mem — every client integrates
 through the MCP server and works with any LLM. The model is there

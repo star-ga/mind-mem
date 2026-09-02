@@ -256,3 +256,337 @@ def core_dependency_count(root: Path | None = None) -> int:
     except (OSError, ValueError) as exc:
         raise AuthorityError(f"could not parse {path}: {exc}") from exc
     return len(data.get("project", {}).get("dependencies") or [])
+
+
+# --------------------------------------------------------------------------
+# CI shape -- the workflow directory is the authority for what CI runs
+# --------------------------------------------------------------------------
+
+# ``.github/workflows/*.yml`` is parsed by hand, not with pyyaml: pyyaml is not
+# a dependency of this package (core deps are zero) and the release gates in
+# ``tests/test_release_preflight_gates.py`` already hand-roll for the same
+# reason. Every parse that does not find the shape it expects raises
+# ``AuthorityError`` -- a matrix this cannot read is an authority that did not
+# run, not an empty finding list.
+
+_JOB_HEADER = re.compile(r"^  (?P<name>[A-Za-z0-9_-]+):\s*(#.*)?$")
+_MATRIX_LIST = re.compile(r"^\s*(?P<key>os|python-version):\s*\[(?P<items>[^\]]*)\]\s*$")
+_WORKFLOW_NAME = re.compile(r"^name:\s*(?P<name>.+?)\s*$", re.MULTILINE)
+
+
+class CIMatrix:
+    """The ``test`` job's OS × Python cross-product, read from ``ci.yml``."""
+
+    __slots__ = ("python_versions", "operating_systems")
+
+    def __init__(self, python_versions: tuple[str, ...], operating_systems: tuple[str, ...]) -> None:
+        self.python_versions = python_versions
+        self.operating_systems = operating_systems
+
+    @property
+    def job_count(self) -> int:
+        return len(self.python_versions) * len(self.operating_systems)
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return f"CIMatrix(python_versions={self.python_versions!r}, operating_systems={self.operating_systems!r})"
+
+
+def _split_yaml_list(items: str) -> tuple[str, ...]:
+    return tuple(part.strip().strip("\"'") for part in items.split(",") if part.strip())
+
+
+def ci_matrix(root: Path | None = None, job: str = "test") -> CIMatrix:
+    """The OS and Python lists of one ``ci.yml`` job's ``strategy.matrix``.
+
+    Scoped to a single job on purpose. ``ci.yml`` holds several jobs that pin
+    one Python version and one that fans out; a whole-file scan for
+    ``python-version:`` would collect the pins too and report a Python list the
+    matrix never ran.
+    """
+    root = root or _project_root()
+    path = root / ".github" / "workflows" / "ci.yml"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise AuthorityError(f"could not read {path}: {exc}") from exc
+
+    start: int | None = None
+    end = len(lines)
+    for idx, line in enumerate(lines):
+        header = _JOB_HEADER.match(line)
+        if header is None:
+            continue
+        if header.group("name") == job:
+            start = idx
+        elif start is not None:
+            end = idx
+            break
+    if start is None:
+        raise AuthorityError(f"{path} has no job named {job!r}")
+
+    found: dict[str, tuple[str, ...]] = {}
+    for line in lines[start:end]:
+        hit = _MATRIX_LIST.match(line)
+        if hit is not None:
+            found[hit.group("key")] = _split_yaml_list(hit.group("items"))
+    missing = {"os", "python-version"} - found.keys()
+    if missing:
+        raise AuthorityError(
+            f"{path} job {job!r}: no inline {sorted(missing)} matrix list found "
+            f"(a block-style list would need a parser change, not a default)"
+        )
+    if not found["os"] or not found["python-version"]:
+        raise AuthorityError(f"{path} job {job!r}: matrix list is empty")
+    return CIMatrix(python_versions=found["python-version"], operating_systems=found["os"])
+
+
+def workflow_inventory(root: Path | None = None) -> dict[str, str]:
+    """``{filename: workflow name}`` for every file in ``.github/workflows``.
+
+    The authority behind ``docs/ci-workflows.md``'s table. That table listed a
+    "Security Review" workflow that does not exist, gave Benchmark a push/PR
+    trigger it lost, and omitted two whole workflows -- drift a table of
+    prose cannot notice about itself.
+    """
+    root = root or _project_root()
+    directory = root / ".github" / "workflows"
+    if not directory.is_dir():
+        raise AuthorityError(f"no workflow directory at {directory}")
+    out: dict[str, str] = {}
+    for path in sorted(directory.glob("*.yml")) + sorted(directory.glob("*.yaml")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise AuthorityError(f"could not read {path}: {exc}") from exc
+        match = _WORKFLOW_NAME.search(text)
+        if match is None:
+            raise AuthorityError(f"{path} has no top-level 'name:' -- cannot be named in a doc table")
+        out[path.name] = match.group("name")
+    if not out:
+        raise AuthorityError(f"{directory} contains no workflow files")
+    return out
+
+
+# --------------------------------------------------------------------------
+# v4 feature flags -- ONE counting rule, two revisions (as for MCP tools)
+# --------------------------------------------------------------------------
+
+_FLAG_TUPLE = "ALL_V4_FLAGS"
+_FLAGS_PATH = "src/mind_mem/v4/feature_flags.py"
+
+
+def _count_flag_literal(source: str, where: str) -> int:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        raise AuthorityError(f"could not parse {where}: {exc}") from exc
+    for node in ast.walk(tree):
+        target: str | None = None
+        if isinstance(node, ast.AnnAssign):
+            target = getattr(node.target, "id", None)
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = getattr(node.targets[0], "id", None)
+        if target != _FLAG_TUPLE:
+            continue
+        if not isinstance(node.value, (ast.Tuple, ast.List, ast.Set)):
+            raise AuthorityError(f"{where}: {_FLAG_TUPLE} is not a literal sequence -- counting rule broke")
+        return len(node.value.elts)
+    raise AuthorityError(f"{where}: no {_FLAG_TUPLE} assignment found")
+
+
+def live_flag_count(root: Path | None = None) -> int:
+    """Number of v4 feature flags the tree declares today."""
+    root = root or _project_root()
+    path = root / _FLAGS_PATH
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise AuthorityError(f"could not read {path}: {exc}") from exc
+    return _count_flag_literal(source, str(path))
+
+
+def trained_flag_count(revision: str = TRAINED_REVISION, root: Path | None = None) -> int:
+    """Number of v4 feature flags at the revision the weights were trained from.
+
+    The model card advertised a "35-flag inventory" through four releases. It
+    matches no revision: ``v4.1.1`` declared 38 and the tree now declares 52.
+    Same failure as the 84-vs-96 tool count -- a number asserted rather than
+    measured -- so it gets the same treatment: one rule, two revisions.
+    """
+    root = root or _project_root()
+    try:
+        proc = subprocess.run(  # nosec B603 - fixed argv, no shell
+            ["git", "show", f"{revision}:{_FLAGS_PATH}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise AuthorityError(f"could not read {_FLAGS_PATH} at {revision}: {exc}") from exc
+    if proc.returncode != 0:
+        raise AuthorityError(
+            f"revision {revision!r} does not carry {_FLAGS_PATH} in this checkout "
+            f"(shallow clone? CI needs actions/checkout with fetch-depth: 0): {proc.stderr.strip()}"
+        )
+    return _count_flag_literal(proc.stdout, f"{revision}:{_FLAGS_PATH}")
+
+
+# --------------------------------------------------------------------------
+# Eval probe surface -- the harness files are the authority for the scores
+# --------------------------------------------------------------------------
+
+
+def _probe_total(path: Path) -> int:
+    """Sum the probe lists the harness in *path* actually benches.
+
+    Derived from the code rather than from a hardcoded list of names: the
+    module-level literal sequences that a ``_bench*`` function or ``main``
+    references ARE the probe surface, so adding a category to the harness moves
+    this number without anyone editing the counter.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError) as exc:
+        raise AuthorityError(f"could not parse {path}: {exc}") from exc
+    sizes: dict[str, int] = {}
+    for node in tree.body:
+        target: str | None = None
+        if isinstance(node, ast.AnnAssign):
+            target = getattr(node.target, "id", None)
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = getattr(node.targets[0], "id", None)
+        if target and target.isupper() and isinstance(node.value, (ast.List, ast.Tuple)):
+            sizes[target] = len(node.value.elts)
+    used: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if not (node.name.startswith("_bench") or node.name == "main"):
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Name) and inner.id in sizes:
+                used.add(inner.id)
+    if not used:
+        raise AuthorityError(f"{path}: no benched probe list found -- counting rule broke")
+    return sum(sizes[name] for name in used)
+
+
+def eval_probe_counts(root: Path | None = None) -> tuple[int, int]:
+    """``(main probes, held-out probes)`` for the shipped 4b eval."""
+    root = root or _project_root()
+    main = _probe_total(root / "train" / "eval_harness.py")
+    holdout = _probe_total(root / "train" / "eval_holdout.py")
+    return main, holdout
+
+
+# --------------------------------------------------------------------------
+# Per-module facts -- "(N lines, M tests, X% coverage)" in a module doc header
+# --------------------------------------------------------------------------
+
+
+def module_line_count(rel: str, root: Path | None = None) -> int:
+    """Lines in one source file -- the authority for a doc's "N lines"."""
+    root = root or _project_root()
+    path = root / rel
+    try:
+        return len(path.read_text(encoding="utf-8").splitlines())
+    except OSError as exc:
+        raise AuthorityError(f"could not read {path}: {exc}") from exc
+
+
+def module_test_count(rel: str, root: Path | None = None) -> int:
+    """``def test_*`` functions in the test file that covers *rel*.
+
+    Counted from the AST rather than by collecting, so this stays a cheap
+    in-process authority: the doc claim is "this module has M tests", and a
+    test function is what that means.
+    """
+    root = root or _project_root()
+    path = root / "tests" / f"test_{Path(rel).stem}.py"
+    if not path.is_file():
+        raise AuthorityError(f"no test file at {path} for the module doc claim about {rel}")
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError) as exc:
+        raise AuthorityError(f"could not parse {path}: {exc}") from exc
+    count = sum(1 for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"))
+    if count == 0:
+        raise AuthorityError(f"{path} declares no test functions -- counting rule broke")
+    return count
+
+
+# --------------------------------------------------------------------------
+# Supported Python -- the most-repeated claim in the docs, and the one with
+# the least behind it: nine live surfaces say "Python 3.10+" or
+# "Python 3.10-3.14 supported" and none of them was checked against packaging
+# metadata. ``requires-python`` is what pip enforces; the classifiers are what
+# the index advertises, so both are read.
+# --------------------------------------------------------------------------
+
+_REQUIRES_FLOOR = re.compile(r">=\s*(?P<v>\d+\.\d+)")
+_CLASSIFIER_VERSION = re.compile(r"^Programming Language :: Python :: (?P<v>\d+\.\d+)$")
+
+
+def python_support(root: Path | None = None) -> tuple[str, str, str]:
+    """``(requires-python floor, lowest classifier, highest classifier)``."""
+    root = root or _project_root()
+    path = root / "pyproject.toml"
+    try:
+        import tomllib  # noqa: PLC0415
+    except ModuleNotFoundError as exc:  # pragma: no cover - py<3.11 only
+        raise AuthorityError(f"tomllib unavailable: {exc}") from exc
+    try:
+        with path.open("rb") as fh:
+            data = tomllib.load(fh)
+    except (OSError, ValueError) as exc:
+        raise AuthorityError(f"could not parse {path}: {exc}") from exc
+    project = data.get("project", {})
+    requires = str(project.get("requires-python", ""))
+    floor = _REQUIRES_FLOOR.search(requires)
+    if floor is None:
+        raise AuthorityError(f"{path}: requires-python {requires!r} has no '>=' floor to hold a doc claim to")
+    versions = sorted(
+        (m.group("v") for m in (_CLASSIFIER_VERSION.match(c) for c in project.get("classifiers", [])) if m),
+        key=lambda v: tuple(int(part) for part in v.split(".")),
+    )
+    if not versions:
+        raise AuthorityError(f"{path}: no 'Programming Language :: Python :: X.Y' classifiers")
+    return floor.group("v"), versions[0], versions[-1]
+
+
+# --------------------------------------------------------------------------
+# Storage backends -- what ``mind-mem-init --backend`` actually accepts
+# --------------------------------------------------------------------------
+
+
+def storage_backends(root: Path | None = None) -> tuple[str, ...]:
+    """``init_workspace.SUPPORTED_BACKENDS`` -- the backends badge's authority.
+
+    Read from the AST rather than imported, so this stays usable from a bare
+    checkout. The badge said "markdown | postgres" while ``encrypted`` has been
+    a first-class ``--backend`` choice with its own row in
+    ``docs/storage-backends.md``: a badge can undersell a product as easily as
+    it can oversell one, and both are the same defect.
+    """
+    root = root or _project_root()
+    path = root / "src" / "mind_mem" / "init_workspace.py"
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError) as exc:
+        raise AuthorityError(f"could not parse {path}: {exc}") from exc
+    for node in tree.body:
+        target: str | None = None
+        if isinstance(node, ast.AnnAssign):
+            target = getattr(node.target, "id", None)
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = getattr(node.targets[0], "id", None)
+        if target != "SUPPORTED_BACKENDS":
+            continue
+        if not isinstance(node.value, (ast.Tuple, ast.List)):
+            raise AuthorityError(f"{path}: SUPPORTED_BACKENDS is not a literal sequence -- counting rule broke")
+        names = tuple(e.value for e in node.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str))
+        if not names:
+            raise AuthorityError(f"{path}: SUPPORTED_BACKENDS holds no string literals")
+        return names
+    raise AuthorityError(f"{path}: no SUPPORTED_BACKENDS assignment found")

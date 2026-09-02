@@ -619,3 +619,301 @@ class TestHashesAreNeverRewritten:
             )
         assert "shrank" in str(caught.value)
         assert len(_read_evidence(store)) == 1, "the refused append still wrote"
+
+
+# ---------------------------------------------------------------------------
+# The other way a ledger loses history: not a fork, a truncation
+# ---------------------------------------------------------------------------
+
+
+def _prefix_v501_export(self, path: str) -> None:
+    """The v5.0.1 body of ``export_jsonl``, copied verbatim.
+
+    It opens the destination ``"w"`` and writes whatever this process
+    holds in memory — with no check that the destination is the store it
+    is about to overwrite, and no attempt to absorb what other writers
+    appended first.
+    """
+    self._raise_if_compromised("export")
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        for ev in self._entries:
+            fh.write(json.dumps(ev.to_dict(), separators=(",", ":")) + "\n")
+
+
+def _two_writers(store: str) -> EvidenceChain:
+    """Seed *store* from two chain objects; return the one holding the stale view.
+
+    Two objects over one file is the shape two processes are in — the
+    first has no idea the second appended anything.
+    """
+    first = _seed(store, n=3)
+    second = EvidenceChain(store_path=store)
+    for i in range(2):
+        second.create(
+            action=EvidenceAction.ROLLBACK,
+            actor="second-writer",
+            target_block_id=f"B-2ND-{i}",
+            target_file="decisions/DECISIONS.md",
+            payload=b"payload",
+        )
+    return first
+
+
+def _actors(path: str) -> list[str]:
+    with open(path, encoding="utf-8") as fh:
+        return [json.loads(line)["actor"] for line in fh if line.strip()]
+
+
+class TestExportCannotTruncateTheLedger:
+    """``export_jsonl`` opens its destination ``"w"``. Aimed at the store,
+    that is not an export — it is an append-only ledger rewritten down to
+    one process's in-memory view. The result still verifies, because a
+    shortened chain links exactly as well as a whole one, so nothing
+    downstream can report the loss. It has to be refused at the call.
+    """
+
+    def test_export_onto_the_store_is_refused_and_every_byte_survives(self, tmp_path):
+        store = str(tmp_path / "evidence_chain.jsonl")
+        stale = _two_writers(store)
+
+        # Positive control 1: the records that a truncation would destroy
+        # are provably on disk, and this test can see them. Without this
+        # the byte-comparison below would pass just as well over a store
+        # the second writer never managed to write to.
+        assert _actors(store) == ["seed", "seed", "seed", "second-writer", "second-writer"]
+        assert len(stale) == 3, "the exporter is not holding the stale view the defect needs"
+
+        # Positive control 2: export works right now, so the refusal below
+        # is about the destination and not about a method that never wrote.
+        elsewhere = str(tmp_path / "exported.jsonl")
+        stale.export_jsonl(elsewhere)
+        assert os.path.isfile(elsewhere)
+
+        before = open(store, "rb").read()
+        with pytest.raises(ValueError, match="own store"):
+            stale.export_jsonl(store)
+        assert open(store, "rb").read() == before, "the refusal landed after the truncation"
+        assert _actors(store) == ["seed", "seed", "seed", "second-writer", "second-writer"]
+
+    def test_the_store_is_refused_however_it_is_spelt(self, tmp_path):
+        """A guard that only matches the literal path is a guard around one spelling."""
+        store = str(tmp_path / "evidence_chain.jsonl")
+        stale = _two_writers(store)
+        before = open(store, "rb").read()
+
+        alias = str(tmp_path / "alias.jsonl")
+        os.symlink(store, alias)
+        spellings = [
+            alias,
+            os.path.join(str(tmp_path), ".", "evidence_chain.jsonl"),
+            os.path.join(str(tmp_path), "sub", "..", "evidence_chain.jsonl"),
+        ]
+        for spelling in spellings:
+            with pytest.raises(ValueError, match="own store"):
+                stale.export_jsonl(spelling)
+            assert open(store, "rb").read() == before, f"{spelling} got through"
+
+        # Positive control: a genuinely different destination still exports,
+        # so the loop above is not passing because every path is refused.
+        other = str(tmp_path / "genuinely_elsewhere.jsonl")
+        stale.export_jsonl(other)
+        assert len(_actors(other)) == 5
+
+    def test_an_export_carries_what_other_writers_appended(self, tmp_path):
+        """An export that stops at this process's prefix is a false history.
+
+        It is presented as *the* chain, it verifies, and the records it
+        omits leave no trace in it.
+        """
+        store = str(tmp_path / "evidence_chain.jsonl")
+        stale = _two_writers(store)
+        assert len(stale) == 3, "nothing to absorb — the test would prove nothing"
+
+        out = str(tmp_path / "exported.jsonl")
+        stale.export_jsonl(out)
+        assert _actors(out) == ["seed", "seed", "seed", "second-writer", "second-writer"]
+
+        restored = EvidenceChain()
+        restored.import_jsonl(out)
+        assert len(restored) == 5
+        assert restored.verify_chain() == (True, [])
+
+
+class TestExportGuardMutationTwin:
+    """The same bodies against the v5.0.1 export, which must come out broken.
+
+    Without this half, the gate above only proves that ``export_jsonl``
+    can raise and that a file has five lines in it — not that either test
+    can see a ledger being truncated.
+    """
+
+    def test_without_the_guard_the_store_is_truncated_and_still_verifies(self, tmp_path, monkeypatch):
+        store = str(tmp_path / "evidence_chain.jsonl")
+        stale = _two_writers(store)
+        assert len(_actors(store)) == 5, "the control did not write"
+
+        monkeypatch.setattr(EvidenceChain, "export_jsonl", _prefix_v501_export)
+        stale.export_jsonl(store)  # the pre-fix path: no refusal at all
+
+        assert _actors(store) == ["seed", "seed", "seed"], "the unguarded export did not truncate — the guard's test proves nothing"
+        # The sting: two records are gone and the ledger reports itself fine.
+        assert EvidenceChain(store_path=store).verify_chain() == (True, [])
+
+    def test_without_the_refresh_the_export_is_a_stale_prefix(self, tmp_path, monkeypatch):
+        store = str(tmp_path / "evidence_chain.jsonl")
+        stale = _two_writers(store)
+
+        monkeypatch.setattr(EvidenceChain, "export_jsonl", _prefix_v501_export)
+        out = str(tmp_path / "exported.jsonl")
+        stale.export_jsonl(out)
+
+        assert _actors(out) == ["seed", "seed", "seed"], "the unrefreshed export was not stale — the refresh test proves nothing"
+        restored = EvidenceChain()
+        restored.import_jsonl(out)
+        assert restored.verify_chain() == (True, []), "a partial history that does not even look partial"
+
+
+# ---------------------------------------------------------------------------
+# The lock the whole fix rests on: does it actually exclude?
+# ---------------------------------------------------------------------------
+
+#: Each worker takes the same lock over and over and, inside the critical
+#: section, writes its own tag to a shared file and reads it back. Another
+#: tag coming back means two processes were inside at once — measured, not
+#: argued about.
+#:
+#: ``defeat`` restores the two v5.0.1 behaviours that made the lock leaky:
+#: a lockfile was judged *stale* when it was merely empty or missing, and a
+#: lockfile was unlinked **by path** rather than by identity. Together they
+#: let one process break a lock another was in the middle of taking, and let
+#: a releasing process delete its successor's claim.
+_LOCK_PROBE_SOURCE = '''\
+import os, sys, time
+import mind_mem.mind_filelock as mfl
+
+target, tag, iters, report, defeat = (
+    sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4], sys.argv[5] == "1",
+)
+
+if defeat:
+    def _v501_unlink(self, identity):
+        """v5.0.1 release/break: remove whatever lockfile is there now."""
+        try:
+            os.unlink(self.lock_path)
+        except OSError:
+            pass
+
+    def _v501_stale(self):
+        """The v5.0.1 _is_stale verdict, copied verbatim."""
+        try:
+            with open(self.lock_path, "r", encoding="utf-8") as f:
+                pid_str = f.read().strip()
+            if not pid_str:
+                return (0, 0)
+            pid = int(pid_str)
+            try:
+                os.kill(pid, 0)
+                return None
+            except ProcessLookupError:
+                return (0, 0)
+            except PermissionError:
+                return None
+        except (OSError, ValueError):
+            try:
+                return (0, 0) if (time.time() - os.path.getmtime(self.lock_path)) > 300 else None
+            except OSError:
+                return (0, 0)
+
+    mfl.FileLock._unlink_if_ours = _v501_unlink
+    mfl.FileLock._stale_identity = _v501_stale
+
+holder = target + ".holder"
+violations = 0
+for i in range(iters):
+    with mfl.FileLock(target, timeout=30.0):
+        with open(holder, "w", encoding="utf-8") as fh:
+            fh.write(tag)
+        time.sleep(0.0005)
+        with open(holder, encoding="utf-8") as fh:
+            if fh.read() != tag:
+                violations += 1
+with open(report, "a", encoding="utf-8") as fh:
+    fh.write("%s %d\\n" % (tag, violations))
+'''
+
+_LOCK_PROCS = 6
+_LOCK_ITERS = 600
+
+
+def _run_lock_probe(tmp_path, *, defeat: bool, tag: str) -> tuple[int, tuple, int]:
+    """Return (violations, exit codes, workers that reported)."""
+    worker = tmp_path / f"lock_probe_{tag}.py"
+    worker.write_text(_LOCK_PROBE_SOURCE, encoding="utf-8")
+    target = tmp_path / f"shared_{tag}.dat"
+    target.write_text("", encoding="utf-8")
+    report = tmp_path / f"lock_report_{tag}.txt"
+    report.write_text("", encoding="utf-8")
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+    env["MIND_MEM_LOG_LEVEL"] = "error"
+
+    running = [
+        subprocess.Popen(
+            [sys.executable, str(worker), str(target), f"w{i}", str(_LOCK_ITERS), str(report), "1" if defeat else "0"],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for i in range(_LOCK_PROCS)
+    ]
+    codes = []
+    for proc in running:
+        proc.communicate(timeout=300)
+        codes.append(proc.returncode)
+    lines = [ln for ln in report.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    return sum(int(ln.split()[1]) for ln in lines), tuple(codes), len(lines)
+
+
+class TestTheStoreLockActuallyExcludes:
+    """Serialising the append is only as true as the lock underneath it.
+
+    ``EvidenceChain.create`` and ``AuditChain.append`` both resolve their
+    tail and write inside ``FileLock``. If that lock lets two processes in,
+    both resolve the same tail, both link to it, and the ledger forks — the
+    exact break those tests exist to prevent, reintroduced one layer down.
+    So the lock gets measured directly rather than assumed: six processes,
+    six hundred acquisitions each, counting the times a second process was
+    inside the section.
+    """
+
+    def test_no_two_processes_are_ever_inside_the_section(self, tmp_path):
+        violations, codes, reported = _run_lock_probe(tmp_path, defeat=False, tag="fixed")
+
+        # Positive control: zero violations must mean zero overlaps, not
+        # zero work. Every worker has to have finished and reported.
+        assert codes == (0,) * _LOCK_PROCS, f"a worker failed: {codes}"
+        assert reported == _LOCK_PROCS, f"only {reported}/{_LOCK_PROCS} workers reported"
+
+        assert violations == 0, f"two processes held the same lock {violations} times"
+
+
+class TestStoreLockMutationTwin:
+    """The same probe against the v5.0.1 lock, which must come out broken."""
+
+    def test_the_v501_lock_lets_two_processes_in(self, tmp_path):
+        # A race needs sampling: the window is real but narrow, so the
+        # control is allowed to look more than once before concluding it
+        # cannot see the defect. It is never allowed to pass without
+        # observing one.
+        seen = 0
+        for attempt in range(3):
+            violations, codes, reported = _run_lock_probe(tmp_path, defeat=True, tag=f"defeat{attempt}")
+            assert codes == (0,) * _LOCK_PROCS, f"a control worker failed: {codes}"
+            assert reported == _LOCK_PROCS, f"the control did not run: {reported}/{_LOCK_PROCS}"
+            seen += violations
+            if seen:
+                break
+        assert seen > 0, "the v5.0.1 lock excluded correctly — this probe cannot see the defect it is here to catch"

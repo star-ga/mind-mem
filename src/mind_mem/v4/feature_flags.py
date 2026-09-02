@@ -33,10 +33,12 @@ from ..observability import get_logger
 from .flag_registry import (
     FLAG_STATES,
     KILL_SWITCH,
+    SHIPS_UNGATED,
     UNIMPLEMENTED,
     FlagState,
     UnimplementedCapabilityError,
     require_implemented,
+    ships_ungated_module,
     state_of,
 )
 
@@ -267,12 +269,28 @@ def require_valid_flag_config() -> None:
     offenders = enabled_unimplemented_flags()
     if not offenders:
         return
-    listed = ", ".join(offenders)
-    raise UnimplementedCapabilityError(
-        f"mind-mem v4 config enables {len(offenders)} flag(s) with nothing behind them: {listed}. "
-        "Each is declared but has no consumer, so enabling it changes nothing. Remove them from the "
-        '"v4" block, or wire a consumer and move them out of mind_mem.v4.flag_registry.UNIMPLEMENTED.'
-    )
+    # Split the report, because the two halves need opposite repairs. A
+    # flag with nothing behind it may be removed from the config. A flag
+    # whose capability SHIPS must not be — the operator would be deleting
+    # a key over a feature that is running, and the honest fix is to wire
+    # the kill switch the capability never got.
+    absent = [f for f in offenders if f not in SHIPS_UNGATED]
+    running = [f for f in offenders if f in SHIPS_UNGATED]
+    parts = [f"mind-mem v4 config enables {len(offenders)} flag(s) no consumer reads: {', '.join(offenders)}."]
+    if absent:
+        parts.append(
+            f"Nothing behind them: {', '.join(absent)} — declared with no consumer and no shipped "
+            'capability, so enabling them changes nothing. Remove them from the "v4" block, or wire '
+            "a consumer and move them out of mind_mem.v4.flag_registry.UNIMPLEMENTED."
+        )
+    if running:
+        listed = ", ".join(f"{f} (mind_mem/{ships_ungated_module(f)})" for f in running)
+        parts.append(
+            f"CAPABILITY SHIPS, key does not control it: {listed} — each runs unconditionally today, "
+            "so the missing piece is a default-ON consumer (is_kill_switch_active), not the feature. "
+            "Do not remove the capability."
+        )
+    raise UnimplementedCapabilityError(" ".join(parts))
 
 
 def _warn_unimplemented(block: dict, path: Path) -> None:
@@ -291,7 +309,14 @@ def _warn_unimplemented(block: dict, path: Path) -> None:
     if _last_unimplemented_warning == offenders:
         return
     _last_unimplemented_warning = offenders
-    _log.warning("v4_unimplemented_flags_enabled", path=str(path), flags=list(offenders))
+    _log.warning(
+        "v4_unimplemented_flags_enabled",
+        path=str(path),
+        flags=list(offenders),
+        # Named separately so the line cannot be read as "seven features
+        # are missing". They are present and running; only the switch is.
+        ships_ungated=[f for f in offenders if f in SHIPS_UNGATED],
+    )
 
 
 def _load_v4_block(*, quiet: bool = False) -> dict:
@@ -543,6 +568,7 @@ __all__ = [
     "ALL_V4_FLAGS",
     "FLAG_STATES",
     "KILL_SWITCH",
+    "SHIPS_UNGATED",
     "UNIMPLEMENTED",
     "FeatureDisabledError",
     "FlagState",
@@ -555,6 +581,7 @@ __all__ = [
     "require_enabled",
     "require_implemented",
     "require_valid_flag_config",
+    "ships_ungated_module",
     "state_of",
     "flag_config",
     "flag_config_for_workspace",

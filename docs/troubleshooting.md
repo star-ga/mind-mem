@@ -119,6 +119,13 @@ conn.close()
 
 ### Tests fail on Python 3.14
 
-**Cause:** Python 3.14 is a pre-release. Some stdlib APIs may change.
+**Cause:** Python 3.14 is a released version and a first-class CI row — it is
+not forgiven. The known 3.14-specific failure is an `anyio`/`TestClient`
+teardown segfault, which is why 3.14 is still absent from the `pyproject.toml`
+classifiers even though every 3.14 row must pass.
 
-**Fix:** Check the CI matrix for `allow-failure` on Python 3.14 jobs.
+**Fix:** There is no `allow-failure` or `continue-on-error` carve-out to look
+for — it was removed because a job that runs red while its run concludes
+`success` is a red row reading as a pass. Reproduce with
+`python3.14 -m pytest tests/ --ignore=tests/integration -m "not stress"` and fix
+the failure, or open an issue; the matrix goes red until one of those happens.

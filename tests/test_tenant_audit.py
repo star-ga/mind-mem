@@ -220,3 +220,58 @@ class TestVerifyTenantDefaultChain:
         result = tenant_audit.verify_tenant("acme", base_path=str(tmp_path), root_secret=b"x" * 32)
         assert result["verified"] is False
         assert result["records"] == 3
+
+
+class _DictChain:
+    """Chain stand-in whose ``verify()`` answers a summary dict."""
+
+    def __init__(self, summary: dict) -> None:
+        self._summary = summary
+
+    def verify(self) -> dict:
+        return dict(self._summary)
+
+
+def _verify_with(summary: dict, tmp_path: Path) -> dict:
+    def factory(tenant_id: str, base_path: str) -> _DictChain:
+        return _DictChain(summary)
+
+    tenant_audit.register_chain_factory(factory)
+    try:
+        return tenant_audit.verify_tenant("acme", base_path=str(tmp_path), root_secret=b"x" * 32)
+    finally:
+        tenant_audit._factory = None  # type: ignore[attr-defined]
+
+
+class TestVerifyTenantUnknownDictShape:
+    """A summary dict with no ``verified`` key must fail CLOSED.
+
+    ``verify_tenant`` is the per-tenant compliance-export surface, so the one
+    direction it must never fail in is "nothing checked this, call it verified".
+    A registered chain impl that returns ``{"records": 5}`` — a different
+    vocabulary, a renamed key, a partially-built adapter — used to be read as
+    verified by the ``.get("verified", True)`` default.
+    """
+
+    def test_a_dict_without_the_key_is_not_verified(self, tmp_path: Path) -> None:
+        result = _verify_with({"records": 5}, tmp_path)
+        assert result["verified"] is False
+        # The count is still reported: refusing the verdict must not also
+        # discard the detail an operator needs to go looking.
+        assert result["records"] == 5
+
+    def test_a_dict_saying_true_is_still_verified(self, tmp_path: Path) -> None:
+        """Positive control — the refusal above discriminates, it is not blanket.
+
+        Without this, ``verified is False`` would also pass on an implementation
+        that had simply stopped returning True for anything.
+        """
+        result = _verify_with({"verified": True, "records": 5}, tmp_path)
+        assert result["verified"] is True
+        assert result["records"] == 5
+
+    def test_a_dict_saying_false_is_not_verified(self, tmp_path: Path) -> None:
+        assert _verify_with({"verified": False, "records": 5}, tmp_path)["verified"] is False
+
+    def test_an_empty_dict_is_not_verified(self, tmp_path: Path) -> None:
+        assert _verify_with({}, tmp_path)["verified"] is False

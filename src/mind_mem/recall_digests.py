@@ -107,6 +107,67 @@ def query_hash(query: str) -> str:
     return hashlib.sha256(QUERY_TAG + _u32be(len(raw)) + raw).hexdigest()
 
 
+#: Domain tag for the run identity, in the ledger's original spelling: a
+#: plain ASCII string whose byte form is ``RUN_TAG.encode("ascii") + b"\x00"``.
+#: Kept as a ``str`` rather than converted to the ``bytes`` form the two tags
+#: above use, because :func:`run_id` values are already on disk in shipped
+#: ledgers and the derivation must stay byte-identical through the move.
+#: Its own tag, so a run id can never be substituted for a row hash or an
+#: attestation hash of the same shape.
+RUN_TAG = "MM_RUN_v1"
+
+#: The alphabet a 64-character digest is allowed to use.
+_HEX = frozenset("0123456789abcdef")
+
+
+def hex64(name: str, value: str) -> str:
+    """Return *value* iff it is a lowercase 64-char hex digest, else raise.
+
+    :func:`run_id` concatenates its three inputs with no separator between
+    them. That is unambiguous only because each is fixed-width, so the width
+    is a *contract*, enforced here rather than assumed.
+
+    Args:
+        name: The field name, used in the error so a caller learns which of
+            the three inputs was malformed rather than that "one" was.
+        value: The candidate digest.
+
+    Raises:
+        ValueError: *value* is not a 64-character lowercase hex digest.
+    """
+    text = str(value)
+    if len(text) != 64 or not set(text) <= _HEX:
+        raise ValueError(f"{name} must be a 64-character lowercase hex digest, got {value!r}")
+    return text
+
+
+def run_id(*, query_hash: str, served_digest: str, pipeline_hash: str) -> str:
+    """``SHA256("MM_RUN_v1\\0" || query_hash || served_digest || pipeline_hash)``.
+
+    Content-derived: no clock, no randomness, no sequence number. Two runs that
+    answered the same question with the same blocks in the same order under the
+    same pipeline share an id, on any host, on any day — which is exactly the
+    question the served-set ledger exists to answer.
+
+    There is deliberately no ``scoring_instant`` parameter. Not "we chose not
+    to pass it": excluding it is what makes the id name an answer rather than
+    an occurrence, and a parameter would invite the opposite.
+
+    **Why this lives in the leaf and not in the ledger.** It has two consumers
+    that must not see each other. ``served_ledger`` stores it as a row field;
+    ``recall_attestation`` publishes it on the recall envelope so a client can
+    name the run it was served. The attestation may not reach a ledger module
+    on any import path (``tests/test_recall_attestation_v2.py`` fails the build
+    on that edge), so the id's one true encoding has to sit somewhere both may
+    depend on — which is the same argument that put
+    :func:`served_set_digest` here, applied to the value derived from it.
+    Deriving it independently in the second consumer would be the second
+    spelling this module exists to prevent.
+    """
+    body = hex64("query_hash", query_hash) + hex64("served_digest", served_digest) + hex64("pipeline_hash", pipeline_hash)
+    return hashlib.sha256(RUN_TAG.encode("ascii") + b"\x00" + body.encode("ascii")).hexdigest()
+
+
 def marker_digest(marker: dict[str, str] | None) -> str:
     """Deterministic SHA-256 over a ``.degraded`` marker dict (``""`` when None).
 
@@ -124,9 +185,12 @@ def marker_digest(marker: dict[str, str] | None) -> str:
 
 __all__ = [
     "QUERY_TAG",
+    "RUN_TAG",
     "SERVED_SET_TAG",
+    "hex64",
     "marker_digest",
     "query_hash",
+    "run_id",
     "seq_digest",
     "served_set_digest",
 ]

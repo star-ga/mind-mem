@@ -91,11 +91,17 @@ from types import MappingProxyType
 from typing import Any, Optional
 
 from .preimage import preimage
-from .recall_digests import served_set_digest
 
-#: Domain tag for the run identity. Its own tag, so a run id can never be
-#: substituted for a row hash or an attestation hash of the same shape.
-RUN_TAG = "MM_RUN_v1"
+# ``RUN_TAG`` and ``run_id`` are re-exported, not defined here. This module
+# *stores* the run identity; since RA.1's residual closed it no longer
+# *defines* it, because :mod:`mind_mem.recall_attestation` must publish the
+# same id on the recall envelope and may not reach a ledger module on any
+# import path (``tests/test_recall_attestation_v2.py`` fails the build on that
+# edge). One object, one encoding, one owner — the rule that already governs
+# ``served_set_digest``. Both names stay importable from here and stay in
+# ``__all__``: a name that moved silently is a break for every caller that
+# already spells it this way.
+from .recall_digests import RUN_TAG, hex64, run_id, served_set_digest
 
 #: Domain tag for the row-chain link.
 ROW_TAG = "MM_LEDGER_ROW_v1"
@@ -121,7 +127,10 @@ HEAD_RELPATH = os.path.join(".mind-mem-ledger", "served.head")
 #: ``mind-mem.json`` section. Absent means off; only ``true`` means on.
 CONFIG_SECTION = "served_ledger"
 
-_HEX = frozenset("0123456789abcdef")
+#: The width contract on every hex field a row seals, under its historical
+#: private name so the four call sites below — and any reader who learned the
+#: name here — keep working after the encoding moved to the leaf.
+_hex64 = hex64
 
 # In-process serialisation of read-tail-then-append. Cross-process appends are
 # deferred: a race writes a duplicate ``seq`` or a stale ``prev_row_hash``,
@@ -129,35 +138,6 @@ _HEX = frozenset("0123456789abcdef")
 # deferred: would take an OS file lock (fcntl / LockFileEx), stubbed because a
 # portable lock is its own module — upgrade path: wrap _append_line() in one.
 _append_lock = threading.Lock()
-
-
-def _hex64(name: str, value: str) -> str:
-    """Reject anything that is not a lowercase 64-char hex digest.
-
-    ``run_id`` concatenates its three inputs with no separator between them.
-    That is unambiguous only because each is fixed-width, so the width is a
-    *contract*, enforced here rather than assumed.
-    """
-    text = str(value)
-    if len(text) != 64 or not set(text) <= _HEX:
-        raise ValueError(f"{name} must be a 64-character lowercase hex digest, got {value!r}")
-    return text
-
-
-def run_id(*, query_hash: str, served_digest: str, pipeline_hash: str) -> str:
-    """``SHA256("MM_RUN_v1\\0" || query_hash || served_digest || pipeline_hash)``.
-
-    Content-derived: no clock, no randomness, no sequence number. Two runs that
-    answered the same question with the same blocks in the same order under the
-    same pipeline share an id, on any host, on any day — which is exactly the
-    question the ledger exists to answer.
-
-    There is deliberately no ``scoring_instant`` parameter. Not "we chose not
-    to pass it": excluding it is what makes the id name an answer rather than
-    an occurrence, and a parameter would invite the opposite.
-    """
-    body = _hex64("query_hash", query_hash) + _hex64("served_digest", served_digest) + _hex64("pipeline_hash", pipeline_hash)
-    return hashlib.sha256(RUN_TAG.encode("ascii") + b"\x00" + body.encode("ascii")).hexdigest()
 
 
 def _identity(value: Any) -> Any:

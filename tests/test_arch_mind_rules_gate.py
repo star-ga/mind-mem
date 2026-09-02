@@ -63,12 +63,16 @@ RULES_FILE = ARCH_MIND_DIR / "rules.mind"
 Q16_ONE = 65_536
 Q16_MAX_SCORE = 655_360_000  # 10000.0 in Q16.16
 
-# The governance fixtures that actually feed the gate. `baseline_*.json` files
-# are dated historical snapshots, not gate inputs; they are deliberately not
-# evaluated here (the 2026-08-29 baseline was itself taken with the nested
-# working trees indexed and is a known-bad historical record, retained rather
-# than rewritten).
-ACTIVE_FIXTURES = ("scan.json", "last_summary.json")
+# The governance fixtures that actually feed the gate -- every fixture
+# `.arch-mind/rescan.py` regenerates, so a live fixture cannot escape the
+# rules by not being listed here. `fixture.json` was committed on 2026-09-01
+# and evaluated by nothing until it was added to this tuple.
+#
+# `baseline_*.json` and `scan_v*.json` are dated historical snapshots, not
+# gate inputs, and are deliberately not evaluated (the 2026-08-29 baseline was
+# itself taken with nested working trees indexed and is a known-bad historical
+# record, retained rather than rewritten).
+ACTIVE_FIXTURES = ("fixture.json", "last_summary.json", "scan.json")
 
 # Mirrors arch-mind's rules grammar: `[arch_rule(metric, op)] const NAME: i32 = N`.
 RULE_PATTERN = re.compile(

@@ -22,14 +22,24 @@ carried here as data and checked against the source tree by
     as before the flag existed.
 
 ``UNIMPLEMENTED``
-    No consumer and no shipped feature behind it. Enabling one raises
-    :class:`UnimplementedCapabilityError` naming the flag, because a
-    capability that is declared but absent must refuse rather than
-    silently succeed.
+    No consumer. Enabling one raises
+    :class:`UnimplementedCapabilityError` naming the flag, because a key
+    that controls nothing must refuse rather than silently succeed.
 
 There is no fourth state. A flag that loses its last consumer stops
 matching its declared state and ``tests/test_flag_registry.py`` fails,
 naming the flag — the classification cannot go stale in silence.
+
+**Consumer count is not a proxy for capability**, and the third state is
+where that bites. Seven of the twenty ``UNIMPLEMENTED`` flags name a
+feature that SHIPS and runs unconditionally — ``time_bounded_recall``
+bounds every recall in ``_recall_temporal.py`` with no flag in the path,
+and counting call sites reports zero for it. Those seven carry a
+:attr:`FlagRecord.ships_ungated` module path and are collected in
+:data:`SHIPS_UNGATED`. They still refuse when enabled, because the key
+really does control nothing; what changes is that the refusal says the
+capability is running rather than absent. Reporting "nothing behind it"
+about a live feature is how an operator ends up deleting one.
 
 **Deletion discipline.** An ``UNIMPLEMENTED`` entry is a question about
 wiring, never a verdict about worth: every one keeps its declaration, its
@@ -81,19 +91,36 @@ class UnimplementedCapabilityError(RuntimeError):
 
 @dataclass(frozen=True)
 class FlagRecord:
-    """One flag's declared state plus the reasoning behind it."""
+    """One flag's declared state plus the reasoning behind it.
+
+    *ships_ungated* is the package-relative path of the module that ships
+    the capability **unconditionally**, or ``""`` when nothing does. It
+    exists because consumer count is not a proxy for capability, and
+    conflating the two makes the registry lie to an operator: reading
+    ``time_bounded_recall``'s zero consumers as "the feature is absent"
+    is false — ``_recall_temporal.py`` bounds every recall today, with no
+    flag in the path. A flag in that position is a KILL_SWITCH waiting
+    for its consumer, not a declaration with nothing behind it, and
+    :func:`require_implemented` has to say so or it sends the operator to
+    delete a key over a capability that is running.
+
+    The field is additive and defaulted, so a reader written against the
+    two-field record still constructs and still reads ``name``,
+    ``state`` and ``note`` unchanged.
+    """
 
     name: str
     state: FlagState
     note: str
+    ships_ungated: str = ""
 
 
 def _wired(name: str, note: str) -> FlagRecord:
     return FlagRecord(name=name, state=FlagState.WIRED, note=note)
 
 
-def _unimplemented(name: str, note: str) -> FlagRecord:
-    return FlagRecord(name=name, state=FlagState.UNIMPLEMENTED, note=note)
+def _unimplemented(name: str, note: str, ships_ungated: str = "") -> FlagRecord:
+    return FlagRecord(name=name, state=FlagState.UNIMPLEMENTED, note=note, ships_ungated=ships_ungated)
 
 
 #: Every declared flag, keyed by name. ``set(FLAG_STATES) ==
@@ -119,6 +146,7 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
             "RRF fusion ships ungated in hybrid_recall.py. Wiring question: it is a KILL_SWITCH candidate "
             "(default-ON), not an opt-in — a consumer must read is_kill_switch_active, and the twin must "
             "prove ON is byte-identical to today.",
+            ships_ungated="hybrid_recall.py",
         ),
         _unimplemented(
             "streaming_recall",
@@ -129,6 +157,7 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
             "chat",
             "chat_memory.py / chat_cli.py ship ungated. Wiring question: KILL_SWITCH candidate — an operator "
             "who wants the chat surface off currently has no way to turn it off.",
+            ships_ungated="chat_memory.py",
         ),
         _unimplemented(
             "prompt_schema",
@@ -145,6 +174,7 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
         _unimplemented(
             "contradiction_states",
             "contradiction_detector.py ships its states ungated. Wiring question: KILL_SWITCH candidate.",
+            ships_ungated="contradiction_detector.py",
         ),
         _unimplemented(
             "self_heal",
@@ -174,6 +204,7 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
             "embedding_fallback",
             "embedding_pipeline.py falls back unconditionally today. Wiring question: KILL_SWITCH candidate — "
             "an operator who wants a hard failure instead of a degraded embedding cannot ask for one.",
+            ships_ungated="v4/embedding_pipeline.py",
         ),
         _wired("pq", "v4/pq.py refuses at ten entry points; recall_vector.py and mcp/tools/memory_ops.py probe it."),
         _wired("hnsw_kind_index", "v4/hnsw_kind_index.py refuses at six entry points; recall and memory_ops probe it."),
@@ -198,17 +229,20 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
             "time_bounded_recall",
             "Time-bounded recall ships ungated in _recall_temporal.py. Wiring question: KILL_SWITCH candidate — "
             "the knob currently misleads an operator who sets it to false expecting the bound to lift.",
+            ships_ungated="_recall_temporal.py",
         ),
         _wired("vocabulary", "v4/vocabulary.py refuses at three entry points."),
         _unimplemented(
             "provenance",
             "Provenance fields ship ungated in block_provenance.py and capture.py. Wiring question: "
             "KILL_SWITCH candidate; a default-ON consumer must prove ON is byte-identical to today.",
+            ships_ungated="block_provenance.py",
         ),
         _unimplemented(
             "evidence",
             "Evidence objects and bundles ship ungated. Wiring question: KILL_SWITCH candidate, and the "
             "widest-blast-radius one — the evidence chain is load-bearing, so an OFF path needs its own design.",
+            ships_ungated="evidence_objects.py",
         ),
         _wired("tenant_kms", "encryption.py probes it before resolving a per-tenant key."),
         _unimplemented(
@@ -255,11 +289,51 @@ KILL_SWITCH: Final[frozenset[str]] = _names_in(FlagState.KILL_SWITCH)
 #: Flags with nothing behind them. Enabling one refuses.
 UNIMPLEMENTED: Final[frozenset[str]] = _names_in(FlagState.UNIMPLEMENTED)
 
+#: The subset of :data:`UNIMPLEMENTED` whose CAPABILITY ships unconditionally
+#: — no consumer reads the flag, and the feature runs anyway. Enabling one
+#: still refuses (the key controls nothing, so honouring it would be a lie),
+#: but the refusal says the capability is running rather than absent.
+#:
+#: This set is the standing answer to a measured trap: counting consumers
+#: reports zero for ``time_bounded_recall``, which ships. Consumer count
+#: decides the STATE; it does not decide whether the capability exists, and a
+#: registry that conflates them tells an operator to delete a key over a
+#: feature that is live.
+SHIPS_UNGATED: Final[frozenset[str]] = frozenset(name for name, record in FLAG_STATES.items() if record.ships_ungated)
+
 
 def state_of(flag: str) -> FlagState | None:
     """The declared state of *flag*, or ``None`` when it is not declared."""
     record = FLAG_STATES.get(flag)
     return record.state if record is not None else None
+
+
+def ships_ungated_module(flag: str) -> str:
+    """The module that ships *flag*'s capability with no flag in the path.
+
+    ``""`` when nothing does — which is the honest answer for a flag that
+    is declared and genuinely not built, and the difference this function
+    exists to keep visible.
+    """
+    record = FLAG_STATES.get(flag)
+    return record.ships_ungated if record is not None else ""
+
+
+def unbacked_ships_ungated_paths(root: Path | None = None) -> tuple[tuple[str, str], ...]:
+    """``(flag, path)`` for every ``ships_ungated`` claim with no such file.
+
+    A claim that a capability ships is a factual assertion about the tree,
+    and an assertion nothing checks goes stale the first time a module is
+    renamed. Returning the pairs rather than a count lets the gate name
+    the flag and the path it could not find.
+    """
+    source_root = (root or default_source_root()).resolve() / "mind_mem"
+    missing: list[tuple[str, str]] = []
+    for name in sorted(SHIPS_UNGATED):
+        rel = FLAG_STATES[name].ships_ungated
+        if not (source_root / rel).is_file():
+            missing.append((name, rel))
+    return tuple(missing)
 
 
 def require_implemented(flag: str) -> None:
@@ -268,10 +342,28 @@ def require_implemented(flag: str) -> None:
     An undeclared name is not this function's business — the caller's own
     fail-closed check owns that — so it returns quietly. Only a name the
     registry knows to be ``UNIMPLEMENTED`` refuses.
+
+    Both refusals are loud and both name the flag; what differs is the
+    claim they make about the world. For a flag whose capability ships
+    ungated the message must NOT say the feature is absent — it is
+    running, unconditionally, and the operator's key is the thing with
+    nothing behind it. Saying "not implemented" there sends the diagnosis
+    at the capability instead of at the missing kill switch, which is how
+    a shipping feature gets deleted to make a config error go away.
     """
     record = FLAG_STATES.get(flag)
     if record is None or record.state is not FlagState.UNIMPLEMENTED:
         return
+    if record.ships_ungated:
+        raise UnimplementedCapabilityError(
+            f"mind-mem v4 flag '{flag}' has no consumer, but the capability it names SHIPS and runs "
+            f"unconditionally in mind_mem/{record.ships_ungated} — the key is what is missing, not the "
+            f"feature. Nothing reads it, so setting it changes nothing in either direction: it cannot "
+            f"turn the capability on (already on) and it cannot turn it off. {record.note} "
+            f'Remove "{flag}" from the "v4" block, or wire a default-ON consumer '
+            f"(is_kill_switch_active) in mind_mem/{record.ships_ungated} and move it to "
+            "mind_mem.v4.flag_registry.KILL_SWITCH. Do not remove the capability."
+        )
     raise UnimplementedCapabilityError(
         f"mind-mem v4 flag '{flag}' is declared but not implemented: nothing in mind-mem reads it, "
         f"so enabling it would change nothing. {record.note} "
@@ -590,10 +682,20 @@ def audit(root: Path | None = None) -> dict[str, object]:
             "wired": len(WIRED),
             "kill_switch": len(KILL_SWITCH),
             "unimplemented": len(UNIMPLEMENTED),
+            # A SUBSET of "unimplemented", never a fourth state: the flags
+            # whose capability ships anyway. Reported separately because
+            # "20 unimplemented" read alone overstates what is missing by
+            # the seven features that are running right now.
+            "ships_ungated": len(SHIPS_UNGATED),
         },
         "consumers": consumers,
         "drift": classification_drift(consumers),
         "kill_switch_call_sites": kill_switch_call_sites(root),
+        # Additive keys. An older reader that knows only the four original
+        # ones still parses this mapping and still sees every count it
+        # knew about, because nothing was renamed or removed.
+        "ships_ungated": {name: FLAG_STATES[name].ships_ungated for name in sorted(SHIPS_UNGATED)},
+        "unbacked_ships_ungated": unbacked_ships_ungated_paths(root),
     }
 
 
@@ -601,6 +703,7 @@ __all__ = [
     "FLAG_STATES",
     "KILL_SWITCH",
     "PROBE_ARG_INDEX",
+    "SHIPS_UNGATED",
     "UNIMPLEMENTED",
     "WIRED",
     "FlagRecord",
@@ -613,5 +716,7 @@ __all__ = [
     "kill_switch_call_sites",
     "require_implemented",
     "resolve_consumers",
+    "ships_ungated_module",
     "state_of",
+    "unbacked_ships_ungated_paths",
 ]

@@ -35,6 +35,7 @@ can see the withheld block when it is allowed to (``blocks_fts_withheld``,
 
 from __future__ import annotations
 
+import inspect
 import os
 import sqlite3
 from pathlib import Path
@@ -42,6 +43,7 @@ from typing import Any
 
 import pytest
 
+from mind_mem import sqlite_index
 from mind_mem.admissibility import is_admissible_status
 from mind_mem.block_parser import parse_file
 from mind_mem.block_store import _render_block
@@ -51,6 +53,7 @@ from mind_mem.sqlite_index import (
     _db_path,
     build_index,
     index_status,
+    is_stale,
     merkle_leaves,
     query_index,
 )
@@ -531,3 +534,192 @@ class TestAttestedAnchorStillCoversEverything:
 
     def test_merkle_leaves_cover_the_withheld_block(self, dirty: str) -> None:
         assert "D-20260101-099" in {bid for bid, _ in merkle_leaves(dirty)}
+
+
+# ---------------------------------------------------------------------------
+# The sweep. One fixed function per aggregate was how the block count got
+# fixed and the build summary did not — a tripwire that enumerates the one
+# reading we already knew about cannot find the next one. So this walks the
+# module's whole public surface, and a new public callable fails the suite
+# until somebody says which side of the gate its numbers are on.
+# ---------------------------------------------------------------------------
+
+
+#: Every public callable ``mind_mem.sqlite_index`` exports, and the claim
+#: this file makes about the numbers it returns.
+#:
+#: ``egress``
+#:     Served, or derivable by a caller the gate refuses the content to.
+#:     Must be IDENTICAL between a corpus with a withheld block and one
+#:     without. This is the side-channel invariant.
+#: ``indexer-truth``
+#:     The builder reporting the work it did, to an operator. Allowed —
+#:     required — to count the whole index, because a builder that hid
+#:     rows from its own report would be lying about what it indexed.
+#:     ``build_index`` also returns the egress-safe ``blocks_admitted``,
+#:     which IS checked as egress below.
+#: ``attestation``
+#:     The Merkle anchor. Covers everything on purpose (see
+#:     ``TestAttestedAnchorStillCoversEverything``); narrowing it would
+#:     void every anchor recorded before 5.0.2.
+#: ``cli``
+#:     ``argparse`` entry point; returns no aggregate of its own.
+_PUBLIC_SURFACE: dict[str, str] = {
+    "build_index": "indexer-truth",
+    "query_index": "egress",
+    "is_stale": "egress",
+    "merkle_leaves": "attestation",
+    "index_status": "egress",
+    "main": "cli",
+}
+
+#: Readings that must not move, keyed for the failure message.
+_MUST_NOT_MOVE = (
+    "index_status.blocks",
+    "index_status.stale_files",
+    "is_stale",
+    "query_index.scores.shared",
+    "query_index.scores.lonely",
+    "query_index.hit_count",
+    "build.blocks_admitted",
+)
+
+#: Readings that MUST move. These are the positive control for the whole
+#: sweep: they prove the snapshot-and-compare method can see a difference
+#: between the two workspaces at all. Without them, seven "did not move"
+#: assertions would pass just as happily against a harness that was
+#: comparing a workspace with itself.
+_MUST_MOVE = (
+    "build.total_blocks",
+    "build.blocks_withheld",
+    "merkle.leaf_count",
+)
+
+
+def _aggregates(ws: str) -> dict[str, Any]:
+    """Every number the public surface of the index module will hand out."""
+    summary = build_index(ws, incremental=False)
+    return {
+        "build.total_blocks": summary["total_blocks"],
+        "build.blocks_admitted": summary["blocks_admitted"],
+        "build.blocks_withheld": summary["blocks_withheld"],
+        "index_status.blocks": index_status(ws)["blocks"],
+        "index_status.stale_files": index_status(ws)["stale_files"],
+        "is_stale": is_stale(ws),
+        "query_index.scores.shared": _scores(ws, SHARED),
+        "query_index.scores.lonely": _scores(ws, LONELY),
+        "query_index.hit_count": len(query_index(ws, SHARED, limit=20, rerank=False)),
+        "merkle.leaf_count": len(merkle_leaves(ws)),
+    }
+
+
+class TestTheAggregateSweep:
+    """Clean vs. one-quarantined-block, across the whole public surface."""
+
+    def test_every_public_callable_is_classified(self) -> None:
+        """A new public aggregate fails here until its side is declared.
+
+        The read-surface tripwire that missed ``get_block`` enumerated one
+        module instead of the registry. Same shape, same fix: enumerate
+        what the module actually exports, not what we remembered writing.
+        """
+        exported = {
+            name
+            for name, obj in inspect.getmembers(sqlite_index, inspect.isfunction)
+            if not name.startswith("_") and obj.__module__ == sqlite_index.__name__
+        }
+        assert exported, "positive control: the module must export something to classify"
+        assert exported == set(_PUBLIC_SURFACE), (
+            f"unclassified public callables: {sorted(exported - set(_PUBLIC_SURFACE))}; "
+            f"classified but gone: {sorted(set(_PUBLIC_SURFACE) - exported)}"
+        )
+
+    def test_the_two_workspaces_really_differ(self, clean: str, dirty: str) -> None:
+        """Positive control: the fixture pair is not the same corpus twice."""
+        assert _fts_ids(clean, "blocks_fts_withheld") == set()
+        assert _fts_ids(dirty, "blocks_fts_withheld") == {"D-20260101-099"}
+
+    def test_the_sweep_can_detect_a_difference(self, clean: str, dirty: str) -> None:
+        """Positive control for the METHOD, not for the code under test.
+
+        Every "did not move" below is only evidence if this passes: it
+        shows the same snapshot-and-compare finds a real difference where
+        one is supposed to exist.
+        """
+        before, after = _aggregates(clean), _aggregates(dirty)
+        moved = [k for k in _MUST_MOVE if before[k] != after[k]]
+        assert moved == list(_MUST_MOVE), (
+            f"the sweep saw no difference in {sorted(set(_MUST_MOVE) - set(moved))} — "
+            "every invariance assertion in this class is vacuous until it does"
+        )
+
+    def test_no_egress_aggregate_moves(self, clean: str, dirty: str) -> None:
+        before, after = _aggregates(clean), _aggregates(dirty)
+        drift = {k: (before[k], after[k]) for k in _MUST_NOT_MOVE if before[k] != after[k]}
+        assert drift == {}, f"withheld content is inferable from: {drift}"
+
+    def test_the_build_summary_decomposes_exactly(self, clean: str, dirty: str) -> None:
+        """``total`` is admitted + withheld, and the withheld count is real."""
+        for ws, expected in ((clean, 0), (dirty, 1)):
+            agg = _aggregates(ws)
+            assert agg["build.blocks_withheld"] == expected
+            assert agg["build.total_blocks"] == agg["build.blocks_admitted"] + agg["build.blocks_withheld"]
+
+    def test_the_admitted_count_agrees_with_the_served_count(self, clean: str, dirty: str) -> None:
+        """One counting authority: the builder and the status agree.
+
+        They disagreed before 5.0.2 — ``index_status`` ran the admission
+        allow-list and the build summary ran a bare ``COUNT(*)`` — which
+        is exactly the drift a second counter always produces.
+        """
+        for ws in (clean, dirty):
+            agg = _aggregates(ws)
+            assert agg["build.blocks_admitted"] == agg["index_status.blocks"]
+
+
+class TestMutationTwin:
+    """Disable the gate; every invariance assertion above must go red.
+
+    A test that cannot fail is not a test. These break the ONE thing that
+    holds the invariant — the admission verdict that decides which FTS
+    table a block is written to, and which rows the counters admit — and
+    assert the leak comes back. If a future refactor makes the withheld
+    block harmless by accident (say, by never indexing it at all), these
+    fail and say the suite has stopped proving anything.
+    """
+
+    @staticmethod
+    def _admit_everything(monkeypatch: pytest.MonkeyPatch) -> None:
+        """The gate, disabled: every block is admissible, releases ignored."""
+        monkeypatch.setattr(
+            sqlite_index,
+            "_admit_ids",
+            lambda pairs, **_kw: {bid for bid, _status in pairs},
+        )
+        monkeypatch.setattr(sqlite_index, "is_admissible_status", lambda _status: True)
+
+    def test_the_withheld_block_rejoins_the_admitted_corpus(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._admit_everything(monkeypatch)
+        ws = _make_ws(tmp_path, "mutant", with_withheld=True)
+        assert "D-20260101-099" in _fts_ids(ws), "the mutation did not disable the gate"
+
+    def test_the_bm25_channel_reopens(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        clean_ws = _make_ws(tmp_path, "control", with_withheld=False)
+        control = _bm25(clean_ws, LONELY)
+        self._admit_everything(monkeypatch)
+        mutant = _make_ws(tmp_path, "mutant", with_withheld=True)
+        assert _bm25(mutant, LONELY) != control, (
+            "with the gate disabled the unrelated term's score must move again — "
+            "if it does not, the bm25 assertions in this file are proving nothing"
+        )
+
+    def test_the_egress_sweep_goes_red(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        clean_ws = _make_ws(tmp_path, "control", with_withheld=False)
+        before = _aggregates(clean_ws)
+        self._admit_everything(monkeypatch)
+        mutant = _make_ws(tmp_path, "mutant", with_withheld=True)
+        after = _aggregates(mutant)
+        moved = [k for k in _MUST_NOT_MOVE if before[k] != after[k]]
+        assert moved, "the ungated build leaked nothing — the sweep cannot be measuring the gate"
+        assert "index_status.blocks" in moved
+        assert "build.blocks_admitted" in moved

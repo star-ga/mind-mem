@@ -55,6 +55,21 @@ class Proposal:
     # Monotonic proposal timestamp — tie-breaks concurrent proposals
     # in the commit order (Raft itself handles this but the façade
     # records it for audit).
+    #
+    # deferred: `time.monotonic()`'s zero point is per-process and per-boot, so
+    # this field is meaningful only inside the process that minted the
+    # Proposal — and `digest()` folds it in, which makes the digest (and
+    # therefore every `sign_proposal` HMAC over it) unreproducible on a peer
+    # that rebuilds the Proposal instead of carrying this exact float. Harmless
+    # while `LocalConsensusLog` is the only implementation, because nothing
+    # crosses a process boundary; a genuine trap the day a real transport is
+    # registered, where the failure looks like "wrong secret" rather than
+    # "clocks disagree". Stubbed as-is because changing the digest preimage
+    # while the module is parked would be a wire change nothing can exercise.
+    # Upgrade path, at the trigger recorded in scripts/reachability_baseline.txt:
+    # replace with an explicit caller-supplied monotonic COUNTER (term, index)
+    # or a UTC instant the proposer states, and cover it with a
+    # sign-here/verify-there test across two processes before wiring.
     ts_monotonic: float = field(default_factory=time.monotonic)
 
     def digest(self) -> bytes:

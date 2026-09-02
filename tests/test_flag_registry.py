@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 
-from mind_mem.v4 import feature_flags
+from mind_mem.v4 import feature_flags, flag_registry
 from mind_mem.v4.feature_flags import (
     FeatureDisabledError,
     enabled_unimplemented_flags,
@@ -44,6 +44,7 @@ from mind_mem.v4.feature_flags import (
 from mind_mem.v4.flag_registry import (
     FLAG_STATES,
     KILL_SWITCH,
+    SHIPS_UNGATED,
     UNIMPLEMENTED,
     WIRED,
     FlagRecord,
@@ -51,7 +52,10 @@ from mind_mem.v4.flag_registry import (
     UnimplementedCapabilityError,
     classification_drift,
     kill_switch_call_sites,
+    require_implemented,
     resolve_consumers,
+    ships_ungated_module,
+    unbacked_ships_ungated_paths,
 )
 
 #: A flag the registry declares UNIMPLEMENTED, used as the sample subject for
@@ -528,3 +532,194 @@ class TestMutationTwin:
         drift = classification_drift(resolve_consumers(tmp_path), FLAG_STATES)
         assert len(drift) == len(WIRED | KILL_SWITCH)
         assert all(row[2] is FlagState.UNIMPLEMENTED for row in drift)
+
+
+# ---------------------------------------------------------------------------
+# Consumer count is not a proxy for capability
+# ---------------------------------------------------------------------------
+
+#: A flag with ZERO consumers whose capability nonetheless ships and runs on
+#: every recall. The measured trap this whole section exists for: counting
+#: call sites reports "nothing behind it", and the feature is live.
+_SHIPPING = "time_bounded_recall"
+
+
+class TestAShippingCapabilityIsNeverReportedAbsent:
+    """The registry may say a KEY is unread. It may not say a FEATURE is gone.
+
+    Both halves matter. Enabling an unconsumed flag has to fail loudly and
+    name the flag — silence is indistinguishable from success, which is the
+    whole point of the registry. But the refusal is also the only sentence
+    the operator will read, and for seven of the twenty unimplemented flags
+    "declared but not implemented" is false about the world: the capability
+    is running right now with no flag in its path. An operator who believes
+    that sentence deletes a config key over a feature that ships, or worse,
+    goes looking for the feature to build and finds it already there.
+    """
+
+    def test_the_samples_are_what_this_section_assumes(self) -> None:
+        """Positive control: one flag that ships, one that genuinely does not."""
+        assert _SHIPPING in UNIMPLEMENTED, f"{_SHIPPING} gained a consumer; pick another sample"
+        assert _SHIPPING in SHIPS_UNGATED
+        assert _real_consumers()[_SHIPPING] == (), "the sample must have zero consumers to be the trap"
+        assert _ABSENT in UNIMPLEMENTED
+        assert _ABSENT not in SHIPS_UNGATED, f"{_ABSENT} now ships; it can no longer be the absent sample"
+
+    def test_ships_ungated_is_a_subset_of_unimplemented(self) -> None:
+        """Not a fourth state — a property of some flags in the third one."""
+        assert SHIPS_UNGATED <= UNIMPLEMENTED
+        assert SHIPS_UNGATED & (WIRED | KILL_SWITCH) == frozenset()
+
+    def test_no_ships_ungated_flag_has_a_consumer(self) -> None:
+        """A consumer would make it WIRED or KILL_SWITCH, not this."""
+        consumers = _real_consumers()
+        assert {f: consumers[f] for f in SHIPS_UNGATED if consumers[f]} == {}
+
+    def test_every_claim_names_a_module_that_exists(self) -> None:
+        """A factual assertion about the tree, checked against the tree."""
+        assert unbacked_ships_ungated_paths() == ()
+        for flag in sorted(SHIPS_UNGATED):
+            assert ships_ungated_module(flag).endswith(".py")
+
+    def test_the_backing_check_can_actually_fail(self, tmp_path: Path) -> None:
+        """Positive control: point it at an empty tree and every claim breaks.
+
+        Without this, ``unbacked == ()`` is equally consistent with a check
+        that looks at nothing.
+        """
+        missing = unbacked_ships_ungated_paths(tmp_path)
+        assert {flag for flag, _path in missing} == set(SHIPS_UNGATED)
+
+    def test_a_flag_with_nothing_behind_it_has_no_module(self) -> None:
+        assert ships_ungated_module(_ABSENT) == ""
+        assert ships_ungated_module("not-a-flag-at-all") == ""
+
+    def test_enabling_a_shipping_flag_still_refuses_and_names_it(self, config) -> None:
+        """Load-bearing: it must not silently do nothing, ships or not."""
+        config({"v4": {_SHIPPING: {"enabled": True}}})
+        with pytest.raises(UnimplementedCapabilityError) as excinfo:
+            is_enabled(_SHIPPING)
+        assert _SHIPPING in str(excinfo.value)
+
+    def test_the_refusal_does_not_claim_the_capability_is_missing(self) -> None:
+        with pytest.raises(UnimplementedCapabilityError) as excinfo:
+            require_implemented(_SHIPPING)
+        message = str(excinfo.value)
+        assert "not implemented" not in message, "the message calls a shipping feature unimplemented"
+        assert "SHIPS and runs unconditionally" in message
+        assert f"mind_mem/{ships_ungated_module(_SHIPPING)}" in message
+        assert "Do not remove the capability." in message
+
+    def test_the_refusal_for_a_genuinely_absent_flag_still_says_so(self) -> None:
+        """The distinction is only worth anything if the other branch survives."""
+        with pytest.raises(UnimplementedCapabilityError) as excinfo:
+            require_implemented(_ABSENT)
+        message = str(excinfo.value)
+        assert "declared but not implemented" in message
+        assert "SHIPS and runs unconditionally" not in message
+
+    def test_a_wired_flag_is_untouched_by_any_of_this(self) -> None:
+        require_implemented(_PRESENT)
+
+    def test_the_whole_config_check_separates_the_two_kinds(self, config) -> None:
+        config({"v4": {_SHIPPING: {"enabled": True}, _ABSENT: {"enabled": True}}})
+        with pytest.raises(UnimplementedCapabilityError) as excinfo:
+            require_valid_flag_config()
+        message = str(excinfo.value)
+        assert "Nothing behind them: redaction" in message
+        assert "CAPABILITY SHIPS, key does not control it" in message
+        assert _SHIPPING in message.split("CAPABILITY SHIPS")[1]
+
+    def test_the_whole_config_check_omits_the_shipping_half_when_absent(self, config) -> None:
+        """Positive control on the split: only the branch that applies appears."""
+        config({"v4": {_ABSENT: {"enabled": True}}})
+        with pytest.raises(UnimplementedCapabilityError) as excinfo:
+            require_valid_flag_config()
+        assert "CAPABILITY SHIPS" not in str(excinfo.value)
+
+    def test_the_warning_names_the_shipping_subset(self, config, monkeypatch: pytest.MonkeyPatch) -> None:
+        recorder = _Recorder()
+        monkeypatch.setattr(feature_flags, "_log", recorder)
+        config({"v4": {_SHIPPING: {"enabled": True}, _ABSENT: {"enabled": True}}})
+        assert enabled_unimplemented_flags() == tuple(sorted((_SHIPPING, _ABSENT)))
+        events = [e for e in recorder.events if e[0] == "v4_unimplemented_flags_enabled"]
+        assert events, "positive control: the loud path must have warned"
+        assert events[0][1]["ships_ungated"] == [_SHIPPING]
+        assert sorted(events[0][1]["flags"]) == sorted((_SHIPPING, _ABSENT))
+
+
+class TestShipsUngatedMutationTwin:
+    """Break each ships-ungated gate; watch it go red."""
+
+    @staticmethod
+    def _repoint(monkeypatch: pytest.MonkeyPatch, flag: str, path: str) -> None:
+        """Rewrite one record's claim, the way a module rename would."""
+        table = dict(FLAG_STATES)
+        old = table[flag]
+        table[flag] = FlagRecord(name=old.name, state=old.state, note=old.note, ships_ungated=path)
+        monkeypatch.setattr(flag_registry, "FLAG_STATES", table)
+        monkeypatch.setattr(
+            flag_registry,
+            "SHIPS_UNGATED",
+            frozenset(n for n, r in table.items() if r.ships_ungated),
+        )
+
+    def test_a_renamed_module_is_caught(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        assert unbacked_ships_ungated_paths() == (), "positive control: clean before the mutation"
+        self._repoint(monkeypatch, _SHIPPING, "_recall_temporal_renamed_by_a_refactor.py")
+        missing = flag_registry.unbacked_ships_ungated_paths()
+        assert [flag for flag, _path in missing] == [_SHIPPING]
+
+    def test_dropping_the_claim_makes_the_refusal_lie_again(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The regression this section prevents, reproduced on demand."""
+        self._repoint(monkeypatch, _SHIPPING, "")
+        with pytest.raises(UnimplementedCapabilityError) as excinfo:
+            flag_registry.require_implemented(_SHIPPING)
+        assert "declared but not implemented" in str(excinfo.value), (
+            "with the claim dropped the message must go back to calling a "
+            "shipping feature absent — if it does not, the assertions above "
+            "are not measuring the distinction"
+        )
+
+
+class TestAnOlderReaderStillParsesTheseRecords:
+    """Forward compatibility: the new field is additive, never a break.
+
+    A reader written against the three-field record — and against the
+    four keys ``audit()`` used to return — must still parse what the
+    registry produces now, and must still dispatch on the raw state
+    string rather than on this module's enum class.
+    """
+
+    def test_a_record_still_constructs_without_the_new_field(self) -> None:
+        legacy = FlagRecord(name="x", state=FlagState.UNIMPLEMENTED, note="n")
+        assert legacy.ships_ungated == ""
+
+    def test_the_legacy_fields_are_unchanged_on_every_record(self) -> None:
+        for name, record in FLAG_STATES.items():
+            assert record.name == name
+            assert isinstance(record.state.value, str)
+            assert isinstance(record.note, str) and record.note
+
+    def test_dispatch_by_raw_string_still_works(self) -> None:
+        """The fail-closed reading: an unknown tag reads as unimplemented."""
+
+        def legacy_reader(tag: str) -> str:
+            return tag if tag in {"wired", "kill_switch", "unimplemented"} else "unimplemented"
+
+        assert {legacy_reader(r.state.value) for r in FLAG_STATES.values()} <= {
+            "wired",
+            "kill_switch",
+            "unimplemented",
+        }
+        assert legacy_reader("some_state_from_a_newer_build") == "unimplemented"
+
+    def test_audit_keeps_every_key_the_old_shape_had(self) -> None:
+        report = flag_registry.audit()
+        assert {"counts", "consumers", "drift", "kill_switch_call_sites"} <= set(report)
+        counts = report["counts"]
+        assert isinstance(counts, dict)
+        assert {"declared", "wired", "kill_switch", "unimplemented"} <= set(counts)
+        assert counts["declared"] == len(FLAG_STATES)
+        assert counts["unimplemented"] == len(UNIMPLEMENTED)
+        assert counts["ships_ungated"] <= counts["unimplemented"]

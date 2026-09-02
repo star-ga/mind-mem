@@ -69,6 +69,6 @@ def test_optional():
 ## CI Matrix
 
 Tests run on:
-- Python: 3.10, 3.12, 3.13, 3.14
+- Python: 3.10, 3.11, 3.12, 3.13, 3.14
 - OS: Ubuntu, macOS, Windows
-- Total: 12 CI jobs
+- Total: 15 CI jobs (a full cross-product; no row is advisory)

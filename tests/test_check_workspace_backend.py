@@ -211,7 +211,19 @@ def test_nonmarkdown_pingless_store_list_raises_errors(tmp_path: Path, monkeypat
 
 # ─── Postgres backend (live DB; skips cleanly when unavailable) ───────────────
 
-psycopg = pytest.importorskip("psycopg", reason="psycopg not installed; skipping Postgres tests")
+# The Postgres gate below is deliberately PER-TEST, not a module-scope
+# ``pytest.importorskip("psycopg")``. It used to be one, sitting part-way down
+# the file, and a module-scope importorskip aborts the whole import -- so every
+# test ABOVE it went with it. Those tests need no database: they exercise the
+# default Markdown/SQLite path. None of the 15 OS/Python matrix rows installs
+# the ``[postgres]`` extra, so they ran only inside the single "postgres
+# backend" job while all 15 rows reported green with them silently withdrawn.
+# MEASURED across the seven files that had this shape, on a row with the driver
+# blocked: 7 skipped / 0 passed before, 57 passed / 28 skipped after.
+try:
+    import psycopg
+except ImportError:  # pragma: no cover - the matrix rows without the [postgres] extra
+    psycopg = None  # type: ignore[assignment]
 
 from mind_mem.block_store_postgres import PostgresBlockStore  # noqa: E402
 
@@ -221,7 +233,9 @@ from mind_mem.block_store_postgres import PostgresBlockStore  # noqa: E402
 _DSN = os.environ.get("MIND_MEM_TEST_PG_DSN")
 
 
-def _pg_available(dsn: str) -> bool:
+def _pg_available(dsn: str | None) -> bool:
+    if psycopg is None or not dsn:
+        return False
     try:
         conn = psycopg.connect(dsn, connect_timeout=3)
         conn.close()
@@ -264,7 +278,7 @@ def pg_workspace(tmp_path: Path) -> Generator[tuple[str, str], None, None]:
             pass
 
 
-@pytest.mark.skipif(not _PG_LIVE, reason="no live Postgres available at the test DSN")
+@pytest.mark.skipif(not _PG_LIVE, reason="psycopg not installed, or no live Postgres at MIND_MEM_TEST_PG_DSN")
 def test_postgres_workspace_valid_without_decisions_dir(pg_workspace: tuple[str, str]) -> None:
     """The regression: a provisioned PG workspace validates with no decisions/."""
     ws, _schema = pg_workspace
@@ -274,7 +288,7 @@ def test_postgres_workspace_valid_without_decisions_dir(pg_workspace: tuple[str,
     assert _check_workspace(ws) is None
 
 
-@pytest.mark.skipif(not _PG_LIVE, reason="no live Postgres available at the test DSN")
+@pytest.mark.skipif(not _PG_LIVE, reason="psycopg not installed, or no live Postgres at MIND_MEM_TEST_PG_DSN")
 def test_postgres_workspace_valid_even_when_empty(pg_workspace: tuple[str, str]) -> None:
     """Validity is reachability, not has-blocks: an empty PG store is valid."""
     ws, _schema = pg_workspace
@@ -282,7 +296,7 @@ def test_postgres_workspace_valid_even_when_empty(pg_workspace: tuple[str, str])
     assert _check_workspace(ws) is None
 
 
-@pytest.mark.skipif(not _PG_LIVE, reason="no live Postgres available at the test DSN")
+@pytest.mark.skipif(not _PG_LIVE, reason="psycopg not installed, or no live Postgres at MIND_MEM_TEST_PG_DSN")
 def test_postgres_unreachable_backend_errors_not_crashes(tmp_path: Path) -> None:
     """A PG workspace pointing at a dead DSN returns a structured error."""
     ws = tmp_path / "deadpg"

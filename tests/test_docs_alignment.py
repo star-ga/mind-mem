@@ -16,6 +16,8 @@ positive control that proves the same code path CAN flag a true positive.
 
 from __future__ import annotations
 
+import dataclasses
+import functools
 import re
 import subprocess  # nosec B404 - fixed argv, no shell
 import sys
@@ -23,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import alignment_authorities as aa
 from scripts import check_docs_alignment as cda
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,6 +47,17 @@ def make_authorities(**overrides) -> cda.Authorities:
         mind_kernels=26,
         version="5.0.1",
         core_deps=0,
+        live_flags=52,
+        trained_flags=38,
+        eval_main_probes=111,
+        eval_holdout_probes=22,
+        ci_python_versions=("3.10", "3.11", "3.12", "3.13", "3.14"),
+        ci_operating_systems=("ubuntu-latest", "macos-latest", "windows-latest"),
+        workflows=(("ci.yml", "CI"), ("release.yml", "Release")),
+        python_floor="3.10",
+        python_classifier_min="3.10",
+        python_classifier_max="3.14",
+        backends=("markdown", "postgres", "encrypted"),
     )
     base.update(overrides)
     return cda.Authorities(**base)
@@ -51,6 +65,26 @@ def make_authorities(**overrides) -> cda.Authorities:
 
 def scan(line: str, *, rel: str = "docs/example.md", auth=None, historical: bool = False):
     return cda.scan_line(rel, 1, line, auth or make_authorities(), historical=historical)
+
+
+@functools.lru_cache(maxsize=1)
+def _real_authorities() -> cda.Authorities:
+    """The tree's own authorities, resolved once (git archive is not free).
+
+    The test-count leg comes from the README badge for the reason
+    ``TestRepositoryIsAligned`` documents: CI checks the badge against the
+    collector once, rather than 15 times inside the suite.
+    """
+    return cda.resolve_authorities(ROOT, tests_collected=readme_tests_badge())
+
+
+def real_auth_kwargs() -> dict:
+    """Every real authority as kwargs, so a test can move exactly one."""
+    return dataclasses.asdict(_real_authorities())
+
+
+def _lines(rel: str) -> list[str]:
+    return (ROOT / rel).read_text(encoding="utf-8").splitlines()
 
 
 # ---------------------------------------------------------------------------
@@ -514,3 +548,564 @@ class TestMutationTwin:
         line = "`mm install-all` now wires 17 clients."
         assert scan(line, historical=True) == []
         assert [(f.kind, f.claimed) for f in scan(line, historical=False)] == [("clients", "17")]
+
+
+# ---------------------------------------------------------------------------
+# CI shape: the workflow directory is the authority for what CI runs
+# ---------------------------------------------------------------------------
+
+_CI_STUB = """name: CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.10", "3.11"]
+
+  docs:
+    runs-on: ubuntu-latest
+"""
+
+
+def write_ci(tmp_path: Path, body: str) -> Path:
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(body, encoding="utf-8")
+    return tmp_path
+
+
+class TestCIMatrixAuthority:
+    def test_the_real_matrix_is_a_full_cross_product(self):
+        matrix = aa.ci_matrix(ROOT)
+        assert matrix.job_count == len(matrix.python_versions) * len(matrix.operating_systems)
+        assert "3.11" in matrix.python_versions, "3.11 has been a matrix row since it was added"
+        assert set(matrix.operating_systems) == {"ubuntu-latest", "macos-latest", "windows-latest"}
+
+    def test_only_the_named_jobs_matrix_is_read(self, tmp_path):
+        """A version PINNED by another job must not be read as a matrix row.
+
+        ``ci.yml`` holds several jobs that pin 3.12; a whole-file scan would
+        report a Python list the matrix never ran.
+        """
+        root = write_ci(tmp_path, _CI_STUB)
+        matrix = aa.ci_matrix(root)
+        assert matrix.python_versions == ("3.10", "3.11")
+        assert matrix.operating_systems == ("ubuntu-latest", "macos-latest")
+        assert matrix.job_count == 4
+
+    def test_a_missing_job_fails_loud(self, tmp_path):
+        root = write_ci(tmp_path, _CI_STUB)
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa.ci_matrix(root, job="nope")
+        assert "no job named" in str(exc.value)
+
+    def test_a_shape_the_parser_cannot_read_is_an_error_not_a_default(self, tmp_path):
+        """A block-style matrix must stop the gate, not silently return nothing."""
+        body = _CI_STUB.replace(
+            "        os: [ubuntu-latest, macos-latest]\n",
+            "        os:\n          - ubuntu-latest\n          - macos-latest\n",
+        )
+        root = write_ci(tmp_path, body)
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa.ci_matrix(root)
+        assert "matrix list" in str(exc.value)
+
+
+class TestWorkflowInventoryAuthority:
+    def test_every_shipped_workflow_is_named(self):
+        inventory = aa.workflow_inventory(ROOT)
+        assert inventory["ci.yml"] == "CI"
+        assert len(inventory) == len(list((ROOT / ".github" / "workflows").glob("*.yml")))
+
+    def test_a_workflow_without_a_name_is_an_error(self, tmp_path):
+        root = write_ci(tmp_path, "on:\n  push:\njobs:\n  x:\n    runs-on: ubuntu-latest\n")
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa.workflow_inventory(root)
+        assert "no top-level 'name:'" in str(exc.value)
+
+    def test_an_empty_directory_is_an_error_not_an_empty_inventory(self, tmp_path):
+        (tmp_path / ".github" / "workflows").mkdir(parents=True)
+        with pytest.raises(aa.AuthorityError):
+            aa.workflow_inventory(tmp_path)
+
+
+class TestFlagCountAuthority:
+    def test_live_and_trained_counts_are_both_measured_and_differ(self):
+        live = aa.live_flag_count(ROOT)
+        trained = aa.trained_flag_count(root=ROOT)
+        assert live > 0 and trained > 0
+        assert live != trained, "if these ever coincide, pick a claim the card can still get wrong"
+        assert 35 not in (live, trained), "35 was the asserted number this gate exists to catch"
+
+    def test_a_sequence_that_is_not_a_literal_is_an_error(self):
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa._count_flag_literal("ALL_V4_FLAGS = tuple(_load())", "<stub>")
+        assert "not a literal sequence" in str(exc.value)
+
+    def test_an_absent_assignment_is_an_error(self):
+        with pytest.raises(aa.AuthorityError):
+            aa._count_flag_literal("X = (1, 2)", "<stub>")
+
+
+class TestFlagClaims:
+    def test_a_stale_live_flag_claim_is_caught(self):
+        found = scan("feature_flags.py — 35 flags + is_enabled/require_enabled")
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [("flags", "35", "52")]
+
+    def test_a_correct_live_flag_claim_is_not_flagged(self):
+        assert scan("feature_flags.py — 52 flags + is_enabled/require_enabled") == []
+
+    def test_the_hyphenated_inventory_form_is_caught(self):
+        found = scan("`FeatureDisabledError`, 35-flag inventory, startup rejection", rel="train/HF_MODEL_CARD_v4.md")
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [("flags", "35", "38")]
+
+    def test_a_trained_marker_selects_the_trained_authority(self):
+        line = "the 38 v4 feature flags the trained revision declared"
+        assert scan(line, rel="docs/mind-mem-4b-setup.md") == []
+        # Positive control: the LIVE number on the same trained-scoped line is
+        # a finding, so the scoping is doing work rather than passing both.
+        found = scan("the 52 v4 feature flags the trained revision declared", rel="docs/mind-mem-4b-setup.md")
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [("flags", "52", "38")]
+
+
+class TestCIJobClaims:
+    def test_a_stale_job_count_is_caught(self):
+        found = scan("- Total: 12 CI jobs")
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [("ci_jobs", "12", "15")]
+
+    def test_the_osxpython_rows_spelling_is_caught(self):
+        found = scan("CI matrix fully green across 12 OS\u00d7Python-version rows.")
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [("ci_jobs", "12", "15")]
+
+    def test_the_true_job_count_passes(self):
+        assert scan("- Total: 15 CI jobs (a full cross-product)") == []
+
+    def test_a_release_record_keeps_its_own_job_count(self):
+        line = "CI matrix fully green across 12 OS\u00d7Python-version rows."
+        assert scan(line, historical=True) == []
+        assert scan(line, historical=False) != []
+
+
+class TestCIPythonListClaims:
+    def scan_lines(self, lines, rel="docs/example.md", auth=None):
+        return cda.scan_ci_python_lists(rel, lines, auth or make_authorities())
+
+    def test_a_list_missing_a_version_is_caught(self):
+        found = self.scan_lines(["Python 3.10, 3.12, 3.13, and 3.14 are tested in CI."])
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [
+            ("ci_python", "3.10, 3.12, 3.13, and 3.14", "3.10, 3.11, 3.12, 3.13, and 3.14")
+        ]
+
+    def test_the_slash_style_is_re_rendered_in_its_own_style(self):
+        found = self.scan_lines(["- **CI**: Runs tests on Python 3.10/3.12/3.13/3.14 across Ubuntu"])
+        assert [f.actual for f in found] == ["3.10/3.11/3.12/3.13/3.14"]
+
+    def test_order_is_not_the_claim(self):
+        assert self.scan_lines(["tested in CI: 3.14, 3.13, 3.12, 3.11, 3.10"]) == []
+
+    def test_a_bare_bullet_under_a_ci_heading_is_still_gated(self):
+        lines = ["## CI Matrix", "", "- Python: 3.10, 3.12, 3.13, 3.14"]
+        found = self.scan_lines(lines)
+        assert [(f.lineno, f.claimed) for f in found] == [(3, "3.10, 3.12, 3.13, 3.14")]
+
+    def test_an_enumeration_with_no_ci_scope_is_left_alone(self):
+        """A release note about two rows is not a claim about the matrix."""
+        lines = ["## Overview", "", "closes the OOM kills on ubuntu 3.12/3.14 from stress tests"]
+        assert self.scan_lines(lines) == []
+        # Positive control: the same enumeration under a CI heading IS gated,
+        # so the guard is scoping rather than disabling the check.
+        assert self.scan_lines(["## CI Matrix", "", "closes the OOM kills on ubuntu 3.12/3.14"]) != []
+
+    def test_a_single_version_is_not_an_enumeration(self):
+        assert self.scan_lines(["Core requires only Python 3.10+ stdlib; CI covers more."]) == []
+
+
+class TestWorkflowTableCheck:
+    def make_doc(self, tmp_path: Path, rows: str) -> Path:
+        doc = tmp_path / "docs"
+        doc.mkdir(parents=True)
+        (doc / "ci-workflows.md").write_text(
+            "# CI Workflows\n\n| Workflow | File | Trigger | Description |\n|---|---|---|---|\n" + rows,
+            encoding="utf-8",
+        )
+        return tmp_path
+
+    def test_a_workflow_absent_from_the_table_is_caught(self, tmp_path):
+        root = self.make_doc(tmp_path, "| CI | `ci.yml` | push | tests |\n")
+        found = cda.check_workflow_table(make_authorities(), root)
+        assert [(f.kind, f.actual) for f in found] == [("workflow", "release.yml = 'Release'")]
+
+    def test_a_row_for_a_file_that_does_not_exist_is_caught(self, tmp_path):
+        rows = (
+            "| CI | `ci.yml` | push | tests |\n"
+            "| Release | `release.yml` | tags | ship |\n"
+            "| Security Review | `security-review.yml` | push | scan |\n"
+        )
+        root = self.make_doc(tmp_path, rows)
+        found = cda.check_workflow_table(make_authorities(), root)
+        assert [(f.claimed, f.actual) for f in found] == [("security-review.yml", "(no such workflow file)")]
+
+    def test_a_renamed_workflow_is_caught(self, tmp_path):
+        rows = "| Continuous Integration | `ci.yml` | push | tests |\n| Release | `release.yml` | tags | ship |\n"
+        root = self.make_doc(tmp_path, rows)
+        found = cda.check_workflow_table(make_authorities(), root)
+        assert [(f.claimed, f.actual) for f in found] == [("Continuous Integration", "CI")]
+
+    def test_an_accurate_table_is_clean(self, tmp_path):
+        rows = "| CI | `ci.yml` | push | tests |\n| Release | `release.yml` | tags | ship |\n"
+        root = self.make_doc(tmp_path, rows)
+        assert cda.check_workflow_table(make_authorities(), root) == []
+
+    def test_the_shipped_table_agrees_with_the_shipped_directory(self):
+        auth = cda.Authorities(**{**real_auth_kwargs(), "workflows": tuple(sorted(aa.workflow_inventory(ROOT).items()))})
+        assert cda.check_workflow_table(auth, ROOT) == []
+
+
+class TestEvalProbeAuthority:
+    def test_the_probe_totals_are_derived_from_the_harness(self):
+        main, holdout = aa.eval_probe_counts(ROOT)
+        assert (main, holdout) == (111, 22)
+
+    def test_a_harness_with_nothing_benched_is_an_error(self, tmp_path):
+        (tmp_path / "PROBES.py").write_text("QUESTIONS = [1, 2]\n", encoding="utf-8")
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa._probe_total(tmp_path / "PROBES.py")
+        assert "counting rule broke" in str(exc.value)
+
+
+class TestEvalClaims:
+    def write_card(self, tmp_path: Path, body: str) -> Path:
+        (tmp_path / "train").mkdir(parents=True)
+        (tmp_path / "train" / "HF_MODEL_CARD_v4.md").write_text(body, encoding="utf-8")
+        return tmp_path
+
+    def test_a_stale_main_total_is_caught(self, tmp_path):
+        root = self.write_card(tmp_path, "| **Total main** | **109 / 109** | 100% |\n")
+        found = cda.check_eval_claims(make_authorities(), root)
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [
+            ("eval_probes", "109", "111"),
+            ("eval_probes", "109", "111"),
+        ]
+
+    def test_a_stale_grand_total_is_caught(self, tmp_path):
+        root = self.write_card(tmp_path, "**Grand total: 131 / 131 = 100%**\n")
+        assert [f.actual for f in cda.check_eval_claims(make_authorities(), root)] == ["133", "133"]
+
+    def test_the_harness_probe_line_is_gated(self, tmp_path):
+        root = self.write_card(tmp_path, "Harness: `train/eval_harness.py` — **109 probes** (95 v3.x + 14)\n")
+        assert [(f.claimed, f.actual) for f in cda.check_eval_claims(make_authorities(), root)] == [("109", "111")]
+
+    def test_the_true_totals_pass(self, tmp_path):
+        body = (
+            "Harness: `train/eval_harness.py` — **111 probes**\n"
+            "| **Total main** | **111 / 111** | 100% |\n"
+            "| **Total holdout** | **22 / 22** | 100% |\n"
+            "**Grand total: 133 / 133 = 100%**\n"
+        )
+        root = self.write_card(tmp_path, body)
+        assert cda.check_eval_claims(make_authorities(), root) == []
+
+    def test_the_shipped_card_agrees_with_the_shipped_harness(self):
+        main, holdout = aa.eval_probe_counts(ROOT)
+        auth = cda.Authorities(**{**real_auth_kwargs(), "eval_main_probes": main, "eval_holdout_probes": holdout})
+        assert cda.check_eval_claims(auth, ROOT) == []
+
+
+class TestNewLegsAreLoadBearing:
+    """Mutation twins for the legs added alongside the CI/flag/eval authorities.
+
+    Each one moves the AUTHORITY, not the doc, and asserts the tree goes red.
+    A leg whose authority can be wrong without anything failing is decoration.
+    """
+
+    def test_the_ci_matrix_authority_is_load_bearing(self):
+        good = cda.Authorities(**real_auth_kwargs())
+        assert cda.scan_ci_python_lists("docs/faq.md", _lines("docs/faq.md"), good) == []
+        mutated = cda.Authorities(**{**real_auth_kwargs(), "ci_python_versions": ("3.10", "3.12", "3.13", "3.14")})
+        assert cda.scan_ci_python_lists("docs/faq.md", _lines("docs/faq.md"), mutated) != []
+
+    def test_the_job_count_is_derived_not_declared(self):
+        auth = cda.Authorities(**{**real_auth_kwargs(), "ci_operating_systems": ("ubuntu-latest",)})
+        assert auth.ci_jobs == 5
+        assert scan("- Total: 15 CI jobs", auth=auth) != []
+
+    def test_the_trained_flag_authority_is_load_bearing(self):
+        card = "train/HF_MODEL_CARD_v4.md"
+        line = "`FeatureDisabledError`, 38-flag inventory, startup rejection"
+        assert scan(line, rel=card) == []
+        assert scan(line, rel=card, auth=make_authorities(trained_flags=52)) != []
+
+    def test_the_workflow_inventory_is_load_bearing(self):
+        mutated = cda.Authorities(
+            **{**real_auth_kwargs(), "workflows": tuple(sorted(aa.workflow_inventory(ROOT).items())) + (("ghost.yml", "Ghost"),)}
+        )
+        found = cda.check_workflow_table(mutated, ROOT)
+        assert [f.actual for f in found] == ["ghost.yml = 'Ghost'"]
+
+    def test_the_eval_authority_is_load_bearing(self):
+        main, holdout = aa.eval_probe_counts(ROOT)
+        mutated = cda.Authorities(**{**real_auth_kwargs(), "eval_main_probes": main + 1, "eval_holdout_probes": holdout})
+        assert cda.check_eval_claims(mutated, ROOT) != []
+
+
+class TestCIMatrixGrid:
+    """The grid in ``docs/ci-workflows.md`` -- the shape no count pattern sees.
+
+    Every case here was found by MUTATION: dropping a whole column from that
+    grid left the gate green, because the versions live in header cells and the
+    body rows carry only tick marks.
+    """
+
+    GOOD = (
+        "| OS | Python 3.10 | Python 3.11 | Python 3.12 | Python 3.13 | Python 3.14 |\n"
+        "|----|:--:|:--:|:--:|:--:|:--:|\n"
+        "| Ubuntu | x | x | x | x | x |\n"
+        "| macOS | x | x | x | x | x |\n"
+        "| Windows | x | x | x | x | x |\n"
+    )
+
+    def make(self, tmp_path: Path, grid: str) -> Path:
+        (tmp_path / "docs").mkdir(parents=True)
+        (tmp_path / "docs" / "ci-workflows.md").write_text("# CI Workflows\n\n## CI Matrix\n\n" + grid, encoding="utf-8")
+        return tmp_path
+
+    def test_an_accurate_grid_is_clean(self, tmp_path):
+        assert cda.check_ci_matrix_grid(make_authorities(), self.make(tmp_path, self.GOOD)) == []
+
+    def test_a_dropped_version_column_is_caught(self, tmp_path):
+        grid = self.GOOD.replace("| Python 3.11 ", "").replace("| x | x | x | x | x |", "| x | x | x | x |")
+        found = cda.check_ci_matrix_grid(make_authorities(), self.make(tmp_path, grid))
+        # The header loses a column AND every row then carries one mark too
+        # few, so both legs fire -- that is the grid being checked as a grid,
+        # not one regex happening to match.
+        assert [f.kind for f in found] == ["ci_python", "ci_matrix", "ci_matrix", "ci_matrix"]
+        assert found[0].actual == "3.10, 3.11, 3.12, 3.13, 3.14"
+
+    def test_a_partial_cross_product_row_is_caught(self, tmp_path):
+        grid = self.GOOD.replace("| macOS | x | x | x | x | x |", "| macOS | | x | | x | |")
+        found = cda.check_ci_matrix_grid(make_authorities(), self.make(tmp_path, grid))
+        assert [f.kind for f in found] == ["ci_matrix"]
+        assert "2 of 5" in found[0].claimed
+
+    def test_a_missing_os_row_is_caught(self, tmp_path):
+        grid = self.GOOD.replace("| Windows | x | x | x | x | x |\n", "")
+        found = cda.check_ci_matrix_grid(make_authorities(), self.make(tmp_path, grid))
+        assert [f.kind for f in found] == ["ci_os"]
+        assert found[0].actual == "macos, ubuntu, windows"
+
+    def test_a_table_that_is_not_the_matrix_is_ignored(self, tmp_path):
+        other = "| Workflow | File |\n|---|---|\n| CI | `ci.yml` |\n"
+        assert cda.check_ci_matrix_grid(make_authorities(), self.make(tmp_path, other)) == []
+
+    def test_the_shipped_grid_agrees_with_the_shipped_matrix(self):
+        auth = cda.Authorities(**real_auth_kwargs())
+        assert cda.check_ci_matrix_grid(auth, ROOT) == []
+
+
+class TestEvalHeadlineWrapping:
+    """A per-line eval scan walked past the stale 109/109 -- it was wrapped."""
+
+    def test_a_headline_wrapped_onto_the_next_line_is_still_gated(self, tmp_path):
+        (tmp_path / "train").mkdir(parents=True)
+        (tmp_path / "train" / "HF_MODEL_CARD_v4.md").write_text(
+            "Eval score for the weights `main` currently points at (`v4.1.1`):\n**109/109 = 100%** on the un-softened harness.\n",
+            encoding="utf-8",
+        )
+        found = cda.check_eval_claims(make_authorities(), tmp_path)
+        assert [(f.lineno, f.claimed, f.actual) for f in found] == [(2, "109", "133"), (2, "109", "133")]
+
+    def test_the_reported_span_is_line_relative_so_fix_can_use_it(self, tmp_path):
+        (tmp_path / "train").mkdir(parents=True)
+        card = tmp_path / "train" / "HF_MODEL_CARD_v4.md"
+        card.write_text("Grand total: 131 / 131 = 100%\n", encoding="utf-8")
+        findings = cda.check_eval_claims(make_authorities(), tmp_path)
+        fixed, skipped = cda.apply_fixes(findings, tmp_path)
+        assert (fixed, skipped) == (2, [])
+        assert card.read_text(encoding="utf-8") == "Grand total: 133 / 133 = 100%\n"
+
+
+class TestFixModeCoversTheNewKinds:
+    def test_fix_rewrites_a_stale_flag_count(self, tmp_path):
+        (tmp_path / "docs").mkdir(parents=True)
+        doc = tmp_path / "docs" / "x.md"
+        doc.write_text("feature_flags.py — 35 flags + is_enabled\n", encoding="utf-8")
+        findings = cda.scan_line("docs/x.md", 1, doc.read_text(encoding="utf-8").rstrip("\n"), make_authorities())
+        fixed, skipped = cda.apply_fixes(findings, tmp_path)
+        assert (fixed, skipped) == (1, [])
+        assert doc.read_text(encoding="utf-8") == "feature_flags.py — 52 flags + is_enabled\n"
+
+    def test_a_structural_workflow_finding_is_never_guessed_at(self, tmp_path):
+        (tmp_path / "docs").mkdir(parents=True)
+        doc = tmp_path / "docs" / "ci-workflows.md"
+        doc.write_text("| CI | `ci.yml` | push | tests |\n", encoding="utf-8")
+        findings = cda.check_workflow_table(make_authorities(), tmp_path)
+        before = doc.read_text(encoding="utf-8")
+        fixed, skipped = cda.apply_fixes(findings, tmp_path)
+        assert fixed == 0
+        assert [f.kind for f in skipped] == ["workflow"]
+        assert doc.read_text(encoding="utf-8") == before
+
+
+class TestModuleFactsAuthority:
+    def test_the_line_count_is_the_file(self):
+        rel = "src/mind_mem/recompaction.py"
+        assert aa.module_line_count(rel, ROOT) == len((ROOT / rel).read_text(encoding="utf-8").splitlines())
+
+    def test_the_test_count_is_the_test_functions(self):
+        assert aa.module_test_count("src/mind_mem/recompaction.py", ROOT) == 18
+
+    def test_a_module_with_no_test_file_fails_loud(self):
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa.module_test_count("src/mind_mem/__init__.py", ROOT)
+        assert "no test file" in str(exc.value)
+
+    def test_a_test_file_with_no_tests_is_an_error_not_a_zero(self, tmp_path):
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "widget.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_widget.py").write_text("def helper():\n    pass\n", encoding="utf-8")
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa.module_test_count("src/widget.py", tmp_path)
+        assert "counting rule broke" in str(exc.value)
+
+
+class TestModuleFactsClaims:
+    def build(self, tmp_path: Path, header: str) -> Path:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "widget.py").write_text("\n".join(f"line {i}" for i in range(10)) + "\n", encoding="utf-8")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_widget.py").write_text("def test_a():\n    pass\n\n\ndef test_b():\n    pass\n", encoding="utf-8")
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "widget.md").write_text(header, encoding="utf-8")
+        return tmp_path
+
+    def test_a_stale_line_count_is_caught(self, tmp_path):
+        root = self.build(tmp_path, "**Module:** `src/widget.py` (268 lines, 2 tests, 99% coverage)\n")
+        found = cda.check_module_facts(make_authorities(), root)
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [("module_facts", "268", "10")]
+
+    def test_a_stale_test_count_is_caught(self, tmp_path):
+        root = self.build(tmp_path, "**Module:** `src/widget.py` (10 lines, 7 tests, 99% coverage)\n")
+        assert [(f.claimed, f.actual) for f in cda.check_module_facts(make_authorities(), root)] == [("7", "2")]
+
+    def test_an_accurate_header_is_clean(self, tmp_path):
+        root = self.build(tmp_path, "**Module:** `src/widget.py` (10 lines, 2 tests, 99% coverage)\n")
+        assert cda.check_module_facts(make_authorities(), root) == []
+
+    def test_a_header_naming_a_module_that_does_not_exist_is_caught(self, tmp_path):
+        root = self.build(tmp_path, "**Module:** `src/ghost.py` (10 lines, 2 tests, 99% coverage)\n")
+        assert [f.actual for f in cda.check_module_facts(make_authorities(), root)] == ["(no such module)"]
+
+    def test_fix_rewrites_a_stale_line_count(self, tmp_path):
+        root = self.build(tmp_path, "**Module:** `src/widget.py` (268 lines, 2 tests, 99% coverage)\n")
+        fixed, skipped = cda.apply_fixes(cda.check_module_facts(make_authorities(), root), root)
+        assert (fixed, skipped) == (1, [])
+        assert (root / "docs" / "widget.md").read_text(encoding="utf-8").startswith("**Module:** `src/widget.py` (10 lines,")
+
+    def test_the_shipped_module_headers_agree_with_their_modules(self):
+        assert cda.check_module_facts(cda.Authorities(**real_auth_kwargs()), ROOT) == []
+
+
+class TestPythonSupportClaims:
+    """ "Python 3.10+" appears on nine live surfaces and had no authority."""
+
+    def test_the_authority_is_packaging_metadata(self):
+        floor, low, high = aa.python_support(ROOT)
+        assert floor == low, "the requires-python floor and the lowest classifier must agree"
+        assert tuple(int(p) for p in high.split(".")) >= tuple(int(p) for p in low.split("."))
+
+    def test_a_stale_floor_is_caught(self):
+        found = scan("**Requirements:** Python 3.9+, FastMCP 2.0+ (for MCP server).")
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [("python_support", "3.9", "3.10")]
+
+    def test_the_true_floor_passes(self):
+        assert scan("- Python: 3.10+") == []
+
+    def test_a_stale_range_endpoint_is_caught(self):
+        found = scan("Python 3.10–3.13 supported. No required native dependencies")
+        assert [(f.claimed, f.actual) for f in found] == [("3.13", "3.14")]
+
+    def test_the_true_range_passes(self):
+        assert scan("Python 3.10–3.14 supported. No required native dependencies") == []
+
+    def test_a_release_record_keeps_its_own_floor(self):
+        line = "**Requirements:** Python 3.9+"
+        assert scan(line, historical=True) == []
+        assert scan(line, historical=False) != []
+
+    def test_fix_rewrites_a_stale_floor(self, tmp_path):
+        (tmp_path / "docs").mkdir(parents=True)
+        doc = tmp_path / "docs" / "x.md"
+        doc.write_text("Requires Python 3.9+ and nothing else.\n", encoding="utf-8")
+        findings = cda.scan_line("docs/x.md", 1, "Requires Python 3.9+ and nothing else.", make_authorities())
+        fixed, skipped = cda.apply_fixes(findings, tmp_path)
+        assert (fixed, skipped) == (1, [])
+        assert doc.read_text(encoding="utf-8") == "Requires Python 3.10+ and nothing else.\n"
+
+    def test_the_python_authority_is_load_bearing(self):
+        """Move the floor and the nine live surfaces go red."""
+        auth = cda.Authorities(**real_auth_kwargs())
+        assert cda.scan_docs(auth, ROOT) == []
+        mutated = cda.Authorities(**{**real_auth_kwargs(), "python_floor": "3.11"})
+        findings = cda.scan_docs(mutated, ROOT)
+        assert len(findings) >= 5
+        assert {f.kind for f in findings} == {"python_support"}
+
+
+class TestBackendsBadge:
+    """The badge undersold the product: `encrypted` is a `--backend` choice."""
+
+    def test_the_authority_is_the_init_workspace_tuple(self):
+        assert aa.storage_backends(ROOT) == ("markdown", "postgres", "encrypted")
+
+    def test_a_computed_tuple_is_an_error_not_a_guess(self, tmp_path):
+        (tmp_path / "src" / "mind_mem").mkdir(parents=True)
+        (tmp_path / "src" / "mind_mem" / "init_workspace.py").write_text("SUPPORTED_BACKENDS = tuple(_discover())\n", encoding="utf-8")
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa.storage_backends(tmp_path)
+        assert "not a literal sequence" in str(exc.value)
+
+    def test_a_badge_missing_a_backend_is_caught(self, tmp_path):
+        (tmp_path / "README.md").write_text(
+            '<img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="x">\n',
+            encoding="utf-8",
+        )
+        found = cda.check_backends_badge(make_authorities(), tmp_path)
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [
+            ("backends", "markdown_%7C_postgres", "markdown_%7C_postgres_%7C_encrypted")
+        ]
+
+    def test_a_badge_naming_a_backend_that_does_not_exist_is_caught(self, tmp_path):
+        (tmp_path / "README.md").write_text(
+            '<img src="https://img.shields.io/badge/backends-markdown_%7C_redis-teal?style=flat-square" alt="x">\n',
+            encoding="utf-8",
+        )
+        assert [f.claimed for f in cda.check_backends_badge(make_authorities(), tmp_path)] == ["markdown_%7C_redis"]
+
+    def test_the_true_badge_passes(self, tmp_path):
+        (tmp_path / "README.md").write_text(
+            '<img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="x">\n',
+            encoding="utf-8",
+        )
+        assert cda.check_backends_badge(make_authorities(), tmp_path) == []
+
+    def test_the_shipped_badge_agrees_with_the_shipped_tuple(self):
+        assert cda.check_backends_badge(cda.Authorities(**real_auth_kwargs()), ROOT) == []
+
+    def test_the_backends_authority_is_load_bearing(self):
+        mutated = cda.Authorities(**{**real_auth_kwargs(), "backends": ("markdown", "postgres")})
+        assert cda.check_backends_badge(mutated, ROOT) != []

@@ -130,6 +130,22 @@ def _imported_names(tree: ast.AST) -> set[str]:
         elif isinstance(node, ast.ImportFrom):
             if node.level:
                 out.add(f"\x00{node.level}\x00{node.module or ''}")
+                # `from . import mind_kernels` -- the RELATIVE twin of the
+                # package-root form handled below, and it was missed for the
+                # same reason: the module being referenced is not in
+                # `node.module` (which is None or the parent package), it is
+                # one of the imported NAMES. 15 such sites exist under
+                # src/mind_mem today, `from . import mind_kernels` and
+                # `from . import vector_inertness` among them; every one of
+                # those targets happens to have a second, absolute importer,
+                # which is the only reason this blind spot has not yet cost a
+                # module. The absolute twin cost two (`usage_meter`,
+                # `self_update`, deleted in 5.0.0 out from under a
+                # console_script), so the relative one is closed here rather
+                # than left to the next sweep to discover the same way.
+                for a in node.names:
+                    name = ".".join(part for part in (node.module, a.name) if part)
+                    out.add(f"\x00{node.level}\x00{name}")
             elif node.module == _SELF_PKG:
                 # `from mind_mem import usage_meter` -- the module is EXACTLY
                 # the package root, so each imported NAME may itself be a

@@ -116,6 +116,14 @@ signed**; authenticated signing (Ed25519 / ML-DSA) is separate, deferred work.
         query=query,                   # bound as a digest, never as text
     )
     envelope["attestation"] = att.to_dict()   # surfaced, never stored
+
+The serialized form carries one derived key, ``query_id``: the run identity a
+client passes back to ``report_outcome(query_id=…)``. It is
+:func:`mind_mem.recall_digests.run_id` over three fields the record already
+binds, so publishing it mints no second identity and creates no import edge to
+a ledger — the encoding lives in the leaf both sides depend on. That is the
+whole of RA.1's residual: the right-hand side of the join already accepted an
+id, and until now nothing put one in the caller's hands.
 """
 
 from __future__ import annotations
@@ -130,7 +138,7 @@ from typing import Any
 
 from .observability import get_logger, metrics
 from .preimage import preimage
-from .recall_digests import marker_digest, query_hash, seq_digest, served_set_digest
+from .recall_digests import marker_digest, query_hash, run_id, seq_digest, served_set_digest
 from .scoring_instant import format_scoring_instant, resolve_scoring_instant
 
 _log = get_logger("recall_attestation")
@@ -403,8 +411,11 @@ class RecallAttestation:
     them without recomputing the hash makes the record internally inconsistent,
     detectable with :meth:`is_internally_consistent`. There is no field on this
     record that the hash does not cover; a sibling value would be forgeable and
-    would therefore attest nothing. This record is **never persisted** (rail 2):
-    it lives in the recall response and is discarded when the response is.
+    would therefore attest nothing. :attr:`query_id` is not a counterexample and
+    not an exception to that rule: it is a ``@property``, stored nowhere and
+    recomputed from three hashed fields on every access, so there is no value
+    for a forger to move. This record is **never persisted** (rail 2): it lives
+    in the recall response and is discarded when the response is.
 
     ``degraded`` carries the existing ``.degraded`` ``{leg, reason}`` marker
     verbatim for readability; the preimage binds its order-independent
@@ -466,6 +477,43 @@ class RecallAttestation:
             )
         ).hexdigest()
 
+    @property
+    def query_id(self) -> str:
+        """The run identity a client reports outcomes against (RA.1's join key).
+
+        ``SHA256(MM_RUN_v1\\0 ‖ query_hash ‖ results_digest ‖ config_hash)``,
+        computed by :func:`mind_mem.recall_digests.run_id` — the same encoding
+        and the same owner the served-set ledger stores under ``run_id``, so a
+        client holding a recall envelope and the ledger holding a row for that
+        run land on one value without either reaching the other.
+
+        **Derived, and that is why it may sit on the record at all.** Every
+        stored field here is bound into ``attestation_hash``, deliberately:
+        an unbound sibling would be forgeable and would therefore attest
+        nothing. This is not a sibling. It is a pure function of three bound
+        fields, recomputed on every access and never stored, so forging it
+        means moving ``query_hash``, ``results_digest`` or ``config_hash`` —
+        which breaks the hash. :meth:`from_dict` re-derives it and refuses a
+        serialized dict whose value disagrees, so it cannot be edited in
+        transit either.
+
+        ``""`` — never a guess — when any of the three inputs is not a
+        64-character hex digest. That happens on a real degraded path:
+        ``derive_recall_attestation_for_workspace`` binds ``config_hash=""``
+        when the pipeline probe fails, and an attestation with an unresolved
+        config hash cannot name a run. An id we cannot mint is absent, and the
+        consumer (``accountability_views.run_precision``) already reports an
+        unjoinable credit row by name rather than dropping it.
+        """
+        try:
+            return run_id(
+                query_hash=self.query_hash,
+                served_digest=self.results_digest,
+                pipeline_hash=self.config_hash,
+            )
+        except (ValueError, TypeError):
+            return ""
+
     def is_internally_consistent(self) -> bool:
         """True iff the stored hash matches its own preimage (constant-time compare).
 
@@ -482,7 +530,16 @@ class RecallAttestation:
         return hmac.compare_digest(recomputed, self.attestation_hash)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for the recall envelope / JSON response (stable field order)."""
+        """Serialize for the recall envelope / JSON response (stable field order).
+
+        ``query_id`` is the one key here that is not a stored field. It is
+        emitted because this dict IS the recall envelope's ``attestation``
+        object, and RA.1's residual was precisely that a client holding an
+        envelope had no id to pass to ``report_outcome(query_id=…)`` — the
+        right-hand side of the join already accepted one. Publishing the
+        derived value closes that without minting a second identity: see
+        :attr:`query_id`.
+        """
         return {
             "schema": self.schema,
             "legs_ran": list(self.legs_ran),
@@ -493,6 +550,7 @@ class RecallAttestation:
             "result_count": self.result_count,
             "results_digest": self.results_digest,
             "query_hash": self.query_hash,
+            "query_id": self.query_id,
             "derivation": self.derivation,
             "scoring_instant": self.scoring_instant,
             "attestation_hash": self.attestation_hash,
@@ -514,6 +572,16 @@ class RecallAttestation:
                 Reviving it with a guessed value would yield a record that
                 merely reports ``is_internally_consistent() is False`` with no
                 explanation, so the boundary refuses it by name instead.
+            ValueError: the dict carries a ``query_id`` that disagrees with
+                the one its own bound fields derive. ``query_id`` is emitted
+                by :meth:`to_dict` and is a pure function of three hashed
+                fields, so a disagreement means the value was edited in
+                transit. Silently recomputing it would honour the record
+                while discarding the evidence that someone rewrote the join
+                key; a record whose published identity is not its identity is
+                refused. A dict with no ``query_id`` at all is accepted — that
+                is an envelope from before RA.1's residual closed, and it
+                claims nothing to disagree with.
         """
         schema = d.get("schema")
         if schema != RECALL_ATTEST_TAG:
@@ -528,7 +596,7 @@ class RecallAttestation:
                 f"attestation dict has no {' and no '.join(repr(k) for k in missing)}: it predates "
                 "the determinism seam, and every hash emitted before it is unrecomputable by design"
             )
-        return cls(
+        record = cls(
             legs_ran=tuple(d.get("legs_ran", ())),
             legs_degraded=tuple(d.get("legs_degraded", ())),
             config_hash=d["config_hash"],
@@ -542,6 +610,12 @@ class RecallAttestation:
             schema=RECALL_ATTEST_TAG,
             derivation=d.get("derivation", DERIVATION_ASSERTED),
         )
+        if "query_id" in d and str(d["query_id"]) != record.query_id:
+            raise ValueError(
+                "attestation query_id does not derive from its own query_hash / results_digest / "
+                "config_hash: the published run identity was edited in transit"
+            )
+        return record
 
 
 def build_recall_attestation(

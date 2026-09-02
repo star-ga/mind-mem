@@ -49,7 +49,7 @@ The load-bearing layer. Every `recall` (read) or `propose_update` (write) flows 
 
 The drift-detection layer:
 
-- **CI** on every push and PR — full pytest matrix (10,265 tests across the suite).
+- **CI** on every push and PR — full pytest matrix (10,517 tests across the suite).
 - **PyPI release** on tag push via OIDC trusted publishing (no long-lived tokens).
 - **LoCoMo benchmark snapshot** per release; regression on any axis (mean / adversarial / temporal) is documented in CHANGELOG.
 

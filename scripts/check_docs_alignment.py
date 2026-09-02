@@ -25,6 +25,25 @@ surface disagrees. Everything it does not cover kept drifting anyway. On
   ``vibe`` landed.
 * The README comparison matrix said 16 MIND kernels; ``mind/`` holds 26.
 
+A second sweep on 2026-09-02, with all of the above green, found the same
+failure in three more places that had no authority at all:
+
+* Four live docs enumerated the CI Python matrix as "3.10, 3.12, 3.13, 3.14",
+  which has been missing 3.11 since that row was added, and
+  ``docs/testing-guide.md`` then derived "12 CI jobs" from its own short list
+  (the matrix is a 3 x 5 cross-product: 15). ``docs/troubleshooting.md`` still
+  told readers to look for an ``allow-failure`` carve-out on the 3.14 rows
+  that was deliberately removed.
+* ``docs/ci-workflows.md`` enumerated the workflow directory in prose: it
+  named a "Security Review" workflow that does not exist, gave Benchmark a
+  push/PR trigger it had lost, and omitted two whole workflows.
+* The model card advertised a "35-flag inventory" through four releases.
+  ``ALL_V4_FLAGS`` held 38 at the trained revision and holds 52 today, so 35
+  described no revision -- the 84-vs-96 failure again, in a different number.
+  ``docs/mind-mem-4b-setup.md`` also still quoted the ``v4.0.0-base``
+  archive's 109/109 eval for the weights ``main`` points at (111/111 main and
+  22/22 held out, 133 total).
+
 Each claim below names the command or file that decides its true value. Run
 with ``--fix`` to rewrite the stale numbers in place.
 
@@ -43,6 +62,12 @@ resources              ``mcp.resource(...)`` registrations in
 MIND kernels           ``mind/*.mind``
 version                ``__version__`` in ``src/mind_mem/__init__.py``
 core deps              ``[project] dependencies`` in ``pyproject.toml``
+v4 feature flags       ``ALL_V4_FLAGS``, live and at ``<TRAINED_REVISION>``
+4b eval probes         the probe lists ``train/eval_harness.py`` and
+                       ``train/eval_holdout.py`` actually bench
+CI Python / OS / jobs  the ``test`` job's ``strategy.matrix`` in
+                       ``.github/workflows/ci.yml`` (jobs = the cross-product)
+workflow table         every file in ``.github/workflows`` and its ``name:``
 =====================  =====================================================
 
 An authority that cannot be computed exits **2**, never 0 with an empty
@@ -78,16 +103,25 @@ from scripts.alignment_authorities import (  # noqa: E402  (path shim above must
     TRAINED_REVISION,
     AuthorityError,
     _project_root,
+    ci_matrix,
     client_count,
     collect_test_count,
     core_dependency_count,
+    eval_probe_counts,
+    live_flag_count,
     live_tool_count,
     mcp_client_count,
     mind_kernel_count,
+    module_line_count,
+    module_test_count,
     package_version,
     parse_collected,  # noqa: F401  re-exported: this module is the one entry point callers and tests import
+    python_support,
     resource_count,
+    storage_backends,
+    trained_flag_count,
     trained_tool_count,
+    workflow_inventory,
 )
 
 # Surfaces a reader can reach. ``CHANGELOG.md`` and every version/date-stamped
@@ -117,10 +151,33 @@ class Authorities:
     mind_kernels: int
     version: str
     core_deps: int
+    live_flags: int
+    trained_flags: int
+    eval_main_probes: int
+    eval_holdout_probes: int
+    ci_python_versions: tuple[str, ...]
+    ci_operating_systems: tuple[str, ...]
+    workflows: tuple[tuple[str, str], ...]
+    python_floor: str
+    python_classifier_min: str
+    python_classifier_max: str
+    backends: tuple[str, ...]
+
+    @property
+    def ci_jobs(self) -> int:
+        """The test matrix is a cross-product, so the job count is derived."""
+        return len(self.ci_python_versions) * len(self.ci_operating_systems)
+
+    @property
+    def eval_total_probes(self) -> int:
+        return self.eval_main_probes + self.eval_holdout_probes
 
 
 def resolve_authorities(root: Path | None = None, tests_collected: int | None = None) -> Authorities:
     root = root or _project_root()
+    matrix = ci_matrix(root)
+    eval_probes = eval_probe_counts(root)
+    py_support = python_support(root)
     return Authorities(
         tests=tests_collected if tests_collected is not None else collect_test_count(root),
         live_tools=live_tool_count(),
@@ -131,6 +188,17 @@ def resolve_authorities(root: Path | None = None, tests_collected: int | None = 
         mind_kernels=mind_kernel_count(root),
         version=package_version(root),
         core_deps=core_dependency_count(root),
+        live_flags=live_flag_count(root),
+        trained_flags=trained_flag_count(root=root),
+        eval_main_probes=eval_probes[0],
+        eval_holdout_probes=eval_probes[1],
+        ci_python_versions=matrix.python_versions,
+        ci_operating_systems=matrix.operating_systems,
+        workflows=tuple(sorted(workflow_inventory(root).items())),
+        python_floor=py_support[0],
+        python_classifier_min=py_support[1],
+        python_classifier_max=py_support[2],
+        backends=storage_backends(root),
     )
 
 
@@ -194,6 +262,47 @@ _TOOL_PATTERNS = (
 )
 
 _VERSION_PATTERNS = (re.compile(r"(?:Current|Latest) release:?[^\n]{0,40}?\bv(?P<n>\d+\.\d+\.\d+)(?P<plus>)"),)
+
+# "38-flag inventory" / "38 v4 feature flags" / "52 flags + is_enabled". The
+# model card advertised a **35-flag** inventory through four releases; the
+# trained revision declared 38 and the tree now declares 52, so 35 was a
+# number with no revision behind it -- the same failure as 84-vs-96, caught
+# the same way. Scoped trained-vs-live by the same nearest-marker rule the
+# tool count uses, because the card states both.
+_FLAG_PATTERNS = (
+    re.compile(rf"\b(?P<n>{_TINY})(?P<plus>)-flag\b", re.IGNORECASE),
+    re.compile(rf"\b(?P<n>{_TINY})(?P<plus>)\s+(?:v4\s+)?feature\s+flags\b", re.IGNORECASE),
+    re.compile(rf"\b(?P<n>{_TINY})(?P<plus>)\s+flags\b", re.IGNORECASE),
+)
+
+# "Total: 15 CI jobs" / "green across 15 OS x Python-version rows". Derived,
+# not declared: the job count is len(os) * len(python-version) in ci.yml's
+# `test` matrix, so a row added to either list moves it.
+_CI_JOB_PATTERNS = (
+    re.compile(rf"\b(?P<n>{_TINY})(?P<plus>)\s+CI\s+jobs?\b", re.IGNORECASE),
+    re.compile(rf"\b(?P<n>{_TINY})(?P<plus>)\s+OS\s*[x\u00d7]\s*Python[\w-]*\s+rows\b", re.IGNORECASE),
+)
+
+# An enumeration of Python versions ("3.10, 3.12, 3.13, and 3.14",
+# "3.10/3.12/3.13/3.14"). Four live docs enumerated FOUR versions while the
+# matrix has run five since 3.11 was added, and one of them then derived a
+# job count from its own short list.
+_PYVER_LIST = re.compile(r"3\.\d{1,2}(?:\s*(?:,|/)\s*(?:and\s+)?3\.\d{1,2})+")
+
+# The enumeration is only a claim about the matrix when the line -- or the
+# section it sits under -- says so. Without this guard, "OOM kills on ubuntu
+# 3.12/3.14" in a release record reads as a matrix claim; with it, a bare
+# "- Python: 3.10, ..." under "## CI Matrix" still does.
+_CI_SCOPE = re.compile(r"\b(CI|matrix|tested in|test matrix|supported)\b", re.IGNORECASE)
+
+# "Python 3.10+" (nine live surfaces) and "Python 3.10-3.14 supported" (one).
+# The floor is what pip enforces (``requires-python``); the range is what the
+# index advertises (the classifiers). Neither had a gate, so both would have
+# gone stale the day the floor moved -- and nine copies of a wrong minimum is
+# nine users installing something that cannot run.
+_PY_FLOOR_PATTERN = re.compile(r"Python\s+(?P<n>3\.\d{1,2})(?P<plus>\+)")
+_PY_RANGE_PATTERN = re.compile(r"Python\s+(?P<lo>3\.\d{1,2})\s*[\u2013\u2014-]\s*(?P<hi>3\.\d{1,2})\s+supported")
+
 
 # A whole-suite test claim, as opposed to "18 tests" about one module. Both
 # spellings appear in these docs and only the first is this gate's business.
@@ -366,6 +475,15 @@ def _tool_scope(rel: str, line: str, match: re.Match[str]) -> str:
     return "trained" if any(rel.startswith(p) for p in _TRAINED_DEFAULT_PREFIXES) else "live"
 
 
+def _flag_expected(rel: str, line: str, match: re.Match[str], auth: Authorities) -> int | None:
+    """Live or trained flag inventory, by the same nearest-marker rule as tools."""
+    if _tool_scope(rel, line, match) == "trained":
+        return auth.trained_flags
+    if cmt._version_qualifies(line, match):
+        return None
+    return auth.live_flags
+
+
 def _tool_expected(rel: str, line: str, match: re.Match[str], auth: Authorities) -> int | None:
     if _tool_scope(rel, line, match) == "trained":
         # NOT version-exempt. A version stamp next to a trained-on count is
@@ -426,6 +544,12 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
             lambda m: None if cmt._version_qualifies(line, m) else auth.mind_kernels,
         ),
         ("tools", _TOOL_PATTERNS, lambda m: _tool_expected(rel, line, m, auth)),
+        ("flags", _FLAG_PATTERNS, lambda m: _flag_expected(rel, line, m, auth)),
+        (
+            "ci_jobs",
+            _CI_JOB_PATTERNS,
+            lambda m: None if cmt._version_qualifies(line, m) else auth.ci_jobs,
+        ),
     ]
 
     seen: set[tuple[int, int]] = set()
@@ -452,7 +576,91 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
                             span[1],
                         )
                     )
+    findings.extend(_scan_python_support(rel, lineno, line, auth))
     return findings
+
+
+def _scan_python_support(rel: str, lineno: int, line: str, auth: Authorities) -> list[Finding]:
+    """ "Python 3.10+" against ``requires-python``; a range against the classifiers."""
+    out: list[Finding] = []
+    for match in _PY_FLOOR_PATTERN.finditer(line):
+        if match.group("n") != auth.python_floor:
+            out.append(
+                Finding(
+                    rel, lineno, "python_support", match.group("n"), auth.python_floor, match.group(0), match.start("n"), match.end("n")
+                )
+            )
+    for match in _PY_RANGE_PATTERN.finditer(line):
+        for group, expected in (("lo", auth.python_classifier_min), ("hi", auth.python_classifier_max)):
+            if match.group(group) != expected:
+                out.append(
+                    Finding(
+                        rel, lineno, "python_support", match.group(group), expected, match.group(0), match.start(group), match.end(group)
+                    )
+                )
+    return out
+
+
+def _ci_scopes(lines: list[str]) -> list[bool]:
+    """For each line, whether it is talking about the CI matrix.
+
+    Either the line itself says so, or the section heading above it does --
+    ``docs/testing-guide.md`` writes the enumeration as a bare
+    ``- Python: 3.10, ...`` bullet under ``## CI Matrix``, and a line-only
+    rule would miss exactly the claim that was stale.
+    """
+    out: list[bool] = []
+    heading_scoped = False
+    for line in lines:
+        heading = _HEADING_RE.match(line)
+        if heading is not None:
+            heading_scoped = _CI_SCOPE.search(heading.group(1)) is not None
+            out.append(heading_scoped)
+            continue
+        out.append(heading_scoped or _CI_SCOPE.search(line) is not None)
+    return out
+
+
+def _render_version_list(versions: tuple[str, ...], template: str) -> str:
+    """Re-render *versions* in the separator style the claim already used."""
+    if "/" in template:
+        return "/".join(versions)
+    if re.search(r",\s*and\s", template):
+        return ", ".join(versions[:-1]) + ", and " + versions[-1]
+    return ", ".join(versions)
+
+
+def scan_ci_python_lists(rel: str, lines: list[str], auth: Authorities) -> list[Finding]:
+    """Every enumeration of Python versions that disagrees with ci.yml's matrix.
+
+    Compared as a SET: the claim is "these are the versions CI runs", and a
+    doc that lists them in a different order is not wrong. A doc that omits
+    3.11 -- as four of them did -- is.
+    """
+    expected = set(auth.ci_python_versions)
+    scopes = _ci_scopes(lines)
+    records = _record_scopes(lines)
+    out: list[Finding] = []
+    for idx, line in enumerate(lines):
+        if not scopes[idx] or records[idx]:
+            continue
+        for match in _PYVER_LIST.finditer(line):
+            claimed = re.findall(r"3\.\d{1,2}", match.group(0))
+            if set(claimed) == expected:
+                continue
+            out.append(
+                Finding(
+                    rel,
+                    idx + 1,
+                    "ci_python",
+                    match.group(0),
+                    _render_version_list(auth.ci_python_versions, match.group(0)),
+                    match.group(0),
+                    match.start(),
+                    match.end(),
+                )
+            )
+    return out
 
 
 def scan_docs(auth: Authorities, root: Path | None = None) -> list[Finding]:
@@ -469,9 +677,228 @@ def scan_docs(auth: Authorities, root: Path | None = None) -> list[Finding]:
         scopes = _record_scopes(lines)
         for idx, line in enumerate(lines):
             findings.extend(scan_line(rel, idx + 1, line, auth, historical=scopes[idx]))
+        findings.extend(scan_ci_python_lists(rel, lines, auth))
     findings.extend(scan_builder_default(auth, root))
     findings.extend(check_core_deps_badge(auth, root))
+    findings.extend(check_backends_badge(auth, root))
+    findings.extend(check_workflow_table(auth, root))
+    findings.extend(check_ci_matrix_grid(auth, root))
+    findings.extend(check_module_facts(auth, root))
+    findings.extend(check_eval_claims(auth, root))
     return findings
+
+
+# ``docs/ci-workflows.md`` enumerates the workflow directory in prose. That
+# table named a "Security Review" workflow that does not exist, gave Benchmark
+# a push/PR trigger it had lost, and omitted two whole workflows -- a table
+# cannot notice that about itself, so the directory checks it.
+_WORKFLOW_DOC = "docs/ci-workflows.md"
+_WORKFLOW_ROW = re.compile(r"^\|\s*(?P<name>[^|]+?)\s*\|\s*`(?P<file>[A-Za-z0-9_.-]+\.ya?ml)`\s*\|")
+
+
+def check_workflow_table(auth: Authorities, root: Path | None = None) -> list[Finding]:
+    """The workflow table must name every workflow file, and only real ones."""
+    root = root or _project_root()
+    path = root / _WORKFLOW_DOC
+    if not path.is_file():
+        return []
+    truth = dict(auth.workflows)
+    listed: dict[str, tuple[int, str]] = {}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for idx, line in enumerate(lines, 1):
+        row = _WORKFLOW_ROW.match(line)
+        if row is not None:
+            listed[row.group("file")] = (idx, row.group("name"))
+
+    out: list[Finding] = []
+    for filename, (lineno, name) in sorted(listed.items()):
+        if filename not in truth:
+            out.append(Finding(_WORKFLOW_DOC, lineno, "workflow", filename, "(no such workflow file)", filename, 0, 0))
+        elif name != truth[filename]:
+            out.append(Finding(_WORKFLOW_DOC, lineno, "workflow", name, truth[filename], lines[lineno - 1][:100], 0, 0))
+    for filename in sorted(truth):
+        if filename not in listed:
+            out.append(
+                Finding(_WORKFLOW_DOC, 0, "workflow", "(absent from the table)", f"{filename} = {truth[filename]!r}", filename, 0, 0)
+            )
+    return out
+
+
+# ``docs/ci-workflows.md`` also draws the matrix as a GRID: the Python versions
+# live in the header cells and the body rows carry only tick marks, so neither
+# ``_PYVER_LIST`` (which needs a comma/slash-separated run) nor any count
+# pattern can see it. Dropping a whole column from that grid left the gate
+# green -- found by mutation, not by reading. The grid gets its own checker.
+_CI_GRID_HEADER = re.compile(r"^\|\s*OS\s*\|(?P<cells>.+)\|\s*$")
+_CI_GRID_VERSION_CELL = re.compile(r"^Python\s+(?P<v>\d+\.\d+)$")
+
+
+def _table_cells(row: str) -> list[str]:
+    return [cell.strip() for cell in row.strip().strip("|").split("|")]
+
+
+def check_ci_matrix_grid(auth: Authorities, root: Path | None = None) -> list[Finding]:
+    """The OS × Python grid must be the matrix, and must be a full cross-product.
+
+    Three separate things were wrong in the shipped grid and only the first is
+    a number: it had no 3.11 column, and it showed macOS and Windows running
+    two of the four versions it did list -- while ``ci.yml`` has always fanned
+    every version out over every OS.
+    """
+    root = root or _project_root()
+    path = root / _WORKFLOW_DOC
+    if not path.is_file():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    out: list[Finding] = []
+    for idx, line in enumerate(lines):
+        header = _CI_GRID_HEADER.match(line)
+        if header is None:
+            continue
+        cells = _table_cells(header.group("cells"))
+        versions = [m.group("v") for m in (_CI_GRID_VERSION_CELL.match(c) for c in cells) if m]
+        if not versions:
+            continue
+        if set(versions) != set(auth.ci_python_versions):
+            out.append(
+                Finding(
+                    _WORKFLOW_DOC,
+                    idx + 1,
+                    "ci_python",
+                    ", ".join(versions),
+                    ", ".join(auth.ci_python_versions),
+                    line[:120],
+                    0,
+                    0,
+                )
+            )
+        labels: dict[str, int] = {}
+        for offset in range(idx + 2, len(lines)):  # +2 skips the |---| separator
+            row = lines[offset]
+            if not row.strip().startswith("|"):
+                break
+            cells = _table_cells(row.strip().strip("|"))
+            if not cells or set(cells[0]) <= {"-", ":", " "}:
+                continue
+            labels[cells[0]] = offset + 1
+            marks = [c for c in cells[1:] if c]
+            if len(marks) != len(auth.ci_python_versions):
+                out.append(
+                    Finding(
+                        _WORKFLOW_DOC,
+                        offset + 1,
+                        "ci_matrix",
+                        f"{cells[0]}: {len(marks)} of {len(auth.ci_python_versions)} versions",
+                        f"{cells[0]}: all {len(auth.ci_python_versions)} (the matrix is a full cross-product)",
+                        row[:120],
+                        0,
+                        0,
+                    )
+                )
+        claimed_os = {label.lower() for label in labels}
+        actual_os = {name.split("-")[0].lower() for name in auth.ci_operating_systems}
+        if claimed_os != actual_os:
+            out.append(
+                Finding(
+                    _WORKFLOW_DOC,
+                    idx + 1,
+                    "ci_os",
+                    ", ".join(sorted(claimed_os)) or "(no rows)",
+                    ", ".join(sorted(actual_os)),
+                    line[:120],
+                    0,
+                    0,
+                )
+            )
+    return out
+
+
+# "**Module:** `src/mind_mem/recompaction.py` (268 lines, 18 tests, 99%
+# coverage)". The test count and the coverage were right; the line count was
+# three stale. A number nobody recomputes drifts on the next edit, so the two
+# with a cheap in-tree authority are recomputed here instead of trusted.
+_MODULE_FACTS = re.compile(r"\*\*Module:\*\*\s*`(?P<path>[^`]+\.py)`\s*\((?P<lines>\d+)\s+lines,\s*(?P<tests>\d+)\s+tests")
+
+
+def check_module_facts(auth: Authorities, root: Path | None = None) -> list[Finding]:
+    """ "(N lines, M tests)" in a module doc header must match the module."""
+    root = root or _project_root()
+    out: list[Finding] = []
+    for path in _doc_files(root):
+        rel = path.relative_to(root).as_posix()
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for match in _MODULE_FACTS.finditer(line):
+                module = match.group("path")
+                if not (root / module).is_file():
+                    out.append(Finding(rel, lineno, "module_facts", module, "(no such module)", match.group(0), 0, 0))
+                    continue
+                for group, actual in (
+                    ("lines", module_line_count(module, root)),
+                    ("tests", module_test_count(module, root)),
+                ):
+                    if int(match.group(group)) != actual:
+                        out.append(
+                            Finding(
+                                rel,
+                                lineno,
+                                "module_facts",
+                                match.group(group),
+                                str(actual),
+                                match.group(0),
+                                match.start(group),
+                                match.end(group),
+                            )
+                        )
+    return out
+
+
+# The 4b eval totals. Every per-category row in the model card already matched
+# the harness; the TOTALS are what drifted -- ``docs/mind-mem-4b-setup.md``
+# advertised 109/109, the score of the ``v4.0.0-base`` archive two revisions
+# back, for the weights ``main`` points at today.
+_EVAL_TOTAL_ROW = re.compile(r"\*\*Total (?P<which>main|holdout)\*\*\s*\|\s*\*\*(?P<n>\d+)\s*/\s*(?P<d>\d+)\*\*")
+# Matched over the WHOLE file, not line by line: the 4b setup guide wraps
+# "Eval score for the weights `main` currently points at (`v4.1.1`):" onto the
+# line above its "**111/111**", and a per-line scan walked straight past the
+# stale 109/109 -- found by mutating the doc back and watching the gate stay
+# green, which is the only reason this is not still a per-line regex.
+_EVAL_GRAND = re.compile(r"(?:Grand total|Eval score)[^:]{0,120}?:?\s*\**(?P<n>\d+)\s*/\s*(?P<d>\d+)")
+_EVAL_HARNESS_PROBES = re.compile(r"Harness:[^\n]*?\*\*(?P<n>\d+) probes\*\*")
+
+
+def check_eval_claims(auth: Authorities, root: Path | None = None) -> list[Finding]:
+    """The published eval totals must equal the probe lists the harness benches."""
+    root = root or _project_root()
+    out: list[Finding] = []
+    for rel in ("train/HF_MODEL_CARD_v4.md", "docs/mind-mem-4b-setup.md"):
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for pattern, expected_for in (
+            (_EVAL_TOTAL_ROW, lambda m: auth.eval_main_probes if m.group("which") == "main" else auth.eval_holdout_probes),
+            (_EVAL_GRAND, lambda m: auth.eval_total_probes),
+            (_EVAL_HARNESS_PROBES, lambda m: auth.eval_main_probes),
+        ):
+            for match in pattern.finditer(text):
+                expected = expected_for(match)
+                for group in [g for g in ("n", "d") if g in match.groupdict()]:
+                    if int(match.group(group)) == expected:
+                        continue
+                    line_start = text.rfind("\n", 0, match.start(group)) + 1
+                    out.append(
+                        Finding(
+                            rel,
+                            text.count("\n", 0, match.start(group)) + 1,
+                            "eval_probes",
+                            match.group(group),
+                            str(expected),
+                            match.group(0).replace("\n", " "),
+                            match.start(group) - line_start,
+                            match.end(group) - line_start,
+                        )
+                    )
+    return out
 
 
 # ``train/build_model_card.py`` renders the public HuggingFace card. Its
@@ -507,6 +934,27 @@ def scan_builder_default(auth: Authorities, root: Path | None = None) -> list[Fi
 
 
 _CORE_DEPS_BADGE_RE = re.compile(r"core_deps-(?P<n>[A-Za-z0-9_]+)-")
+
+# The shields.io path spells "|" as %7C: "backends-markdown_%7C_postgres-teal".
+_BACKENDS_BADGE_RE = re.compile(r"backends-(?P<n>[A-Za-z0-9_%]+?)-[a-z]+\?")
+
+
+def check_backends_badge(auth: Authorities, root: Path | None = None) -> list[Finding]:
+    """The storage badge must list the backends ``--backend`` accepts."""
+    root = root or _project_root()
+    readme = root / "README.md"
+    if not readme.is_file():
+        return []
+    truth = "_%7C_".join(auth.backends)
+    out: list[Finding] = []
+    for lineno, line in enumerate(readme.read_text(encoding="utf-8").splitlines(), 1):
+        for match in _BACKENDS_BADGE_RE.finditer(line):
+            claimed = {part.lower() for part in match.group("n").split("_%7C_")}
+            if claimed != {name.lower() for name in auth.backends}:
+                out.append(
+                    Finding("README.md", lineno, "backends", match.group("n"), truth, match.group(0), match.start("n"), match.end("n"))
+                )
+    return out
 
 
 def check_core_deps_badge(auth: Authorities, root: Path | None = None) -> list[Finding]:
@@ -567,7 +1015,27 @@ def check_live_hf_card(auth: Authorities, url: str = HF_CARD_URL, timeout: float
 # Fix mode
 # --------------------------------------------------------------------------
 
-_FIXABLE = frozenset({"tests", "clients", "mcp_clients", "resources", "mind_kernels", "tools"})
+# Kinds whose finding carries a LINE-RELATIVE span, so the number can be
+# rewritten in place. ``workflow``, ``ci_matrix`` and ``ci_os`` are structural
+# -- a row is missing, or a grid is not a cross-product -- and there is no
+# single number to substitute, so they are reported and never guessed at.
+_FIXABLE = frozenset(
+    {
+        "tests",
+        "clients",
+        "mcp_clients",
+        "resources",
+        "mind_kernels",
+        "tools",
+        "flags",
+        "ci_jobs",
+        "ci_python",
+        "eval_probes",
+        "module_facts",
+        "python_support",
+        "backends",
+    }
+)
 
 
 def apply_fixes(findings: list[Finding], root: Path | None = None) -> tuple[int, list[Finding]]:
@@ -648,6 +1116,15 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  MIND kernels (mind/*.mind)       : {auth.mind_kernels}")
     print(f"  package version                  : {auth.version}")
     print(f"  core dependencies                : {auth.core_deps}")
+    print(f"  v4 feature flags (live)          : {auth.live_flags}")
+    print(f"  v4 feature flags (weights)       : {auth.trained_flags}")
+    print(f"  4b eval probes (main + holdout)  : {auth.eval_main_probes} + {auth.eval_holdout_probes} = {auth.eval_total_probes}")
+    print(f"  CI Python versions               : {', '.join(auth.ci_python_versions)}")
+    print(f"  CI operating systems             : {', '.join(auth.ci_operating_systems)}")
+    print(f"  CI test jobs (cross-product)     : {auth.ci_jobs}")
+    print(f"  GitHub workflows                 : {len(auth.workflows)}")
+    print(f"  Python floor / classifier range  : {auth.python_floor}+ / {auth.python_classifier_min}-{auth.python_classifier_max}")
+    print(f"  storage backends                 : {', '.join(auth.backends)}")
     if args.show:
         return 0
 

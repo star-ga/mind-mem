@@ -50,8 +50,8 @@ that actually contributed to it. An empty source is reported as
 *unavailable with a reason*, never as a zero — a zero from a table that
 does not exist is the vacuous pass this repo has been bitten by before.
 
-THE JOIN, and the half of it that is still missing
---------------------------------------------------
+THE JOIN, and how its missing half closed
+-----------------------------------------
 Two precisions are computed here, and they are not the same measurement.
 
 :func:`precision_by_intent` is **block-level** and needs no run identity:
@@ -66,12 +66,32 @@ attestation already publishes — so
 :func:`run_id_of_attestation` mints it from an attestation dict without
 the caller touching the ledger's internals or minting a second identity.
 
-The remaining gap is one field, and it is named rather than papered over:
-the recall envelope does not carry that id, so a client calling
-``report_outcome(query_id=…)`` has nothing joinable to pass. Until the
-envelope carries it, :func:`run_precision` reports
-``available=False`` with the reason, and counts the credit rows it could
-not join instead of silently dropping them.
+The gap this module was written with — the recall envelope carrying no
+joinable id, so a client calling ``report_outcome(query_id=…)`` had
+nothing to pass — is closed. ``RecallAttestation.query_id`` publishes the
+identity on the envelope, derived by the same
+:func:`mind_mem.recall_digests.run_id` the ledger stores under ``run_id``,
+so the two sides land on one value without either importing the other.
+The client contract is two lines::
+
+    query_id = envelope["attestation"]["query_id"]
+    report_outcome(ws, block_ids, "success", query_id=query_id)
+
+:func:`run_precision` still reports ``available=False`` **with a reason**
+where the join genuinely cannot be made — the ledger is default-OFF, so a
+workspace that never enabled it has no run rows to join to — and it counts
+the credit rows it could not join instead of silently dropping them.
+
+THE THIRD VIEW — counts that outlive the window
+------------------------------------------------
+:func:`serve_counts` answers "how often", where :func:`waste_view` answers
+"at all". It is the RA.1 residual that asked for serve counts to survive
+the 30-day prune, and it closes it the way this module closes everything:
+by **deriving** the count from a source that is not pruned rather than by
+storing a counter that is. ``retrieval_log`` contributes a 30-day window;
+the append-only ledger contributes durable evidence; the view reports the
+two separately, so a caller can always tell a count that will still be
+true next month from one that will have decayed.
 
     from mind_mem.accountability_views import accountability_report
     report = accountability_report("/path/to/workspace")
@@ -132,11 +152,14 @@ __all__ = [
     "SERVED_LEDGER_WINDOW",
     "SOURCE_RETRIEVAL_LOG",
     "SOURCE_SERVED_LEDGER",
+    "BlockServeCount",
     "CreditRow",
     "IntentPrecision",
     "ObservedRun",
     "PrecisionView",
+    "RunIntentPrecision",
     "RunPrecision",
+    "ServeCountView",
     "WasteView",
     "accountability_report",
     "credit_rows",
@@ -145,6 +168,7 @@ __all__ = [
     "precision_by_intent",
     "run_id_of_attestation",
     "run_precision",
+    "serve_counts",
     "waste_view",
 ]
 
@@ -207,6 +231,12 @@ def run_id_of_attestation(attestation: Mapping[str, Any]) -> str:
     ``RECALL_ATTEST_v2`` record — so a client holding a recall envelope can
     name the run it was served without the ledger, and without a second
     identity being minted anywhere.
+
+    Since RA.1's residual closed, a v2 envelope publishes the same value
+    directly as ``attestation["query_id"]``, so a client does not need this
+    function to *obtain* the id. It remains the way to **check** one: an
+    envelope that arrived over a wire can be re-derived here and compared,
+    which is what makes the published field evidence rather than a label.
 
     Delegates to :func:`mind_mem.served_ledger.run_id`; this function
     re-spells nothing, it only maps attestation field names onto it.
@@ -544,8 +574,48 @@ def _window_of(sources: Sequence[str]) -> str:
 
 
 @dataclass(frozen=True)
+class RunIntentPrecision:
+    """Run-level precision for one intent type.
+
+    The same shape as :class:`IntentPrecision` one section up, over a
+    different denominator, and the difference is the whole point of RA.1.
+    ``IntentPrecision`` asks "of the blocks ever served under this intent,
+    how many are credited *anywhere*"; this asks "of the blocks served by
+    THESE runs, how many are credited *by those runs*". A block credited
+    after a WHY-question no longer counts toward a WHEN-question here.
+
+    ``served``/``credited`` count block *slots*, not distinct blocks: a
+    block served by two joined runs is two chances to be credited, and
+    collapsing them would let one run's credit paper over another run's
+    miss. That is also what makes the per-intent rows sum to the totals.
+    """
+
+    intent: str
+    runs: int
+    served: int
+    credited: int
+    precision: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "intent": self.intent,
+            "runs": self.runs,
+            "served": self.served,
+            "credited": self.credited,
+            "precision": self.precision,
+        }
+
+
+@dataclass(frozen=True)
 class RunPrecision:
-    """Precision computed on an exact run join, when one is reachable."""
+    """Precision computed on an exact run join, when one is reachable.
+
+    ``by_intent`` is the per-intent-type breakdown RA.2 asks for, at run
+    level. It is empty whenever ``available`` is False, and its rows sum to
+    ``served`` / ``credited`` exactly — a row whose intent the retrieval log
+    could not supply lands in :data:`INTENT_UNKNOWN` rather than being
+    dropped, so the sum holds even when the ledger has outlived the log.
+    """
 
     available: bool
     reason: str
@@ -555,6 +625,7 @@ class RunPrecision:
     credited: int
     precision: float
     credit_rows_with_unjoinable_query_id: int
+    by_intent: tuple[RunIntentPrecision, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -566,6 +637,7 @@ class RunPrecision:
             "credited": self.credited,
             "precision": self.precision,
             "credit_rows_with_unjoinable_query_id": self.credit_rows_with_unjoinable_query_id,
+            "by_intent": [row.to_dict() for row in self.by_intent],
         }
 
 
@@ -579,11 +651,12 @@ def run_precision(workspace: str) -> RunPrecision:
 
     ``available`` is ``False``, with the reason, when the ledger holds no
     rows (it is default-OFF) or when no credit row carries a joinable id.
-    The second case is the live one and it is a wiring gap, not a data
-    gap: the recall envelope does not yet publish the id, so a client has
-    nothing joinable to report against. The count of unjoinable credit
-    rows is reported either way — a row that could not be joined is
-    named, never dropped.
+    Neither is a wiring gap any more: the envelope publishes the id as
+    ``attestation["query_id"]``, so a client that reports outcomes against
+    it joins. What remains are data conditions — an unenabled ledger, or
+    outcomes reported without the id — and the reason says which. The count
+    of unjoinable credit rows is reported either way: a row that could not
+    be joined is named, never dropped.
     """
     ledger_runs = tuple(run for run in observed_runs(workspace) if run.run_id)
     rows = credit_rows(workspace)
@@ -600,8 +673,9 @@ def run_precision(workspace: str) -> RunPrecision:
         return RunPrecision(
             available=False,
             reason=(
-                "no credit row carries a run_id: the recall envelope does not publish one, "
-                "so report_outcome has nothing joinable to receive"
+                "no credit row carries a run_id matching a ledger row: pass "
+                'envelope["attestation"]["query_id"] to report_outcome(query_id=...) '
+                "so an outcome names the run it is about"
             ),
             runs=len(ledger_runs),
             joined_runs=0,
@@ -614,11 +688,19 @@ def run_precision(workspace: str) -> RunPrecision:
     joined_run_ids = {row.query_id for row in joinable}
     served = 0
     credited = 0
+    served_by_intent: dict[str, int] = {}
+    credited_by_intent: dict[str, int] = {}
+    runs_by_intent: dict[str, int] = {}
     for rid in sorted(joined_run_ids):
-        ids = tuple(i for i in by_run[rid].ids if i)
+        run = by_run[rid]
+        ids = tuple(i for i in run.ids if i)
         credited_here = {row.block_id for row in joinable if row.query_id == rid and row.verdict == OUTCOME_SUCCESS}
+        hits = sum(1 for i in ids if i in credited_here)
         served += len(ids)
-        credited += sum(1 for i in ids if i in credited_here)
+        credited += hits
+        runs_by_intent[run.intent] = runs_by_intent.get(run.intent, 0) + 1
+        served_by_intent[run.intent] = served_by_intent.get(run.intent, 0) + len(ids)
+        credited_by_intent[run.intent] = credited_by_intent.get(run.intent, 0) + hits
     return RunPrecision(
         available=True,
         reason="",
@@ -628,6 +710,16 @@ def run_precision(workspace: str) -> RunPrecision:
         credited=credited,
         precision=_ratio(credited, served),
         credit_rows_with_unjoinable_query_id=unjoinable,
+        by_intent=tuple(
+            RunIntentPrecision(
+                intent=intent,
+                runs=runs_by_intent[intent],
+                served=served_by_intent[intent],
+                credited=credited_by_intent[intent],
+                precision=_ratio(credited_by_intent[intent], served_by_intent[intent]),
+            )
+            for intent in sorted(served_by_intent)
+        ),
     )
 
 
@@ -741,17 +833,173 @@ def waste_view(workspace: str) -> WasteView:
 
 
 # ---------------------------------------------------------------------------
+# View 4 — how often, and how much of that will still be true next month
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class BlockServeCount:
+    """Times one block appeared in a served answer, split by what can see it.
+
+    ``durable`` comes from the append-only served-set ledger and does not
+    decay. ``windowed`` comes from ``retrieval_log``, which is pruned at 30
+    days, so it is a count *within the retained window* and shrinks on its
+    own. They are reported apart rather than summed into one number, because
+    the sum answers a question nobody asked: it is neither "how often was
+    this served, ever" nor "how often recently", and a caller cannot recover
+    either half from it.
+    """
+
+    block_id: str
+    durable: int
+    windowed: int
+
+    @property
+    def observed(self) -> int:
+        """Serve observations across both sources.
+
+        Not "how many times this block was served": a run recorded in both
+        sources contributes to each, by the same additive-sources rule
+        :func:`observed_runs` states. It is the right key to rank on — a
+        block seen by two independent sources is better evidenced than one
+        seen by either alone — and the wrong number to quote as a serve
+        count, which is why the two components travel with it.
+        """
+        return self.durable + self.windowed
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "block_id": self.block_id,
+            "durable": self.durable,
+            "windowed": self.windowed,
+            "observed": self.observed,
+        }
+
+
+@dataclass(frozen=True)
+class ServeCountView:
+    """Per-block serve counts, derived on demand and stored nowhere.
+
+    This is RA.1's ``block_serve_counts`` residual, and the residual was
+    "counts that survive the 30-day prune". A counter table would not have
+    survived it either — it would have needed its own retention policy, a
+    writer on the serve path, and a story for what happens when the two
+    disagree. Deriving the count from the source that is *not* pruned is
+    the same shape as every other view here: nothing stored, nothing to
+    drift, and the window named rather than implied.
+    """
+
+    available: bool
+    reason: str
+    blocks: int
+    durable_blocks: int
+    observations: int
+    durable_serves: int
+    windowed_serves: int
+    top: tuple[BlockServeCount, ...]
+    top_truncated: bool
+    sources: tuple[str, ...]
+    window: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "available": self.available,
+            "reason": self.reason,
+            "blocks": self.blocks,
+            "durable_blocks": self.durable_blocks,
+            "observations": self.observations,
+            "durable_serves": self.durable_serves,
+            "windowed_serves": self.windowed_serves,
+            "top": [row.to_dict() for row in self.top],
+            "top_truncated": self.top_truncated,
+            "sources": list(self.sources),
+            "window": self.window,
+        }
+
+
+def serve_counts(workspace: str) -> ServeCountView:
+    """How often each block was served, split by durable vs. windowed evidence.
+
+    Read-only and recomputed, like every view in this module. Ranking is
+    total: ties break on ``block_id``, so two hosts reporting the same
+    workspace print the same list in the same order.
+
+    Args:
+        workspace: Workspace root.
+
+    Returns:
+        A :class:`ServeCountView`. ``available`` is ``False`` with a reason
+        when there is no serve evidence at all — an empty workspace reports
+        "nothing observed", never a corpus of zero-count blocks, which is
+        the same refusal :func:`precision_by_intent` makes.
+    """
+    runs = observed_runs(workspace)
+    sources = tuple(sorted({run.source for run in runs}))
+    if not runs:
+        return ServeCountView(
+            available=False,
+            reason="no serve evidence: retrieval_log holds no rows and the served-set ledger is empty",
+            blocks=0,
+            durable_blocks=0,
+            observations=0,
+            durable_serves=0,
+            windowed_serves=0,
+            top=(),
+            top_truncated=False,
+            sources=(),
+            window="",
+        )
+
+    durable: dict[str, int] = {}
+    windowed: dict[str, int] = {}
+    for run in runs:
+        bucket = durable if run.source == SOURCE_SERVED_LEDGER else windowed
+        for block_id in run.ids:
+            if block_id:
+                bucket[block_id] = bucket.get(block_id, 0) + 1
+
+    rows = tuple(
+        BlockServeCount(block_id=block_id, durable=durable.get(block_id, 0), windowed=windowed.get(block_id, 0))
+        for block_id in sorted(set(durable) | set(windowed))
+    )
+    ranked = sorted(rows, key=lambda row: (-row.observed, row.block_id))
+    return ServeCountView(
+        available=True,
+        reason="",
+        blocks=len(rows),
+        durable_blocks=len(durable),
+        observations=len(runs),
+        durable_serves=sum(durable.values()),
+        windowed_serves=sum(windowed.values()),
+        top=tuple(ranked[:MAX_NAMED_IDS]),
+        top_truncated=len(ranked) > MAX_NAMED_IDS,
+        sources=sources,
+        window=_window_of(sources),
+    )
+
+
+# ---------------------------------------------------------------------------
 # The report + its entry point
 # ---------------------------------------------------------------------------
 
 
 def accountability_report(workspace: str) -> dict[str, Any]:
-    """Both views over *workspace*, recomputed. Writes nothing, ever."""
+    """Every view over *workspace*, recomputed. Writes nothing, ever.
+
+    ``MM_ACCOUNTABILITY_v1`` is additive-only: a view may gain a key and the
+    report may gain a view, but a key that exists keeps its meaning. That is
+    what lets a consumer written against an earlier report keep working
+    while ``serve_counts`` (RA.1's residual) and ``run_precision.by_intent``
+    (RA.2's per-intent-type breakdown, at run level) arrive under the same
+    tag. Unlike a preimage tag, this one names a *report*: nothing hashes
+    it, so there is no forgeable layout to pin and no downgrade to refuse.
+    """
     return {
         "schema": "MM_ACCOUNTABILITY_v1",
         "workspace": os.path.abspath(workspace),
         "precision_by_intent": precision_by_intent(workspace).to_dict(),
         "run_precision": run_precision(workspace).to_dict(),
+        "serve_counts": serve_counts(workspace).to_dict(),
         "waste": waste_view(workspace).to_dict(),
     }
 

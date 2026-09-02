@@ -137,7 +137,19 @@ class TestMarkdownDefaultUnchanged:
 
 # ─── Postgres backend (live DB; skips cleanly when unavailable) ───────────────
 
-psycopg = pytest.importorskip("psycopg", reason="psycopg not installed; skipping Postgres tests")
+# The Postgres gate below is deliberately PER-TEST, not a module-scope
+# ``pytest.importorskip("psycopg")``. It used to be one, sitting part-way down
+# the file, and a module-scope importorskip aborts the whole import -- so every
+# test ABOVE it went with it. Those tests need no database: they exercise the
+# default Markdown/SQLite path. None of the 15 OS/Python matrix rows installs
+# the ``[postgres]`` extra, so they ran only inside the single "postgres
+# backend" job while all 15 rows reported green with them silently withdrawn.
+# MEASURED across the seven files that had this shape, on a row with the driver
+# blocked: 7 skipped / 0 passed before, 57 passed / 28 skipped after.
+try:
+    import psycopg
+except ImportError:  # pragma: no cover - the matrix rows without the [postgres] extra
+    psycopg = None  # type: ignore[assignment]
 
 from mind_mem.block_store_postgres import PostgresBlockStore  # noqa: E402
 
@@ -147,7 +159,9 @@ from mind_mem.block_store_postgres import PostgresBlockStore  # noqa: E402
 _DSN = os.environ.get("MIND_MEM_TEST_PG_DSN")
 
 
-def _pg_available(dsn: str) -> bool:
+def _pg_available(dsn: str | None) -> bool:
+    if psycopg is None or not dsn:
+        return False
     try:
         conn = psycopg.connect(dsn, connect_timeout=3)
         conn.close()
@@ -158,7 +172,7 @@ def _pg_available(dsn: str) -> bool:
 
 _pg_live = pytest.mark.skipif(
     not _pg_available(_DSN),
-    reason="no live Postgres available at the test DSN",
+    reason="psycopg not installed, or no live Postgres at MIND_MEM_TEST_PG_DSN",
 )
 
 

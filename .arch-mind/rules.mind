@@ -6,16 +6,30 @@
 //
 // Q16.16 fixed-point thresholds in [0, 10000].
 //
-// Scan precondition (2026-09-01): the fixture must be produced with
-// nested working trees pruned. A `git worktree` checkout below the
+// How the fixtures are produced (2026-09-01):
+//
+//     python3 .arch-mind/rescan.py            # rewrite fixture.json,
+//                                             # last_summary.json, scan.json
+//     python3 .arch-mind/rescan.py --check    # exit 1 if they are stale
+//
+// That script extracts the commit with `git archive` and scans the
+// extraction, so every counter below is a function of the COMMIT and
+// never of scan-time filesystem state. Scanning a live checkout is not
+// equivalent and must not be used: a `git worktree` checkout below the
 // repo root (`.wt/`, `.claude/worktrees/`, any other naming) holds a
 // second copy of this source, is untracked here, and appears and
-// vanishes as parallel agents run — so indexing one makes every score
-// a function of scan-time filesystem state instead of repository
-// content. Measured on this commit: three such checkouts moved
-// module_count 388 -> 1299, modularity_q16 10000 -> 2155 and
-// mcp_tool_isolation 9800 -> 9400. Both readings were artefacts; no
-// threshold below is calibrated to them.
+// vanishes as parallel agents run. Measured on commit 6e60759 with one
+// binary and two inputs — live checkout vs `git archive` extraction —
+// module_count 1302 vs 391, intra_package_edges 77 of 350 vs 77 of 77
+// (modularity_q16 2200 vs 10000), and max_mcp_tool_overlap 6 vs 2
+// (mcp_tool_isolation 9400 vs 9800). The live-checkout readings were
+// artefacts of eight nested checkouts; no threshold below is
+// calibrated to them, and none has been moved to accommodate them.
+//
+// Extraction is deliberately stronger than asking the scanner to prune
+// nested trees: pruning depends on which arch-mind build is installed,
+// while an extraction of a commit contains tracked files only and so
+// cannot contain a nested working tree at all.
 //
 // Copyright 2026 STARGA, Inc. — Apache-2.0.
 
@@ -68,31 +82,57 @@ module mind_mem_rules {
     [arch_rule(governance_kernel_coverage, ge)]
     const GOVERNANCE_FLOOR: i32 = 0
 
-    // Verified 10000 on 2026-09-01: all 75 architectural dependency
-    // edges are intra-package (`intra_package_edges == total_edges`).
-    // `eq` is deliberate and is NOT a tightened floor: the rule name
-    // says what it means — zero cross-package edges — and a repo whose
-    // production surface is one package either has that property or
-    // has lost it. Softening this to a floor would also destroy its
-    // second, load-bearing job: it is the canary for a scan that
-    // measured something other than this repository, because a second
-    // copy of the tree resolves its imports to the same canonical
-    // module names and every one of those lands as a cross-package
-    // edge. Enforced in CI by tests/test_arch_mind_rules_gate.py,
-    // which additionally measures the invariant straight from the
-    // import graph so a stale fixture cannot make it look true.
+    // Verified 10000 on 2026-09-01 against commit 6e60759: all 77
+    // architectural dependency edges are intra-package
+    // (`intra_package_edges == total_edges`), and an independent walk
+    // of the import graph found zero edges whose endpoints sit in
+    // different top-level packages.
+    //
+    // `eq` is NOT a miscalibrated threshold and NOT an unreachable
+    // target: the property is measured, and held, on this commit. The
+    // comparator is exact because `modularity_q16` truncates — the
+    // ratio reaches 10000 only when intra == total — so `eq 10000`
+    // means literally "zero cross-package edges", which is what the
+    // rule is named after. A repo whose production surface is one
+    // package either has that property or has lost it; there is no
+    // meaningful 99%-modular state to grant a floor for.
+    //
+    // Softening it to a floor would also destroy its second,
+    // load-bearing job: it is the canary for a scan that measured
+    // something other than this repository. A second copy of the tree
+    // resolves its imports to the same canonical module names, so every
+    // one of those lands as a cross-package edge — 273 of 350 edges
+    // when this repo was scanned live on 2026-09-01. It fired
+    // correctly; the fix was the input, not the rule.
+    //
+    // Enforced in CI by tests/test_arch_mind_rules_gate.py, which
+    // additionally measures the invariant straight from the import
+    // graph so a stale fixture cannot make it look true.
     [arch_rule(modularity_q16, eq)]
     const NO_CROSS_PKG: i32 = 10000
 
-    // Verified 9800 on 2026-09-01: max transitive-dependency overlap
-    // is 2 across 40 MCP-tool modules, so the floor tolerates three
-    // more shared dependencies before it bites. The two pairs sitting
-    // at 2 are mcp.tools.governance / mcp.tools.memory_ops (sharing
-    // block_parser + storage) and mcp.resources / mcp.tools.recall
-    // (sharing recall + sqlite_index) — shared infrastructure, not
-    // tool-to-tool coupling. A reading of 9400 means overlap 6, which
-    // on this repo has only ever come from MCP tool modules being
-    // paired against copies of themselves in a nested working tree.
+    // Verified 9800 on 2026-09-01 against commit 6e60759: max
+    // transitive-dependency overlap is 2 across 40 MCP-tool modules.
+    // The kernel is a step function — score = 10000 - 100*overlap — so
+    // this floor admits overlap up to 5 and tolerates three more shared
+    // dependencies before it bites.
+    //
+    // THREE pairs sit at 2, all of them sharing infrastructure rather
+    // than each other:
+    //   mcp.tools.governance / mcp.tools.memory_ops  (block_parser, storage)
+    //   mcp.resources        / mcp.tools.recall      (recall, sqlite_index)
+    //   mcp.resources        / mcp.tools.memory_ops  (block_parser, sqlite_index)
+    //
+    // A reading of 9400 is overlap 6, not a near miss on overlap 2:
+    // the metric moves in whole units of 100. Every 9400 reading on
+    // this repo has come from MCP tool modules paired against copies of
+    // THEMSELVES in a nested working tree — on 2026-09-01 the overlap-6
+    // pair was src/mind_mem/mcp/tools/memory_ops.py against the copies
+    // of that same file in .wt/agent-comm/, .wt/agent-comm-inv/ and
+    // .wt/recall-default-bug/, sharing block_parser, corpus_registry,
+    // mind_ffi, mind_filelock, sqlite_index and storage. There is no
+    // tool-to-tool coupling defect to fix, so the floor stays where it
+    // is; the input is what was wrong.
     [arch_rule(mcp_tool_isolation, ge)]
     const MCP_ISOLATION_FLOOR: i32 = 9500
 

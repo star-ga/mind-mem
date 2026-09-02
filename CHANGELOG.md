@@ -33,6 +33,44 @@ All notable changes to MIND-Mem are documented in this file.
   also said "16 AI coding clients" against a registry of 19.
 * `docs/hf-mind-mem-4b-v2-README.md` now opens with a HISTORICAL banner; it
   documents the v2 weights against the v3.3.0 surface and read as current.
+* **Four live docs described a CI matrix that has not been run in months.**
+  `docs/faq.md`, `docs/development.md`, `docs/testing-guide.md` and
+  `docs/ci-workflows.md` all enumerated Python "3.10, 3.12, 3.13, 3.14" —
+  missing 3.11 since that row was added — and `docs/testing-guide.md` then
+  derived "12 CI jobs" from its own short list. The `test` matrix is a full
+  cross-product of 3 operating systems and 5 interpreters: **15** jobs, every
+  version on every OS. `docs/ci-workflows.md` drew the grid with macOS and
+  Windows running two of the four versions it listed, which was never true.
+* **`docs/troubleshooting.md` told readers to look for a carve-out that was
+  deliberately removed.** Its fix for a failing 3.14 row was "check the CI
+  matrix for `allow-failure`"; no row is advisory any more, because a job that
+  runs red while its run concludes `success` is a red row reading as a pass.
+  It also still called 3.14 a pre-release.
+* **`docs/ci-workflows.md` enumerated the workflow directory and got it wrong
+  three ways**: it named a "Security Review" workflow that does not exist (the
+  file is `security.yml`, "Supply-Chain Security"), gave Benchmark a push/PR
+  trigger it lost when it went manual-only, and omitted `audit-pinned.yml` and
+  `red-team.yml` entirely.
+* **The model card advertised a "35-flag inventory" that matches no revision.**
+  `ALL_V4_FLAGS` held **38** entries at the trained revision `v4.1.1` and holds
+  **52** today. This is the 84-vs-96 tool count again in a different number: a
+  figure asserted rather than measured, carried through four releases.
+  Corrected in `train/HF_MODEL_CARD_v4.md`, `docs/mind-mem-4b-setup.md` and
+  `CLAUDE.md` (which stated the live count, so it becomes 52, not 38).
+* **`docs/mind-mem-4b-setup.md` quoted the wrong checkpoint's eval score.** It
+  advertised **109/109** — the `v4.0.0-base` archive, two revisions back — for
+  the weights `main` points at today, which score **133/133** (111 main probes
+  plus 22 held out). The per-category table in the model card was already
+  right; only the headline had drifted.
+* **`docs/recompaction.md` advertised a module three lines longer than it is**
+  (268 vs 265). The test count and the coverage figure beside it were both
+  right, which is how the wrong one survived: nobody recomputes a number that
+  sits next to two correct ones.
+* **The README storage badge undersold the product.** It read "markdown |
+  postgres" while `init_workspace.SUPPORTED_BACKENDS` has offered `encrypted`
+  as a third `--backend` choice, with its own row in `docs/storage-backends.md`,
+  since v3.0.0. A badge that understates is the same defect as one that
+  overstates: it is a claim nothing checked.
 
 ### Added
 
@@ -44,6 +82,31 @@ All notable changes to MIND-Mem are documented in this file.
   and true value. `--fix` rewrites the stale numbers. An authority that cannot
   be computed exits 2 rather than reporting an empty finding list, because a
   verifier that died is not a verifier that passed.
+* Four more authorities behind that gate, each added after the surface it
+  governs was found stale: the `test` job's `strategy.matrix` in
+  `.github/workflows/ci.yml` (Python versions, operating systems, and the job
+  count derived from their cross-product); the workflow directory itself, so
+  the table in `docs/ci-workflows.md` cannot name a workflow that does not
+  exist or omit one that does; `ALL_V4_FLAGS`, live and at the trained
+  revision, by the same one-rule-two-revisions method the tool count uses; and
+  the probe lists `train/eval_harness.py` and `train/eval_holdout.py` actually
+  bench, so a published eval score cannot outrun its harness.
+* The OS × Python grid in `docs/ci-workflows.md` is checked as a grid, not as
+  prose: its header cells must be the matrix's Python versions, its rows must
+  be the matrix's operating systems, and every row must be full — a partial
+  cross-product is a finding. Two of these legs exist because mutating the doc
+  back and watching the gate stay green showed the earlier line-oriented scan
+  could not see either one.
+* A `**Module:** \`path\` (N lines, M tests, ...)` header is now checked against
+  the module and its test file, so a per-module fact cannot drift silently on
+  the next edit.
+* "Python 3.10+" — the single most-repeated claim in the docs, on nine live
+  surfaces — is now held to `requires-python`, and "Python 3.10–3.14 supported"
+  to the `Programming Language :: Python ::` classifiers. Both were correct and
+  neither was checked; nine copies of a wrong minimum is nine users installing
+  something that cannot run.
+* The storage badge is held to `init_workspace.SUPPORTED_BACKENDS`, so the set
+  of backends it advertises is the set `mind-mem-init --backend` accepts.
 
 ## [5.0.1] - 2026-09-01
 

@@ -420,9 +420,14 @@ def test_a_credit_row_that_cannot_join_is_named_not_dropped(workspace: str) -> N
 
     verdict = run_precision(workspace)
     assert verdict.available is False
-    assert "the recall envelope does not publish one" in verdict.reason
+    # RA.1's residual closed: the envelope publishes the id, so an unjoinable
+    # credit row is now a caller that did not pass it, and the reason says so
+    # rather than blaming a wiring gap that no longer exists.
+    assert "no credit row carries a run_id matching a ledger row" in verdict.reason
+    assert 'envelope["attestation"]["query_id"]' in verdict.reason
     assert verdict.runs == 1
     assert verdict.credit_rows_with_unjoinable_query_id == 1
+    assert verdict.by_intent == ()
 
 
 # ---------------------------------------------------------------------------

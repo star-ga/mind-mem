@@ -61,7 +61,7 @@ Follow conventional commit format:
 
 ## CI Pipeline
 
-- **CI**: Runs tests on Python 3.10/3.12/3.13/3.14 across Ubuntu/macOS/Windows
+- **CI**: Runs tests on Python 3.10/3.11/3.12/3.13/3.14 across Ubuntu/macOS/Windows
 - **Benchmark**: Measures recall latency
 - **Security Review**: CodeQL + Claude Code review
 - **Docs**: Validates documentation

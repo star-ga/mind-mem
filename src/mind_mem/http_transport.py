@@ -309,6 +309,14 @@ def _handle_status(workspace: str) -> tuple[int, dict[str, Any]]:
 
     try:
         store = get_block_store(workspace)
+        # deferred: this is the count of block-containing *artifacts*, not
+        # of memories — the same list_blocks type confusion that made
+        # POST /clear delete nothing (see _corpus_block_ids). Measured: a
+        # 7-block corpus in one file reports memory_count 1. Not corrected
+        # here because the honest count costs a full corpus parse on a
+        # polled, rate-limited health endpoint, which is a cost decision
+        # rather than a bug fix. Upgrade path: read the count off the
+        # recall index (sqlite_index) instead of parsing the corpus.
         block_ids = store.list_blocks()
         memory_count = len(block_ids)
     except Exception as exc:
@@ -516,6 +524,59 @@ _BLOCK_ID_MAX = 256
 DEFAULT_DELETE_RATIONALE = "http-delete"
 
 
+def _corpus_block_ids(store: Any) -> tuple[list[str], int]:
+    """Every block id in the corpus, in a stable order, plus a shortfall count.
+
+    ``list_blocks()`` is **not** this list, and using it as one is the
+    defect this function exists to remove. Every store in the tree
+    implements ``list_blocks`` exactly as the ``BlockStore`` protocol
+    documents it — the set of block-*containing artifacts*: ``.md`` paths
+    on the Markdown and encrypted backends, distinct ``file_path`` values
+    on Postgres, their union on the sharded store. ``POST /clear`` handed
+    those paths to ``delete_block``, which resolves a path to no block at
+    all, so the endpoint answered ``{"ok": true, "deleted": 0}`` with the
+    corpus fully intact — a wipe that reported success and removed
+    nothing (verified by live probe on a real Markdown corpus, and
+    present in 5.0.1 before the delete scope existed). Once the scope
+    landed it got worse in one specific way: the door minted a DELETE
+    authorisation over a set of *filenames*, so the chain carried a
+    receipt for a death that never happened — the mirror image of the
+    ungated delete this release closed.
+
+    ``get_all`` is on the protocol and implemented by all five stores, so
+    this reads ids the same way whatever backend is configured.
+    ``active_only=False`` is load-bearing: a clear that walked past
+    quarantined and pending blocks would be a *partial* purge reported as
+    a whole one, which is the same lie in a smaller box.
+
+    Returns:
+        ``(ids, unidentified)`` — ids deduplicated with first-seen order
+        preserved, and the number of parsed blocks carrying no ``_id``.
+        Those cannot be deleted by id and are counted rather than
+        dropped, so a wipe that could not reach everything says so
+        instead of reporting a whole purge it did not perform.
+
+    Raises:
+        Whatever ``get_all`` raises. Deliberately not swallowed: a store
+        that cannot enumerate its corpus must fail the clear, because the
+        alternative is the ``deleted: 0`` success this replaces.
+    """
+    ids: list[str] = []
+    seen: set[str] = set()
+    unidentified = 0
+    for block in store.get_all(active_only=False):
+        raw = block.get("_id") if hasattr(block, "get") else None
+        bid = str(raw) if raw else ""
+        if not bid:
+            unidentified += 1
+            continue
+        if bid in seen:
+            continue
+        seen.add(bid)
+        ids.append(bid)
+    return ids, unidentified
+
+
 def _clear_batch_id(block_ids: list[str]) -> str:
     """A stable subject id for one ``POST /clear`` decision.
 
@@ -648,14 +709,21 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> t
     unlinked records in a chain built for low-volume decisions, and
     nothing in them would say the removals were one operation.
 
-    The covered set is whatever ``list_blocks()`` returns, because that
-    is what the loop deletes; the scope covers the iterated set by
-    construction rather than by a second enumeration that could drift
-    from it.
+    The covered set is whatever :func:`_corpus_block_ids` returns,
+    because that is what the loop deletes; the scope covers the iterated
+    set by construction rather than by a second enumeration that could
+    drift from it. It used to be ``list_blocks()``, which is a list of
+    *files* — see :func:`_corpus_block_ids` for what that cost.
 
     Args:
         actor: See :func:`_handle_delete_memory`. Empty lets the gate
             resolve the authenticated REST agent, then ``"system"``.
+
+    Returns:
+        ``200`` with ``deleted`` and the admission id. ``unreachable`` is
+        present only when the corpus held blocks with no id: an
+        incomplete wipe must be visibly incomplete, and a key nobody has
+        to read is the additive way to say so.
     """
     rationale = body.get("rationale")
     confirm = body.get("confirm")
@@ -675,16 +743,25 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> t
 
     try:
         store = get_block_store(workspace)
-        block_ids = list(store.list_blocks())
+        block_ids, unidentified = _corpus_block_ids(store)
     except Exception as exc:
         _log.error("clear_failed", extra={"error": str(exc)})
         return (500, {"error": "internal block store error"})
+
+    if unidentified:
+        _log.warning(
+            "clear_blocks_without_id",
+            extra={"workspace": _safe_log(workspace), "unreachable": unidentified},
+        )
 
     if not block_ids:
         # No scope: a receipt covering nothing authorises nothing, and
         # minting one would put a decision in the chain that never had a
         # subject. Nothing died, so there is nothing to record.
-        return (200, {"ok": True, "deleted": 0, "rationale": rationale, "admission": None})
+        empty: dict[str, Any] = {"ok": True, "deleted": 0, "rationale": rationale, "admission": None}
+        if unidentified:
+            empty["unreachable"] = unidentified
+        return (200, empty)
 
     batch_id = _clear_batch_id(block_ids)
     deleted = 0
@@ -693,6 +770,15 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> t
         gate = get_gate(workspace)
         with gate.admit_delete_batch(batch_id, block_ids, rationale=rationale, actor=actor) as receipt:
             admission_id = receipt.entry_id
+            # deferred: the loop is O(n²) on a Markdown corpus — each
+            # delete_block re-reads and rewrites the whole .md file.
+            # Measured on one file: 200 blocks 0.16 s, 400 0.46 s, 800
+            # 1.43 s, so ~4 min at 10k. Acceptable for a rare, twice-
+            # confirmed destructive call, and the previous shape's cost
+            # was zero only because it deleted nothing. Upgrade path: a
+            # bulk `delete_blocks(ids)` on the store protocol, splicing
+            # each file once, still reporting every removal into the one
+            # receipt so the single bulk record is unchanged.
             for bid in block_ids:
                 try:
                     if store.delete_block(bid):
@@ -727,7 +813,10 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> t
             "rationale": _safe_log(rationale, max_len=120),
         },
     )
-    return (200, {"ok": True, "deleted": deleted, "rationale": rationale, "admission": admission_id})
+    out: dict[str, Any] = {"ok": True, "deleted": deleted, "rationale": rationale, "admission": admission_id}
+    if unidentified:
+        out["unreachable"] = unidentified
+    return (200, out)
 
 
 # ---------------------------------------------------------------------------

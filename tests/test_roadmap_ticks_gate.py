@@ -186,8 +186,7 @@ class TestTheGateHasTeeth:
     def test_injecting_a_self_refuting_tick_turns_the_real_file_red(self, tmp_path: Path) -> None:
         mutated = tmp_path / "ROADMAP.md"
         mutated.write_text(
-            ROADMAP.read_text(encoding="utf-8")
-            + "\n- [x] **Injected** - the detector chain is not wired. Tracked.\n",
+            ROADMAP.read_text(encoding="utf-8") + "\n- [x] **Injected** - the detector chain is not wired. Tracked.\n",
             encoding="utf-8",
         )
         result = _run("--check", str(mutated))

@@ -9,7 +9,7 @@ MIND-Mem is a persistent, auditable, contradiction-safe memory system for AI cod
 No. MIND-Mem uses zero external dependencies. All data is stored as plain markdown files.
 
 ### What Python versions are supported?
-Python 3.10, 3.12, 3.13, and 3.14 are tested in CI.
+Python 3.10, 3.11, 3.12, 3.13, and 3.14 are tested in CI, on Ubuntu, macOS and Windows.
 
 ## Retrieval
 

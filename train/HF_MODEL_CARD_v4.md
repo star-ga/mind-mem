@@ -143,8 +143,12 @@ v4 knows all 83 MCP tools from v3.x, plus the following v4 surfaces:
 
 **Foundation**
 - `feature_flags` — `is_enabled` / `require_enabled` / `flag_config`,
-  `FeatureDisabledError`, 35-flag inventory, startup rejection of
-  unknown flags
+  `FeatureDisabledError`, 38-flag inventory, startup rejection of
+  unknown flags. (This card said **35** through four releases; like the
+  two-numbers-for-one-fact tool count above it, that figure was asserted,
+  never measured. `ALL_V4_FLAGS` at the trained revision `v4.1.1` holds
+  **38** entries, and the live tree now holds **52** — so the weights do
+  not know the newest flags.)
 
 **Corrected from v3.12.1**
 - `KIND_DECAY['cites']` is `0.8` — not `0.4`. The v3.12.1 model

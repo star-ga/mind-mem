@@ -108,25 +108,39 @@ class TestFullPipeline:
         assert summary2["files_indexed"] == 0
         assert summary2["blocks_new"] == 0
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason=(
-            "append_signals returns 0 on Windows runners (no diff vs Linux/macOS "
-            "where it returns 1). Pre-existing pre-3.7.0 issue, exposed only after "
-            "the audit-response unit-test fixes let the integration step run on "
-            "Windows for the first time. Tracked as a v3.7.x follow-up; the WRITE "
-            "path is otherwise covered by unit tests in tests/test_capture.py "
-            "which DO pass on Windows."
-        ),
-    )
     def test_propose_creates_signal(self, workspace):
-        """Proposal writes to SIGNALS.md via capture.append_signals."""
+        """Proposal writes to SIGNALS.md via capture.append_signals.
+
+        This carried a blanket ``@pytest.mark.skipif(sys.platform == "win32")``
+        whose reason recorded a real, still-open defect -- "append_signals
+        returns 0 on Windows runners", a pre-3.7.0 issue tracked as a v3.7.x
+        follow-up. That is a skip standing in for a fix, and it cost more than
+        the one assertion: the decorator skipped the WHOLE test, so the write
+        path never executed on Windows at all, and the skip could never clear
+        itself if the defect were fixed -- it was keyed on the platform, not on
+        the behaviour.
+
+        The gate is now keyed on the behaviour. Every Windows row runs the body
+        and calls ``append_signals``; only if it still returns 0 does the test
+        skip, and it skips with the DIAGNOSIS attached. ``capture.append_signals``
+        has exactly two branches that return 0 -- SIGNALS.md is not a file, or
+        every signal deduplicated against the existing content -- so the two
+        probes below decide between them, and one Windows CI run now names the
+        cause instead of restating the symptom. When the defect is fixed the
+        skip disappears on its own; on every other platform ``written == 0``
+        remains a hard failure.
+        """
         from datetime import datetime
 
         from mind_mem.capture import append_signals
 
         signals_path = os.path.join(workspace, "intelligence", "SIGNALS.md")
-        before = os.path.getsize(signals_path) if os.path.isfile(signals_path) else 0
+        signals_exists = os.path.isfile(signals_path)
+        before = os.path.getsize(signals_path) if signals_exists else 0
+        existing_text = ""
+        if signals_exists:
+            with open(signals_path, "r", encoding="utf-8") as fh:
+                existing_text = fh.read()
 
         signal = {
             "line": 0,
@@ -143,6 +157,18 @@ class TestFullPipeline:
         }
         today = datetime.now().strftime("%Y-%m-%d")
         written = append_signals(workspace, [signal], today)
+
+        if written == 0 and sys.platform == "win32":
+            already_deduplicated = signal["text"][:100] in existing_text
+            pytest.skip(
+                "known Windows-only defect, still reproducing (v3.7.x follow-up). "
+                f"append_signals returned 0. Diagnosis: SIGNALS.md present={signals_exists}, "
+                f"size={before}, signal text already in file={already_deduplicated}. "
+                "Those are the only two branches in capture.append_signals that return 0, "
+                "so exactly one of the two flags above is the cause. Not skipped on any "
+                "other platform; clears itself once the return is non-zero."
+            )
+
         assert written > 0, "append_signals should write at least 1 signal"
 
         after = os.path.getsize(signals_path) if os.path.isfile(signals_path) else 0

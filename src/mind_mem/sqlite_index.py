@@ -989,7 +989,7 @@ def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: dat
     conn.commit()
 
     elapsed = (datetime.now() - start).total_seconds() * 1000
-    row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
+    admitted_count, withheld_count = _indexed_block_counts(conn, workspace)
     summary = {
         "files_checked": 0,
         "files_indexed": 0,
@@ -999,7 +999,9 @@ def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: dat
         "blocks_deleted": 0,
         "blocks_unchanged": 0,
         "elapsed_ms": round(elapsed, 1),
-        "total_blocks": row["cnt"],
+        "total_blocks": admitted_count + withheld_count,
+        "blocks_admitted": admitted_count,
+        "blocks_withheld": withheld_count,
         "source": "block_store",
     }
     _log.info("build_complete", **summary)
@@ -1152,9 +1154,29 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
                 "elapsed_ms": round(elapsed, 1),
             }
 
-            # Count total blocks in index
-            row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
-            summary["total_blocks"] = row["cnt"]
+            # Count the blocks in the index, and SAY WHICH SET each number
+            # counts. The bare ``SELECT COUNT(*) FROM blocks`` that used to
+            # stand here is the same statistic ``index_status`` serves, and
+            # it answered differently: admission-blind, so it moved by one
+            # every time a quarantined block was indexed. Two counters in
+            # one module disagreeing about "how many blocks?" is how the
+            # egress count drifted in the first place, so both now come
+            # from :func:`_indexed_block_counts` — the one counting
+            # authority, which puts every status to the shared allow-list.
+            #
+            # ``total_blocks`` stays the WHOLE index on purpose: this is the
+            # indexer reporting the work it did, an operator-side number,
+            # and hiding the withheld rows from it would make the builder
+            # lie about what it indexed. What changes is that the number is
+            # no longer ambiguous — ``blocks_admitted`` is the egress-safe
+            # count a caller should propagate to any served surface, and
+            # ``blocks_withheld`` is the difference, stated rather than
+            # buried. Both keys are additive; a reader that knows only
+            # ``total_blocks`` still finds it, with the same meaning.
+            admitted_count, withheld_count = _indexed_block_counts(conn, workspace)
+            summary["total_blocks"] = admitted_count + withheld_count
+            summary["blocks_admitted"] = admitted_count
+            summary["blocks_withheld"] = withheld_count
         finally:
             # Don't close the manager — it's shared and cached
             pass
