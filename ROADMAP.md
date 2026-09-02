@@ -74,14 +74,16 @@ by its full description below.
 - *(tracked below — see “Local visual viewer” in the status section; listed twice, counted once)*
 - [x] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
 - *(tracked below — see “Adversarial / poisoning defense” in the status section; listed twice, counted once)*
-- [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from the GLOSSOPETRAE "Lingua Ex Machina" report ([elder-plinius/GLOSSOPETRAE](https://github.com/elder-plinius/GLOSSOPETRAE), Jun 2026): its covert-channel finding shows payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (100% receiver recovery, 0% monitor detection). Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
+- [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from recent research on invisible-Unicode covert channels: payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (reported 100% receiver recovery at 0% monitor detection). Provenance recorded privately in `mind-internal`, per the no-public-attribution rule. Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
 - [x] **Memory reputation / trust scores** — shipped as the validity gate's FIFTH component, not a separate subsystem: `src/mind_mem/provenance_class.py` classifies a block `operator` > `agent-verified` > `agent-inferred` > `external-ingest` from the existing `ActorRole` / `ToolId` / `Source` fields, and `validity_gate.validity_components()` folds that weight into the composite `V`. No per-actor learned or anomaly scoring (determinism wedge). `trust_scores.apply_trust_scores` keeps the `actor_trust` field as a thin façade over that one component. Opt-in via `recall.validity_gate.provenance_class.enabled`; flag-off recall ordering is byte-identical. 48 tests.
 
-### Group E — Compliance (5 items)
+### Group E — Compliance (5 items — 2 shipped, 3 open)
 
-- [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters
-- [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies
-- [x] **Provenance-rich blocks** — `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`
+- [ ] **Pluggable redaction layer** — no pre-write detector chain in-tree; the `redaction` flag is a name with no consumer
+- [ ] **Compliance export pipeline** — no `mm export` verb and no `--policy` option anywhere in `src/`
+- [ ] **Provenance-rich blocks** — the five provenance fields ship; the `provenance: off|recommended|required` policy that makes them required does not
+- [x] **Time-bounded and event-bounded recall** — **shipped** (`since` / `until` / `event_id` on `recall(...)`, applied in `_apply_post_filters`)
+- [x] **Vocabulary-bound fields** — **shipped** (`v4/vocabulary.py`, enforced by `v4/block_metadata.validate_block` on the `propose_update` door; opt-in behind both `v4.block_metadata` and `v4.vocabulary`)
 
 ### Group G — Ecosystem (9 items, mostly SDK fan-out)
 
@@ -916,7 +918,7 @@ pin a state the toolchain cannot yet satisfy.
 
 ---
 
-## v2.0.0b1 — Inference Acceleration (from mind-inference) — Python subset ✅ Released 2026-04-13 — all boxes checked in v2.8.0
+## v2.0.0b1 — Inference Acceleration (from mind-inference) — Python subset ✅ Released 2026-04-13 — every box checked in v2.8.0 except one retracted 2026-09-01 ("Quantized prefix cache" — the tick was false; see the entry)
 
 **Goal:** Sub-millisecond hot paths. Predictive prefetch. KV cache for LLM-backed operations.
 
@@ -925,12 +927,19 @@ pin a state the toolchain cannot yet satisfy.
 - [x] Prefix caching for intent router (system prompt + governance context = cached)
 - [x] Multi-hop sub-queries share parent query prefix (90%+ overlap)
 - [x] Cache hit rate metric exposed via `index_stats`
-- [x] **TurboQuant-compressed prefix cache** — apply 3-bit vector quantization
-  (arXiv:2504.19874) to cached KV embeddings for ~6x memory reduction. Enables
-  caching far more prefix contexts in limited RAM/VRAM. PolarQuant rotation +
-  Lloyd-Max codebook + QJL residual correction — quality-neutral at 3.5 bits/channel.
-  Uses mind-inference's TurboQuant implementation when available (Phase 2), falls
-  back to pure Python codebook lookup otherwise.
+- [ ] **Quantized prefix cache** — apply 3-bit vector quantization to cached
+  prefix embeddings for ~6x memory reduction, so far more prefix contexts fit in
+  limited RAM/VRAM. **Not shipped, and the tick this line carried until 2026-09-01
+  was false on both halves.** (a) `prefix_cache.PrefixCache` is a process-local LRU
+  over `(namespace, prefix_hash, payload_hash)` — it caches *responses*, holds no
+  embeddings, and nothing quantizes anything on that path. (b) `turbo_quant.py` is a
+  per-vector uniform min-max scalar quantiser whose own docstring calls the format a
+  placeholder for the rotation + learned-codebook + residual-correction scheme the
+  name implies, it has zero consumers in `src/`, and its stated invariant is that it
+  never touches the recall path. Blocker: the codec upgrade must land first (private
+  research notes, not cited here); unblocking step = swap `turbo_quant`'s channel
+  encoder behind its existing format byte, then give the prefix cache an
+  embedding-valued tier to compress. Tracked.
 
 ### Speculative Prefetch
 - [x] Predict next-needed blocks based on query pattern + access history
@@ -996,7 +1005,9 @@ Release criteria:
 
 ## v2.1.0 — Self-Improving Retrieval via OpenClaw-RL ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
-> **Paper:** "Train Any Agent Simply by Talking" (arXiv:2603.10165)
+> **Basis:** recent research on training agent behaviour directly from natural-language
+> interaction. Provenance recorded privately in `mind-internal`, per the
+> no-public-attribution rule.
 >
 > Theme: MIND-Mem learns from every user interaction — corrections, re-queries, and rephrased searches become training signals that improve retrieval quality over time.
 
@@ -2255,7 +2266,7 @@ multi-tenancy thread is also tracked as issue [#505].
 - [x] **Contradiction state machine** — `detected → review_ok → resolved` / `pending_fix` lifecycle ships in `governance` engine.
 - [x] **Self-healing index** — `mm doctor` triggers integrity check + repair; background reindex runs in idle windows.
 - [ ] **Local visual viewer** — `mm view` web UI not yet shipped. Stack target: stdlib HTTP + minimal JS/D3. Tracked.
-- [x] **Auto-generated hierarchical index** — `index.md` / `log.md` autogen not wired. Tracked.
+- [x] **Auto-generated hierarchical index** — `index.md` (hierarchical: category → kind) + `log.md` (chronological) are regenerated from the block corpus by `src/mind_mem/memory_index.py` (`generate_index`), exposed as the `mm index` verb (`mm_cli._cmd_index`); `tests/test_memory_index.py` covers it with 14 tests. The earlier text on this line denied its own tick — corrected 2026-09-01 against the code.
 - [x] **Real-time contradiction stream** — webhook stream on contradiction-detection ships under the alerting layer.
 - [ ] **Adversarial / poisoning defense** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
 - [x] **Approval workflows for sensitive proposals** — multi-reviewer chain (OPA/Rego-style) ships behind opt-in dep.
@@ -2291,21 +2302,21 @@ default story is two laptops talking to each other.
 - [ ] **Audit headers (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`)** — not yet propagated end-to-end across REST/gRPC. Tracked (small, well-defined).
 - [ ] **Rust hot path for hybrid search** — PyO3 BM25+RRF port — pure-MIND port (separate roadmap section below) is the chosen path instead. Marking as ⊘ superseded by Pure-MIND Core Port.
 
-### E. Compliance-sensitive opt-in extensions (partial — 5 open)
+### E. Compliance-sensitive opt-in extensions (partial — 5 shipped, 3 open)
 
 **Shipped:**
 
-- [x] **Pluggable redaction layer** — pre-write detector chain ships under the redaction module; events flow to audit chain.
 - [x] **Confidence / Evidence as first-class** — structured `Evidence` blocks with `confidence_score` ship; recall surfaces evidence chains.
 - [x] **Per-tenant audit chains** — `audit_chain.py` forks per tenant with isolated genesis + spec-hash binding.
-- [x] **Compliance export pipeline** — `mm export --policy <policy> --since <date>` ships signed deterministic bundles.
 - [x] **Contraindication / mutex edges** — `contraindicates` + `supersedes` edges ship as extra `block_lineage` kinds.
+- [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters ship on `recall(...)` (v4.0.15) and are applied through `_apply_post_filters` in `_recall_core.py`, the single funnel every backend dispatch goes through, so the contract cannot diverge per backend. Was filed under **Open** while already shipped; moved up 2026-09-01.
+- [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies ship in `src/mind_mem/v4/vocabulary.py` and are enforced by `v4/block_metadata.validate_block(..., workspace=...)`, which `propose_update` calls on every proposal (`mcp/tools/governance.py`); reject-mode violations refuse the write, flag-mode violations warn and pass. Opt-in behind **two** flags — `v4.block_metadata` owns the door probe and `v4.vocabulary` owns the check, so the surface is inert unless both are on. `tests/test_v4_vocabulary.py` + `tests/test_vocabulary_wiring.py` collect 49 tests and `tests/test_block_metadata_wiring.py` adds 15 that pin the door itself. Was filed under **Open** with a sentence that denied its own wiring; settled 2026-09-01 by refusal rather than by grep — a proposal whose `confidence` value is outside a reject-mode workspace vocabulary comes back `error: schema_validation_rejection` and SIGNALS.md is byte-for-byte unchanged, against two controls (same proposal with both flags off is accepted, and an in-vocabulary value with both flags on is accepted).
 
 **Open:**
 
-- [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters exposed on `recall(...)` (v4.0.15), applied via `_apply_post_filters` in `_recall_core.py`.
-- [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies not wired into `validate_block`. Tracked.
-- [x] **Provenance-rich blocks** — `actor_id`/`actor_role`/`session_id`/`tool_id`/`purpose` fields gated by `provenance: off|recommended|required` not added. Tracked.
+- [ ] **Pluggable redaction layer** — the `redaction` name is registered in `v4/feature_flags.py` and has zero consumers: there is no `v4/redaction.py` (`import mind_mem.v4.redaction` raises `ModuleNotFoundError`), no pre-write detector chain anywhere in `src/`, and nothing routes detector events to the audit chain. The only redaction code in-tree is DSN password masking (`mm_cli._redact_dsn`) and hook-transcript credential scrubbing (`hook_installer`), neither of which is this item. Carried a false shipped tick until 2026-09-01. Tracked.
+- [ ] **Compliance export pipeline** — there is no `mm export` verb (`mm export` exits 2 with `invalid choice: 'export'`), no `--policy` option anywhere in `src/`, no `v4/compliance_export.py`, and the `compliance_export` flag has zero consumers. `mind-mem-backup export <workspace>` does exist but writes unsigned, unfiltered JSONL with no policy and no `--since`, which is a different capability. Carried a false shipped tick until 2026-09-01. Tracked.
+- [ ] **Provenance-rich blocks** — half-shipped, and the shipped half is the easy half. The five fields (`actor_id` / `actor_role` / `session_id` / `tool_id` / `purpose`) exist and flow through `propose_update`; the `provenance: off|recommended|required` policy that would make them recommended or required does **not** exist — zero occurrences in `src/`, and the `provenance` flag has no consumer. The item is the policy, so it stays open. Carried a false shipped tick until 2026-09-01. Tracked.
 
 ### G. Observability, reliability, ecosystem (partial — 7 open)
 
@@ -2429,7 +2440,7 @@ does not solve. Documented here so users see them as complements rather than
 competitors. **MIND-Mem will not depend on any of these** — license, scope, and
 substrate-of-record concerns make co-existence the right pattern.
 
-- [x] **GitNexus** (`github.com/h4ckf0r0day/GitNexus`) — code knowledge-graph indexer
+- [x] **GitNexus** (third-party MCP server) — code knowledge-graph indexer
   exposed as MCP server. Parses repo structure (call graphs, dependencies, clusters)
   and serves architectural-awareness tools to coding agents. Solves "what does the
   code do at this point in time" — orthogonal to MIND-Mem's "what did we decide and
@@ -2607,24 +2618,24 @@ raw fusion rank.
   dependency. Prior-art shape: probabilistic-modeling libraries that ship a
   conformally-calibrated defer/answer cascade (a distill→cascade `task` surface).
 - **Research-watch — faithful (not just factual) calibration, training-side complement
-  (2026-07-08).** RLMF, *"Reinforcement Learning with Metacognitive Feedback Elicits
-  Faithful Uncertainty Expression in LLMs"* (Liu et al., Yale NLP, COLM 2026 —
-  arXiv:2606.32032, github.com/yale-nlp/RLMF). Distinction worth stealing: *factual*
+  (2026-07-08).** Recent research on eliciting faithful uncertainty expression from
+  language models through a metacognitive training reward (provenance recorded
+  privately in `mind-internal`). Distinction worth stealing: *factual*
   calibration = "90% claimed → right 90% of the time"; *faithful* calibration = the
   stated confidence matches the model's own internal consistency (measured by sampling
   the same answer ~N× and comparing to the confidence it emits). Their fix is a second
   RL reward for how well the model predicts its own performance ("metacognitive
-  feedback"), reported to surpass standard RL by up to 63% on faithful calibration.
+  feedback"), reported to surpass standard RL by a wide margin on faithful calibration.
   - **The lift for mind-mem is the *evaluation lens*, not the training recipe.** The
     conformal sidecar above calibrates *retrieval* confidence (inference-time, over the
-    fusion score, distribution-free bound). RLMF is the *generation-time* twin: if a
+    fusion score, distribution-free bound). That work is the *generation-time* twin: if a
     mind-mem answer surface ever emits a spoken confidence ("I'm fairly sure this block
     is the one"), faithful-calibration is the honest test of whether that phrase matches
     the system's actual self-consistency. It sharpens the existing "cite or say no record
     found" discipline from a rule into a measurable property.
   - **What NOT to lift.** Don't bolt an RL training loop onto the deterministic recall
     path — mind-mem's honesty rail is a *gate*, and the conformal quantile already gives
-    it a proven bound with none of RL's nondeterminism. RLMF is the wedge-*aligned* idea
+    it a proven bound with none of RL's nondeterminism. That work is the wedge-*aligned* idea
     (a system telling the truth about what it knows) but it's an LLM-training technique;
     keep it beside the recall path, not inside it. Orthogonal to the substrate/determinism
     wedge — epistemic honesty, not execution byte-identity (the two rhyme, don't conflate).
