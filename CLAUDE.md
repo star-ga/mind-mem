@@ -200,7 +200,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   block_versioning.py   — block version history
   circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
   feature_flags.py      — 52 flags + is_enabled/require_enabled
-tests/                  — pytest suite (10,517 tests incl. 376 v4 unit
+tests/                  — pytest suite (10,550 tests incl. 376 v4 unit
                           + 38 concurrency + 22 paraphrase probes)
 mind/                   — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
@@ -265,7 +265,7 @@ name that no longer exists -- this list previously carried 11 ghosts
 
 ## Testing
 ```bash
-pytest                           # full suite (10,517 tests)
+pytest                           # full suite (10,550 tests)
 pytest tests/test_retrieval.py   # specific module
 pytest -x --tb=short             # stop on first failure
 pytest --collect-only -q | tail  # verify test count
