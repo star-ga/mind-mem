@@ -1233,3 +1233,72 @@ class TestStaleBreakMutationTwin:
         assert not os.path.exists(lock_path), (
             "check-then-unlink left the winner's claim alone — this twin cannot see the defect it is here to catch"
         )
+
+
+def _replace_with_a_fresh_claim(lock_path: str) -> tuple[int, int]:
+    """Stand in for a successor: a different lockfile at the same path."""
+    os.unlink(lock_path)
+    fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    try:
+        os.write(fd, f"{os.getpid()}\n".encode())
+        st = os.fstat(fd)
+    finally:
+        os.close(fd)
+    return (st.st_dev, st.st_ino)
+
+
+def _identity_of(path: str) -> tuple[int, int]:
+    st = os.stat(path)
+    return (st.st_dev, st.st_ino)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot unlink a lockfile that is still open")
+class TestReleaseOnlyRemovesItsOwnClaim:
+    """Releasing is the other place a lockfile gets deleted.
+
+    ``release`` unlinking by path is safe in the ordinary case only
+    because a live owner's lockfile cannot legitimately be replaced. That
+    is an argument about the rest of the system, not a property of
+    ``release`` — so the identity check stays, and this is what it buys.
+    """
+
+    def test_a_successors_claim_survives_our_release(self, tmp_path):
+        target = tmp_path / "released.dat"
+        target.write_text("", encoding="utf-8")
+
+        # Positive control: release DOES remove its own lockfile, so the
+        # survival below is the check working and not release doing nothing.
+        ordinary = FileLock(str(target), timeout=1.0)
+        ordinary.acquire()
+        assert os.path.exists(ordinary.lock_path)
+        ordinary.release()
+        assert not os.path.exists(ordinary.lock_path)
+
+        lock = FileLock(str(target), timeout=1.0)
+        lock.acquire()
+        successor = _replace_with_a_fresh_claim(lock.lock_path)
+        lock.release()
+
+        assert os.path.exists(lock.lock_path), "release deleted a lockfile it did not create"
+        assert _identity_of(lock.lock_path) == successor, "release replaced the successor's claim"
+        os.unlink(lock.lock_path)
+
+    def test_unlinking_by_path_deletes_it(self, tmp_path, monkeypatch):
+        """The twin: the same body with the identity check taken out."""
+        target = tmp_path / "released.dat"
+        target.write_text("", encoding="utf-8")
+
+        def _unlink_by_path(self, identity):
+            try:
+                os.unlink(self.lock_path)
+            except OSError:
+                pass
+
+        monkeypatch.setattr(FileLock, "_unlink_if_ours", _unlink_by_path)
+
+        lock = FileLock(str(target), timeout=1.0)
+        lock.acquire()
+        _replace_with_a_fresh_claim(lock.lock_path)
+        lock.release()
+
+        assert not os.path.exists(lock.lock_path), "unlinking by path left the successor's claim alone — this twin proves nothing"
