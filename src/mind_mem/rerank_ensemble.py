@@ -48,6 +48,7 @@ install them get a graceful fallback to CE-only.
 
 from __future__ import annotations
 
+import threading
 from typing import Any, Protocol, runtime_checkable
 
 from .observability import get_logger
@@ -186,6 +187,10 @@ class EnsembleReranker:
 # ---------------------------------------------------------------------------
 
 
+#: The BGE checkpoint the ``bge`` ensemble member loads.
+_BGE_MODEL_NAME = "BAAI/bge-reranker-v2-m3"
+
+
 def _build_cross_encoder() -> Reranker | None:
     try:
         from .cross_encoder_reranker import CrossEncoderReranker
@@ -198,21 +203,64 @@ def _build_cross_encoder() -> Reranker | None:
         return None
 
 
+#: BGE weights already loaded in this process, keyed by ``(model, device)``.
+#: ``create_ensemble`` runs per *query*, so an uncached loader here reloads a
+#: ~2.2 GB checkpoint on every search: a 500-question benchmark spends its
+#: entire wall clock in ``from_pretrained``. The key is ``(model, device)``
+#: rather than a single slot for the same reason the cross-encoder cache uses
+#: one -- a single slot silently serves the first caller's weights to every
+#: later one, so a run comparing two rerankers would measure one of them twice.
+_BGE_MODELS: dict[tuple[str, str], Any] = {}
+_BGE_LOAD_LOCK = threading.Lock()
+
+#: Bumped once per real ``from_pretrained``. A cache is a performance claim,
+#: and a performance claim needs a number: this is the number, and the
+#: reload-count regression test reads it rather than arguing from the code.
+_BGE_LOADS = 0
+
+
+def _load_bge(model_name: str, device: str) -> Any:
+    """Return the shared BGE cross-encoder for ``(model_name, device)``.
+
+    Double-checked under a lock: two threads racing the first query must
+    load the weights once, not twice.
+    """
+    global _BGE_LOADS
+    from sentence_transformers import CrossEncoder  # type: ignore
+
+    key = (model_name, device)
+    cached = _BGE_MODELS.get(key)
+    if cached is not None:
+        return cached
+    with _BGE_LOAD_LOCK:
+        cached = _BGE_MODELS.get(key)
+        if cached is None:
+            cached = CrossEncoder(model_name, device=device)
+            _BGE_MODELS[key] = cached
+            _BGE_LOADS += 1
+    return cached
+
+
+def bge_load_count() -> int:
+    """How many times BGE weights were actually loaded in this process."""
+    return _BGE_LOADS
+
+
 def _build_bge() -> Reranker | None:
     """BGE reranker (BAAI/bge-reranker-v2-m3) — heavier alternative to CE.
 
     Uses the same sentence-transformers CrossEncoder interface with a
-    different pretrained weight. Returns None when the model can't be
+    different pretrained weight. The weights are process-cached by
+    :func:`_load_bge`, so the per-query ``create_ensemble`` call costs a dict
+    lookup after the first one. Returns None when the model can't be
     loaded (typically because ``sentence-transformers`` isn't
     installed or the HuggingFace cache is empty and no network).
     """
     try:
         import os
 
-        from sentence_transformers import CrossEncoder  # type: ignore
-
         device = os.environ.get("MIND_MEM_RERANKER_DEVICE", "cpu")
-        model = CrossEncoder("BAAI/bge-reranker-v2-m3", device=device)
+        model = _load_bge(_BGE_MODEL_NAME, device)
 
         class BGEAdapter:
             def rerank(

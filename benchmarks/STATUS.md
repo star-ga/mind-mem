@@ -46,12 +46,17 @@ python3 benchmarks/memory_ab_bench.py selfcheck --select bucket:single_file:1
 python3 benchmarks/memory_ab_bench.py run --select bucket:single_file:1 --agent none
 ```
 
-## LongMemEval — HELD
+## LongMemEval — HELD (hold unchanged; full run now measured)
 
 **Status: provenance hold active.** The headline `R@5 = 85.3` published in
 `benchmarks/REPORT.md` (entered the repo 2026-02-18, no committed artifact or
 methodology) is **not reproducible** from any documented harness and is
 excluded from MIND-Mem positioning until a clean full-run number replaces it.
+
+**The hold is NOT lifted by the 2026-09-03 full run below.** That run measures
+a *stated* configuration under a *disclosed* protocol; `85.3` names neither, so
+there is nothing to compare it against. A number cannot replace a number whose
+methodology is unknown — it can only sit beside it and say so.
 
 ### What's resolved
 
@@ -69,14 +74,58 @@ Full diagnosis + defect list: [`LONGMEMEVAL_FINDINGS_2026-05-19.md`](LONGMEMEVAL
 
 ### What's still open
 
-- Only a **stratified 18-question sample** (seed 42, 3 per question type) has
-  been re-measured post-fix — see the 2026-07-30 scorecards below. The **full
-  500-question LongMemEval-S set has not been re-run**; no number from this
-  page replaces the held `85.3` until that full run lands with ≥2 reps.
-- Cross-encoder reranker has no model singleton (reloads per query on a full
-  run) and `signal.alarm` timeouts can't preempt native hangs — both block a
-  full-corpus run at scale (tracked in the FINDINGS doc, "Remaining
-  engineering").
+- The **full-potential hybrid** number (BM25F + mxbai dense + RRF + 4b query
+  expansion) is still not measured. The 2026-09-03 run below is **BM25F over
+  the SQLite index with vector OFF** — a stated configuration, not the ceiling.
+  The dense leg needs the GPU, which is committed to a pinned embedding model.
+- Both engineering blockers are **closed** (2026-09-03), so the full run is no
+  longer gated on them:
+  - *Reranker model singleton.* The single-model cross-encoder already cached
+    per `(model, device)`; the **ensemble** path did not — `create_ensemble`
+    runs per query and `_build_bge` reloaded a ~2.2 GB checkpoint every time.
+    Now cached per `(model, device)` under a lock. Measured on a counting stub:
+    **25 queries → 25 loads before, 1 after** (26 → 2 across both ensemble
+    members). Regression test `tests/test_reranker_model_cache.py`; reverting
+    the cache turns 4 of its tests red.
+  - *Preemptive timeouts.* `signal.alarm` cannot stop a stage inside a C call,
+    because a Python handler only runs from the eval loop. Replaced with a
+    child process killed by `SIGKILL` on its whole process group
+    (`benchmarks/hard_timeout.py`). `tests/test_bench_hard_timeout.py` pairs
+    the fix with a **positive control for the defect**: a SQLite recursive CTE
+    that a 1 s alarm demonstrably fails to preempt, which the new mechanism
+    recovers from in bounded time. (A catastrophic-backtracking regex is *not*
+    a valid fixture here — CPython's `sre` polls for signals, so the alarm does
+    fire on it. Measured, not assumed.)
+
+### Full-set run — 2026-09-03 (measured, artifacts committed)
+
+**Full eligible set, 2 reps, both adapters, both protocols.** 500 questions,
+30 excluded as abstention (`*_abs`), **470 eligible, 470 evaluated, 0 killed or
+crashed**. Driver: `benchmarks/longmemeval_full_run.py` (one hard-killed child
+process per question, resumable). Reps are **byte-identical** to 4 d.p. on
+every metric, so the pipeline is deterministic at this configuration.
+
+| Adapter | Backend (probed) | any@5 | all@5 | any@1 | all@10 | MRR |
+|---|---|---:|---:|---:|---:|---:|
+| `mind_mem` | `sqlite` (BM25F, vector off, caps off) | 0.9404 | 0.8170 | 0.8277 | 0.9000 | 0.8776 |
+| `bm25_baseline` | in-memory BM25 (zero-dep) | 0.9702 | 0.8298 | 0.8660 | 0.9021 | 0.9081 |
+
+**Read this the unflattering way, because that is what it says.** On this
+configuration the zero-dependency BM25 floor **beats** the product on every
+column. That is a real result, not a harness fault: the probe recorded
+`effective_backend: sqlite` with no pipeline mismatch, so `mind_mem` really did
+run its own index. What it does *not* show is a ceiling — the dense/RRF/expansion
+legs are off. The honest summary is that **BM25F alone does not beat plain BM25
+here**, and any claim to the contrary needs the hybrid number that does not yet
+exist.
+
+It also retires the FINDINGS' `~0.30 any@5`: that figure measured the
+config-less scan fallback with the recall caps on. With caps off and the index
+actually built, the same corpus scores 0.94 any@5. The 0.30 was the defect,
+not the product.
+
+Artifacts (committed, per-question NDJSON + scorecard, both reps):
+`docs/benchmarks/2026-09-03-longmemeval-s-full-{mind_mem,bm25_baseline}-rep{1,2}.{md,ndjson}`.
 
 ### Latest measured numbers (diagnostic only — not a positioning claim)
 

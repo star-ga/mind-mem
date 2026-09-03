@@ -16,6 +16,17 @@ _CE_MODELS: dict[tuple[str, str], Any] = {}
 _CE_LOAD_LOCK = threading.Lock()
 _CE_AVAILABLE = None
 
+#: Bumped once per real model construction. The cache above is a performance
+#: claim -- "a full benchmark run loads the weights once, not once per query"
+#: -- and a performance claim needs a number rather than an argument, so the
+#: reload-count regression test reads this counter instead of inspecting code.
+_CE_LOADS = 0
+
+
+def ce_load_count() -> int:
+    """How many times cross-encoder weights were loaded in this process."""
+    return _CE_LOADS
+
 
 def _check_available() -> bool:
     global _CE_AVAILABLE
@@ -49,6 +60,7 @@ class CrossEncoderReranker:
 
         self.model_name = model
         self.device = device
+        global _CE_LOADS
         key = (model, device)
         cached = _CE_MODELS.get(key)
         if cached is None:
@@ -58,6 +70,7 @@ class CrossEncoderReranker:
                 if cached is None:
                     cached = CrossEncoder(model, device=device)
                     _CE_MODELS[key] = cached
+                    _CE_LOADS += 1
         self._model = cached
 
     def rerank(
