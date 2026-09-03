@@ -6,6 +6,16 @@ import {
   MindMemRateLimitError,
   MindMemServerError,
 } from "../src/errors.js";
+import {
+  expandRoute,
+  ROUTE_GET_BLOCK,
+  ROUTE_HEALTH,
+  ROUTE_LIST_CONTRADICTIONS,
+  ROUTE_RECALL,
+  ROUTE_SCAN,
+  ROUTES,
+} from "../src/routes.js";
+import type { Route } from "../src/routes.js";
 import type { RecallResult, HealthResult } from "../src/types.js";
 
 // ---------------------------------------------------------------------------
@@ -49,15 +59,17 @@ describe("MindMemClient — construction", () => {
 });
 
 describe("MindMemClient — URL composition", () => {
-  it("composes /v1/recall with query params", async () => {
+  it("POSTs /v1/recall with a JSON body, not GET with query params", async () => {
     let capturedUrl: string | undefined;
+    let capturedInit: RequestInit | undefined;
 
-    const mockFetch: typeof fetch = async (input) => {
+    const mockFetch: typeof fetch = async (input, init) => {
       capturedUrl = input.toString();
+      capturedInit = init;
       return makeFetch({
         status: 200,
         body: { query: "test", results: [], total: 0, backend_used: "bm25", latency_ms: 1 },
-      })(input);
+      })(input, init);
     };
 
     const original = globalThis.fetch;
@@ -65,9 +77,16 @@ describe("MindMemClient — URL composition", () => {
     try {
       const client = new MindMemClient("http://localhost:8080");
       await client.recall("test query", { limit: 3, backend: "bm25" });
-      assert.ok(capturedUrl?.includes("/v1/recall"), "path included");
-      assert.ok(capturedUrl?.includes("limit=3"), "limit param");
-      assert.ok(capturedUrl?.includes("backend=bm25"), "backend param");
+      // The server serves POST /v1/recall with a JSON body. This client used
+      // to send GET /v1/recall with query parameters, which no deployed
+      // server has ever answered; sdk/spec/openapi.json is now the contract.
+      assert.equal(capturedInit?.method, "POST", "method");
+      assert.equal(capturedUrl, "http://localhost:8080/v1/recall", "no query string");
+      const body = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>;
+      assert.equal(body["query"], "test query");
+      assert.equal(body["limit"], 3);
+      assert.equal(body["backend"], "bm25");
+      assert.ok(!("active_only" in body), "unset options are omitted so server defaults apply");
     } finally {
       globalThis.fetch = original;
     }
@@ -86,7 +105,13 @@ describe("MindMemClient — URL composition", () => {
     try {
       const client = new MindMemClient("http://localhost:8080");
       await client.getBlock("block/with spaces");
-      assert.ok(capturedUrl?.includes("block%2Fwith%20spaces"), "block id encoded");
+      // Singular /v1/block/{block_id} — the server has never served the
+      // plural /v1/blocks/{id} this client used to request.
+      assert.equal(
+        capturedUrl,
+        "http://localhost:8080/v1/block/block%2Fwith%20spaces",
+        "singular path, id encoded",
+      );
     } finally {
       globalThis.fetch = original;
     }
@@ -261,5 +286,80 @@ describe("MindMemClient — error handling", () => {
     } finally {
       globalThis.fetch = original;
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Route table wiring
+// ---------------------------------------------------------------------------
+
+describe("route table", () => {
+  // The leg that makes routes.ts a contract instead of documentation: every
+  // client method is driven against a recording fetch and the (method, path)
+  // it actually put on the wire is compared with the Route it declares. A
+  // route table nothing calls would be decoration, and the cross-language
+  // conformance gate in tests/test_sdk_route_conformance.py reads that table.
+  const cases: ReadonlyArray<{
+    name: string;
+    route: Route;
+    call: (c: MindMemClient) => Promise<unknown>;
+    path: string;
+  }> = [
+    {
+      name: "recall",
+      route: ROUTE_RECALL,
+      call: (c) => c.recall("q"),
+      path: "/v1/recall",
+    },
+    {
+      name: "getBlock",
+      route: ROUTE_GET_BLOCK,
+      call: (c) => c.getBlock("b1"),
+      path: "/v1/block/b1",
+    },
+    {
+      name: "listContradictions",
+      route: ROUTE_LIST_CONTRADICTIONS,
+      call: (c) => c.listContradictions(),
+      path: "/v1/contradictions",
+    },
+    { name: "health", route: ROUTE_HEALTH, call: (c) => c.health(), path: "/v1/health" },
+    { name: "scan", route: ROUTE_SCAN, call: (c) => c.scan(), path: "/v1/scan" },
+  ];
+
+  it("exercises every declared route", () => {
+    assert.equal(
+      cases.length,
+      ROUTES.length,
+      "every route needs a caller — a declared route with no method behind it is decoration",
+    );
+  });
+
+  for (const tc of cases) {
+    it(`${tc.name} issues its declared route`, async () => {
+      let capturedUrl: string | undefined;
+      let capturedInit: RequestInit | undefined;
+
+      const original = globalThis.fetch;
+      globalThis.fetch = async (input, init) => {
+        capturedUrl = input.toString();
+        capturedInit = init;
+        return makeFetch({ status: 200, body: {} })(input, init);
+      };
+      try {
+        await tc.call(new MindMemClient("http://localhost:8080"));
+      } finally {
+        globalThis.fetch = original;
+      }
+
+      assert.equal(capturedInit?.method, tc.route.method, "method matches routes.ts");
+      assert.equal(capturedUrl, `http://localhost:8080${tc.path}`, "path matches routes.ts");
+    });
+  }
+
+  it("expandRoute refuses an arity mismatch instead of shipping a placeholder", () => {
+    assert.equal(expandRoute(ROUTE_GET_BLOCK, "a/b c"), "/v1/block/a%2Fb%20c");
+    assert.throws(() => expandRoute(ROUTE_GET_BLOCK), RangeError);
+    assert.throws(() => expandRoute(ROUTE_HEALTH, "extra"), RangeError);
   });
 });

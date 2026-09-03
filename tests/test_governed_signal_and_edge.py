@@ -61,6 +61,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
+from _ledger_rows import authorisation_rows
 
 from mind_mem.admission import UngatedWriteError
 from mind_mem.enums import IngestTier
@@ -131,8 +132,18 @@ def _meta(record: dict) -> dict:
     return record.get("metadata") or {}
 
 
+def _authorisations(ws: str) -> list[dict]:
+    """Evidence rows that *authorised* something — one per governed scope.
+
+    A scope now leaves two rows: the authorisation and the close record
+    that says whether the write landed. Every count in this file means
+    the first. ``tests/_ledger_rows`` holds that convention once.
+    """
+    return authorisation_rows(_records(ws))
+
+
 def _rows_for(ws: str, target: str) -> list[dict]:
-    return [r for r in _records(ws) if r.get("target_block_id") == target]
+    return [r for r in _authorisations(ws) if r.get("target_block_id") == target]
 
 
 def _signals_text(ws: str) -> str:
@@ -244,13 +255,13 @@ class TestApprovingARelationSignal:
     def test_the_approval_writes_one_apply_row_naming_the_signal(self, workspace: str) -> None:
         """+0 rows was the defect. One row, and it says what happened."""
         sig_id = _stage(workspace)
-        before = len(_records(workspace))
+        before = len(_authorisations(workspace))
 
         approve_relation_signals(workspace, [sig_id])
 
         rows = _rows_for(workspace, f"{RELATION_APPROVAL_PREFIX}{sig_id}")
         assert len(rows) == 1, f"expected exactly one authorisation record, got {len(rows)}"
-        assert len(_records(workspace)) == before + 1
+        assert len(_authorisations(workspace)) == before + 1
         meta = _meta(rows[0])
         assert rows[0]["action"] == "APPLY"
         assert meta["door"] == "graph_ingest.approve_relation_signals"
@@ -351,13 +362,13 @@ class TestApprovingARelationSignal:
     def test_a_second_approval_mints_no_second_record(self, workspace: str) -> None:
         sig_id = _stage(workspace)
         approve_relation_signals(workspace, [sig_id])
-        after_first = len(_records(workspace))
+        after_first = len(_authorisations(workspace))
 
         report = approve_relation_signals(workspace, [sig_id])
 
         assert report["applied"] == []
         assert sig_id in report["errors"]
-        assert len(_records(workspace)) == after_first
+        assert len(_authorisations(workspace)) == after_first
 
     @pytest.mark.unit
     def test_the_cli_door_reaches_the_governed_path(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,0 +1,20 @@
+{
+  "//": "Compiles src + test together so `npm test` runs the TypeScript suite with no network fetch. The base tsconfig deliberately excludes test/ because the published dist must not carry test code; this config exists so the suite is runnable, which it was not: `npm test` ran `node --test test/*.test.js` against .ts sources that were never compiled, so the JS client had no runnable gate at all.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "build",
+    "declaration": false,
+    "declarationMap": false,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": [
+    "src",
+    "test"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
+  ]
+}

@@ -30,6 +30,7 @@ import json
 from pathlib import Path
 
 import pytest
+from _ledger_rows import authorisation_rows
 
 from mind_mem.admission import AdmissionReceipt, UngatedWriteError
 from mind_mem.enums import (
@@ -339,7 +340,12 @@ def test_the_tier_is_recorded_in_the_audit_trail(workspace: str) -> None:
     with open(os.path.join(workspace, "memory", "evidence_chain.jsonl"), encoding="utf-8") as handle:
         rows = [json.loads(line) for line in handle if line.strip()]
     assert rows, "no evidence row was written"
-    assert rows[-1]["metadata"]["ingest_tier"] == IngestTier.EXTERNAL_INGEST.value
+    # The tier is a property of the *authorisation*: the scope's close
+    # record says what landed, and it carries no tier, so reading the last
+    # row would read the wrong half.
+    admitted = authorisation_rows(rows)
+    assert admitted, "no authorisation row was written"
+    assert admitted[-1]["metadata"]["ingest_tier"] == IngestTier.EXTERNAL_INGEST.value
 
 
 # ---------------------------------------------------------------------------

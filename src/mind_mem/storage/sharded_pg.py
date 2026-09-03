@@ -50,7 +50,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-from ..admission import require_admission, require_delete_admission
+from ..admission import require_admission, require_delete_admission, require_restore_admission
 from ..block_store import BlockStoreError
 
 _log = logging.getLogger("mind_mem.storage.sharded_pg")
@@ -379,7 +379,37 @@ class ShardedPostgresBlockStore:
     def restore(self, snap_dir: str) -> None:
         """Restore every shard from ``snap_dir/shard-NN``.
 
+        Admission is required here, before the fan-out, for the two
+        reasons :meth:`delete_block` states and one more that is specific
+        to a restore:
+
+        *Authorisation precedes existence.* The shard-directory check
+        below reports whether ``snap_dir`` is this cluster's snapshot. Run
+        first, it answered that question for a caller with no scope at
+        all — measured: an ungated ``restore("/nonexistent")`` raised
+        ``BlockStoreError: ... has no directory for shard-00`` rather than
+        ``UngatedRestoreError``, which is the oracle
+        :func:`~mind_mem.admission.require_restore_admission` and
+        :func:`~mind_mem.admission.require_delete_admission` exist to
+        close.
+
+        *An empty fan-out is not an authorised no-op.* The loop below
+        forwards to each shard's own gated ``restore``. With nothing to
+        forward to, an ungated restore would return ``None`` having been
+        checked by nobody — the same shape ``delete_block`` names.
+
+        *Inherited enforcement is not this class's property.* Delegation
+        made the refusal depend on every shard being a store that checks;
+        this adapter is a ``BlockStore`` in its own right and owes its
+        caller the same mutation surface a single shard offers.
+
+        It opens no scope: the sanctioned caller does, each shard checks
+        the same receipt, and one restore leaves one chain record however
+        it was reached.
+
         Raises:
+            UngatedRestoreError: No RESTORE admission is open. Checked
+                first, before ``snap_dir`` is inspected.
             BlockStoreError: if any shard's directory is absent, before
                 anything is restored. :meth:`snapshot` creates one
                 directory per shard, so a missing one means this is not
@@ -388,6 +418,7 @@ class ShardedPostgresBlockStore:
                 happen to be present and returning ``None`` is
                 indistinguishable from a full restore.
         """
+        require_restore_admission(snap_dir)
         missing = [f"shard-{idx:02d}" for idx in self._stores if not os.path.isdir(os.path.join(snap_dir, f"shard-{idx:02d}"))]
         if missing:
             raise BlockStoreError(f"snapshot {snap_dir} has no directory for {', '.join(missing)} — refusing a partial restore")

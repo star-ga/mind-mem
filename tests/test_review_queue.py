@@ -141,6 +141,49 @@ class TestQueueHealth:
         assert health.no_touch_ok is True
 
     def test_flags_detect_only_as_a_blocked_queue(self, workspace):
+        """A ``detect_only`` workspace reports as blocked, not as healthy.
+
+        The mode is flipped in ``mind-mem.json`` through ``mm config set``
+        because that is the file ``apply_engine._get_mode`` reads and the
+        spec binding attests. A hand edit would be drift the gate refuses;
+        an edit to ``memory/intel-state.json`` would not reach the engine
+        at all (see the companion test below).
+
+        The pre-flip assertions are the positive control: they prove the
+        fixture starts *unblocked*, so the blocker asserted after the flip
+        was produced by the flip rather than inherited from a workspace
+        that was already sitting on the shipped ``detect_only`` default.
+        """
+        from mind_mem.mm_cli import config_set
+        from mind_mem.review_queue import queue_health
+
+        root, _ids = workspace
+        before = queue_health(root)
+        assert before.governance_mode == "propose_apply"
+        assert not [b for b in before.blockers if "detect_only" in b]
+
+        config_set(os.path.join(root, "mind-mem.json"), "governance_mode", "detect_only")
+
+        health = queue_health(root)
+        assert health.governance_mode == "detect_only"
+        assert health.blockers
+        assert any("detect_only" in b for b in health.blockers)
+
+    def test_the_unattested_state_file_does_not_change_the_reported_mode(self, workspace):
+        """``memory/intel-state.json`` cannot flip what the queue reports.
+
+        Regression guard for the two-files-one-word defect: the apply
+        engine read ``intel-state.json`` while the governance gate read
+        ``mind-mem.json``, so an edit to the unattested file changed what
+        the engine would apply while the attested file — the one whose
+        changes the spec binding records as DRIFT — said otherwise. Both
+        now read the attested config, and ``queue_health`` reports what
+        the engine will do, so this edit must be inert here.
+
+        Paired with the test above, which flips the attested file and
+        *does* see the blocker: that is the positive control proving this
+        assertion can fail.
+        """
         import json
 
         from mind_mem.review_queue import queue_health
@@ -149,10 +192,11 @@ class TestQueueHealth:
         state_path = os.path.join(root, "memory/intel-state.json")
         with open(state_path, encoding="utf-8") as handle:
             state = json.load(handle)
+        assert state["governance_mode"] == "propose_apply"
         state["governance_mode"] = "detect_only"
         with open(state_path, "w", encoding="utf-8") as handle:
             json.dump(state, handle)
+
         health = queue_health(root)
-        assert health.governance_mode == "detect_only"
-        assert health.blockers
-        assert any("detect_only" in b for b in health.blockers)
+        assert health.governance_mode == "propose_apply"
+        assert not [b for b in health.blockers if "detect_only" in b]

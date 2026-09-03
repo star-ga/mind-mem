@@ -15,6 +15,8 @@ from typing import Any, Iterator, Mapping, Sequence
 
 import pytest
 
+from mind_mem.mm_cli import config_set
+
 DECISION_FILE = "decisions/DECISIONS.md"
 PROPOSAL_FILE = "intelligence/proposed/EDITS_PROPOSED.md"
 
@@ -140,7 +142,15 @@ def build_workspace(
 
 
 def _relax_gates(root: str, *, backlog_limit: int) -> None:
-    """Enable applies and lift the backlog ceiling for the fixture workspace."""
+    """Enable applies and lift the backlog ceiling for the fixture workspace.
+
+    ``mind-mem.json`` goes through ``mm config set`` rather than a hand
+    edit. ``init`` arms the workspace (it writes ``.spec_binding.json``),
+    so a hand edit here is drift by construction — under ``enforce`` the
+    gate refuses every governed write in the fixture, and the tests fail
+    on a config change nobody was hiding. ``intel-state.json`` is not the
+    bound config and is still written directly.
+    """
     state_path = os.path.join(root, "memory/intel-state.json")
     with open(state_path, encoding="utf-8") as handle:
         state = json.load(handle)
@@ -149,11 +159,8 @@ def _relax_gates(root: str, *, backlog_limit: int) -> None:
     _write(state_path, json.dumps(state, indent=2))
 
     config_path = os.path.join(root, "mind-mem.json")
-    with open(config_path, encoding="utf-8") as handle:
-        config = json.load(handle)
-    config.setdefault("proposal_budget", {})["backlog_limit"] = backlog_limit
-    config["governance_mode"] = "propose_apply"
-    _write(config_path, json.dumps(config, indent=2))
+    config_set(config_path, "proposal_budget.backlog_limit", backlog_limit)
+    config_set(config_path, "governance_mode", "propose_apply")
 
 
 def clear_no_touch_window(root: str) -> None:

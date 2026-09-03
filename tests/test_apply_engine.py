@@ -486,18 +486,25 @@ class TestModeGate(unittest.TestCase):
             self.assertIn("detect_only", msg)
 
     def test_propose_mode_allows_apply(self):
-        """In propose mode, apply should proceed past mode gate (will fail on missing proposal)."""
+        """In propose mode, apply should proceed past mode gate (will fail on missing proposal).
+
+        ``propose`` is set in ``mind-mem.json`` — the file the spec binding
+        attests. It used to be set in ``memory/intel-state.json``, which the
+        engine no longer reads: two files carried one word and only the
+        config was accountable for it. See
+        ``tests/test_apply_abort_is_recorded.py::TestOneModeSource``.
+        """
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
-            # Switch to propose mode
-            state_path = os.path.join(ws, "memory/intel-state.json")
-            with open(state_path) as f:
-                state = json.load(f)
-            state["governance_mode"] = "propose"
-            with open(state_path, "w", encoding="utf-8") as f:
-                json.dump(state, f)
+            # Switch to propose mode in the bound config
+            config_path = os.path.join(ws, "mind-mem.json")
+            with open(config_path, encoding="utf-8") as f:
+                config = json.load(f)
+            config["governance_mode"] = "propose"
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f)
             ok, msg = apply_proposal(ws, "P-20260214-999", dry_run=False)
             self.assertFalse(ok)
             # Should fail on "not found", NOT on mode gate

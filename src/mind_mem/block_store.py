@@ -17,7 +17,7 @@ import warnings
 from datetime import datetime, timezone
 from typing import Any, Optional, Protocol, runtime_checkable
 
-from .admission import require_admission, require_delete_admission
+from .admission import require_admission, require_delete_admission, require_restore_admission
 from .block_parser import get_active, get_by_id, parse_file
 from .corpus_registry import (
     BLOCK_PREFIX_MAP,
@@ -612,7 +612,20 @@ class BlockStore(Protocol):
         ...
 
     def restore(self, snap_dir: str) -> None:
-        """Restore the workspace from a snapshot directory."""
+        """Restore the workspace from a snapshot directory.
+
+        Implementations must call
+        :func:`~mind_mem.admission.require_restore_admission` as their
+        **first** statement — before the snapshot is read — so a restore
+        with no RESTORE scope open fails by *authorisation* rather than
+        by whatever the snapshot happens to contain, exactly as
+        :meth:`delete_block` fails before resolving its target.
+
+        A restore withdraws every block written since the snapshot. The
+        record naming what it reinstated and what it withdrew is written
+        by the scope (``apply_engine.restore_snapshot``); the check here
+        is what makes that scope non-optional.
+        """
         ...
 
     def diff(self, snap_dir: str) -> list[str]:
@@ -1095,7 +1108,13 @@ class MarkdownBlockStore:
         counted in the ``missing`` field of the ``block_store_restore``
         record, which also carries ``complete`` — do not read a restore as
         a completed rollback without checking it.
+
+        Raises:
+            UngatedRestoreError: No RESTORE admission is open. Checked
+                before the manifest is read, so an ungated caller and a
+                caller naming a damaged snapshot fail differently.
         """
+        receipt = require_restore_admission(snap_dir)
         ws = self._workspace
         manifest_data = _read_manifest(snap_dir)
         if manifest_data is not None:
@@ -1160,6 +1179,7 @@ class MarkdownBlockStore:
                 missing=len(missing),
                 refused_ledgers=len(refused_ledgers),
                 complete=not missing,
+                admission=receipt.entry_id,
             )
             return
 
@@ -1227,7 +1247,7 @@ class MarkdownBlockStore:
             if os.path.isfile(src):
                 shutil.copy2(src, dst)
 
-        _log.info("block_store_restore_legacy", snap_dir=snap_dir)
+        _log.info("block_store_restore_legacy", snap_dir=snap_dir, admission=receipt.entry_id)
 
     def diff(self, snap_dir: str) -> list[str]:
         """Return sorted list of relative POSIX paths that differ vs. snapshot.

@@ -7,10 +7,26 @@ JavaScript / TypeScript client for the [MIND-Mem](https://github.com/star-ga/min
 - Node.js 18+ (native `fetch`, `AbortSignal.timeout`)
 - Or any modern browser
 
-## Install
+## Tests
 
 ```bash
-npm install @mind-mem/sdk
+npm test    # compiles src + test with tsconfig.test.json, then runs node --test
+```
+
+## Install
+
+> **Not published yet.** The package name is an open decision — the manifest
+> reads `@mind-mem/sdk`, the roadmap names `@star-ga/mind-mem-client`, and an
+> npm name is not reclaimable once taken. Until it is settled,
+> `sdk/js/package.json` carries `"private": true` so no accidental
+> `npm publish` can claim either name. Build the publishable tarball with
+> `python3 sdk/release/pack_js.py --stage <dir>`, which stamps the version
+> from `pyproject.toml` rather than trusting the manifest.
+
+For now, consume it from a checkout:
+
+```bash
+cd sdk/js && npm install && npm run build
 ```
 
 ## Quick start
@@ -35,15 +51,20 @@ console.log(results.results.map(r => r.block.content));
 | `token` | `string` | — | Bearer token. Sent as `Authorization: Bearer` and `X-MindMem-Token`. |
 | `timeoutMs` | `number` | `30000` | Per-request abort timeout. |
 
-### Methods (v0.1 — read-only surface)
+### Methods (read-only surface)
 
-| Method | Description |
-|--------|-------------|
-| `recall(query, opts?)` | BM25/vector/hybrid recall against stored blocks. |
-| `getBlock(blockId)` | Fetch a single block by ID. |
-| `listContradictions()` | List governance-detected contradictions. |
-| `health()` | Check server health and version. |
-| `scan()` | Trigger a governance scan and return issues. |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `recall(query, opts?)` | `POST /v1/recall` | BM25/vector/hybrid recall against stored blocks. |
+| `getBlock(blockId)` | `GET /v1/block/{block_id}` | Fetch a single block by ID. |
+| `listContradictions()` | `GET /v1/contradictions` | List governance-detected contradictions. |
+| `health()` | `GET /v1/health` | Check server health and version. |
+| `scan()` | `GET /v1/scan` | Trigger a governance scan and return issues. |
+
+The endpoint each method calls is declared in `src/routes.ts` and checked
+against `sdk/spec/openapi.json` by `tests/test_sdk_route_conformance.py`, so a
+client that calls something the server does not serve fails in CI rather than
+at a user's first request.
 
 ### `RecallOptions`
 
@@ -80,7 +101,12 @@ try {
 
 ## Write operations
 
-`propose_update` and `approve_apply` land in v0.2 once the REST API server ships.
+Not covered by this client yet. The server *does* serve them —
+`POST /v1/propose_update`, `POST /v1/approve_apply`,
+`POST /v1/rollback_proposal` and the `/v1/admin/api_keys` surface are all in
+`sdk/spec/openapi.json`, and all of them require an admin-scope token. Adding
+one means a new entry in `src/routes.ts` plus its method; the conformance gate
+then holds it to the spec like the rest.
 
 ## License
 

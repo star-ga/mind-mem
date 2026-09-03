@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import threading
+from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Annotated, Any, cast
 
@@ -31,6 +32,7 @@ except ImportError as _err:  # pragma: no cover
     raise ImportError("mind-mem REST API requires the 'api' extra: pip install 'mind-mem[api]'") from _err
 
 from mind_mem import __version__ as _PACKAGE_VERSION
+from mind_mem import audit_context as _audit_ctx
 from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
 from mind_mem.mcp.infra.http_auth import (
     ALLOW_UNAUTH_ENV,
@@ -54,7 +56,12 @@ from mind_mem.schema_version import CURRENT_SCHEMA_VERSION
 #: state is required (see ``_require_auth``'s ``request.state.oidc_scopes``
 #: handoff). ``current_agent_id`` is kept for audit-chain callers that
 #: read it within the same sync dependency frame.
-current_agent_id: ContextVar[str] = ContextVar("current_agent_id", default="anonymous")
+#: The value ``_verify_bearer`` answers when nothing identified the caller.
+#: It is the *absence* of an identity, not an identity named "anonymous",
+#: and provenance fields treat it that way.
+_UNIDENTIFIED = "anonymous"
+
+current_agent_id: ContextVar[str] = ContextVar("current_agent_id", default=_UNIDENTIFIED)
 
 
 def _oidc_admin_scope_names() -> tuple[str, ...]:
@@ -410,6 +417,17 @@ def _require_auth(
         )
     current_agent_id.set(agent_id)
     request.state.oidc_scopes = oidc_scopes
+    # The ``.set`` above does not reach the endpoint: FastAPI runs this
+    # sync dependency in a threadpool worker under a *copy* of the
+    # request context, so the assignment dies with the worker frame.
+    # That is why every REST-driven governed write recorded its actor as
+    # "system" no matter who called. Record it on the two objects both
+    # frames genuinely share instead — the Request, and the audit
+    # context the middleware bound — and let ``_acting_as`` re-establish
+    # the ContextVar inside the endpoint's own frame, where the write
+    # actually happens.
+    request.state.mindmem_authenticated_agent = agent_id
+    _audit_ctx.record_authenticated_agent(agent_id)
     return token
 
 
@@ -468,6 +486,86 @@ def _require_admin(
                 detail="Admin scope required",
             )
     return token
+
+
+@contextmanager
+def _acting_as(request: Request):  # type: ignore[no-untyped-def]
+    """Run the block with the request's authenticated identity in scope.
+
+    ``governance_gate._current_agent()`` reads :data:`current_agent_id`;
+    it is the fallback an admission takes when its caller passes no
+    explicit ``actor``. :func:`_require_auth` cannot set that ContextVar
+    usefully — it runs in its own threadpool frame, so the assignment
+    dies there — which is why the value was never in scope for anything
+    the endpoint called. The endpoint re-establishes it here, in the
+    frame that performs the work, and everything called synchronously
+    from it, however deep, sees it.
+
+    Scope of the claim, stated plainly: every in-tree gate caller that
+    the three governance endpoints reach today passes an explicit actor
+    naming the *mechanism* (``capture``, ``apply_engine``, ``intel_scan``),
+    so this is defence in depth rather than the live attribution path for
+    those three. The principal behind the request is recorded separately
+    and non-optionally, by :func:`_request_provenance`, in the block's own
+    ``ActorId``/``Purpose`` provenance fields. What this fixes is that a
+    caller which *omits* the actor — ``mcp.tools.graph``'s
+    ``admit_proposal(actor="")`` is one — attributed the write to
+    ``"system"`` no matter who was authenticated.
+
+    Falls back to the audit context bound by the middleware, which the
+    dependency mutated with the same identity, and finally to leaving the
+    ContextVar alone: an unauthenticated deployment keeps recording
+    exactly what it recorded before.
+    """
+    agent = getattr(request.state, "mindmem_authenticated_agent", None)
+    if not agent:
+        ctx = _audit_ctx.current_audit_context()
+        agent = ctx.agent_authenticated if ctx is not None else None
+    if not agent or agent == _UNIDENTIFIED:
+        # Nothing identified the caller, so leave the ContextVar exactly as
+        # it was: an unauthenticated deployment keeps attributing writes the
+        # way it did before this existed.
+        yield None
+        return
+    reset = current_agent_id.set(agent)
+    try:
+        # The middleware's log bindings were snapshotted before auth ran,
+        # so the resolved identity is pushed here rather than backfilled
+        # into a frame that has already been copied.
+        with _audit_ctx.log_scope(agent=agent):
+            yield agent
+    finally:
+        current_agent_id.reset(reset)
+
+
+def _request_provenance(request: Request) -> dict[str, str]:
+    """``actor_id`` / ``purpose`` to stamp on a proposal from this request.
+
+    The actor recorded is the identity the server *authenticated*, never
+    the ``X-MindMem-Actor`` header, whenever one is available — a
+    provenance field filled from an unauthenticated claim is worse than
+    an empty one, because it reads like a fact. The claimed actor is used
+    only when the deployment authenticated nobody (loopback / opt-in
+    unauthenticated mode), where a claim is all that exists.
+
+    Both keys are empty strings when there is nothing to say, which is
+    what ``propose_update`` already treats as "field absent" — so a
+    caller that sends no headers to an unauthenticated server writes the
+    exact block it wrote before.
+    """
+    ctx = _audit_ctx.current_audit_context()
+    authenticated = getattr(request.state, "mindmem_authenticated_agent", None)
+    if not authenticated and ctx is not None:
+        authenticated = ctx.agent_authenticated
+    if authenticated == _UNIDENTIFIED:
+        # ``_verify_bearer`` answers "anonymous" for the loopback opt-in
+        # deployment, where nobody was identified. Stamping that string on
+        # a block would read like an identity; it is the absence of one, so
+        # an unauthenticated server keeps writing the block it always wrote.
+        authenticated = None
+    claimed = ctx.actor_claimed if ctx is not None else ""
+    purpose = ctx.purpose if ctx is not None else ""
+    return {"actor_id": authenticated or claimed or "", "purpose": purpose}
 
 
 def _rate_limit_bucket(request: Request, token: str | None) -> str:
@@ -799,24 +897,6 @@ def create_app(workspace: str | None = None) -> FastAPI:
     # log or response headers.
     @application.middleware("http")
     async def _audit_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
-        import re as _re
-        import uuid as _uuid
-
-        _CTRL = _re.compile(r"[\x00-\x1f\x7f]")
-
-        def _safe_hdr(raw: str | None, *, default: str = "", max_len: int = 256) -> str:
-            """Return *raw* with CR/LF/NUL/control bytes stripped, bounded length.
-
-            CodeQL-friendly: leads with explicit ``.replace`` so the stock
-            ``py/log-injection`` and ``py/header-injection`` queries
-            recognise this as a sanitiser node.
-            """
-            if not raw:
-                return default
-            cleaned = raw.replace("\r", "").replace("\n", "")
-            cleaned = _CTRL.sub("", cleaned)
-            return cleaned[:max_len]
-
         # Capture raw presence-vs-absence on the request: an absent
         # client header should NOT echo a synthetic "anonymous" string
         # on the response (operators read header absence as
@@ -824,13 +904,10 @@ def create_app(workspace: str | None = None) -> FastAPI:
         raw_actor = request.headers.get("x-mindmem-actor")
         raw_purpose = request.headers.get("x-mindmem-purpose")
 
-        request_id = _safe_hdr(
-            request.headers.get("x-mindmem-request-id"),
-            default=str(_uuid.uuid4()),
-            max_len=64,
-        )
-        actor = _safe_hdr(raw_actor, default="anonymous")
-        purpose = _safe_hdr(raw_purpose, default="")
+        ctx = _audit_ctx.context_from_headers(request.headers.get, transport="rest")
+        request_id = ctx.request_id
+        actor = ctx.actor_claimed or "anonymous"
+        purpose = ctx.purpose
         # Stash on request.state for any downstream handler that wants
         # to record actor/purpose in the audit chain. ``actor`` defaults
         # to "anonymous" here so the chain has a stable string to record;
@@ -838,11 +915,20 @@ def create_app(workspace: str | None = None) -> FastAPI:
         request.state.mindmem_request_id = request_id
         request.state.mindmem_actor = actor
         request.state.mindmem_purpose = purpose
-        response = await call_next(request)
+        # Bind the same attribution where code that has never heard of
+        # FastAPI can read it. This is what turns the three headers from
+        # "parsed and echoed" into "propagated": the context object bound
+        # here is the one ``_require_auth`` mutates with the authenticated
+        # identity (a ContextVar set inside a threadpool-run sync
+        # dependency would not survive), the one every governance
+        # endpoint reads to attribute its write, and the one that feeds
+        # the structured-log correlation id.
+        with _audit_ctx.bind_audit_context(ctx):
+            response = await call_next(request)
         # Echo on the response — operators stitch upstream logs by these.
         response.headers["X-MindMem-Request-Id"] = request_id
-        if raw_actor and actor:
-            response.headers["X-MindMem-Actor"] = actor
+        if raw_actor and ctx.actor_claimed:
+            response.headers["X-MindMem-Actor"] = ctx.actor_claimed
         if raw_purpose and purpose:
             response.headers["X-MindMem-Purpose"] = purpose
         return response
@@ -983,16 +1069,24 @@ def create_app(workspace: str | None = None) -> FastAPI:
         summary="Stage a new decision or task proposal",
         dependencies=[Depends(_rate_limit)],
     )
-    def propose_update(body: ProposeUpdateRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
+    def propose_update(
+        request: Request,
+        body: ProposeUpdateRequest,
+        _token: Annotated[str | None, Depends(_require_admin)],
+    ) -> Any:
         from mind_mem.mcp.tools.governance import propose_update as _propose_update
 
-        raw = _propose_update(
-            block_type=body.block_type,
-            statement=body.statement,
-            rationale=body.rationale,
-            tags=body.tags,
-            confidence=body.confidence,
-        )
+        provenance = _request_provenance(request)
+        with _acting_as(request):
+            raw = _propose_update(
+                block_type=body.block_type,
+                statement=body.statement,
+                rationale=body.rationale,
+                tags=body.tags,
+                confidence=body.confidence,
+                actor_id=provenance["actor_id"],
+                purpose=provenance["purpose"],
+            )
         return _parse_tool_json(raw)
 
     @application.post(
@@ -1001,10 +1095,15 @@ def create_app(workspace: str | None = None) -> FastAPI:
         summary="Apply a staged proposal (admin scope required)",
         dependencies=[Depends(_rate_limit)],
     )
-    def approve_apply(body: ApproveApplyRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
+    def approve_apply(
+        request: Request,
+        body: ApproveApplyRequest,
+        _token: Annotated[str | None, Depends(_require_admin)],
+    ) -> Any:
         from mind_mem.mcp.tools.governance import approve_apply as _approve_apply
 
-        raw = _approve_apply(proposal_id=body.proposal_id, dry_run=body.dry_run)
+        with _acting_as(request):
+            raw = _approve_apply(proposal_id=body.proposal_id, dry_run=body.dry_run)
         return _parse_tool_json(raw)
 
     @application.post(
@@ -1013,10 +1112,15 @@ def create_app(workspace: str | None = None) -> FastAPI:
         summary="Rollback an applied proposal (admin scope required)",
         dependencies=[Depends(_rate_limit)],
     )
-    def rollback_proposal(body: RollbackProposalRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
+    def rollback_proposal(
+        request: Request,
+        body: RollbackProposalRequest,
+        _token: Annotated[str | None, Depends(_require_admin)],
+    ) -> Any:
         from mind_mem.mcp.tools.governance import rollback_proposal as _rollback
 
-        raw = _rollback(receipt_ts=body.receipt_ts, reason=body.reason)
+        with _acting_as(request):
+            raw = _rollback(receipt_ts=body.receipt_ts, reason=body.reason)
         return _parse_tool_json(raw)
 
     @application.get(
@@ -1217,12 +1321,72 @@ def _enforce_fail_closed(host: str, allow_unauthenticated_localhost: bool) -> No
         )
 
 
+def _floored_uvicorn_config(
+    server_app: Any,
+    host: str,
+    port: int,
+    *,
+    tls_certfile: str,
+    tls_keyfile: str | None,
+    tls_keyfile_password: str | None,
+    tls_client_ca: str | None,
+) -> Any:
+    """Return a loaded uvicorn ``Config`` whose TLS context carries the floor.
+
+    uvicorn builds its listener context with ``ssl.SSLContext(ssl_version)``
+    and never touches ``minimum_version``, so its default listener happily
+    completes a TLS 1.2 handshake. The floor is raised here, on the context
+    object uvicorn will hand to the socket, **before** ``Server.run`` binds
+    anything — so a peer that can only speak TLS 1.2 fails the handshake and
+    there is no connection to inspect afterwards. Nothing in this path reads
+    ``SSLSocket.version()`` and logs a complaint; by then the request has
+    already been served.
+
+    ``config.load()`` is called here rather than left to ``Server.run``,
+    which is what makes the context exist early enough to floor. ``run``
+    checks ``config.loaded`` and does not redo it.
+
+    Raises:
+        TlsFloorUnavailable: this interpreter cannot enforce TLS 1.3, or
+            uvicorn produced no context for a TLS bind. Either way the
+            server does not start.
+    """
+    import ssl as _ssl
+
+    import uvicorn  # type: ignore[import-untyped]
+
+    from mind_mem.v4.tls_floor import TlsFloorUnavailable, apply_floor, context_meets_floor
+
+    config = uvicorn.Config(
+        server_app,
+        host=host,
+        port=port,
+        ssl_certfile=tls_certfile,
+        ssl_keyfile=tls_keyfile,
+        ssl_keyfile_password=tls_keyfile_password,
+        ssl_ca_certs=tls_client_ca,
+        ssl_cert_reqs=int(_ssl.CERT_REQUIRED) if tls_client_ca else int(_ssl.CERT_NONE),
+    )
+    config.load()
+    ctx = getattr(config, "ssl", None)
+    if ctx is None:
+        raise TlsFloorUnavailable("uvicorn built no SSL context for a TLS bind; refusing to start a listener whose floor cannot be set")
+    apply_floor(ctx)
+    if not context_meets_floor(ctx):  # pragma: no cover - apply_floor already read back
+        raise TlsFloorUnavailable("uvicorn's SSL context does not carry the TLS 1.3 floor after it was applied")
+    return config
+
+
 def run(
     host: str = "127.0.0.1",
     port: int = 8080,
     workspace: str | None = None,
     *,
     allow_unauthenticated_localhost: bool = False,
+    tls_certfile: str | None = None,
+    tls_keyfile: str | None = None,
+    tls_keyfile_password: str | None = None,
+    tls_client_ca: str | None = None,
 ) -> None:
     """Launch the REST API with uvicorn.
 
@@ -1238,11 +1402,27 @@ def run(
         v3.7.0 H4: explicit operator opt-in to skip authentication.
         Permitted only when ``host`` is a loopback interface; routable
         binds without auth are refused at startup.
+    tls_certfile, tls_keyfile, tls_keyfile_password:
+        Serve HTTPS directly instead of behind a terminating proxy. When
+        ``tls_certfile`` is given the listener is built with the TLS 1.3
+        floor already on its context (roadmap v4.0.0 Group D) — a TLS 1.2
+        peer cannot complete a handshake. Omitting them keeps the plain
+        ``uvicorn.run`` path exactly as it was.
+    tls_client_ca:
+        Require client certificates signed by this CA (mutual TLS). This
+        is the supported way to bind a peer's identity; certificate
+        pinning is deliberately not offered — see
+        :data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION`.
     """
     try:
         import uvicorn  # type: ignore[import-untyped]
     except ImportError as err:  # pragma: no cover
         raise ImportError("uvicorn is required to run the REST API server. Install: pip install 'mind-mem[api]'") from err
+
+    if tls_keyfile and not tls_certfile:
+        raise ValueError("tls_keyfile was given without tls_certfile; a TLS listener needs the certificate chain too")
+    if tls_client_ca and not tls_certfile:
+        raise ValueError("tls_client_ca requires tls_certfile: mutual TLS is a property of a TLS listener")
 
     _enforce_fail_closed(host, allow_unauthenticated_localhost)
     if allow_unauthenticated_localhost and not _auth_is_configured():
@@ -1251,4 +1431,16 @@ def run(
     os.environ[BIND_HOST_ENV] = host
 
     server_app = create_app(workspace)
-    uvicorn.run(server_app, host=host, port=port)
+    if tls_certfile is None:
+        uvicorn.run(server_app, host=host, port=port)
+        return
+    config = _floored_uvicorn_config(
+        server_app,
+        host,
+        port,
+        tls_certfile=tls_certfile,
+        tls_keyfile=tls_keyfile,
+        tls_keyfile_password=tls_keyfile_password,
+        tls_client_ca=tls_client_ca,
+    )
+    uvicorn.Server(config).run()

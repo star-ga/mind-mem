@@ -31,7 +31,10 @@ never executed in CI while the run reported green.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -226,12 +229,77 @@ class TestParseMicbBench:
 # ---------------------------------------------------------------------------
 
 
+def _active_tracer() -> str | None:
+    """Name the line-level tracer instrumenting this process, or ``None``.
+
+    Three probes, because no single one is both sound and complete — and
+    the obvious fourth one is neither:
+
+    * ``sys.gettrace()`` sees coverage.py's C tracer and any debugger.
+      Measured on this tree under ``pytest --cov=src``: a
+      ``coverage.CTracer`` already installed at module-import time, which
+      is when the skip below is decided; ``None`` without ``--cov``.
+    * ``sys.monitoring`` (3.12+) is the backend coverage.py uses when
+      ``COVERAGE_CORE=sysmon``, and that backend leaves ``sys.gettrace()``
+      empty. Reached through ``getattr`` because the 3.10 and 3.11 matrix
+      rows have no ``sys.monitoring`` at all.
+    * ``coverage.Coverage.current()`` is coverage.py's own answer, and the
+      only probe that stays correct if it grows a third backend.
+
+    What this deliberately does **not** test is ``"coverage" in
+    sys.modules``. Measured: pytest-cov imports coverage on *every* run,
+    instrumented or not, so that clause is true on all fifteen matrix rows
+    and would turn the guard below into an unconditional skip rather than
+    one conditional on a real environment fact.
+    ``TestTheFloorsAreGuardedAgainstTheirOwnInstrumentation`` pins both
+    halves of that distinction.
+    """
+    tracer = sys.gettrace()
+    if tracer is not None:
+        return f"sys.gettrace() -> {type(tracer).__module__}.{type(tracer).__name__}"
+    monitoring = getattr(sys, "monitoring", None)  # 3.12+
+    if monitoring is not None:
+        tool = monitoring.get_tool(monitoring.COVERAGE_ID)
+        if tool is not None:
+            return f"sys.monitoring COVERAGE_ID held by {tool!r}"
+    current = getattr(getattr(sys.modules.get("coverage"), "Coverage", None), "current", None)
+    if current is not None and current() is not None:
+        return "coverage.Coverage.current() reports a running Coverage"
+    return None
+
+
+#: Resolved once, at import: that is when the skip is decided, and by then
+#: pytest-cov has already installed its tracer.
+_TRACER = _active_tracer()
+
+
+@pytest.mark.skipif(
+    _TRACER is not None,
+    reason=(f"a wall-clock throughput floor under line tracing measures the tracer, not the parser ({_TRACER})"),
+)
 class TestThroughputFloors:
     """Worst-acceptable throughput on a single core. Floors are
     intentionally conservative so a CI runner under load doesn't
     flake. The expected pure-Python numbers are well above these
     floors; a future Cython / Rust accelerator should push them
-    much higher."""
+    much higher.
+
+    Skipped while something is tracing this process, because then the
+    number under test is the tracer's. Measured on this tree, same box,
+    same commit, ``-k TestThroughputFloors``::
+
+        pytest ...                    6 passed
+        pytest ... --cov=src          2 failed, 4 passed
+                                      parse_micb(small) only 4430/s   (floor 5000)
+                                      parse_micb(large) only 46.3/s   (floor 50)
+
+    CI run 33628984458 failed the same two on the one instrumented row
+    (ubuntu-3.12, the only row that passes ``--cov``) at 4624/s and
+    44.0/s, while the fourteen uninstrumented rows passed them. The floor
+    is not lowered and the scan is not narrowed: the other fourteen rows
+    still measure it on every push, and the skip states the environment
+    fact that makes this row's number meaningless.
+    """
 
     @staticmethod
     def _measure_ops_per_sec(fn, *args, max_seconds: float = 0.5) -> float:
@@ -269,6 +337,80 @@ class TestThroughputFloors:
         b = emit_micb(large_graph)
         ops = self._measure_ops_per_sec(parse_micb, b, max_seconds=1.0)
         assert ops > 50, f"parse_micb(large) only {ops:.1f}/s"
+
+
+# ---------------------------------------------------------------------------
+# The guard on the floors above, and the two facts it rests on
+# ---------------------------------------------------------------------------
+
+#: Run in a process nobody is instrumenting, to measure the one thing an
+#: instrumented process cannot tell you: that importing coverage is not
+#: the same as running it. Imports the test module by path, so it is the
+#: *shipped* detector under test and not a copy of it.
+_IDLE_COVERAGE_PROBE = """\
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import coverage  # noqa: F401  — imported and never started, as pytest-cov does
+
+import test_mic_map_bench as bench
+
+print("imported=%s tracer=%s" % ("coverage" in sys.modules, bench._active_tracer()))
+"""
+
+
+class TestTheFloorsAreGuardedAgainstTheirOwnInstrumentation:
+    """The skip on ``TestThroughputFloors`` is only honest if the thing it
+    asks about is real. Two halves, and neither is enough alone: the
+    detector must SEE a tracer that is present, and must NOT call an idle
+    import one.
+    """
+
+    def test_the_detector_sees_a_tracer_that_is_present(self) -> None:
+        # Positive control. Before trusting ``_active_tracer() is None``
+        # anywhere, prove the method can find one it is standing inside.
+        # Works on the instrumented row too, where it is already non-None.
+        before = sys.gettrace()
+        try:
+            sys.settrace(lambda frame, event, arg: None)
+            found = _active_tracer()
+        finally:
+            sys.settrace(before)
+        assert found is not None, "the detector cannot see a tracer it is standing in — it can prove nothing"
+
+    def test_an_imported_but_idle_coverage_is_not_reported_as_a_tracer(self) -> None:
+        # The clause the detector refuses to use, measured where it can be:
+        # a subprocess with coverage imported and nothing tracing.
+        proc = subprocess.run(
+            [sys.executable, "-c", _IDLE_COVERAGE_PROBE, str(Path(__file__).parent)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert proc.returncode == 0, f"probe failed ({proc.returncode}):\n{proc.stdout}\n{proc.stderr}"
+        out = proc.stdout.strip().splitlines()[-1]
+        # Positive control first: a probe where coverage never imported
+        # would report tracer=None for the wrong reason.
+        assert "imported=True" in out, f"coverage was not imported in the probe, so it proves nothing: {out!r}"
+        assert "tracer=None" in out, (
+            f"an imported-but-idle coverage was reported as a tracer: {out!r} — the guard on "
+            "TestThroughputFloors would then skip on every matrix row"
+        )
+
+    def test_the_floors_carry_the_guard(self) -> None:
+        # Wiring, not intent: a detector nothing consults is decoration, and
+        # a guard wired to a stale answer is worse than no guard at all.
+        marks = [m for m in getattr(TestThroughputFloors, "pytestmark", []) if m.name == "skipif"]
+        assert marks, "TestThroughputFloors lost its skipif — the floors are back to measuring the tracer"
+        # Deliberately compared against a FRESH call, not against ``_TRACER``.
+        # ``_TRACER`` is the value the mark was built from, so comparing the
+        # two only asserts that a name equals itself: blinding the detector
+        # leaves both sides False and this stays green. Measured — that is
+        # exactly what the first version of this assertion did.
+        live = _active_tracer()
+        assert marks[0].args[0] is (live is not None), (
+            f"the floors' skipif no longer tracks the live tracer detector (mark condition={marks[0].args[0]!r}, detector={live!r})"
+        )
 
 
 # ---------------------------------------------------------------------------

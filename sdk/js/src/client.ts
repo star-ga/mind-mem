@@ -4,6 +4,14 @@ import {
   MindMemRateLimitError,
   MindMemServerError,
 } from "./errors.js";
+import {
+  expandRoute,
+  ROUTE_GET_BLOCK,
+  ROUTE_HEALTH,
+  ROUTE_LIST_CONTRADICTIONS,
+  ROUTE_RECALL,
+  ROUTE_SCAN,
+} from "./routes.js";
 import type {
   BlockResult,
   ClientOptions,
@@ -48,41 +56,54 @@ export class MindMemClient {
 
   /**
    * Full-text + semantic recall against stored memory blocks.
+   *
+   * Sent as `POST /v1/recall` with a JSON body — the shape the server has
+   * always served. Fields the caller left unset are omitted so the server's
+   * own defaults apply (see components/schemas/RecallRequest in
+   * `sdk/spec/openapi.json`).
    */
   async recall(query: string, opts: RecallOptions = {}): Promise<RecallResult> {
-    const params: Record<string, string> = { q: query };
-    if (opts.limit !== undefined) params["limit"] = String(opts.limit);
-    if (opts.activeOnly !== undefined) params["active_only"] = String(opts.activeOnly);
-    if (opts.backend !== undefined) params["backend"] = opts.backend;
-    return this.get<RecallResult>("/v1/recall", params);
+    const body: Record<string, unknown> = { query };
+    if (opts.limit !== undefined) body["limit"] = opts.limit;
+    if (opts.activeOnly !== undefined) body["active_only"] = opts.activeOnly;
+    if (opts.backend !== undefined) body["backend"] = opts.backend;
+    return this.request<RecallResult>(ROUTE_RECALL.method, expandRoute(ROUTE_RECALL), {
+      body,
+    });
   }
 
   /**
    * Fetch a single memory block by its ID.
    */
   async getBlock(blockId: string): Promise<BlockResult> {
-    return this.get<BlockResult>(`/v1/blocks/${encodeURIComponent(blockId)}`);
+    return this.request<BlockResult>(
+      ROUTE_GET_BLOCK.method,
+      expandRoute(ROUTE_GET_BLOCK, blockId),
+    );
   }
 
   /**
    * List all detected contradictions in the memory store.
    */
   async listContradictions(): Promise<ContradictionsResult> {
-    return this.get<ContradictionsResult>("/v1/contradictions");
+    return this.request<ContradictionsResult>(
+      ROUTE_LIST_CONTRADICTIONS.method,
+      expandRoute(ROUTE_LIST_CONTRADICTIONS),
+    );
   }
 
   /**
    * Check the health / readiness of the running mind-mem instance.
    */
   async health(): Promise<HealthResult> {
-    return this.get<HealthResult>("/v1/health");
+    return this.request<HealthResult>(ROUTE_HEALTH.method, expandRoute(ROUTE_HEALTH));
   }
 
   /**
    * Run a governance scan and return any drift/conflict issues found.
    */
   async scan(): Promise<ScanResult> {
-    return this.get<ScanResult>("/v1/scan");
+    return this.request<ScanResult>(ROUTE_SCAN.method, expandRoute(ROUTE_SCAN));
   }
 
   // -------------------------------------------------------------------------
@@ -111,17 +132,26 @@ export class MindMemClient {
     return headers;
   }
 
-  private async get<T>(path: string, params?: Record<string, string>): Promise<T> {
-    const url = this.buildUrl(path, params);
+  private async request<T>(
+    method: string,
+    path: string,
+    options: { params?: Record<string, string>; body?: unknown } = {},
+  ): Promise<T> {
+    const url = this.buildUrl(path, options.params);
     const signal = AbortSignal.timeout(this.timeoutMs);
+
+    const init: RequestInit = {
+      method,
+      headers: this.buildHeaders(),
+      signal,
+    };
+    if (options.body !== undefined) {
+      init.body = JSON.stringify(options.body);
+    }
 
     let response: Response;
     try {
-      response = await fetch(url, {
-        method: "GET",
-        headers: this.buildHeaders(),
-        signal,
-      });
+      response = await fetch(url, init);
     } catch (cause) {
       throw new MindMemError(
         `Network error reaching ${url}: ${(cause as Error).message}`,

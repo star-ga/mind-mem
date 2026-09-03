@@ -36,6 +36,7 @@ import pytest
 from mind_mem import ingestion_pipeline, streaming
 from mind_mem.block_parser import parse_file
 from mind_mem.init_workspace import init
+from mind_mem.mm_cli import config_set
 from mind_mem.recall import recall
 
 # Distinct from the redteam suite's token, so a cross-contaminated workspace
@@ -51,18 +52,23 @@ def _governed_ws(*, ingest_serve: bool = True, streaming_cfg: dict | None = None
     """A governed workspace with the two flags this door needs, both explicit."""
     ws = tempfile.mkdtemp(prefix="mm_frontgate_")
     init(ws)
-    for rel, key in ((("mind-mem.json",), "governance_mode"), (("memory", "intel-state.json"), "governance_mode")):
-        path = os.path.join(ws, *rel)
-        with open(path, encoding="utf-8") as fh:
-            blob = json.load(fh)
-        blob[key] = "enforce"
-        if rel == ("mind-mem.json",):
-            if ingest_serve:
-                blob["v4"] = {**blob.get("v4", {}), ingestion_pipeline.INGEST_SERVE_FLAG: {"enabled": True}}
-            if streaming_cfg is not None:
-                blob["streaming"] = streaming_cfg
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(blob, fh)
+    # ``init`` arms the gate. ``mind-mem.json`` therefore goes through
+    # ``mm config set``, which writes and re-attests in one step; a hand
+    # edit is drift and ``enforce`` refuses every write below.
+    # ``memory/intel-state.json`` is not the bound config.
+    config_path = os.path.join(ws, "mind-mem.json")
+    config_set(config_path, "governance_mode", "enforce")
+    if ingest_serve:
+        config_set(config_path, f"v4.{ingestion_pipeline.INGEST_SERVE_FLAG}", {"enabled": True})
+    if streaming_cfg is not None:
+        config_set(config_path, "streaming", streaming_cfg)
+
+    state_path = os.path.join(ws, "memory", "intel-state.json")
+    with open(state_path, encoding="utf-8") as fh:
+        state = json.load(fh)
+    state["governance_mode"] = "enforce"
+    with open(state_path, "w", encoding="utf-8") as fh:
+        json.dump(state, fh)
     return ws
 
 

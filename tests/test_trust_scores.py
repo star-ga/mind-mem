@@ -11,6 +11,7 @@ exact floats rather than a range check.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -274,6 +275,29 @@ class TestPoisoningDemotion:
 # --- workspace signal loaders ----------------------------------------------
 
 
+def _write_evidence(tmp_path, rows) -> None:
+    """Write a real evidence chain from ``(action, actor, metadata)`` triples.
+
+    Built with :meth:`EvidenceChain.create` rather than hand-rolled JSON
+    so the rows carry genuine linkage and hashes — a fixture that forged
+    them could drift from what the writer actually emits and the test
+    would be measuring the fixture.
+    """
+    from mind_mem.evidence_objects import EvidenceAction, EvidenceChain
+
+    os.makedirs(tmp_path / "memory", exist_ok=True)
+    chain = EvidenceChain(store_path=str(tmp_path / "memory" / "evidence_chain.jsonl"))
+    for index, (action, actor, metadata) in enumerate(rows):
+        chain.create(
+            action=EvidenceAction(action),
+            actor=actor,
+            target_block_id=f"D-{index}",
+            target_file="memory/MEMORY.md",
+            payload="x",
+            metadata=metadata,
+        )
+
+
 class TestWorkspaceSignals:
     def test_loaders_are_re_exported_from_trust_scores(self) -> None:
         from mind_mem import trust_signals
@@ -287,46 +311,47 @@ class TestWorkspaceSignals:
 
     def test_missing_chain_returns_no_rollbacks_and_creates_nothing(self, tmp_path) -> None:
         assert load_rollback_history(str(tmp_path)) == ({}, {})
+        # EvidenceChain's constructor creates the directory it is pointed
+        # at, so the existence probe has to come first. Asserting the
+        # directory is still absent is what proves it did.
+        assert not (tmp_path / "memory").exists()
         assert not (tmp_path / ".mind-mem-audit").exists()
 
-    def test_rollback_history_is_read_from_the_audit_chain(self, tmp_path) -> None:
-        audit_dir = tmp_path / ".mind-mem-audit"
-        audit_dir.mkdir()
-        rows = [
-            ("apply_proposal", TRUSTED_ACTOR),
-            ("apply_proposal", POISON_ACTOR),
-            ("rollback", POISON_ACTOR),
-            ("rollback", POISON_ACTOR),
-            ("apply_proposal", ""),
-        ]
-        with (audit_dir / "chain.jsonl").open("w", encoding="utf-8") as fh:
-            for seq, (operation, agent) in enumerate(rows, start=1):
-                fh.write(
-                    json.dumps(
-                        {
-                            "seq": seq,
-                            "timestamp": "2026-01-01T00:00:00Z",
-                            "operation": operation,
-                            "target": "memory/MEMORY.md",
-                            "agent": agent,
-                            "reason": "",
-                            "payload_hash": "0" * 64,
-                            "prev_hash": "0" * 64,
-                            "entry_hash": "0" * 64,
-                        }
-                    )
-                    + "\n"
-                )
+    def test_rollback_history_is_read_from_the_evidence_chain(self, tmp_path) -> None:
+        """Withdrawals live in the evidence chain, not the field-audit sidecar.
+
+        Until 5.0.2 this counted sidecar rows whose ``operation`` was
+        ``"rollback"`` — a verb no door has ever written there — so the
+        answer was ``{}`` on every workspace that has ever existed, and
+        the emptiness read as "nobody was rolled back" rather than as
+        "this is reading the wrong ledger".
+        """
+        _write_evidence(
+            tmp_path,
+            [
+                ("APPLY", TRUSTED_ACTOR, None),
+                ("APPLY", POISON_ACTOR, None),
+                ("ROLLBACK", POISON_ACTOR, None),
+                ("ROLLBACK", POISON_ACTOR, None),
+                ("APPLY", "", None),
+            ],
+        )
         rollbacks, writes = load_rollback_history(str(tmp_path))
         assert rollbacks == {POISON_ACTOR: 2}
         assert writes == {TRUSTED_ACTOR: 1, POISON_ACTOR: 3}
 
-    def test_rollback_history_is_not_wired_into_any_score(self, tmp_path) -> None:
-        """Per-actor history must never move a rank (determinism wedge)."""
+    def test_the_sidecar_is_no_longer_consulted(self, tmp_path) -> None:
+        """Positive control for the repoint.
+
+        Rows in the OLD location, written exactly as the previous
+        implementation read them, must now count for nothing. Without
+        this the repoint could be a no-op and the test above would still
+        pass off the new ledger.
+        """
         audit_dir = tmp_path / ".mind-mem-audit"
         audit_dir.mkdir()
         with (audit_dir / "chain.jsonl").open("w", encoding="utf-8") as fh:
-            for seq in range(1, 6):
+            for seq in range(1, 4):
                 fh.write(
                     json.dumps(
                         {
@@ -343,6 +368,36 @@ class TestWorkspaceSignals:
                     )
                     + "\n"
                 )
+        assert (audit_dir / "chain.jsonl").is_file(), "positive control: the sidecar rows must exist"
+        assert load_rollback_history(str(tmp_path)) == ({}, {})
+
+    def test_a_delete_scope_is_charged_once_not_twice(self, tmp_path) -> None:
+        """A governed delete mints ``admitted`` then ``removed`` under ROLLBACK.
+
+        Both records are real and both belong in the ledger; counting
+        both would report every delete as two withdrawals.
+        """
+        _write_evidence(
+            tmp_path,
+            [
+                ("ROLLBACK", POISON_ACTOR, {"delete_phase": "admitted"}),
+                ("ROLLBACK", POISON_ACTOR, {"delete_phase": "removed"}),
+            ],
+        )
+        rollbacks, writes = load_rollback_history(str(tmp_path))
+        assert rollbacks == {POISON_ACTOR: 1}
+        assert writes == {POISON_ACTOR: 2}
+
+    def test_rollback_history_is_not_wired_into_any_score(self, tmp_path) -> None:
+        """Per-actor history must never move a rank (determinism wedge).
+
+        Written to the ledger the loader *actually* reads: against the
+        old location this assertion held for the wrong reason — nothing
+        read those rows, so of course they moved nothing.
+        """
+        _write_evidence(tmp_path, [("ROLLBACK", POISON_ACTOR, None)] * 5)
+        rollbacks, _writes = load_rollback_history(str(tmp_path))
+        assert rollbacks == {POISON_ACTOR: 5}, "positive control: the history must be visible to mean anything"
         with_history = apply_trust_scores(_poisoned_results(), config=CFG_RERANK, workspace=str(tmp_path))
         without_history = apply_trust_scores(_poisoned_results(), config=CFG_RERANK)
         assert json.dumps(with_history, sort_keys=True) == json.dumps(without_history, sort_keys=True)

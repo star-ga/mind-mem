@@ -30,12 +30,17 @@ from __future__ import annotations
 
 import ast
 
+import _write_path_scan
 import pytest
 from _write_path_scan import (
     ADMIT_OPENERS,
     CORPUS_BASENAMES,
+    CORPUS_DIRS,
     DELETE_ADMIT_OPENERS,
+    UNRESOLVED,
     corpus_basenames_from_source,
+    corpus_dir_hit,
+    corpus_dirs_from_source,
     find_write_block_calls,
     function_node,
     iter_source_files,
@@ -94,6 +99,49 @@ SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     # C-/DREF- ids and to the one status it mints, so this scope cannot be
     # spent on anything but a finding.
     ("src/mind_mem/intel_scan.py", "_write_findings"): LOCAL,
+    # --- the dream cycle's auto-created entities (AUD-06). It used to
+    # write entities/<PREFIX>-<slug>.md by hand, which was ungoverned AND
+    # unresolvable: measured on a fresh workspace, parse_file found 0
+    # blocks in the file, get_by_id answered None and both ledgers stayed
+    # at +0, while list_blocks counted it -- so the RepairAction reported
+    # `entity_created` for an id that did not exist and GET /status
+    # counted a file resolving to nothing. Reached from POST /consolidate
+    # {"auto_repair": true} and from the daemon. One admit_block per
+    # entity under IngestTier.AUTO_CAPTURE, so the block lands `pending`
+    # and recall withholds it until a release admits it.
+    ("src/mind_mem/dream_cycle.py", "_create_entity_block"): LOCAL,
+    # --- staged skill mutations (AUD-06). It used to append a
+    # "## SKILL-<id>" heading to SIGNALS.md; the id it returned is stored
+    # by `mm skill-optimize` as the mutation's governance handle and
+    # resolved to NOTHING, because a markdown heading is not a block.
+    # Same tier and same bargain as the dream cycle: AUTO_CAPTURE,
+    # `pending`, withheld until released.
+    ("src/mind_mem/skill_opt/validator.py", "submit_to_governance"): LOCAL,
+    # --- the auto-capture door itself (R2-03). Twelve callers, the
+    # `observe_signal` MCP tool among them. It used to hand-write the
+    # `[SIG-...]` text into intelligence/SIGNALS.md with the scope as a
+    # CONDITIONAL -- `gate.admit_batch(...) if _gate is not None else
+    # nullcontext()`, over a `_get_gate` whose `except Exception: return
+    # None` turned any gate failure into a no-op scope. Measured on a
+    # fresh workspace with memory/hash_chain_v2.db replaced by a
+    # directory: get_gate raised OperationalError, the block landed
+    # anyway, both ledgers stayed at +0 and the call returned 1. The
+    # allowlist claimed it opened an admission and the scanner agreed,
+    # because `admit_batch` appeared textually; `opens_admission` now
+    # refuses an opener that is one arm of a conditional expression.
+    # One admit_batch per run under IngestTier.AUTO_CAPTURE, so signals
+    # land `pending` and recall withholds them until a release admits
+    # them, and nothing here can reach a corpus file any more because
+    # nothing here opens one.
+    ("src/mind_mem/capture.py", "append_signals"): LOCAL,
+    # --- the eval harness's synthetic haystack. Not the operator's
+    # corpus, which is why it was PENDING rather than a leak; but it spelled
+    # `Status: active` straight into a file it opened itself, so the
+    # benchmark was measuring a write path the product does not ship.
+    # admit_proposal + write_block, exactly as bench/ab_seed does -- and
+    # PROPOSAL_APPLY is the only tier that may mint the servable status a
+    # retrieval haystack has to carry.
+    ("src/mind_mem/bench/eval_adapters.py", "_seed_governed"): LOCAL,
     # --- the drop folder: untrusted input by construction. Same bargain
     # as the importer — batch admission, lands quarantined.
     ("src/mind_mem/inbox.py", "ingest_text_file"): LOCAL,
@@ -166,10 +214,19 @@ ENFORCEMENT_EXEMPT: frozenset[tuple[str, str]] = frozenset(
 #: touching ``write_block``. A receipt on ``write_block`` cannot cover
 #: these, so they are pinned here rather than left unbounded.
 SANCTIONED_CORPUS_WRITERS: dict[tuple[str, str], str] = {
-    # The sanctioned signal mint behind propose_update. Admits BEFORE the
-    # bytes land (it used to admit after, inside a bare except that
-    # swallowed the refusal, so a drifted spec blocked nothing).
-    ("src/mind_mem/capture.py", "append_signals"): LOCAL,
+    # NOT HERE ANY MORE, and the absence is the point: ``capture.
+    # append_signals``. It was the sanctioned signal mint behind
+    # propose_update, allowlisted because it appended the ``[SIG-...]``
+    # text to intelligence/SIGNALS.md itself. Being on this list is what
+    # made its fail-open conditional scope survivable -- an entry here
+    # only ever promises that SOME admission scope is opened, and a
+    # scope opened in one arm of ``X if c else nullcontext()`` satisfied
+    # that promise while writing the block regardless. It now mints
+    # through ``BlockStore.write_block`` like every other governed door,
+    # so it is a scan-A caller (see SANCTIONED_WRITE_BLOCK_CALLERS) and
+    # scan D no longer has anything to see: the only ``open`` left in the
+    # function is the read for dedup. An entry retired by fixing the
+    # writer, not by re-justifying it.
     # The session summariser's dated artifact, summaries/daily/<date>.md.
     #
     # WHY IT IS ALLOWLISTED RATHER THAN PENDING. It is a DERIVED artifact --
@@ -208,21 +265,57 @@ SANCTIONED_CORPUS_WRITERS: dict[tuple[str, str], str] = {
     ("src/mind_mem/compaction.py", "compact_signals"): DELETE_LOCAL,
 }
 
-#: Known-ungoverned corpus writers, pinned so the set cannot grow while
-#: each carries its upgrade path. Lower severity than the ingest doors:
-#: all three write internally-derived content, none is an external-input
-#: channel. Not fixed in this change.
-PENDING_CORPUS_WRITERS: frozenset[tuple[str, str]] = frozenset(
-    {
-        # deferred: appends non-block "## SKILL-..." prose into SIGNALS.md
-        # — corpus pollution rather than a block mint. Upgrade path: stop
-        # writing to SIGNALS.md and stage a proposal instead.
-        ("src/mind_mem/skill_opt/validator.py", "submit_to_governance"),
-        # Bench harness: builds a synthetic eval workspace, never the
-        # operator's corpus. Pinned so it stays visible, not fixed.
-        ("src/mind_mem/bench/eval_adapters.py", "MindMemAdapter.init"),
-    }
-)
+#: Known-ungoverned writers to a NAMED corpus file. **Empty, and asserted
+#: empty** by :func:`test_no_pending_corpus_writers_remain`.
+#:
+#: It held two entries until 5.0.2, and both are now closed rather than
+#: re-justified:
+#:
+#: * ``skill_opt/validator.submit_to_governance`` appended a
+#:   ``## SKILL-<mutation_id>`` heading to ``SIGNALS.md`` with
+#:   ``open(..., "a")``. Its upgrade path here read "stop writing to
+#:   SIGNALS.md and stage a proposal instead", and the measured cost of
+#:   the wait was worse than "corpus pollution": the id it returned was
+#:   recorded by ``mm skill-optimize`` as the mutation's
+#:   ``governance_signal`` and resolved to NOTHING, because a markdown
+#:   heading is not a block. It now mints a governed ``SIG-`` block at
+#:   ``pending``.
+#: * ``bench/eval_adapters.MindMemAdapter.init`` wrote its whole synthetic
+#:   haystack with ``Status: active`` spelled into the text — a servable
+#:   status minted with no admission. It now seeds through
+#:   ``admit_proposal`` + ``write_block``, exactly as ``bench/ab_seed``
+#:   does.
+#:
+#: The entry that is NOT here is the point: an empty allowlist is what
+#: makes I-1 total at the corpus. Keep it empty. A new hole gets fixed,
+#: not listed.
+PENDING_CORPUS_WRITERS: frozenset[tuple[str, str]] = frozenset()
+
+#: Ungoverned writers to a corpus DIRECTORY that no basename scan could
+#: see, revealed by widening scan D in 5.0.2 (:func:`corpus_dir_hit`).
+#:
+#: EMPTY, and asserted empty by
+#: :func:`test_no_pending_corpus_dir_writers_remain` — the same standard
+#: :data:`PENDING_CORPUS_WRITERS` is held to. It was briefly non-empty
+#: while two ``intel_scan`` reports were pinned rather than fixed:
+#:
+#: * ``write_impact`` -> ``intelligence/IMPACT.md``. Measured on a fresh
+#:   workspace: it emitted ``[I-YYYYMMDD-###]`` headers, the store parsed
+#:   them, ``get_by_id('I-20260902-001')`` RESOLVED and the block was in
+#:   ``get_all`` — with the evidence chain at +0 and the hash chain at
+#:   +0, one ``Status:`` field away from a servable ungoverned mint.
+#: * ``generate_briefing`` -> ``intelligence/BRIEFINGS.md``. Its
+#:   ``[2026-W36]`` heading did not parse as a block, so it was an inert
+#:   report sitting inside the store's read set — and after I-14 widened
+#:   recall to the store's read set, an inert report inside it is one
+#:   well-formed heading away from being served.
+#:
+#: Both now write ``maintenance/derived/``
+#: (``intel_scan.DERIVED_DIR``), which no corpus walk reaches. That is
+#: the fix by construction: the next report written there cannot re-enter
+#: the corpus however it is named, whereas a pinned entry only records
+#: that this one did.
+PENDING_CORPUS_DIR_WRITERS: frozenset[tuple[str, str]] = frozenset()
 
 #: Modules with zero production importers. Rerouting them would be wasted
 #: work, so the allowlist says so out loud instead of implying they are
@@ -288,6 +381,120 @@ def test_scanner_corpus_basenames_match_the_registry() -> None:
     extra = sorted(CORPUS_BASENAMES - derived)
     assert not missing, f"CORPUS_FILES gained {missing}; the scanner never learned about it, so writers to those files go unscanned"
     assert not extra, f"the scanner scans {extra}, which CORPUS_FILES no longer registers"
+
+
+def test_scanner_corpus_dirs_match_the_registry() -> None:
+    """The scanner's hand-copied corpus DIRECTORY list must equal the registry.
+
+    The directory twin of
+    :func:`test_scanner_corpus_basenames_match_the_registry`, and it guards
+    a wider hole than that one does. ``CORPUS_BASENAMES`` going stale hides
+    writers to ONE named file; ``CORPUS_DIRS`` going stale hides writers to
+    EVERY ``.md`` in a whole directory, because
+    ``MarkdownBlockStore._discover_files`` lists the directory rather than a
+    fixed set of names.
+    """
+    derived = corpus_dirs_from_source()
+    assert len(derived) >= 4, f"only {len(derived)} entries parsed out of CORPUS_DIRS; the AST reader is broken, not the registry"
+    missing = sorted(derived - CORPUS_DIRS)
+    extra = sorted(CORPUS_DIRS - derived)
+    assert not missing, f"CORPUS_DIRS gained {missing}; the scanner never learned about it, so every .md written there goes unscanned"
+    assert not extra, f"the scanner scans {extra}, which CORPUS_DIRS no longer registers"
+
+
+def test_no_pending_corpus_writers_remain() -> None:
+    """The known-holes list for NAMED corpus files is empty, and stays empty.
+
+    Asserted rather than merely emptied. An allowlist that is empty today
+    and unasserted is one commit from being non-empty again, and the whole
+    value of I-1 at the corpus is that the allowlist of exceptions is
+    *nothing* — a "mostly governed" corpus is an ungoverned one with better
+    documentation.
+    """
+    assert PENDING_CORPUS_WRITERS == frozenset(), (
+        f"PENDING_CORPUS_WRITERS is non-empty: {sorted(PENDING_CORPUS_WRITERS)}. "
+        "Route the write through GovernanceGate + write_block instead of "
+        "pinning it; see the closed entries in this file for two worked examples."
+    )
+
+
+def test_no_pending_corpus_dir_writers_remain() -> None:
+    """The known-holes list for corpus DIRECTORIES is empty, and stays empty.
+
+    The directory twin of :func:`test_no_pending_corpus_writers_remain`,
+    and it became load-bearing when I-14 made the store's read set equal
+    to what recall serves. While the two definitions disagreed, an
+    ungoverned ``.md`` written into ``intelligence/`` was "only"
+    ``get_by_id``-readable and export-visible. Now anything the store can
+    read is also anything recall can serve, so a writer that mints
+    unadmitted blocks into a corpus directory mints them straight into
+    retrieval — which is why this list is asserted empty rather than
+    curated.
+
+    The remedy is never to add an entry. Write the artefact outside the
+    corpus directories (``intel_scan.DERIVED_DIR``), or mint it through
+    ``GovernanceGate.admit_batch`` + ``write_block`` with a row in
+    ``corpus_registry.CORPUS_TABLE``.
+    """
+    assert PENDING_CORPUS_DIR_WRITERS == frozenset(), (
+        f"PENDING_CORPUS_DIR_WRITERS is non-empty: {sorted(PENDING_CORPUS_DIR_WRITERS)}. "
+        "A .md written directly into a corpus directory is read by the store AND "
+        "served by recall (I-14). Move the file to maintenance/derived/ or admit "
+        "the write; see intel_scan.DERIVED_DIR for a worked example."
+    )
+
+
+def test_corpus_dir_scan_sees_a_named_file_written_by_pattern() -> None:
+    """Positive control for the widened scan D, on source it owns.
+
+    The rule this pins is the one that made ``dream_cycle`` visible: a
+    ``.md`` written directly into a corpus directory under a name no
+    registry lists. Held as SYNTHETIC source rather than as an assertion
+    about ``dream_cycle`` itself, because the real writer has since been
+    fixed — a positive control that disappears the moment the bug is fixed
+    is a control that stops controlling anything (the ``HEAD``-pinned
+    baseline mistake).
+    """
+    rogue = (
+        "import os\n\n\n"
+        "def go(ws, slug):\n"
+        "    d = os.path.join(ws, 'entities')\n"
+        "    p = os.path.join(d, f'PRJ-{slug}.md')\n"
+        "    with open(p, 'w', encoding='utf-8') as f:\n"
+        "        f.write('x')\n"
+    )
+    tree = ast.parse(rogue)
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and _write_path_scan._write_target(n) is not None]
+    assert calls, "the write-mode open matcher stopped recognising open(path, 'w')"
+    env = _write_path_scan._assignments(next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)))
+    templates = _write_path_scan._path_templates(_write_path_scan._write_target(calls[0]), env, {})
+    hits = {corpus_dir_hit(t, CORPUS_DIRS) for t in templates}
+    assert "entities" in hits, f"the corpus-directory scan no longer sees entities/<name>.md; templates were {sorted(templates)!r}"
+
+
+def test_corpus_dir_scan_does_not_claim_nested_or_sibling_paths() -> None:
+    """Negative control WITH the positive half attached.
+
+    ``corpus_dir_hit`` encodes ``_discover_files``, which calls
+    ``os.listdir`` on each corpus directory — one level, never a walk. So a
+    ``.md`` one level deeper, and a same-named directory under a different
+    parent, are both outside the store's read set. Measured on this tree,
+    these are the exact shapes that would otherwise be reported:
+    ``intelligence/proposed/EDITS_PROPOSED.md`` (``lint_autofix``,
+    ``importers/quarantine``), ``intelligence/applied/<ts>/APPLY_RECEIPT.md``
+    (``apply_engine.rollback``) and ``shared/intelligence/LEDGER.md``
+    (``namespaces``).
+
+    The first assertion is the positive half: without it, a
+    ``corpus_dir_hit`` that returned ``None`` for everything would pass the
+    rest of this test while detecting nothing at all.
+    """
+    root = UNRESOLVED
+    assert corpus_dir_hit(f"{root}/entities/PRJ-x.md", CORPUS_DIRS) == "entities"
+    assert corpus_dir_hit(f"{root}/intelligence/proposed/EDITS_PROPOSED.md", CORPUS_DIRS) is None
+    assert corpus_dir_hit(f"{root}/intelligence/applied/{UNRESOLVED}/APPLY_RECEIPT.md", CORPUS_DIRS) is None
+    assert corpus_dir_hit(f"{root}/shared/intelligence/LEDGER.md", CORPUS_DIRS) is None
+    assert corpus_dir_hit(f"{root}/intelligence/state/snapshots/S-x.json", CORPUS_DIRS) is None
 
 
 def test_matcher_detects_a_synthetic_bypass() -> None:
@@ -389,6 +596,50 @@ def test_every_write_block_binds_the_block_status(files: tuple[str, ...]) -> Non
         )
 
 
+def test_admission_scanner_rejects_a_conditional_scope() -> None:
+    """Negative control WITH its positive half: a scope in an ``IfExp`` arm.
+
+    Tree-independent, and held as synthetic source for the reason
+    :func:`test_corpus_dir_scan_sees_a_named_file_written_by_pattern`
+    gives: the real writer has been fixed, and a control that vanishes
+    when the bug is fixed stops controlling anything.
+
+    The first assertion is the positive half — without it a matcher that
+    answered ``False`` for everything would pass the rest of this test
+    while detecting nothing. The second is the shape that shipped in
+    ``capture.append_signals`` and was reported as admitted; the third
+    pins the blunt half of the rule (both arms openers still fails),
+    which is deliberate: erring toward "ungated" is the only safe
+    direction for a checker whose job is to refuse a fail-open path.
+    """
+    from _write_path_scan import conditional_calls
+
+    unconditional = ast.parse(
+        "def go(ws, store, block):\n    with get_gate(ws).admit_batch(action='WRITE'):\n        store.write_block(block)\n"
+    ).body[0]
+    fail_open = ast.parse(
+        "def go(ws, store, block, gate):\n"
+        "    scope = gate.admit_batch(action='WRITE') if gate is not None else nullcontext()\n"
+        "    with scope, open('x', 'a') as f:\n"
+        "        f.write('block')\n"
+    ).body[0]
+    both_arms = ast.parse(
+        "def go(ws, store, block, one):\n"
+        "    scope = one.admit_block(action='WRITE') if one else one.admit_batch(action='WRITE')\n"
+        "    with scope:\n"
+        "        store.write_block(block)\n"
+    ).body[0]
+
+    assert opens_admission(unconditional) is True, "the admission matcher stopped recognising an unconditional scope"
+    assert opens_admission(fail_open) is False, (
+        "an admission scope held in one arm of a conditional expression is reported as opened; "
+        "that is the shape that let capture.append_signals write a block with a dead gate"
+    )
+    assert opens_admission(both_arms) is False, "the conditional rule must not depend on what the other arm holds"
+    assert conditional_calls(unconditional) == set(), "conditional_calls flags a call that is in no conditional at all"
+    assert conditional_calls(fail_open), "conditional_calls found no call inside the IfExp; the walk is broken"
+
+
 def test_status_binding_scanner_detects_a_synthetic_omission() -> None:
     """Negative control: the binding matcher must reject the unbound form."""
     from _write_path_scan import binds_status_to_require_admission
@@ -441,7 +692,7 @@ def test_admission_contextvar_is_private_to_the_gate(files: tuple[str, ...]) -> 
 
 
 def test_no_unpinned_direct_corpus_writers(files: tuple[str, ...]) -> None:
-    known = set(SANCTIONED_CORPUS_WRITERS) | PENDING_CORPUS_WRITERS
+    known = set(SANCTIONED_CORPUS_WRITERS) | PENDING_CORPUS_WRITERS | PENDING_CORPUS_DIR_WRITERS
     unknown = sorted({(rel, qual, line, name) for rel, qual, line, name in scan_corpus_writes(files) if (rel, qual) not in known})
     if unknown:
         listing = "\n".join(f"  {rel}:{line}  in {qual}  -> {name}" for rel, qual, line, name in unknown)

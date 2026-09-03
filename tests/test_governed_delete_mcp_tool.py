@@ -36,6 +36,7 @@ shows these tests going red: a gate never observed failing is not a gate.
 
 from __future__ import annotations
 
+import getpass
 import json
 import os
 from pathlib import Path
@@ -45,9 +46,17 @@ import pytest
 
 from mind_mem.admission import UngatedDeleteError, current_admission
 from mind_mem.governance_gate import PHASE_ADMITTED, PHASE_REMOVED, evict_gate
+from mind_mem.http_transport import ANONYMOUS_ACTORS
 from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.mcp.tools import memory_ops
-from mind_mem.mcp.tools.memory_ops import DEFAULT_DELETE_RATIONALE, delete_memory_item
+from mind_mem.mcp.tools.memory_ops import (
+    DEFAULT_DELETE_RATIONALE,
+    MCP_CLIENT_ENV,
+    MCP_STDIO_ACTOR_PREFIX,
+    MCP_UNRESOLVED_USER,
+    _mcp_door_actor,
+    delete_memory_item,
+)
 
 SEED_ID = "D-20260901-001"
 KEEP_ID = "D-20260901-002"
@@ -109,6 +118,11 @@ def _records(ws: str) -> list[dict]:
 
 def _phase(ws: str, phase: str) -> list[dict]:
     return [r for r in _records(ws) if (r.get("metadata") or {}).get("delete_phase") == phase]
+
+
+def _delete_rows(ws: str) -> list[dict]:
+    """Every DELETE-verb row the chain holds, both phases."""
+    return [r for r in _records(ws) if (r.get("metadata") or {}).get("delete_phase")]
 
 
 def _call(ws: str, bid: str, **kwargs: Any) -> dict:
@@ -393,7 +407,102 @@ def test_a_markdown_id_that_is_not_there_records_no_death(workspace: str) -> Non
 
 
 # ---------------------------------------------------------------------------
-# D — the mutation twin. A gate never observed failing is not a gate.
+# D — the actor: who the record says did it
+# ---------------------------------------------------------------------------
+#
+# Measured on 5.0.1: this tool passed ``actor=""`` on the reasoning that a
+# stdio call has no authenticated identity to pass. The first half is
+# true; the second does not follow. The gate resolves ``""`` through a
+# REST contextvar an MCP process never sets, so every delete through the
+# most-used door in the product was recorded as ``anonymous``. A stdio
+# pipe *is* the trust boundary, and the two things on the server's side
+# of it that are real — the client name the operator configured, and the
+# account the server runs as — are what the record now carries.
+
+
+@pytest.mark.unit
+def test_an_mcp_delete_names_the_door_that_made_it(workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """AUD-03, closed on the MCP leg."""
+    monkeypatch.setenv(MCP_CLIENT_ENV, "the-nightly-compactor")
+    _seed(workspace, SEED_ID, "the block a named door removed")
+    assert _present(workspace, SEED_ID), "positive control: the block is there to be taken"
+
+    payload = _call(workspace, SEED_ID)
+
+    assert payload["status"] == "deleted"
+    assert not _present(workspace, SEED_ID), "no delete happened, so the rows below prove nothing"
+    rows = _delete_rows(workspace)
+    assert len(rows) == 2, f"expected an authorisation and a removal row, got {len(rows)}"
+    assert {r["actor"] for r in rows} == {"mcp-stdio:the-nightly-compactor"}
+
+
+@pytest.mark.unit
+def test_no_mcp_delete_row_is_attributed_to_nobody(workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The gate, for this door — swept over both configurations.
+
+    The unconfigured one is included because it is what ships: an
+    operator who never sets :data:`MCP_CLIENT_ENV` must not be the one
+    who gets the anonymous rows back.
+    """
+    monkeypatch.delenv(MCP_CLIENT_ENV, raising=False)
+    _seed(workspace, SEED_ID, "removed with no client name configured")
+    _seed(workspace, KEEP_ID, "removed with one")
+    assert _present(workspace, SEED_ID) and _present(workspace, KEEP_ID), "positive control"
+
+    assert _call(workspace, SEED_ID)["status"] == "deleted"
+    monkeypatch.setenv(MCP_CLIENT_ENV, "claude-code")
+    assert _call(workspace, KEEP_ID)["status"] == "deleted"
+
+    rows = _delete_rows(workspace)
+    assert len(rows) == 4, f"two deletes, an authorisation and a removal each; got {len(rows)}"
+    unnamed = sorted({str(r["actor"]) for r in rows if str(r["actor"]).strip() in ANONYMOUS_ACTORS})
+    assert not unnamed, f"DELETE rows attributed to nobody: {unnamed}"
+    assert all(str(r["actor"]).startswith(MCP_STDIO_ACTOR_PREFIX) for r in rows)
+
+
+@pytest.mark.unit
+def test_the_door_identity_falls_back_to_the_account_the_server_runs_as(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unconfigured is still a real, checkable identity."""
+    monkeypatch.delenv(MCP_CLIENT_ENV, raising=False)
+    assert _mcp_door_actor() == f"{MCP_STDIO_ACTOR_PREFIX}{getpass.getuser()}"
+
+
+@pytest.mark.unit
+def test_the_door_identity_can_never_name_nobody(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Whatever the environment says, a non-empty prefix means a non-empty name."""
+    for configured in ("", "   ", "\n\t", "claude-code", "a" * 300):
+        monkeypatch.setenv(MCP_CLIENT_ENV, configured)
+        actor = _mcp_door_actor()
+        assert actor.startswith(MCP_STDIO_ACTOR_PREFIX), actor
+        assert actor.strip() not in ANONYMOUS_ACTORS, actor
+        assert "\n" not in actor and "\r" not in actor, actor
+
+    # The last resort: no configured name and no resolvable OS account
+    # (a distroless container under a bare numeric uid).
+    monkeypatch.delenv(MCP_CLIENT_ENV, raising=False)
+
+    def _no_passwd_entry() -> str:
+        raise OSError("no passwd entry for this uid")
+
+    monkeypatch.setattr(getpass, "getuser", _no_passwd_entry)
+    assert _mcp_door_actor() == f"{MCP_STDIO_ACTOR_PREFIX}{MCP_UNRESOLVED_USER}"
+
+
+@pytest.mark.unit
+def test_the_actor_field_holds_a_name_and_not_the_acl_scope(workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "admin" is a permission this call held, not somebody who held it."""
+    monkeypatch.delenv(MCP_CLIENT_ENV, raising=False)
+    _seed(workspace, SEED_ID, "the block an admin-scoped call removed")
+    assert os.environ["MIND_MEM_SCOPE"] == "admin", "positive control: the call really is admin-scoped"
+
+    assert _call(workspace, SEED_ID)["status"] == "deleted"
+
+    actors = {str(r["actor"]) for r in _delete_rows(workspace)}
+    assert actors and "admin" not in {a.split(":", 1)[-1] for a in actors}, actors
+
+
+# ---------------------------------------------------------------------------
+# E — the mutation twin. A gate never observed failing is not a gate.
 # ---------------------------------------------------------------------------
 
 
@@ -453,3 +562,24 @@ class TestMutationTwin:
         assert not _present(workspace, SEED_ID)
         assert len(_phase(workspace, PHASE_ADMITTED)) == 1
         assert _phase(workspace, PHASE_REMOVED) == [], "the twin did not actually drop the removal report"
+
+    @pytest.mark.unit
+    def test_restoring_the_empty_actor_makes_the_record_anonymous_again(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The 5.0.1 call shape: ``actor=""``, resolved by the gate to nobody.
+
+        This is the measured defect, put back. Both rows come out under a
+        word that names no one, so
+        ``test_no_mcp_delete_row_is_attributed_to_nobody`` would fail on
+        this workspace — which is the only way to know it can.
+        """
+        _seed(workspace, SEED_ID, "the block the old door took anonymously")
+        assert _present(workspace, SEED_ID)
+
+        monkeypatch.setattr(memory_ops, "_mcp_door_actor", lambda: "")
+        payload = _call(workspace, SEED_ID)
+
+        assert payload["status"] == "deleted", "the twin must reproduce a working delete, not a broken one"
+        assert not _present(workspace, SEED_ID)
+        actors = {str(r["actor"]) for r in _delete_rows(workspace)}
+        assert actors, "the twin recorded nothing, so it did not reproduce the defect"
+        assert actors <= ANONYMOUS_ACTORS, f"the twin did not reproduce the defect: {actors}"

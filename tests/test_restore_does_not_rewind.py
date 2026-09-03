@@ -77,7 +77,7 @@ from mind_mem.corpus_registry import (
 )
 from mind_mem.enums import IngestTier
 from mind_mem.evidence_objects import EvidenceAction
-from mind_mem.governance_gate import evict_gate, get_gate
+from mind_mem.governance_gate import CLOSE_VERB, evict_gate, get_gate
 from mind_mem.storage import get_block_store
 
 CORPUS = ("decisions", "tasks", "entities", "intelligence", "memory", "summaries")
@@ -145,6 +145,35 @@ def chain_lengths(ws: str) -> tuple[int, int]:
     return len(evidence_rows(ws)), hash_chain_len(ws)
 
 
+def authorisation_lengths(ws: str) -> tuple[int, int]:
+    """``(evidence, hash_chain)`` counting ONLY the rows that authorised something.
+
+    Every write scope now appends a second row when it closes
+    (``governance_gate._run_write_scope``), recorded under
+    :data:`~mind_mem.governance_gate.CLOSE_VERB` precisely so a consumer
+    counting rows by verb does not see one scope twice. A test whose
+    positive control is "one governed write moves each ledger by one" has
+    to select the authorisation rows or it is really asserting how many
+    records a scope happens to emit — which is a fact about the gate's
+    bookkeeping, not about the chain surviving a restore.
+
+    Both ledgers are filtered on the same verb: the evidence row carries it
+    in ``metadata.action_verb``, the hash-chain row in its ``action``
+    column, and they are written from the one ``admit`` call so they cannot
+    disagree.
+    """
+    evidence = len([r for r in evidence_rows(ws) if (r.get("metadata") or {}).get("action_verb") != CLOSE_VERB])
+    path = os.path.join(ws, HASH_CHAIN_REL)
+    if not os.path.isfile(path):
+        return evidence, 0
+    con = sqlite3.connect(path)
+    try:
+        chain = int(con.execute("SELECT COUNT(*) FROM hash_chain WHERE action <> ?", (CLOSE_VERB,)).fetchone()[0])
+    finally:
+        con.close()
+    return evidence, chain
+
+
 def block_is_readable(ws: str, block_id: str) -> bool:
     return get_block_store(ws).get_by_id(block_id) is not None
 
@@ -164,45 +193,66 @@ class TestTheChainIsMonotoneAcrossARestore:
 
     def test_apply_engine_full_snapshot_restore_never_shortens_the_chain(self, workspace: str) -> None:
         write_governed_block(workspace, "D-20260902-001")
-        before = chain_lengths(workspace)
+        before = authorisation_lengths(workspace)
         # Positive control: this workspace's chain really does move when a
         # block lands, so a later "it did not shrink" is a measurement and
-        # not an artefact of a chain nothing writes to.
-        assert before == (1, 1), f"expected one row per ledger after one governed write, got {before}"
+        # not an artefact of a chain nothing writes to. Counted over the
+        # AUTHORISATION rows — see ``authorisation_lengths`` — so the number
+        # tracks decisions taken rather than records emitted per scope.
+        assert before == (1, 1), f"expected one authorisation per ledger after one governed write, got {before}"
 
         snap_dir = create_snapshot(workspace, "20260902-120000", files_touched=None)
 
         write_governed_block(workspace, "D-20260902-002")
-        after_write = chain_lengths(workspace)
+        after_write = authorisation_lengths(workspace)
+        total_after_write = chain_lengths(workspace)
         assert after_write == (2, 2), f"the post-snapshot write did not reach the ledgers: {after_write}"
         assert block_is_readable(workspace, "D-20260902-002")
 
         restore_snapshot(workspace, snap_dir)
 
-        after_restore = chain_lengths(workspace)
+        after_restore = authorisation_lengths(workspace)
+        total_after_restore = chain_lengths(workspace)
         assert after_restore[0] >= after_write[0], f"evidence chain went BACKWARDS across a restore: {after_write[0]} → {after_restore[0]}"
         assert after_restore[1] >= after_write[1], f"hash chain went BACKWARDS across a restore: {after_write[1]} → {after_restore[1]}"
+        # And not only the authorisations: a rewind takes whole rows, so the
+        # raw totals must not shrink either. Asserting both is what stops the
+        # selection above from becoming a place a rewind could hide.
+        assert total_after_restore[0] >= total_after_write[0], (
+            f"the raw evidence chain shrank across a restore: {total_after_write[0]} → {total_after_restore[0]}"
+        )
+        assert total_after_restore[1] >= total_after_write[1], (
+            f"the raw hash chain shrank across a restore: {total_after_write[1]} → {total_after_restore[1]}"
+        )
 
     def test_backup_restore_never_shortens_the_chain(self, workspace: str, tmp_path: Path) -> None:
         write_governed_block(workspace, "D-20260902-101")
-        before = chain_lengths(workspace)
+        before = authorisation_lengths(workspace)
         assert before == (1, 1), f"positive control: chain not moving on write, got {before}"
 
         archive = str(tmp_path / "backup.tar.gz")
         backup_workspace(workspace, archive)
 
         write_governed_block(workspace, "D-20260902-102")
-        after_write = chain_lengths(workspace)
+        after_write = authorisation_lengths(workspace)
+        total_after_write = chain_lengths(workspace)
         assert after_write == (2, 2)
 
         restore_workspace(workspace, archive, force=True)
 
-        after_restore = chain_lengths(workspace)
+        after_restore = authorisation_lengths(workspace)
+        total_after_restore = chain_lengths(workspace)
         assert after_restore[0] >= after_write[0], (
             f"evidence chain went BACKWARDS across a backup restore: {after_write[0]} → {after_restore[0]}"
         )
         assert after_restore[1] >= after_write[1], (
             f"hash chain went BACKWARDS across a backup restore: {after_write[1]} → {after_restore[1]}"
+        )
+        assert total_after_restore[0] >= total_after_write[0], (
+            f"the raw evidence chain shrank across a backup restore: {total_after_write[0]} → {total_after_restore[0]}"
+        )
+        assert total_after_restore[1] >= total_after_write[1], (
+            f"the raw hash chain shrank across a backup restore: {total_after_write[1]} → {total_after_restore[1]}"
         )
 
     def test_a_block_the_restore_withdrew_is_named_in_the_record(self, workspace: str) -> None:
@@ -334,7 +384,13 @@ class TestPre502ArtifactsCannotRewindEither:
             json.dumps({"files": ["decisions/DECISIONS.md", EVIDENCE_REL], "version": 2}), encoding="utf-8"
         )
 
-        get_block_store(workspace).restore(str(snap_dir))
+        # Through the sanctioned door, not the raw store: since the restore
+        # seam is gated (``admission.require_restore_admission``) a direct
+        # ``store.restore`` raises before it reads the manifest, which would
+        # make the ledger assertions below vacuous — they would pass because
+        # nothing ran. ``restore_snapshot`` is the one opener, so this test
+        # measures the reader refusal over a manifest a real restore read.
+        restore_snapshot(workspace, str(snap_dir))
 
         # Positive control: the non-ledger entry in the SAME manifest was
         # restored, so the restore genuinely ran over this manifest.
@@ -639,14 +695,42 @@ class TestTheRegistryIsLoadBearing:
 
 
 class TestMutationTwin:
+    """Break each guard and watch the invariant fail.
+
+    Three of these read differently since the scope-close record landed
+    (``governance_gate._run_write_scope``). A restore now writes a row on
+    its way *out*, so a mutation that lets the ledger be rewound is caught
+    at that append: :class:`~mind_mem.evidence_objects.EvidenceChainCompromisedError`
+    is raised because the store the chain was loaded from shrank or
+    vanished. The mutation is still the thing being measured — with the
+    guard in place the same restore completes and the chain is intact,
+    which is the positive control each case carries — but the *observable*
+    is now "the rewind is refused" rather than "the rewind happened and
+    the count went down". Asserting the old shape would mean asserting
+    that a detected rewind goes unreported, which is backwards.
+    """
+
     def test_the_rewind_test_depends_on_the_capture_filter(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Blind the snapshot walk; the chain rewinds again.
+        """Blind the snapshot walk; the ledger is captured and the restore is refused.
 
         Both the walk filter and the manifest refusal are disabled, because
         the manifest refusal would otherwise raise instead of letting the
         old behaviour through — and a test that goes red for the wrong
         reason proves nothing about the right one.
         """
+        from mind_mem.evidence_objects import EvidenceChainCompromisedError
+
+        # Positive control, unmutated: the same sequence completes, and the
+        # chain does not shrink. Without it, "the mutated run raises" could
+        # be true of a workspace where every restore raises.
+        write_governed_block(workspace, "D-20260902-000")
+        clean_snap = create_snapshot(workspace, "20260902-169999", files_touched=None)
+        clean_manifest = json.loads(Path(clean_snap, "MANIFEST.json").read_text(encoding="utf-8"))["files"]
+        assert EVIDENCE_REL not in clean_manifest, "the filter was already off before the mutation"
+        before_clean = chain_lengths(workspace)
+        restore_snapshot(workspace, clean_snap)
+        assert chain_lengths(workspace)[0] >= before_clean[0], "the unmutated restore already rewound the chain"
+
         monkeypatch.setattr(block_store_mod, "is_ledger_path", lambda rel: False)
         monkeypatch.setattr(block_store_mod, "assert_ledger_free", lambda paths, *, what: None)
 
@@ -656,17 +740,19 @@ class TestMutationTwin:
         assert EVIDENCE_REL in manifest, "the mutation did not re-open the capture path"
 
         write_governed_block(workspace, "D-20260902-002")
-        after_write = chain_lengths(workspace)
-        restore_snapshot(workspace, snap_dir)
-        after_restore = chain_lengths(workspace)
 
-        assert after_restore[0] < after_write[0], (
-            "with the filter disabled the evidence chain did NOT rewind — the guard under test "
-            f"is not what is holding the invariant up ({after_write[0]} → {after_restore[0]})"
+        with pytest.raises(EvidenceChainCompromisedError) as excinfo:
+            restore_snapshot(workspace, snap_dir)
+
+        assert "append-only history was rewritten" in str(excinfo.value), (
+            "with the filter disabled the restore failed for some other reason — the guard under "
+            f"test is not what this measures: {excinfo.value}"
         )
 
     def test_the_orphan_test_depends_on_the_sweep_exemption(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
         """Let the sweep treat a ledger as an orphan; it deletes the chain."""
+        from mind_mem.evidence_objects import EvidenceChainCompromisedError
+
         monkeypatch.setattr(
             block_store_mod,
             "_is_removable_orphan",
@@ -677,30 +763,51 @@ class TestMutationTwin:
         snap_dir = create_snapshot(workspace, "20260902-170001", files_touched=None)
         assert os.path.isfile(os.path.join(workspace, EVIDENCE_REL))
 
-        restore_snapshot(workspace, snap_dir)
+        with pytest.raises(EvidenceChainCompromisedError):
+            restore_snapshot(workspace, snap_dir)
 
+        # The mutation's own effect, unchanged: the sweep really did take the
+        # ledger. The raise above is the scope failing to close over a chain
+        # that is no longer there — both halves say the exemption is what
+        # keeps the ledger alive.
         assert not os.path.isfile(os.path.join(workspace, EVIDENCE_REL)), (
             "with the exemption disabled the sweep did NOT delete the evidence chain — the exemption is not what is keeping it alive"
         )
 
-    def test_the_recorded_restore_test_depends_on_the_scope(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Remove the scope; the restore goes back to minting nothing."""
-        from contextlib import nullcontext
+    def test_the_recorded_restore_test_depends_on_the_seam_check(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Remove the seam check; an ungated restore runs again and mints nothing.
 
-        class SilentGate:
-            def admit_batch(self, **_kwargs: Any) -> Any:
-                return nullcontext(None)
+        This twin used to remove the *scope* and observe that the store
+        restored anyway with no row — which is exactly what R3-02 named as
+        the defect. The scope is no longer the only thing holding the
+        invariant up: ``MarkdownBlockStore.restore`` calls
+        ``admission.require_restore_admission`` first, so what is worth
+        breaking now is that call.
+        """
+        from mind_mem.admission import UngatedRestoreError
 
         write_governed_block(workspace, "D-20260902-001")
         snap_dir = create_snapshot(workspace, "20260902-170002", files_touched=None)
+        write_governed_block(workspace, "D-20260902-002")
 
-        monkeypatch.setattr("mind_mem.governance_gate.get_gate", lambda ws: SilentGate())
-        # The store's restore does not need a receipt, so the scope is the
-        # only thing that was writing a row.
+        # Positive control: unmutated, the ungated call is refused and the
+        # post-snapshot block survives.
+        with pytest.raises(UngatedRestoreError):
+            get_block_store(workspace).restore(snap_dir)
+        assert block_is_readable(workspace, "D-20260902-002"), "the refused restore ran anyway"
+
+        class _NoReceipt:
+            entry_id = "mutation-twin"
+
+        monkeypatch.setattr(block_store_mod, "require_restore_admission", lambda snap: _NoReceipt())
+
         get_block_store(workspace).restore(snap_dir)
 
+        assert not block_is_readable(workspace, "D-20260902-002"), (
+            "with the seam check neutralised the ungated restore did NOT run — this test is not measuring the check"
+        )
         assert restore_rows(workspace, RESTORE_VERB) == [], (
-            "a RESTORE row appeared with no scope open — this test is not measuring the scope"
+            "a RESTORE row appeared with no scope open — the row comes from the scope, not from the store"
         )
 
     def test_the_legacy_archive_test_depends_on_the_reader_refusal(
@@ -709,7 +816,9 @@ class TestMutationTwin:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Stop refusing ledger members; a pre-5.0.2 archive rewinds again."""
+        """Stop refusing ledger members; a pre-5.0.2 archive overwrites the chain."""
+        from mind_mem.evidence_objects import EvidenceChainCompromisedError
+
         write_governed_block(workspace, "D-20260902-001")
         live_evidence = Path(workspace, EVIDENCE_REL).read_bytes()
 
@@ -720,7 +829,8 @@ class TestMutationTwin:
             tar.add(stale, arcname=EVIDENCE_REL)
 
         monkeypatch.setattr(backup_restore, "is_ledger_path", lambda rel: False)
-        restore_workspace(workspace, str(archive), force=True)
+        with pytest.raises(EvidenceChainCompromisedError):
+            restore_workspace(workspace, str(archive), force=True)
 
         assert Path(workspace, EVIDENCE_REL).read_bytes() != live_evidence, (
             "with the refusal disabled the archive did NOT overwrite the chain — the refusal is not what is stopping it"

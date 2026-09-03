@@ -5,8 +5,10 @@ Extracted from ``mcp_server.py`` per docs/v3.2.0-mcp-decomposition-plan.md
 
 * ``verify_merkle`` — prove a block's Merkle inclusion against the
   live tree built from the FTS index.
-* ``verify_chain`` — walk both the SHA3-512 governance hash chain
-  and the evidence chain and report any integrity breaks.
+* ``verify_chain`` — verify every hash-linked ledger the product
+  writes, by delegating to the single aggregate verifier
+  (:func:`mind_mem.verify_cli.verify_workspace`). It walks nothing
+  itself; see its docstring for why that is the fix.
 * ``list_evidence`` — enumerate governance evidence objects with
   optional ``block_id`` / ``action`` filters.
 * ``mind_mem_verify`` — expose the standalone ``mind-mem-verify``
@@ -131,27 +133,62 @@ def mind_mem_verify(snapshot: str = "") -> str:
     return json.dumps(envelope, indent=2)
 
 
+#: Non-ledger checks :func:`~mind_mem.verify_cli.verify_workspace` also
+#: produces, republished beside the ledgers so the envelope carries every
+#: row the verifier ran rather than the subset this module remembers.
+_EXTRA_CHECKS: tuple[str, ...] = ("spec_binding", "snapshot_anchor", "merkle_root", "chain_head")
+
+
 @mcp_tool_observe
 def verify_chain() -> str:
-    """Verify the integrity of the SHA3-512 governance hash chain.
+    """Verify every hash-linked ledger in the workspace, as one verdict.
 
-    Walks every entry in the chain and checks that each entry_hash matches
-    its recomputed value and that chain linkage is unbroken.
+    Delegates to :func:`mind_mem.verify_cli.verify_workspace` — the single
+    aggregate verifier — and republishes its rows. It keeps no walk of its
+    own, and that is the fix rather than a style choice: until 5.0.2 this
+    tool walked the hash chain and the evidence chain only, so tampering
+    with the field-audit sidecar or the served-recall ledger left it
+    reporting ``valid: true`` while ``mind-mem-verify`` on the same
+    workspace reported the workspace broken. A two-of-four verdict
+    published under the name ``valid`` is worse than no verdict.
+
+    Two consequences worth naming. ``valid`` is now ``report.ok``, so it
+    goes false when **any** ledger fails, and a ledger added to
+    :data:`~mind_mem.verify_cli.LEDGER_CHECKS` is covered here the day it
+    is added rather than the day someone remembers this file. And the
+    tool no longer constructs the governance gate, so verifying a
+    workspace creates nothing in it.
+
+    TWO VERDICTS, because the verifier answers two questions and this
+    tool is named after one of them. ``valid`` is the **declared ledger
+    hierarchy** — every name in
+    :data:`~mind_mem.verify_cli.LEDGER_CHECKS`, and fail-closed on a row
+    the verifier did not produce. ``workspace_valid`` is ``report.ok``,
+    the verifier's whole answer, which also folds in the two non-ledger
+    checks (``spec_binding``, ``snapshot_anchor``). They differ exactly
+    when the ledgers are intact and the governance config has drifted
+    from its binding — a real finding, and not a chain break, so it is
+    reported under its own name rather than collapsed into this tool's.
+    Neither is hidden and neither is inferred: ``exit_code`` is the
+    verifier's, ``checks`` carries every row, and
+    ``mind_mem_verify`` publishes the whole report. What is gone is the
+    *subset* — a verdict computed here from ledgers this module happened
+    to remember.
 
     Returns:
-        JSON with valid (bool), length (int), and broken_at (int, -1 if valid).
+        JSON with ``valid`` (bool — every declared ledger),
+        ``workspace_valid`` (bool — the verifier's whole verdict),
+        ``exit_code``, ``ledgers`` (the declared hierarchy), ``checks``
+        (every row by name), ``missing``, ``messages``, and one object
+        per check carrying its ``valid`` flag plus that check's
+        structured facts (``hash_chain`` keeps ``length`` /
+        ``broken_at``, ``evidence_chain`` keeps ``broken_ids``).
     """
     ws = _workspace()
     try:
-        from mind_mem.governance_gate import get_gate
+        from mind_mem.verify_cli import LEDGER_CHECKS, verify_workspace
 
-        gate = get_gate(ws)
-        chain = gate.chain
-        hc_valid, broken_at = chain.verify_chain()
-        length = chain.length
-
-        evidence = gate.evidence
-        ev_valid, broken_ids = evidence.verify_chain()
+        report = verify_workspace(ws)
     except Exception as exc:
         _log.warning("verify_chain_failed", error=str(exc))
         return json.dumps(
@@ -162,33 +199,35 @@ def verify_chain() -> str:
             indent=2,
         )
 
-    overall_valid = hc_valid and ev_valid
+    # ``get`` defaults to False, not True: a ledger the verifier did not
+    # produce a row for must not be counted as verified. The row is
+    # unconditional today (``tests/test_ledger_hierarchy.py``), and this
+    # is what keeps the failure closed if that ever stops being true.
+    ledger_valid = all(report.checks.get(name, False) for name in LEDGER_CHECKS)
+    envelope: dict = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "valid": ledger_valid,
+        "workspace_valid": report.ok,
+        "exit_code": report.exit_code,
+        "ledgers": list(LEDGER_CHECKS),
+        "checks": dict(report.checks),
+        "missing": list(report.missing),
+        "messages": list(report.messages),
+    }
+    for name in LEDGER_CHECKS + _EXTRA_CHECKS:
+        if name in report.checks:
+            envelope[name] = {"valid": report.checks[name], **report.details.get(name, {})}
+
     metrics.inc("mcp_verify_chain")
     _log.info(
         "mcp_verify_chain",
-        valid=overall_valid,
-        hash_chain_valid=hc_valid,
-        length=length,
-        broken_at=broken_at,
-        evidence_valid=ev_valid,
-        evidence_broken_ids=broken_ids,
+        valid=ledger_valid,
+        workspace_valid=report.ok,
+        exit_code=report.exit_code,
+        checks=dict(report.checks),
+        missing=list(report.missing),
     )
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "valid": overall_valid,
-            "hash_chain": {
-                "valid": hc_valid,
-                "length": length,
-                "broken_at": broken_at,
-            },
-            "evidence_chain": {
-                "valid": ev_valid,
-                "broken_ids": broken_ids,
-            },
-        },
-        indent=2,
-    )
+    return json.dumps(envelope, indent=2)
 
 
 @mcp_tool_observe

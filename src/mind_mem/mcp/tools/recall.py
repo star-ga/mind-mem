@@ -54,7 +54,179 @@ _log = get_logger("mcp_server")
 _MAX_QUERY_LEN = 8192
 
 
+def _resolve_chain_head(ws: str) -> str:
+    """The workspace's governed-ledger head — the corpus coordinate of a recall.
+
+    Delegates to :func:`mind_mem.prefetch.chain_head`, which reads it through the
+    same resolver ``_apply_attestation`` uses, so the cached answer and the
+    attested corpus state are one value rather than two opinions. Resolved once
+    per recall, here at the top, and handed to both consumers.
+
+    Degrades to the genesis anchor on any failure: a cache key that cannot be
+    computed must fall back to a *constant*, so two runs at different corpus
+    states still share a key only when nothing could be learned about either —
+    never silently drop the coordinate and re-open the staleness hole it closes.
+    """
+    try:
+        from mind_mem.prefetch import chain_head
+
+        return chain_head(ws)
+    except Exception as exc:  # pragma: no cover — defensive
+        _log.warning("chain_head_unresolved", error=str(exc))
+        from mind_mem.recall_attestation import GENESIS_ANCHOR
+
+        return GENESIS_ANCHOR
+
+
+def _anticipation_envelope(
+    ws: str,
+    query: str,
+    limit: int,
+    config: Any,
+    head: str,
+    instant_iso: str,
+) -> str | None:
+    """Answer *query* from the local bundle cache, or ``None`` to fall through.
+
+    Group J's consumer half. The bundles consulted are only those recorded at
+    *head*, so this can never serve content a governed write has superseded —
+    that write moved the head and retired the generation with it. The
+    :mod:`~mind_mem.novel_term_gate` makes the local-vs-source call, and a
+    fall-through is the safe direction on every degenerate input.
+
+    An anticipation-served envelope is **not attested**, deliberately. The
+    attestation says "this run read the corpus at this anchor and served these
+    ids"; this run read a *bundle*. Stamping it would be the exact
+    stale-evidence-as-this-run's failure the post-cache attestation exists to
+    avoid, so the early return below skips the attestation, explain and
+    served-ledger stages, and the envelope says so in-band: every hit carries
+    ``_retrieval_source: "anticipation_cache"``, the envelope carries an
+    ``anticipation`` block with the gate's numbers, and a warning names the
+    trade in words.
+
+    **Named consequence, so it is not discovered later.** Skipping the
+    served-ledger stage means an anticipation-served run leaves no RA.1 row, so
+    the ledger under-counts what was served. That is deliberate rather than an
+    oversight — ``append_served_run`` records an attestation's ``index_anchor``
+    and this run has no attestation to record — but it is a real gap, and the
+    way to close it is to give the ledger a row shape that says "served from a
+    local bundle at head H, unattested" rather than to fabricate an attestation
+    here. Until then, an operator should read the ledger as a record of
+    *attested* recalls only.
+
+    The gap got wider in 5.0.2 and is worth restating in those terms: the
+    ledger is now ON by default, so this is no longer "two opt-ins that
+    interact". Switching ``cache.anticipation.enabled`` on is now, on its own,
+    a decision to stop recording the runs it answers locally.
+    """
+    try:
+        from mind_mem.prefetch import anticipation_config, get_cache, observe_served
+    except Exception as exc:  # pragma: no cover — defensive
+        _log.warning("anticipation_cache_unavailable", error=str(exc))
+        return None
+    # Clamp to the SAME ceiling the store path applies. A second door that
+    # serves results must enforce the same policy as the first, or the operator
+    # limit is only advisory: without this an anticipation-served recall could
+    # return more hits than ``limits.max_recall_results`` allows, purely by
+    # being answered locally.
+    limit = max(1, min(limit, _get_limits(ws)["max_recall_results"]))
+    decision = get_cache().lookup(
+        ws,
+        query,
+        limit=limit,
+        gate_config=anticipation_config(config),
+        head=head,
+    )
+    if not decision.serve_from_cache:
+        return None
+    results = [dict(hit) for hit in decision.served]
+    observe_served(query, results)
+    metrics.inc("mcp_recall_anticipation_hits")
+    _log.info("mcp_recall_anticipated", query=query, count=len(results), reason=decision.reason)
+    envelope: dict[str, Any] = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "backend": "anticipation_cache",
+        "query": query,
+        "query_id": "",
+        "count": len(results),
+        "scoring_instant": instant_iso,
+        "results": results,
+        "anticipation": decision.as_dict(),
+        "warnings": [
+            "Served from the local anticipation cache at this workspace's current "
+            "governed-ledger head — no store round-trip, and therefore no recall "
+            "attestation. Set cache.anticipation.enabled to false for the "
+            "attested path."
+        ],
+    }
+    return json.dumps(envelope, indent=2, default=str)
+
+
+def _record_anticipation_bundle(ws: str, origin: str, raw: str, head: str) -> None:
+    """Store a served envelope's blocks as a bundle at *head*. Never raises.
+
+    The producer half. Only reached when the feature is on, so the flag-off
+    path pays none of the tokenization this does.
+    """
+    try:
+        from mind_mem.prefetch import get_cache, observe_served
+
+        envelope = json.loads(raw) if raw else None
+        if not isinstance(envelope, dict):
+            return
+        results = envelope.get("results")
+        if not isinstance(results, list) or not results:
+            return
+        hits = [r for r in results if isinstance(r, dict)]
+        if not hits:
+            return
+        get_cache().record(ws, origin, hits, head=head)
+        observe_served(str(envelope.get("query", "")), hits)
+    except Exception as exc:  # pragma: no cover — a cache write must not break recall
+        _log.warning("anticipation_cache_record_failed", origin=origin, error=str(exc))
+
+
 def _recall_impl(
+    query: str,
+    limit: int = 10,
+    active_only: bool = False,
+    backend: str = "auto",
+    format: str = "blocks",
+    explain: bool = False,
+    scoring_instant: date | str | None = None,
+) -> str:
+    """Claim the serve, then rank. The attesting entry for this surface.
+
+    This surface derives its attestation and writes its ledger row POST-cache
+    (see :func:`_apply_attestation`), which is a placement the engine entry
+    cannot reproduce from underneath: the recall-cache key omits the pipeline
+    hash, so a record baked in below the cache would be replayed stale on the
+    next hit. So the handler claims the serve with
+    :func:`mind_mem.recall.serving_scope` and the engine calls beneath it — the
+    BM25 arm of the hybrid backend, the full-scan fallback when the FTS index
+    is missing — rank without attesting. One serve, one row, derived where the
+    live pipeline config is visible.
+
+    The scope wraps the *whole* implementation rather than only the retrieval
+    call, because the early return on an anticipation-cache hit is also a
+    serve this handler owns, and it deliberately records nothing (see
+    :func:`_anticipation_envelope`).
+    """
+    from mind_mem.recall import serving_scope
+
+    with serving_scope():
+        return _recall_impl_ranked(
+            query,
+            limit=limit,
+            active_only=active_only,
+            backend=backend,
+            format=format,
+            explain=explain,
+            scoring_instant=scoring_instant,
+        )
+
+
+def _recall_impl_ranked(
     query: str,
     limit: int = 10,
     active_only: bool = False,
@@ -82,6 +254,15 @@ def _recall_impl(
     resolved once here, threaded into the retrieval legs, folded into the cache
     key (two instants are two different answers) and bound into the recall
     attestation so the run is replayable. ``None`` resolves to today in UTC.
+
+    v5.0.2 — the governed-ledger head is folded into the cache key alongside the
+    instant, so a cache entry belongs to the corpus state it was computed
+    against. See :func:`mind_mem.recall_cache.make_cache_key`: before this the
+    entry outlived the corpus and the attestation stamped the *new* anchor onto
+    the *old* answer whenever a write landed through a door that does not call
+    ``_invalidate_recall_cache`` — the CLI, the HTTP transport, the apply
+    engine, federation replication. The same head is the generation key of the
+    anticipation cache below, so the two agree on what "this corpus" means.
     """
     if not isinstance(query, str):
         return json.dumps({"error": "query must be a string"})
@@ -128,6 +309,34 @@ def _recall_impl(
     # worse than no diagnostics, so the trace flag (default OFF) buys the
     # measurement at the price of the cache.
     _trace_on = _trace_attribution_enabled(_raw_config)
+    # The corpus coordinate of the cache key: the governed-ledger head, read
+    # once here and handed to both consumers below. It is the same value
+    # ``_apply_attestation`` binds as ``index_anchor``, read through the same
+    # resolver, so the cached answer and the attested corpus state can never be
+    # two different opinions of "which corpus is this".
+    _index_anchor = _resolve_chain_head(ws)
+
+    # Group J — the anticipation cache, consulted BEFORE the store round-trip.
+    # Off by default; the probe is a dict lookup on the config already loaded
+    # above, so a workspace that has not opted in pays no syscall, no parse and
+    # no per-hit work for the feature's presence. Attribution tracing takes the
+    # same exemption as the recall cache, and for the same reason: a locally
+    # answered recall ran none of the retrieval features a trace would claim.
+    from mind_mem.prefetch import anticipation_enabled
+
+    _anticipation_on = anticipation_enabled(_raw_config) and not _trace_on
+    # ``format="bundle"`` never takes the local answer. The early return below
+    # skips the post-cache stages, and the bundle re-shaping is one of them, so
+    # serving here would hand a bundle client the raw blocks envelope with no
+    # facts / relations / timeline — the exact shape confusion
+    # ``tests/test_recall_format_cache_isolation.py`` exists to prevent, arriving
+    # through a different door. Falling through costs one round-trip and is
+    # always correct, which is the trade this whole module makes everywhere else.
+    if _anticipation_on and format == "blocks":
+        _anticipated = _anticipation_envelope(ws, query, limit, _raw_config, _index_anchor, instant_iso)
+        if _anticipated is not None:
+            return _anticipated
+
     if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
         raw = cached_recall(
             _inner,
@@ -138,6 +347,7 @@ def _recall_impl(
             config=_raw_config,
             ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
             scoring_instant=instant_iso,
+            index_anchor=_index_anchor,
         )
     else:
         raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend)
@@ -176,9 +386,20 @@ def _recall_impl(
 
     # RA.1 — record the served set, strictly last. Everything above has already
     # decided and serialised the ranking, so nothing this does can reach it.
-    # Default OFF; opt in with ``served_ledger.enabled`` in mind-mem.json.
+    # Default ON since 5.0.2; opt out per workspace with a literal
+    # ``served_ledger.enabled: false`` in mind-mem.json.
     if raw:
-        _record_served_run(raw, ws)
+        raw = _record_served_run(raw, ws)
+
+    # Group J — the producer half. What this recall served becomes the bundle a
+    # later, lexically-close query can be answered from without a round-trip,
+    # and the served ids are reported to the co-retrieval predictor, which is
+    # the loop the roadmap item flagged as starving (prefetch observations = 0
+    # because nothing ever told it what a query resolved to). Recorded against
+    # the head the answer was computed at, so a write that lands between now
+    # and the next lookup retires this bundle rather than aging it out.
+    if _anticipation_on and raw:
+        _record_anticipation_bundle(ws, "recall", raw, _index_anchor)
 
     return raw
 
@@ -220,17 +441,16 @@ def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
     vector leg regardless of config. Any failure degrades to the BM25-only shape
     (both False) rather than raising — an auxiliary artifact must not break
     recall.
-    """
-    if backend == "bm25":
-        return False, False
-    try:
-        from mind_mem.hybrid_recall import HybridBackend
 
-        hb = HybridBackend.from_config(_load_config(ws))
-        return bool(getattr(hb, "vector_enabled", False)), bool(getattr(hb, "vector_available", False))
-    except Exception as exc:  # pragma: no cover — defensive
-        _log.warning("recall_attestation_vector_flags_failed", error=str(exc))
-        return False, False
+    The rule itself lives in :func:`mind_mem.recall.resolve_vector_flags`, which
+    the serving entry uses too: one implementation, so the flags an MCP-served
+    attestation binds and the flags an HTTP- or CLI-served one binds cannot
+    drift apart. Only the config *loader* differs — this surface keeps the MCP
+    config reader it has always used, and hands the mapping in.
+    """
+    from mind_mem.recall import resolve_vector_flags
+
+    return resolve_vector_flags(ws, backend, _load_config(ws))
 
 
 def _apply_bundle_format(query: str, raw_json: str) -> str:
@@ -316,8 +536,8 @@ def _apply_attestation(raw_json: str, backend: str, scoring_instant: str, query:
         return raw_json
 
 
-def _record_served_run(raw_json: str, ws: str) -> None:
-    """Append this run to the served-set ledger (RA.1). Default OFF.
+def _record_served_run(raw_json: str, ws: str) -> str:
+    """Append this run to the served-set ledger (RA.1). Default ON since 5.0.2.
 
     Runs **after** ``recall()`` has returned and after the envelope is
     serialised — the last thing ``_recall_impl`` does. That placement is the
@@ -335,34 +555,35 @@ def _record_served_run(raw_json: str, ws: str) -> None:
     rather than hopeful.
 
     Writes no block, so the store's admission gate is untouched. Failure must
-    never break recall — logged, and the answer is returned regardless.
+    never break recall — the envelope is returned regardless, but it is no
+    longer returned *silently*: the attestation carries ``served_seq`` (the row
+    this run is recorded as) or ``served_seq: null`` with a ``ledger_error``
+    saying why there is none. A client holding this envelope can therefore tell
+    "never recorded" from "row removed", which is the difference between the
+    ledger being a record and being a hope.
+
+    Returns the envelope to publish — the input string unchanged when there is
+    no attestation to stamp.
     """
     try:
         from mind_mem.recall_attestation import _served_ids
-        from mind_mem.served_ledger import append_served_run, ledger_enabled
+        from mind_mem.served_ledger import attach_served_run
 
-        if not ledger_enabled(ws):
-            return
         envelope = json.loads(raw_json)
         if not isinstance(envelope, dict):
-            return
+            return raw_json
         attestation = envelope.get("attestation")
         results = envelope.get("results")
         if not isinstance(attestation, dict) or not isinstance(results, list):
             # No attestation (format="bundle", or a derivation that failed):
-            # there is no record to join to, so there is nothing to record.
-            return
-        append_served_run(
-            ws,
-            query_hash=attestation["query_hash"],
-            served_digest=attestation["results_digest"],
-            ids=_served_ids(results),
-            pipeline_hash=attestation["config_hash"],
-            index_anchor=attestation["index_anchor"],
-            scoring_instant=attestation["scoring_instant"],
-        )
+            # there is no record to join to, so there is nothing to record and
+            # nothing to stamp the outcome onto.
+            return raw_json
+        envelope["attestation"] = attach_served_run(attestation, ws, ids=_served_ids(results))
+        return json.dumps(envelope, indent=2, default=str)
     except Exception as exc:  # pragma: no cover — defensive; recall must not fail on the ledger
         _log.warning("served_ledger_append_failed", error=str(exc))
+        return raw_json
 
 
 def _apply_explain(query: str, raw_json: str) -> str:
@@ -644,8 +865,10 @@ def pack_recall_budget(
         return json.dumps({"error": "limit must be in [1, 500]"})
 
     raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
+    attestation: dict[str, Any] | None = None
     if isinstance(raw, dict):
         results = raw.get("results", []) or []
+        attestation = raw.get("attestation")
     elif isinstance(raw, list):
         results = raw
     else:
@@ -728,6 +951,12 @@ def pack_recall_budget(
             **packed.as_dict(),
             **({"sufficiency": sufficiency} if sufficiency else {}),
             **({"context_budget": budget} if budget is not None else {}),
+            # The record for the RECALL underneath the pack, surfaced rather
+            # than dropped. It commits to the ranking the recall served, which
+            # is ``included`` + ``dropped`` — packing is a budget decision
+            # taken after the fact, and re-deriving a record over ``included``
+            # alone would attest a ranking the engine never produced.
+            "attestation": attestation,
             "_schema_version": "1.0",
         },
         indent=2,
@@ -829,6 +1058,10 @@ def recall_with_axis(
         "rotated": result["rotated"],
         "diversity": result["diversity"],
         "attempts": result["attempts"],
+        # The orchestrator attests the FUSED answer, not its per-axis passes:
+        # what this tool served is the merged ranking below, and a record per
+        # pass would name candidate sets no caller was handed.
+        "attestation": result.get("attestation"),
         "_schema_version": "1.0",
     }
     return json.dumps(envelope, indent=2, default=str)
@@ -1063,6 +1296,16 @@ def retrieval_diagnostics(last_n: int = 50, max_age_days: int = 7) -> str:
 
     result["vector_leg"] = inertness_for(ws).as_dict()
 
+    # Group J — the anticipation cache's own counters, on the operator surface
+    # that already answers "why is recall behaving like this". Reported
+    # unconditionally and for the same reason as the vector leg above: a cache
+    # whose hit rate nobody can see is a cache nobody can tune, and a run of
+    # zeroes is itself the answer when the feature is off or never warm. The
+    # counters are process-local integers — no clock, no I/O, no store read.
+    from mind_mem.prefetch import get_cache as _anticipation_cache
+
+    result["anticipation_cache"] = _anticipation_cache().stats()
+
     result["_schema_version"] = MCP_SCHEMA_VERSION
     metrics.inc("mcp_retrieval_diagnostics")
     return json.dumps(result, indent=2)
@@ -1083,18 +1326,47 @@ def prefetch(signals: str, limit: int = 5) -> str:
 
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_prefetch_results"]))
+    # Resolved here, once, and handed to both the assembly and the record it
+    # gets attested with. Left to default, the N+1 passes inside
+    # ``prefetch_context`` would each read their own "today" and the
+    # attestation below would read a further one — across a UTC midnight that
+    # is a record naming a day none of the passes scored against.
+    instant = resolve_scoring_instant(None)
     try:
         from mind_mem.recall import prefetch_context
 
-        results = prefetch_context(ws, signal_list, limit=limit)
+        results = prefetch_context(ws, signal_list, limit=limit, scoring_instant=instant)
         metrics.inc("mcp_prefetch_queries")
         _log.info("mcp_prefetch", signals=signal_list, results=len(results))
+        # Group J — this is the tool the roadmap item calls "idle": it
+        # assembled context and then nothing consumed it. Its results now land
+        # in the anticipation cache, at the current chain head, so the next
+        # recall can be answered from them without a round-trip. Gated on the
+        # same flag as the consumer, read from the workspace config already on
+        # hand, so an opted-out workspace pays nothing for the wiring.
+        from mind_mem.prefetch import anticipation_enabled, get_cache
+
+        if anticipation_enabled(_load_config(ws)):
+            hits = [r for r in results if isinstance(r, dict)]
+            if hits:
+                get_cache().record(ws, "prefetch", hits, head=_resolve_chain_head(ws))
+        # This tool is a door: it hands assembled block content back to a
+        # caller, so it owes the same proof every other door owes. It cannot
+        # inherit one from underneath — ``prefetch_context`` fans its signals
+        # out over a thread pool and calls the ENGINE per signal, so no single
+        # inner run describes what was served. The serve is the merged,
+        # deduplicated list this function returns, and that is what is attested
+        # here: one record, one row, over the answer the caller actually got.
+        from mind_mem.recall import attest_and_record
+
+        attestation = attest_and_record(ws, ",".join(signal_list), results, scoring_instant=instant)
         return json.dumps(
             {
                 "_schema_version": MCP_SCHEMA_VERSION,
                 "signals": signal_list,
                 "count": len(results),
                 "results": results,
+                "attestation": attestation,
             },
             indent=2,
             default=str,

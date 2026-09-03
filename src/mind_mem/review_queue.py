@@ -173,7 +173,16 @@ def load_queue(
 
 
 def queue_health(workspace: str) -> QueueHealth:
-    """Governance gates that stand between the queue and an apply."""
+    """Governance gates that stand between the queue and an apply.
+
+    ``governance_mode`` is read through :func:`mind_mem.apply_engine._get_mode`
+    rather than from ``memory/intel-state.json`` directly, and that is the
+    point: this function reports what the apply engine *will do*, so it has
+    to read the file the engine reads. While the engine read
+    ``intel-state.json`` and the governance gate read ``mind-mem.json``,
+    a health report could truthfully quote one file and be wrong about the
+    apply. One reader, one file — the attested one.
+    """
     root = _require_workspace(workspace)
 
     from .apply_engine import _get_mode, check_backlog_limit, check_no_touch_window
@@ -190,7 +199,7 @@ def queue_health(workspace: str) -> QueueHealth:
             "Export MIND_MEM_SCOPE=admin to review. This tool will not elevate it for you."
         )
     if mode == "detect_only":
-        blockers.append("governance_mode is detect_only — no proposal can be applied until it changes")
+        blockers.append("governance_mode is detect_only in mind-mem.json — no proposal can be applied until it changes")
     if over_limit:
         blockers.append(f"backlog limit reached ({backlog_count} staged) — the apply engine refuses new applies")
     if not touch_ok:

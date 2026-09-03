@@ -61,6 +61,7 @@ from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_s
 from .block_maturity import apply_min_maturity_filter as _apply_min_maturity_filter
 from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
+from .corpus_registry import discover_corpus_files
 from .enums import TaskStatus
 from .guardrail_surface import apply_guardrail_surfacing
 from .guardrails import GuardrailContext, GuardrailPolicy
@@ -1038,9 +1039,16 @@ def recall(
             except ImportError:
                 _log.debug("namespaces_unavailable", agent_id=agent_id)
 
-    # Load all blocks with source file tracking
+    # Load all blocks with source file tracking.
+    #
+    # I-14: discovery is the corpus TABLE plus the ``CORPUS_DIRS`` markdown
+    # walk — exactly what ``MarkdownBlockStore._discover_files`` reads.
+    # Iterating ``CORPUS_FILES`` alone left every unnamed ``.md`` in a
+    # corpus directory readable by ``get_by_id``/``get_all``/``export`` and
+    # invisible to recall; the table half comes first and whole, so an
+    # existing workspace's result order does not move.
     all_blocks = []
-    for label, rel_path in CORPUS_FILES.items():
+    for label, rel_path in discover_corpus_files(workspace):
         # ACL check: skip files the agent cannot read
         if ns_manager and not ns_manager.can_read(rel_path):
             continue
@@ -1071,6 +1079,11 @@ def recall(
         workspace_real = os.path.realpath(workspace)
         workspace_prefix = workspace_real + os.sep
         agent_ns = f"agents/{agent_id}"
+        # The TABLE, deliberately, not ``discover_corpus_files``: this loop
+        # mirrors the table's relpath *shapes* under ``agents/<id>/``, a
+        # corpus root ``MarkdownBlockStore`` never discovers, so there is no
+        # store-vs-recall equality to keep here. Widening it to a directory
+        # walk would widen an ACL surface, which I-14 does not ask for.
         for label, rel_path in CORPUS_FILES.items():
             ns_path = os.path.join(agent_ns, rel_path)
             candidate_real = os.path.realpath(os.path.join(workspace_real, ns_path))
@@ -1987,6 +2000,8 @@ def prefetch_context(
     workspace: str,
     recent_signals: list[str],
     limit: int = 5,
+    *,
+    scoring_instant: date | str | None = None,
 ) -> list[dict]:
     """Given recent conversation signals (entity mentions, topic keywords),
     pre-fetch memory blocks likely to be needed next.
@@ -1999,12 +2014,25 @@ def prefetch_context(
         recent_signals: List of recent entity mentions, topic keywords, or
             short phrases from the conversation that hint at upcoming needs.
         limit: Maximum number of blocks to return.
+        scoring_instant: The UTC date every pass here scores against,
+            resolved ONCE and threaded into all of them.
+
+            This function is N+1 recalls — one per signal, fanned out over a
+            thread pool, plus a category pass — and each one used to resolve
+            its own "today". A prefetch running across a UTC midnight
+            therefore fused rankings from two different days into one answer,
+            and the attestation its caller derives afterwards could name a
+            third. One instant for the whole assembly makes the merged result
+            a function of (corpus, config, instant) like every other served
+            ranking, and lets the caller bind the value it actually used.
 
     Returns:
         Deduplicated list of blocks ranked by relevance to the signals.
     """
     if not recent_signals:
         return []
+
+    instant = resolve_scoring_instant(scoring_instant)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -2019,7 +2047,7 @@ def prefetch_context(
     # 1. Parallel recall for each signal (#477 — avoid N+1 serial calls)
     def _recall_signal(sig: str) -> list[dict]:
         try:
-            return recall(workspace, sig, limit=limit, rerank=True)
+            return recall(workspace, sig, limit=limit, rerank=True, scoring_instant=instant)
         except RecursionError:
             raise  # structural cycle — never swallow silently
         except Exception as e:
@@ -2080,7 +2108,7 @@ def prefetch_context(
         if relevant_cats and category_reserve > 0:
             cat_query = " ".join(relevant_cats[:3])
             try:
-                cat_hits = recall(workspace, cat_query, limit=category_reserve, rerank=True)
+                cat_hits = recall(workspace, cat_query, limit=category_reserve, rerank=True, scoring_instant=instant)
                 added = 0
                 for block in cat_hits:
                     if added >= category_reserve:
@@ -2133,48 +2161,81 @@ def main():
 
     workspace = resolve_workspace(args.workspace)
 
-    # Resolve backend: CLI flag > config > default scan
-    backend = args.backend
-    if backend == "auto":
-        cfg_backend = _load_backend(workspace)
-        if cfg_backend == "sqlite":
-            backend = "sqlite"
-        elif cfg_backend is not None and isinstance(cfg_backend, RecallBackend):
-            # Vector or other custom backend
-            try:
-                results = cfg_backend.search(workspace, args.query, args.limit, args.active_only)
-            except (OSError, ValueError, TypeError) as e:
-                print(f"recall: backend error ({e}), falling back to scan", file=sys.stderr)
-                backend = "scan"
+    # The CLI is a door: what it prints is served to whoever ran it, so it owes
+    # the same proof every other door owes. Two things follow.
+    #
+    # The scope is claimed for the whole retrieval below because the sqlite
+    # branch can fall back into the serving entry from underneath (a missing
+    # FTS database sends ``query_index`` there), and a fallback leg is not a
+    # serve — recording it would put a candidate set nobody was handed into the
+    # ledger the outcome join reads.
+    #
+    # The record is then derived ONCE, after the branch, over whichever
+    # backend actually answered. Deriving it inside a branch would leave the
+    # other two backends serving unrecorded, which is precisely the shape of
+    # the defect this closes. Imported here rather than at module scope: the
+    # serving entry re-exports this module, and the write-side ledger it
+    # reaches must stay out of the scoring path's import closure
+    # (``tests/test_recall_attestation_v2.py`` fails the build on that edge).
+    from .recall import attest_and_record, serving_scope
+
+    with serving_scope():
+        # Resolve backend: CLI flag > config > default scan
+        backend = args.backend
+        if backend == "auto":
+            cfg_backend = _load_backend(workspace)
+            if cfg_backend == "sqlite":
+                backend = "sqlite"
+            elif cfg_backend is not None and isinstance(cfg_backend, RecallBackend):
+                # Vector or other custom backend
+                try:
+                    results = cfg_backend.search(workspace, args.query, args.limit, args.active_only)
+                except (OSError, ValueError, TypeError) as e:
+                    print(f"recall: backend error ({e}), falling back to scan", file=sys.stderr)
+                    backend = "scan"
+                else:
+                    backend = None  # already have results
             else:
-                backend = None  # already have results
-        else:
-            backend = "scan"
+                backend = "scan"
 
-    if backend == "sqlite":
-        from .sqlite_index import query_index
+        if backend == "sqlite":
+            from .sqlite_index import query_index
 
-        results = query_index(
-            workspace,
-            args.query,
-            limit=args.limit,
-            active_only=args.active_only,
-            graph_boost=args.graph,
-            retrieve_wide_k=args.retrieve_wide_k,
-            rerank=not args.no_rerank,
-            rerank_debug=args.rerank_debug,
-        )
-    elif backend == "scan":
-        results = recall(
-            workspace,
-            args.query,
-            args.limit,
-            args.active_only,
-            args.graph,
-            retrieve_wide_k=args.retrieve_wide_k,
-            rerank=not args.no_rerank,
-            rerank_debug=args.rerank_debug,
-        )
+            results = query_index(
+                workspace,
+                args.query,
+                limit=args.limit,
+                active_only=args.active_only,
+                graph_boost=args.graph,
+                retrieve_wide_k=args.retrieve_wide_k,
+                rerank=not args.no_rerank,
+                rerank_debug=args.rerank_debug,
+            )
+        elif backend == "scan":
+            results = recall(
+                workspace,
+                args.query,
+                args.limit,
+                args.active_only,
+                args.graph,
+                retrieve_wide_k=args.retrieve_wide_k,
+                rerank=not args.no_rerank,
+                rerank_debug=args.rerank_debug,
+            )
+
+    # Reads no clock of its own: ``scoring_instant`` is left to the value the
+    # run resolved, and the ranking above is already fixed and printed below,
+    # so nothing recorded here can reach it.
+    attest_and_record(
+        workspace,
+        args.query,
+        results,
+        # ``scan`` and ``sqlite`` are the lexical engines — neither runs a dense
+        # leg — so reporting the config's vector flags for them would mark a leg
+        # degraded that this run never requested. A configured custom backend
+        # (the vector one) is the case where those flags ARE the run's own.
+        backend="bm25" if backend in ("scan", "sqlite") else "auto",
+    )
 
     if args.json:
         print(json.dumps(results, indent=2))

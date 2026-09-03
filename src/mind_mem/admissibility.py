@@ -426,16 +426,18 @@ def live_statuses(workspace: str) -> Mapping[str, str]:
         # Unreadable index: resolve live rather than trust it. Fail-closed.
         _log.warning("index_staleness_check_failed", error=str(exc))
 
-    from ._recall_constants import CORPUS_FILES
+    from .corpus_registry import discover_corpus_files
 
-    # CORPUS_FILES, not ``MarkdownBlockStore.list_blocks()``. The two
-    # disagree, and the difference is exactly the blocks that matter here:
-    # the store enumerates ``CORPUS_DIRS`` (decisions/tasks/entities/
-    # intelligence) while CORPUS_FILES also names the three ``memory/``
-    # drop corpora — IMPORTED, INBOX, MESSAGES — which is where withheld
-    # content lives and which the indexer and the scan leg both read. A
-    # status map built off the store would silently never cover them.
-    paths = [os.path.join(workspace, rel) for rel in sorted(CORPUS_FILES.values())]
+    # ``discover_corpus_files``, not ``MarkdownBlockStore.list_blocks()``
+    # and no longer ``CORPUS_FILES`` alone. The status map has to cover
+    # every file a block can be served from, and that is the union of two
+    # halves: the corpus TABLE — which names the four ``memory/`` drop
+    # corpora (IMPORTED, INBOX, MESSAGES, INGEST), where withheld content
+    # lives and which the store's directory walk cannot see — and the
+    # ``CORPUS_DIRS`` markdown walk, which names every unnamed ``.md`` in
+    # a corpus directory, which the table cannot see. A map built off
+    # either half alone silently never covers the other (I-14).
+    paths = [os.path.join(workspace, rel) for _label, rel in sorted(discover_corpus_files(workspace), key=lambda row: row[1])]
     paths = [path for path in paths if os.path.isfile(path)]
     key = tuple(_file_identity(path) for path in paths)
     cached = _LIVE_STATUS_CACHE.get(key)

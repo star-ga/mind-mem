@@ -1170,15 +1170,128 @@ _RACE_PROCS = 6
 _RACE_ROUNDS = 60
 
 
-def _run_stale_race(tmp_path, *, tag: str, preamble: str = "", budget: float = 240.0) -> tuple[int, int, tuple, str, str]:
-    """Return (violations, stale_breaks, exit codes, evidence, wedged).
+#: The share of the per-test kill this race may spend before it fails with
+#: its own words. Strictly below 1, so for any positive external timeout
+#: the internal deadline fires FIRST — which is the one property the
+#: constant it replaces could not have.
+_RACE_BUDGET_SHARE = 0.5
 
-    *budget* is a wall-clock bound on the whole race, and *wedged* is the
-    reason it was exceeded (empty when it was not). Without it a lock that
-    can never be broken is not a test failure — it is a hung session that
+#: Used only when no per-test kill is in force at all (a bare ``pytest``
+#: run with pytest-timeout absent), where there is nothing to fire before.
+_RACE_BUDGET_UNPOLICED = 120.0
+
+
+def _effective_pytest_timeout(request) -> float | None:
+    """The per-test wall-clock kill in force for *request*, or ``None``.
+
+    Resolution order is pytest-timeout's own: a ``timeout`` marker on the
+    item beats ``--timeout`` on the command line, which beats the ini
+    value. Every lookup is guarded, because with pytest-timeout not
+    installed neither the option nor the ini key exists and both raise.
+    """
+    marker = request.node.get_closest_marker("timeout")
+    if marker is not None:
+        if marker.args:
+            return float(marker.args[0])
+        if "timeout" in marker.kwargs:
+            return float(marker.kwargs["timeout"])
+    for read, key in ((request.config.getoption, "timeout"), (request.config.getini, "timeout")):
+        try:
+            raw = read(key)
+        except (ValueError, KeyError):
+            continue
+        if raw in (None, "", 0, "0"):
+            continue
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _budget_that_fires_first(request) -> float:
+    """A self-imposed deadline is only a deadline while it fires first.
+
+    This race's bound used to be the constant ``240.0`` while CI runs
+    ``--timeout=120 --timeout-method=thread``. That constant could never
+    fire: pytest-timeout's thread reached 120 s first and killed the
+    interpreter inside the poll loop, so every Windows row of CI run
+    33628984458 ended in a stack dump and ``exit code 1`` with no summary
+    line at all — five other failures in that run lost their names with
+    it, and roughly ninety per cent of the suite never ran.
+
+    Deriving the bound from the kill actually in force makes that ordering
+    impossible to get wrong, instead of something the next edit has to
+    remember. There is deliberately no floor term: a floor is exactly what
+    would let the budget climb back above a small timeout.
+    """
+    killer = _effective_pytest_timeout(request)
+    if killer is None or killer <= 0:
+        return _RACE_BUDGET_UNPOLICED
+    return killer * _RACE_BUDGET_SHARE
+
+
+@dataclass(frozen=True)
+class _RaceOutcome:
+    """What one stale-break race produced, wedge included.
+
+    ``wedged`` is empty when the race finished inside its budget, and
+    otherwise carries the reason *plus* the evidence a reader needs to
+    diagnose it without a rerun: which round it stopped on, every worker's
+    pid and live/exited state at that moment, the lockfile's contents, the
+    barrier directory, and each worker's captured output.
+    """
+
+    violations: int
+    breaks: int
+    codes: tuple[int, ...]
+    pids: tuple[int, ...]
+    evidence: str
+    transcript: str
+    wedged: str
+
+
+def _race_snapshot(running, target, bdir, round_reached: int) -> str:
+    """The state of the box at the moment the race ran out of budget."""
+    lines = [f"  stopped waiting in round {round_reached} of {_RACE_ROUNDS}"]
+    for proc in running:
+        state = proc.poll()
+        lines.append(f"  worker pid={proc.pid} state={'running' if state is None else f'exited {state}'}")
+    lock = target.parent / (target.name + ".lock")
+    try:
+        lines.append(f"  lockfile {lock.name}: {lock.read_text(encoding='utf-8')!r}")
+    except OSError as exc:
+        lines.append(f"  lockfile {lock.name}: unreadable ({exc})")
+    try:
+        entries = sorted(os.listdir(bdir))
+        lines.append(f"  barrier {bdir.name}: {len(entries)} entries, last: {entries[-12:]}")
+    except OSError as exc:
+        lines.append(f"  barrier {bdir.name}: unreadable ({exc})")
+    return "\n".join(lines)
+
+
+def _worker_transcript(talk) -> str:
+    """Every worker's captured output, which used to be read and dropped."""
+    lines = []
+    for pid, code, out, err in talk:
+        lines.append(f"  worker pid={pid} exit={code}")
+        for stream, text in (("stdout", out), ("stderr", err)):
+            if text:
+                lines.append(f"    {stream}: " + text.replace("\n", "\n      "))
+    return "\n".join(lines) or "  (no worker output)"
+
+
+def _run_stale_race(request, tmp_path, *, tag: str, preamble: str = "") -> _RaceOutcome:
+    """Run the stale-break race under a deadline it is guaranteed to reach.
+
+    The budget is derived from the per-test kill in force (see
+    :func:`_budget_that_fires_first`) rather than chosen next to it, so a
+    lock that can never be broken comes back as a named failure carrying
+    pids, states and the lockfile — not as a hung session that
     pytest-timeout kills, taking every other test's failure text with it.
     That is how five Windows failures came back with no assertion text.
     """
+    budget = _budget_that_fires_first(request)
     worker = tmp_path / f"stale_race_{tag}.py"
     worker.write_text(preamble + _STALE_RACE_SOURCE, encoding="utf-8")
     bdir = tmp_path / f"barrier_stale_{tag}"
@@ -1213,15 +1326,39 @@ def _run_stale_race(tmp_path, *, tag: str, preamble: str = "", budget: float = 2
     ]
     deadline = time.monotonic() + budget
     wedged = ""
+    snapshot = ""
+    next_liveness = 0.0
     try:
         for rnd in range(_RACE_ROUNDS):
             prefix = f"ready-{rnd}-"
             while sum(1 for f in os.listdir(bdir) if f.startswith(prefix)) < _RACE_PROCS:
-                if time.monotonic() > deadline:
-                    # Either a worker died — the exit codes below will say
-                    # so — or nobody can make progress at all.
-                    wedged = f"the race made no progress past round {rnd} within {budget}s"
+                now = time.monotonic()
+                if now > deadline:
+                    # Nobody can make progress at all. Photograph the box
+                    # BEFORE the finally block kills anything: the live
+                    # pids and states are the diagnosis.
+                    wedged = f"the race made no progress past round {rnd} of {_RACE_ROUNDS} within its {budget:.1f}s budget"
+                    snapshot = _race_snapshot(running, target, bdir, rnd)
                     break
+                if now >= next_liveness:
+                    # A worker cannot legitimately be gone here: it exits
+                    # only after the final round, which needs the final
+                    # ``go-`` file, which the parent writes only once that
+                    # round's barrier has filled. So a dead worker
+                    # mid-barrier IS the failure, and waiting out the rest
+                    # of the budget to say so only buries the reason.
+                    # Sampled at 20 Hz rather than at the 1 kHz poll rate,
+                    # so the healthy path pays six waitpids every 50 ms
+                    # instead of six every millisecond.
+                    next_liveness = now + 0.05
+                    if any(proc.poll() is not None for proc in running):
+                        gone = sum(1 for proc in running if proc.poll() is not None)
+                        wedged = (
+                            f"{gone} of {_RACE_PROCS} workers were already gone during round {rnd}'s barrier, "
+                            "which no worker can reach before the parent opens the last gate"
+                        )
+                        snapshot = _race_snapshot(running, target, bdir, rnd)
+                        break
                 time.sleep(0.001)
             if wedged:
                 break
@@ -1230,38 +1367,63 @@ def _run_stale_race(tmp_path, *, tag: str, preamble: str = "", budget: float = 2
             (bdir / f"go-{rnd}").write_text("", encoding="utf-8")
     finally:
         codes = []
+        talk = []
         for proc in running:
             try:
-                proc.communicate(timeout=max(1.0, deadline - time.monotonic()))
+                out, err = proc.communicate(timeout=max(1.0, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:  # pragma: no cover - worker wedged
+                if not snapshot:
+                    snapshot = _race_snapshot(running, target, bdir, _RACE_ROUNDS)
                 proc.kill()
-                proc.communicate()
-                wedged = wedged or f"a worker had to be killed after {budget}s: it never exited"
+                out, err = proc.communicate()
+                wedged = wedged or f"a worker had to be killed after {budget:.1f}s: it never exited"
             codes.append(proc.returncode)
+            talk.append((proc.pid, proc.returncode, (out or "").strip(), (err or "").strip()))
+
+    transcript = _worker_transcript(talk)
+    if wedged:
+        wedged = "\n".join([wedged, snapshot, transcript])
 
     counts = tmp_path / f"overlaps_{tag}.txt.counts"
     lines = [ln.split() for ln in counts.read_text(encoding="utf-8").splitlines() if ln.strip()] if counts.exists() else []
-    violations = sum(int(parts[1]) for parts in lines)
-    breaks = sum(int(parts[2]) for parts in lines)
-    return violations, breaks, tuple(codes), evidence.read_text(encoding="utf-8"), wedged
+    return _RaceOutcome(
+        violations=sum(int(parts[1]) for parts in lines),
+        breaks=sum(int(parts[2]) for parts in lines),
+        codes=tuple(codes),
+        pids=tuple(proc.pid for proc in running),
+        evidence=evidence.read_text(encoding="utf-8"),
+        transcript=transcript,
+        wedged=wedged,
+    )
 
 
+#: Six workers x sixty rounds of contended acquire is legitimately long —
+#: 15.1 s and 15.4 s measured on Linux for the two tests below — and the
+#: 120 s default kill leaves the race no room to reach its own deadline on
+#: a slower runner. This is the hang detector for these two tests only,
+#: and it is what :func:`_budget_that_fires_first` derives the internal
+#: 180 s budget from: twelve times the measured cost, and still half the
+#: kill. No assertion below is relaxed by it.
+_RACE_KILL = 360
+
+
+@pytest.mark.timeout(_RACE_KILL)
 class TestBreakingACrashedHoldersLockHasOneWinner:
-    def test_no_two_waiters_break_the_same_lock(self, tmp_path):
-        violations, breaks, codes, evidence, wedged = _run_stale_race(tmp_path, tag="fixed")
+    def test_no_two_waiters_break_the_same_lock(self, request, tmp_path):
+        race = _run_stale_race(request, tmp_path, tag="fixed")
 
         # Bounded time, not a timeout: a lock nobody can break has to come
         # back as a named failure here, not as a hung session somebody else
         # has to kill.
-        assert not wedged, wedged
+        assert not race.wedged, race.wedged
 
         # Positive control: the break path has to have been walked, or a
         # clean result says nothing. Every round plants a lockfile that
         # somebody must break before anyone can enter.
-        assert codes == (0,) * _RACE_PROCS, f"a worker failed: {codes}"
-        assert breaks >= _RACE_ROUNDS, f"only {breaks} stale breaks over {_RACE_ROUNDS} rounds — the path was not exercised"
+        assert race.codes == (0,) * _RACE_PROCS, f"a worker failed: {race.codes}\n{race.transcript}"
+        assert race.breaks >= _RACE_ROUNDS, f"only {race.breaks} stale breaks over {_RACE_ROUNDS} rounds — the path was not exercised"
 
-        assert violations == 0, f"two processes held the same lock {violations} times:\n{evidence}"
+        assert race.violations == 0, f"two processes held the same lock {race.violations} times:\n{race.evidence}"
 
 
 #: The simulation needs ``/proc/self/fd`` to know which files this process
@@ -1270,6 +1432,7 @@ class TestBreakingACrashedHoldersLockHasOneWinner:
 _HAS_PROCFS = os.path.isdir("/proc/self/fd")
 
 
+@pytest.mark.timeout(_RACE_KILL)
 @pytest.mark.skipif(not _HAS_PROCFS, reason="the Windows unlink simulation reads /proc/self/fd")
 class TestACrashedHoldersLockIsBreakableUnderWindowsUnlink:
     """The Windows matrix row, run on a box that is not Windows.
@@ -1293,21 +1456,233 @@ class TestACrashedHoldersLockIsBreakableUnderWindowsUnlink:
     process's handle and so is invisible to a same-process simulation.
     """
 
-    def test_the_break_never_unlinks_a_file_it_holds_open(self, tmp_path):
-        violations, breaks, codes, evidence, wedged = _run_stale_race(
+    def test_the_break_never_unlinks_a_file_it_holds_open(self, request, tmp_path):
+        race = _run_stale_race(
+            request,
             tmp_path,
             tag="winsim",
             preamble=_WINDOWS_UNLINK_PREAMBLE,
         )
 
-        assert not wedged, wedged
+        assert not race.wedged, race.wedged
         # Positive control, twice over: the simulation proves itself active
         # at worker startup (or the worker exits non-zero), and the break
         # path has to have been walked on every round.
-        assert codes == (0,) * _RACE_PROCS, f"a worker failed: {codes}"
-        assert breaks >= _RACE_ROUNDS, f"only {breaks} stale breaks over {_RACE_ROUNDS} rounds — the path was not exercised"
+        assert race.codes == (0,) * _RACE_PROCS, f"a worker failed: {race.codes}\n{race.transcript}"
+        assert race.breaks >= _RACE_ROUNDS, f"only {race.breaks} stale breaks over {_RACE_ROUNDS} rounds — the path was not exercised"
 
-        assert violations == 0, f"two processes held the same lock {violations} times:\n{evidence}"
+        assert race.violations == 0, f"two processes held the same lock {race.violations} times:\n{race.evidence}"
+
+
+# ---------------------------------------------------------------------------
+# The deadline the two races above run under, and the wedge it must catch
+# ---------------------------------------------------------------------------
+
+
+class _StubNode:
+    """An item carrying a ``timeout`` marker, or carrying none."""
+
+    def __init__(self, seconds: float | None) -> None:
+        self._seconds = seconds
+
+    def get_closest_marker(self, name: str):
+        if name != "timeout" or self._seconds is None:
+            return None
+        return pytest.mark.timeout(self._seconds).mark
+
+
+class _StubConfig:
+    """A config where ``--timeout`` and the ini key may each be absent.
+
+    Absent means *raises*, which is what ``getoption``/``getini`` really do
+    when pytest-timeout is not installed — a stub that returned ``None``
+    instead would hide the branch that has to survive that.
+    """
+
+    def __init__(self, option: float | None, ini: float | None) -> None:
+        self._option, self._ini = option, ini
+
+    def getoption(self, name: str):
+        if name != "timeout" or self._option is None:
+            raise ValueError(f"no option named {name!r}")
+        return self._option
+
+    def getini(self, name: str):
+        if name != "timeout" or self._ini is None:
+            raise ValueError(f"unknown ini option {name!r}")
+        return self._ini
+
+
+class _StubRequest:
+    """Only what :func:`_effective_pytest_timeout` reads, nothing else."""
+
+    def __init__(self, *, marker: float | None = None, option: float | None = None, ini: float | None = None) -> None:
+        self.node = _StubNode(marker)
+        self.config = _StubConfig(option, ini)
+
+
+#: The bound that shipped before the derivation, kept as a number so the
+#: regression it caused can be asserted rather than described.
+_BUDGET_THAT_COULD_NOT_FIRE = 240.0
+
+#: The kill ``.github/workflows/ci.yml`` passes on every matrix row.
+_CI_KILL = 120.0
+
+
+class TestTheRaceDeadlineFiresBeforeTheKill:
+    """A self-imposed deadline is only a deadline while it fires first.
+
+    Pins the ordering, the resolution order it is read from, and the fact
+    that the constant this replaced violated it at the timeout CI runs.
+    """
+
+    def test_a_marker_beats_the_command_line(self) -> None:
+        assert _effective_pytest_timeout(_StubRequest(marker=50, option=120)) == 50.0
+
+    def test_the_command_line_beats_the_ini_value(self) -> None:
+        assert _effective_pytest_timeout(_StubRequest(option=120, ini=300)) == 120.0
+
+    def test_the_ini_value_is_read_when_nothing_else_is_set(self) -> None:
+        assert _effective_pytest_timeout(_StubRequest(ini=300)) == 300.0
+
+    def test_no_kill_at_all_is_reported_as_none(self) -> None:
+        # pytest-timeout absent: both lookups raise, and the race falls back
+        # to its own bound because there is nothing to fire before.
+        assert _effective_pytest_timeout(_StubRequest()) is None
+        assert _budget_that_fires_first(_StubRequest()) == _RACE_BUDGET_UNPOLICED
+
+    @pytest.mark.timeout(97)
+    def test_the_stubs_agree_with_a_real_request(self, request) -> None:
+        # Positive control for every stub above: read the same value off the
+        # genuine fixture, so a stub that lies about the API is caught here.
+        assert _effective_pytest_timeout(request) == 97.0
+        assert _budget_that_fires_first(request) == 97.0 * _RACE_BUDGET_SHARE
+
+    def test_the_budget_is_strictly_under_the_kill_at_every_scale(self) -> None:
+        for killer in (1.0, 5.0, 30.0, _CI_KILL, 240.0, float(_RACE_KILL), 3600.0):
+            budget = _budget_that_fires_first(_StubRequest(marker=killer))
+            assert budget < killer, f"a {budget}s budget under a {killer}s kill can never fire"
+
+    def test_the_constant_this_replaced_could_not_fire_under_ci(self) -> None:
+        # Positive control for the property above: name the regression as a
+        # number. CI run 33628984458 is what it cost — five Windows rows
+        # killed mid-poll with no summary line.
+        assert _BUDGET_THAT_COULD_NOT_FIRE > _CI_KILL, (
+            "the constant no longer outlives the CI kill, so this test no longer "
+            "demonstrates the ordering bug the derivation exists to prevent"
+        )
+        assert _budget_that_fires_first(_StubRequest(option=_CI_KILL)) < _CI_KILL
+
+    def test_both_races_declare_the_kill_their_budget_is_derived_from(self) -> None:
+        # Wiring, not intent: a derivation nothing consults is decoration.
+        for cls in (
+            TestBreakingACrashedHoldersLockHasOneWinner,
+            TestACrashedHoldersLockIsBreakableUnderWindowsUnlink,
+        ):
+            marks = [m for m in getattr(cls, "pytestmark", []) if m.name == "timeout"]
+            assert marks, f"{cls.__name__} lost its timeout marker — its budget is back to the 120s default"
+            killer = float(marks[0].args[0])
+            assert _budget_that_fires_first(_StubRequest(marker=killer)) < killer
+
+
+#: A worker that reaches the barrier and then never acquires. Round 0
+#: fills, the parent plants the crashed holder's lockfile and opens the
+#: gate, and round 1's barrier can never fill — the exact shape of the
+#: Windows wedge, on demand and in seconds.
+_NEVER_ACQUIRES_PREAMBLE = """\
+import time as _wt
+
+import mind_mem.mind_filelock as _wmfl
+
+
+def _never_acquires(self):
+    while True:
+        _wt.sleep(0.05)
+
+
+_wmfl.FileLock.acquire = _never_acquires
+"""
+
+#: Small enough to keep this test cheap, large enough that the wedge, the
+#: six one-second waits for a worker that will not exit, and the kills all
+#: fit inside it. Measured below the marker; see the assertion.
+_WEDGE_KILL = 40
+
+
+class TestAWedgedRaceFailsWithEvidenceInsteadOfKillingTheRun:
+    """The behaviour the Windows rows needed and did not have.
+
+    On CI run 33628984458 this race stopped making progress on a Windows
+    runner, the 240 s bound could not fire under the 120 s kill, and
+    pytest-timeout's thread method took the interpreter out at 10% of the
+    suite: a stack dump, ``exit code 1``, no summary line, and five other
+    failures on those rows that were never named. This test reproduces a
+    wedge deliberately and asserts the run comes back with the diagnosis
+    instead — which round, which pids, whether they were alive, and what
+    the lockfile held at that moment.
+    """
+
+    @pytest.mark.timeout(_WEDGE_KILL)
+    def test_a_race_that_cannot_hand_over_names_the_round_the_pids_and_the_lockfile(self, request, tmp_path):
+        started = time.monotonic()
+        race = _run_stale_race(request, tmp_path, tag="wedge", preamble=_NEVER_ACQUIRES_PREAMBLE)
+        elapsed = time.monotonic() - started
+
+        assert race.wedged, (
+            "a race whose workers can never acquire came back clean — this harness cannot see a wedge, "
+            f"so the two gates above prove nothing (codes={race.codes})"
+        )
+        # Round 0 completed, so this is the hand-over wedging and not the
+        # workers failing to start.
+        assert f"round 1 of {_RACE_ROUNDS}" in race.wedged, f"the wedge is not where this test aims it:\n{race.wedged}"
+        # Positive control on the pids: the report has to name the processes
+        # actually spawned, not a plausible-looking placeholder.
+        for pid in race.pids:
+            assert f"pid={pid}" in race.wedged, f"worker {pid} is missing from the report:\n{race.wedged}"
+        assert "state=running" in race.wedged, f"no worker was reported alive at the wedge:\n{race.wedged}"
+        assert _IMPOSSIBLE_PID in race.wedged, f"the crashed holder's lockfile is missing:\n{race.wedged}"
+        assert "barrier" in race.wedged, f"the barrier state is missing:\n{race.wedged}"
+
+        # And it is bounded: the whole thing, kills included, finished
+        # inside the kill rather than being ended by it.
+        assert elapsed < _WEDGE_KILL, f"the wedge took {elapsed:.1f}s of a {_WEDGE_KILL}s kill — no margin left"
+
+
+#: A worker that is gone before it ever reaches the barrier. This is the
+#: shape a Windows worker takes when its lock protocol raises: one of the
+#: six is missing, round 0's barrier can never fill, and the parent waits
+#: for a file that is not coming. Prepended to the worker source, so it
+#: fires before any import.
+_DIES_AT_STARTUP_PREAMBLE = "raise SystemExit(3)\n"
+
+
+class TestADeadWorkerIsNamedAtOnceRatherThanWaitedOut:
+    """The budget is the backstop, not the diagnosis.
+
+    A worker cannot legitimately exit during a barrier wait — reaching the
+    exit needs the final ``go-`` file, which the parent writes only after
+    the final barrier has filled — so one that is gone mid-barrier is
+    itself the failure. Sitting out the remaining budget to report it costs a CI row
+    minutes and buries the reason under a wall-clock message.
+    """
+
+    @pytest.mark.timeout(_WEDGE_KILL)
+    def test_workers_that_exited_are_named_without_burning_the_budget(self, request, tmp_path):
+        budget = _budget_that_fires_first(request)
+        started = time.monotonic()
+        race = _run_stale_race(request, tmp_path, tag="dead", preamble=_DIES_AT_STARTUP_PREAMBLE)
+        elapsed = time.monotonic() - started
+
+        assert race.wedged, f"six dead workers came back as a clean race (codes={race.codes})"
+        # Positive control: they really did die, and died the way this test
+        # arranged them to — not because the harness failed to start them.
+        assert race.codes == (3,) * _RACE_PROCS, f"the workers did not exit as arranged: {race.codes}"
+        assert "already gone during round 0" in race.wedged, f"the wedge was not attributed to them:\n{race.wedged}"
+        assert "exited 3" in race.wedged, f"the exit states are missing:\n{race.wedged}"
+        assert elapsed < budget, (
+            f"took {elapsed:.1f}s of a {budget:.1f}s budget to notice six dead workers — "
+            "the fast path is not wired, so a Windows row pays the whole budget to learn this"
+        )
 
 
 #: One process, one crashed holder's lockfile, one attempt to take it. The

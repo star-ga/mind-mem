@@ -29,6 +29,7 @@ from typing import Any
 
 from . import __version__ as _pkg_version
 from .observability import get_logger
+from .spec_binding import SpecBindingManager
 
 _log = get_logger("init_workspace")
 
@@ -125,8 +126,18 @@ MAINTENANCE_SCRIPTS = [
 # hardcoded "1.7.0" through v3.8.10 (purely informational; nothing validates it).
 DEFAULT_CONFIG = {
     "version": _pkg_version,
-    "workspace_path": ".",
+    # ``workspace_path`` was here until 5.0.2, documented as "workspace root
+    # directory; relative paths are resolved from the config file location".
+    # No code resolved anything against it: every consumer -- the CLI, the MCP
+    # server, the hooks, the HTTP transport -- takes the workspace as an
+    # argument or from ``MIND_MEM_WORKSPACE``. An operator moving it moved
+    # nothing. The workspace is an argument, not a setting; SUBSTITUTE is
+    # ``MIND_MEM_WORKSPACE`` / the explicit path each entry point already takes.
     "auto_capture": True,
+    # ``auto_recall`` stayed and is now WIRED (hooks/session-start.sh), which
+    # is the outcome the gate below is for. It was reader-less for the same
+    # reason ``workspace_path`` was -- nobody had connected it -- and that is
+    # an argument for connecting it, not for deleting it.
     "auto_recall": True,
     "governance_mode": "detect_only",
     "recall": {
@@ -137,22 +148,29 @@ DEFAULT_CONFIG = {
         "per_day": 6,
         "backlog_limit": 30,
     },
-    "scan_schedule": "daily",
-    "mcp_acl": {
-        "admin_tools": [
-            "write_memory",
-            "apply_proposal",
-            "approve_apply",
-            "rollback_proposal",
-            "delete_memory_item",
-            "reindex_vectors",
-        ],
-        "default_scope": "user",
-    },
-    "mcp_rate_limit": {
-        "max_calls_per_minute": 120,
-        "query_timeout_seconds": 30,
-    },
+    # ``scan_schedule`` ("daily" / "manual") was here until 5.0.2 and nothing
+    # scheduled anything from it. The intel scan runs as a cron_runner job
+    # ("intel_scan" in ``JOB_DEFS``) on the daemon's own interval, or by hand
+    # via ``mind-mem-scan``; neither consults this key. SUBSTITUTE: the daemon
+    # job table for automatic runs, the console script for manual ones.
+    # ``mcp_acl`` was here until 5.0.2 and nothing ever read it. The MCP
+    # ACL is code-defined and total: ``mcp/infra/acl.py`` classifies every
+    # registered tool into ``ADMIN_TOOLS`` or ``USER_TOOLS``, and a tool in
+    # neither is refused before its body runs. A config key that cannot
+    # move that decision is not a setting, it is a claim -- and this one
+    # was false three ways over: ``write_memory``, ``apply_proposal`` and
+    # ``reindex_vectors`` are not registered tool names at all, so an
+    # operator editing the list to lock a door was editing nothing, twice
+    # removed. The gate that keeps it gone is
+    # ``tests/test_config_keys_have_readers.py``: a DEFAULT_CONFIG key with
+    # no reader in ``src/`` fails the build.
+    # ``mcp_rate_limit`` ({"max_calls_per_minute", "query_timeout_seconds"})
+    # was here until 5.0.2 and was a DUPLICATE of the section immediately
+    # below, spelled differently: the live limiter reads
+    # ``limits.rate_limit_calls_per_minute`` and ``limits.query_timeout_seconds``
+    # (``mcp/infra/config.py``). Two names for one lever is worse than one,
+    # because the operator can move the wrong one and see no effect.
+    # SUBSTITUTE: ``limits`` -- same two numbers, same defaults, actually read.
     "limits": {
         "max_recall_results": 100,
         "max_similar_results": 50,
@@ -426,7 +444,8 @@ def init(
     # markdown backend ``config`` equals DEFAULT_CONFIG (no block_store
     # section), so the zero-config path is byte-for-byte unchanged.
     config_path = os.path.join(ws, "mind-mem.json")
-    if not os.path.exists(config_path):
+    wrote_config = not os.path.exists(config_path)
+    if wrote_config:
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
             f.write("\n")
@@ -434,6 +453,37 @@ def init(
         created.append("file: mind-mem.json")
     else:
         skipped.append("mind-mem.json")
+
+    # Arm the governance gate on the config THIS call just wrote, so the
+    # workspace is not born with an inert step 1. Until 5.0.2 nothing in
+    # the shipped tooling wrote a ``.spec_binding.json``: an operator or
+    # agent editing ``governance_mode`` / ``proposal_budget`` was never
+    # detected, on any workspace this product could produce, while the
+    # gate's own docstring described it as verifying spec-hash
+    # consistency.
+    #
+    # Two conditions, and both are load-bearing:
+    #
+    #   ``wrote_config`` -- bind only the config this call authored. On a
+    #   re-run over an existing workspace, the config on disk is one this
+    #   code has never reviewed; attesting it would rubber-stamp exactly
+    #   the drift ``mm bind`` refuses to launder without ``--rebind``.
+    #
+    #   no binding present -- an existing binding is the operator's
+    #   attestation and is never overwritten here.
+    #
+    # This is safe to do now, and was not before, because
+    # ``GovernanceGate.admit`` responds to drift under the shipped default
+    # ``detect_only`` by recording a DRIFT row and warning rather than by
+    # raising. Under the old unconditional raise, arming at birth turned
+    # hand-editing ``mind-mem.json`` -- the only configuration path this
+    # product offers, there is no ``mm config set`` -- into a total write
+    # outage for every new workspace. Order matters: the mode-aware drift
+    # step lands first, this second. Never the reverse.
+    binding_path = os.path.join(ws, ".spec_binding.json")
+    if wrote_config and not os.path.exists(binding_path):
+        SpecBindingManager(config_path).bind(config_path)
+        created.append("file: .spec_binding.json")
 
     # Create empty weekly summary placeholder
     placeholder = os.path.join(ws, "summaries/weekly/.gitkeep")

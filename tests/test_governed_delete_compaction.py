@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
+from _ledger_rows import authorisation_rows
 
 from mind_mem.admission import UngatedDeleteError
 from mind_mem.compaction import SIGNAL_SWEEP_RATIONALE, archive_completed_blocks, compact_signals
@@ -126,6 +127,18 @@ def _records(ws: str) -> list[dict]:
         return []
     with open(path, "r", encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
+
+
+def _authorisations(ws: str) -> list[dict]:
+    """Evidence rows that authorised something — one per governed scope.
+
+    A scope leaves two rows, the authorisation and the record of what it
+    actually did (``write_phase=closed`` on the write side,
+    ``delete_phase=removed`` on the delete side). ``tests/_ledger_rows``
+    holds that convention once; :func:`_phase` below still reads the
+    second half directly, which is the point of keeping both.
+    """
+    return authorisation_rows(_records(ws))
 
 
 def _meta(record: dict) -> dict:
@@ -319,7 +332,7 @@ class TestArchiveIsRecordedAsAMove:
         assert len(actions) == 2, actions
         assert not _present(workspace, task, "tasks", "TASKS.md")
         assert _present(workspace, task, "tasks", "TASKS_ARCHIVE.md")
-        records = _records(workspace)
+        records = _authorisations(workspace)
         assert len(records) == 1, f"one archive run is one decision; got {len(records)} records"
         meta = _meta(records[0])
         assert meta["action_verb"] == "MIGRATE"

@@ -1,0 +1,773 @@
+{
+  "components": {
+    "schemas": {
+      "ApproveApplyRequest": {
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "description": "Dry-run (True) or commit (False)",
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "proposal_id": {
+            "description": "Proposal ID in format P-YYYYMMDD-NNN",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^P-\\d{8}-\\d{3}$",
+            "title": "Proposal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id"
+        ],
+        "title": "ApproveApplyRequest",
+        "type": "object"
+      },
+      "CreateAPIKeyRequest": {
+        "description": "Request body for POST /v1/admin/api_keys.",
+        "properties": {
+          "agent_id": {
+            "description": "Agent identifier",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "expires_in_days": {
+            "default": 90,
+            "description": "Key validity in days",
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Expires In Days",
+            "type": "integer"
+          },
+          "scopes": {
+            "description": "Access scopes",
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "title": "CreateAPIKeyRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ProposeUpdateRequest": {
+        "properties": {
+          "block_type": {
+            "description": "Block type: decision | task",
+            "title": "Block Type",
+            "type": "string"
+          },
+          "confidence": {
+            "default": "medium",
+            "description": "Confidence level: low | medium | high",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "rationale": {
+            "default": "",
+            "description": "Rationale for the proposal",
+            "maxLength": 2000,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "statement": {
+            "description": "The proposal statement",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          },
+          "tags": {
+            "default": "",
+            "description": "Comma-separated tags",
+            "maxLength": 500,
+            "title": "Tags",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block_type",
+          "statement"
+        ],
+        "title": "ProposeUpdateRequest",
+        "type": "object"
+      },
+      "RecallRequest": {
+        "properties": {
+          "active_only": {
+            "default": false,
+            "description": "Only return active (non-superseded) blocks",
+            "title": "Active Only",
+            "type": "boolean"
+          },
+          "backend": {
+            "default": "auto",
+            "description": "Retrieval backend: auto | bm25 | hybrid",
+            "title": "Backend",
+            "type": "string"
+          },
+          "limit": {
+            "default": 10,
+            "description": "Maximum number of results",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "query": {
+            "description": "Search query",
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "scoring_instant": {
+            "default": "",
+            "description": "UTC date (YYYY-MM-DD) the recency layer scores against. Recall is deterministic given (corpus, config, scoring_instant); pass back the instant a previous run's attestation recorded to replay it. Empty means today in UTC.",
+            "maxLength": 10,
+            "title": "Scoring Instant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "RecallRequest",
+        "type": "object"
+      },
+      "RollbackProposalRequest": {
+        "properties": {
+          "reason": {
+            "description": "Why this rollback is being performed. Required for audit trail (issue #510 / N-02).",
+            "maxLength": 2000,
+            "minLength": 8,
+            "title": "Reason",
+            "type": "string"
+          },
+          "receipt_ts": {
+            "description": "Receipt timestamp in format YYYYMMDD-HHMMSS",
+            "maxLength": 15,
+            "minLength": 15,
+            "pattern": "^\\d{8}-\\d{6}$",
+            "title": "Receipt Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "receipt_ts",
+          "reason"
+        ],
+        "title": "RollbackProposalRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "REST API that mirrors the mind-mem MCP tool surface.",
+    "title": "mind-mem REST API",
+    "version": "5.0.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/admin/api_keys": {
+      "get": {
+        "operationId": "list_api_keys_v1_admin_api_keys_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List API keys (admin scope required)",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "create_api_key_v1_admin_api_keys_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAPIKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create a new per-agent API key (admin scope required)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/api_keys/{key_id}": {
+      "delete": {
+        "operationId": "revoke_api_key_v1_admin_api_keys__key_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke an API key (admin scope required)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/api_keys/{key_id}/rotate": {
+      "post": {
+        "operationId": "rotate_api_key_v1_admin_api_keys__key_id__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate an API key — revoke old, issue new (admin scope required)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/approve_apply": {
+      "post": {
+        "operationId": "approve_apply_v1_approve_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Approve Apply V1 Approve Apply Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Apply a staged proposal (admin scope required)",
+        "tags": [
+          "governance"
+        ]
+      }
+    },
+    "/v1/auth/oidc/callback": {
+      "post": {
+        "description": "Validate an OIDC JWT supplied via ``Authorization: Bearer <token>``.\n\nWhen valid, returns the decoded claims so callers can confirm their\nidentity was accepted.  Configure the issuer via ``OIDC_ISSUER``,\n``OIDC_CLIENT_ID``, ``OIDC_AUDIENCE`` environment variables.",
+        "operationId": "oidc_callback_v1_auth_oidc_callback_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Exchange an OIDC access_token for a validated session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/block/{block_id}": {
+      "get": {
+        "operationId": "get_block_v1_block__block_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Block V1 Block  Block Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retrieve a single block by ID",
+        "tags": [
+          "recall"
+        ]
+      }
+    },
+    "/v1/contradictions": {
+      "get": {
+        "operationId": "list_contradictions_v1_contradictions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Contradictions V1 Contradictions Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List detected contradictions with resolution analysis",
+        "tags": [
+          "governance"
+        ]
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "operationId": "health_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Workspace health and schema version",
+        "tags": [
+          "observability"
+        ]
+      }
+    },
+    "/v1/metrics": {
+      "get": {
+        "operationId": "metrics_endpoint_v1_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Prometheus metrics exposition (requires prometheus_client)",
+        "tags": [
+          "observability"
+        ]
+      }
+    },
+    "/v1/propose_update": {
+      "post": {
+        "operationId": "propose_update_v1_propose_update_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Propose Update V1 Propose Update Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stage a new decision or task proposal",
+        "tags": [
+          "governance"
+        ]
+      }
+    },
+    "/v1/recall": {
+      "post": {
+        "operationId": "recall_v1_recall_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Recall V1 Recall Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search memory with BM25/hybrid backend",
+        "tags": [
+          "recall"
+        ]
+      }
+    },
+    "/v1/rollback_proposal": {
+      "post": {
+        "operationId": "rollback_proposal_v1_rollback_proposal_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackProposalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Rollback Proposal V1 Rollback Proposal Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback an applied proposal (admin scope required)",
+        "tags": [
+          "governance"
+        ]
+      }
+    },
+    "/v1/scan": {
+      "get": {
+        "operationId": "scan_v1_scan_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Scan V1 Scan Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run workspace integrity scan",
+        "tags": [
+          "governance"
+        ]
+      }
+    }
+  }
+}

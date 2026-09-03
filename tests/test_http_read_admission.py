@@ -471,13 +471,18 @@ def test_a_route_cannot_be_constructed_without_a_valid_verdict() -> None:
     is not one of the two states raises before the module finishes
     loading. Positive control for the two tripwires above: they check a
     table that cannot hold an unclassified row in the first place.
+
+    ``mutates`` is the same shape for the same reason — see
+    ``tests/test_governed_delete_http.py`` for the attribution half.
     """
     with pytest.raises(TypeError):
         Route("GET", "/x", http_transport._handle_status, "workspace")  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        Route("GET", "/x", http_transport._handle_status, "workspace", NO_CONTENT)  # type: ignore[call-arg]
     with pytest.raises(ValueError, match="verdict"):
-        Route("GET", "/x", http_transport._handle_status, "workspace", "probably-fine")
+        Route("GET", "/x", http_transport._handle_status, "workspace", "probably-fine", mutates=False)
     with pytest.raises(ValueError, match="takes"):
-        Route("GET", "/x", http_transport._handle_status, "whatever", NO_CONTENT)
+        Route("GET", "/x", http_transport._handle_status, "whatever", NO_CONTENT, mutates=False)
 
 
 def test_no_two_routes_claim_the_same_method_and_path() -> None:
@@ -608,7 +613,7 @@ def test_the_sweep_catches_a_route_that_leaks(seed_template: str, monkeypatch: p
         blocks = parse_file(os.path.join(workspace, "decisions", "DECISIONS.md"))
         return (200, {"blocks": blocks})
 
-    leaky = Route("GET", "/leak", _handle_leak, "params", NO_CONTENT)
+    leaky = Route("GET", "/leak", _handle_leak, "params", NO_CONTENT, mutates=False)
     monkeypatch.setattr(http_transport, "ROUTES", ROUTES + (leaky,))
 
     workspace = _fresh(seed_template)
@@ -816,13 +821,18 @@ def test_the_listing_has_no_bypass_parameter() -> None:
 # ---------------------------------------------------------------------------
 
 #: The functions allowed to read the store without admission, and why.
-#: All three are on the DELETE path, where reaching a withheld block is the
+#: Both are on the DELETE path, where reaching a withheld block is the
 #: whole point: a quarantined block an operator cannot delete is a block the
 #: product cannot govern.
+#:
+#: ``_handle_delete_memory`` was a third entry, for an existence pre-check
+#: it ran before opening the scope. The pre-check is gone — it answered
+#: "does this id exist?" ahead of the gate and left no record of the
+#: question — so the exemption went with it rather than being left here
+#: naming code that no longer exists.
 RAW_READ_ALLOWLIST: dict[str, str] = {
     "_admitted_blocks": "the seam itself — it is what applies admit_read",
     "_corpus_block_ids": "POST /clear must enumerate withheld blocks to delete them",
-    "_handle_delete_memory": "existence pre-check before opening the delete scope",
 }
 
 _RAW_READS = ("get_all", "get_by_id")

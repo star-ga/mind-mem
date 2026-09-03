@@ -44,12 +44,20 @@ def test_recall_respects_limit():
 
 
 def test_recall_results_have_id():
-    """Each result has an id field."""
+    """Each result carries the ``_id`` every recall hit is keyed by."""
     ws, td = _make_workspace()
     try:
         results = recall(ws, "BM25 retrieval", limit=5)
+        # POSITIVE CONTROL. The loop below is only worth anything while the
+        # fixture is actually retrievable, and for most of this test's life it
+        # was not: recall iterated the corpus TABLE, ``decisions/hybrid.md`` is
+        # in no table, so recall returned nothing here, the loop never ran, and
+        # the test passed green while asserting an ``id``/``block_id`` key that
+        # recall has never emitted on any path. Corpus discovery now walks the
+        # corpus directories, the fixture is found, and the assertion is real.
+        assert results, "fixture blocks are unretrievable — the check below would be vacuous"
         for r in results:
-            assert "id" in r or "block_id" in r or "ID" in r.get("raw", {})
+            assert r.get("_id"), f"result carries no _id: {sorted(r)}"
     finally:
         td.cleanup()
 
@@ -72,8 +80,11 @@ def test_recall_no_duplicates():
     ws, td = _make_workspace()
     try:
         results = recall(ws, "decision retrieval", limit=10)
-        ids = [r.get("id") or r.get("block_id") for r in results]
-        ids = [i for i in ids if i is not None]
+        # Same latent defect as ``test_recall_results_have_id``: this read
+        # ``id``/``block_id``, got ``None`` for every hit, dropped them all as
+        # missing, and compared two empty lists. The key is ``_id``.
+        ids = [r.get("_id") for r in results]
+        assert ids and all(ids), "fixture blocks are unretrievable — uniqueness would be vacuous"
         assert len(ids) == len(set(ids))
     finally:
         td.cleanup()

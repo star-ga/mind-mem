@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/tests-10%2C550-brightgreen?style=flat-square" alt="Tests: 10,550">
+  <img src="https://img.shields.io/badge/tests-11%2C718-brightgreen?style=flat-square" alt="Tests: 11,718">
   <img src="https://img.shields.io/badge/MCP_tools-102-blue?style=flat-square" alt="MCP Tools: 102">
   <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
@@ -42,7 +42,7 @@ MIND-Mem is a deterministic AI memory system: recall is a pure function of **(co
 
 Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 102 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic given (corpus, config, `scoring_instant`) — same three inputs → same ranked results — and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
-Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: scoring kernels compiled from MIND source with Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
+Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The scoring path itself is pure Python (`mind_kernels.py`): the wheel ships MIND-language kernel *sources* under `mind/` and no compiled kernel, and the optional native `libmindmem.so` is built from `lib/kernels.c` (C99). The substrate claim is the encoding, the gate and the chain — not the kernels, which are not compiled yet. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
 > **If your agent runs for weeks, it will drift. MIND-Mem prevents silent drift.**
 >
@@ -1272,7 +1272,6 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 ```json
 {
   "version": "4.9.1",
-  "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
   "governance_mode": "detect_only",
@@ -1295,16 +1294,15 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
     "snapshot_days": 30,
     "log_days": 180,
     "signal_days": 60
-  },
-  "scan_schedule": "daily"
+  }
 }
 ```
 
 | Key                             | Default              | Description                                                  |
 | ------------------------------- | -------------------- | ------------------------------------------------------------ |
 | `version`                       | `"2.8.0"`          | Config file version                                          |
-| `auto_capture`                  | `true`               | Run capture engine on session end                            |
-| `auto_recall`                   | `true`               | Show recall context on session start                         |
+| `auto_capture`                  | `true`               | Run capture engine on session end (`hooks/session-end.sh`)   |
+| `auto_recall`                   | `true`               | Show health/recall context on session start (`hooks/session-start.sh`) |
 | `governance_mode`               | `"detect_only"`      | Governance mode (`detect_only`, `propose`, `enforce`)        |
 | `recall.backend`                | `"scan"`             | `"scan"` (BM25), `"hybrid"` (BM25+Vector+RRF), or `"vector"` |
 | `recall.rrf_k`                  | `60`                 | RRF fusion parameter k                                       |
@@ -1320,7 +1318,6 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 | `compaction.snapshot_days`      | `30`                 | Remove apply snapshots older than N days                     |
 | `compaction.log_days`           | `180`                | Archive daily logs older than N days                         |
 | `compaction.signal_days`        | `60`                 | Remove resolved/rejected signals older than N days           |
-| `scan_schedule`                 | `"daily"`            | `"daily"` or `"manual"`                                      |
 
 ---
 
@@ -1423,7 +1420,7 @@ MIND_MEM_WORKSPACE=/path/to/workspace MIND_MEM_TOKEN=$(openssl rand -hex 32) \
 | `mind-mem://decisions`       | Active decisions                              |
 | `mind-mem://tasks`           | All tasks                                     |
 | `mind-mem://entities/{type}` | Entities (projects, people, tools, incidents) |
-| `mind-mem://signals`         | Auto-captured signals pending review          |
+| `mind-mem://signals`         | Signals that PASSED review + `withheld_count` |
 | `mind-mem://contradictions`  | Detected contradictions                       |
 | `mind-mem://health`          | Workspace health summary                      |
 | `mind-mem://recall/{query}`  | BM25 recall search results                    |
@@ -1604,7 +1601,7 @@ tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 | `capture` says "no daily log"               | No `memory/YYYY-MM-DD.md` for today. Write something first.                                                       |
 | `intel_scan` finds 0 contradictions         | Good — no conflicting decisions.                                                                                  |
 | Tests fail on Windows                       | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL.                                                 |
-| MIND kernel not loading                     | Expected — the `.mind` files are INI configs, not yet MIND-language source. Pure-Python scoring (in `mind_kernels.py`) is the authoritative path. See [`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md). |
+| MIND kernel not loading                     | Expected — no compiled kernel ships in the wheel. Of the 26 `mind/*.mind` files, 18 are INI-style config read at runtime and 8 are MIND-language tensor source that is inert until compiled; the optional native `libmindmem.so` is built from `lib/kernels.c` and is refused on an ABI/version mismatch. Pure-Python scoring (in `mind_kernels.py`) is the authoritative path. See [`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md). |
 
 ### FAQ
 

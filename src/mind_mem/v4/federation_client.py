@@ -8,11 +8,20 @@ Stdlib-only HTTP client for the federation endpoints exposed by
 operator's network can exchange version vectors and resolve conflicts
 without speaking MCP.
 
-The transport is HTTPS-capable (``base_url`` may use ``https://``) but
-TLS configuration is left to the underlying ``urllib`` / ``ssl``
-machinery; the client does not currently pin certificates. Use a
-reverse proxy or stunnel for TLS termination in production until the
-roadmap's Group-D mTLS layer lands.
+When ``base_url`` is ``https://`` the connection is made through an
+:class:`ssl.SSLContext` built by :mod:`mind_mem.v4.tls_floor`, whose
+``minimum_version`` is TLS 1.3 *before* the socket exists — a peer that
+can only speak TLS 1.2 fails the handshake, so there is no connection
+and no request to inspect after the fact (roadmap v4.0.0 Group D).
+Passing ``cafile`` replaces the system trust store with the operator's
+own CA, and ``client_cert``/``client_key`` make the connection the
+client half of mutual TLS: together they bind the peer's identity.
+
+Certificate pinning is deliberately **not** implemented; the
+``pinned_pubkey_sha256`` argument exists solely to refuse loudly and
+name the decision rather than let a caller believe an argument that was
+silently ignored — see
+:data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION`.
 
 Example::
 
@@ -40,11 +49,14 @@ from __future__ import annotations
 import base64
 import json
 import os as _os
+import ssl
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote, urlsplit
+
+from mind_mem.audit_context import outbound_audit_headers
 
 # Issue #529: response-size cap mirrors the server-side body cap so a
 # hostile or buggy peer can't stream gigabytes into the client process.
@@ -121,7 +133,40 @@ class FederationClient:
         *,
         token: str | None = None,
         timeout: float = 10.0,
+        cafile: str | None = None,
+        capath: str | None = None,
+        client_cert: str | None = None,
+        client_key: str | None = None,
+        client_key_password: str | None = None,
+        pinned_pubkey_sha256: str | None = None,
     ) -> None:
+        """Build a client for one federation peer.
+
+        Args:
+            base_url: ``http://`` or ``https://`` origin of the peer.
+            token: bearer token sent as ``X-MindMem-Token``.
+            timeout: per-request socket timeout in seconds.
+            cafile, capath: trust roots that replace the system store.
+                This is how a private-CA federation binds peer identity.
+            client_cert, client_key, client_key_password: client half of
+                mutual TLS.
+            pinned_pubkey_sha256: **refused.** Accepted as a named
+                argument only so a caller who asks for pinning gets the
+                decision instead of silence — see
+                :data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION`.
+
+        Raises:
+            FederationTransportError: bad scheme, missing host, or an
+                mTLS/pinning argument that cannot be honoured.
+            mind_mem.v4.tls_floor.TlsFloorUnavailable: ``https://`` was
+                asked for on an interpreter that cannot enforce TLS 1.3.
+                The client is not constructed, so no floorless connection
+                can be opened through it.
+        """
+        if pinned_pubkey_sha256 is not None:
+            from mind_mem.v4.tls_floor import CERT_PINNING_DECISION  # noqa: PLC0415
+
+            raise FederationTransportError(f"pinned_pubkey_sha256 is not supported: {CERT_PINNING_DECISION}")
         # Issue #529 (1): scheme allowlist. urllib.request.urlopen
         # otherwise handles file://, ftp://, etc. so a base_url from a
         # config file / env var / peer-discovery handshake could turn
@@ -133,16 +178,40 @@ class FederationClient:
             )
         if not parts.netloc:
             raise FederationTransportError(f"federation base_url has no host: {base_url!r}")
+        if (client_key or client_cert or cafile or capath) and parts.scheme != "https":
+            raise FederationTransportError(
+                f"TLS options (cafile/capath/client_cert/client_key) were given for a {parts.scheme}:// base_url; "
+                "they would be silently ignored. Use https:// or drop them."
+            )
         self._base = base_url.rstrip("/")
         self._base_scheme = parts.scheme
         self._base_netloc = parts.netloc
         self._token = token
         self._timeout = timeout
+        # Roadmap v4.0.0 Group D: the TLS 1.3 floor is applied by
+        # CONSTRUCTION. The context is built (and the floor read back)
+        # here, before any socket exists; if this interpreter cannot
+        # enforce the floor the constructor raises and there is no client
+        # to open a floorless connection with.
+        self._ssl_context: ssl.SSLContext | None = None
+        if parts.scheme == "https":
+            from mind_mem.v4.tls_floor import client_context  # noqa: PLC0415
+
+            try:
+                self._ssl_context = client_context(
+                    cafile=cafile,
+                    capath=capath,
+                    client_cert=client_cert,
+                    client_key=client_key,
+                    client_key_password=client_key_password,
+                )
+            except (OSError, ValueError) as exc:
+                raise FederationTransportError(f"federation TLS configuration is unusable: {exc}") from exc
         # Issue #529 (2): same-origin redirect cap. Build an opener that
         # rejects redirects to a different scheme/host/port — blocks the
         # SSRF pivot to cloud metadata endpoints
         # (169.254.169.254, metadata.google.internal, etc.).
-        self._opener = _build_strict_opener(self._base_scheme, self._base_netloc)
+        self._opener = _build_strict_opener(self._base_scheme, self._base_netloc, ssl_context=self._ssl_context)
 
     # ------------------------------------------------------------------
     # Reader API
@@ -265,6 +334,12 @@ class FederationClient:
         url = self._base + path
         data: bytes | None = None
         headers: dict[str, str] = {"Accept": "application/json"}
+        # Roadmap v4.0.0 Group D: carry this request's audit attribution
+        # to the peer, so one correlation id spans a federation hop
+        # instead of stopping at the process boundary. Empty (and the
+        # request byte-identical to what it was) when this client is used
+        # outside a served request.
+        headers.update(outbound_audit_headers())
         if self._token is not None:
             headers["X-MindMem-Token"] = self._token
         if body is not None:
@@ -285,6 +360,16 @@ class FederationClient:
             self._raise_for_status(exc.code, _safe_read(exc))
         except urllib.error.URLError as exc:
             raise FederationTransportError(f"network error: {exc.reason}") from exc
+        except ssl.SSLError as exc:
+            # urllib only wraps OSError raised while *writing* the request;
+            # a TLS failure surfaced while reading the response escapes as a
+            # bare ssl.SSLError. A peer rejecting our client certificate
+            # lands exactly there, so without this a caller of a module that
+            # documents "FederationTransportError on any network error" gets
+            # an ssl exception instead.
+            raise FederationTransportError(f"TLS error talking to federation peer: {exc}") from exc
+        except OSError as exc:
+            raise FederationTransportError(f"network error: {exc}") from exc
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -339,7 +424,21 @@ class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, hdrs, newurl)
 
 
-def _build_strict_opener(scheme: str, netloc: str) -> urllib.request.OpenerDirector:
-    """Build an opener with the same-origin redirect handler installed."""
-    opener = urllib.request.build_opener(_SameOriginRedirectHandler(scheme, netloc))
-    return opener
+def _build_strict_opener(
+    scheme: str,
+    netloc: str,
+    *,
+    ssl_context: ssl.SSLContext | None = None,
+) -> urllib.request.OpenerDirector:
+    """Build an opener with the same-origin redirect handler installed.
+
+    When ``ssl_context`` is given it is installed as the opener's HTTPS
+    handler, so every request this client makes negotiates under that
+    context's floor. Without it urllib falls back to
+    ``ssl._create_default_https_context``, which has no floor above
+    TLS 1.2 — which is exactly the state this replaced.
+    """
+    handlers: list[urllib.request.BaseHandler] = [_SameOriginRedirectHandler(scheme, netloc)]
+    if ssl_context is not None:
+        handlers.append(urllib.request.HTTPSHandler(context=ssl_context))
+    return urllib.request.build_opener(*handlers)

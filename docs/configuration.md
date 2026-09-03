@@ -10,11 +10,9 @@ MIND-Mem is configured via `mind-mem.json` in your workspace root. This file is 
 {
   "version": "4.4.0",
   "schema_version": "2.1.0",
-  "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
   "governance_mode": "detect_only",
-  "scan_schedule": "daily",
   "recall": {
     "backend": "scan",
     "rrf_k": 60,
@@ -197,11 +195,24 @@ See `docs/storage-backends.md` for a full setup guide including Docker Compose a
 | --- | --- | --- | --- |
 | `version` | string | `"4.4.0"` | Config file version. Set automatically by `init_workspace.py`. |
 | `schema_version` | string | `"2.1.0"` | Workspace schema version. Used by `schema_version.py` for migrations. Falls back to `version` if absent. |
-| `workspace_path` | string | `"."` | Workspace root directory. Relative paths are resolved from the config file location. |
-| `auto_capture` | bool | `true` | Run the capture engine automatically on session-end hooks. When `false`, the session-end hook exits without capturing signals. |
-| `auto_recall` | bool | `true` | Show recall context automatically on session-start hooks. |
+| `auto_capture` | bool | `true` | Run the capture engine automatically on session-end hooks. When `false`, `hooks/session-end.sh` exits without capturing signals. |
+| `auto_recall` | bool | `true` | Show the health/recall context automatically on session start. When `false`, `hooks/session-start.sh` prints nothing. |
 | `governance_mode` | string | `"detect_only"` | Controls how the intelligence scan handles findings. See Governance Modes below. |
-| `scan_schedule` | string | `"daily"` | How often the intel scan runs. Valid values: `"daily"`, `"manual"`. |
+
+Three keys were **removed** from the shipped defaults in 5.0.2 because nothing
+read them — a setting no code consults is not a setting, it is a claim, and an
+operator who moved one was told they had changed something they had not:
+
+| Removed key | What it claimed | What to use instead |
+| --- | --- | --- |
+| `workspace_path` | "workspace root; relative paths resolved from the config file location" | The workspace is an argument, never a setting: pass it to the CLI/hook, or set `MIND_MEM_WORKSPACE`. |
+| `scan_schedule` | `"daily"` / `"manual"` scan cadence | The daemon's job table (`cron_runner.JOB_DEFS`, job `intel_scan`) for automatic runs; `mind-mem-scan` for manual ones. |
+| `mcp_rate_limit` | `max_calls_per_minute` / `query_timeout_seconds` | `limits.rate_limit_calls_per_minute` and `limits.query_timeout_seconds` — the same two numbers under the names the limiter actually reads. |
+
+Keys already present in an existing `mind-mem.json` are ignored, not rejected;
+there is nothing to migrate, because there was no behaviour to preserve.
+`tests/test_config_keys_have_readers.py` is the gate: a `DEFAULT_CONFIG` key
+with no reader under `src/` or `hooks/` fails the build.
 
 ### Governance Modes
 
@@ -653,7 +664,7 @@ Environment variables take precedence over config file values where applicable.
 
 | Variable | Description |
 | --- | --- |
-| `MIND_MEM_WORKSPACE` | Workspace path. Used by the MCP server, hooks, and scripts to locate the workspace. Overrides `workspace_path` in config. Falls back to `"."` (current directory). |
+| `MIND_MEM_WORKSPACE` | Workspace path. Used by the MCP server, hooks, and scripts to locate the workspace. This is the ONLY way to set it in config-space — `workspace_path` was removed in 5.0.2 because nothing read it. Falls back to `"."` (current directory). |
 | `MIND_MEM_TOKEN` | Bearer token for HTTP MCP transport authentication. When set, all HTTP requests must include `Authorization: Bearer <token>` or `X-MindMem-Token: <token>`. Not required for stdio transport. Can also be passed via `--token` CLI flag. **As of v3.7.0, HTTP/REST authentication fails CLOSED:** if no token is configured the server refuses to start unless `MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1` is set explicitly (loopback-only opt-in for tests / dev). |
 | `MIND_MEM_ADMIN_TOKEN` | Separate admin bearer token for privileged REST endpoints. Same fail-closed contract as `MIND_MEM_TOKEN`. |
 | `MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST` | Opt-in escape hatch (set to `1` / `true` / `yes`) that re-enables unauthenticated access **only when binding to a loopback address** (`127.0.0.1` / `::1` / `localhost`). Intended for local development; never set in production. Without it, HTTP/REST refuses to start when no token is configured. Maps to the `--allow-unauthenticated-localhost` CLI flag on `mind-mem-mcp serve` and `mind-mem-rest`. |
@@ -823,10 +834,23 @@ unreachable (fail-open).
 | --- | --- | --- | --- |
 | `cache.enabled` | boolean | `true` | Set to `false` to bypass the cache entirely (useful for debugging recall changes). |
 | `cache.redis_url` | string \| null | `null` | Redis connection URL (e.g. `"redis://localhost:6379/0"`). When `null`, only the in-process LRU is used. |
-| `cache.ttl_seconds` | integer | `300` | Time-to-live for cached recall results. Governance writes (`propose_update`, `approve_apply`) invalidate the namespace anyway, so the TTL is a safety net rather than a correctness boundary. |
+| `cache.ttl_seconds` | integer | `300` | How long an entry keeps occupying a slot. A **memory** bound, not a freshness one: freshness comes from the governed-ledger head in the cache key (below), which retires an entry the moment the corpus it was computed against moves. |
 | `cache.lru_max_entries` | integer | `1024` | Max entries in the in-process LRU. Each entry is the serialized recall payload (~2-20KB typical). |
+| `cache.anticipation.enabled` | boolean | `false` | Group J anticipation cache: answer a recall from the local bundle store, with no store round-trip, when the novel-term gate says the local bundles can plausibly answer it. Off by default — an anticipation-served recall reads a bundle rather than the corpus, so it carries **no recall attestation** and says so in-band. |
+| `cache.anticipation.novel_ratio_threshold` | float | `0.45` | Suppress the local hit above this share of query stems the bundles do not hold. Strict: a ratio exactly at the threshold is served. |
+| `cache.anticipation.min_corpus_stems` | integer | `200` | Distinct cached stems required before the ratio is trusted at all. Below this floor every query falls through to the store, so a cold cache resolves in the safe direction. |
 
-**Cache key format:** `mindmem:recall:<namespace>:<sha256(query+limit+backend+active_only)>`
+**Cache key format:** `mindmem:recall:<namespace>:<sha256(query+namespace+limit+backend+active_only+scoring_instant+index_anchor)>`
+
+`index_anchor` is the workspace's governed-ledger head — the hash chain the
+governance gate appends to on every admitted write and delete. It is in the key because
+it is the coordinate that names *which corpus* an answer belongs to: recall is
+deterministic given (corpus, config, `scoring_instant`), and a governed write
+moves the head. With the head in the key, an entry computed against a
+superseded corpus is unresolvable — no invalidation call to remember, and so no
+write door (CLI, HTTP transport, apply engine, federation replication) that can
+forget to make one. The explicit `invalidate()` the governance tools still call
+now frees memory promptly; it is no longer what makes the cache correct.
 
 ```json
 {
@@ -834,7 +858,12 @@ unreachable (fail-open).
     "enabled": true,
     "redis_url": "redis://cache.internal:6379/0",
     "ttl_seconds": 300,
-    "lru_max_entries": 2048
+    "lru_max_entries": 2048,
+    "anticipation": {
+      "enabled": false,
+      "novel_ratio_threshold": 0.45,
+      "min_corpus_stems": 200
+    }
   }
 }
 ```
@@ -1048,19 +1077,27 @@ boost had no effect to preserve.
 An append-only record of *what was served*, so a later outcome can be credited
 to a **run** rather than correlated against a query string.
 
-**Default OFF.** Opt in per workspace:
+**Default ON since 5.0.2.** Opt out per workspace:
 
 ```json
 {
   "served_ledger": {
-    "enabled": true
+    "enabled": false
   }
 }
 ```
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `served_ledger.enabled` | boolean | `false` | Absent means off; only a literal `true` turns it on. |
+| `served_ledger.enabled` | boolean | `true` | Exactly one value opts out: a literal `false`. An absent section, an absent key, a non-dict section and every other value all mean on, so a workspace cannot end up unrecorded by omission. A workspace with no readable `mind-mem.json` is the one other off case — that is the workspace being absent, not the flag. |
+
+It shipped opt-in through 5.0.1, and an opt-in proof is not a proof: "mind-mem
+can prove what it served" was a property of a configuration rather than of the
+product. Nothing the ledger writes is a judgement about an answer and nothing
+in it can reach the scoring path, so the reason to leave it off was never
+safety. `served_ledger.ledger_enabled` is the authority for this row, and
+`tests/test_docs_alignment.py::TestServedLedgerDefault` fails the build if this
+cell and that function disagree.
 
 When on, every `recall` appends one row to `.mind-mem-ledger/served.jsonl`,
 written **after** `recall()` returns. Each row carries exactly nine fields —
@@ -1075,8 +1112,46 @@ answered with the same blocks in the same order under the same pipeline gets
 the same id on any host on any day, so two rows sharing a `run_id` are two
 servings of one answer. `seq` is the unique key.
 
-Verify a workspace's chain with `mind_mem.served_ledger.verify_served_chain`,
-which reads no clock and names the first row that cannot be trusted.
+Verify a workspace's chain with **`mm dashboard`**, which runs
+`mind_mem.served_ledger.verify_served_chain` — it reads no clock, names the
+first row that cannot be trusted, and the verb **exits 1** when the chain
+fails, so it can be a cron job rather than something someone remembers to read.
+`mm dashboard --json` emits the same verdict under `ledger`.
+
+Check one *run* against the ledger with **`mm replay-check`**. The attestation
+rides on the **MCP `recall` tool's** envelope under `attestation` (`mm recall`
+prints results, not an envelope, so it has none to pass); save that envelope —
+or just the `attestation` object off it — and hand it over. Both shapes are
+accepted, from a file or on stdin.
+
+```bash
+mm dashboard                                    # exits 1 on a broken chain
+mm replay-check --attestation ./envelope.json   # exits 1 unless corroborated
+cat envelope.json | mm replay-check --attestation -
+```
+
+In-process, the same check is two lines:
+
+```python
+from mind_mem.replay_check import replay_check
+
+verdict = replay_check(workspace, envelope["attestation"])
+assert verdict.replayable, verdict.reason
+```
+
+The check is the join neither half can make alone. `run_id` binds the answer
+*digest* and never its cardinality, so an attestation can claim
+`result_count = 9` over a two-block answer and stay internally consistent
+forever; the ledger row holds the ids, the chain walk has already proven they
+hash to the row's `served_digest`, and `len(ids)` is therefore an independent
+witness of the count. Verdicts: `REPLAYED` (this run is on the ledger),
+`ANSWER_RECORDED` (the same answer, under a different anchor or instant — a
+pass, since `run_id` excludes both), `NOT_RECORDED`, `MISMATCH`,
+`CHAIN_BROKEN`, `UNVERIFIABLE`. Exit status is `0` only for the first two.
+
+`NOT_RECORDED` is never evidence that a run did not happen: the ledger is
+default OFF and proves nothing about completeness — an append that never
+happened leaves no gap — so the reason names which kind of silence it is.
 
 Nothing on the recall scoring path may read this file. Serve counts are
 derivable from it, and that is only safe while they cannot flow back into a

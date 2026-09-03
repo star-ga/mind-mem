@@ -66,11 +66,14 @@ from mind_mem.admission import (
     require_admission,
     require_delete_admission,
 )
+from mind_mem.block_store import MarkdownBlockStore
 from mind_mem.enums import IngestTier
 from mind_mem.evidence_objects import EvidenceAction, EvidenceChain
 from mind_mem.governance_gate import (
+    CLOSE_VERB,
     DELETE_VERB,
     PHASE_ADMITTED,
+    PHASE_CLOSED,
     PHASE_REMOVED,
     GovernanceBypassError,
     evict_gate,
@@ -775,3 +778,300 @@ class TestMutationTwinReadAdmission:
         monkeypatch.setattr(admissibility, "is_admissible_status", lambda status: True)
         decision = admit_read_one(SEED_ROWS[2])
         assert decision.withheld == 0 and decision.sole is not None, "twin precondition: every status now passes"
+
+
+# ===========================================================================
+# D — WRITE scope close records
+#
+# The delete side reports what it removed; the write side reported
+# nothing. `_mint` appended the APPLY row on the way IN and no row was
+# written on the way out, so a scope that raised before ``write_block``
+# left a row byte-indistinguishable from one whose block landed.
+#
+# Measured on a fresh workspace before the fix:
+#   control rows 0 -> 1   block present: True
+#   aborted rows 1 -> 2   block present: False
+#   last row = APPLY D-20260902-901
+#   metadata keys ['action_verb','agent_id','evidence_schema','ingest_tier','operation']
+#   any outcome/aborted marker in last row: False
+#
+# Every test below carries its positive control: the aborted case is only
+# evidence if the completed case is shown recording the opposite.
+# ===========================================================================
+
+
+def _closes(records: list[dict]) -> list[dict]:
+    """Close records, in order."""
+    return [r for r in records if r.get("metadata", {}).get("write_phase") == PHASE_CLOSED]
+
+
+def _store(ws: str) -> MarkdownBlockStore:
+    return MarkdownBlockStore(ws)
+
+
+def _landed_block(ws: str, bid: str) -> dict:
+    return {"_id": bid, "title": bid, "content": "body", "Status": "quarantined", "category": "reference"}
+
+
+def _in_corpus(ws: str, bid: str) -> bool:
+    """True when *bid* is in a corpus file — not merely named in a ledger."""
+    return any(bid in Path(path).read_text(encoding="utf-8") for path in _store(ws).list_blocks())
+
+
+class TestWriteScopeOutcome:
+    def test_a_completed_scope_records_ok_and_the_id_it_landed(self, workspace: str) -> None:
+        """Positive control for every 'nothing landed' assertion below."""
+        gate = get_gate(workspace)
+        store = _store(workspace)
+        with gate.admit_block("WRITE", "IMP-20260902-001", "body", tier=IngestTier.EXTERNAL_INGEST):
+            store.write_block(_landed_block(workspace, "IMP-20260902-001"))
+
+        assert _in_corpus(workspace, "IMP-20260902-001"), "control precondition: the block really did land"
+        closes = _closes(_records(workspace))
+        assert len(closes) == 1, "exactly one close record per scope"
+        assert closes[-1]["metadata"]["scope_outcome"] == "ok"
+        assert closes[-1]["metadata"]["landed"] == ["IMP-20260902-001"]
+        assert closes[-1]["metadata"]["landed_count"] == 1
+
+    def test_a_scope_that_aborts_before_the_write_records_that_nothing_landed(self, workspace: str) -> None:
+        """The measured defect. The APPLY row alone claimed a write happened."""
+        gate = get_gate(workspace)
+        with pytest.raises(RuntimeError):
+            with gate.admit_proposal("D-20260902-901", "body"):
+                raise RuntimeError("op failed before the write landed")
+
+        assert not _in_corpus(workspace, "D-20260902-901"), "precondition: nothing was written"
+        closes = _closes(_records(workspace))
+        assert len(closes) == 1, "the error exit records too — a scope that died silently is the case auditors want"
+        assert closes[-1]["metadata"]["scope_outcome"] == "error"
+        assert closes[-1]["metadata"]["landed"] == []
+        assert closes[-1]["metadata"]["landed_count"] == 0
+
+    def test_the_open_row_alone_still_cannot_tell_the_two_apart(self, workspace: str) -> None:
+        """Why the close row is needed at all, stated as a measurement.
+
+        The two scopes above differ in exactly one respect at the open
+        row: nothing. Same action, same metadata keys. The distinction
+        lives entirely in the record written on the way out.
+        """
+        gate = get_gate(workspace)
+        store = _store(workspace)
+        with gate.admit_block("WRITE", "IMP-20260902-002", "body", tier=IngestTier.EXTERNAL_INGEST):
+            store.write_block(_landed_block(workspace, "IMP-20260902-002"))
+        with pytest.raises(RuntimeError):
+            with gate.admit_block("WRITE", "IMP-20260902-003", "body", tier=IngestTier.EXTERNAL_INGEST):
+                raise RuntimeError("nothing lands")
+
+        opens = [r for r in _records(workspace) if r["metadata"].get("operation") == OP_WRITE and "write_phase" not in r["metadata"]]
+        landed, aborted = opens[-2], opens[-1]
+        assert set(landed["metadata"]) == set(aborted["metadata"]), "the open rows carry identical metadata keys"
+        assert landed["action"] == aborted["action"] == EvidenceAction.APPLY.value
+
+        outcomes = [r["metadata"]["scope_outcome"] for r in _closes(_records(workspace))]
+        assert outcomes == ["ok", "error"], "and the close rows are what separate them"
+
+    def test_a_batch_records_what_it_consumed_not_what_it_covered(self, workspace: str) -> None:
+        """``covers`` is intent, minted before a store was touched.
+
+        A batch admitted for three ids that writes two must not be
+        readable as three writes. This is the over-report in its
+        commonest shape.
+        """
+        gate = get_gate(workspace)
+        store = _store(workspace)
+        ids = ["IMP-20260902-010", "IMP-20260902-011", "IMP-20260902-012"]
+        with gate.admit_batch("INGEST", "batch-1", ids, "body", tier=IngestTier.EXTERNAL_INGEST):
+            for bid in ids[:2]:
+                store.write_block(_landed_block(workspace, bid))
+
+        close = _closes(_records(workspace))[-1]
+        assert close["metadata"]["scope_outcome"] == "ok"
+        assert close["metadata"]["landed"] == ids[:2]
+        assert ids[2] not in close["metadata"]["landed"], "the covered-but-unwritten id is not reported as landed"
+
+    def test_a_proposal_scope_names_the_blocks_the_apply_wrote(self, workspace: str) -> None:
+        """A PROPOSAL receipt covers nothing, so only the ledger can say."""
+        gate = get_gate(workspace)
+        store = _store(workspace)
+        with gate.admit_proposal("P-20260902-1", "ops") as receipt:
+            assert receipt.covers == frozenset(), "precondition: the open row names no ids at all"
+            store.write_block(_landed_block(workspace, "IMP-20260902-020"))
+            store.write_block(_landed_block(workspace, "IMP-20260902-021"))
+
+        close = _closes(_records(workspace))[-1]
+        assert close["metadata"]["landed"] == ["IMP-20260902-020", "IMP-20260902-021"]
+
+    def test_the_same_block_written_twice_is_recorded_once(self, workspace: str) -> None:
+        gate = get_gate(workspace)
+        store = _store(workspace)
+        with gate.admit_block("WRITE", "IMP-20260902-030", "body", tier=IngestTier.EXTERNAL_INGEST):
+            store.write_block(_landed_block(workspace, "IMP-20260902-030"))
+            store.write_block(_landed_block(workspace, "IMP-20260902-030"))
+
+        assert _closes(_records(workspace))[-1]["metadata"]["landed"] == ["IMP-20260902-030"]
+
+    def test_a_refused_write_is_not_recorded_as_landed(self, workspace: str) -> None:
+        """The ledger holds ids the gate let through, never one it refused."""
+        gate = get_gate(workspace)
+        with pytest.raises(UngatedWriteError):
+            with gate.admit_block("WRITE", "IMP-20260902-040", "body", tier=IngestTier.EXTERNAL_INGEST):
+                require_admission("IMP-20260902-041")  # not covered by this receipt
+
+        close = _closes(_records(workspace))[-1]
+        assert close["metadata"]["scope_outcome"] == "error"
+        assert close["metadata"]["landed"] == []
+
+
+class TestCloseRecordShape:
+    def test_the_close_record_links_back_to_both_halves_of_its_admission(self, workspace: str) -> None:
+        """The pairing key an auditor needs, in both ledgers' vocabularies."""
+        gate = get_gate(workspace)
+        with gate.admit_block("WRITE", "IMP-20260902-050", "body", tier=IngestTier.EXTERNAL_INGEST) as receipt:
+            pass
+
+        close = _closes(_records(workspace))[-1]
+        assert close["metadata"]["admission_entry_id"] == receipt.entry_id
+        assert gate.chain.get_by_entry_id(receipt.entry_id) is not None, "…and that id resolves in the hash chain"
+
+        opens = [r for r in _records(workspace) if r["evidence_id"] == close["metadata"]["admission_evidence_id"]]
+        assert len(opens) == 1, "the evidence link resolves to exactly the open row"
+        assert "write_phase" not in opens[0]["metadata"]
+
+    def test_the_landed_root_covers_the_landed_ids(self, workspace: str) -> None:
+        gate = get_gate(workspace)
+        store = _store(workspace)
+        ids = ["IMP-20260902-060", "IMP-20260902-061"]
+        with gate.admit_batch("INGEST", "batch-root", ids, "body", tier=IngestTier.EXTERNAL_INGEST):
+            for bid in ids:
+                store.write_block(_landed_block(workspace, bid))
+
+        close = _closes(_records(workspace))[-1]
+        assert close["metadata"]["landed_root"] == _merkle_root([(bid, _sha256(bid)) for bid in ids])
+
+    def test_a_scope_larger_than_the_cap_keeps_an_exact_count_and_root(self, workspace: str) -> None:
+        """Truncating the inline list must not cost the record its reach."""
+        gate = get_gate(workspace)
+        store = _store(workspace)
+        ids = [f"IMP-2026090{i // 1000}-{i:04d}" for i in range(governance_gate._MAX_LANDED_LISTED + 5)]
+        with gate.admit_batch("INGEST", "batch-big", ids, "body", tier=IngestTier.EXTERNAL_INGEST):
+            for bid in ids:
+                store.write_block(_landed_block(workspace, bid))
+
+        close = _closes(_records(workspace))[-1]["metadata"]
+        assert close["landed_count"] == len(ids), "the count is exact at any size"
+        assert close["landed_root"] == _merkle_root([(bid, _sha256(bid)) for bid in ids]), "so is the root"
+        assert close["landed_truncated"] is True
+        assert len(close["landed"]) == governance_gate._MAX_LANDED_LISTED
+
+    def test_closing_a_write_scope_added_no_evidence_action_member(self, workspace: str) -> None:
+        """Forward compatibility: a 5.0.1 reader parses every close record.
+
+        ``EvidenceObject.from_dict`` does a strict ``EvidenceAction(value)``
+        lookup, so a new member would freeze an older reader on a chain a
+        newer one wrote. A close record attests what an admitted scope did
+        — it neither lands content nor withdraws it — and lands under
+        ``VERIFY``, which already existed.
+        """
+        gate = get_gate(workspace)
+        with gate.admit_block("INGEST", "IMP-20260902-070", "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+        close = _closes(_records(workspace))[-1]
+        assert close["action"] == EvidenceAction.VERIFY.value
+        assert EvidenceAction(close["action"]) is EvidenceAction.VERIFY
+
+    def test_the_close_record_does_not_double_a_verb_row_count(self, workspace: str) -> None:
+        """A consumer that counts rows by verb must not see the scope twice.
+
+        This is why the close record does not reuse its scope's verb the
+        way the delete side's two phases share ``DELETE``: callers already
+        count by verb — ``restore_snapshot`` opens a ``RESTORE`` batch and
+        its caller asserts exactly one ``RESTORE`` row — and reusing the
+        verb would have doubled every such count with no caller changed.
+        """
+        gate = get_gate(workspace)
+        with gate.admit_batch("RESTORE", "restore:snap", ["IMP-20260902-071"], "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+        rows = _records(workspace)
+        assert [r["metadata"]["action_verb"] for r in rows].count("RESTORE") == 1, "one authorisation, one RESTORE row"
+        close = _closes(rows)[-1]
+        assert close["metadata"]["action_verb"] == CLOSE_VERB
+        assert close["metadata"]["scope_verb"] == "RESTORE", "and the scope's verb is not lost — it moves into metadata"
+
+
+class TestUnclosedWriteScopes:
+    """ "Opened, not landed" has to be computable, or the record is decoration."""
+
+    def test_a_workspace_whose_scopes_all_closed_reports_nothing_open(self, workspace: str) -> None:
+        gate = get_gate(workspace)
+        with gate.admit_block("WRITE", "IMP-20260902-080", "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+        with pytest.raises(RuntimeError):
+            with gate.admit_block("WRITE", "IMP-20260902-081", "body", tier=IngestTier.EXTERNAL_INGEST):
+                raise RuntimeError("closed on the error exit, which still closes it")
+
+        assert governance_gate.unclosed_write_scopes(gate.evidence) == []
+
+    def test_a_suppressed_close_record_is_reported_as_opened_not_landed(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Positive control for the assertion above.
+
+        Suppressing the close record is what a process dying inside the
+        scope looks like in the ledger. If the detector could not see
+        this, "reports nothing open" would be a statement about the
+        method, not about the workspace.
+        """
+        gate = get_gate(workspace)
+        with gate.admit_block("WRITE", "IMP-20260902-090", "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+        assert governance_gate.unclosed_write_scopes(gate.evidence) == [], "precondition: clean before the kill"
+
+        monkeypatch.setattr(type(gate), "_record_scope_close", lambda self, *a, **k: None)
+        with gate.admit_block("WRITE", "IMP-20260902-091", "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+
+        open_scopes = governance_gate.unclosed_write_scopes(gate.evidence)
+        assert [row.target_block_id for row in open_scopes] == ["IMP-20260902-091"]
+
+    def test_a_delete_scope_is_not_reported_as_an_open_write(self, workspace: str) -> None:
+        """A delete that removed nothing writes no second row, by design."""
+        gate = get_gate(workspace)
+        with gate.admit_delete("IMP-20260902-100", rationale="nothing there to remove"):
+            pass
+        assert governance_gate.unclosed_write_scopes(gate.evidence) == []
+
+
+class TestMutationTwinWriteScopeClose:
+    """Restore the pre-5.0.2 behaviour; the protective bodies must go red."""
+
+    def test_the_outcome_assertions_depend_on_the_close_record(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Delete the close record — exactly the 5.0.1 write scope."""
+        monkeypatch.setattr(governance_gate.GovernanceGate, "_record_scope_close", lambda self, *a, **k: None)
+        gate = get_gate(workspace)
+
+        with pytest.raises(RuntimeError):
+            with gate.admit_proposal("D-20260902-901", "body"):
+                raise RuntimeError("op failed before the write landed")
+
+        rows = _records(workspace)
+        assert _closes(rows) == [], "twin precondition: the close record is gone"
+        assert rows[-1]["action"] == EvidenceAction.APPLY.value, "…leaving an APPLY row that reads as a landed write"
+        assert not any("outcome" in key for key in rows[-1]["metadata"]), "…with no outcome marker of any kind"
+
+        # Which is what test_a_scope_that_aborts_... asserts against.
+        with pytest.raises(IndexError):
+            _closes(rows)[-1]["metadata"]["scope_outcome"]
+
+    def test_the_landed_list_depends_on_require_admission_recording_it(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Stop recording landings; a completed write reports landing nothing."""
+        monkeypatch.setattr(AdmissionReceipt, "record_landing", lambda self, block_id: None)
+        gate = get_gate(workspace)
+        store = _store(workspace)
+        with gate.admit_block("WRITE", "IMP-20260902-110", "body", tier=IngestTier.EXTERNAL_INGEST):
+            store.write_block(_landed_block(workspace, "IMP-20260902-110"))
+
+        assert _in_corpus(workspace, "IMP-20260902-110"), "twin precondition: the block did land"
+        close = _closes(_records(workspace))[-1]
+        assert close["metadata"]["landed"] == [], "…and the record no longer says so, which is the defect"
+
+        # Which is what test_a_completed_scope_records_ok_... asserts against.
+        with pytest.raises(AssertionError):
+            assert close["metadata"]["landed"] == ["IMP-20260902-110"]

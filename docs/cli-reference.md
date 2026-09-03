@@ -2,6 +2,74 @@
 
 The `mm` command is the unified MIND-Mem CLI for non-MCP agents.
 
+## Command index
+
+Every verb `mm` accepts, with the parser's own help text. **Generated** from
+`mind_mem.mm_cli.build_parser()` — `tests/test_docs_alignment.py::TestGeneratedCliVerbIndex`
+fails the build if this table and the parser disagree, so a new verb documents
+itself or does not land. Hand-maintenance is what let 32 of 51 verbs go
+unlisted, `mm bind` among them — the command the governance gate names in
+every drift refusal.
+
+The sections below this index cover the frequently-used verbs in depth.
+
+<!-- BEGIN GENERATED: cli-verb-index — regenerate with tests/test_docs_alignment.py -->
+| Command | What it does |
+| --- | --- |
+| `mm recall` | Search memory and print JSON results. |
+| `mm context` | Recall + token-budget pack into a context snippet (JSON). |
+| `mm inject` | Render a context snippet in the format a specific agent expects. |
+| `mm resume` | Print the resume brief for the active task frame, with dead-end warnings. |
+| `mm dead-ends` | List recorded dead ends (JSON), optionally filtered by an about-to-happen action. |
+| `mm review` | Batch-review the HITL proposal queue: diff, evidence, approve/reject. |
+| `mm status` | Print workspace status as JSON. |
+| `mm index` | Regenerate index.md (hierarchical, by category/kind) + log.md (chronological) from the block corpus. |
+| `mm usage` | Model-call token counts per day (local ledger; no egress). |
+| `mm tool-run` | Run a command; keep its large output out of context, print a summary+handle. |
+| `mm tool-recall` | Print the full stored output for a tool-run handle. |
+| `mm migrate-store` | Migrate the workspace block corpus between storage backends. |
+| `mm migrate` | Run a workspace layout migration. |
+| `mm lint` | Report deterministic corpus defects; --fix stages one repair proposal. |
+| `mm detect` | Auto-detect installed AI coding clients for this workspace. |
+| `mm install` | Configure mind-mem for one named AI coding client. |
+| `mm install-all` | Auto-detect + configure every installed AI coding client. |
+| `mm install-model` | Download `mind-mem-4b` GGUF (~2.5GB) from HuggingFace and import into Ollama as `mind-mem:4b`. Idempotent. |
+| `mm doctor` | Diagnose workspace state (block-store parity, recall-log schema drift). Add --rebuild-cache or --migrate-recall-log to actually repair. |
+| `mm token` | Federation/HTTP transport token management (rotation primitive). |
+| `mm import` | Import memory from another system into the corpus (local dumps and note directories). |
+| `mm kinds` | v4 block-kind taxonomy (requires v4.block_kinds in mind-mem.json). |
+| `mm vault` | Vault sync subcommands. |
+| `mm lineage` | Block-lineage subcommands (v3.11.0 typed edges + v3.12 staleness). |
+| `mm skill` | Self-improving skill optimization subcommands. |
+| `mm serve` | Launch the mind-mem REST API server (requires mind-mem[api]). |
+| `mm http-serve` | Launch the v3.9 stdlib HTTP transport (zero dependencies; minimal endpoint surface). |
+| `mm daemon` | Launch the v3.9 background daemon — runs configured jobs on internal intervals. |
+| `mm inbox-watch` | Watch an inbox directory; route files by extension into the workspace. |
+| `mm ingest-serve` | Serve POST /ingest and drain accepted events into QUARANTINED blocks. Requires v4.ingest_serve in mind-mem.json; off by default. |
+| `mm send` | Send a message to another agent (writes an MSG- block to shared memory). |
+| `mm inbox` | Read agent messages addressed to you (recall over MSG- blocks). |
+| `mm graph-backfill` | Extract typed relations from a corpus slice into staged SIGNALS.md proposals. Dry-run by default: prints edges-per-block + predicate histogram (the yield measurement). |
+| `mm graph-answer` | Answer about an entity using ONLY the k-hop subgraph of governed edges: every claim cites its edge and provenance block, and what the graph does not contain is listed explicitly. |
+| `mm pipeline-status` | Show current extractor pipeline hash + count of dirty (re-extract) blocks. |
+| `mm accountability` | RA.2 retrieval accountability: precision (credited/served per intent) and waste (admitted blocks with no serve evidence). Derived views, recomputed on every call and never stored. |
+| `mm dashboard` | RA.5 lifecycle-tier dashboard: the one MemoryTier ladder crossed with retention class, the served-set ledger's chain verdict, and RA.2's precision / waste / serve counts. Read-only; exits 1 on a broken chain. |
+| `mm replay-check` | Check a recall attestation against the served-set ledger: same run id, and the recorded id count agrees with the attested result_count. Exits 1 unless the ledger corroborates it. |
+| `mm audit-model` | Static security scan of a local model checkpoint. Flags remote-code hooks, unsafe pickle, tokenizer injection. Outputs SHA-256 manifest. |
+| `mm sign-model` | Sign every file in a local model checkpoint with Ed25519. Writes MODEL_MANIFEST.txt + .sig + MODEL_PUBKEY.pub sidecars. |
+| `mm verify-model` | Verify a previously-signed checkpoint. Returns nonzero if the manifest, signature, or public key fail. |
+| `mm gate` | Load-gate registry that tracks which local checkpoints have been audited. Three sub-commands: check, list, remove. |
+| `mm bind` | Attest the current mind-mem.json by writing .spec_binding.json. Until this runs, GovernanceGate's spec-hash check is inert and config tampering is not detected. Exits 3 on drift unless --rebind. |
+| `mm config` | Read/write mind-mem.json. `config set` writes the key and re-attests .spec_binding.json in one step, so a setting change is not read back by GovernanceGate as config tampering. |
+| `mm audit-pinned` | Run the seven-check audit (and optional Ed25519 verify) on every entry in audit_pinned_models of mind-mem.json. Designed for release CI — non-zero exit on any HIGH finding or verify failure. |
+| `mm mic` | MIND IR graph serialization (mic@2 text + mic-b binary). Subcommands: convert, inspect. |
+| `mm inspect` | Print full block fields and provenance tree for a block ID. |
+| `mm explain` | Show per-stage retrieval scores (BM25 → vector → RRF → rerank) for a query. |
+| `mm trace` | Display recent MCP tool calls parsed from structured JSON logs. |
+| `mm export` | Deterministic compliance bundle over the admitted corpus. Two runs over an unchanged corpus produce byte-identical output. |
+| `mm compliance` | Redaction detectors, the pre-write screening door, and the provenance policy. |
+| `mm self-update` | Check PyPI for a newer mind-mem and upgrade this install. |
+<!-- END GENERATED: cli-verb-index -->
+
 ## Global options
 
 ```

@@ -144,7 +144,7 @@ structured `v4.lint is disabled` payload until the flag is set in
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `verify_merkle` | Verify a block's Merkle inclusion against the live tree | `block_id`, `content_hash` |
-| `verify_chain` | Verify the SHA3-512 governance hash chain end to end | — |
+| `verify_chain` | Verify every hash-linked ledger as one verdict — `hash_chain`, `evidence_chain`, `audit_sidecar`, `served_ledger` — by delegating to the single verifier (`mind-mem-verify`). `valid` is false when any one of them fails; `workspace_valid` additionally folds in the non-ledger checks (`spec_binding`, `snapshot_anchor`), and each check returns its own row. Reads only: it creates nothing in the workspace | — |
 | `mind_mem_verify` | Verify a workspace (optionally against a snapshot) | `snapshot` |
 | `list_evidence` | List evidence-chain records | filter parameters |
 | `anchor_root` | Record the CURRENT Merkle root in the local external-anchor trail. Computes the root from the live index — it takes no root argument, because anchoring a caller-supplied root would anchor the caller's claim rather than the store's state. Records `status="pending"` when no external poster is wired (ADMIN) | `chain`, `tx_hash`, `block_height` |

@@ -63,7 +63,7 @@ Add to `~/.claude/mcp.json`:
 | `list_mind_kernels` | List MIND scoring kernels |
 | `get_mind_kernel` | Read a MIND kernel |
 | `export_memory` | Export as JSONL |
-| `verify_chain` | Verify mutation audit chain integrity |
+| `verify_chain` | Verify all four ledgers as one verdict: `hash_chain`, `evidence_chain`, `audit_sidecar`, `served_ledger` |
 | `list_evidence` | List evidence entries with filters |
 | `get_block` | Retrieve a single block by ID |
 | `memory_health` | Full health summary (stats, drift, contradictions) |

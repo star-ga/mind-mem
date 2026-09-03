@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import inspect
 import re
 import subprocess  # nosec B404 - fixed argv, no shell
 import sys
@@ -27,6 +28,7 @@ import pytest
 
 from scripts import alignment_authorities as aa
 from scripts import check_docs_alignment as cda
+from scripts import count_mcp_tools as cmt
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -67,15 +69,66 @@ def scan(line: str, *, rel: str = "docs/example.md", auth=None, historical: bool
     return cda.scan_line(rel, 1, line, auth or make_authorities(), historical=historical)
 
 
+# CI's exact collection selector, duplicated here so this module can ask the
+# collector a second question (what did this environment DROP?) that the
+# authority's ``-> int`` signature cannot answer. Duplication is the drift
+# risk, so it is gated: ``test_the_local_selector_is_the_authoritys_selector``
+# fails if the authority's selector ever stops containing these tokens.
+_CI_SELECTOR = ("tests/", "--ignore=tests/integration", "--collect-only", "-q", "-m", "not stress")
+
+# ``pytest -rs`` reports a module dropped at collection time (a module-level
+# ``pytest.importorskip`` whose extra is absent) as
+# ``SKIPPED [1] tests/test_rest_api.py:18: could not import 'fastapi'``.
+_DROPPED_MODULE_RE = re.compile(r"^SKIPPED \[\d+\]\s+(\S+?):\d+:")
+
+
+def dropped_modules(stdout: str) -> tuple[str, ...]:
+    """Test modules this environment dropped at COLLECTION time, from ``-rs`` output."""
+    return tuple(sorted({m.group(1) for m in (_DROPPED_MODULE_RE.match(line) for line in stdout.splitlines()) if m}))
+
+
+@functools.lru_cache(maxsize=1)
+def collected_tests() -> tuple[int, tuple[str, ...]]:
+    """``(count, dropped)`` from ONE collection with CI's selector.
+
+    *count* is what the badge must equal. *dropped* is the environment fact
+    that says whether this machine can answer the question at all: a partial
+    install (no ``fastapi``, no ``psycopg``) silently removes whole modules
+    from collection, and comparing the tree's badge to a short count would
+    report drift that is really a missing extra. CI installs ``.[test]`` in
+    every cell that runs pytest, so *dropped* is empty there and the
+    comparison is always made.
+    """
+    proc = subprocess.run(  # nosec B603 - fixed argv, no shell
+        [sys.executable, "-m", "pytest", *_CI_SELECTOR, "-rs"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=1800,
+    )
+    if proc.returncode != 0:
+        tail = "\n".join((proc.stdout + proc.stderr).splitlines()[-15:])
+        raise cda.AuthorityError(f"pytest collection exited {proc.returncode}:\n{tail}")
+    return cda.parse_collected(proc.stdout), dropped_modules(proc.stdout)
+
+
+def collected_or_skip() -> int:
+    """The collected count, or skip naming the modules this environment lacks."""
+    count, dropped = collected_tests()
+    if dropped:
+        names = ", ".join(dropped[:5])
+        pytest.skip(f"this environment drops {len(dropped)} module(s) at collection ({names}); its count is a floor, not the authority")
+    return count
+
+
 @functools.lru_cache(maxsize=1)
 def _real_authorities() -> cda.Authorities:
     """The tree's own authorities, resolved once (git archive is not free).
 
-    The test-count leg comes from the README badge for the reason
-    ``TestRepositoryIsAligned`` documents: CI checks the badge against the
-    collector once, rather than 15 times inside the suite.
+    The test-count leg is COLLECTED, not read off the badge: a badge injected
+    as its own authority agrees with itself no matter what it says.
     """
-    return cda.resolve_authorities(ROOT, tests_collected=readme_tests_badge())
+    return cda.resolve_authorities(ROOT, tests_collected=collected_tests()[0])
 
 
 def real_auth_kwargs() -> dict:
@@ -406,18 +459,31 @@ def readme_tests_badge() -> int:
 class TestRepositoryIsAligned:
     """Every gated claim in the tree agrees with its authority.
 
-    The test-count leg is injected from the README badge rather than collected
-    here: running ``pytest --collect-only`` inside the suite would add one full
-    collection per matrix cell (15 of them) for a check the ``version-check``
-    CI job already performs once against the live selector. So this asserts
-    that every test-count claim in the tree agrees with the BADGE, and CI
-    asserts the badge agrees with the collector.
+    The test-count leg used to be injected FROM the README badge, with a
+    docstring saying "CI asserts the badge agrees with the collector". CI did
+    not: ``grep -n check_docs_alignment .github/workflows/*.yml`` returned
+    nothing, so the badge was the only authority for itself and agreed with
+    itself no matter what it said -- it read 10,550 while the selector
+    collected 11,137. The number is now COLLECTED here, once per session
+    (``functools.lru_cache``), and CI's ``version-check`` job collects it once
+    more with the same selector and passes it to the CLI. Two independent
+    checks, neither of which can be satisfied by the badge alone.
     """
 
     def test_no_claim_disagrees_with_its_authority(self):
-        auth = cda.resolve_authorities(tests_collected=readme_tests_badge())
+        auth = cda.resolve_authorities(ROOT, tests_collected=collected_or_skip())
         findings = cda.scan_docs(auth, ROOT)
         assert findings == [], "stale claims:\n" + "\n".join(str(f) for f in findings)
+
+    def test_the_badge_is_not_its_own_authority(self):
+        """The README badge equals what the CI selector actually collects."""
+        assert readme_tests_badge() == collected_or_skip()
+
+    def test_the_local_selector_is_the_authoritys_selector(self):
+        """``_CI_SELECTOR`` is a copy; this fails the moment the original moves."""
+        source = inspect.getsource(aa.collect_test_count)
+        for token in _CI_SELECTOR:
+            assert f'"{token}"' in source, f"{token!r} is no longer in the authority's selector"
 
     def test_the_scan_actually_read_something(self):
         """An empty finding list is only evidence when the search happened."""
@@ -429,7 +495,7 @@ class TestRepositoryIsAligned:
 
     def test_the_cli_exits_zero_on_an_aligned_tree(self):
         proc = subprocess.run(  # nosec B603
-            [sys.executable, "scripts/check_docs_alignment.py", "--tests-collected", str(readme_tests_badge())],
+            [sys.executable, "scripts/check_docs_alignment.py", "--tests-collected", str(collected_or_skip())],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -445,6 +511,193 @@ class TestRepositoryIsAligned:
 
         monkeypatch.setattr(cda, "trained_tool_count", boom)
         assert cda.main(["--tests-collected", "1"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# The two shapes every line-scoped pattern was structurally blind to
+# ---------------------------------------------------------------------------
+
+
+def _write_doc(tmp_path: Path, name: str, body: str) -> Path:
+    doc = tmp_path / "docs" / name
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text(body, encoding="utf-8")
+    return doc
+
+
+def _cmt_claims(body: str) -> list[tuple[int, int]]:
+    """``(lineno, value)`` for every tool claim ``count_mcp_tools`` can see."""
+    return [(lineno, value) for lineno, _s, _e, value, _x in cmt.scan_doc_claims(body.splitlines())]
+
+
+class TestTableCellToolClaims:
+    """``| MCP tools | 89 | N/A |`` -- the count stated AFTER its label.
+
+    Every pattern in ``count_mcp_tools`` wants the number adjacent to the word,
+    so all four reported "all tool-count claims agree with 102" while three
+    live docs said 89. These are the fixture positive controls: a doc
+    containing the row FAILS the gate.
+    """
+
+    COMPARISON = "\n".join(
+        [
+            "| Feature | MIND-Mem | LangMem |",
+            "|---------|----------|---------|",
+            "| MCP tools | 89 | N/A |",
+            "",
+        ]
+    )
+    MIGRATION = "\n".join(
+        [
+            "| Feature | mem-os | MIND-Mem |",
+            "|---------|--------|----------|",
+            "| MCP Tools | 8 | 89 |",
+            "",
+        ]
+    )
+
+    def test_a_stale_cell_fails_the_tool_gate(self):
+        assert _cmt_claims(self.COMPARISON) == [(3, 89)]
+
+    def test_a_current_cell_passes(self):
+        """The positive control's negative twin: 102 in the same shape is clean."""
+        assert _cmt_claims(self.COMPARISON.replace("89", "102")) == [(3, 102)]
+
+    def test_the_gate_reports_it(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(cmt, "_project_root", lambda: tmp_path)
+        _write_doc(tmp_path, "comparison.md", self.COMPARISON)
+        bad = cmt.check_docs(102)
+        assert len(bad) == 1 and "docs/comparison.md:3" in bad[0] and "claims 89" in bad[0]
+
+    def test_a_two_number_row_gates_only_our_column(self):
+        """``| MCP Tools | 8 | 89 |`` is mem-os then MIND-Mem.
+
+        Gating every numeric cell would fail the build on a TRUE statement
+        about another product; the header row says which column is ours.
+        """
+        assert _cmt_claims(self.MIGRATION) == [(3, 89)]
+
+    def test_a_competitor_column_is_not_our_claim(self):
+        """Positive control: our own cell in the SAME row is still gated."""
+        body = self.MIGRATION.replace("| MCP Tools | 8 | 89 |", "| MCP Tools | 45 | 89 |")
+        assert _cmt_claims(body) == [(3, 89)]
+
+    def test_a_table_with_no_header_of_ours_gates_every_count(self):
+        body = "| Item | Count |\n|------|-------|\n| MCP tools | 89 |\n"
+        assert _cmt_claims(body) == [(3, 89)]
+
+    def test_a_row_outside_a_table_is_not_a_claim(self):
+        """No separator row, no table: a bare pipe line is prose, not a cell."""
+        assert _cmt_claims("| MCP tools | 89 |\n") == []
+
+    def test_a_transition_row_is_a_record_not_a_claim(self):
+        body = "| Item | MIND-Mem |\n|------|----------|\n| MCP tools | 89 -> 102 |\n"
+        assert _cmt_claims(body) == []
+
+    def test_the_alignment_gate_sees_the_same_cell(self):
+        findings = cda.scan_text("docs/comparison.md", self.COMPARISON.splitlines(), make_authorities())
+        assert [(f.lineno, f.kind, f.claimed, f.actual) for f in findings] == [(3, "tools", "89", "102")]
+
+
+class TestWrappedClaims:
+    """A claim a markdown reflow split across the line break.
+
+    ``docs/integrations.md`` said "MIND-Mem's 89 MCP\\ntools" -- the number and
+    its noun on different lines, so no line-scoped matcher could ever see it.
+    """
+
+    WRAPPED = "**What this means**: each of these tools can call MIND-Mem's 89 MCP\ntools (recall, propose_update, scan) the same way.\n"
+
+    def test_a_wrapped_claim_fails_the_tool_gate(self):
+        assert _cmt_claims(self.WRAPPED) == [(1, 89)]
+
+    def test_a_current_wrapped_claim_passes(self):
+        assert _cmt_claims(self.WRAPPED.replace("89", "102")) == [(1, 102)]
+
+    def test_the_number_is_reported_on_the_line_that_holds_it(self):
+        """The fix rewrites by span, so the span must name the real line."""
+        claims = cmt.scan_doc_claims(self.WRAPPED.splitlines())
+        lineno, start, end, value, _excerpt = claims[0]
+        assert (lineno, value) == (1, 89)
+        assert self.WRAPPED.splitlines()[lineno - 1][start:end] == "89"
+
+    def test_a_claim_wholly_inside_one_line_is_reported_once(self):
+        body = "the server exposes 89 MCP tools today\nand that is the whole story.\n"
+        assert _cmt_claims(body) == [(1, 89)]
+
+    def test_a_table_row_is_never_glued_to_the_next_row(self):
+        """Joining structure fabricates claims that exist on neither line."""
+        body = "| Rows | 89 |\n| tools | many |\n"
+        assert _cmt_claims(body) == []
+
+    def test_a_heading_is_never_glued_to_the_paragraph_under_it(self):
+        body = "Released in 2026 with 89\n## tools and other things\n"
+        assert _cmt_claims(body) == []
+
+    def test_the_alignment_gate_fixes_a_wrapped_number_in_place(self, tmp_path):
+        doc = _write_doc(tmp_path, "integrations.md", self.WRAPPED)
+        findings = cda.scan_text("docs/integrations.md", self.WRAPPED.splitlines(), make_authorities())
+        assert [(f.lineno, f.claimed, f.actual) for f in findings] == [(1, "89", "102")]
+        fixed, skipped = cda.apply_fixes(findings, tmp_path)
+        assert (fixed, skipped) == (1, [])
+        assert doc.read_text(encoding="utf-8").splitlines()[0].endswith("MIND-Mem's 102 MCP")
+
+
+class TestTrainedClaimsAreReferredNotJudged:
+    """``count_mcp_tools`` knows only the LIVE count, so a claim about the
+    WEIGHTS is not its to answer.
+
+    CLAUDE.md's "Knows all 84 / tools" is wrapped, so widening the matcher made
+    it visible for the first time -- and answering it with 102 would be wrong
+    in a new way, because the trained revision registers 83. It is skipped
+    there and gated HERE, against the authority that can decide it.
+    """
+
+    TRAINED = "Qwen3.5-4B retrained for v4.0.0 (v4 weights revision). Knows all 84\ntools, v4 surfaces (cognitive kernel).\n"
+
+    def test_the_live_gate_refers_it_rather_than_judging_it(self):
+        assert _cmt_claims(self.TRAINED) == []
+
+    def test_the_alignment_gate_judges_it_against_the_trained_count(self):
+        findings = cda.scan_text("CLAUDE.md", self.TRAINED.splitlines(), make_authorities())
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "84", "83")]
+
+    def test_a_live_claim_in_the_same_file_is_still_the_live_gates(self):
+        """Positive control: the referral is scoped to the marker, not the file."""
+        assert _cmt_claims("the server currently exposes 89 MCP\ntools.\n") == [(1, 89)]
+
+
+class TestSkippedModuleDetection:
+    """``collected_tests`` skips rather than reports drift when this
+    environment cannot collect the whole tree. The detector needs a positive
+    control, or an always-empty result would silently make the skip
+    unreachable and the count a lie."""
+
+    def test_it_reads_a_real_collection_time_skip(self, tmp_path):
+        (tmp_path / "test_dropped.py").write_text(
+            "import pytest\n\npytest.importorskip('mind_mem_no_such_extra')\n\n\ndef test_never_collected():\n    pass\n",
+            encoding="utf-8",
+        )
+        proc = subprocess.run(  # nosec B603 - fixed argv, no shell
+            [sys.executable, "-m", "pytest", str(tmp_path), "--collect-only", "-q", "-rs", "-p", "no:cacheprovider"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        dropped = dropped_modules(proc.stdout)
+        assert dropped and dropped[0].endswith("test_dropped.py"), proc.stdout
+
+    def test_a_clean_collection_reports_nothing_dropped(self, tmp_path):
+        (tmp_path / "test_fine.py").write_text("def test_ok():\n    pass\n", encoding="utf-8")
+        proc = subprocess.run(  # nosec B603 - fixed argv, no shell
+            [sys.executable, "-m", "pytest", str(tmp_path), "--collect-only", "-q", "-rs", "-p", "no:cacheprovider"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert dropped_modules(proc.stdout) == ()
 
 
 class TestPublishedModelCard:
@@ -529,7 +782,11 @@ class TestMutationTwin:
         monkeypatch.setattr(cda, "scan_line", lambda *a, **k: [])
         monkeypatch.setattr(cda, "scan_builder_default", lambda *a, **k: [])
         monkeypatch.setattr(cda, "check_core_deps_badge", lambda *a, **k: [])
-        auth = cda.resolve_authorities(tests_collected=readme_tests_badge())
+        # The table-cell leg is a SECOND finding producer, not a caller of
+        # scan_line, so neutering scan_line alone no longer empties the scan --
+        # which is itself the proof that the new leg is load-bearing.
+        monkeypatch.setattr(cda, "scan_table_tools", lambda *a, **k: [])
+        auth = cda.resolve_authorities(tests_collected=collected_or_skip())
         # With the scanner neutered a KNOWN-BAD tree would still report clean,
         # which is exactly what the real assertion must be able to detect.
         assert cda.scan_docs(auth, ROOT) == []
@@ -1184,3 +1441,410 @@ class TestExperimentalIsNotShipped:
 
     def test_the_shipped_status_page_makes_no_unshipped_claim_about_a_live_tool(self):
         assert cda.check_experimental_is_not_shipped(cda.Authorities(**real_auth_kwargs()), ROOT) == []
+
+
+# ---------------------------------------------------------------------------
+# Generated doc blocks: the CLI verb index and the HTTP route table
+#
+# Both surfaces were documented by hand and both had drifted past the point
+# where a reader could trust them: 32 of the 51 `mm` verbs had no line in
+# docs/cli-reference.md -- including `mm bind`, the command
+# governance_gate.py names in EVERY drift refusal, so the gate's own remedy
+# was undocumented -- and 9 of the 11 stdlib-transport routes were absent
+# from docs/rest-api.md entirely.
+#
+# Hand-editing them again would buy one correct day. These render the tables
+# FROM the argparse tree and FROM http_transport.ROUTES, and the tests below
+# require the committed docs to equal the render, so the next verb or route
+# either updates its documentation or fails the build.
+# ---------------------------------------------------------------------------
+
+CLI_MARKER = "cli-verb-index"
+ROUTE_MARKER = "http-transport-routes"
+
+
+def _begin(marker: str) -> str:
+    return f"<!-- BEGIN GENERATED: {marker} — regenerate with tests/test_docs_alignment.py -->"
+
+
+def _end(marker: str) -> str:
+    return f"<!-- END GENERATED: {marker} -->"
+
+
+def generated_block(text: str, marker: str) -> str:
+    """The body between *marker*'s sentinels, or "" when absent."""
+    begin, end = _begin(marker), _end(marker)
+    if begin not in text or end not in text:
+        return ""
+    return text.split(begin, 1)[1].split(end, 1)[0]
+
+
+def render_cli_verb_index() -> str:
+    """Every `mm` subcommand and its own argparse help, as a table."""
+    import argparse
+
+    from mind_mem.mm_cli import build_parser
+
+    parser = build_parser()
+    subparsers = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]
+    assert len(subparsers) == 1, f"expected one subparser group, found {len(subparsers)}"
+    lines = ["", "| Command | What it does |", "| --- | --- |"]
+    for action in subparsers[0]._choices_actions:
+        help_text = " ".join((action.help or "").split()).replace("|", r"\|")
+        lines.append(f"| `mm {action.dest}` | {help_text} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_route_table() -> str:
+    """Every route the stdlib HTTP transport serves, with its declarations."""
+    from mind_mem.http_transport import CONTENT, ROUTES
+
+    lines = [
+        "",
+        "| Method | Path | Serves block content | Mutates state |",
+        "| --- | --- | --- | --- |",
+    ]
+    for route in ROUTES:
+        path = route.path if route.takes != "tail" else f"{route.path}{{tail}}"
+        content = "yes" if route.verdict == CONTENT else "no"
+        lines.append(f"| `{route.method}` | `{path}` | {content} | {'yes' if route.mutates else 'no'} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+class TestGeneratedCliVerbIndex:
+    DOC = ROOT / "docs" / "cli-reference.md"
+
+    def test_the_renderer_sees_a_real_parser(self) -> None:
+        """Positive control: a renderer over an empty parser documents nothing
+        and would make every assertion below vacuously true."""
+        rendered = render_cli_verb_index()
+        assert rendered.count("\n| `mm ") >= 40, rendered
+        assert "| `mm recall` |" in rendered
+
+    def test_the_committed_index_matches_the_parser(self) -> None:
+        block = generated_block(self.DOC.read_text(encoding="utf-8"), CLI_MARKER)
+        assert block, f"{self.DOC} has no generated verb index — the sentinels are gone"
+        assert block == render_cli_verb_index(), (
+            "docs/cli-reference.md's verb index has drifted from mm_cli.build_parser(). "
+            "Replace the block between the sentinels with:\n" + render_cli_verb_index()
+        )
+
+    def test_every_verb_the_parser_accepts_is_in_the_doc(self) -> None:
+        """The census, taken a second way, so a renderer that agreed with
+        itself could not hide a dropped verb."""
+        import argparse
+
+        from mind_mem.mm_cli import build_parser
+
+        parser = build_parser()
+        subparsers = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)][0]
+        verbs = set(subparsers.choices)
+        assert verbs, "positive control: the parser registered no subcommands"
+        # Scoped to the generated block, NOT the page. A whole-document
+        # substring search was satisfied by this section's own INTRO PROSE
+        # (which names `mm bind` as an example), so renaming the verb's row
+        # to a typo left the census green -- measured, in the mutation run
+        # that was supposed to prove this test worked.
+        block = generated_block(self.DOC.read_text(encoding="utf-8"), CLI_MARKER)
+        assert block, "the generated block is gone; the census would pass on prose"
+        rows = {line.split("`")[1] for line in block.splitlines() if line.startswith("| `mm ")}
+        missing = sorted(f"mm {v}" for v in verbs if f"mm {v}" not in rows)
+        assert not missing, f"verbs the CLI accepts and the generated index never names: {missing}"
+
+    def test_bind_is_documented(self) -> None:
+        """The verb every drift refusal tells the operator to run.
+
+        ``governance_gate`` names ``mm bind`` in the message it prints when
+        it stops a write. Until 5.0.2 the CLI reference did not contain the
+        string: the product's own remedy pointed at an undocumented command.
+        """
+        block = generated_block(self.DOC.read_text(encoding="utf-8"), CLI_MARKER)
+        assert "| `mm bind` |" in block, "mm bind has no ROW in the generated index (prose mentioning it does not count)"
+
+
+class TestGeneratedRouteTable:
+    DOC = ROOT / "docs" / "rest-api.md"
+
+    def test_the_renderer_sees_real_routes(self) -> None:
+        rendered = render_route_table()
+        assert rendered.count("\n| `") >= 8, rendered
+        assert "`/status`" in rendered
+
+    def test_the_committed_table_matches_the_route_tuple(self) -> None:
+        block = generated_block(self.DOC.read_text(encoding="utf-8"), ROUTE_MARKER)
+        assert block, f"{self.DOC} has no generated route table — the sentinels are gone"
+        assert block == render_route_table(), (
+            "docs/rest-api.md's route table has drifted from http_transport.ROUTES. "
+            "Replace the block between the sentinels with:\n" + render_route_table()
+        )
+
+    def test_every_handler_is_reachable_from_a_documented_route(self) -> None:
+        """Census from the handlers, not the table, so a route dropped from
+        ``ROUTES`` cannot hide behind a table that agrees with it."""
+        import inspect
+
+        from mind_mem import http_transport
+
+        handlers = {name for name, obj in vars(http_transport).items() if name.startswith("_handle_") and inspect.isfunction(obj)}
+        assert handlers, "positive control: no _handle_* functions found"
+        routed = {route.handler.__name__ for route in http_transport.ROUTES}
+        assert handlers == routed, (
+            f"handlers with no route: {sorted(handlers - routed)}; routes naming an absent handler: {sorted(routed - handlers)}"
+        )
+        block = generated_block(self.DOC.read_text(encoding="utf-8"), ROUTE_MARKER)
+        assert block, "the generated block is gone; the census would pass on prose"
+        for route in http_transport.ROUTES:
+            path = route.path if route.takes != "tail" else f"{route.path}{{tail}}"
+            assert f"| `{route.method}` | `{path}` |" in block, f"{route.name} is served but has no ROW in docs/rest-api.md"
+
+
+class TestArchitectureNamesEveryLedger:
+    """``docs/architecture.md`` must name each ledger it claims to describe.
+
+    MEASURED before the fix: the file contained ZERO occurrences of
+    ``hash_chain_v2``, ``evidence_chain``, ``audit_sidecar`` and
+    ``served_ledger`` — four distinct artifacts, one phrase ("audit chain")
+    used for whichever, and a reader with no way to tell which one a claim
+    was about. Naming them is not documentation polish: the product's
+    differentiator is what those files guarantee, and three of them
+    guarantee different things.
+    """
+
+    DOC = ROOT / "docs" / "architecture.md"
+
+    def test_every_ledger_check_is_described(self) -> None:
+        from mind_mem.verify_cli import LEDGER_CHECKS
+
+        assert LEDGER_CHECKS, "positive control: the authority is empty"
+        # A ROW, not a mention. The first cut of this test searched the whole
+        # page, and the section's own opening paragraph lists all four names
+        # while explaining that they used to be missing -- so unnaming a row
+        # left the gate green. Measured in a mutation run; fixed by anchoring
+        # on the table's own shape.
+        rows = [line for line in self.DOC.read_text(encoding="utf-8").splitlines() if line.startswith("| `")]
+        assert rows, "positive control: the ledger table has no rows at all"
+        named = {line.split("`")[1] for line in rows}
+        missing = sorted(name for name in LEDGER_CHECKS if name not in named)
+        assert not missing, f"ledgers verify_cli walks with no row in docs/architecture.md: {missing}"
+
+    def test_every_ledger_names_its_artifact_path(self) -> None:
+        """Naming the row is half of it; the reader needs the file.
+
+        Without this, a doc could satisfy the test above with a bullet list
+        of row names and still leave "which file is the audit chain?"
+        unanswered — the exact question the section exists for.
+        """
+        doc = self.DOC.read_text(encoding="utf-8")
+        for artifact in (
+            "memory/hash_chain_v2.db",
+            "memory/evidence_chain.jsonl",
+            ".mind-mem-audit/chain.jsonl",
+            ".mind-mem-ledger/served.jsonl",
+        ):
+            assert artifact in doc, f"{artifact} is walked by verify_workspace and named nowhere in the architecture doc"
+
+    def test_positive_control_the_scan_can_see_an_absence(self) -> None:
+        """Proof the two assertions above are measurements.
+
+        A substring search that always succeeded would pass them on any
+        file at all. This name is not in the document and must be reported
+        missing by the same method.
+        """
+        rows = [line for line in self.DOC.read_text(encoding="utf-8").splitlines() if line.startswith("| `")]
+        named = {line.split("`")[1] for line in rows}
+        assert "a_fifth_ledger_that_does_not_exist" not in named
+
+
+class TestCompiledKernelClaim:
+    """ "Scoring kernels compiled from MIND source" is not true of any wheel.
+
+    MEASURED, three ways, and the README asserted the opposite in one place
+    while denying it in another 1500 lines later:
+
+    * ``lib/kernels.c`` opens "mind-mem scoring kernels — C99 reference
+      implementations … the C equivalents of the MIND tensor kernels".
+      The optional ``libmindmem.so`` is built from THAT, by ``gcc``.
+    * ``pyproject.toml`` ships ``*.mind`` sources (``package-data``) and
+      ``mind/*.mind`` (``data-files``) and no shared object at all, so no
+      wheel carries a compiled kernel to begin with.
+    * ``mind_kernels.py`` is the authoritative scoring path, and
+      ``mind_ffi`` falls back to it and reports the backend.
+
+    The claim is not banned forever — it is banned until it is true. The
+    gate is conditional on the artifact: ship a compiled kernel in the
+    wheel and the phrase is allowed in the same commit.
+    """
+
+    PHRASES = ("compiled from MIND source", "kernels compiled from MIND")
+    SURFACES = ("README.md", "CLAUDE.md", "ROADMAP.md")
+
+    @staticmethod
+    def _wheel_ships_a_compiled_kernel() -> bool:
+        """Whether ``pyproject`` puts a shared object in the wheel."""
+        try:
+            import tomllib as toml
+        except ModuleNotFoundError:  # pragma: no cover - python 3.10 only
+            import tomli as toml  # type: ignore[no-redef]
+
+        data = toml.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        setuptools = data.get("tool", {}).get("setuptools", {})
+        globs: list[str] = []
+        for patterns in setuptools.get("package-data", {}).values():
+            globs.extend(patterns)
+        for patterns in setuptools.get("data-files", {}).values():
+            globs.extend(patterns)
+        return any(g.endswith((".so", ".dylib", ".dll")) for g in globs)
+
+    def _docs(self) -> dict[str, str]:
+        paths = [ROOT / name for name in self.SURFACES]
+        paths.extend(sorted((ROOT / "docs").rglob("*.md")))
+        return {str(p.relative_to(ROOT)): p.read_text(encoding="utf-8") for p in paths if p.is_file()}
+
+    def test_the_scan_covers_the_public_surface(self) -> None:
+        """Positive control: an empty corpus finds no claim and says clean."""
+        docs = self._docs()
+        assert len(docs) > 20, f"only {len(docs)} public docs scanned — the walk is wrong"
+        assert "README.md" in docs
+
+    def test_the_scan_can_find_a_phrase_that_is_present(self) -> None:
+        """Positive control for the METHOD, not the corpus.
+
+        A substring search over the wrong text, or over text read with the
+        wrong encoding, reports zero for everything. This phrase IS in the
+        README, so a scanner that cannot see it cannot be trusted to see
+        the forbidden one either.
+        """
+        docs = self._docs()
+        hits = [rel for rel, body in docs.items() if "Q16.16" in body]
+        assert "README.md" in hits, hits
+
+    def test_no_public_doc_claims_a_compiled_mind_kernel(self) -> None:
+        if self._wheel_ships_a_compiled_kernel():
+            pytest.skip("a compiled kernel now ships in the wheel; the claim has become true")
+        offenders = [f"{rel}: {phrase!r}" for rel, body in self._docs().items() for phrase in self.PHRASES if phrase in body]
+        assert not offenders, (
+            "no wheel ships a compiled kernel (pyproject ships .mind SOURCES; libmindmem.so is built "
+            f"from lib/kernels.c, in C99), so this claim is false where it stands: {offenders}"
+        )
+
+    def test_the_readme_states_what_actually_ships(self) -> None:
+        """The claim was removed, not merely softened.
+
+        Deleting a false sentence and leaving a hole is how the next writer
+        re-adds it. The README now says what the wheel carries, so there is
+        a true sentence occupying the space.
+        """
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        assert "lib/kernels.c" in readme, "the README no longer says where the native library comes from"
+        assert "mind_kernels.py" in readme, "the README no longer names the authoritative scoring path"
+
+    def test_the_troubleshooting_row_agrees_with_the_kernel_inventory(self) -> None:
+        """The README told readers ALL the .mind files are INI configs.
+
+        ``docs/MIND_CONFIG_VS_MIND_LANG.md`` — linked from that very row —
+        says 18 of 26 are INI and 8 are MIND-language tensor source. The two
+        documents contradicted each other, with the wrong one doing the
+        reassuring. Counted from the files rather than from either doc.
+        """
+        sources = sorted((ROOT / "mind").glob("*.mind"))
+        assert sources, "positive control: no .mind files found at all"
+        lang = [p for p in sources if any(line.lstrip().startswith("fn ") for line in p.read_text(encoding="utf-8").splitlines())]
+        assert lang, "positive control: the MIND-language detector matched nothing"
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        assert "the `.mind` files are INI configs, not yet MIND-language source" not in readme, (
+            f"{len(lang)} of {len(sources)} mind/*.mind files ARE MIND-language source; the README says none are"
+        )
+        assert f"{len(sources) - len(lang)} are INI-style config" in readme and f"{len(lang)} are MIND-language" in readme, (
+            f"the README's split must match the files: {len(sources) - len(lang)} INI / {len(lang)} MIND-language"
+        )
+
+
+class TestServedLedgerDefault:
+    """The docs said `false`; the function has said on since 5.0.2.
+
+    ``served_ledger.ledger_enabled`` returns True unless a workspace opts
+    out with a literal ``false``. The configuration table said the default
+    was ``false`` and that "only a literal ``true`` turns it on" — the exact
+    inverse — and ``ROADMAP.md``, ``verify_cli``, ``replay_check`` and
+    ``accountability_views`` all repeated the opt-in story in prose. Six
+    documents describing a behaviour the code stopped having.
+
+    The authority is the FUNCTION, evaluated here on a real empty config
+    rather than read out of a comment, so the prose cannot drift from it
+    again without this going red.
+    """
+
+    OPT_IN_PHRASES = ("opt-in", "opt in", "Off by default", "default OFF", "default-OFF", "off by default")
+    PROSE_FILES = (
+        "src/mind_mem/verify_cli.py",
+        "src/mind_mem/replay_check.py",
+        "src/mind_mem/accountability_views.py",
+    )
+
+    @staticmethod
+    def default_is_on(tmp_path: Path) -> bool:
+        """``ledger_enabled`` on a workspace whose config sets nothing."""
+        from mind_mem.served_ledger import ledger_enabled
+
+        (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
+        return ledger_enabled(str(tmp_path))
+
+    def test_the_authority_is_computed_not_quoted(self, tmp_path: Path) -> None:
+        assert self.default_is_on(tmp_path) is True, (
+            "ledger_enabled says OFF for an empty config — the docs below are now wrong the other way"
+        )
+
+    def test_the_probe_can_see_the_off_case(self, tmp_path: Path) -> None:
+        """Positive control: a probe that always answered True would make
+        every assertion here vacuous."""
+        from mind_mem.served_ledger import ledger_enabled
+
+        (tmp_path / "mind-mem.json").write_text('{"served_ledger": {"enabled": false}}', encoding="utf-8")
+        assert ledger_enabled(str(tmp_path)) is False
+
+    def test_the_configuration_table_cell_matches_the_function(self, tmp_path: Path) -> None:
+        rows = [
+            line
+            for line in (ROOT / "docs" / "configuration.md").read_text(encoding="utf-8").splitlines()
+            if line.startswith("| `served_ledger.enabled`")
+        ]
+        assert len(rows) == 1, f"expected exactly one config row for served_ledger.enabled, found {len(rows)}"
+        expected = "`true`" if self.default_is_on(tmp_path) else "`false`"
+        cells = [c.strip() for c in rows[0].strip("|").split("|")]
+        assert cells[2] == expected, f"docs say default {cells[2]}, ledger_enabled computes {expected}"
+
+    def test_no_shipped_docstring_still_calls_it_opt_in(self, tmp_path: Path) -> None:
+        """The prose the machine consumer reads back in a verdict.
+
+        ``verify_cli`` printed "served-recall ledger disabled (opt-in)" into
+        the report a CI gate reads. A message that describes the wrong
+        default is not a comment — it is output.
+        """
+        if not self.default_is_on(tmp_path):
+            pytest.skip("the default is off again; the opt-in wording would be correct")
+        offenders = [
+            f"{rel}: {phrase!r}"
+            for rel in self.PROSE_FILES
+            for phrase in self.OPT_IN_PHRASES
+            if phrase in (ROOT / rel).read_text(encoding="utf-8")
+        ]
+        assert not offenders, f"the ledger is on by default; these still describe it as opt-in: {offenders}"
+
+    def test_the_phrase_scan_can_see_a_phrase_that_is_present(self) -> None:
+        """Positive control for the scanner in the test above.
+
+        Without it, "no offenders" could equally mean the paths are wrong,
+        the files are empty, or the phrase list never matched anything.
+        """
+        body = (ROOT / "src" / "mind_mem" / "verify_cli.py").read_text(encoding="utf-8")
+        assert "served_ledger" in body, "the scanner is reading the wrong file"
+        seeded = body.replace("served_ledger", "Off by default", 1)
+        assert any(phrase in seeded for phrase in self.OPT_IN_PHRASES), "the phrase list matches nothing at all"
+
+    def test_the_roadmap_records_the_flip(self, tmp_path: Path) -> None:
+        if not self.default_is_on(tmp_path):
+            pytest.skip("the default is off again")
+        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        assert "default ON since 5.0.2" in roadmap, "RA.1 still describes the ledger as default OFF"

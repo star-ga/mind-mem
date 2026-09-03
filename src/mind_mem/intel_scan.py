@@ -97,6 +97,86 @@ class IntelReport:
         return "\n".join(self.lines)
 
 
+#: Where intel_scan's DERIVED artefacts live: a report ABOUT the corpus,
+#: never a file the corpus is read out of.
+#:
+#: ``IMPACT.md`` and ``BRIEFINGS.md`` used to be written into
+#: ``intelligence/``, which is a :data:`corpus_registry.CORPUS_DIRS`
+#: directory — and ``MarkdownBlockStore._discover_files`` lists **every**
+#: ``.md`` in one, whatever it is called. So these two regenerated reports
+#: sat inside the store's read set: measured on a fresh workspace,
+#: ``write_impact`` emits ``[I-YYYYMMDD-###]`` headers that the store
+#: parses, ``get_by_id('I-20260902-001')`` RESOLVES and the block is in
+#: ``get_all`` — with the evidence chain at +0 and the hash chain at +0.
+#: An ungoverned mint one ``Status:`` field away from being servable, and
+#: ``export_memory`` / ``GET /memories`` / the delete doors saw it.
+#:
+#: Moving them out is the fix by construction rather than by convention:
+#: the walk cannot reach ``maintenance/`` at all, so no future report
+#: written here can re-enter the corpus by accident, and
+#: ``tests/test_governed_write_paths.py`` can assert
+#: ``PENDING_CORPUS_DIR_WRITERS`` empty instead of pinning these two.
+#: ``maintenance/`` is also outside :data:`corpus_registry.BACKUP_DIRS`
+#: and :data:`corpus_registry.SNAPSHOT_DIRS`, which is right for an
+#: artefact every scan regenerates from the corpus.
+DERIVED_DIR = "maintenance/derived"
+
+#: Legacy in-corpus locations, READ for continuity and never written.
+#:
+#: An existing workspace has its briefing history and its last impact
+#: graph in ``intelligence/``. The reader falls back to these so the move
+#: loses nothing; the writer never names them, so the ungoverned mint
+#: stops growing and the old file goes inert. Removing the stale file is
+#: an operator's call, not this scanner's — deleting corpus content on a
+#: read-only scan is exactly the kind of unasked-for destruction this
+#: codebase has paid for before.
+LEGACY_DERIVED = {
+    "IMPACT.md": "intelligence/IMPACT.md",
+    "BRIEFINGS.md": "intelligence/BRIEFINGS.md",
+}
+
+
+def derived_path(ws, filename):
+    """Absolute path of a derived artefact, outside every corpus directory."""
+    return os.path.join(ws, *DERIVED_DIR.split("/"), filename)
+
+
+def legacy_derived_path(ws, filename):
+    """Absolute path of *filename*'s pre-5.0.2 in-corpus location."""
+    return os.path.join(ws, *LEGACY_DERIVED[filename].split("/"))
+
+
+def read_derived(ws, filename):
+    """Text of a derived artefact: the new location, else the legacy one, else ``""``.
+
+    One-way migration read. The new path wins whenever it exists, so once
+    a scan has written it the legacy file stops being consulted and can be
+    deleted by hand without changing any result.
+    """
+    for path in (derived_path(ws, filename), legacy_derived_path(ws, filename)):
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return handle.read()
+        except OSError:
+            continue
+    return ""
+
+
+def write_derived(ws, filename, text):
+    """Replace a derived artefact at its non-corpus location."""
+    path = derived_path(ws, filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    return path
+
+
+def _impact_read_path(ws):
+    """The impact graph's location: the derived copy, else the legacy one."""
+    derived = derived_path(ws, "IMPACT.md")
+    return derived if os.path.exists(derived) else legacy_derived_path(ws, "IMPACT.md")
+
+
 def load_all(ws):
     """Load all parseable files."""
     data = {}
@@ -109,7 +189,9 @@ def load_all(ws):
         "incidents": f"{ws}/entities/incidents.md",
         "contradictions": f"{ws}/intelligence/CONTRADICTIONS.md",
         "drift": f"{ws}/intelligence/DRIFT.md",
-        "impact": f"{ws}/intelligence/IMPACT.md",
+        # DERIVED, so it is read from ``maintenance/derived/`` and falls
+        # back to the pre-5.0.2 in-corpus copy. See :data:`DERIVED_DIR`.
+        "impact": _impact_read_path(ws),
     }
     for key, path in files.items():
         if os.path.exists(path):
@@ -785,21 +867,22 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
 
     briefing_text = "\n".join(briefing_lines)
 
-    # Append to BRIEFINGS.md
-    briefing_path = f"{ws}/intelligence/BRIEFINGS.md"
-    if not os.path.isfile(briefing_path):
-        os.makedirs(os.path.dirname(briefing_path), exist_ok=True)
-        with open(briefing_path, "w", encoding="utf-8") as f:
-            f.write("# Intelligence Briefings\n\n")
-    with open(briefing_path, "r", encoding="utf-8") as f:
-        existing = f.read()
+    # Append to maintenance/derived/BRIEFINGS.md — outside every corpus
+    # directory, so a weekly report can never be read back as memory. See
+    # :data:`DERIVED_DIR`. ``read_derived`` carries an existing workspace's
+    # briefing history over from the legacy in-corpus copy, so the
+    # already-generated check below still fires after the move.
+    existing = read_derived(ws, "BRIEFINGS.md") or "# Intelligence Briefings\n\n"
 
     # Check if this week's briefing already exists
     if week_id in existing:
         report.info_msg(f"Briefing {week_id} already exists, skipping.")
+        if not os.path.isfile(derived_path(ws, "BRIEFINGS.md")):
+            # One-time carry-over of a legacy workspace's history. Guarded
+            # on absence so a repeat scan is a genuine no-op, not a rewrite.
+            write_derived(ws, "BRIEFINGS.md", existing)
     else:
-        with open(briefing_path, "a", encoding="utf-8") as f:
-            f.write(f"\n{briefing_text}\n")
+        write_derived(ws, "BRIEFINGS.md", f"{existing}\n{briefing_text}\n")
         report.ok(f"Briefing {week_id} generated and appended.")
 
     return briefing_text
@@ -1028,11 +1111,14 @@ def write_drift(drift_signals, ws, report):
 
 
 def write_impact(impacts, ws, report):
-    """Write impact graph to IMPACT.md."""
+    """Write the impact graph to ``maintenance/derived/IMPACT.md``.
+
+    Outside every corpus directory, deliberately — see :data:`DERIVED_DIR`
+    for what writing it into ``intelligence/`` did.
+    """
     if not impacts:
         return
 
-    path = f"{ws}/intelligence/IMPACT.md"
     today = datetime.now().strftime("%Y%m%d")
 
     lines = [
@@ -1064,8 +1150,7 @@ def write_impact(impacts, ws, report):
         lines.append("- decisions/DECISIONS.md")
         lines.append("- tasks/TASKS.md")
 
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+    write_derived(ws, "IMPACT.md", "\n".join(lines) + "\n")
 
     report.ok(f"Impact graph rebuilt: {len(impacts)} entries.")
 

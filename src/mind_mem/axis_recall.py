@@ -277,54 +277,81 @@ def recall_with_axis(
         A dict with keys ``results`` (list of merged block dicts),
         ``weights`` (the effective axis weights), ``rotated`` (bool),
         ``diversity`` (int — count of distinct axes that contributed),
-        and ``attempts`` (list of AxisWeights tried in order).
+        ``attempts`` (list of AxisWeights tried in order), and
+        ``attestation`` — the ``RECALL_ATTEST_v2`` record committing to the
+        fused ranking that is returned, or ``None`` if it could not be
+        derived. One record for the observation, not one per axis pass: the
+        passes are legs and nobody was served them.
     """
     if weights is None:
         weights = AxisWeights()
     if not weights.active_axes():
         raise ValueError("recall_with_axis requires at least one active axis")
 
+    # This orchestrator is a door, and its axis passes are legs. Claiming the
+    # serve keeps the passes from each minting a record of a candidate set no
+    # caller was handed; the fused ranking below is the answer, and it is what
+    # gets attested once, at the end.
+    from .recall import attest_and_record, serving_scope
+
     base_kwargs = dict(recall_kwargs or {})
+    # One instant for every axis pass AND for the record. Each pass is a full
+    # ranked recall, so leaving them to default meant a multi-axis observation
+    # could straddle a UTC midnight and fuse two differently-dated rankings —
+    # and the attestation would then name a third "today" of its own.
+    from .scoring_instant import resolve_scoring_instant
+
+    base_kwargs["scoring_instant"] = resolve_scoring_instant(base_kwargs.get("scoring_instant"))
     attempts: list[AxisWeights] = [weights]
     tried_axes: set[ObservationAxis] = set(weights.active_axes())
     rotated = False
 
-    fused = _run_pass(
-        workspace,
-        query,
-        weights,
-        limit=limit,
-        active_only=active_only,
-        base_recall_kwargs=base_kwargs,
-        adversarial=adversarial,
-    )
+    with serving_scope():
+        fused = _run_pass(
+            workspace,
+            query,
+            weights,
+            limit=limit,
+            active_only=active_only,
+            base_recall_kwargs=base_kwargs,
+            adversarial=adversarial,
+        )
 
-    top_confidence = _top_confidence(fused)
-    if allow_rotation and should_rotate(top_confidence, threshold=rotation_threshold):
-        rotated_weights = rotate_axes(weights, already_tried=tried_axes)
-        # rotate_axes returns the same instance when nothing new is
-        # available — that's our cue to stop.
-        if rotated_weights is not weights:
-            attempts.append(rotated_weights)
-            tried_axes.update(rotated_weights.active_axes())
-            rotation_extra = _run_pass(
-                workspace,
-                query,
-                rotated_weights,
-                limit=limit,
-                active_only=active_only,
-                base_recall_kwargs=base_kwargs,
-                adversarial=adversarial,
-            )
-            # _merge_rotation is responsible for stamping rotated=True on
-            # the specific results that the rotation pass touched; we
-            # must NOT overwrite it for primary-only results that stayed
-            # below the confidence threshold.
-            fused = _merge_rotation(fused, rotation_extra)
-            rotated = True
+        top_confidence = _top_confidence(fused)
+        if allow_rotation and should_rotate(top_confidence, threshold=rotation_threshold):
+            rotated_weights = rotate_axes(weights, already_tried=tried_axes)
+            # rotate_axes returns the same instance when nothing new is
+            # available — that's our cue to stop.
+            if rotated_weights is not weights:
+                attempts.append(rotated_weights)
+                tried_axes.update(rotated_weights.active_axes())
+                rotation_extra = _run_pass(
+                    workspace,
+                    query,
+                    rotated_weights,
+                    limit=limit,
+                    active_only=active_only,
+                    base_recall_kwargs=base_kwargs,
+                    adversarial=adversarial,
+                )
+                # _merge_rotation is responsible for stamping rotated=True on
+                # the specific results that the rotation pass touched; we
+                # must NOT overwrite it for primary-only results that stayed
+                # below the confidence threshold.
+                fused = _merge_rotation(fused, rotation_extra)
+                rotated = True
 
     fused.sort(key=lambda r: (r.get("_axis_score", 0.0), _block_id(r) or ""), reverse=True)
     fused = fused[:limit]
+
+    # Attested AFTER the sort and the truncation, so the record commits to the
+    # ranking the caller receives rather than to the wider fused pool.
+    attestation = attest_and_record(
+        workspace,
+        query,
+        fused,
+        scoring_instant=base_kwargs.get("scoring_instant"),
+    )
 
     diversity_count = _count_axis_diversity(fused)
 
@@ -344,6 +371,7 @@ def recall_with_axis(
         "rotated": rotated,
         "diversity": diversity_count,
         "attempts": [w.as_dict() for w in attempts],
+        "attestation": attestation,
     }
 
 

@@ -55,12 +55,35 @@ admission check at all in any of the five stores — an ungated delete
 returned ``True`` and the block was gone, with no receipt and no chain
 record. See :func:`require_delete_admission`.
 
+**A restore is admitted at the seam too.** ``restore`` is the third
+mutation on a ``BlockStore`` and was the last one held up by
+convention: the RESTORE scope lived in the callers
+(``apply_engine.restore_snapshot``), so a direct ``store.restore(snap)``
+withdrew governed blocks with both ledgers unmoved while ``write_block``
+and ``delete_block`` at the same seam refused. Every ``restore``
+implementation now calls :func:`require_restore_admission` first and
+raises :class:`UngatedRestoreError` when the open receipt was not minted
+for a restore.
+
 **A DELETE scope reports back what it removed.** The store calls
 :meth:`AdmissionReceipt.record_removal` with the content it actually
 took out; the gate reads that ledger when the scope closes and writes
 ONE chain record covering it. The alternative — every door remembering
 to write its own record — is the shape that produced the ungated delete
 in the first place.
+
+**A WRITE scope reports back what it consumed.** The delete side's
+ledger had no write-side twin, so the chain recorded that a write was
+*authorised* and never that it happened: a scope that raised after the
+gate minted its entry left an ``APPLY`` row byte-indistinguishable from
+one whose block landed. Measured on a fresh workspace — a scope that
+raises before ``write_block`` moves the chain from 1 row to 2, the block
+is absent, and the last row carries no outcome marker of any kind.
+:func:`require_admission` now records every id it authorises into
+:class:`LandingLedger`, and the gate writes one close record naming the
+outcome and the consumed ids on **both** exits of every write scope. See
+:meth:`~mind_mem.governance_gate.GovernanceGate._run_write_scope` for
+what that record can and cannot claim.
 
 **Reads have an admission too.** :func:`admit_read` and
 :func:`admit_read_one` expose the decision the recall legs already make
@@ -97,15 +120,19 @@ __all__ = [
     "OP_DELETE",
     "OP_WRITE",
     "PROPOSAL",
+    "LandingLedger",
     "ReadAdmission",
     "RemovalLedger",
+    "RESTORE_TIER",
     "UngatedDeleteError",
+    "UngatedRestoreError",
     "UngatedWriteError",
     "admit_read",
     "admit_read_one",
     "current_admission",
     "require_admission",
     "require_delete_admission",
+    "require_restore_admission",
 ]
 
 
@@ -152,6 +179,23 @@ class UngatedDeleteError(UngatedWriteError):
     """
 
 
+class UngatedRestoreError(UngatedWriteError):
+    """A store restore was attempted with no RESTORE admission open.
+
+    Raised when nothing is open, when the open receipt was minted for a
+    delete, for a single block, or for a whole proposal, when its chain
+    entry was never confirmed, or when it was not minted for a re-stamp
+    of already-governed content. See :func:`require_restore_admission`
+    for what each of those refusals is protecting.
+
+    A subclass of :class:`UngatedWriteError` for the same
+    forward-compatibility reason :class:`UngatedDeleteError` is one: a
+    restore re-writes content, the apply engine already aborts on that
+    class, and every existing ``except UngatedWriteError`` keeps catching
+    every ungated mutation without being edited.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Receipt
 # ---------------------------------------------------------------------------
@@ -188,6 +232,18 @@ OP_DELETE: Final = "delete"
 #: an operation nobody has classified authorises nothing, which is the
 #: fail-closed direction.
 OPERATIONS: Final[frozenset[str]] = frozenset({OP_WRITE, OP_DELETE})
+
+
+#: The ingest tier a restore has to be admitted under.
+#:
+#: A restore reinstates blocks that were already admitted once and mints
+#: no status of its own, which is exactly what
+#: :data:`~mind_mem.enums.INITIAL_STATUS` calls a *carrying* tier — its row
+#: is ``None``. Naming it here rather than open-coding ``IngestTier.RESTAMP``
+#: at the seam gives the rule one definition and one place to change, and
+#: makes "the receipt was minted for a re-stamp, not for an ingest" a
+#: property :func:`require_restore_admission` can state rather than imply.
+RESTORE_TIER: Final[IngestTier] = IngestTier.RESTAMP
 
 
 class RemovalLedger:
@@ -254,6 +310,70 @@ class RemovalLedger:
         return f"RemovalLedger(removed={len(self._leaves)})"
 
 
+class LandingLedger:
+    """Which ids a WRITE scope authorised a store to write, in order.
+
+    The write-side twin of :class:`RemovalLedger`, and the reason a close
+    record can say something rather than nothing. Every
+    :func:`require_admission` that returns a WRITE receipt records its id
+    here, so when the scope closes the gate knows which of the ids the
+    receipt *covered* were actually consumed — the distinction the chain
+    could not make before, because ``covers`` is a statement of intent
+    minted before any store was touched.
+
+    **What a recorded id means, exactly.** ``require_admission`` is the
+    first statement of every ``write_block``, so an id lands here when a
+    store *began* an authorised write of it, not when the bytes are
+    durable. That gap is bounded rather than open: a ``write_block`` that
+    raises propagates out through the scope, and the scope's close record
+    then reads ``scope_outcome="error"``, so the ambiguous combination is
+    "outcome=ok with an id that a store accepted and then discarded
+    without raising". Closing that last gap needs the store to report
+    back after the durable write the way ``record_removal`` does —
+    deferred: it is a five-backend change to ``write_block``, and the
+    upgrade path is a ``receipt.record_landed(id)`` call at the end of
+    each implementation with this ledger recording *attempts* under a
+    separate key.
+
+    Mutable by design and excluded from receipt equality, exactly as
+    :class:`RemovalLedger` is. Ids are de-duplicated, so re-writing one
+    block twice inside a scope records it once; memory is one id per
+    distinct block, which is the same order as the ``covers`` set the
+    receipt already holds.
+    """
+
+    __slots__ = ("_ids", "_seen")
+
+    def __init__(self) -> None:
+        self._ids: list[str] = []
+        self._seen: set[str] = set()
+
+    def record(self, block_id: str) -> None:
+        """Record that *block_id* was authorised for writing. Idempotent."""
+        bid = str(block_id)
+        if bid in self._seen:
+            return
+        self._seen.add(bid)
+        self._ids.append(bid)
+
+    @property
+    def block_ids(self) -> tuple[str, ...]:
+        """Ids consumed, in the order they were first authorised."""
+        return tuple(self._ids)
+
+    def __contains__(self, block_id: object) -> bool:
+        return str(block_id) in self._seen
+
+    def __len__(self) -> int:
+        return len(self._ids)
+
+    def __bool__(self) -> bool:
+        return bool(self._ids)
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostic only
+        return f"LandingLedger(landed={len(self._ids)})"
+
+
 @dataclass(frozen=True)
 class AdmissionReceipt:
     """Immutable proof that :meth:`GovernanceGate.admit` accepted a mutation.
@@ -288,8 +408,18 @@ class AdmissionReceipt:
             authorise a delete and a delete receipt cannot authorise a
             write. Defaults to :data:`OP_WRITE`, which is what every
             receipt minted before this field existed was.
+        evidence_id: ``EvidenceObject.evidence_id`` of the evidence row
+            the gate wrote for this admission. The pairing key a close
+            record points back with: the evidence row for an *open*
+            admission cannot carry the chain ``entry_id`` (the evidence
+            row is written first, before the chain entry exists), so
+            without this an auditor has no field linking the two halves
+            of one scope. Defaults to ``""`` for a receipt minted by
+            something other than the gate.
         removals: The :class:`RemovalLedger` a DELETE scope's store
             reports into. Empty for a write.
+        landings: The :class:`LandingLedger` :func:`require_admission`
+            records every authorised WRITE id into. Empty for a delete.
     """
 
     entry_id: str
@@ -300,7 +430,9 @@ class AdmissionReceipt:
     chain_verified: bool = False
     actor: str = ""
     operation: str = OP_WRITE
+    evidence_id: str = ""
     removals: RemovalLedger = field(default_factory=RemovalLedger, compare=False, repr=False)
+    landings: LandingLedger = field(default_factory=LandingLedger, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         """Refuse a receipt whose operation and tier disagree.
@@ -362,6 +494,34 @@ class AdmissionReceipt:
             )
         self.removals.record(bid, content)
 
+    def record_landing(self, block_id: str) -> None:
+        """Report that *block_id* was authorised for writing under this receipt.
+
+        Called by :func:`require_admission` — the first statement of every
+        ``write_block`` — once the id has passed every admission check, so
+        the ledger holds exactly the ids this scope let through and never
+        one it refused.
+
+        Raises:
+            UngatedWriteError: On a delete receipt (a delete lands
+                nothing; it reports through :meth:`record_removal`), or
+                for an id this receipt does not cover. Both are
+                unreachable from ``require_admission``, which checks the
+                same two things first; they are here so a receipt cannot
+                be made to carry a false landing by any other caller.
+        """
+        if self.operation != OP_WRITE:
+            raise UngatedWriteError(
+                f"admission {self.entry_id} authorises a {self.operation}, not a write; it cannot record a landing for {block_id!r}"
+            )
+        bid = str(block_id)
+        if not self.authorizes(bid):
+            covered = ", ".join(sorted(self.covers)[:8]) or "(none)"
+            raise UngatedWriteError(
+                f"admission {self.entry_id} does not cover block {bid!r} (covers: {covered}); refusing to record it as landed"
+            )
+        self.landings.record(bid)
+
 
 # ---------------------------------------------------------------------------
 # The context variable. Private by design: publishing a receipt is the
@@ -419,6 +579,131 @@ def require_delete_admission(block_id: str) -> AdmissionReceipt:
     return require_admission(block_id, operation=OP_DELETE)
 
 
+def require_restore_admission(snap_dir: str) -> AdmissionReceipt:
+    """Return the open receipt authorising a restore from *snap_dir*.
+
+    The **first statement of every** ``BlockStore.restore`` implementation,
+    for the reason :func:`require_delete_admission` is the first statement
+    of every ``delete_block``: until this existed the restore seam was the
+    one mutation door held up by convention rather than by construction.
+    Measured on 5.0.2 with the delete and write gates already closed, a
+    governed write followed by ``store.restore(snap)`` called directly with
+    no scope::
+
+        restore returned normally
+        block D-002 readable before/after: True False
+        (evidence, hash_chain) before/after: (4, 4) (4, 4)
+
+    — a governed block died and neither ledger moved. The positive control
+    in the same run at the same seam: ``ungated delete_block -> raised
+    UngatedDeleteError``, ``ungated write_block -> raised
+    UngatedWriteError``. The RESTORE scope existed
+    (``apply_engine.restore_snapshot``, ``backup_restore.restore_workspace``)
+    and every sanctioned caller opened it; nothing made a caller that did
+    not fail.
+
+    **What a restore receipt has to be.** Four properties, each refusing a
+    receipt that would otherwise be silently transferable into the most
+    destructive operation the product has:
+
+    ``operation`` is :data:`OP_WRITE`
+        A restore re-writes content, so it is admitted on the write side.
+        A DELETE receipt is not transferable to it, exactly as it is not
+        transferable to a write.
+
+    ``kind`` is :data:`BATCH`
+        A restore reinstates a *set* and withdraws another. A
+        :data:`BLOCK` receipt covers one id and cannot honestly authorise
+        overwriting a workspace; a :data:`PROPOSAL` receipt authorises
+        every id it is asked about, which is ambient authority to
+        overwrite anything — the same reason
+        :meth:`AdmissionReceipt.__post_init__` refuses a proposal-scoped
+        delete. This is the load-bearing one: ``apply_engine`` rolls back
+        from *inside* an open ``admit_proposal``, so without it the
+        proposal's ambient receipt would authorise a bare
+        ``store.restore()`` on that path.
+
+    ``tier`` is :data:`RESTORE_TIER`
+        The receipt was minted for a re-stamp of already-governed
+        content. A receipt minted for an ingest is a licence to land what
+        that door brought in, never a licence to reinstate a snapshot
+        over the corpus.
+
+    ``chain_verified``
+        The gate read the admission back out of the durable chain. An
+        unconfirmed receipt authorises nothing here for the same reason
+        it authorises no write.
+
+    Args:
+        snap_dir: The snapshot being restored. Not resolved, not read and
+            not required to exist — it names the subject in the refusal,
+            and this function is called *before* the store touches the
+            snapshot so that an ungated caller and a caller naming a
+            missing snapshot fail by authorisation rather than by
+            existence, exactly as :func:`require_delete_admission` does
+            for a missing block.
+
+    Returns:
+        The open receipt, so the store can name ``receipt.entry_id`` in
+        its own log record and an operator can join the store's log to
+        the chain entry that authorised it.
+
+    Raises:
+        UngatedRestoreError: no admission is open, or the open one fails
+            any of the four properties above.
+
+    Note:
+        The receipt carries no field naming the snapshot, so this cannot
+        yet check that the open scope recorded *this* manifest digest.
+        The gap is bounded by ``tests/test_governed_restore_seam.py``,
+        which pins ``apply_engine.restore_snapshot`` as the only opener of
+        a ``.restore(`` call in ``src/`` — and that function passes the
+        same ``snap_dir`` to the store that it hashed into its record, so
+        a scope recording one snapshot while restoring another is not
+        reachable. Closing it by construction needs the gate to mint a
+        receipt that covers ``sha256(MANIFEST.json)``; see this lane's
+        report for the exact change.
+    """
+    receipt = _active_admission.get()
+    if receipt is None:
+        raise UngatedRestoreError(
+            f"ungated restore from {snap_dir!r}: no governance admission is open. "
+            "A restore withdraws every block written since the snapshot and "
+            "reinstates the versions under it; it must run inside "
+            "apply_engine.restore_snapshot, which opens the RESTORE scope that "
+            "records what was reinstated and what was withdrawn. See "
+            "docs/GOVERNED_WRITES.md."
+        )
+    if receipt.operation != OP_WRITE:
+        raise UngatedRestoreError(
+            f"admission {receipt.entry_id} authorises a {receipt.operation}, not a restore, "
+            f"so it does not cover the snapshot at {snap_dir!r}. A receipt is not transferable "
+            "between operations; open a RESTORE scope."
+        )
+    if receipt.kind != BATCH:
+        raise UngatedRestoreError(
+            f"admission {receipt.entry_id} is {receipt.kind}-scoped and cannot authorise the "
+            f"restore of {snap_dir!r}: a restore reinstates a set of blocks and withdraws "
+            f"another, so it needs a {BATCH} receipt naming both. A {BLOCK} receipt covers one "
+            f"id, and a {PROPOSAL} receipt covers whatever it is asked about — which is ambient "
+            "authority to overwrite the whole workspace."
+        )
+    if receipt.tier is not RESTORE_TIER:
+        named = receipt.tier.value if receipt.tier is not None else None
+        raise UngatedRestoreError(
+            f"admission {receipt.entry_id} was minted under ingest tier {named!r}, not "
+            f"{RESTORE_TIER.value!r}, so it does not authorise the restore of {snap_dir!r}. A "
+            "restore re-stamps content the corpus already admitted; a receipt minted for an "
+            "ingest lets that door land what it brought in, not reinstate a snapshot over "
+            "everything else."
+        )
+    if not receipt.chain_verified:
+        raise UngatedRestoreError(
+            f"admission {receipt.entry_id} for the restore of {snap_dir!r} was never confirmed in the hash chain; refusing the restore"
+        )
+    return receipt
+
+
 def require_admission(block_id: str, *, status: object = None, operation: str = OP_WRITE) -> AdmissionReceipt:
     """Return the open receipt authorising *operation* on *block_id*.
 
@@ -435,6 +720,11 @@ def require_admission(block_id: str, *, status: object = None, operation: str = 
     does not, so the default here is a signature convenience and not an
     opt-out. *status* is meaningless for a delete and is not consulted
     there — a removal cannot escalate a status it is taking away.
+
+    A WRITE that passes every check is recorded in the receipt's
+    :class:`LandingLedger` before this returns, which is what lets the
+    scope's close record name the ids it consumed rather than only the
+    ids it covered. Nothing is recorded for a refusal or for a delete.
 
     Args:
         operation: :data:`OP_WRITE` (default) or :data:`OP_DELETE`. The
@@ -479,6 +769,12 @@ def require_admission(block_id: str, *, status: object = None, operation: str = 
         raise _ungated(operation, f"admission {receipt.entry_id} does not cover block {block_id!r} (covers: {covered})")
     if operation == OP_WRITE:
         _require_write_within_tier(receipt, block_id, status)
+        # Last, after every refusal: the ledger holds ids this scope let
+        # through, never one it turned away. The gate reads it when the
+        # scope closes and names the consumed ids in the close record, so
+        # an aborted scope's record says `landed: []` instead of leaving
+        # an authorisation row that reads exactly like a landed write.
+        receipt.record_landing(block_id)
     return receipt
 
 

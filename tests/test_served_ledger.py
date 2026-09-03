@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -33,10 +34,18 @@ import pytest
 from mind_mem.recall_digests import query_hash, served_set_digest
 from mind_mem.served_ledger import (
     GENESIS_ROW_HASH,
+    HEAD_RELPATH,
+    LEDGER_ATTESTATION_KEYS,
+    LEDGER_DISABLED,
+    LEDGER_ERROR_KEY,
     LEDGER_RELPATH,
     RUN_TAG,
+    SERVED_ROW_HASH_KEY,
+    SERVED_SEQ_KEY,
+    ServedLedgerCorruptedError,
     ServedRun,
     append_served_run,
+    attach_served_run,
     ledger_enabled,
     ledger_path,
     read_served_runs,
@@ -150,13 +159,70 @@ def test_t14_ledger_off_creates_no_file(tmp_path: Path) -> None:
     assert not (Path(ws) / LEDGER_RELPATH).parent.exists()
 
 
-def test_t14_ledger_absent_from_config_is_off(tmp_path: Path) -> None:
-    """Default OFF means *absent* is off, not just ``false``."""
-    ws = tmp_path / "bare"
-    ws.mkdir()
-    (ws / "mind-mem.json").write_text(json.dumps({"recall": {}}), encoding="utf-8")
-    assert ledger_enabled(str(ws)) is False
-    assert _append(str(ws), ["D-1"]) is None
+def test_t14_ledger_absent_from_config_is_on(tmp_path: Path) -> None:
+    """The default inverted in 5.0.2: absent is ON, only ``false`` opts out.
+
+    An opt-in proof is not a proof. While the flag defaulted off, "mind-mem can
+    prove what it served" was a claim about a workspace that had switched
+    something on, and false about every other one — a property of a
+    configuration rather than of the product. Nothing this module writes is a
+    judgement about an answer, and nothing on the scoring path can read it (see
+    the module header), so the reason to stay off was never safety.
+
+    Asserted three ways, because "absent" has three shapes and a check that
+    only knew the first would let the other two silence the ledger by accident:
+    a config with no section at all, a section with no ``enabled`` key, and a
+    section that is not a mapping.
+    """
+    for name, config in (
+        ("no_section", {"recall": {}}),
+        ("no_key", {"served_ledger": {}}),
+        ("not_a_mapping", {"served_ledger": True}),
+    ):
+        ws = tmp_path / name
+        ws.mkdir()
+        (ws / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+        assert ledger_enabled(str(ws)) is True, f"{name}: absent must read as ON"
+        assert _append(str(ws), ["D-1"]) is not None, f"{name}: nothing was recorded"
+
+
+def test_t14_only_a_literal_false_opts_out(tmp_path: Path) -> None:
+    """One value turns it off, and every neighbouring value does not.
+
+    The negative control for the test above. A resolver that read any falsy
+    value as off — ``0``, ``""``, ``null`` — would hand an operator three
+    accidental ways to stop recording, and the string ``"false"`` (what a
+    config written by hand or by a shell most often contains) is the one that
+    would look deliberate while being ignored. Only ``False`` opts out.
+    """
+    cases = ((False, False), (True, True), (0, True), ("", True), (None, True), ("false", True))
+    for index, (value, expected) in enumerate(cases):
+        ws = tmp_path / f"value_{index}"
+        ws.mkdir()
+        (ws / "mind-mem.json").write_text(json.dumps({"served_ledger": {"enabled": value}}), encoding="utf-8")
+        assert ledger_enabled(str(ws)) is expected, f"enabled={value!r} resolved to {not expected}"
+
+
+def test_t14_a_workspace_with_no_config_at_all_is_off(tmp_path: Path) -> None:
+    """No ``mind-mem.json`` is not "the flag is absent" — it is no workspace.
+
+    There is nothing configured to serve from and no store this module has been
+    told it may write beside, and ``verify_cli`` reports such a directory's
+    ledger as *missing* rather than broken. Named as its own case so the
+    consequence is visible: an unreadable config therefore also reads as off,
+    which is a narrow way to silence the ledger without writing ``false``.
+    Closing that means making an unparseable config a hard error on the recall
+    path, which belongs with the config loader rather than here.
+    """
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    assert ledger_enabled(str(bare)) is False
+    assert _append(str(bare), ["D-1"]) is None
+
+    corrupt = tmp_path / "corrupt"
+    corrupt.mkdir()
+    (corrupt / "mind-mem.json").write_text("{not json", encoding="utf-8")
+    assert ledger_enabled(str(corrupt)) is False
 
 
 def test_t14_ledger_on_writes_a_chain_that_verifies(tmp_path: Path) -> None:
@@ -175,6 +241,104 @@ def test_t14_ledger_on_writes_a_chain_that_verifies(tmp_path: Path) -> None:
     assert verdict.ok is True, verdict.reason
     assert verdict.rows_checked == 3
     assert verdict.bad_seq is None
+
+
+def test_t14_the_link_is_derived_from_the_file_not_from_the_seal(tmp_path: Path) -> None:
+    """An edited sidecar must not choose the link for the rows that follow.
+
+    The head sidecar holds exactly the value the next row's ``prev_row_hash``
+    needs, which makes reading it a tempting shortcut — and a wrong one: the
+    sidecar is a seal to be CHECKED against the file, so appending from it
+    would let one edited file quietly re-anchor everything written afterwards
+    and still verify. Proved by making them disagree and watching the append
+    follow the rows.
+
+    Also the regression test for what the append reads at all. Since the ledger
+    defaults on, ``_next_link`` parses only the ledger's last line instead of
+    rebuilding every row to read two fields off the final one; the seq and the
+    link it produces must be unchanged by that.
+
+    WHAT CHANGED, and why this test was rewritten rather than fixed. It used to
+    make the two disagree by writing an ARBITRARY seal (``"f" * 64``) and then
+    asserting the append followed the rows and re-sealed the head, so that
+    ``verify_served_chain`` "verifies again". That last step is the laundering
+    :func:`~mind_mem.served_ledger._next_link` now exists to refuse: an
+    arbitrary seal is also what a truncated tail leaves behind, and an append
+    that repairs it turns a named break into a clean chain on the next ordinary
+    recall. The invariant under test never changed — the link still comes from
+    the row — but the state it was proved in is now a refusal, so it is proved
+    on the one disagreement an append may still proceed through, and the state
+    it used to be proved in is pinned to the refusal instead.
+
+    Both halves run against ONE workspace, in order, because the property that
+    matters is that the guard TELLS THEM APART: the same file, two seal values,
+    one extended and one refused.
+    """
+    ws = _ws(tmp_path, enabled=True)
+    first = _append(ws, ["D-1"], question="first")
+    second = _append(ws, ["D-2"], question="second")
+    assert first is not None and second is not None
+
+    seal = Path(ws) / HEAD_RELPATH
+    assert seal.is_file(), "positive control: the seal exists to be corrupted"
+
+    # THE LEGAL DISAGREEMENT — the crash window. ``_write_row`` appends the row
+    # and then replaces the seal, so a process killed between the two leaves
+    # the seal one row behind a tail that names it. The append must heal it,
+    # and the value the seal holds is exactly the wrong answer a seal-derived
+    # link would return, which is what makes the assertion below able to fail.
+    seal.write_text(row_hash(first) + "\n", encoding="utf-8")
+    assert seal.read_text(encoding="utf-8").strip() == row_hash(first) != row_hash(second), (
+        "positive control: the seal must hold the link a seal-reading append would produce"
+    )
+
+    third = _append(ws, ["D-3"], question="third")
+    assert third is not None, "the append refused the crash window it is required to heal"
+    assert third.seq == 2, "the seq came from somewhere other than the last row on disk"
+    assert third.prev_row_hash == row_hash(second), "the link came from the seal, not from the row"
+    assert verify_served_chain(ws).ok is True, "healing the crash window did not restore the chain"
+
+    # THE ILLEGAL ONE — a seal that is neither the tail nor its predecessor
+    # cannot have been left by a crash, so the append refuses instead of
+    # re-anchoring the rows that follow onto whatever edited it.
+    seal.write_text("f" * 64 + "\n", encoding="utf-8")
+    assert verify_served_chain(ws).ok is False, "positive control: the wrong seal must convict the chain first"
+    with pytest.raises(ServedLedgerCorruptedError, match="neither that row nor its predecessor"):
+        _append(ws, ["D-4"], question="fourth")
+
+    assert [r.seq for r in read_served_runs(ws)] == [0, 1, 2], "the refusal appended a row anyway"
+    assert seal.read_text(encoding="utf-8").strip() == "f" * 64, "the refusal rewrote the seal it refused"
+    assert verify_served_chain(ws).ok is False, "one append re-sealed over the edit and the chain went green"
+
+
+def test_t14_an_earlier_corrupt_row_does_not_silence_the_ledger(tmp_path: Path) -> None:
+    """Recording continues; the verifier is what convicts.
+
+    Behaviour named because it changed. While ``_next_link`` rebuilt every row
+    on the way to the last one, a single unparseable line anywhere in the file
+    made every subsequent append raise — and the recall path swallows that, so
+    the ledger stopped recording silently, which is the one failure mode an
+    append-only record cannot afford. Validation did not go away; it lives
+    where it belongs, in :func:`verify_served_chain`, which still names the
+    row.
+    """
+    ws = _ws(tmp_path, enabled=True)
+    _append(ws, ["D-1"], question="first")
+    _append(ws, ["D-2"], question="second")
+
+    path = Path(ledger_path(ws))
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2, "positive control: two rows to corrupt between"
+    lines[0] = "{not json"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    third = _append(ws, ["D-3"], question="third")
+    assert third is not None, "a corrupt earlier row silenced the ledger"
+    assert third.seq == 2
+
+    verdict = verify_served_chain(ws)
+    assert verdict.ok is False, "the verifier did not notice the corruption"
+    assert "unreadable row" in verdict.reason
 
 
 def test_t14_run_id_is_identical_across_two_scoring_instants(tmp_path: Path) -> None:
@@ -784,3 +948,156 @@ def test_a_workspace_that_never_ran_the_ledger_still_verifies(tmp_path: Path) ->
     assert verdict.ok is True, verdict.reason
     assert verdict.rows_checked == 0
     assert verdict.head == GENESIS_ROW_HASH
+
+
+# ---------------------------------------------------------------------------
+# The row is part of the record, or the record says there is no row.
+#
+# The defect: a recall whose append raised returned its answer, its attestation
+# and a log line, and nothing in the attestation said the row was missing.
+# Measured, with the ledger directory replaced by a plain file: ``recall()``
+# returned one hit and an attestation, ``read_served_runs`` returned nothing,
+# and no key named a row. A verifier holding that record could not tell "never
+# recorded" from "row removed" — which is the whole difference between a
+# ledger of record and a hope.
+# ---------------------------------------------------------------------------
+
+
+def _record(ws: str, ids: list[str], instant: str = "2026-08-29", question: str = "q") -> dict[str, Any]:
+    """An attestation-shaped dict, carrying exactly the keys the ledger reads."""
+    return {
+        "query_hash": query_hash(question),
+        "results_digest": served_set_digest(ids),
+        "config_hash": PIPELINE,
+        "index_anchor": ANCHOR,
+        "scoring_instant": instant,
+    }
+
+
+def _break_the_ledger(ws: str) -> None:
+    """Make the ledger directory unwritable by putting a FILE in its place.
+
+    A permission bit would be skipped for root (CI containers run as root) and
+    is meaningless on Windows. A plain file where a directory must be fails the
+    same way for every user on every platform.
+    """
+    directory = Path(ws) / Path(LEDGER_RELPATH).parent
+    shutil.rmtree(directory, ignore_errors=True)
+    directory.write_text("not a directory\n", encoding="utf-8")
+
+
+def test_the_attestation_names_the_row_that_was_written(tmp_path: Path) -> None:
+    """POSITIVE CONTROL for every ``served_seq is None`` assertion below.
+
+    The join has to be real in the healthy case first: the seq must be the
+    row's seq and the hash must be the hash of the row actually on disk, or
+    "null when it failed" is a claim about a key that never carried anything.
+    """
+    ws = _ws(tmp_path, enabled=True)
+    ids = ["D-1", "D-2"]
+
+    stamped = attach_served_run(_record(ws, ids), ws, ids=ids)
+
+    rows = read_served_runs(ws)
+    assert len(rows) == 1
+    assert stamped[SERVED_SEQ_KEY] == rows[0].seq == 0
+    assert stamped[SERVED_ROW_HASH_KEY] == row_hash(rows[0])
+    assert stamped[LEDGER_ERROR_KEY] is None
+    assert verify_served_chain(ws).ok is True
+
+
+def test_every_ledger_key_is_present_whatever_happened(tmp_path: Path) -> None:
+    """All three keys, always — written, disabled, and failed.
+
+    A key that appears only on the happy path is a key consumers stop reading.
+    """
+    ids = ["D-1"]
+    written = attach_served_run(_record(str(tmp_path), ids), _ws(tmp_path, enabled=True), ids=ids)
+    off = attach_served_run(_record(str(tmp_path), ids), _ws(tmp_path, enabled=False), ids=ids)
+    broken_ws = _ws(tmp_path / "broken", enabled=True)
+    _break_the_ledger(broken_ws)
+    failed = attach_served_run(_record(broken_ws, ids), broken_ws, ids=ids)
+
+    for label, record in (("written", written), ("disabled", off), ("failed", failed)):
+        assert set(LEDGER_ATTESTATION_KEYS) <= set(record), f"{label} record is missing a ledger key: {sorted(record)}"
+
+
+def test_a_failed_append_yields_a_null_seq_and_names_the_reason(tmp_path: Path) -> None:
+    """THE FINDING. No row written, and the record says so instead of implying one."""
+    ws = _ws(tmp_path, enabled=True)
+    _break_the_ledger(ws)
+    ids = ["D-1"]
+
+    stamped = attach_served_run(_record(ws, ids), ws, ids=ids)
+
+    assert stamped[SERVED_SEQ_KEY] is None
+    assert stamped[SERVED_ROW_HASH_KEY] is None
+    assert stamped[LEDGER_ERROR_KEY], "a failed append published no reason"
+    assert stamped[LEDGER_ERROR_KEY] != LEDGER_DISABLED, "a broken ledger must not read as an opted-out one"
+    assert read_served_runs(ws) == (), "the positive control is wrong — the append did land"
+
+
+def test_a_disabled_ledger_is_distinguishable_from_a_broken_one(tmp_path: Path) -> None:
+    """Opting out and being broken are different facts and stay different.
+
+    Collapsing them would make an operator's ``false`` indistinguishable from a
+    workspace whose ledger has been failing silently for a week.
+    """
+    ws = _ws(tmp_path, enabled=False)
+    ids = ["D-1"]
+
+    stamped = attach_served_run(_record(ws, ids), ws, ids=ids)
+
+    assert stamped[SERVED_SEQ_KEY] is None
+    assert stamped[LEDGER_ERROR_KEY] == LEDGER_DISABLED
+    assert not Path(ledger_path(ws)).exists(), "a disabled ledger wrote a file"
+
+
+def test_attach_returns_a_new_record_and_mutates_nothing(tmp_path: Path) -> None:
+    """The caller's record is an input, not a scratch buffer."""
+    ws = _ws(tmp_path, enabled=True)
+    ids = ["D-1"]
+    original = _record(ws, ids)
+    before = dict(original)
+
+    stamped = attach_served_run(original, ws, ids=ids)
+
+    assert original == before, "attach_served_run mutated the record it was given"
+    assert stamped is not original
+    assert all(stamped[key] == value for key, value in before.items()), "a published field was dropped or rewritten"
+
+
+def test_the_published_row_hash_is_the_one_the_chain_seals(tmp_path: Path) -> None:
+    """The join is checkable: the hash must survive a round trip through disk.
+
+    Recomputing it from the in-memory row would pass even if the row on disk
+    were something else, so it is re-derived from what ``read_served_runs``
+    parses back.
+    """
+    ws = _ws(tmp_path, enabled=True)
+    stamped = [attach_served_run(_record(ws, [f"D-{n}"]), ws, ids=[f"D-{n}"]) for n in range(3)]
+
+    rows = read_served_runs(ws)
+    assert [record[SERVED_SEQ_KEY] for record in stamped] == [0, 1, 2]
+    assert [record[SERVED_ROW_HASH_KEY] for record in stamped] == [row_hash(row) for row in rows]
+    assert rows[1].prev_row_hash == stamped[0][SERVED_ROW_HASH_KEY], "the published hash is not the chain's link"
+
+
+def test_the_head_sidecar_is_replaced_atomically_and_leaves_no_debris(tmp_path: Path) -> None:
+    """``open(path, "w")`` truncates first — a reader in that window sees a blank seal.
+
+    A blank seal is not neutral here: ``_read_head`` reports it as an
+    OVERWRITTEN one, so the window turns an untouched ledger into a tamper
+    verdict. The replace is atomic, and the temp file it goes through must not
+    survive in the ledger directory where a later reader could mistake it for a
+    seal or a row.
+    """
+    ws = _ws(tmp_path, enabled=True)
+    for n in range(3):
+        _append(ws, [f"D-{n}"], question=f"q{n}")
+
+    directory = Path(ws) / Path(LEDGER_RELPATH).parent
+    leftovers = [p.name for p in directory.iterdir() if p.name.endswith(".tmp")]
+    assert leftovers == [], f"the atomic head write left debris behind: {leftovers}"
+    assert _head_file(ws).read_text(encoding="utf-8").strip() == row_hash(read_served_runs(ws)[-1])
+    assert verify_served_chain(ws).ok is True

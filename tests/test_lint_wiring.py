@@ -38,6 +38,7 @@ import pytest
 from mind_mem.init_workspace import init
 from mind_mem.lint import RULE_DUPLICATE_BLOCK, RULE_MISSING_METADATA
 from mind_mem.lint_autofix import PROPOSAL_FILE
+from mind_mem.mm_cli import config_set
 
 # Two active decisions asserting the same statement: D-...-004 is the twin,
 # D-...-001 wins on lowest id. That pair is what the end-to-end chain repairs.
@@ -101,14 +102,15 @@ def _make_ws(tmp_path: Path, *, enable_lint: bool, mode: str = "enforce", tasks:
     ws = str(tmp_path / "ws")
     init(ws)
 
+    # ``init`` arms the gate, so the bound config is changed through
+    # ``mm config set`` (write + re-attest in one step); a hand edit is
+    # drift and ``enforce`` would refuse the applies below. The malformed
+    # -config tests further down write the file raw on purpose — that is
+    # the tamper they exist to check, not a configuration change.
     config_path = os.path.join(ws, "mind-mem.json")
-    with open(config_path, encoding="utf-8") as handle:
-        config = json.load(handle)
     if enable_lint:
-        config.setdefault("v4", {})["lint"] = {"enabled": True}
-    config["governance_mode"] = mode
-    with open(config_path, "w", encoding="utf-8") as handle:
-        json.dump(config, handle, indent=2)
+        config_set(config_path, "v4.lint", {"enabled": True})
+    config_set(config_path, "governance_mode", mode)
 
     state_path = os.path.join(ws, "memory", "intel-state.json")
     with open(state_path, encoding="utf-8") as handle:

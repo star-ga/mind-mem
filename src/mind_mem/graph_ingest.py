@@ -44,6 +44,9 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Optional
 
 from .capture import append_signals
+from .graph_schema import METADATA_KEY as SCHEMA_METADATA_KEY
+from .graph_schema import current_version as current_schema_version
+from .graph_schema import is_schema_version
 from .knowledge_graph import KnowledgeGraph, Predicate, default_db_path, edge_id
 from .observability import get_logger
 
@@ -57,6 +60,11 @@ _MAX_ENTITY_NAME_LEN = 512
 _TAG_PREDICATE = "predicate="
 _TAG_SOURCE_BLOCK = "source-block="
 _TAG_CONFIDENCE = "edge-confidence="
+#: The extraction schema in force when the triple was staged. Carried on
+#: the signal rather than recomputed at approval: an operator may approve
+#: in September what was extracted in June, and the honest answer to
+#: "what rules produced this edge" is June's vocabulary and prompt.
+_TAG_SCHEMA_VERSION = "schema-version="
 
 #: The status an approved relation signal carries afterwards.
 #:
@@ -135,6 +143,7 @@ def relations_to_signals(relations: Iterable[RelationTriple]) -> list[dict]:
     the full edge from the SIGNALS.md block byte-exactly.
     """
     signals = []
+    schema_version = current_schema_version()
     for rel in relations:
         signals.append(
             {
@@ -156,6 +165,7 @@ def relations_to_signals(relations: Iterable[RelationTriple]) -> list[dict]:
                         f"{_TAG_PREDICATE}{_encode_tag_value(rel.predicate)}",
                         f"{_TAG_SOURCE_BLOCK}{_encode_tag_value(rel.source_block_id)}",
                         f"{_TAG_CONFIDENCE}{rel.confidence:g}",
+                        f"{_TAG_SCHEMA_VERSION}{_encode_tag_value(schema_version)}",
                     ],
                 },
             }
@@ -203,10 +213,16 @@ def _relation_from_block(block: dict) -> Optional[dict]:
         return None
     tags = _parse_tags(block.get("Tags"))
     predicate = source_block = None
+    schema_version = None
     confidence = 0.5
     for tag in tags:
         if tag.startswith(_TAG_PREDICATE):
             predicate = _decode_tag_value(tag[len(_TAG_PREDICATE) :])
+        elif tag.startswith(_TAG_SCHEMA_VERSION):
+            candidate = _decode_tag_value(tag[len(_TAG_SCHEMA_VERSION) :])
+            # A malformed stamp reads as absent rather than propagating a
+            # false provenance claim into the edge that approval commits.
+            schema_version = candidate if is_schema_version(candidate) else None
         elif tag.startswith(_TAG_SOURCE_BLOCK):
             source_block = _decode_tag_value(tag[len(_TAG_SOURCE_BLOCK) :])
         elif tag.startswith(_TAG_CONFIDENCE):
@@ -225,6 +241,7 @@ def _relation_from_block(block: dict) -> Optional[dict]:
         "object": obj,
         "source_block_id": source_block,
         "confidence": confidence,
+        "schema_version": schema_version,
         "status": str(block.get("Status", "")).strip().lower(),
     }
 
@@ -386,6 +403,13 @@ def approve_relation_signals(
                 kg = KnowledgeGraph(default_db_path(workspace))
             assert store is not None  # nosec B101 — built beside the gate, one line above
             approved_block = {**block, "Status": APPLIED_STATUS}
+            # The signal's extraction-time schema id, when it carries one.
+            # ``add_edge`` preserves a stamp it is handed and mints the
+            # live one only when there is none, so a pre-stamping signal
+            # still lands with a readable generation.
+            edge_metadata: dict[str, Any] = {"origin": EDGE_ORIGIN, "signal_id": sig_id}
+            if rel.get("schema_version"):
+                edge_metadata[SCHEMA_METADATA_KEY] = rel["schema_version"]
             try:
                 with gate.admit_proposal(
                     proposal_id=f"{RELATION_APPROVAL_PREFIX}{sig_id}",
@@ -410,7 +434,7 @@ def approve_relation_signals(
                         source_block_id=rel["source_block_id"],
                         confidence=rel["confidence"],
                         valid_from=valid_from,
-                        metadata={"origin": EDGE_ORIGIN, "signal_id": sig_id},
+                        metadata=edge_metadata,
                     )
                     store.write_block(approved_block)
             except GovernanceBypassError as exc:
@@ -437,6 +461,68 @@ def approve_relation_signals(
         if kg is not None:
             kg.close()
     return {"applied": applied, "errors": errors}
+
+
+# ---------------------------------------------------------------------------
+# Re-extraction targets — the corpus slice an old schema left behind
+# ---------------------------------------------------------------------------
+
+
+def stale_schema_blocks(workspace: str, *, current: Optional[str] = None) -> list[str]:
+    """Source blocks behind edges not stamped with the live schema id.
+
+    This is what makes a schema version more than a label: it names the
+    exact corpus slice a re-extraction has to cover to bring the graph up
+    to the current vocabulary / prompt, computed from the graph rather
+    than remembered. Feeds ``mm graph-backfill --reextract-stale``.
+
+    Read-only. Opens the graph, reads, closes; never writes, and never
+    creates a graph that did not exist (an absent database yields an
+    empty list, because a graph with no edges has no stale ones).
+
+    Returns a lex-sorted, de-duplicated list of block ids.
+    """
+    db_path = default_db_path(workspace)
+    if not os.path.isfile(db_path):
+        return []
+    kg = KnowledgeGraph(db_path)
+    try:
+        return kg.stale_schema_source_blocks(current=current)
+    finally:
+        kg.close()
+
+
+def schema_report(workspace: str, *, current: Optional[str] = None) -> dict:
+    """Which schema generations the workspace graph actually holds.
+
+    ``{"current": <id>, "components": {...}, "versions": {id: count},
+    "stale_edges": N, "stale_blocks": [...]}``. The empty-string key in
+    ``versions`` counts edges written before stamping existed.
+    """
+    from .graph_schema import schema_components
+
+    live = current if current is not None else current_schema_version()
+    db_path = default_db_path(workspace)
+    if not os.path.isfile(db_path):
+        return {
+            "current": live,
+            "components": schema_components(),
+            "versions": {},
+            "stale_edges": 0,
+            "stale_blocks": [],
+        }
+    kg = KnowledgeGraph(db_path)
+    try:
+        stale = kg.stale_schema_edges(current=live)
+        return {
+            "current": live,
+            "components": schema_components(),
+            "versions": kg.schema_version_histogram(),
+            "stale_edges": len(stale),
+            "stale_blocks": sorted({e.source_block_id for e in stale}),
+        }
+    finally:
+        kg.close()
 
 
 # ---------------------------------------------------------------------------
@@ -485,6 +571,7 @@ def backfill(
     limit: Optional[int] = None,
     offset: int = 0,
     dry_run: bool = True,
+    restrict_to_blocks: Optional[Iterable[str]] = None,
 ) -> dict:
     """Run relation extraction over a corpus slice; report yield.
 
@@ -498,6 +585,12 @@ def backfill(
             extraction model. Invalid triples are dropped, counted in
             ``edges_dropped_invalid``.
         limit / offset: Slice bounds over the corpus (blocks with ids).
+        restrict_to_blocks: When given, only these block ids are scanned
+            (applied before ``offset``/``limit``). An **empty** collection
+            restricts to nothing and scans nothing — it is not the same as
+            ``None``, which means "no restriction". That distinction is
+            the point: ``--reextract-stale`` on an already-current graph
+            must scan zero blocks, not the whole corpus.
         dry_run: When true (default) nothing is written anywhere —
             the run is purely a yield measurement. When false, valid
             triples are staged as pending SIGNALS.md entries (still
@@ -507,7 +600,9 @@ def backfill(
         Metrics dict: ``blocks_scanned``, ``blocks_with_edges``,
         ``edges_extracted``, ``edges_per_block``,
         ``predicate_histogram``, ``edges_dropped_invalid``,
-        ``signals_written``, ``dry_run``.
+        ``signals_written``, ``dry_run``, ``restricted_to_blocks``
+        (``None`` when unrestricted) and ``schema_version`` — the id every
+        triple this run stages will carry.
     """
     if corpus is None:
         corpus = _load_corpus(workspace)
@@ -515,6 +610,11 @@ def backfill(
         extract_fn = _default_extract_fn(workspace)
 
     with_ids = [b for b in corpus if str(b.get("_id") or "").strip()]
+    restricted = restrict_to_blocks is not None
+    wanted: set[str] = set()
+    if restricted:
+        wanted = {str(bid).strip() for bid in (restrict_to_blocks or [])}
+        with_ids = [b for b in with_ids if str(b["_id"]).strip() in wanted]
     if offset > 0:
         with_ids = with_ids[offset:]
     if limit is not None:
@@ -564,6 +664,8 @@ def backfill(
         "predicate_histogram": dict(sorted(histogram.items())),
         "edges_dropped_invalid": dropped,
         "signals_written": signals_written,
+        "restricted_to_blocks": (len(wanted) if restricted else None),
+        "schema_version": current_schema_version(),
     }
     _log.info("graph_backfill_report", **report)
     return report
@@ -578,5 +680,7 @@ __all__ = [
     "pending_relation_signals",
     "attach_source_excerpts",
     "approve_relation_signals",
+    "stale_schema_blocks",
+    "schema_report",
     "backfill",
 ]

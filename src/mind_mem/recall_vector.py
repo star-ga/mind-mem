@@ -49,11 +49,10 @@ from typing import Any, cast
 
 # Import helpers from recall.py
 from .block_parser import parse_file
-from .corpus_registry import CORPUS_DIRS
+from .corpus_registry import CORPUS_DIRS, discover_corpus_files
 from .enums import TaskStatus
 from .observability import get_logger, metrics, timed
 from .recall import (
-    CORPUS_FILES,
     RecallBackend,
     date_score,
     extract_text,
@@ -901,9 +900,14 @@ class VectorBackend(RecallBackend):
         _log.info("indexing_start", workspace=workspace, provider=self.provider)
 
         with timed("index_build"):
-            # Load all blocks from corpus files
+            # Load all blocks from corpus files.
+            #
+            # I-14: the same discovery the Markdown store reads — the table
+            # PLUS the ``CORPUS_DIRS`` markdown walk. Indexing the table
+            # alone left an unnamed corpus-directory file readable by
+            # ``get_by_id`` and absent from every vector hit.
             all_blocks = []
-            for label, rel_path in CORPUS_FILES.items():
+            for label, rel_path in discover_corpus_files(workspace):
                 path = os.path.join(workspace, rel_path)
                 if not os.path.isfile(path):
                     _log.debug("corpus_file_missing", file=rel_path)

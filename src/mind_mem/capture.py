@@ -20,30 +20,34 @@ Usage:
 
 from __future__ import annotations
 
-import contextlib
 import datetime as _dt
 import hashlib
 import os
 import re
 import sys
 from datetime import datetime, timedelta
+from typing import Any
 
 from .block_provenance import PROVENANCE_FIELDS, clean_provenance_value
-from .enums import IngestTier
+from .enums import INITIAL_STATUS, IngestTier
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
 _log = get_logger("capture")
 
-
-def _get_gate(workspace: str):
-    """Return the workspace GovernanceGate, or None if unavailable."""
-    try:
-        from .governance_gate import get_gate
-
-        return get_gate(workspace)
-    except Exception:
-        return None
+#: Lock path suffix for the "read the file, derive the next id, write the
+#: blocks" critical section.
+#:
+#: Deliberately NOT ``SIGNALS.md`` itself. ``BlockStore.write_block`` takes
+#: ``FileLock(intelligence/SIGNALS.md)`` for its own splice, and
+#: :class:`~mind_mem.mind_filelock.FileLock`'s intra-process layer is a plain
+#: ``threading.Lock`` keyed on the lock path — not an ``RLock`` — so holding
+#: the file's lock across the store call would deadlock capture against
+#: itself and surface as a ``LockTimeout`` ten seconds later. A separate
+#: path gives concurrent capture runs the mutual exclusion the daily id
+#: counter needs, and leaves the file's own lock to the writer that actually
+#: touches the bytes.
+_DERIVE_LOCK_SUFFIX = ".capture"
 
 
 # ---------------------------------------------------------------------------
@@ -261,13 +265,143 @@ def _classify_coding_type(text: str) -> str | None:
         return None
 
 
+def _signal_status() -> str:
+    """The one status a captured signal may carry.
+
+    Read off :data:`~mind_mem.enums.INITIAL_STATUS` rather than spelled as
+    a literal, for the same reason ``intel_scan._finding_status`` is: the
+    tier table is the only place a status is decided, and
+    :func:`~mind_mem.admission.require_admission` refuses an
+    ``AUTO_CAPTURE`` receipt carrying anything else — so a literal here
+    would be a second definition free to drift, and its only possible
+    destination is a refused write.
+    """
+    status = INITIAL_STATUS[IngestTier.AUTO_CAPTURE]
+    if status is None:  # pragma: no cover — pinned by test_capture_governed_signals
+        raise RuntimeError("IngestTier.AUTO_CAPTURE has no INITIAL_STATUS row; captured signals cannot be stamped")
+    return status.value
+
+
+def _one_line(value: str) -> str:
+    """Flatten a value onto the single line its field occupies.
+
+    ``mcp/tools/governance._recent_statements`` compares a candidate
+    proposal against the stored ``Excerpt``, and its docstring pins the
+    stored form as "truncated to 500 chars with newlines collapsed" — so
+    this collapsing is part of that reader's contract, not cosmetics.
+    Escaping a value so it cannot break out of its block is a separate
+    job, and belongs to ``block_store._neutralise_value``, which every
+    write through the store passes through.
+    """
+    return value.replace("\n", " ").replace("\r", "")
+
+
+def _signal_block(sig: dict, sig_id: str, date_str: str) -> dict[str, Any]:
+    """The governed block form of one captured signal.
+
+    Built entirely before any scope opens and before any byte lands, so a
+    value this refuses — ``clean_provenance_value`` raises on a
+    vocabulary-bound field — aborts the batch with nothing written. That
+    ordering used to be a separate pre-validation loop above the file
+    open; it is now a property of building the blocks first.
+    """
+    block: dict[str, Any] = {
+        "_id": sig_id,
+        "Date": date_str,
+        # Full UTC instant beside the day. ``Date:`` is day-granular, so a
+        # reader can only place the block at 00:00 of its day, which makes
+        # it look up to 24h older than it is — the recency window in
+        # mcp/tools/governance.py then has an effective retention of
+        # (24h - time-of-day of the write) and silently under-fires.
+        "Captured": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+        "Type": f"auto-capture-{sig['type']}",
+        "Source": f"memory/{date_str}.md:{sig['line']}",
+        "Confidence": sig.get("confidence", "medium"),
+        "Priority": sig.get("priority", "P2"),
+        "Status": _signal_status(),
+        "Excerpt": _one_line(str(sig["text"])[:500]),
+    }
+    if sig.get("content_hash"):
+        block["ContentHash"] = sig["content_hash"]
+
+    structure = sig.get("structure") or {}
+    if structure.get("subject"):
+        block["Subject"] = _one_line(str(structure["subject"]))
+    if structure.get("object"):
+        block["Object"] = _one_line(str(structure["object"]))
+    if structure.get("tags"):
+        block["Tags"] = ", ".join(str(tag) for tag in structure["tags"])
+
+    # Provenance fields (Group E + T-001 ContentSource) — optional, written
+    # only when the caller attached them (e.g. propose_update).
+    provenance = sig.get("provenance") or {}
+    for prov_param, prov_field in PROVENANCE_FIELDS.items():
+        prov_val = provenance.get(prov_param)
+        if not prov_val:
+            continue
+        prov_clean = clean_provenance_value(prov_param, str(prov_val))
+        if prov_clean:
+            block[prov_field] = prov_clean
+
+    prefix = "D-" if sig["type"] == "decision" else "T-"
+    block["Action"] = f"Review and formalize as {prefix} block if warranted"
+    return block
+
+
 def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
-    """Append captured signals to SIGNALS.md with structured metadata."""
+    """Land captured signals as governed ``SIG-`` blocks. Returns the count.
+
+    Every signal goes through ``BlockStore.write_block`` inside one
+    :meth:`~mind_mem.governance_gate.GovernanceGate.admit_batch` scope at
+    :attr:`~mind_mem.enums.IngestTier.AUTO_CAPTURE`, so the receipt is
+    minted before a byte lands and ``write_block``'s first statement —
+    :func:`~mind_mem.admission.require_admission` — refuses any write the
+    receipt does not cover, and any status the tier may not mint.
+
+    **Why it is not an ``open(..., "a")`` any more.** This function used
+    to hand-write the ``[SIG-…]`` text into ``intelligence/SIGNALS.md``
+    with the admission as a *conditional* scope::
+
+        _gate = _get_gate(workspace)          # except Exception: return None
+        _scope = _gate.admit_batch(...) if _gate is not None else nullcontext()
+
+    which is fail-OPEN in the one direction that matters: a gate that
+    cannot be constructed produced ``None``, the conditional silently
+    substituted a no-op scope, and the signal was written anyway with a
+    success returned. Measured on a fresh workspace, with
+    ``memory/hash_chain_v2.db`` replaced by a directory (an unwritable or
+    corrupted ledger — the realistic trigger, not a monkeypatch):
+    ``get_gate`` raised ``OperationalError`` and ``append_signals``
+    returned 1 with the block in the corpus, the hash chain at +0 and the
+    evidence chain at +0. ``tests/test_governed_write_paths`` passed
+    throughout, because ``admit_batch`` appears textually in the function
+    and the scanner could not see that a conditional expression had an
+    ungated arm — which is why that scanner now rejects the shape.
+
+    There is no fallback now, by construction rather than by an
+    ``except`` clause someone must remember to keep narrow: nothing here
+    can write a corpus file, because nothing here opens one. A gate that
+    cannot open cannot mint a receipt, and ``write_block`` without a
+    receipt raises :class:`~mind_mem.admission.UngatedWriteError`. The
+    caller sees the failure instead of a count.
+
+    deferred: the daily id counter and the ``ContentHash`` dedup are still
+    derived from ``intelligence/SIGNALS.md`` on disk, which is authoritative
+    only while ``get_block_store`` resolves to the Markdown backend (the
+    default). On a Postgres-backed workspace the canonical file stays
+    empty, so the counter restarts and a new signal can take an id an
+    existing one already holds — the same hazard ``intel_scan``
+    documents. Upgrade path: derive the used-id set through the store as
+    ``intel_scan._recorded_findings`` does, once it can be done without
+    paying a whole-corpus parse per call (measured 0.25 s for
+    ``get_all`` against 0.005 s for the file read on a 2,750-block
+    workspace, on a path that includes the ``observe_signal`` MCP tool).
+    """
     signals_path = os.path.join(workspace, "intelligence", "SIGNALS.md")
     if not os.path.isfile(signals_path):
         return 0
 
-    with FileLock(signals_path):
+    with FileLock(signals_path + _DERIVE_LOCK_SUFFIX):
         # Check existing signals to avoid duplicates via content hash
         with open(signals_path, "r", encoding="utf-8") as f:
             existing = f.read()
@@ -287,15 +421,6 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
         if not new_signals:
             return 0
 
-        # Validate declared provenance BEFORE a byte is written, for the same
-        # reason the gate admission below moved above the append: a refused
-        # value must abort the batch, not leave a truncated block mid-file.
-        # Vocabulary-bound fields (T-001 ``content_source``) raise here.
-        for _sig in new_signals:
-            for _param, _val in (_sig.get("provenance") or {}).items():
-                if _param in PROVENANCE_FIELDS and _val:
-                    clean_provenance_value(_param, str(_val))
-
         # Find next signal ID — filter by today's date to avoid cross-date max
         existing_ids = re.findall(r"\[SIG-(\d{8}-\d{3})\]", existing)
         today_compact = date_str.replace("-", "")
@@ -305,85 +430,40 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
         else:
             counter = 1
 
-        # Admit BEFORE the bytes land. This used to admit AFTER the append,
-        # inside a bare `except` that downgraded a gate failure to a warning --
-        # so a rejected signal stayed written to the corpus anyway. Ids are
-        # derived up front so the batch can name exactly what it authorises.
-        _planned_ids = [f"SIG-{today_compact}-{counter + i:03d}" for i in range(min(len(new_signals), max(0, 1000 - counter)))]
-        _gate = _get_gate(workspace)
-        _scope = (
-            _gate.admit_batch(
-                action="WRITE",
-                batch_id=f"capture-{today_compact}",
-                block_ids=_planned_ids,
-                content="\n".join(sig["text"] for sig in new_signals),
-                tier=IngestTier.AUTO_CAPTURE,
-                actor="capture",
-                target_file=signals_path,
-            )
-            if _gate is not None and _planned_ids
-            else contextlib.nullcontext()
-        )
-        with _scope, open(signals_path, "a", encoding="utf-8") as f:
-            for sig in new_signals:
-                if counter > 999:
-                    break  # Cap at 999 signals per day to maintain ID format
-                sig_id = f"SIG-{today_compact}-{counter:03d}"
-                sig["_sig_id"] = sig_id  # Store for gate.admit below
-                # Sanitize signal text: cap length and prevent block-header injection
-                sanitized = sig["text"][:500]
-                sanitized = sanitized.replace("\n[", "\n ")
-                f.write(f"\n[{sig_id}]\n")
-                f.write(f"Date: {date_str}\n")
-                # Full UTC instant beside the day. `Date:` is day-granular, so a
-                # reader can only place the block at 00:00 of its day, which
-                # makes it look up to 24h older than it is -- the recency window
-                # in mcp/tools/governance.py then has an effective retention of
-                # (24h - time-of-day of the write) and silently under-fires.
-                # Additive: the field is generated here, never user input, and
-                # readers that do not know it ignore it.
-                f.write(f"Captured: {_dt.datetime.now(_dt.timezone.utc).isoformat(timespec='seconds')}\n")
-                f.write(f"Type: auto-capture-{sig['type']}\n")
-                f.write(f"Source: memory/{date_str}.md:{sig['line']}\n")
-                f.write(f"Confidence: {sig.get('confidence', 'medium')}\n")
-                f.write(f"Priority: {sig.get('priority', 'P2')}\n")
-                f.write("Status: pending\n")
-                f.write(f"Excerpt: {sanitized.replace(chr(10), ' ').replace(chr(13), '')}\n")
-                if sig.get("content_hash"):
-                    f.write(f"ContentHash: {sig['content_hash']}\n")
+        # Cap at 999 signals per day to keep the ``SIG-YYYYMMDD-###`` id
+        # format. The blocks are built first so the batch names exactly the
+        # ids it will write — a receipt that covers an id no one writes is
+        # noise, and one that misses an id refuses that write.
+        blocks = [
+            _signal_block(sig, f"SIG-{today_compact}-{counter + offset:03d}", date_str)
+            for offset, sig in enumerate(new_signals[: max(0, 1000 - counter)])
+        ]
+        if not blocks:
+            return 0
 
-                # Write structured extraction
-                st = sig.get("structure", {})
-                if st.get("subject"):
-                    f.write(f"Subject: {st['subject'].replace(chr(10), ' ').replace(chr(13), '')}\n")
-                if st.get("object"):
-                    f.write(f"Object: {st['object'].replace(chr(10), ' ').replace(chr(13), '')}\n")
-                if st.get("tags"):
-                    f.write(f"Tags: {', '.join(st['tags'])}\n")
+        from .governance_gate import get_gate
+        from .storage import get_block_store
 
-                # Provenance fields (Group E + T-001 ContentSource) — optional;
-                # written only when the caller attached them (e.g.
-                # propose_update). Already validated above the file open.
-                prov = sig.get("provenance") or {}
-                for prov_param, prov_field in PROVENANCE_FIELDS.items():
-                    prov_val = prov.get(prov_param)
-                    if not prov_val:
-                        continue
-                    prov_clean = clean_provenance_value(prov_param, str(prov_val))
-                    if prov_clean:
-                        f.write(f"{prov_field}: {prov_clean}\n")
+        # Built before the scope opens: a store that cannot be constructed
+        # must not leave an authorisation record behind for a write that
+        # never happened.
+        store = get_block_store(workspace)
+        with get_gate(workspace).admit_batch(
+            action="WRITE",
+            batch_id=f"capture-{today_compact}",
+            block_ids=[str(block["_id"]) for block in blocks],
+            content="\n".join(sig["text"] for sig in new_signals),
+            tier=IngestTier.AUTO_CAPTURE,
+            actor="capture",
+            target_file=signals_path,
+        ):
+            for block in blocks:
+                store.write_block(block)
 
-                prefix = "D-" if sig["type"] == "decision" else "T-"
-                f.write(f"Action: Review and formalize as {prefix} block if warranted\n")
-                f.write("\n---\n")
-                counter += 1
-
-    written_count = len(new_signals)
-
-    # The admission now happens above, before the append, so there is nothing
-    # to do after the fact. A gate rejection aborts the write instead of being
-    # logged next to a signal that got written anyway.
-    return written_count
+    # The number of blocks that actually landed, not ``len(new_signals)``:
+    # the two differ once the daily cap bites, and the old return reported
+    # signals it had just dropped.
+    return len(blocks)
 
 
 def main():

@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
+from _restore_scope import restoring
 
 from mind_mem.admission import UngatedWriteError
 from mind_mem.block_store import BlockStore, BlockStoreError, MarkdownBlockStore
@@ -248,7 +249,12 @@ class TestSnapshotAndLockSurface:
             store.write_block({"_id": "D-20260410-002", "Date": "2026-04-13", "Status": "active", "Rationale": "second"})
         assert store.diff(snap_dir) == ["decisions/DECISIONS.md"]
 
-        store.restore(snap_dir)
+        # The wrapper checks the RESTORE receipt at its own seam from 5.0.2
+        # on, so the round trip runs inside the scope the sanctioned caller
+        # opens. The refusal is covered by
+        # ``tests/test_restore_is_gated_at_the_seam.py``.
+        with restoring(str(workspace), block_ids=["D-20260410-001", "D-20260410-002"]):
+            store.restore(snap_dir)
         store.invalidate_cache()
         assert [b["_id"] for b in store.get_all()] == ["D-20260410-001"]
         assert _head(_decisions(workspace)) == _MAGIC

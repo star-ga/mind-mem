@@ -292,18 +292,44 @@ def test_index_anchor_read_only_creates_nothing(tmp_path):
 
 
 def test_index_anchor_reads_existing_chain_head(tmp_path):
+    """The anchor tracks the GOVERNED ledger, not the field-audit sidecar.
+
+    This test used to seed ``.mind-mem-audit/chain.jsonl`` and assert the
+    anchor read it. That was the defect, not the contract: nothing in the
+    product appends to that sidecar except an explicit field audit, so the
+    anchor was ``GENESIS_ANCHOR`` for the entire life of an ordinary store,
+    and every served-ledger row inherited the same constant. A served proof
+    that binds to a constant proves nothing about the corpus it served from.
+
+    The anchor now reads ``memory/hash_chain_v2.db``, which every admitted
+    write and every admitted delete appends to by construction. So the test
+    keeps its intent — the anchor must read the real head rather than a
+    constant — against the source that actually moves.
+    """
+    from mind_mem.hash_chain_v2 import HashChainV2
+    from mind_mem.recall_attestation import GENESIS_ANCHOR, index_anchor_ledger_path
+
     ws = str(tmp_path)
-    audit_dir = os.path.join(ws, ".mind-mem-audit")
-    os.makedirs(audit_dir, exist_ok=True)
-    with open(os.path.join(audit_dir, "chain.jsonl"), "w", encoding="utf-8") as f:
-        f.write(json.dumps({"seq": 1, "entry_hash": "a" * 64}) + "\n")
-        f.write(json.dumps({"seq": 2, "entry_hash": "b" * 64}) + "\n")
-    assert _resolve_index_anchor(ws) == "b" * 64
+    os.makedirs(os.path.join(ws, "memory"), exist_ok=True)
+
+    # Positive control: with no ledger the anchor is the genesis constant, so
+    # the assertions below distinguish "read the head" from "always genesis".
+    assert _resolve_index_anchor(ws) == GENESIS_ANCHOR
+
+    chain = HashChainV2(index_anchor_ledger_path(ws))
+    chain.append("D-20260101-001", "write_block", "first")
+    first = _resolve_index_anchor(ws)
+    assert first != GENESIS_ANCHOR, "the anchor did not move when the ledger did"
+
+    chain.append("D-20260101-002", "write_block", "second")
+    head = _resolve_index_anchor(ws)
+    assert head != first, "the anchor did not track the head across a second append"
+
     # The anchor is bound into the attestation.
     att = derive_recall_attestation_for_workspace(
         _as_results([{"_id": "a"}], None), ws, vector_requested=False, vector_available=False, query=QUERY
     )
-    assert att.index_anchor == "b" * 64
+    assert att.index_anchor == head
 
 
 # ---------------------------------------------------------------------------

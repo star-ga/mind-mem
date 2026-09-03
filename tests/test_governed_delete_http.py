@@ -41,9 +41,14 @@ deletions it authorises.
 from __future__ import annotations
 
 import hashlib
+import http.client
+import inspect
 import json
 import os
+import socket
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Iterator
 
 import pytest
@@ -52,14 +57,31 @@ from mind_mem import http_transport
 from mind_mem.admission import require_delete_admission
 from mind_mem.governance_gate import PHASE_ADMITTED, PHASE_REMOVED, evict_gate, get_gate
 from mind_mem.http_transport import (
+    _MEMORY_ID_PREFIX,
+    ANONYMOUS_ACTORS,
     DEFAULT_DELETE_RATIONALE,
+    DIRECT_CALL_ACTOR,
+    HTTP_TOKEN_ACTOR_PREFIX,
+    HTTP_UNAUTHENTICATED_ACTOR,
+    NO_CONTENT,
+    PATH_CLEAR,
+    ROUTES,
+    Route,
     _handle_clear,
     _handle_delete_memory,
+    _token_actor,
+    mutating_routes,
+    serve_http,
 )
 from mind_mem.merkle_tree import MerkleTree
+from mind_mem.protection import AUTH_HEADER
 
 SEED_ID = "D-20260901-001"
 CLEAR_BODY = {"rationale": "operator reset for the release rehearsal", "confirm": "yes-i-really-want-to-clear"}
+
+#: The credential the served-door tests present. Long enough that the
+#: 48-bit digest in the record is an identifier and not a hint.
+TOKEN = "an-operator-token-for-the-audit-record"
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +99,81 @@ def _records(ws: str) -> list[dict]:
 
 def _phase(ws: str, phase: str) -> list[dict]:
     return [r for r in _records(ws) if r.get("metadata", {}).get("delete_phase") == phase]
+
+
+def _delete_rows(ws: str) -> list[dict]:
+    """Every DELETE-verb row the chain holds, both phases.
+
+    ``delete_phase`` is written by ``_mint_delete`` / ``_record_removals``
+    and by nothing else, so it selects the delete verb without depending
+    on the ``EvidenceAction`` member the gate reuses to carry it.
+    """
+    return [r for r in _records(ws) if (r.get("metadata") or {}).get("delete_phase")]
+
+
+def _free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+@contextmanager
+def _serve(workspace: str, *, token: str | None) -> Iterator[int]:
+    """A real loopback server over *workspace*, torn down on exit.
+
+    The actor is derived at the dispatcher, so a test that called the
+    handler function directly would measure the handler and skip the
+    thing under test. These go over a socket.
+    """
+    port = _free_port()
+    _thread, stop = serve_http(
+        workspace=workspace,
+        port=port,
+        host="127.0.0.1",
+        token=token,
+        allow_unauthenticated_localhost=token is None,
+    )
+    try:
+        yield port
+    finally:
+        stop()
+
+
+def _request(
+    port: int,
+    method: str,
+    path: str,
+    *,
+    token: str | None,
+    body: dict[str, Any] | None = None,
+) -> tuple[int, dict[str, Any]]:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    payload = json.dumps(body).encode("utf-8") if body is not None else b""
+    headers = {"Content-Length": str(len(payload))}
+    if payload:
+        headers["Content-Type"] = "application/json"
+    if token is not None:
+        headers[AUTH_HEADER] = token
+    try:
+        conn.request(method, path, body=payload, headers=headers)
+        response = conn.getresponse()
+        raw = response.read()
+        parsed = json.loads(raw.decode("utf-8")) if raw else {}
+        return (response.status, parsed if isinstance(parsed, dict) else {"_raw": parsed})
+    finally:
+        conn.close()
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The server must authenticate the token the test hands it, not one from the shell.
+
+    ``_active_tokens`` reads ``MIND_MEM_TOKENS`` / ``MIND_MEM_TOKEN``
+    ahead of the handler's own token, so an operator's ambient
+    environment would otherwise decide what these tests measure.
+    """
+    monkeypatch.delenv("MIND_MEM_TOKENS", raising=False)
+    monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
 
 
 def _sha256(text: str) -> str:
@@ -398,6 +495,246 @@ def test_a_block_that_merely_errors_does_not_abort_the_clear(workspace: str, cor
 
 
 # ===========================================================================
+# The actor — who the record says did it
+# ===========================================================================
+#
+# Measured on 5.0.1, in one workspace, with a governed INGEST write
+# naming its own door::
+#
+#     APPLY    actor='ingest-door'
+#     ROLLBACK actor='anonymous'  delete_phase='admitted'
+#     ROLLBACK actor='anonymous'  delete_phase='removed'
+#
+# The transport authenticated a bearer token and then threw the identity
+# away: ``_dispatch`` called ``route.handler(workspace, tail)``, the
+# handler defaulted ``actor`` to ``""``, and the gate resolved that
+# through a REST contextvar this transport never sets. The write side
+# could name its door and the delete side could not, which is the wrong
+# way round — a write can be re-derived from its source and a deletion
+# cannot be re-derived from anything.
+
+
+def test_a_served_delete_records_the_token_that_authorised_it(workspace: str) -> None:
+    """AUD-03, closed at the door it was measured at."""
+    _seed(workspace, SEED_ID, "the block a named operator removed")
+    assert _present(workspace, SEED_ID), "positive control: the block is there to be taken"
+
+    with _serve(workspace, token=TOKEN) as port:
+        status, body = _request(port, "DELETE", _MEMORY_ID_PREFIX + SEED_ID, token=TOKEN)
+
+    assert status == 200, body
+    assert not _present(workspace, SEED_ID), "the door did not actually delete; the rows below prove nothing"
+    rows = _delete_rows(workspace)
+    assert len(rows) == 2, f"expected an authorisation and a removal row, got {len(rows)}"
+    assert {r["actor"] for r in rows} == {_token_actor(TOKEN)}
+    assert _token_actor(TOKEN).startswith(HTTP_TOKEN_ACTOR_PREFIX)
+
+
+def test_a_served_clear_records_the_token_that_authorised_it(workspace: str) -> None:
+    """The larger of the two doors carries the same identity."""
+    _seed(workspace, SEED_ID, "one of the blocks the wipe takes")
+    assert _present(workspace, SEED_ID), "positive control: there is something to wipe"
+
+    with _serve(workspace, token=TOKEN) as port:
+        status, body = _request(port, "POST", PATH_CLEAR, token=TOKEN, body=CLEAR_BODY)
+
+    assert status == 200, body
+    assert body["deleted"] >= 1, "the wipe removed nothing, so its record proves nothing"
+    rows = _delete_rows(workspace)
+    assert rows, "the wipe left no DELETE row to check"
+    assert {r["actor"] for r in rows} == {_token_actor(TOKEN)}
+
+
+def test_the_record_carries_the_credential_s_identity_and_not_the_credential(workspace: str) -> None:
+    """An evidence chain is readable by everyone who can read the workspace."""
+    _seed(workspace, SEED_ID, "the block whose deletion must not leak a credential")
+    with _serve(workspace, token=TOKEN) as port:
+        status, body = _request(port, "DELETE", _MEMORY_ID_PREFIX + SEED_ID, token=TOKEN)
+    assert status == 200, body
+
+    chain = Path(workspace, "memory", "evidence_chain.jsonl").read_text(encoding="utf-8")
+    assert _token_actor(TOKEN) in chain, "positive control: the derived identity did reach the chain"
+    assert TOKEN not in chain, "the bearer token reached the audit chain verbatim"
+    digest = _token_actor(TOKEN)[len(HTTP_TOKEN_ACTOR_PREFIX) :]
+    assert len(digest) == 12 and set(digest) <= set("0123456789abcdef"), digest
+
+
+def test_an_unauthenticated_loopback_door_names_itself(workspace: str) -> None:
+    """No credential to name is not the same thing as nobody.
+
+    ``--allow-unauthenticated-localhost`` is a deployment the operator
+    chose, and the record says so rather than borrowing a word that
+    reads like a failed lookup.
+    """
+    _seed(workspace, SEED_ID, "the block an opted-out operator removed")
+    assert _present(workspace, SEED_ID), "positive control"
+
+    with _serve(workspace, token=None) as port:
+        status, body = _request(port, "DELETE", _MEMORY_ID_PREFIX + SEED_ID, token=None)
+
+    assert status == 200, body
+    rows = _delete_rows(workspace)
+    assert rows and {r["actor"] for r in rows} == {HTTP_UNAUTHENTICATED_ACTOR}
+
+
+def test_no_delete_row_from_any_door_is_attributed_to_nobody(workspace: str) -> None:
+    """The gate: walk every DELETE row from every door and reject the empty names.
+
+    Three doors into one workspace — a served ``DELETE``, a served
+    ``POST /clear`` and a direct in-process call — so the assertion is
+    over the union rather than over whichever door a fix happened to
+    reach. ``TestMutationTwins`` restores the pre-5.0.2 shape and shows
+    this predicate going red.
+    """
+    others = ("D-20260901-002", "D-20260901-003")
+    _seed(workspace, SEED_ID, "taken by the served delete")
+    _seed(workspace, others[0], "taken by the direct in-process call")
+    _seed(workspace, others[1], "taken by the served clear")
+    assert all(_present(workspace, bid) for bid in (SEED_ID, *others)), "positive control: all three are there"
+
+    with _serve(workspace, token=TOKEN) as port:
+        assert _request(port, "DELETE", _MEMORY_ID_PREFIX + SEED_ID, token=TOKEN)[0] == 200
+        assert _handle_delete_memory(workspace, others[0])[0] == 200
+        assert _request(port, "POST", PATH_CLEAR, token=TOKEN, body=CLEAR_BODY)[0] == 200
+
+    assert not any(_present(workspace, bid) for bid in (SEED_ID, *others)), "a door did not delete"
+    rows = _delete_rows(workspace)
+    assert len(rows) == 6, f"three doors, an authorisation and a removal each; got {len(rows)}"
+    unnamed = sorted({str(r["actor"]) for r in rows if str(r["actor"]).strip() in ANONYMOUS_ACTORS})
+    assert not unnamed, f"DELETE rows attributed to nobody: {unnamed}"
+    assert {r["actor"] for r in rows} == {_token_actor(TOKEN), DIRECT_CALL_ACTOR}
+
+
+@pytest.mark.parametrize("unnamed", sorted(ANONYMOUS_ACTORS))
+def test_the_delete_door_refuses_to_record_a_death_against_nobody(workspace: str, unnamed: str) -> None:
+    """Fail closed. The block survives, and nothing is recorded claiming otherwise."""
+    _seed(workspace, SEED_ID, "the block an unnamed caller may not take")
+    assert _present(workspace, SEED_ID), "positive control"
+
+    status, body = _handle_delete_memory(workspace, SEED_ID, actor=unnamed)
+
+    assert status == 500
+    assert body["error"] == "delete requires a named actor"
+    assert _present(workspace, SEED_ID), "an unattributable delete removed the block anyway"
+    assert _records(workspace) == [], "a refused delete minted a record"
+
+
+@pytest.mark.parametrize("unnamed", sorted(ANONYMOUS_ACTORS))
+def test_the_clear_door_refuses_to_record_a_wipe_against_nobody(workspace: str, corpus: _CorpusStore, unnamed: str) -> None:
+    """Refused before the corpus is even enumerated."""
+    assert corpus.rows, "positive control: there is a corpus to wipe"
+
+    status, body = _handle_clear(workspace, CLEAR_BODY, actor=unnamed)
+
+    assert status == 500
+    assert body["error"] == "clear requires a named actor"
+    assert corpus.rows, "the wipe ran anyway"
+    assert corpus.attempts == [], "the door reached the store despite refusing"
+    assert _records(workspace) == []
+
+
+def test_a_direct_in_process_call_names_itself_rather_than_nobody(workspace: str) -> None:
+    """The default is an identity, not a blank.
+
+    A library or test caller is a real caller. Naming it beats resolving
+    to the gate's contextvar fallback, and it can never be mistaken for
+    a served request because no door can produce this string.
+    """
+    _seed(workspace, SEED_ID, "the block a library caller removed")
+    assert _present(workspace, SEED_ID), "positive control"
+
+    assert _handle_delete_memory(workspace, SEED_ID)[0] == 200
+
+    rows = _delete_rows(workspace)
+    assert rows and {r["actor"] for r in rows} == {DIRECT_CALL_ACTOR}
+    assert DIRECT_CALL_ACTOR.strip() not in ANONYMOUS_ACTORS
+
+
+# ---------------------------------------------------------------------------
+# The by-construction half: the route table, not the handler's memory
+# ---------------------------------------------------------------------------
+
+
+def test_the_route_table_declares_which_doors_change_state() -> None:
+    """``mutates`` has no default, so a new route cannot dodge the question."""
+    assert mutating_routes() == {
+        "POST /consolidate",
+        "POST /clear",
+        "POST /federation/write",
+        "POST /federation/resolve",
+        "DELETE /memories/",
+    }
+
+
+def test_every_mutating_route_can_be_handed_an_actor_and_no_other_can() -> None:
+    """Both directions, over the live table."""
+    for route in ROUTES:
+        param = inspect.signature(route.handler).parameters.get("actor")
+        takes_actor = param is not None and param.kind is inspect.Parameter.KEYWORD_ONLY
+        assert takes_actor is route.mutates, f"{route.name}: mutates={route.mutates} but takes_actor={takes_actor}"
+
+
+def test_a_mutating_route_whose_handler_cannot_take_an_actor_is_refused_at_import() -> None:
+    """What replaces "the handler remembers to pass an actor".
+
+    A door added to the table with nowhere to put the identity fails
+    when the module loads, not in review.
+    """
+
+    def _handler_without_actor(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        return (200, {})  # pragma: no cover - never routed
+
+    with pytest.raises(ValueError, match="no keyword-only 'actor'"):
+        Route("POST", "/wipe-everything", _handler_without_actor, "body", NO_CONTENT, mutates=True)
+
+
+def test_a_handler_that_takes_an_actor_cannot_be_declared_read_only() -> None:
+    """The other direction: mislabelling a mutating door is refused too.
+
+    This is also why the dispatcher twin below has to build a stand-in
+    row — the mutation cannot be expressed as a ``Route``.
+    """
+    with pytest.raises(ValueError, match="declared read-only"):
+        Route("DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT, mutates=False)
+
+
+# ---------------------------------------------------------------------------
+# Probing resistance: the existence pre-check is gone
+# ---------------------------------------------------------------------------
+
+
+def test_a_delete_of_a_missing_id_is_authorised_before_it_is_answered(workspace: str) -> None:
+    """The pre-check answered "does this id exist?" ahead of the gate.
+
+    It ran ``store.get_by_id`` before ``admit_delete``, so a caller could
+    tell a real id from an invented one through a door that wrote no
+    row — and the store's own design already handles this: inside a
+    covering scope ``delete_block`` returns ``False`` for an id that is
+    not there. Same 404, with the attempt on the record.
+    """
+    _seed(workspace, SEED_ID, "a different block")
+    status, body = _handle_delete_memory(workspace, "D-20260901-999")
+
+    assert status == 404
+    assert body["error"] == "block not found"
+    assert len(_phase(workspace, PHASE_ADMITTED)) == 1, "the probe left no trace"
+    assert _phase(workspace, PHASE_REMOVED) == [], "nothing died, so nothing may say it did"
+    assert _present(workspace, SEED_ID), "positive control: the real block is untouched"
+
+
+def test_the_delete_door_no_longer_reads_the_store_before_the_gate() -> None:
+    """Structural, because the behavioural test above cannot see a re-added read.
+
+    ``tests/test_http_read_admission.py`` allowlists the functions in
+    this module that read the store without admission. This one earned
+    its place there through the pre-check and no longer needs it.
+    """
+    source = inspect.getsource(http_transport._handle_delete_memory)
+    assert "get_by_id" not in source, "the existence pre-check is back"
+    assert "admit_delete" in source, "positive control: the scope this function opens is still here"
+
+
+# ===========================================================================
 # Mutation twins — restore the 5.0.1 shape and watch the gate go red
 # ===========================================================================
 
@@ -446,6 +783,97 @@ class TestMutationTwins:
         # Ten records, and not one of them says the removals were one
         # decision: each covers exactly its own block.
         assert {r["metadata"]["removed_count"] for r in removed} == {1}
+
+    def test_restoring_the_empty_actor_default_puts_anonymous_back(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The 5.0.1 shape on a direct call: default ``""``, no named-actor guard.
+
+        Both halves are needed to reproduce what actually shipped. With
+        the guard in place an empty actor is *refused*, so the twin would
+        show a 500 rather than the anonymous row that was measured — and
+        a twin that reproduces a different failure proves nothing about
+        this one.
+        """
+        _seed(workspace, SEED_ID, "the block the old door took anonymously")
+        assert _present(workspace, SEED_ID)
+        assert (_handle_delete_memory.__kwdefaults__ or {})["actor"] == DIRECT_CALL_ACTOR, (
+            "positive control: the default really is the named one before the mutation"
+        )
+
+        monkeypatch.setattr(http_transport, "_is_named_actor", lambda actor: True)
+        monkeypatch.setitem(_handle_delete_memory.__kwdefaults__, "actor", "")
+
+        status, _body = _handle_delete_memory(workspace, SEED_ID)
+
+        assert status == 200, "the twin must reproduce a working delete, not a broken one"
+        assert not _present(workspace, SEED_ID)
+        actors = {str(r["actor"]) for r in _delete_rows(workspace)}
+        assert actors, "the twin recorded nothing, so it did not reproduce the defect"
+        assert actors <= ANONYMOUS_ACTORS, f"the twin did not reproduce the defect: {actors}"
+
+    def test_a_dispatcher_that_stops_passing_the_actor_makes_a_served_delete_anonymous(
+        self, workspace: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The served half, with the pre-5.0.2 dispatcher put back.
+
+        ``Route`` refuses ``mutates=False`` over a handler that takes an
+        actor — that refusal is itself tested above — so the twin
+        installs plain stand-in rows carrying the same attributes, which
+        is exactly a dispatcher that hands nothing over. With the default
+        and the guard also restored, the served door records ``anonymous``
+        again, and ``test_no_delete_row_from_any_door_is_attributed_to_nobody``
+        would fail on the result.
+        """
+        _seed(workspace, SEED_ID, "the block the old dispatcher took anonymously")
+        assert _present(workspace, SEED_ID)
+
+        unattributed = tuple(
+            SimpleNamespace(
+                method=route.method,
+                path=route.path,
+                handler=route.handler,
+                takes=route.takes,
+                verdict=route.verdict,
+                mutates=False,
+                empty_tail_error=route.empty_tail_error,
+            )
+            for route in ROUTES
+        )
+        monkeypatch.setattr(http_transport, "ROUTES", unattributed)
+        monkeypatch.setattr(http_transport, "_is_named_actor", lambda actor: True)
+        monkeypatch.setitem(_handle_delete_memory.__kwdefaults__, "actor", "")
+
+        with _serve(workspace, token=TOKEN) as port:
+            status, body = _request(port, "DELETE", _MEMORY_ID_PREFIX + SEED_ID, token=TOKEN)
+
+        assert status == 200, f"the twin must reproduce a working delete, not a broken one: {body}"
+        assert not _present(workspace, SEED_ID)
+        actors = {str(r["actor"]) for r in _delete_rows(workspace)}
+        assert actors, "the twin recorded nothing, so it did not reproduce the defect"
+        assert actors <= ANONYMOUS_ACTORS, f"the twin did not reproduce the defect: {actors}"
+
+    def test_the_old_existence_pre_check_answered_a_probe_with_no_record(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Why the pre-check went: a 404 that costs the prober nothing.
+
+        The removed code ran ``store.get_by_id`` before ``admit_delete``.
+        Reproduced here by short-circuiting on the same read, it answers
+        404 for a missing id and leaves the chain empty — so an
+        unauthorised caller could separate real ids from invented ones
+        and the workspace would hold no trace of the question.
+        """
+        from mind_mem.storage import get_block_store
+
+        _seed(workspace, SEED_ID, "the block whose neighbours were probed")
+        store = get_block_store(workspace)
+        assert store.get_by_id(SEED_ID) is not None, "positive control: the reader works, so a miss is a real miss"
+
+        # The 5.0.1 body, verbatim, ahead of the gate.
+        assert store.get_by_id("D-20260901-999") is None
+        assert _records(workspace) == [], "the pre-check left a record after all; the fix would be moot"
+
+        # And the current door, on the same id: still 404, now on the record.
+        status, _body = _handle_delete_memory(workspace, "D-20260901-999")
+        assert status == 404
+        assert len(_phase(workspace, PHASE_ADMITTED)) == 1, "the current door left no trace either"
 
 
 def test_the_module_exports_the_rationale_default() -> None:

@@ -38,7 +38,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from .admission import require_admission, require_delete_admission
+from .admission import require_admission, require_delete_admission, require_restore_admission
 from .block_store import BlockStore
 from .block_store_postgres import PostgresBlockStore
 from .observability import get_logger, metrics
@@ -226,6 +226,29 @@ class ReplicatedPostgresBlockStore:
         return self._primary.snapshot(snap_dir, files_touched=files_touched)
 
     def restore(self, snap_dir: str) -> None:
+        """Route a restore to the primary, refusing an ungated one here.
+
+        Enforced here as well as on the primary, for the same reason
+        :meth:`write_block` and :meth:`delete_block` enforce it: this
+        adapter is a ``BlockStore`` in its own right, so a caller holding
+        only the replica must not get a laxer mutation surface than one
+        holding the primary. Before this check the refusal was
+        *inherited* — correct only for as long as ``self._primary`` is a
+        store that enforces, which is a property of another class rather
+        than of this one.
+
+        It opens no scope and records nothing: the sanctioned caller
+        (``apply_engine.restore_snapshot``) opens the RESTORE scope and
+        the primary checks the same receipt, so a restore leaves exactly
+        one chain record however it was reached — one door, checked
+        twice.
+
+        Raises:
+            UngatedRestoreError: No RESTORE admission is open. Checked
+                before the call is forwarded, so an ungated caller cannot
+                reach the primary at all.
+        """
+        require_restore_admission(snap_dir)
         self._primary.restore(snap_dir)
 
     def lock(self, *, blocking: bool = True, timeout: float = 30.0) -> Any:

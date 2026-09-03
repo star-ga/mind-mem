@@ -62,6 +62,7 @@ from mind_mem.importers import (
 from mind_mem.init_workspace import init
 from mind_mem.mcp.infra.acl import ADMIN_TOOLS, USER_TOOLS
 from mind_mem.mcp.tools import core as core_tools
+from mind_mem.mm_cli import config_set
 from mind_mem.recall import recall
 
 FIXED_NOW = datetime(2026, 8, 27, 12, 0, 0)
@@ -82,16 +83,18 @@ def _ws(*, flag_on: bool, mode: str = "enforce") -> str:
     ``core_export`` flag explicitly on or off."""
     workspace = tempfile.mkdtemp(prefix="mm_core_export_")
     init(workspace)
+    # ``init`` arms the gate, so the bound config is changed through
+    # ``mm config set`` — write and re-attest in one step. A hand edit is
+    # drift, and under ``enforce`` it refuses the governed writes below.
+    # ``intel-state.json`` is not the bound config.
     config_path = os.path.join(workspace, "mind-mem.json")
-    with open(config_path, encoding="utf-8") as handle:
-        config = json.load(handle)
-    config["governance_mode"] = mode
+    config_set(config_path, "governance_mode", mode)
     if flag_on:
-        config["v4"] = {**config.get("v4", {}), "core_export": {"enabled": True}}
-    else:
-        config.pop("v4", None)
-    with open(config_path, "w", encoding="utf-8") as handle:
-        json.dump(config, handle)
+        config_set(config_path, "v4.core_export", {"enabled": True})
+    # OFF needs no write: ``init``'s DEFAULT_CONFIG carries no ``v4`` key
+    # at all, so the flag is already absent on a freshly-created
+    # workspace and writing ``v4: {}`` would put a key there that the
+    # unwired build never had.
     state_path = os.path.join(workspace, "memory", "intel-state.json")
     with open(state_path, encoding="utf-8") as handle:
         state = json.load(handle)

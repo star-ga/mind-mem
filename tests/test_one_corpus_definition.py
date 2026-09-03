@@ -51,6 +51,7 @@ from typing import Any, Iterator
 
 import pytest
 
+from mind_mem import corpus_registry
 from mind_mem._recall_constants import CORPUS_FILES
 from mind_mem.block_parser import parse_file
 from mind_mem.block_store import _BLOCK_PREFIX_MAP, MarkdownBlockStore, _resolve_block_file
@@ -98,6 +99,34 @@ UNMAPPED_ROW_IDS: dict[str, str] = {"drift": "DRIFT", "signals": "SIG"}
 #: positive control for it is that ``parse_file`` reads it fine.
 DAILY_LOG_REL = "memory/2026-09-02.md"
 DAILY_LOG_ID = "D-20260902-777"
+
+#: An ``.md`` sitting directly in a corpus directory under a name the
+#: table does not list — an archive split out of ``DECISIONS.md``, an
+#: ``entities/`` overflow file, a generated report. The store's walk takes
+#: EVERY ``.md`` in a corpus directory, so these were readable by
+#: ``get_by_id`` / ``get_all`` / ``export_memory`` / ``GET /memories`` and
+#: invisible to recall, which iterated the table alone. Measured on
+#: 5.0.2-pre with ``intelligence/BRIEFINGS.md``::
+#:
+#:     store.get_by_id            True   (control, a table file: True)
+#:     store.get_all(active)      True   (control: True)
+#:     iter_active_blocks         False  (control: True)
+#:     recall(ws, ...)            absent (control: present)
+#:
+#: One id readable by every enumerating door and unreachable by the one
+#: surface a memory product exists to provide.
+UNNAMED_BASENAME = "ARCHIVE-2026.md"
+
+#: One distinct id per corpus directory, so a test that passes for
+#: ``decisions`` and silently skips ``intelligence`` cannot look green.
+#: The ``D-`` prefix is deliberate: the prefix map routes it to
+#: ``decisions/DECISIONS.md``, so the delete leg has to fall through to
+#: the discovery walk to find it where it actually lives.
+UNNAMED_IDS: dict[str, str] = {d: f"D-20260902-9{i:02d}" for i, d in enumerate(CORPUS_DIRS, start=1)}
+
+#: A token that appears only in the unnamed-file blocks, so a recall hit
+#: on it cannot come from a seeded table block.
+UNNAMED_TOKEN = "zebranomicon"
 
 CLEAR_BODY = {
     "rationale": "operator purge rehearsal for the release",
@@ -299,6 +328,222 @@ def test_a_delete_of_a_memory_corpus_block_is_recorded(workspace: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# I-14, the other half: the store's read set IS what recall serves
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def workspace_unnamed(workspace: str) -> str:
+    """The conformance workspace plus one unnamed ``.md`` per corpus dir."""
+    for subdir, bid in UNNAMED_IDS.items():
+        path = os.path.join(workspace, subdir, UNNAMED_BASENAME)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(_block(bid, f"a {UNNAMED_TOKEN} block filed in {subdir}/{UNNAMED_BASENAME}"))
+    return workspace
+
+
+def _discovery_relpaths(ws: str) -> set[str]:
+    """Relpaths :func:`discover_corpus_files` yields that exist on disk.
+
+    The existence filter is not a narrowing: the table half is yielded
+    unconditionally (that is what makes it a drop-in for the old
+    ``CORPUS_FILES.items()``, whose callers all ``isfile``-check), while
+    the store's walk can only produce files that are there. Comparing the
+    two therefore has to compare the same universe.
+    """
+    # Through the module attribute, not a from-import binding: the
+    # mutation twin replaces the function, and a pin that kept its own
+    # reference would keep passing while every consumer was mutated —
+    # the shape of a check that cannot fail.
+    rows = corpus_registry.discover_corpus_files(ws)
+    return {rel for _label, rel in rows if os.path.isfile(os.path.join(ws, *rel.split("/")))}
+
+
+def _store_relpaths(ws: str) -> set[str]:
+    return {os.path.relpath(p, ws).replace(os.sep, "/") for p in MarkdownBlockStore(ws)._discover_files()}
+
+
+def _assert_discovery_matches_the_store(ws: str) -> None:
+    """What the store can READ equals what the retrieval legs discover.
+
+    Factored out so :class:`TestMutationTwin` can drop the walk half from
+    the shared function and watch this fail — an equality check that
+    cannot fail is not one.
+    """
+    discovered = _discovery_relpaths(ws)
+    store = _store_relpaths(ws)
+    assert store, "the store discovered nothing; the comparison below would pass vacuously"
+    unserved = sorted(store - discovered)
+    unread = sorted(discovered - store)
+    assert not unserved, f"the store reads {unserved}, which no retrieval leg discovers — readable, exportable, and never served"
+    assert not unread, f"the retrieval legs discover {unread}, which the store cannot read — served, and invisible to every delete door"
+
+
+def test_discovery_equals_what_the_store_reads(workspace_unnamed: str) -> None:
+    """The pin. One discovery function, two consumers, no drift.
+
+    The positive control is the ``unnamed`` assertion: the workspace holds
+    files outside the table, so the equality is being tested on the case
+    that used to diverge rather than on a table-only corpus where both
+    halves trivially agree.
+    """
+    discovered = _discovery_relpaths(workspace_unnamed)
+    unnamed = {rel for rel in discovered if rel.endswith("/" + UNNAMED_BASENAME)}
+    assert len(unnamed) == len(CORPUS_DIRS), f"the fixture's unnamed files are not in the corpus at all: {sorted(discovered)}"
+    assert not (unnamed & set(CORPUS_RELPATHS)), "the control files are table rows, so they prove nothing about unnamed ones"
+
+    _assert_discovery_matches_the_store(workspace_unnamed)
+
+
+@pytest.mark.parametrize("subdir", CORPUS_DIRS)
+def test_an_unnamed_corpus_dir_block_is_readable_servable_and_deletable(workspace_unnamed: str, subdir: str) -> None:
+    """readable ⇔ served-when-active ⇔ deletable, for every corpus dir.
+
+    Parametrised over :data:`CORPUS_DIRS` rather than probing the one
+    directory the audit happened to use: the claim is about the rule, and
+    ``intelligence/`` and ``entities/`` were the unpinned halves.
+    """
+    bid = UNNAMED_IDS[subdir]
+    rel = f"{subdir}/{UNNAMED_BASENAME}"
+    path = os.path.join(workspace_unnamed, subdir, UNNAMED_BASENAME)
+
+    parsed = parse_file(path)
+    assert [b["_id"] for b in parsed] == [bid], "the control file is not parseable, so nothing below proves anything"
+    assert rel not in CORPUS_RELPATHS, "the file joined the table; this test no longer covers the case it names"
+
+    store = MarkdownBlockStore(workspace_unnamed)
+    assert store.get_by_id(bid) is not None, f"{rel} is not readable"
+    assert bid in _ids(workspace_unnamed), f"{rel} is missing from get_all, so /clear cannot count it"
+    assert bid in _served_ids(workspace_unnamed), f"{rel} is readable and not served — the divergence I-14 forbids"
+
+    status, body = _handle_delete_memory(workspace_unnamed, bid, actor="alice")
+    assert status == 200, f"the HTTP door cannot destroy a block in {rel}: {body}"
+    assert MarkdownBlockStore(workspace_unnamed).get_by_id(bid) is None
+    assert bid not in open(path, encoding="utf-8").read()
+    assert bid not in _served_ids(workspace_unnamed)
+
+
+def test_recall_serves_a_block_from_an_unnamed_corpus_dir_file(workspace_unnamed: str) -> None:
+    """The end-to-end half: the retrieval surface itself, not just the walk.
+
+    ``iter_active_blocks`` and ``recall`` are different legs over the same
+    definition, and the measured symptom was on ``recall``.
+    """
+    from mind_mem.recall import recall as run_recall
+
+    hits = run_recall(workspace_unnamed, f"{UNNAMED_TOKEN} block filed", limit=50)
+    served = {str(h.get("_id")) for h in hits if h.get("_id")}
+    assert served, "recall returned nothing at all; a containment check against it would be vacuous"
+    missing = sorted(set(UNNAMED_IDS.values()) - served)
+    assert not missing, f"recall does not serve {missing}, which get_by_id resolves"
+
+
+def test_the_clear_door_takes_the_unnamed_corpus_dir_blocks(workspace_unnamed: str) -> None:
+    """A wipe that skipped an archive file was partial and reported as whole."""
+    before = _ids(workspace_unnamed)
+    assert set(UNNAMED_IDS.values()) <= before, "positive control: the unnamed blocks are in the corpus to be taken"
+
+    status, body = _handle_clear(workspace_unnamed, CLEAR_BODY, actor="alice")
+
+    assert status == 200
+    assert body["deleted"] == len(before), f"the wipe left blocks behind: {sorted(_ids(workspace_unnamed))}"
+    assert _ids(workspace_unnamed) == set()
+    assert _served_ids(workspace_unnamed) == set()
+
+
+def test_the_derived_reports_are_written_outside_every_corpus_directory(workspace: str) -> None:
+    """``intel_scan``'s regenerated reports cannot land in the read set.
+
+    Run, not asserted about: ``write_impact`` really emits
+    ``[I-YYYYMMDD-###]`` block headers, and the measured defect was that
+    the store parsed them out of ``intelligence/IMPACT.md`` — evidence
+    chain +0, hash chain +0, ``get_by_id`` resolving. So the check is that
+    a real call leaves the corpus read set unchanged and puts the report
+    somewhere no corpus walk descends.
+    """
+    from mind_mem import intel_scan
+
+    head = intel_scan.DERIVED_DIR.split("/", 1)[0]
+    assert head not in CORPUS_DIRS, f"{intel_scan.DERIVED_DIR} is inside a corpus directory; the store would read it"
+    for legacy in intel_scan.LEGACY_DERIVED.values():
+        assert legacy.split("/", 1)[0] in CORPUS_DIRS, f"{legacy} is not a legacy in-corpus path; this test is checking nothing"
+
+    before_files = _store_relpaths(workspace)
+    before_ids = _ids(workspace)
+    impacts = [{"decision": "D-20260902-001", "projects": ["PRJ-1"], "tasks": [], "incidents": []}]
+    intel_scan.write_impact(impacts, workspace, intel_scan.IntelReport())
+
+    written = intel_scan.derived_path(workspace, "IMPACT.md")
+    assert os.path.isfile(written), "write_impact wrote nothing; the assertions below would pass vacuously"
+    body = open(written, encoding="utf-8").read()
+    assert "[I-" in body, "the report carries no block headers, so it never was the mint this test is about"
+
+    minted = {str(b["_id"]) for b in parse_file(written) if b.get("_id")}
+    assert minted, "the report parsed to zero blocks, so the containment checks below are vacuous"
+
+    assert _store_relpaths(workspace) == before_files, "the report landed in a file the store reads"
+    assert _ids(workspace) == before_ids, "an ungoverned I- block entered the corpus"
+    assert not (minted & _served_ids(workspace)), "recall serves a block minted outside the gate"
+
+
+def test_the_index_drops_an_unnamed_corpus_file_that_leaves_the_disk(workspace_unnamed: str) -> None:
+    """Recovery has to be reachable, not just entry.
+
+    Widening discovery to the directory walk creates a one-way door if
+    only the entry side is wired: a table row that vanishes is still
+    ENUMERATED (so ``_index_file`` sees a missing path and drops its
+    blocks), but an unnamed file that vanishes simply stops being
+    discovered — its ``blocks_fts`` rows would then serve a file that no
+    longer exists, forever. ``_vanished_indexed_files`` sweeps
+    ``file_state`` for exactly that, and this is the round trip: enter the
+    index, leave the disk, leave the index.
+    """
+    from mind_mem import sqlite_index
+
+    bid = UNNAMED_IDS["intelligence"]
+    path = os.path.join(workspace_unnamed, "intelligence", UNNAMED_BASENAME)
+
+    sqlite_index.build_index(workspace_unnamed, incremental=False)
+    hits = sqlite_index.query_index(workspace_unnamed, UNNAMED_TOKEN, limit=50)
+    assert bid in {str(h.get("_id")) for h in hits}, "positive control: the block never entered the index, so its removal proves nothing"
+
+    os.remove(path)
+    assert sqlite_index.is_stale(workspace_unnamed), "a vanished unnamed file did not mark the index stale, so nothing would rebuild"
+    sqlite_index.build_index(workspace_unnamed, incremental=True)
+
+    after = {str(h.get("_id")) for h in sqlite_index.query_index(workspace_unnamed, UNNAMED_TOKEN, limit=50)}
+    assert bid not in after, "the index still serves a block whose file was deleted"
+    assert set(UNNAMED_IDS.values()) - {bid} <= after, "the sweep took blocks from files that are still on disk"
+
+
+def test_a_legacy_in_corpus_briefing_is_carried_over_not_reread(workspace: str) -> None:
+    """The move keeps an existing workspace's history and stops feeding the hole.
+
+    Positive control first: the legacy file is real and holds the marker.
+    Then one scan writes the derived copy carrying that marker forward,
+    and the legacy path is never written again.
+    """
+    from mind_mem import intel_scan
+
+    legacy = intel_scan.legacy_derived_path(workspace, "BRIEFINGS.md")
+    os.makedirs(os.path.dirname(legacy), exist_ok=True)
+    with open(legacy, "w", encoding="utf-8") as fh:
+        fh.write("# Intelligence Briefings\n\nB-2020-W01 an old briefing\n")
+    legacy_bytes = open(legacy, "rb").read()
+    assert b"B-2020-W01" in legacy_bytes, "the control file is empty; carrying it over would prove nothing"
+
+    assert intel_scan.read_derived(workspace, "BRIEFINGS.md") == legacy_bytes.decode("utf-8")
+
+    intel_scan.write_derived(workspace, "BRIEFINGS.md", legacy_bytes.decode("utf-8") + "\nB-2026-W36 a new briefing\n")
+
+    derived = intel_scan.derived_path(workspace, "BRIEFINGS.md")
+    carried = open(derived, encoding="utf-8").read()
+    assert "B-2020-W01" in carried and "B-2026-W36" in carried, "the move lost the workspace's briefing history"
+    assert open(legacy, "rb").read() == legacy_bytes, "the legacy in-corpus file was written to"
+    assert intel_scan.read_derived(workspace, "BRIEFINGS.md") == carried, "the derived copy does not win once it exists"
+
+
 def test_a_memory_file_the_table_does_not_name_stays_invisible(workspace: str) -> None:
     """``memory/`` is not walked wholesale — only the rows the table names.
 
@@ -415,14 +660,71 @@ class TestMutationTwin:
         assert bid in _served_ids(workspace), "recall still serves it — that half never depended on the store"
         assert MarkdownBlockStore(workspace).get_by_id(bid) is None, "the mutation did not reproduce the blind store"
 
-        status, body = _handle_delete_memory(workspace, bid, actor="alice")
-        assert (status, body["error"]) == (404, "block not found"), "the door answered something other than the measured 404"
-        assert bid in open(path, encoding="utf-8").read(), "404 and gone would be a different bug"
-
+        # The wipe is the half the blind walk breaks: it takes whatever
+        # ``get_all`` returns, and the mutation is what ``get_all`` reads.
         status, body = _handle_clear(workspace, CLEAR_BODY, actor="alice")
         assert status == 200
         assert bid in open(path, encoding="utf-8").read(), "the partial purge, reported as a whole one"
         assert bid in _served_ids(workspace), "still served, after a wipe that reported success"
+
+        # The by-id door is the half that reaches it anyway, because
+        # ``delete_block`` resolves an id through the prefix map and not
+        # through the discovery walk — which is what ``_handle_clear``'s
+        # docstring always claimed. Until 5.0.2 the door contradicted it:
+        # an existence pre-check read this blind store *before* the gate
+        # and answered 404 for a block sitting in a file it could name.
+        # Removing that probe is what makes this a 200.
+        status, body = _handle_delete_memory(workspace, bid, actor="alice")
+        assert status == 200, f"the by-id door could not reach a block the prefix map resolves: {body}"
+        assert bid not in open(path, encoding="utf-8").read(), "200 and still there would be a different bug"
+
+    def test_dropping_the_dir_walk_reproduces_the_readable_but_unserved_blocks(
+        self, workspace_unnamed: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Restore the table-only discovery and watch the divergence come back.
+
+        The mutation is the pre-fix code: ``discover_corpus_files`` minus
+        its ``CORPUS_DIRS`` walk, which is exactly what every retrieval
+        leg used to do when it iterated ``CORPUS_FILES``. The store is
+        untouched — it never used the shared function — so the two
+        surfaces disagree again and the pin has to say so.
+
+        Every module that bound the name is patched, and the list of
+        modules is DISCOVERED rather than typed out: a new leg that
+        imports the function is mutated automatically instead of quietly
+        escaping the twin.
+        """
+        import sys
+
+        def table_only(workspace: str, corpus_dirs: tuple[str, ...] | None = None) -> list[tuple[str, str]]:
+            return [(e.label, e.relpath) for e in CORPUS_TABLE]
+
+        real = corpus_registry.discover_corpus_files
+        patched: list[str] = []
+        for mod in list(sys.modules.values()):
+            name = getattr(mod, "__name__", "")
+            if not name.startswith("mind_mem"):
+                continue
+            if getattr(mod, "discover_corpus_files", None) is real:
+                monkeypatch.setattr(mod, "discover_corpus_files", table_only)
+                patched.append(name)
+        assert "mind_mem.corpus_registry" in patched, "the registry itself was not patched; the lazy importers still see the real walk"
+        assert {"mind_mem._recall_core", "mind_mem.sqlite_index"} <= set(patched), (
+            f"the recall and index legs were not mutated, so this twin proves nothing: patched={sorted(patched)}"
+        )
+
+        with pytest.raises(AssertionError, match="which no retrieval leg discovers"):
+            _assert_discovery_matches_the_store(workspace_unnamed)
+
+        for subdir, bid in UNNAMED_IDS.items():
+            rel = f"{subdir}/{UNNAMED_BASENAME}"
+            store = MarkdownBlockStore(workspace_unnamed)
+            assert store.get_by_id(bid) is not None, f"the mutation blinded the store too; {rel} proves nothing"
+            assert bid not in _served_ids(workspace_unnamed), f"{rel} is still served — the mutation did not reproduce the pre-fix walk"
+
+    def test_the_dir_walk_half_is_what_makes_the_two_agree(self, workspace_unnamed: str) -> None:
+        """Positive control for the twin: unmutated, the same call passes."""
+        _assert_discovery_matches_the_store(workspace_unnamed)
 
     def test_a_prefix_routed_to_an_unscanned_file_fails_the_agreement_check(self) -> None:
         """Add a corpus to one table only — the shape the derivation forbids."""

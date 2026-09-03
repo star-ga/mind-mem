@@ -18,12 +18,13 @@ import logging
 import os
 import re
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     pass  # No runtime-only type imports needed; psycopg is a dynamic dependency.
 
-from .admission import require_admission, require_delete_admission
+from .admissibility import is_admissible_status
+from .admission import require_admission, require_delete_admission, require_restore_admission
 from .block_store import BlockStoreError  # noqa: F401  (re-exported for convenience)
 
 _log = logging.getLogger("mind_mem.block_store_postgres")
@@ -290,16 +291,21 @@ def _ddl(schema: str) -> Any:
     return pgsql.SQL(";\n").join(stmts)
 
 
-def _sql(schema: str, template: str) -> Any:
+def _sql(schema: str, template: str, **parts: Any) -> Any:
     """Return a psycopg Composable for *template* with ``{s}`` replaced by the
     safely-quoted schema identifier.
 
     Row values must still be passed as ``%s`` bind parameters — this helper
     only secures the schema name, not row data.
+
+    *parts* substitutes further named ``{placeholders}`` with Composables
+    the caller built (never raw text): the only user is the ``active``
+    derivation from :func:`_active_from_status_sql`, which has to appear
+    in a SELECT list and a WHERE clause where a bind parameter cannot go.
     """
     from psycopg import sql as pgsql
 
-    return pgsql.SQL(template).format(s=pgsql.Identifier(schema))
+    return pgsql.SQL(template).format(s=pgsql.Identifier(schema), **parts)
 
 
 _TS_TERM_RE = re.compile(r"[A-Za-z0-9]+")
@@ -531,6 +537,73 @@ def _ddl_pgvector(
         ).format(s=s, ops=cosine_ops),
     ]
     return pgsql.SQL(";\n").join(stmts)
+
+
+# ─── The ``active`` column: one derivation, two languages ────────────────────
+#
+# ``blocks.active`` is a *cache* of a governance fact — "would admission
+# serve this block?" — and the fact itself is
+# :func:`mind_mem.admissibility.is_admissible_status`. Two places have to
+# compute it: ``write_block`` (in Python, per row, at the door) and the
+# one-time backfill for rows written before the column meant anything (in
+# SQL, set-at-a-time, over ``metadata->'Status'``). Both are derived from
+# the same allow-list below, so a status added to the vocabulary cannot
+# be recognised by one and withheld by the other.
+#
+# The SQL form mirrors ``is_admissible_status`` case for case over the
+# shapes a JSON status can take: absent, JSON null, empty array, and
+# string (empty or in the allow-list) are admissible; a populated array,
+# a number, an object and an unrecognised string are not. It differs in
+# exactly one place: Python's ``str.strip()`` also strips Unicode
+# whitespace, ``btrim`` here strips only the ASCII set. That divergence
+# is fail-CLOSED (a Unicode-padded status is withheld by the column and
+# admitted by Python), it can only affect rows written before this
+# landed, and the enumeration path does not consult the column at all —
+# it re-runs ``admit_corpus``. Every row written from here on gets its
+# value from the Python predicate itself.
+
+#: ASCII whitespace ``btrim`` strips, matching ``str.strip()``'s ASCII set.
+_STATUS_TRIM_CHARS: Final = " \t\n\r\v\f"
+
+#: ``schema_migrations.version`` for the backfill that derives
+#: ``blocks.active`` from the block's Status. The table has existed since
+#: v3.2.0 for exactly this ("enables safe future ALTER TABLE migrations")
+#: and had no rows; this is its first user.
+_MIGRATION_ACTIVE_FROM_STATUS: Final = 1
+_MIGRATION_ACTIVE_FROM_STATUS_DESC: Final = "derive blocks.active from the block's governance Status"
+
+
+def _active_from_status_sql(*, table: str | None = None, column: str = "metadata") -> Any:
+    """SQL boolean: would admission serve the block in this row?
+
+    Composed from :data:`~mind_mem.admissibility.RECOGNISED_STATUSES`
+    (which already has :data:`~mind_mem.admissibility.UNADMITTED`
+    subtracted) rendered as quoted literals, so it cannot drift from the
+    Python predicate — ``tests/test_postgres_active_admission.py`` fails
+    the build if a recognised status is missing from the rendered SQL or
+    a withheld one appears in it.
+
+    Args:
+        table:  Optional table alias to qualify the metadata column with
+                (``restore`` reads ``sb.metadata``).
+        column: The JSONB column holding the block's non-private fields.
+    """
+    from psycopg import sql as pgsql
+
+    from .admissibility import RECOGNISED_STATUSES
+
+    m = pgsql.Identifier(table, column) if table else pgsql.Identifier(column)
+    # '' is the *unstated* spelling: a bare ``Status:`` line. It joins the
+    # allow-list rather than getting an arm of its own so the two
+    # admissible-string cases stay one comparison.
+    literals = pgsql.SQL(", ").join(pgsql.Literal(v) for v in ["", *sorted(RECOGNISED_STATUSES)])
+    return pgsql.SQL(
+        "(({m} -> 'Status') IS NULL"
+        " OR jsonb_typeof({m} -> 'Status') = 'null'"
+        " OR (jsonb_typeof({m} -> 'Status') = 'array' AND jsonb_array_length({m} -> 'Status') = 0)"
+        " OR (jsonb_typeof({m} -> 'Status') = 'string'"
+        "     AND btrim(lower({m} ->> 'Status'), {ws}) IN ({statuses})))"
+    ).format(m=m, ws=pgsql.Literal(_STATUS_TRIM_CHARS), statuses=literals)
 
 
 # ─── Row → block dict ─────────────────────────────────────────────────────────
@@ -803,6 +876,7 @@ class PostgresBlockStore:
                                 "postgres_pgvector_ddl_failed",
                                 extra={"schema": self._schema, "error": str(vec_exc)[:200]},
                             )
+                    self._backfill_active_from_status(conn)
                 self._schema_ready = True
                 _log.info(
                     "postgres_block_store_schema_ready",
@@ -810,6 +884,52 @@ class PostgresBlockStore:
                 )
             except Exception as exc:
                 raise BlockStoreError(f"Schema migration failed: {exc}") from exc
+
+    def _backfill_active_from_status(self, conn: Any) -> None:
+        """One-time: derive ``blocks.active`` for rows written before it meant anything.
+
+        Rows written by any released version up to 5.0.1 carry the
+        column's ``DEFAULT TRUE``, whatever their governance Status —
+        no INSERT named the column and nothing ever updated it. New
+        writes are correct by construction (``write_block``); the rows
+        already on disk need this one statement.
+
+        Claimed through ``<schema>.schema_migrations``, the versioning
+        table this module has created since v3.2.0 "to enable safe
+        future ALTER TABLE migrations" and that nothing had yet used.
+        The claim and the UPDATE share one transaction, so:
+
+        * a second process finds the row taken and does nothing (its
+          conflicting INSERT blocks until the first commits, then
+          returns no row), and
+        * a failure part-way rolls the claim back with the data, so the
+          next start retries rather than recording a migration that did
+          not happen.
+
+        This is why the backfill is not simply an idempotent statement in
+        :func:`_ddl`: ``_ensure_schema`` runs per store instance, and the
+        factory builds a fresh instance per recall / drift / dream call,
+        so an unguarded full-table UPDATE would be paid on every one.
+        """
+        active_expr = _active_from_status_sql()
+        claim = _sql(
+            self._schema,
+            "INSERT INTO {s}.schema_migrations (version, description) VALUES (%s, %s) ON CONFLICT (version) DO NOTHING RETURNING version",
+        )
+        backfill = _sql(
+            self._schema,
+            "UPDATE {s}.blocks SET active = {expr} WHERE active IS DISTINCT FROM {expr}",
+            expr=active_expr,
+        )
+        with conn.transaction():
+            claimed = conn.execute(claim, (_MIGRATION_ACTIVE_FROM_STATUS, _MIGRATION_ACTIVE_FROM_STATUS_DESC)).fetchone()
+            if claimed is None:
+                return
+            conn.execute(backfill)
+        _log.info(
+            "postgres_block_store_migration_applied",
+            extra={"schema": self._schema, "version": _MIGRATION_ACTIVE_FROM_STATUS},
+        )
 
     # ─── Read surface ─────────────────────────────────────────────────────────
 
@@ -1160,33 +1280,43 @@ class PostgresBlockStore:
         self._ensure_schema()
         pool = self._get_pool()
         block_id, file_path, content, metadata_json = _block_to_row(block)
+        # The ``active`` column is written, not defaulted. It used to be
+        # declared ``NOT NULL DEFAULT TRUE`` and named by no INSERT and no
+        # UPDATE anywhere in this module, so every row — quarantined ones
+        # included — satisfied the ``WHERE active`` predicate that
+        # ``list_blocks``, ``search`` and ``hybrid_search`` select on.
+        # Deriving it from the same predicate the recall allow-list applies
+        # is what makes the column's name true.
+        active = is_admissible_status(block.get("Status"))
         if embedding is not None and self._has_vector:
             if len(embedding) != self._embedding_dim:
                 raise BlockStoreError(f"embedding dim mismatch: got {len(embedding)}, schema expects {self._embedding_dim}")
             sql = _sql(
                 self._schema,
-                "INSERT INTO {s}.blocks (id, file_path, content, metadata, embedding, updated_at)"
-                " VALUES (%s, %s, %s, %s::jsonb, %s::vector, NOW())"
+                "INSERT INTO {s}.blocks (id, file_path, content, metadata, embedding, active, updated_at)"
+                " VALUES (%s, %s, %s, %s::jsonb, %s::vector, %s, NOW())"
                 " ON CONFLICT (id) DO UPDATE"
                 "     SET file_path  = EXCLUDED.file_path,"
                 "         content    = EXCLUDED.content,"
                 "         metadata   = EXCLUDED.metadata,"
                 "         embedding  = EXCLUDED.embedding,"
+                "         active     = EXCLUDED.active,"
                 "         updated_at = EXCLUDED.updated_at",
             )
-            params: tuple[Any, ...] = (block_id, file_path, content, metadata_json, _embedding_to_pg(embedding))
+            params: tuple[Any, ...] = (block_id, file_path, content, metadata_json, _embedding_to_pg(embedding), active)
         else:
             sql = _sql(
                 self._schema,
-                "INSERT INTO {s}.blocks (id, file_path, content, metadata, updated_at)"
-                " VALUES (%s, %s, %s, %s::jsonb, NOW())"
+                "INSERT INTO {s}.blocks (id, file_path, content, metadata, active, updated_at)"
+                " VALUES (%s, %s, %s, %s::jsonb, %s, NOW())"
                 " ON CONFLICT (id) DO UPDATE"
                 "     SET file_path  = EXCLUDED.file_path,"
                 "         content    = EXCLUDED.content,"
                 "         metadata   = EXCLUDED.metadata,"
+                "         active     = EXCLUDED.active,"
                 "         updated_at = EXCLUDED.updated_at",
             )
-            params = (block_id, file_path, content, metadata_json)
+            params = (block_id, file_path, content, metadata_json, active)
         try:
             with pool.connection() as conn:
                 with conn.transaction():
@@ -1366,7 +1496,14 @@ class PostgresBlockStore:
         Clears all current rows in ``<schema>.blocks`` and re-inserts from
         ``<schema>.snapshot_blocks[snap_id]``.  The operation is fully
         atomic: if the transaction fails the live table is unchanged.
+
+        Raises:
+            UngatedRestoreError: No RESTORE admission is open. Checked
+                first — before the schema, the pool, or the snap_id — so
+                an ungated caller cannot learn from the failure whether a
+                snapshot exists, and cannot open a connection by asking.
         """
+        receipt = require_restore_admission(snap_dir)
         self._ensure_schema()
         pool = self._get_pool()
         snap_id = os.path.basename(snap_dir.rstrip("/"))
@@ -1387,9 +1524,14 @@ class PostgresBlockStore:
             "        COALESCE(NULLIF(sb.file_path, ''), sb.metadata->>'_source_file', ''),"
             "        sb.content,"
             "        sb.metadata,"
-            "        TRUE"
+            # Derived, not TRUE. A literal here re-activated every restored
+            # row, so a snapshot taken before a block was quarantined would
+            # hand it back servable — a rollback that silently undoes a
+            # governance decision.
+            "        {expr}"
             " FROM {s}.snapshot_blocks sb"
             " WHERE sb.snap_id = %s",
+            expr=_active_from_status_sql(table="sb"),
         )
         try:
             with pool.connection() as conn:
@@ -1405,7 +1547,7 @@ class PostgresBlockStore:
         except Exception as exc:
             raise BlockStoreError(f"restore failed for snap_id={snap_id!r}: {exc}") from exc
 
-        _log.info("postgres_block_store_restore", extra={"snap_id": snap_id})
+        _log.info("postgres_block_store_restore", extra={"snap_id": snap_id, "admission": receipt.entry_id})
 
     def diff(self, snap_dir: str) -> list[str]:
         """Return paths of blocks that differ between current state and snapshot.

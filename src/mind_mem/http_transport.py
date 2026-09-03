@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import inspect
 import json
 import logging
 import os
@@ -78,11 +79,16 @@ from .admission import admit_read
 from .protection import AUTH_HEADER
 
 __all__ = [
+    "ANONYMOUS_ACTORS",
     "CONTENT",
+    "DIRECT_CALL_ACTOR",
+    "HTTP_TOKEN_ACTOR_PREFIX",
+    "HTTP_UNAUTHENTICATED_ACTOR",
     "MAX_BODY_BYTES",
     "NO_CONTENT",
     "ROUTES",
     "Route",
+    "mutating_routes",
     "serve_http",
     "build_handler",
 ]
@@ -502,8 +508,8 @@ def _handle_query(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
     if persona is not None and not isinstance(persona, str):
         return (400, {"error": "persona must be a string"})
 
-    from ._recall_core import recall as _recall
     from .personas import PERSONAS, PersonaError, apply_persona
+    from .recall import recall as _recall
 
     if persona is not None and persona not in PERSONAS:
         return (
@@ -532,6 +538,22 @@ def _handle_query(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
         "query": query,
         "results": projected,
         "count": len(projected),
+        # The proof travels with the answer. This route reached the engine
+        # directly until 5.0.2 and served block content that nothing recorded:
+        # the attestation was bound on one caller (the MCP recall handler), so
+        # "mind-mem can prove what it served" was a property of that handler
+        # rather than of the product. It now calls the serving entry, which
+        # derives the record and appends the served-ledger row before
+        # returning, and the record is surfaced here so an HTTP client can
+        # replay the run from its ``scoring_instant`` and check the served
+        # digest against what it received.
+        #
+        # ``persona`` is a PROJECTION applied after the fact — it rewrites the
+        # per-hit fields a client sees, never the set or the order — so the
+        # record still commits to exactly the ids in ``results``. Deriving it
+        # from the projected list instead would bind a shape rather than a
+        # ranking.
+        "attestation": getattr(results, "attestation", None),
     }
     if persona is not None:
         payload["persona"] = persona
@@ -630,10 +652,30 @@ def _handle_walkthrough(workspace: str, body: dict[str, Any]) -> tuple[int, dict
     return (200, {"topic": topic, "steps": steps, "count": len(steps)})
 
 
-def _handle_consolidate(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
-    """``POST /consolidate`` — trigger dream cycle."""
+def _handle_consolidate(workspace: str, body: dict[str, Any], *, actor: str) -> tuple[int, dict[str, Any]]:
+    """``POST /consolidate`` — trigger dream cycle.
+
+    Args:
+        actor: The door identity ``_dispatch`` derived from the
+            credential that passed auth. Keyword-only with **no
+            default**, so a caller cannot reach this route's mutating
+            work without naming itself.
+    """
     dry_run = bool(body.get("dry_run", False))
     auto_repair = bool(body.get("auto_repair", False))
+
+    # Attribution reaches the server log even where it cannot yet reach
+    # the chain: ``auto_repair`` rewrites blocks through writers this
+    # module does not own.
+    # deferred: would pass ``actor`` into ``run_dream_cycle`` so the gate
+    # scopes it opens carry the door identity rather than the contextvar
+    # fallback; stubbed because ``dream_cycle`` is outside this module's
+    # change — upgrade path: an ``actor`` keyword on ``run_dream_cycle``
+    # threaded to every ``admit_*`` call it makes.
+    _log.info(
+        "consolidate_requested",
+        extra={"actor": _safe_log(actor), "dry_run": dry_run, "auto_repair": auto_repair},
+    )
 
     from .dream_cycle import run_dream_cycle
 
@@ -665,6 +707,52 @@ _BLOCK_ID_MAX = 256
 #: claiming a reason nobody gave. Kept as a constant so the audit record
 #: and the tests read the same string.
 DEFAULT_DELETE_RATIONALE = "http-delete"
+
+#: Prefix of the actor recorded for a request that passed bearer-token
+#: auth; the suffix is ``sha256(token)[:12]``. The credential's identity
+#: without the credential — an auditor can group every act under one
+#: token, and rotating that token does not rewrite what it already did.
+HTTP_TOKEN_ACTOR_PREFIX = "http:tok:"
+
+#: Actor recorded when the operator started the server with
+#: ``--allow-unauthenticated-localhost`` on a loopback bind. There is no
+#: credential to name, so the record names *that* rather than borrowing a
+#: word that reads like a failed lookup.
+HTTP_UNAUTHENTICATED_ACTOR = "http:loopback-unauthenticated"
+
+#: Actor recorded when a handler is called in-process rather than served
+#: through the dispatcher — a library caller or a test. Every mutating
+#: route is handed a door identity by ``_dispatch``, and
+#: :meth:`Route.__post_init__` refuses at import to route a mutating
+#: handler that cannot take one, so this value can only appear on a
+#: direct call. It says that, instead of saying nothing.
+DIRECT_CALL_ACTOR = "http:in-process"
+
+#: Strings that name nobody. ``""`` reaches the gate's contextvar
+#: fallback, which is ``"anonymous"`` when the REST layer is importable
+#: and ``"system"`` when it is not. Measured on 5.0.1: a governed INGEST
+#: write recorded ``actor="ingest-door"`` and the ``DELETE`` that removed
+#: the same block recorded ``actor="anonymous"`` on both phase rows — the
+#: transport authenticated a token and then threw the identity away. A
+#: delete attributed to one of these is an unattributed delete, so the
+#: doors refuse it rather than record it.
+ANONYMOUS_ACTORS: frozenset[str] = frozenset({"", "anonymous", "system"})
+
+
+def _token_actor(token_value: str) -> str:
+    """The audit identity of the bearer token that just passed auth.
+
+    A truncated digest, not the token: an evidence chain is readable by
+    everyone who can read the workspace, and a credential that lands in
+    it stops being a credential.
+    """
+    digest = hashlib.sha256(token_value.encode("utf-8")).hexdigest()[:12]
+    return f"{HTTP_TOKEN_ACTOR_PREFIX}{digest}"
+
+
+def _is_named_actor(actor: str) -> bool:
+    """True iff *actor* names someone — see :data:`ANONYMOUS_ACTORS`."""
+    return actor.strip() not in ANONYMOUS_ACTORS
 
 
 def _corpus_block_ids(store: Any) -> tuple[list[str], int]:
@@ -749,7 +837,7 @@ def _handle_delete_memory(
     workspace: str,
     block_id: str,
     *,
-    actor: str = "",
+    actor: str = DIRECT_CALL_ACTOR,
     rationale: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """``DELETE /memories/{id}`` — one governed death, one chain record.
@@ -760,12 +848,30 @@ def _handle_delete_memory(
     cannot say why content was destroyed is most of the way to no record,
     and "a human typed a reason" is a claim this route cannot make.
 
+    The other half of that record is *who*. It used to be ``"anonymous"``
+    on every request this transport served: the handler defaulted
+    ``actor`` to ``""``, which the gate resolves through the REST
+    contextvar, and this transport is not the REST app so nothing ever
+    set it. ``_dispatch`` now derives the identity from the credential
+    that passed authentication and passes it here, once, for every
+    mutating route — see :data:`HTTP_TOKEN_ACTOR_PREFIX`.
+
+    There is **no existence pre-check**. Resolving the target before
+    opening the scope answered "is this id real?" to a caller the gate
+    had not yet authorised, and left no record of the question; inside a
+    covering scope the store returns ``False`` for an id that is not
+    there, which is the same 404 with an authorisation row behind it.
+    That is what :func:`~mind_mem.admission.require_delete_admission`
+    bought — "authorised" and "present" are told apart by the gate, never
+    by a probe.
+
     Args:
-        actor: Identity to attribute the deletion to. Empty lets the gate
-            resolve the authenticated REST agent, then ``"system"``. The
-            dispatcher does not yet have an authenticated agent id to
-            pass (RM-1718); this keyword is where it lands when it does,
-            without reshaping the handler again.
+        actor: Identity to attribute the deletion to. The dispatcher
+            passes the door identity; a direct in-process caller gets
+            :data:`DIRECT_CALL_ACTOR`. An actor in
+            :data:`ANONYMOUS_ACTORS` is refused — recording a deletion
+            under a word that names nobody is most of the way to no
+            record.
         rationale: Overrides :data:`DEFAULT_DELETE_RATIONALE`.
 
     Returns 403 when governance refuses the scope: the block is still
@@ -774,6 +880,11 @@ def _handle_delete_memory(
     """
     if not _valid_block_id(block_id):
         return (400, {"error": "invalid block id"})
+    if not _is_named_actor(actor):
+        # Fail closed: nothing is removed, and no record is minted
+        # claiming a deletion nobody can be held to.
+        _log.error("delete_memory_unnamed_actor", extra={"block_id": _safe_log(block_id)})
+        return (500, {"error": "delete requires a named actor"})
 
     from .governance_gate import GovernanceBypassError, get_gate
     from .storage import get_block_store
@@ -786,22 +897,6 @@ def _handle_delete_memory(
             extra={"error": _safe_log(exc), "block_id": _safe_log(block_id)},
         )
         return (500, {"error": "internal block store error"})
-
-    # Pre-check existence so a missing-block delete returns 404 even when
-    # the underlying store raises (e.g. Windows file-handle quirks under
-    # the lock acquisition path) instead of returning False.
-    try:
-        if hasattr(store, "get_by_id") and store.get_by_id(block_id) is None:
-            return (404, {"error": "block not found", "id": block_id})
-    except Exception as exc:
-        # Treat get_by_id errors as best-effort — fall through to the
-        # delete path which handles a missing block via its own return
-        # contract. Log at debug so the precheck failure is visible
-        # without surfacing as a server error.
-        _log.debug(
-            "delete_memory_precheck_failed",
-            extra={"error": _safe_log(exc), "block_id": _safe_log(block_id)},
-        )
 
     admission_id = ""
     try:
@@ -836,7 +931,7 @@ def _handle_delete_memory(
     return (200, {"ok": True, "id": block_id, "admission": admission_id})
 
 
-def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> tuple[int, dict[str, Any]]:
+def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = DIRECT_CALL_ACTOR) -> tuple[int, dict[str, Any]]:
     """``POST /clear`` — wipe workspace contents (governance-protected).
 
     Requires a non-empty ``rationale`` per v3.6.x mandatory rationale
@@ -859,8 +954,10 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> t
     *files* — see :func:`_corpus_block_ids` for what that cost.
 
     Args:
-        actor: See :func:`_handle_delete_memory`. Empty lets the gate
-            resolve the authenticated REST agent, then ``"system"``.
+        actor: See :func:`_handle_delete_memory`. ``_dispatch`` derives
+            the door identity from the credential that passed auth and
+            passes it here; an actor in :data:`ANONYMOUS_ACTORS` is
+            refused before anything is enumerated.
 
     Returns:
         ``200`` with ``deleted`` and the admission id. ``unreachable`` is
@@ -870,19 +967,30 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = "") -> t
 
     Scope, stated because a wipe that is narrower than its name is the
     same failure in a smaller box: "the corpus" is whatever
-    ``store.get_all`` returns, and on the Markdown backends that is the
-    four ``CORPUS_DIRS`` (``decisions``, ``tasks``, ``entities``,
-    ``intelligence``), non-recursively. Measured: a block in
-    ``memory/INBOX.md`` is invisible to ``get_all`` and ``get_by_id``
-    alike, so this endpoint does not take it — the inbox, agent-message,
-    imported and ingest corpora under ``memory/`` are outside every read
-    surface the store offers, and widening the wipe past what the store
-    can read would destroy content no reader can see. ``DELETE
-    /memories/{id}`` still removes those by id, because the prefix map
-    resolves them directly.
+    ``store.get_all`` returns, which is every file
+    :data:`~mind_mem.corpus_registry.CORPUS_TABLE` names — the four
+    ``CORPUS_DIRS`` (``decisions``, ``tasks``, ``entities``,
+    ``intelligence``) **and** the ``memory/`` rows (``MESSAGES.md``,
+    ``INBOX.md``, ``IMPORTED.md``, ``INGEST.md``).
+
+    This paragraph used to say the opposite — that a block in
+    ``memory/INBOX.md`` was invisible to ``get_all`` and so survived this
+    endpoint. It is false against the one corpus definition:
+    ``tests/test_one_corpus_definition.py``'s
+    ``test_the_clear_door_counts_and_takes_the_memory_corpora`` seeds one
+    block per table row, holds the four ``memory/`` ids as its positive
+    control, and measures ``deleted == len(before)`` with an empty corpus
+    after. What recall can serve is what a clear takes; a ``memory/``
+    file the table does *not* name (the daily log) stays outside both.
     """
     rationale = body.get("rationale")
     confirm = body.get("confirm")
+    if not _is_named_actor(actor):
+        # Fail closed, before the corpus is even enumerated: a wipe is
+        # the largest act this surface offers and the least defensible
+        # one to record against nobody.
+        _log.error("clear_unnamed_actor", extra={"workspace": _safe_log(workspace)})
+        return (500, {"error": "clear requires a named actor"})
     if not isinstance(rationale, str) or len(rationale.strip()) < 16:
         return (400, {"error": "rationale is required (min 16 chars per governance policy)"})
     if confirm != "yes-i-really-want-to-clear":
@@ -1054,12 +1162,20 @@ def _handle_fed_conflicts(workspace: str, params: dict[str, str]) -> tuple[int, 
     )
 
 
-def _handle_fed_write(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+def _handle_fed_write(workspace: str, body: dict[str, Any], *, actor: str) -> tuple[int, dict[str, Any]]:
     """POST /federation/write {block_id, agent_id} — record agent write.
 
     Bumps the (block_id, agent_id) version atomically and reports a
     conflict if the resulting version vector diverges from another
     agent's claim. Auto-detects + logs the conflict to ``tier_conflict_log``.
+
+    Args:
+        actor: The door identity, keyword-only with **no default**. It is
+            not ``agent_id``: that one is a *claim the body makes* and the
+            version vector is keyed on it, while this is the credential
+            that passed auth. Both go to the log, because a peer writing
+            under someone else's ``agent_id`` is exactly the thing an
+            operator would want to be able to see afterwards.
     """
     try:
         from mind_mem.v4 import federation as fed
@@ -1071,6 +1187,10 @@ def _handle_fed_write(workspace: str, body: dict[str, Any]) -> tuple[int, dict[s
         return (400, {"ok": False, "error": "block_id (valid string) is required"})
     if not isinstance(agent_id, str) or not _valid_block_id(agent_id):
         return (400, {"ok": False, "error": "agent_id (valid string) is required"})
+    _log.info(
+        "fed_write_requested",
+        extra={"actor": _safe_log(actor), "block_id": _safe_log(block_id), "claimed_agent_id": _safe_log(agent_id)},
+    )
     try:
         new_version = fed.record_agent_write(workspace, block_id, agent_id)
         report = fed.detect_conflict(workspace, block_id)
@@ -1092,13 +1212,18 @@ def _handle_fed_write(workspace: str, body: dict[str, Any]) -> tuple[int, dict[s
     return (200, out)
 
 
-def _handle_fed_resolve(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+def _handle_fed_resolve(workspace: str, body: dict[str, Any], *, actor: str) -> tuple[int, dict[str, Any]]:
     """POST /federation/resolve {block_id, strategy, merged_payload?}.
 
     Applies the chosen MergeStrategy to the most-recent open conflict.
     For THREE_WAY_MERGE the caller supplies a merged_payload that is
     treated as the merge result; the function does not invoke a
     server-side merger callable.
+
+    Args:
+        actor: The door identity, keyword-only with **no default**.
+            Resolving a conflict picks one peer's bytes over another's,
+            so the log says who asked for that.
     """
     try:
         from mind_mem.v4 import federation as fed
@@ -1111,6 +1236,10 @@ def _handle_fed_resolve(workspace: str, body: dict[str, Any]) -> tuple[int, dict
         return (400, {"ok": False, "error": "block_id (valid string) is required"})
     if not isinstance(strategy, str) or strategy not in {s.value for s in fed.MergeStrategy}:
         return (400, {"ok": False, "error": "strategy must be one of MergeStrategy values"})
+    _log.info(
+        "fed_resolve_requested",
+        extra={"actor": _safe_log(actor), "block_id": _safe_log(block_id), "strategy": _safe_log(strategy)},
+    )
     merger = None
     if merged_b64 is not None:
         import base64
@@ -1185,6 +1314,14 @@ class Route:
     handler: Callable[..., tuple[int, dict[str, Any]]]
     takes: str
     verdict: str
+    #: Whether serving this route can change workspace state. Like
+    #: ``verdict`` it has **no default**, and like ``verdict`` it is not
+    #: documentation: ``True`` makes the dispatcher pass the door's actor
+    #: identity, and ``__post_init__`` refuses at import to route a
+    #: mutating handler that cannot receive one. That is what makes the
+    #: actor unforgettable — the next handler cannot be added to this
+    #: table without it, rather than being expected to remember.
+    mutates: bool
     #: Response for a prefix route whose tail is empty, when the handler
     #: should not be reached at all with a blank id.
     empty_tail_error: str | None = None
@@ -1197,6 +1334,18 @@ class Route:
             raise ValueError(f"route {self.method} {self.path} has verdict {self.verdict!r}; must be one of {sorted(_VERDICTS)}")
         if self.takes not in _TAKES:
             raise ValueError(f"route {self.method} {self.path} takes {self.takes!r}; must be one of {sorted(_TAKES)}")
+        actor_param = inspect.signature(self.handler).parameters.get("actor")
+        takes_actor = actor_param is not None and actor_param.kind is inspect.Parameter.KEYWORD_ONLY
+        if self.mutates and not takes_actor:
+            raise ValueError(
+                f"route {self.method} {self.path} mutates but {self.handler.__name__} has no keyword-only 'actor' "
+                "parameter; a door that changes workspace state must be able to record who opened it"
+            )
+        if not self.mutates and takes_actor:
+            raise ValueError(
+                f"route {self.method} {self.path} is declared read-only but {self.handler.__name__} takes a keyword-only "
+                "'actor'; the dispatcher passes one only to mutating routes, so one of the two declarations is wrong"
+            )
 
     @property
     def name(self) -> str:
@@ -1208,12 +1357,12 @@ class Route:
 #: other kind is an exact match on the path with the query string split
 #: off. Order is the match order.
 ROUTES: tuple[Route, ...] = (
-    Route("GET", PATH_STATUS, _handle_status, "workspace", NO_CONTENT),
-    Route("GET", PATH_MEMORIES, _handle_list_memories, "params", CONTENT),
-    Route("GET", PATH_FED_CONFLICTS, _handle_fed_conflicts, "params", NO_CONTENT),
-    Route("GET", _FED_VCLOCK_PREFIX, _handle_fed_vclock, "tail", NO_CONTENT, empty_tail_error="block_id required"),
-    Route("POST", PATH_QUERY, _handle_query, "body", CONTENT),
-    Route("POST", PATH_CONSOLIDATE, _handle_consolidate, "body", NO_CONTENT),
+    Route("GET", PATH_STATUS, _handle_status, "workspace", NO_CONTENT, mutates=False),
+    Route("GET", PATH_MEMORIES, _handle_list_memories, "params", CONTENT, mutates=False),
+    Route("GET", PATH_FED_CONFLICTS, _handle_fed_conflicts, "params", NO_CONTENT, mutates=False),
+    Route("GET", _FED_VCLOCK_PREFIX, _handle_fed_vclock, "tail", NO_CONTENT, mutates=False, empty_tail_error="block_id required"),
+    Route("POST", PATH_QUERY, _handle_query, "body", CONTENT, mutates=False),
+    Route("POST", PATH_CONSOLIDATE, _handle_consolidate, "body", NO_CONTENT, mutates=True),
     # MEASURED, not assumed. ``compile_walkthrough`` projects recall rows
     # into ``{step, block_id, role, score, subject}`` and the rows carry
     # ``excerpt`` rather than ``Statement``, so the subject comes out
@@ -1222,20 +1371,25 @@ ROUTES: tuple[Route, ...] = (
     # The reach check is what keeps this honest: the day the projection
     # starts carrying text, the sweep's reach set grows and the build
     # fails until this row says CONTENT.
-    Route("POST", PATH_WALKTHROUGH, _handle_walkthrough, "body", NO_CONTENT),
-    Route("POST", PATH_CLEAR, _handle_clear, "body", NO_CONTENT),
-    Route("POST", PATH_FED_WRITE, _handle_fed_write, "body", NO_CONTENT),
-    Route("POST", PATH_FED_RESOLVE, _handle_fed_resolve, "body", NO_CONTENT),
+    Route("POST", PATH_WALKTHROUGH, _handle_walkthrough, "body", NO_CONTENT, mutates=False),
+    Route("POST", PATH_CLEAR, _handle_clear, "body", NO_CONTENT, mutates=True),
+    Route("POST", PATH_FED_WRITE, _handle_fed_write, "body", NO_CONTENT, mutates=True),
+    Route("POST", PATH_FED_RESOLVE, _handle_fed_resolve, "body", NO_CONTENT, mutates=True),
     # The tail is a block id the caller supplied, so an empty one reaches
     # the handler and is refused there by ``_valid_block_id`` — one
     # rejection path for a bad id, not two.
-    Route("DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT),
+    Route("DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT, mutates=True),
 )
 
 
 def content_routes() -> frozenset[str]:
     """Names of the routes declared able to serve block content."""
     return frozenset(route.name for route in ROUTES if route.verdict == CONTENT)
+
+
+def mutating_routes() -> frozenset[str]:
+    """Names of the routes the dispatcher hands a door identity to."""
+    return frozenset(route.name for route in ROUTES if route.mutates)
 
 
 def _match_route(method: str, base: str) -> tuple[Route | None, str]:
@@ -1382,6 +1536,32 @@ def build_handler(
             source = self.client_address[0] if self.client_address else ""
             return source in allowed
 
+        # -- door identity ----------------------------------------------
+        def _door_actor(self) -> str:
+            """Who this request is, for the record a mutating route writes.
+
+            Derived from the credential that just passed
+            :meth:`_authenticated` — at the dispatcher, once, so no
+            handler has to remember. Two shapes and no third:
+
+            ``http:tok:<sha256(token)[:12]>``
+                a request that presented a token on the active set. The
+                digest is the token's identity without the token, so
+                rotation does not rewrite what the old one already did.
+            ``http:loopback-unauthenticated``
+                the operator started this server with
+                ``--allow-unauthenticated-localhost`` on a loopback bind.
+                There is no credential to name, and the record says that
+                rather than borrowing a word that reads like a failed
+                lookup.
+
+            Only ever called after :meth:`_guards_passed`, so the header
+            read here is the one that passed the constant-time compare.
+            """
+            if not auth_required:
+                return HTTP_UNAUTHENTICATED_ACTOR
+            return _token_actor(self.headers.get(AUTH_HEADER, ""))
+
         def _reject_auth(self) -> None:
             _write_status(self, 401, "missing or invalid token")
 
@@ -1434,6 +1614,14 @@ def build_handler(
             ...`` chain here would let a handler be served without a
             classification, which is exactly how this transport ended up
             outside the read-surface sweep.
+
+            The same table decides attribution: a route declaring
+            ``mutates`` is handed :meth:`_door_actor` and a route that
+            does not, is not. The identity is derived here rather than in
+            each handler because "the handler passes an actor" is a thing
+            to remember and "the route table says so" is a thing to
+            declare — and ``Route.__post_init__`` refuses at import to
+            route a mutating handler that cannot take one.
             """
             base, params = _parse_query_params(self.path)
             route, tail = _match_route(method, base)
@@ -1443,14 +1631,15 @@ def build_handler(
             if route.takes == "tail" and not tail and route.empty_tail_error:
                 _write_status(self, 400, route.empty_tail_error)
                 return
+            attribution: dict[str, Any] = {"actor": self._door_actor()} if route.mutates else {}
             if route.takes == "workspace":
-                status, body = route.handler(workspace)
+                status, body = route.handler(workspace, **attribution)
             elif route.takes == "params":
-                status, body = route.handler(workspace, params)
+                status, body = route.handler(workspace, params, **attribution)
             elif route.takes == "body":
-                status, body = route.handler(workspace, payload if payload is not None else {})
+                status, body = route.handler(workspace, payload if payload is not None else {}, **attribution)
             else:
-                status, body = route.handler(workspace, tail)
+                status, body = route.handler(workspace, tail, **attribution)
             _write_json(self, status, body)
 
         # -- OPTIONS (CORS preflight reject — S-7) ----------------------

@@ -253,17 +253,68 @@ class TestRecallExplainMCPIntegration:
             assert scores[i] >= scores[i + 1], f"Sort order broken at index {i}: {scores[i]} < {scores[i + 1]}"
 
     def test_payload_byte_diff_default_lt_5pct(self, ws):
-        """Default (explain=False) response is byte-for-byte identical to baseline."""
+        """Default (kwarg omitted) equals explain=False everywhere the payload is
+        a function of the query — i.e. everywhere but the served-ledger pointers.
+
+        Byte-for-byte equality between two serves stopped being the claim when
+        the served-recall ledger landed: each served recall is appended as its
+        own row, so ``served_seq`` counts 0, 1, 2 … and ``served_row_hash``
+        names a different row every time, by construction
+        (``tests/test_served_ledger.py`` pins that sequence). Those two fields
+        are lifted out before comparing and then checked directly, so nothing
+        stops being asserted — the diff moves from "these bytes are equal" to
+        "these bytes are equal AND the only two that moved moved the way the
+        ledger says they must".
+
+        The attestation hash is deliberately NOT lifted out. The pointers ride
+        beside its preimage, so a run whose ranking, config or scoring instant
+        actually differed still moves ``attestation_hash`` and still fails
+        here.
+        """
         import mind_mem.mcp.tools.recall as recall_tool
         from mind_mem.mcp.infra.workspace import use_workspace
+        from mind_mem.served_ledger import (
+            PROOF_RECORDED,
+            SERVED_PROOF_KEY,
+            SERVED_ROW_HASH_KEY,
+            SERVED_SEQ_KEY,
+        )
+
+        per_serve = (SERVED_SEQ_KEY, SERVED_ROW_HASH_KEY)
+
+        def _split(raw: str) -> tuple[dict, dict]:
+            """Split a payload into (everything else, the per-serve pointers)."""
+            payload = json.loads(raw)
+            attestation = payload["attestation"]
+            for key in per_serve:
+                assert key in attestation, f"attestation published no {key}"
+            return payload, {key: attestation.pop(key) for key in per_serve}
 
         with use_workspace(ws):
             baseline = recall_tool.recall("BM25 scoring", limit=10, explain=False)
             comparison = recall_tool.recall("BM25 scoring", limit=10)  # no explain kwarg
             with_explain = recall_tool.recall("BM25 scoring", limit=10, explain=True)
+            other_query = recall_tool.recall("vector embedding", limit=10, explain=False)
+
+        base_payload, base_pointers = _split(baseline)
+        comp_payload, comp_pointers = _split(comparison)
+        explain_payload, _ = _split(with_explain)
+        other_payload, _ = _split(other_query)
 
         # Both should be identical because default is False.
-        assert baseline == comparison, "recall() without explain kwarg differs from explain=False"
+        assert base_payload == comp_payload, "recall() without explain kwarg differs from explain=False"
+
+        # POSITIVE CONTROL for the equality above: dropping the two pointers
+        # must not be able to make two genuinely different payloads compare
+        # equal. Real differences — the injected _explain, and a different
+        # query — survive the identical normalisation.
+        assert explain_payload != base_payload, "normalisation hid the _explain injection"
+        assert other_payload != base_payload, "normalisation hid a different query"
+
+        # And the pointers themselves: recorded, consecutive, distinct rows.
+        assert base_payload["attestation"][SERVED_PROOF_KEY] == PROOF_RECORDED
+        assert comp_pointers[SERVED_SEQ_KEY] == base_pointers[SERVED_SEQ_KEY] + 1
+        assert comp_pointers[SERVED_ROW_HASH_KEY] != base_pointers[SERVED_ROW_HASH_KEY]
 
         # Sanity: explain=True is different (larger).
         assert with_explain != baseline

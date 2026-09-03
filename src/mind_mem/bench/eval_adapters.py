@@ -112,6 +112,60 @@ def _sanitise(text: str) -> str:
     return flat.replace("[", "(").replace("]", ")").strip() or "(empty)"
 
 
+#: Block-id prefix the harness seeds under. Must be a prefix
+#: ``corpus_registry.CORPUS_TABLE`` routes -- ``write_block`` raises for one
+#: it cannot route, and the old hand-written ``SESSION-`` ids were not
+#: routable at all. ``D`` routes to ``decisions/DECISIONS.md``, which is the
+#: file this harness was writing by hand anyway.
+_SEED_PREFIX = "D"
+
+
+def _seed_governed(workspace: str, sessions: list[SessionDoc]) -> dict[str, str]:
+    """Seed the eval workspace through the governed write path.
+
+    Returns ``block_id -> doc_id``.
+
+    This used to open ``decisions/DECISIONS.md`` and write the whole
+    haystack by hand, with ``Status: active`` spelled into the text -- a
+    servable status minted with no admission, no evidence row and no chain
+    row. It is a synthetic workspace rather than an operator's corpus, which
+    is why it was pinned as PENDING rather than treated as a leak; but a
+    benchmark that seeds memory by bypassing governance is not measuring the
+    product's write path, and the numbers it produces are for a system that
+    does not ship. ``bench/ab_seed`` already learned this -- its module
+    docstring records that an earlier draft appended directly and this
+    repository's own structural invariant refused it -- so this takes the
+    same route: one ``admit_proposal`` scope, then ``write_block`` per
+    block.
+
+    ``admit_proposal`` is the right scope and not a convenience: it is the
+    only tier that mints ``ACTIVE``, and the haystack has to be servable or
+    recall retrieves nothing and the benchmark measures zero.
+    """
+    from ..governance_gate import get_gate
+    from ..storage import get_block_store
+
+    store = get_block_store(workspace)
+    id_map: dict[str, str] = {}
+    blocks: list[dict[str, str]] = []
+    for idx, doc in enumerate(sessions):
+        block_id = f"{_SEED_PREFIX}-{idx}"
+        id_map[block_id] = doc.doc_id
+        blocks.append({"_id": block_id, "Statement": _sanitise(doc.text), "Status": "active"})
+
+    if blocks:
+        with get_gate(workspace).admit_proposal(
+            f"P-bench-eval-seed-{len(blocks)}",
+            "\n".join(b["_id"] for b in blocks),
+            actor="bench_eval_adapter",
+            target_file=os.path.join("decisions", "DECISIONS.md"),
+            metadata={"benchmark": "eval_adapters", "blocks": str(len(blocks))},
+        ):
+            for block in blocks:
+                store.write_block(dict(block))
+    return id_map
+
+
 @dataclass
 class _MindMemState:
     workspace: str
@@ -164,16 +218,10 @@ class MindMemAdapter:
         ws = tempfile.mkdtemp(prefix="mm_eval_")
         os.makedirs(os.path.join(ws, "decisions"), exist_ok=True)
 
-        id_map: dict[str, str] = {}
-        blocks: list[str] = []
-        for idx, doc in enumerate(sessions):
-            block_id = f"SESSION-{idx}"
-            id_map[block_id] = doc.doc_id
-            blocks.append(f"[{block_id}]\nStatement: {_sanitise(doc.text)}\nStatus: active\n")
-        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
-            f.write("# DECISIONS\n\n---\n\n" + "\n---\n\n".join(blocks) + "\n")
         with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
             _json.dump(cfg, f)
+
+        id_map = _seed_governed(ws, sessions)
 
         effective, vector_available, notes, extra = self._probe_backend(ws, declared)
 

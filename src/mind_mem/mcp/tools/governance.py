@@ -313,6 +313,68 @@ def propose_update(
     rationale = _sanitize_reason_for_markdown(rationale.strip()) if rationale else ""
     raw_tags = [_sanitize_reason_for_markdown(t) for t in raw_tags]
 
+    # Compliance pre-write check (roadmap Group E).
+    #
+    # Placed BESIDE the quality gate rather than anywhere else, because this
+    # is the governed write path's one enforcement point and the two controls
+    # belong at the same door. The package shipped wired to the CLI and the
+    # export pipeline first, which meant the honest claim was "the chain is
+    # wired" and NOT "every write is screened" -- a compliance control the
+    # governed path does not run is a feature, not a control.
+    #
+    # Provenance is judged before redaction inside ``screen``: a write that is
+    # refused for missing attribution is never scanned and never hashed, so a
+    # refusal leaves no trace of content it declined to store.
+    from mind_mem.compliance.prewrite import PreWritePolicy, screen
+    from mind_mem.compliance.provenance_policy import ProvenanceConfigError, ProvenanceRequired
+    from mind_mem.compliance.redaction import RedactionRefused
+
+    try:
+        _cp_policy = PreWritePolicy.resolve(ws)
+    except ProvenanceConfigError as exc:
+        # A malformed policy must not crash the governed write path. Resolving
+        # the policy is config parsing, not a decision about this write, and an
+        # unhandled exception here would take down the tool rather than
+        # refusing one proposal. It still FAILS CLOSED: the write is refused,
+        # because a workspace whose compliance policy cannot be read is not a
+        # workspace whose compliance policy is "off".
+        metrics.inc("compliance_config_errors")
+        _log.warning("compliance_config_invalid", block_type=block_type, detail=str(exc))
+        return json.dumps({"error": "compliance_config_invalid", "reason": str(exc)}, indent=2)
+    try:
+        _cp = screen(
+            statement,
+            policy=_cp_policy,
+            # The policy keys off the BLOCK-METADATA field names, which are
+            # the names these values are written under, not the Python
+            # parameter names. Passing the snake_case parameter names here
+            # would make every field look absent, so a ``required`` policy
+            # would refuse an attributed write as loudly as an unattributed
+            # one -- a refusal that cannot be satisfied by doing the right
+            # thing. Caught by a positive control that supplied attribution
+            # and was refused anyway.
+            provenance={
+                "ActorId": actor_id,
+                "ActorRole": actor_role,
+                "SessionId": session_id,
+                "ToolId": tool_id,
+                "Purpose": purpose,
+            },
+            target=block_type,
+            agent=actor_id,
+        )
+    except ProvenanceRequired as exc:
+        metrics.inc("compliance_provenance_refusals")
+        _log.warning("compliance_provenance_refused", block_type=block_type, detail=str(exc))
+        return json.dumps({"error": "provenance_required", "reason": str(exc)}, indent=2)
+    except RedactionRefused as exc:
+        metrics.inc("compliance_redaction_refusals")
+        _log.warning("compliance_redaction_refused", block_type=block_type, detail=str(exc))
+        return json.dumps({"error": "redaction_refused", "reason": str(exc)}, indent=2)
+    # A ``redact`` workspace rewrites the text; every other mode returns it
+    # unchanged, so this assignment is a no-op off the redact path.
+    statement = _cp.text
+
     # Quality gate pre-write check (v3.12.0 Theme B).
     from mind_mem.mcp.infra.config import _get_quality_gate_mode
     from mind_mem.quality_gate import validate_block

@@ -42,7 +42,7 @@ import os
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, cast
 
-from .admission import require_admission, require_delete_admission
+from .admission import require_admission, require_delete_admission, require_restore_admission
 from .block_parser import get_active, get_by_id, parse_file
 from .block_store import BlockStore, BlockStoreError, MarkdownBlockStore, _resolve_block_file
 from .corpus_registry import CORPUS_DIRS
@@ -233,7 +233,21 @@ class EncryptedBlockStore:
         return self._inner.snapshot(snap_dir, files_touched=files_touched)
 
     def restore(self, snap_dir: str) -> None:
-        """Restore the workspace from a snapshot directory (see :meth:`snapshot`)."""
+        """Restore the workspace from a snapshot directory (see :meth:`snapshot`).
+
+        Enforced here as well as on the inner store, for the same reason
+        :meth:`write_block` and :meth:`delete_block` enforce it: this
+        wrapper is a ``BlockStore`` in its own right, so a caller holding
+        only the encrypted store must not get a laxer mutation surface
+        than one holding the plain store. It opens no scope of its own —
+        the sanctioned caller does, and the inner store checks the same
+        receipt, so a restore leaves exactly one chain record however it
+        was reached.
+
+        Raises:
+            UngatedRestoreError: No RESTORE admission is open.
+        """
+        require_restore_admission(snap_dir)
         self._inner.restore(snap_dir)
 
     def diff(self, snap_dir: str) -> list[str]:

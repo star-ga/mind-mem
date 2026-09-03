@@ -2,7 +2,7 @@
 """The three-state flag registry: WIRED / KILL_SWITCH / UNIMPLEMENTED.
 
 A declared flag with no consumer is a promise the code does not keep. An
-operator writes ``{"redaction": {"enabled": true}}``, nothing reads it, and
+operator writes ``{"streaming_recall": {"enabled": true}}``, nothing reads it, and
 the product answers with silence — which is indistinguishable from success.
 Twenty of the fifty-two declared v4 flags were in exactly that state.
 
@@ -61,7 +61,7 @@ from mind_mem.v4.flag_registry import (
 #: A flag the registry declares UNIMPLEMENTED, used as the sample subject for
 #: every refusal test. Guarded below: if it ever gains a consumer the guard
 #: fails loudly instead of these tests quietly stopping to test anything.
-_ABSENT = "redaction"
+_ABSENT = "streaming_recall"
 
 #: A flag the registry declares WIRED — the positive control for every
 #: refusal test, so "it raised" is never confused with "it always raises".
@@ -626,7 +626,7 @@ class TestAShippingCapabilityIsNeverReportedAbsent:
         with pytest.raises(UnimplementedCapabilityError) as excinfo:
             require_valid_flag_config()
         message = str(excinfo.value)
-        assert "Nothing behind them: redaction" in message
+        assert f"Nothing behind them: {_ABSENT}" in message
         assert "CAPABILITY SHIPS, key does not control it" in message
         assert _SHIPPING in message.split("CAPABILITY SHIPS")[1]
 

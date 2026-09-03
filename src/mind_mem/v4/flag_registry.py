@@ -220,10 +220,10 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
         _wired("block_metadata", "v4/block_metadata.py refuses at eight entry points."),
         _wired("circuit_breaker", "v4/circuit_breaker.py refuses at two entry points and reads its tunables."),
         # -- Group E: compliance-sensitive opt-in --------------------------
-        _unimplemented(
+        _wired(
             "redaction",
-            "No redaction pass exists. Wiring question: redactable tombstones are the RA.3 unit with five "
-            "named preconditions; until one lands, enabling this must refuse rather than imply redaction.",
+            "compliance/redaction.py resolves the mode and the detector chain workspace-first; off means the "
+            "chain does not run, and every pass that does run lands in the audit chain (compliance/audit.py).",
         ),
         _unimplemented(
             "time_bounded_recall",
@@ -232,11 +232,11 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
             ships_ungated="_recall_temporal.py",
         ),
         _wired("vocabulary", "v4/vocabulary.py refuses at three entry points."),
-        _unimplemented(
+        _wired(
             "provenance",
-            "Provenance fields ship ungated in block_provenance.py and capture.py. Wiring question: "
-            "KILL_SWITCH candidate; a default-ON consumer must prove ON is byte-identical to today.",
-            ships_ungated="block_provenance.py",
+            "compliance/provenance_policy.py gates the off|recommended|required POLICY on it, workspace-first. "
+            "The five FIELDS still ship ungated in block_provenance.py and are unaffected by this key: turning "
+            "it off removes the policy, never the fields, which is why this is opt-in rather than a kill switch.",
         ),
         _unimplemented(
             "evidence",
@@ -249,10 +249,10 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
             "tenant_chains",
             "tenant_audit.py has no per-tenant chain writer. Wiring question: it needs the chain seam, not a flag, first.",
         ),
-        _unimplemented(
+        _wired(
             "compliance_export",
-            "The `mm export --policy` verb does not exist. Wiring question: the X-1 prov-o export unit is what "
-            "would give this flag something to gate.",
+            "compliance/export.build_bundle probes it once per command before touching the corpus; `mm export "
+            "--policy` refuses with the enable instruction when it is off.",
         ),
         _unimplemented(
             "contraindicates_edges",

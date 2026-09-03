@@ -36,6 +36,7 @@ from mind_mem.lint_autofix import (
     UnknownFindingError,
     lint_autofix,
 )
+from mind_mem.mm_cli import config_set
 from mind_mem.v4.feature_flags import FeatureDisabledError
 
 FIXED_NOW = datetime(2026, 8, 27, 12, 0, 0)
@@ -105,14 +106,13 @@ Sources:
 def _make_ws(decisions: str = DECISIONS, *, enable_lint: bool = True, mode: str = "detect_only") -> str:
     ws = tempfile.mkdtemp(prefix="mm_lint_")
     init(ws)
+    # ``init`` arms the gate: the bound config goes through
+    # ``mm config set``, which writes and re-attests in one step, so a
+    # setting change is not read back as tampering.
     config_path = os.path.join(ws, "mind-mem.json")
-    with open(config_path, encoding="utf-8") as handle:
-        config = json.load(handle)
     if enable_lint:
-        config["v4"] = {"lint": {"enabled": True}}
-    config["governance_mode"] = mode
-    with open(config_path, "w", encoding="utf-8") as handle:
-        json.dump(config, handle)
+        config_set(config_path, "v4", {"lint": {"enabled": True}})
+    config_set(config_path, "governance_mode", mode)
     state_path = os.path.join(ws, "memory", "intel-state.json")
     with open(state_path, encoding="utf-8") as handle:
         state = json.load(handle)

@@ -96,7 +96,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
@@ -329,8 +329,14 @@ _SUITE_SCOPE = re.compile(r"\b(suite|full pytest|pytest matrix|entire test|whole
 # state BOTH -- what the weights know and what the server exposes -- so a
 # per-file rule cannot separate them. Nearest marker wins; a line with no
 # marker falls back to the file's default.
-_TRAINED_MARK = re.compile(r"\b(trained|training|weights|checkpoint|knows|corpus)\b", re.IGNORECASE)
-_LIVE_MARK = re.compile(r"\b(live|exposes|currently|current)\b", re.IGNORECASE)
+#
+# ONE definition, shared with ``count_mcp_tools``: that gate uses the same
+# markers to REFER a trained-scope claim here instead of judging it with the
+# live count. Two copies of this vocabulary would let the two gates disagree
+# about which surface a sentence is talking about, and the claim would fall
+# through the gap between them.
+_TRAINED_MARK = cmt.TRAINED_MARK
+_LIVE_MARK = cmt.LIVE_MARK
 
 # Files whose tool claims default to the TRAINED surface. Everything else
 # defaults to the live surface.
@@ -459,30 +465,28 @@ def _doc_files(root: Path) -> list[Path]:
     return keep
 
 
+_nearest_span = cmt.nearest_span
+
+
 def _nearest(pattern: re.Pattern[str], line: str, match: re.Match[str]) -> int | None:
     """Distance from *match* to the closest occurrence of *pattern* in *line*."""
-    best: int | None = None
-    for hit in pattern.finditer(line):
-        if hit.end() <= match.start():
-            gap = match.start() - hit.end()
-        elif hit.start() >= match.end():
-            gap = hit.start() - match.end()
-        else:
-            gap = 0
-        if best is None or gap < best:
-            best = gap
-    return best
+    return _nearest_span(pattern, line, match.start(), match.end())
 
 
-def _tool_scope(rel: str, line: str, match: re.Match[str]) -> str:
-    """``"trained"`` or ``"live"`` for one tool-count claim."""
-    trained = _nearest(_TRAINED_MARK, line, match)
-    live = _nearest(_LIVE_MARK, line, match)
+def _tool_scope_span(rel: str, line: str, start: int, end: int) -> str:
+    """``"trained"`` or ``"live"`` for the tool-count claim at ``line[start:end]``."""
+    trained = _nearest_span(_TRAINED_MARK, line, start, end)
+    live = _nearest_span(_LIVE_MARK, line, start, end)
     if trained is not None and (live is None or trained < live):
         return "trained"
     if live is not None and (trained is None or live < trained):
         return "live"
     return "trained" if any(rel.startswith(p) for p in _TRAINED_DEFAULT_PREFIXES) else "live"
+
+
+def _tool_scope(rel: str, line: str, match: re.Match[str]) -> str:
+    """``"trained"`` or ``"live"`` for one tool-count claim."""
+    return _tool_scope_span(rel, line, match.start(), match.end())
 
 
 def _flag_expected(rel: str, line: str, match: re.Match[str], auth: Authorities) -> int | None:
@@ -680,6 +684,53 @@ def scan_ci_python_lists(rel: str, lines: list[str], auth: Authorities) -> list[
     return out
 
 
+def scan_table_tools(rel: str, lines: list[str], auth: Authorities, scopes: list[bool]) -> list[Finding]:
+    """Tool counts stated in a table CELL, where the number follows its label.
+
+    ``| MCP tools | 89 | N/A |`` states a claim no pattern in this module can
+    see, because every one of them wants the count adjacent to the word. The
+    cell matcher lives in ``count_mcp_tools`` and is shared, so the two gates
+    cannot disagree about what a table claim is.
+    """
+    out: list[Finding] = []
+    for lineno, start, end, value in cmt.table_tool_claims(lines):
+        line = lines[lineno - 1]
+        if scopes[lineno - 1] or cmt.version_qualifies_span(line, start, end):
+            continue
+        scope = _tool_scope_span(rel, line, start, end)
+        expected = auth.trained_tools if scope == "trained" else auth.live_tools
+        if value != expected:
+            out.append(Finding(rel, lineno, "tools", str(value), str(expected), line.strip(), start, end))
+    return out
+
+
+def scan_text(rel: str, lines: list[str], auth: Authorities) -> list[Finding]:
+    """Every stale claim in one document: per line, wrapped across a break, and in a table cell."""
+    scopes = _record_scopes(lines)
+    findings: list[Finding] = []
+    for idx, line in enumerate(lines):
+        findings.extend(scan_line(rel, idx + 1, line, auth, historical=scopes[idx]))
+    # A claim the markdown reflow split in two ("...MIND-Mem's 89 MCP\ntools")
+    # is invisible to every line-scoped pattern above. Rescan each prose line
+    # glued to its successor, mapping each hit back to the real line that holds
+    # the number, and drop anything the per-line pass already reported --
+    # otherwise every claim inside a joined pair is counted twice.
+    seen = {(f.lineno, f.start, f.end, f.kind) for f in findings}
+    for lineno, joined, boundary in cmt.wrapped_line_pairs(lines):
+        historical = scopes[lineno - 1] or scopes[lineno]
+        for finding in scan_line(rel, lineno, joined, auth, historical=historical):
+            real_lineno, start, end = cmt.locate_in_pair(finding.start, finding.end, lineno, boundary)
+            key = (real_lineno, start, end, finding.kind)
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append(replace(finding, lineno=real_lineno, start=start, end=end))
+    for finding in scan_table_tools(rel, lines, auth, scopes):
+        if (finding.lineno, finding.start, finding.end, finding.kind) not in seen:
+            findings.append(finding)
+    return findings
+
+
 def scan_docs(auth: Authorities, root: Path | None = None) -> list[Finding]:
     root = root or _project_root()
     findings: list[Finding] = []
@@ -691,9 +742,7 @@ def scan_docs(auth: Authorities, root: Path | None = None) -> list[Finding]:
             print(f"WARN: could not read {rel}: {exc}", file=sys.stderr)
             continue
         lines = text.splitlines()
-        scopes = _record_scopes(lines)
-        for idx, line in enumerate(lines):
-            findings.extend(scan_line(rel, idx + 1, line, auth, historical=scopes[idx]))
+        findings.extend(scan_text(rel, lines, auth))
         findings.extend(scan_ci_python_lists(rel, lines, auth))
     findings.extend(scan_builder_default(auth, root))
     findings.extend(check_core_deps_badge(auth, root))
@@ -1079,12 +1128,9 @@ def check_live_hf_card(auth: Authorities, url: str = HF_CARD_URL, timeout: float
     if not text.strip():
         raise AuthorityError(f"the published model card at {url} came back empty")
     rel = "huggingface.co/star-ga/mind-mem-4b/README.md"
-    findings: list[Finding] = []
-    lines = text.splitlines()
-    scopes = _record_scopes(lines)
-    for idx, line in enumerate(lines):
-        findings.extend(scan_line(rel, idx + 1, line, auth, historical=scopes[idx]))
-    return findings
+    # Same scanner as the in-tree surfaces: the published card is where the
+    # wrapped and table shapes hide too, and a hub-only matcher would drift.
+    return scan_text(rel, text.splitlines(), auth)
 
 
 # --------------------------------------------------------------------------

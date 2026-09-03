@@ -1,5 +1,6 @@
 {
   "name": "@mind-mem/sdk",
+  "private": true,
   "version": "0.1.0",
   "description": "JS/TS client SDK for the mind-mem REST API",
   "license": "Apache-2.0",
@@ -16,10 +17,9 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "node --test test/*.test.js",
-    "test:ts": "npx --yes tsx --test test/*.test.ts",
-    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.test.json && test -f build/test/client.test.js && node --test build/test/*.test.js",
+    "clean": "rm -rf dist build",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "engines": {

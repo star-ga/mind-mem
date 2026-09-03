@@ -78,9 +78,9 @@ The client contract is two lines::
     report_outcome(ws, block_ids, "success", query_id=query_id)
 
 :func:`run_precision` still reports ``available=False`` **with a reason**
-where the join genuinely cannot be made — the ledger is default-OFF, so a
-workspace that never enabled it has no run rows to join to — and it counts
-the credit rows it could not join instead of silently dropping them.
+where the join genuinely cannot be made — a workspace that opted out, or one
+that has served nothing yet, has no run rows to join to — and it counts the
+credit rows it could not join instead of silently dropping them.
 
 THE THIRD VIEW — counts that outlive the window
 ------------------------------------------------
@@ -132,7 +132,8 @@ SOURCE_SERVED_LEDGER: Final = "served_ledger"
 #: rows older than 30 days, so its silence about a block is bounded.
 RETRIEVAL_LOG_WINDOW: Final = "retrieval_log: rows pruned at 30 days"
 
-#: What the ledger can see. Append-only, never pruned — but default OFF.
+#: What the ledger can see. Append-only, never pruned; on by default since
+#: 5.0.2, so the window is the whole history unless the workspace opted out.
 SERVED_LEDGER_WINDOW: Final = "served_ledger: append-only, not pruned"
 
 #: The two credit verdicts, derived from the outcome→feedback projection in
@@ -650,10 +651,11 @@ def run_precision(workspace: str) -> RunPrecision:
     attestation.
 
     ``available`` is ``False``, with the reason, when the ledger holds no
-    rows (it is default-OFF) or when no credit row carries a joinable id.
+    rows (nothing served yet, or the workspace opted out) or when no credit
+    row carries a joinable id.
     Neither is a wiring gap any more: the envelope publishes the id as
     ``attestation["query_id"]``, so a client that reports outcomes against
-    it joins. What remains are data conditions — an unenabled ledger, or
+    it joins. What remains are data conditions — an opted-out ledger, or
     outcomes reported without the id — and the reason says which. The count
     of unjoinable credit rows is reported either way: a row that could not
     be joined is named, never dropped.
@@ -667,7 +669,7 @@ def run_precision(workspace: str) -> RunPrecision:
     if not ledger_runs:
         reason = "served-set ledger holds no rows"
         if not ledger_enabled(workspace):
-            reason += " (served_ledger.enabled is not true in mind-mem.json)"
+            reason += " (this workspace opted out: served_ledger.enabled is false in mind-mem.json)"
         return RunPrecision(False, reason, 0, 0, 0, 0, 0.0, unjoinable)
     if not joinable:
         return RunPrecision(

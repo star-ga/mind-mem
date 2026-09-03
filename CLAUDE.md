@@ -200,7 +200,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   block_versioning.py   — block version history
   circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
   feature_flags.py      — 52 flags + is_enabled/require_enabled
-tests/                  — pytest suite (10,550 tests incl. 376 v4 unit
+tests/                  — pytest suite (11,718 tests incl. 376 v4 unit
                           + 38 concurrency + 22 paraphrase probes)
 mind/                   — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
@@ -229,7 +229,7 @@ docs/                   — User + integration docs (35+ files)
   audit hash preimages, TAG_v1 NUL-separated composition for collision
   resistance
 - **Local model** (v4.0.0): `star-ga/mind-mem-4b` — full fine-tune of
-  Qwen3.5-4B retrained for v4.0.0 (v4 weights revision). Knows all 84
+  Qwen3.5-4B retrained for v4.0.0 (v4 weights revision). Knows all 83
   tools, v4 surfaces (cognitive kernel, block kinds, tier memory,
   self-editing), and the corrected `KIND_DECAY['cites']=0.8` value.
   Prior v3.12.0-fullft weights pinned at `v3.12.0` HF revision. Prior
@@ -265,7 +265,7 @@ name that no longer exists -- this list previously carried 11 ghosts
 
 ## Testing
 ```bash
-pytest                           # full suite (10,550 tests)
+pytest                           # full suite (11,718 tests)
 pytest tests/test_retrieval.py   # specific module
 pytest -x --tb=short             # stop on first failure
 pytest --collect-only -q | tail  # verify test count

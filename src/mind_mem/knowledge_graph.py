@@ -30,8 +30,12 @@ purpose: ``approve_edge`` delegates to ``add_edge``, so does the ingest
 approval and so does the admin tool, and a door added tomorrow inherits
 the refusal instead of having to remember the rule.
 
-Pure Python, stdlib-only except the leaf ``admission`` module (which
-itself imports only ``enums``). Concurrency-safe.
+Pure Python, stdlib-only except two leaf modules: ``admission`` (which
+itself imports only ``enums``) and ``graph_schema``, which folds the
+predicate vocabulary, the entity-folding rule and the extraction prompt
+into the deterministic ``schema_version`` every edge is stamped with —
+the receipt says who authorised the edge, the stamp says what rules
+produced it, and re-extraction needs both. Concurrency-safe.
 """
 
 from __future__ import annotations
@@ -47,6 +51,8 @@ from enum import Enum
 from typing import Any, Mapping, Optional
 
 from .admission import require_admission
+from .graph_schema import stamp as stamp_schema_version
+from .graph_schema import version_of as schema_version_of
 
 # ---------------------------------------------------------------------------
 # Predicate registry
@@ -585,6 +591,77 @@ class EdgeProposal:
 
 
 @dataclass(frozen=True)
+class Corroboration:
+    """How many independent blocks assert one claim, and how strongly.
+
+    ``corroborated_confidence`` combines the per-edge confidences as
+    independent evidence for the same claim (``1 - prod(1 - c_i)``): two
+    sources at 0.6 outrank one source at 0.8, and no amount of
+    corroboration can exceed 1.0. Inputs are sorted before the product so
+    the floating-point result is a function of the *set* of confidences,
+    not of row order — the same claim scores identically on any machine.
+
+    It is a **combiner, not a calibration**: it says how much independent
+    support a claim has, not what fraction of such claims turn out true.
+    Fitting that mapping to outcomes is the conformal-calibration work
+    tracked separately; naming this one honestly is what keeps the two
+    from being confused.
+    """
+
+    subject: str
+    predicate: str
+    object: str
+    source_block_ids: tuple[str, ...]
+    confidences: tuple[float, ...]
+
+    @property
+    def sources(self) -> int:
+        """Distinct blocks asserting this claim."""
+        return len(self.source_block_ids)
+
+    @property
+    def corroborated_confidence(self) -> float:
+        """Independent-evidence combination of the per-source confidences."""
+        remaining = 1.0
+        for value in self.confidences:
+            remaining *= 1.0 - value
+        return round(1.0 - remaining, 6)
+
+    @classmethod
+    def from_edges(cls, claim: tuple[str, str, str], edges: list["Edge"]) -> "Corroboration":
+        """Build from the rows of one claim.
+
+        Deduplicates by ``source_block_id``: one block asserting a claim
+        twice is one source, or a repeated document would manufacture
+        corroboration out of nothing. When it does appear twice the
+        strongest confidence for that block wins.
+        """
+        best: dict[str, float] = {}
+        for edge in edges:
+            block = edge.source_block_id
+            if block not in best or edge.confidence > best[block]:
+                best[block] = edge.confidence
+        blocks = tuple(sorted(best))
+        return cls(
+            subject=claim[0],
+            predicate=claim[1],
+            object=claim[2],
+            source_block_ids=blocks,
+            confidences=tuple(sorted(best[b] for b in blocks)),
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "subject": self.subject,
+            "predicate": self.predicate,
+            "object": self.object,
+            "sources": self.sources,
+            "source_block_ids": list(self.source_block_ids),
+            "corroborated_confidence": self.corroborated_confidence,
+        }
+
+
+@dataclass(frozen=True)
 class GraphStats:
     """Snapshot of graph size for observability."""
 
@@ -714,6 +791,14 @@ class KnowledgeGraph:
         pred = predicate if isinstance(predicate, Predicate) else Predicate.from_str(predicate)
         if not source_block_id or not source_block_id.strip():
             raise ValueError("source_block_id is required for provenance")
+        # Before the admission check, and therefore before ``resolve``
+        # mints entity rows: a malformed stamp is a refusable call, and a
+        # refusable call must leave the database exactly as it found it.
+        # An id the caller already carries is preserved rather than
+        # overwritten -- that is how a proposal staged under one
+        # vocabulary keeps its extraction-time schema through an approval
+        # committed under a wider one.
+        stamped_metadata = stamp_schema_version(metadata)
         require_admission(edge_id(subject, pred, object, source_block_id))
         s_id = self.entities.resolve(subject)
         o_id = self.entities.resolve(object)
@@ -737,7 +822,7 @@ class KnowledgeGraph:
             confidence=float(confidence),
             valid_from=valid_from,
             valid_until=valid_until,
-            metadata=dict(metadata or {}),
+            metadata=stamped_metadata,
         )
         with self._lock:
             self._conn.execute(
@@ -814,7 +899,10 @@ class KnowledgeGraph:
             if _parse_iso8601(valid_until) < _parse_iso8601(valid_from):
                 raise ValueError("valid_until must be >= valid_from")
 
-        meta = dict(metadata or {})
+        # Stamped at staging, not at approval: the schema that produced
+        # the triple is the one in force when it was proposed, and
+        # ``add_edge`` preserves an id it is handed.
+        meta = stamp_schema_version(metadata)
         pid = _edge_proposal_id(subject, pred.value, object, source_block_id)
         with self._lock:
             self._conn.execute(
@@ -1046,6 +1134,50 @@ class KnowledgeGraph:
             include_expired=include_expired,
         )
 
+    def edges_of(
+        self,
+        entity: str,
+        *,
+        direction: str = "both",
+        predicate: "Predicate | str | None" = None,
+        include_expired: bool = False,
+    ) -> list[Edge]:
+        """Edges touching *entity*, resolved **without minting a row**.
+
+        :meth:`edges_from` and :meth:`edges_to` go through
+        ``entities.resolve``, which creates the entity when it is unknown
+        — correct for a write path, wrong for one that answers questions:
+        asking "what does the graph know about X" would silently add X to
+        the graph. This uses :meth:`EntityRegistry.lookup` instead, so an
+        unknown entity yields ``[]`` and the registry is untouched.
+
+        ``direction`` is ``"outgoing"``, ``"incoming"`` or ``"both"``;
+        results are de-duplicated (a self-edge appears once) and ordered
+        deterministically by ``(-confidence, subject, predicate, object,
+        source_block_id)``.
+        """
+        direction = direction.lower()
+        if direction not in {"outgoing", "incoming", "both"}:
+            raise ValueError("direction must be 'outgoing', 'incoming', or 'both'")
+        entity_id = self.entities.lookup(entity)
+        if entity_id is None:
+            return []
+        collected: list[Edge] = []
+        if direction in {"outgoing", "both"}:
+            collected.extend(self._query_edges(subject=entity_id, predicate=predicate, include_expired=include_expired))
+        if direction in {"incoming", "both"}:
+            collected.extend(self._query_edges(object_=entity_id, predicate=predicate, include_expired=include_expired))
+        seen: set[tuple[str, str, str, str]] = set()
+        unique: list[Edge] = []
+        for edge in collected:
+            key = (edge.subject, edge.predicate.value, edge.object, edge.source_block_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(edge)
+        unique.sort(key=lambda e: (-e.confidence, e.subject, e.predicate.value, e.object, e.source_block_id))
+        return unique
+
     def _query_edges(
         self,
         *,
@@ -1193,6 +1325,114 @@ class KnowledgeGraph:
         return out
 
     # ------------------------------------------------------------------
+    # Corroboration — an edge asserted by three blocks is not one edge
+    # ------------------------------------------------------------------
+
+    def corroboration_index(self) -> dict[tuple[str, str, str], "Corroboration"]:
+        """Every distinct triple, with the independent sources behind it.
+
+        ``(subject, predicate, object)`` is the *claim*; ``source_block_id``
+        is part of the edges primary key, so one claim asserted by three
+        blocks is three rows. Until now those three rows ranked exactly
+        like one row asserted once, which is the opposite of how evidence
+        works.
+
+        Derived, never stored. It is a pure function of the ``edges``
+        table — recomputed on demand, identical on any machine, and it
+        writes nothing, so a corroboration score can never become
+        ungoverned content that entered the graph without a receipt. That
+        is the "sidecar only, never in the sealed preimage" rule taken to
+        its end: there is no sidecar to keep in sync.
+        """
+        grouped: dict[tuple[str, str, str], list[Edge]] = {}
+        for edge in self._all_edges():
+            grouped.setdefault((edge.subject, edge.predicate.value, edge.object), []).append(edge)
+        return {claim: Corroboration.from_edges(claim, edges) for claim, edges in sorted(grouped.items())}
+
+    def corroboration_of(
+        self,
+        subject: str,
+        predicate: "Predicate | str",
+        object: str,
+    ) -> "Corroboration":
+        """Corroboration for one claim. Unknown claims score zero.
+
+        Entity surfaces are folded exactly as the store folds them, so a
+        caller may pass any alias.
+        """
+        pred = predicate if isinstance(predicate, Predicate) else Predicate.from_str(predicate)
+        s_id = self.entities.lookup(subject) or _canonicalise(subject)
+        o_id = self.entities.lookup(object) or _canonicalise(object)
+        claim = (s_id, pred.value, o_id)
+        matching = [e for e in self._all_edges() if (e.subject, e.predicate.value, e.object) == claim]
+        return Corroboration.from_edges(claim, matching)
+
+    def single_source_claims(self) -> list["Corroboration"]:
+        """Claims resting on exactly one block, in deterministic order.
+
+        Not a defect list — most claims legitimately have one source. It
+        is the set a reviewer should read differently from a claim three
+        independent blocks agree on, and naming it is what lets a consumer
+        weight the two apart.
+        """
+        return [c for c in self.corroboration_index().values() if c.sources == 1]
+
+    # ------------------------------------------------------------------
+    # Schema generations — distinguishable, comparable, re-extractable
+    # ------------------------------------------------------------------
+
+    def _all_edges(self) -> list[Edge]:
+        """Every stored edge, expired ones included.
+
+        ``include_expired=True`` on purpose: the temporal filter reads a
+        clock, and a schema report that changed its answer at midnight
+        would not be a schema report. A stale-schema edge is stale
+        whether or not its validity window has closed.
+        """
+        return self._query_edges(include_expired=True)
+
+    def schema_version_histogram(self) -> dict[str, int]:
+        """Edge count per stamped schema id, lex-ordered.
+
+        Edges written before stamping existed (and any row whose stamp is
+        malformed) are counted under the empty-string key rather than
+        dropped: "how many edges cannot say what produced them" is the
+        first number an operator needs, and silently omitting them would
+        report a cleaner graph than the one on disk.
+        """
+        counts: dict[str, int] = {}
+        for edge in self._all_edges():
+            key = schema_version_of(edge.metadata) or ""
+            counts[key] = counts.get(key, 0) + 1
+        return dict(sorted(counts.items()))
+
+    def edges_by_schema_version(self, version: Optional[str]) -> list[Edge]:
+        """Edges stamped with *version*; ``None`` selects the unstamped ones."""
+        return [e for e in self._all_edges() if schema_version_of(e.metadata) == version]
+
+    def stale_schema_edges(self, *, current: Optional[str] = None) -> list[Edge]:
+        """Edges whose stamp is not *current* (default: the live schema id).
+
+        Includes unstamped edges — they are the oldest generation of all.
+        This is the "distinguishable" half of schema versioning made
+        answerable: before this, an edge extracted under a narrower
+        vocabulary was indistinguishable from one extracted today.
+        """
+        from .graph_schema import current_version
+
+        target = current if current is not None else current_version()
+        return [e for e in self._all_edges() if schema_version_of(e.metadata) != target]
+
+    def stale_schema_source_blocks(self, *, current: Optional[str] = None) -> list[str]:
+        """Lex-sorted, de-duplicated source blocks behind the stale edges.
+
+        The "re-extractable" half: this is the corpus slice a re-extraction
+        run has to cover to bring the graph up to the live schema, and it
+        is derived from the graph rather than guessed.
+        """
+        return sorted({e.source_block_id for e in self.stale_schema_edges(current=current)})
+
+    # ------------------------------------------------------------------
     # Stats
     # ------------------------------------------------------------------
 
@@ -1236,6 +1476,7 @@ __all__ = [
     "EntityRegistry",
     "KnowledgeGraph",
     "GraphStats",
+    "Corroboration",
     "TYPED_RELATIONS",
     "TYPED_RELATION_VALUES",
     "is_typed_relation",
@@ -1245,4 +1486,7 @@ __all__ = [
     "PROPOSAL_REJECTED",
     "EDGE_ORIGIN_HITL_APPROVED",
     "EDGE_ORIGIN_DIRECT_ADMIN",
+    "edge_id",
+    "stamp_schema_version",
+    "schema_version_of",
 ]

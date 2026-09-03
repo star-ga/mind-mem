@@ -1,14 +1,53 @@
 #!/usr/bin/env python3
-"""mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
+"""mind-mem field-level audit sidecar — tamper-evident append-only ledger.
 
-Every mutation (create, update, delete, supersede) is recorded as a
-hash-chained entry. Each entry includes a SHA256 hash of the previous
-entry, creating a Merkle-style chain that detects tampering.
+**Not the ledger of record.** What a mutation was allowed to do is
+recorded by the gate in ``hash_chain_v2``; why it was allowed is
+recorded in ``evidence_chain``. This module is a *sidecar* of those
+two: it carries field-granular detail for the four doors that write to
+it -- three distinct verbs between them -- and nothing else reaches it. It is one of the four ledgers
+``mind-mem-verify`` walks, and the only one whose rows name individual
+fields.
+
+Everything that writes here, and nothing else does:
+
+* ``field_audit.record_change``          -> ``update_field``
+* ``compliance.audit.record_redaction``  -> ``update_field``
+* ``auto_resolver`` (resolution applied) -> ``apply_proposal``
+* ``importers.quarantine``               -> ``create_block``
+
+:data:`VALID_OPERATIONS` is exactly that written set, and
+``tests/test_ledger_hierarchy.py`` re-derives it from the source by
+AST, so the two cannot drift without failing the build. Do not read a
+missing verb as a missing record: a delete is recorded by the gate and
+the ``deleted_blocks`` ledger, a rollback by ``apply_engine.rollback``
+in the evidence chain — neither lands here, and until 5.0.2 this
+docstring claimed both did. The verbs this module advertised but never
+wrote are kept in :data:`RETIRED_OPERATIONS`, so a pre-5.0.2 ledger
+carrying them still reads and still verifies; :meth:`AuditChain.append`
+refuses to mint a new one.
+
+Each entry names the gate admission it happened under —
+``admission_entry_id``, the ``hash_chain`` entry id published by
+:func:`~mind_mem.admission.current_admission` — whenever a scope is
+open. That is the link from a sidecar row back to the chain of record,
+and it is read from the ambient scope rather than passed by the
+caller, so a new writer gets it without knowing it exists. A row
+appended outside any admission scope omits the field rather than
+inventing a link.
+
+deferred: ``admission_entry_id`` sits outside the entry-hash preimage,
+exactly like ``fields_changed``, so it is recorded but not
+authenticated — an edit to the link alone does not break the chain.
+Upgrade path: a v4 preimage (new TAG, ``AUDIT_v2``) covering both
+fields, added reader-first so an older verifier is never handed a row
+it cannot check.
 
 Ledger location: workspace/.mind-mem-audit/chain.jsonl
 Each line is a JSON object with:
     seq, timestamp, operation, target, agent, reason,
     payload_hash, prev_hash, entry_hash
+    [, fields_changed] [, admission_entry_id]
 
 Usage:
     from .audit_chain import AuditChain
@@ -29,6 +68,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
+from .admission import current_admission
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
@@ -40,10 +80,27 @@ _log = get_logger("audit_chain")
 # verifier reads the anchor rather than recomputing it.
 _GENESIS_HASH = "0" * 64
 
+#: The operations a door actually appends here. Derived from the source
+#: by ``tests/test_ledger_hierarchy.py``: adding a member without a
+#: writer, or a writer whose verb is not a member, fails the build.
 VALID_OPERATIONS = frozenset(
     {
         "create_block",
         "update_field",
+        "apply_proposal",
+    }
+)
+
+#: Verbs a pre-5.0.2 ``VALID_OPERATIONS`` accepted that no door ever
+#: wrote. Kept so an existing ledger carrying one still parses and still
+#: verifies -- :meth:`AuditChain.verify` never consults either set, and
+#: an operator's own ``mm``-era rows must not become unreadable because
+#: we corrected the contract. Refused for NEW appends: minting one now
+#: would re-advertise a record this ledger does not keep. Each is
+#: recorded elsewhere (the gate's hash chain, the evidence chain, or
+#: ``deleted_blocks``); none of them is lost.
+RETIRED_OPERATIONS = frozenset(
+    {
         "delete_block",
         "supersede",
         "append_block",
@@ -52,10 +109,12 @@ VALID_OPERATIONS = frozenset(
         "append_list_item",
         "insert_after_block",
         "restore_backup",
-        "apply_proposal",
         "rollback",
     }
 )
+
+#: Everything a reader may legitimately encounter on disk.
+READABLE_OPERATIONS = VALID_OPERATIONS | RETIRED_OPERATIONS
 
 
 def _compute_hash(data: str) -> str:
@@ -86,6 +145,7 @@ class AuditEntry:
         "prev_hash",
         "entry_hash",
         "fields_changed",
+        "admission_entry_id",
     )
 
     def __init__(
@@ -100,6 +160,7 @@ class AuditEntry:
         prev_hash: str,
         entry_hash: str,
         fields_changed: list[str] | None = None,
+        admission_entry_id: str | None = None,
     ):
         self.seq = seq
         self.timestamp = timestamp
@@ -111,6 +172,11 @@ class AuditEntry:
         self.prev_hash = prev_hash
         self.entry_hash = entry_hash
         self.fields_changed = fields_changed or []
+        #: ``hash_chain`` entry id of the gate admission this row was
+        #: appended under, or ``None`` when no scope was open. Never
+        #: fabricated: absent means "not written inside an admission",
+        #: which is a fact about the row, not a gap in it.
+        self.admission_entry_id = admission_entry_id
 
     def to_dict(self) -> dict:
         d: dict = {
@@ -126,6 +192,8 @@ class AuditEntry:
         }
         if self.fields_changed:
             d["fields_changed"] = self.fields_changed
+        if self.admission_entry_id:
+            d["admission_entry_id"] = self.admission_entry_id
         return d
 
     @classmethod
@@ -141,6 +209,7 @@ class AuditEntry:
             prev_hash=d["prev_hash"],
             entry_hash=d["entry_hash"],
             fields_changed=d.get("fields_changed"),
+            admission_entry_id=d.get("admission_entry_id"),
         )
 
     @staticmethod
@@ -321,7 +390,9 @@ class AuditChain:
         """Append a new mutation entry to the chain.
 
         Args:
-            operation: One of VALID_OPERATIONS.
+            operation: One of :data:`VALID_OPERATIONS`. A
+                :data:`RETIRED_OPERATIONS` verb is refused with the
+                ledger that does record it named in the message.
             target: Relative path of the affected file/block.
             agent: Identity of who made the change.
             reason: Governance justification for the change.
@@ -338,6 +409,14 @@ class AuditChain:
                 than restarted at seq 1 on top of the damaged tail.
         """
         if operation not in VALID_OPERATIONS:
+            if operation in RETIRED_OPERATIONS:
+                raise ValueError(
+                    f"Operation '{operation}' is retired: no door has ever written it to the "
+                    f"field-audit sidecar, and minting one now would advertise a record this "
+                    f"ledger does not keep. It is recorded in the chain of record instead "
+                    f"(hash_chain_v2 + evidence_chain; deletes also in deleted_blocks). "
+                    f"Appendable here: {sorted(VALID_OPERATIONS)}"
+                )
             raise ValueError(f"Invalid operation '{operation}'. Must be one of: {sorted(VALID_OPERATIONS)}")
 
         # Normalize target to relative path
@@ -356,6 +435,15 @@ class AuditChain:
 
             entry_hash = AuditEntry.compute_entry_hash(seq, ts, operation, target, agent, reason, p_hash, prev_hash)
 
+            # The link to the chain of record is taken from the ambient
+            # scope, not from an argument: a caller cannot forget to pass
+            # it, and a future door gets the link without knowing the
+            # field exists. A ContextVar read -- no syscall, no parse, no
+            # clock -- so a row written outside any scope costs exactly
+            # what it cost before this field existed.
+            receipt = current_admission()
+            admission_entry_id = getattr(receipt, "entry_id", None) if receipt is not None else None
+
             entry = AuditEntry(
                 seq=seq,
                 timestamp=ts,
@@ -367,6 +455,7 @@ class AuditChain:
                 prev_hash=prev_hash,
                 entry_hash=entry_hash,
                 fields_changed=fields_changed,
+                admission_entry_id=admission_entry_id,
             )
 
             with open(self._chain_path, "a", encoding="utf-8") as f:

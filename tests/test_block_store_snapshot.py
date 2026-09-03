@@ -1,10 +1,18 @@
-"""v3.2.0 §1.4 PR-3 — MarkdownBlockStore.snapshot / restore / diff tests."""
+"""v3.2.0 §1.4 PR-3 — MarkdownBlockStore.snapshot / restore / diff tests.
+
+From 5.0.2 ``restore`` is checked at the store seam like ``write_block`` and
+``delete_block``, so every restore below runs inside the RESTORE scope the
+sanctioned caller opens (:func:`tests._restore_scope.restoring`). The refusal
+itself is covered by ``tests/test_restore_is_gated_at_the_seam.py``; these
+tests are about what a restore *does* once it is allowed to run.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
+from _restore_scope import restoring
 
 from mind_mem.block_store import MarkdownBlockStore
 
@@ -56,12 +64,14 @@ class TestStoreRestore:
         (ws / "decisions" / "DECISIONS.md").write_text("[D-001]\nStatement: mutated\n\n---\n")
 
         # First restore
-        store.restore(str(snap_dir))
+        with restoring(str(ws)):
+            store.restore(str(snap_dir))
         content_after_first = (ws / "decisions" / "DECISIONS.md").read_text()
         assert "initial" in content_after_first
 
         # Second restore (idempotent — should not raise and result must be the same)
-        store.restore(str(snap_dir))
+        with restoring(str(ws)):
+            store.restore(str(snap_dir))
         content_after_second = (ws / "decisions" / "DECISIONS.md").read_text()
         assert content_after_second == content_after_first
 
@@ -75,7 +85,8 @@ class TestStoreDiff:
         (ws / "decisions" / "DECISIONS.md").write_text("[D-001]\nStatement: mutated\n\n---\n")
         assert store.diff(str(snap_dir)) != [], "diff should be non-empty after mutation"
 
-        store.restore(str(snap_dir))
+        with restoring(str(ws)):
+            store.restore(str(snap_dir))
         remaining = store.diff(str(snap_dir))
         assert remaining == [], f"diff should be empty after restore, got: {remaining}"
 
@@ -110,7 +121,8 @@ class TestRestoreWithDamagedSnapshot:
             lambda event, **kw: events.append(("info", event, kw)),
         )
 
-        MarkdownBlockStore(str(ws)).restore(str(snap_dir))
+        with restoring(str(ws)):
+            MarkdownBlockStore(str(ws)).restore(str(snap_dir))
 
         warned = [kw for lvl, event, kw in events if lvl == "warning" and event == "restore_missing_snapshot_source"]
         assert [kw["entry"] for kw in warned] == ["decisions/DECISIONS.md"]
@@ -131,7 +143,8 @@ class TestRestoreWithDamagedSnapshot:
 
         events: list[dict] = []
         monkeypatch.setattr(bs._log, "info", lambda event, **kw: events.append({"event": event, **kw}))
-        store.restore(str(snap_dir))
+        with restoring(str(ws)):
+            store.restore(str(snap_dir))
 
         (summary,) = [e for e in events if e["event"] == "block_store_restore"]
         assert summary["missing"] == 0
@@ -142,6 +155,7 @@ class TestRestoreWithDamagedSnapshot:
     def test_unrestorable_file_is_not_deleted_as_an_orphan(self, ws: Path, snap_dir: Path) -> None:
         """The live file stays: the snapshot is damaged, not the workspace."""
         self._damage(ws, snap_dir)
-        MarkdownBlockStore(str(ws)).restore(str(snap_dir))
+        with restoring(str(ws)):
+            MarkdownBlockStore(str(ws)).restore(str(snap_dir))
         assert (ws / "decisions" / "DECISIONS.md").is_file()
         assert "mutated" in (ws / "decisions" / "DECISIONS.md").read_text()

@@ -6,8 +6,19 @@ Stdlib-only — no external dependencies.
 ## Install
 
 ```sh
-go get github.com/star-ga/mind-mem/sdk/go@latest
+go get github.com/star-ga/mind-mem/sdk/go/v5@latest
 ```
+
+```go
+import mindmem "github.com/star-ga/mind-mem/sdk/go/v5"
+```
+
+The `/v5` suffix is required by Go, not decoration: this is a subdirectory
+module in a repository whose releases are v5.x, so it is published by the tag
+`sdk/go/v5.0.2`, and Go rejects a v2-or-higher version for a module path with
+no matching major-version suffix. The suffix is derived from the package
+version by `sdk/release/version.py`, so it cannot be left behind at the next
+major.
 
 ## Quick start
 
@@ -62,7 +73,7 @@ client := mindmem.NewClient("http://localhost:8080",
 | Method | Endpoint |
 |---|---|
 | `Recall(ctx, query, RecallOptions)` | `POST /v1/recall` |
-| `GetBlock(ctx, blockID)` | `GET /v1/blocks/{id}` |
+| `GetBlock(ctx, blockID)` | `GET /v1/block/{block_id}` |
 | `ListContradictions(ctx)` | `GET /v1/contradictions` |
 | `Health(ctx)` | `GET /v1/health` |
 | `Scan(ctx)` | `GET /v1/scan` |
@@ -94,3 +105,10 @@ if err != nil {
 ## Requirements
 
 - Go 1.21+
+
+## Route table
+
+The endpoint each method calls is declared in `routes.go` and checked against
+`sdk/spec/openapi.json` by `tests/test_sdk_route_conformance.py`, so a client
+that calls something the server does not serve fails in CI rather than at a
+user's first request.

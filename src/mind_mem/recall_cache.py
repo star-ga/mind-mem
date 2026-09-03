@@ -17,18 +17,23 @@ Two backends:
   ``collections.OrderedDict`` with LRU eviction. Used when Redis
   isn't configured or the ``redis`` package isn't installed.
 
-Invalidation — the cache entries are invalidated automatically
-on:
+Invalidation — **by construction, through the key**. The recall path folds
+the governed-ledger head (``index_anchor``) into :func:`make_cache_key`, so a
+governed write moves the head, the head moves the key, and every entry
+computed against the previous corpus state becomes unresolvable. That holds
+for a write through *any* door — the governance MCP tools, the CLI, the HTTP
+transport, the apply engine, federation replication — because it does not
+depend on that door remembering to call anything.
 
-* ``propose_update`` — signals can touch results, so stale caches
-  would leak pre-update blocks.
-* ``approve_apply`` (non-dry-run) — writes to source-of-truth.
-* ``rollback_proposal`` — reverts writes, reverses any post-apply
-  caching.
+The explicit namespace-wide :func:`invalidate` remains, and the governance
+MCP tools still call it. It is now a *promptness* measure (it frees the
+memory immediately rather than at the next eviction), not the correctness
+mechanism it used to be. It was never sufficient as one: it is called from
+three MCP tools, and the other write doors never called it at all.
 
-Invalidation is **namespace-wide** rather than per-query. Targeted
-invalidation requires tracking which queries touched which blocks,
-which is more complexity than the typical workspace needs.
+Targeted per-query invalidation is still not offered — it would require
+tracking which queries touched which blocks, and the anchor makes it
+unnecessary.
 
 Metrics exported on the Prometheus exporter (when installed):
 
@@ -52,9 +57,11 @@ from .observability import get_logger, metrics
 
 _log = get_logger("recall_cache")
 
-# Default TTL: one hour. Callers can override per query. Chosen so a
-# typical agent working session (minutes) gets cache hits while the
-# cache stays fresh across multi-hour sessions.
+# Default TTL: one hour. Callers can override per query. This is a *memory*
+# bound, not a freshness mechanism — freshness comes from ``index_anchor`` in
+# the key (see ``make_cache_key``). An entry whose corpus state has moved is
+# already unresolvable long before its TTL expires; the TTL only decides how
+# long an entry nobody will ask for again keeps occupying a slot.
 _DEFAULT_TTL_SECONDS = 3600
 
 # In-process LRU cap. Each entry averages ~8 KiB (envelope JSON) so
@@ -75,6 +82,7 @@ def make_cache_key(
     backend: str = "auto",
     active_only: bool = False,
     scoring_instant: str = "",
+    index_anchor: str = "",
 ) -> str:
     """Derive a stable cache key for a recall invocation.
 
@@ -87,6 +95,23 @@ def make_cache_key(
     recall is deterministic given (corpus, config, scoring_instant), so two
     requests differing only in the instant are two different queries. Omitting
     it would serve one instant's ranking under another instant's attestation.
+
+    ``index_anchor`` — the head of the governed hash chain — is in the key for
+    the same reason and a sharper one. Recall is deterministic given *(corpus, config,
+    scoring_instant)*, and the anchor is how a run names the corpus it read;
+    it is the third coordinate, and the TTL below is not a substitute for it.
+    Without the anchor in the key, a governed write that lands through any door
+    other than the governance MCP tools — the CLI, the HTTP transport, the
+    apply engine, federation replication — leaves this cache serving the
+    pre-write answer while :mod:`mind_mem.recall_attestation` stamps the
+    post-write anchor onto it. The run then attests a corpus state it did not
+    read, and replaying at that anchor does not reproduce the answer. With the
+    anchor in the key a superseded entry is simply unresolvable: the write
+    moved the head, the head is in the key, the key no longer matches. No
+    invalidation call to remember, so no door that can forget to call it.
+
+    The default of ``""`` keeps the signature backward-compatible for callers
+    outside the recall path; the recall path always supplies it.
     """
     payload = {
         "query": query,
@@ -95,6 +120,7 @@ def make_cache_key(
         "backend": backend,
         "active_only": bool(active_only),
         "scoring_instant": str(scoring_instant),
+        "index_anchor": str(index_anchor),
     }
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
@@ -311,6 +337,7 @@ def cached_recall(
     ttl_seconds: int = _DEFAULT_TTL_SECONDS,
     config: dict[str, Any] | None = None,
     scoring_instant: str = "",
+    index_anchor: str = "",
 ) -> str:
     """Cache-wrapped call to a recall function.
 
@@ -320,9 +347,11 @@ def cached_recall(
     same string envelope.
 
     ``scoring_instant`` (an ISO-8601 UTC date, or ``""`` for callers that do not
-    use the seam) participates in the key only — *inner* is called with its
-    original signature, so a caller that closes over the instant keeps working
-    unchanged.
+    use the seam) and ``index_anchor`` (the governed-ledger head, or ``""``)
+    participate in the key only — *inner* is called with its original
+    signature, so a caller that closes over either keeps working unchanged.
+    See :func:`make_cache_key` for why the anchor, not the TTL, is what makes a
+    superseded entry unservable.
     """
     key = make_cache_key(
         query,
@@ -331,6 +360,7 @@ def cached_recall(
         backend=backend,
         active_only=active_only,
         scoring_instant=scoring_instant,
+        index_anchor=index_anchor,
     )
     cache = get_cache(config)
     hit = cache.get(key)

@@ -151,7 +151,11 @@ def recall_with_guardrails(
 
     Returns:
         JSON: ``{"query": ..., "count": N, "guardrail_count": G,
-        "results": [...]}``.
+        "results": [...], "attestation": {...}}``.
+
+    ``attestation`` is the ``RECALL_ATTEST_v2`` record for this run, derived by
+    the serving entry this tool calls and committing to the ids in
+    ``results`` — guardrail-surfaced blocks included, because they were served.
     """
     if not isinstance(query, str):
         return json.dumps({"error": "query must be a string"})
@@ -186,6 +190,7 @@ def recall_with_guardrails(
             "count": len(results),
             "guardrail_count": guardrail_count,
             "results": results,
+            "attestation": getattr(results, "attestation", None),
         },
         indent=2,
         default=str,

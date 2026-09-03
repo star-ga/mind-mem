@@ -231,13 +231,18 @@ def _corpus_has_ciphertext(workspace: str) -> bool:
 
     Probes exactly the paths :func:`_iter_markdown_active_blocks`
     enumerates, so the answer is about the bytes that walk will actually
-    read. Cheap: one open + a 6-byte read per registered corpus file,
+    read. Cheap: one open + a 6-byte read per discovered corpus file,
     missing files skipped.
+
+    Discovery is :func:`corpus_registry.discover_corpus_files`, the same
+    one the enumeration uses — an encrypted ``.md`` sitting in a corpus
+    directory under a name the table does not list would otherwise read
+    as plaintext here and come back as zero blocks there, silently.
     """
-    from .._recall_constants import CORPUS_FILES
+    from ..corpus_registry import discover_corpus_files
     from ..encryption import _MAGIC, has_magic
 
-    for rel_path in CORPUS_FILES.values():
+    for _label, rel_path in discover_corpus_files(workspace):
         try:
             with open(os.path.join(workspace, rel_path), "rb") as fh:
                 if has_magic(fh.read(len(_MAGIC))):
@@ -312,10 +317,16 @@ def _iter_markdown_active_blocks(
 
     Single source of truth for the markdown-corpus enumeration used by
     the feature layer (scan / governance / export / reindex). Mirrors
-    the ``_recall_core`` corpus walk: iterate :data:`CORPUS_FILES`,
+    the ``_recall_core`` corpus walk: iterate
+    :func:`~mind_mem.corpus_registry.discover_corpus_files`,
     :func:`parse_file` each present file, keep only active blocks, tag
     each with ``_source_file`` / ``_source_label``, and exclude
     unreviewed pending signals (the same ``#429`` rule recall applies).
+
+    Discovery is the table PLUS the ``CORPUS_DIRS`` markdown walk, which
+    is what the store reads. Iterating the table alone is what made an
+    unnamed corpus-directory file ``get_by_id``-readable and
+    recall-invisible (I-14).
 
     ``active_only=False`` skips both status filters — an explicit
     "everything on disk" enumeration, for a caller that is opening a
@@ -331,12 +342,12 @@ def _iter_markdown_active_blocks(
     # Lazy imports keep this module import-safe (no recall/parse cost at
     # ``import mind_mem.storage`` time) and avoid an import cycle through
     # the recall constants.
-    from .._recall_constants import CORPUS_FILES
     from ..block_parser import get_active, parse_file
+    from ..corpus_registry import discover_corpus_files
 
     read = parse_file if parse is None else parse
     blocks: list[dict[str, Any]] = []
-    for label, rel_path in CORPUS_FILES.items():
+    for label, rel_path in discover_corpus_files(workspace):
         path = os.path.join(workspace, rel_path)
         if not os.path.isfile(path):
             continue
@@ -375,9 +386,12 @@ def iter_active_blocks(workspace: str, config: dict[str, Any] | None = None) -> 
       (see :func:`_iter_markdown_active_blocks`). An ``encrypted``
       corpus is decrypted on the way in — the reader comes from
       :func:`_corpus_parse_fn`, not ``parse_file``.
-    * **Any other backend** (e.g. ``postgres``) — delegate to
-      ``get_block_store(workspace).get_all(active_only=True)`` so the
-      blocks of record in the store are returned.
+    * **Any other backend** (e.g. ``postgres``) — read every row through
+      ``get_block_store(workspace).get_all(active_only=False)`` and hand
+      it to :func:`~mind_mem.admissibility.admit_corpus`, so the blocks
+      of record in the store are returned and the withheld ones are not.
+      The store's own ``active_only`` flag is deliberately not used: see
+      the comment in :func:`iter_blocks`.
 
     Args:
         workspace: Path to the mind-mem workspace root.
@@ -413,7 +427,27 @@ def iter_blocks(workspace: str, config: dict[str, Any] | None = None, *, active_
     if backend in _MARKDOWN_BACKENDS:
         return _iter_markdown_active_blocks(workspace, active_only=active_only, parse=_corpus_parse_fn(workspace, backend))
     store = get_block_store(workspace, config=config)
-    return store.get_all(active_only=active_only)
+    # Every row, then the admission function — never the store's own
+    # ``active_only`` filter. Two reasons, and both are load-bearing:
+    #
+    # 1. A store's notion of "active" is a *column*, and a column is a
+    #    cache of a governance fact that can be stale, hand-edited, or
+    #    (as ``blocks.active`` was up to 5.0.1) a constant. Asking
+    #    ``admit_corpus`` is asking the authority.
+    # 2. Admission is not a per-row predicate: an active release decision
+    #    in ``decisions/DECISIONS.md`` readmits ids a status alone
+    #    withholds, and ``admit_corpus`` can only see that decision if the
+    #    row it admits is still in the list. Filtering in the store first
+    #    would drop the released block before the release could apply.
+    #
+    # Same shape, and for the same reasons, as
+    # ``online_trainer.workspace_admitted_ids``.
+    blocks = store.get_all(active_only=False)
+    if not active_only:
+        return blocks
+    from ..admissibility import admit_corpus
+
+    return admit_corpus(blocks)
 
 
 def get_active_blocks(workspace: str, config: dict[str, Any] | None = None) -> list[dict[str, Any]]:

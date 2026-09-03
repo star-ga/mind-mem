@@ -1,6 +1,7 @@
 package mindmem
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -104,7 +105,27 @@ func (c *Client) addHeaders(req *http.Request) {
 
 // get performs a GET request and decodes the JSON response into dst.
 func (c *Client) get(ctx context.Context, path string, params map[string]string, dst interface{}) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.buildURL(path, params), nil)
+	return c.do(ctx, http.MethodGet, path, params, nil, dst)
+}
+
+// post performs a POST request with a JSON body and decodes the JSON response
+// into dst. A nil body sends no payload.
+func (c *Client) post(ctx context.Context, path string, body interface{}, dst interface{}) error {
+	return c.do(ctx, http.MethodPost, path, nil, body, dst)
+}
+
+// do issues one request and decodes the JSON response into dst.
+func (c *Client) do(ctx context.Context, method, path string, params map[string]string, body interface{}, dst interface{}) error {
+	var payload io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("mind-mem: encode request body: %w", err)
+		}
+		payload = bytes.NewReader(encoded)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.buildURL(path, params), payload)
 	if err != nil {
 		return fmt.Errorf("mind-mem: build request: %w", err)
 	}

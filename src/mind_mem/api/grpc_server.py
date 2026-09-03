@@ -37,9 +37,11 @@ Requires ``grpcio``, which mind-mem does not depend on.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Iterator, Optional, Sequence, Tuple
 
+from mind_mem import audit_context as _audit_ctx
 from mind_mem.observability import get_logger
 
 _log = get_logger("grpc_server")
@@ -60,6 +62,60 @@ def _reject_unsupported_tenant(tenant_id: str | None) -> None:
     """Raise if the caller asked for a tenant this transport cannot honour."""
     if tenant_id:
         raise ValueError(TENANT_UNSUPPORTED)
+
+
+# ---------------------------------------------------------------------------
+# Audit-header propagation (roadmap v4.0.0 Group D)
+# ---------------------------------------------------------------------------
+
+
+def audit_context_from_metadata(metadata: Optional[Sequence[Tuple[str, Any]]]) -> "_audit_ctx.AuditContext":
+    """Build a request-scoped audit context from gRPC invocation metadata.
+
+    gRPC metadata keys are lowercase ASCII, which is already the shape
+    :func:`mind_mem.audit_context.context_from_headers` looks up, so
+    the same three names carry across both transports and one correlation
+    id survives a REST-to-gRPC hop.
+
+    Binary metadata (a ``-bin`` key, whose value is ``bytes``) is ignored
+    rather than coerced: these three headers are text, and a ``bytes``
+    value here means the caller sent something this transport does not
+    define.
+
+    Note what is deliberately absent: nothing here fills
+    ``agent_authenticated``. This transport performs no authentication at
+    all (see the module docstring), so every identity it sees is a claim,
+    and recording a claim as an authenticated identity is how attribution
+    becomes forgery.
+    """
+    pairs: dict[str, str] = {}
+    for key, value in metadata or ():
+        if isinstance(value, str):
+            pairs[str(key).lower()] = value
+    return _audit_ctx.context_from_headers(pairs.get, transport="grpc")
+
+
+@contextmanager
+def bind_call_context(context: Any) -> Iterator[Optional["_audit_ctx.AuditContext"]]:
+    """Bind the audit context for one RPC, from its ``ServicerContext``.
+
+    A servicer context that cannot produce metadata (a plain object in a
+    test harness, a generated stub that passes ``None``) yields ``None``
+    and binds nothing — the handler then behaves exactly as it did before
+    this existed.
+    """
+    getter = getattr(context, "invocation_metadata", None)
+    if getter is None:
+        yield None
+        return
+    try:
+        metadata = getter()
+    except Exception:
+        yield None
+        return
+    ctx = audit_context_from_metadata(metadata)
+    with _audit_ctx.bind_audit_context(ctx):
+        yield ctx
 
 
 # ---------------------------------------------------------------------------
@@ -212,13 +268,16 @@ def _build_servicer() -> Any:
     # wraps our handler funcs into a dispatcher that package can call.
     class _Servicer:
         def Recall(self, request_dict: dict, context: Any) -> dict:
-            return handle_recall(RecallRequest(**request_dict)).__dict__
+            with bind_call_context(context):
+                return handle_recall(RecallRequest(**request_dict)).__dict__
 
         def Governance(self, request_dict: dict, context: Any) -> dict:
-            return handle_governance(GovernanceRequest(**request_dict)).__dict__
+            with bind_call_context(context):
+                return handle_governance(GovernanceRequest(**request_dict)).__dict__
 
         def Health(self, request_dict: dict, context: Any) -> dict:
-            return handle_health().__dict__
+            with bind_call_context(context):
+                return handle_health().__dict__
 
     return _Servicer()
 
@@ -330,6 +389,8 @@ def serve(port: int = 50051) -> None:
 __all__ = [
     "TENANT_UNSUPPORTED",
     "_enforce_grpc_bind",
+    "audit_context_from_metadata",
+    "bind_call_context",
     "RecallRequest",
     "RecallResponse",
     "GovernanceRequest",

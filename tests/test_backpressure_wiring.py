@@ -38,6 +38,7 @@ import mind_mem.v4.feature_flags as ff_mod
 from mind_mem.block_parser import parse_file
 from mind_mem.change_stream import ChangeStream
 from mind_mem.init_workspace import init
+from mind_mem.mm_cli import config_set
 from mind_mem.recall import recall
 from mind_mem.v4.backpressure import FLAG as BP_FLAG
 from mind_mem.v4.backpressure import (
@@ -131,15 +132,21 @@ def _governed_ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bp: dict | Non
     """An initialised, enforcing workspace whose OWN config holds the flag."""
     ws = tempfile.mkdtemp(prefix="mm_bp_", dir=str(tmp_path))
     init(ws)
-    for rel, key in ((("mind-mem.json",), "governance_mode"), (("memory", "intel-state.json"), "governance_mode")):
-        path = os.path.join(ws, *rel)
-        with open(path, encoding="utf-8") as fh:
-            blob = json.load(fh)
-        blob[key] = "enforce"
-        if rel == ("mind-mem.json",) and bp is not None:
-            blob["v4"] = {BP_FLAG: bp}
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(blob, fh)
+    # ``init`` arms the gate against the config it wrote, so ``mind-mem.json``
+    # is changed through ``mm config set`` — write and re-attest in one step.
+    # A hand edit is drift, and under ``enforce`` it refuses every governed
+    # write the inbox makes. ``intel-state.json`` is not the bound config.
+    config_path = os.path.join(ws, "mind-mem.json")
+    config_set(config_path, "governance_mode", "enforce")
+    if bp is not None:
+        config_set(config_path, "v4", {BP_FLAG: bp})
+
+    state_path = os.path.join(ws, "memory", "intel-state.json")
+    with open(state_path, encoding="utf-8") as fh:
+        state = json.load(fh)
+    state["governance_mode"] = "enforce"
+    with open(state_path, "w", encoding="utf-8") as fh:
+        json.dump(state, fh)
     monkeypatch.setenv("MIND_MEM_CONFIG", os.path.join(ws, "mind-mem.json"))
     monkeypatch.setenv("MIND_MEM_WORKSPACE", ws)
     return ws
@@ -541,11 +548,7 @@ def test_stream_status_carries_backpressure_only_when_armed(tmp_path: Path, monk
     assert payload["published"] == 0
 
     # Same tool, flag on, something reported.
-    with open(os.path.join(ws, "mind-mem.json"), encoding="utf-8") as fh:
-        blob = json.load(fh)
-    blob["v4"] = {BP_FLAG: {"enabled": True, "high_watermark": 4, "low_watermark": 1}}
-    with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as fh:
-        json.dump(blob, fh)
+    config_set(os.path.join(ws, "mind-mem.json"), "v4", {BP_FLAG: {"enabled": True, "high_watermark": 4, "low_watermark": 1}})
     report_depth(PRODUCER_INBOX, 9)
 
     payload = json.loads(stream_status())

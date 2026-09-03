@@ -149,6 +149,37 @@ flowchart TB
     rerank --> results["Final Results"]
 ```
 
+## Ledgers and chains
+
+"The audit chain" is four different files, and this document did not name any
+of them — it contained zero occurrences of `hash_chain_v2`, `evidence_chain`,
+`audit_sidecar` or `served_ledger` while the README said "audit chain" four
+times for whichever one it meant. A reader could not tell which artifact a
+claim was about, which is the same as having no architecture document for the
+part of the system the product's differentiator rests on.
+
+`verify_cli.LEDGER_CHECKS` is the authority for this list, and
+`tests/test_docs_alignment.py::TestArchitectureNamesEveryLedger` fails the
+build if a ledger is added there and not described here.
+
+| Row | Artifact | What it records | Failure exit code |
+| --- | --- | --- | --- |
+| `hash_chain` | `memory/hash_chain_v2.db` | The SHA3-512 append-only chain of record: **what the gate admitted**. Q16.16 fixed-point in the hash preimage, byte-identical across architectures. | 2 |
+| `evidence_chain` | `memory/evidence_chain.jsonl` | Structured governance evidence: **why** an admission was allowed, and by whom. | 4 |
+| `audit_sidecar` | `.mind-mem-audit/chain.jsonl` | The field-granular sidecar (`audit_chain.py`) — which fields of a block changed, per operation. | 7 |
+| `served_ledger` | `.mind-mem-ledger/served.jsonl` | **What recall actually served** (`served_ledger.py`): one append-only row per served run, no verdict and no score. On by default since 5.0.2. | 8 |
+
+They are separate on purpose and are not interchangeable: the first says a
+write landed, the second says it was allowed, the third says which fields
+moved, and the fourth says what a reader was later shown. A verification that
+walked one and reported on "the audit chain" would be answering a different
+question from the one asked.
+
+Two further rows in the same report are **not** ledgers
+(`verify_cli.NON_LEDGER_CHECKS`): `spec_binding` compares the live
+`mind-mem.json` against its attestation, and `open_scopes` asks the evidence
+ledger which write scopes opened and never recorded a close (exit code 9).
+
 ## Components
 
 ## Core Modules

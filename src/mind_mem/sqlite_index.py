@@ -34,13 +34,13 @@ from .admissibility import is_admissible_status, workspace_release_ids
 from .block_parser import parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
 from .connection_manager import ConnectionManager
+from .corpus_registry import corpus_label_for, discover_corpus_files
 from .enums import TaskStatus
 from .extractor import extract_facts
 from .observability import get_logger, metrics
 from .recall import (
     _BLOCK_ID_RE,
     _QUERY_TYPE_PARAMS,
-    CORPUS_FILES,
     SEARCH_FIELDS,
     _parse_speaker_from_tags,
     date_score,
@@ -481,11 +481,26 @@ def _get_changed_files(conn: sqlite3.Connection, workspace: str) -> list[tuple[s
       the M8 migration, which forces a single rehash)
     - Its full SHA-256 differs (catches the same-size + same-mtime_ns
       case where an in-place edit kept the metadata stable)
+
+    Discovery is :func:`~mind_mem.corpus_registry.discover_corpus_files`
+    (I-14): the corpus table PLUS every ``.md`` directly inside a corpus
+    directory, which is what ``MarkdownBlockStore`` reads. Indexing the
+    table alone left an unnamed corpus-directory block ``get_by_id``-
+    readable and absent from every FTS hit.
+
+    A table row that has left the disk is reported as changed by the loop
+    below (its ``file_state`` row survives). An *unnamed* file that has
+    left the disk cannot be — discovery no longer yields it at all — so
+    :func:`_vanished_indexed_files` sweeps ``file_state`` for paths the
+    walk no longer produces and reports those too. Without that sweep a
+    deleted ``intelligence/ARCHIVE.md`` would keep serving its blocks out
+    of ``blocks_fts`` forever.
     """
     changed = []
     ws = os.path.abspath(workspace)
 
-    for label, rel_path in CORPUS_FILES.items():
+    discovered = discover_corpus_files(ws)
+    for label, rel_path in discovered:
         full_path = os.path.join(ws, rel_path)
         if not os.path.isfile(full_path):
             # File doesn't exist — check if it was previously indexed
@@ -527,7 +542,31 @@ def _get_changed_files(conn: sqlite3.Connection, workspace: str) -> list[tuple[s
         if current_hash != row["hash"]:
             changed.append((label, rel_path))
 
+    changed.extend(_vanished_indexed_files(conn, {rel for _label, rel in discovered}))
     return changed
+
+
+def _vanished_indexed_files(conn: sqlite3.Connection, discovered: set[str]) -> list[tuple[str, str]]:
+    """``(label, rel_path)`` for indexed files discovery no longer produces.
+
+    The deletion half of I-14's widened discovery. A file the corpus
+    TABLE names is yielded whether or not it exists, so its removal is
+    reported by the existence branch of :func:`_get_changed_files`. A
+    file discovered by the *directory walk* is yielded only while it is
+    on disk — delete it and the walk simply stops mentioning it, so
+    without this sweep its rows sit in ``blocks``/``blocks_fts`` forever
+    and recall keeps serving a file that no longer exists.
+
+    Reported as changed rather than deleted here: ``_index_file`` already
+    handles a missing path by dropping that file's blocks, so routing the
+    vanished path back through it keeps one deletion implementation
+    instead of a second one that has to stay in step.
+
+    Sorted so a rebuild is deterministic.
+    """
+    rows = conn.execute("SELECT path FROM file_state").fetchall()
+    stale = sorted({str(row["path"]) for row in rows} - discovered)
+    return [(corpus_label_for(rel), rel) for rel in stale]
 
 
 def _update_file_state(conn: sqlite3.Connection, workspace: str, rel_path: str) -> None:
@@ -1018,7 +1057,8 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
 
     Backend-aware (audit bugs 4 & 9): for the default Markdown / SQLite
     backend, the corpus files are the blocks of record and are indexed
-    incrementally via :data:`CORPUS_FILES` + :func:`parse_file`. For a
+    incrementally via :func:`~mind_mem.corpus_registry.discover_corpus_files`
+    + :func:`parse_file`. For a
     non-markdown backend (e.g. Postgres) the blocks of record live in
     the configured store, so the index is rebuilt from
     :func:`mind_mem.storage.iter_active_blocks` instead — otherwise the
@@ -1048,9 +1088,12 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
             if not markdown_backend:
                 return _build_index_from_store(workspace, conn, start)
 
-            # Collect all block IDs for xref resolution
+            # Collect all block IDs for xref resolution. I-14: the same
+            # discovery the store reads, so an xref that points into an
+            # unnamed corpus-directory file resolves.
+            corpus_rows = discover_corpus_files(ws)
             all_block_ids = set()
-            for label, rel_path in CORPUS_FILES.items():
+            for label, rel_path in corpus_rows:
                 path = os.path.join(ws, rel_path)
                 if os.path.isfile(path):
                     try:
@@ -1080,10 +1123,10 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
                 # flipped are rewritten.
                 prior = conn.execute("SELECT value FROM meta WHERE key = 'release_set_hash'").fetchone()
                 if (prior["value"] if prior else None) != release_hash:
-                    _log.info("release_set_changed", workspace=ws, files=len(CORPUS_FILES))
-                    changed = list(CORPUS_FILES.items())
+                    _log.info("release_set_changed", workspace=ws, files=len(corpus_rows))
+                    changed = list(corpus_rows)
             else:
-                changed = list(CORPUS_FILES.items())
+                changed = list(corpus_rows)
                 # Clear the index for a full rebuild — the SAME set of tables
                 # ``_build_index_from_store`` clears, which is where this list
                 # comes from. Clearing only file_state/index_meta made every
@@ -1144,7 +1187,7 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
 
             elapsed = (datetime.now() - start).total_seconds() * 1000
             summary = {
-                "files_checked": len(CORPUS_FILES),
+                "files_checked": len(corpus_rows),
                 "files_indexed": len(changed),
                 "blocks_indexed": total_blocks,
                 "blocks_new": total_new,
@@ -1859,7 +1902,7 @@ def index_status(workspace: str, *, include_withheld: bool = False) -> dict:
     """
     db_path = _db_path(workspace)
     if not os.path.isfile(db_path):
-        return {"exists": False, "blocks": 0, "stale_files": len(CORPUS_FILES)}
+        return {"exists": False, "blocks": 0, "stale_files": len(discover_corpus_files(workspace))}
 
     conn = None
     try:
@@ -1873,7 +1916,7 @@ def index_status(workspace: str, *, include_withheld: bool = False) -> dict:
                 "exists": True,
                 "blocks": 0,
                 "last_build": None,
-                "stale_files": len(CORPUS_FILES),
+                "stale_files": len(discover_corpus_files(workspace)),
                 "db_size_bytes": os.path.getsize(db_path),
                 "schema_built": False,
             }

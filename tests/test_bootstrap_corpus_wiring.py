@@ -49,6 +49,7 @@ from mind_mem.bootstrap_corpus import (
 )
 from mind_mem.enums import INITIAL_STATUS, is_servable
 from mind_mem.init_workspace import init
+from mind_mem.mm_cli import config_set
 
 #: Improbable token planted through the door. Any hit is this content.
 CANARY = "qvhzlarkspurmoss"
@@ -81,12 +82,16 @@ def _transcript(path: str, token: str, n: int = 8) -> None:
 
 
 def _set_flag(ws: str, on: bool) -> str:
+    """Set the door's flag through ``mm config set``, and return the path.
+
+    ``init`` arms the governance gate on the config it writes, so a hand
+    edit of ``mind-mem.json`` is spec drift — which under ``enforce``
+    refuses every governed write this door makes. ``mm config set``
+    writes and re-attests in one step, so turning a flag on is a
+    configuration change rather than tampering.
+    """
     cfg_path = os.path.join(ws, "mind-mem.json")
-    with open(cfg_path, encoding="utf-8") as fh:
-        cfg = json.load(fh)
-    cfg.setdefault("v4", {})[FLAG] = {"enabled": on}
-    with open(cfg_path, "w", encoding="utf-8") as fh:
-        json.dump(cfg, fh)
+    config_set(cfg_path, f"v4.{FLAG}", {"enabled": on})
     return cfg_path
 
 
@@ -468,12 +473,53 @@ def test_the_signal_leg_admits_before_the_bytes_land(door, monkeypatch) -> None:
     signals_path = pathlib.Path(door) / "intelligence" / "SIGNALS.md"
     before = signals_path.read_bytes()
 
-    class _RefusingGate:
+    from mind_mem.governance_gate import get_gate as _real_get_gate
+
+    class _RefusingBatchGate:
+        """The real gate, with ``admit_batch`` — and only that — refusing.
+
+        Wrapping instead of substituting is what keeps this a test of the
+        signal leg's *ordering*. Every other scope the bootstrap opens is
+        the production one, so the single difference between this run and
+        a normal one is the refusal, and the untouched corpus can only be
+        explained by the append never starting.
+
+        It replaces a patch of ``mind_mem.capture._get_gate``, a helper
+        that no longer exists: ``append_signals`` was rewritten to call
+        ``governance_gate.get_gate`` directly, precisely because
+        ``_get_gate``'s ``except Exception: return None`` turned a dead
+        gate into a no-op scope (``tests/test_capture_governed_signals``
+        asserts the helper stays gone). Patching a deleted name raises
+        ``AttributeError`` before the door is ever exercised, so this test
+        stopped testing the thing it names.
+        """
+
+        def __init__(self, inner) -> None:
+            self._inner = inner
+
         def admit_batch(self, **_kwargs):
             raise GovernanceBypassError("refused for the test")
 
-    monkeypatch.setattr("mind_mem.capture._get_gate", lambda _ws: _RefusingGate())
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    monkeypatch.setattr("mind_mem.governance_gate.get_gate", lambda ws: _RefusingBatchGate(_real_get_gate(ws)))
     with pytest.raises(GovernanceBypassError):
         run_bootstrap(door, out=io.StringIO())
 
     assert signals_path.read_bytes() == before, "a refused admission still wrote signals"
+
+
+def test_positive_control_the_signal_leg_writes_when_the_gate_admits(door) -> None:
+    """The refusal test's control: unrefused, this same run appends signals.
+
+    Without it ``read_bytes() == before`` is satisfied by a bootstrap that
+    never reached the signal leg at all — the most common way a negative
+    assertion proves nothing.
+    """
+    signals_path = pathlib.Path(door) / "intelligence" / "SIGNALS.md"
+    before = signals_path.read_bytes()
+
+    run_bootstrap(door, out=io.StringIO())
+
+    assert signals_path.read_bytes() != before, "the signal leg wrote nothing even when admitted"

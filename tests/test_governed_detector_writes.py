@@ -49,6 +49,7 @@ from datetime import datetime
 from typing import Any, Iterator
 
 import pytest
+from _ledger_rows import authorisation_rows, chain_rows, count_chain_authorisations
 
 from mind_mem.admission import UngatedWriteError
 from mind_mem.enums import INITIAL_STATUS, TIER_ID_PREFIXES, IngestTier, Status
@@ -106,6 +107,11 @@ def _evidence_rows(workspace: str) -> list[dict[str, Any]]:
         return []
     with open(path, "r", encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
+
+
+def _authorisations(workspace: str) -> list[dict[str, Any]]:
+    """Evidence rows that authorised a detector run — see tests/_ledger_rows."""
+    return authorisation_rows(_evidence_rows(workspace))
 
 
 def _hash_chain_rows(workspace: str) -> int:
@@ -210,14 +216,15 @@ class TestTheFindingSurvivesTheGate:
 
 class TestEveryFindingLeavesARecord:
     def test_both_gate_ledgers_gain_a_row_per_detector_run(self, ws: str, report: IntelReport) -> None:
-        before_evidence, before_hash = len(_evidence_rows(ws)), _hash_chain_rows(ws)
+        before_evidence = len(_authorisations(ws))
+        before_hash = count_chain_authorisations(ws)
 
         write_contradictions([_contradiction()], ws, report)
         write_drift([_drift()], ws, report)
 
-        rows = _evidence_rows(ws)
+        rows = _authorisations(ws)
         assert len(rows) - before_evidence == 2, "one admission per detector run, and it is missing"
-        assert _hash_chain_rows(ws) - before_hash == 2
+        assert count_chain_authorisations(ws) - before_hash == 2
 
         minted = {row["action"]: row for row in rows[before_evidence:]}
         assert set(minted) == {"CONTRADICT", "DRIFT"}, f"the run was recorded under the wrong verbs: {sorted(minted)}"
@@ -232,13 +239,11 @@ class TestEveryFindingLeavesARecord:
         """A batch entry is only worth its id set; prove the two agree."""
         write_contradictions([_contradiction(), dict(_contradiction(), severity="medium")], ws, report)
 
-        path = os.path.join(ws, "memory", "hash_chain_v2.db")
-        con = sqlite3.connect(path)
-        try:
-            row = con.execute("SELECT block_id, action FROM hash_chain ORDER BY rowid DESC LIMIT 1").fetchone()
-        finally:
-            con.close()
-        batch_id, action = row
+        # The LAST chain row is now the scope's CLOSE record, not its
+        # authorisation. The authorisation is the row that names the id
+        # set the batch covered, so that is the one this test reads.
+        row = authorisation_rows(chain_rows(ws))[-1]
+        batch_id, action = row["block_id"], row["action"]
         assert action == "CONTRADICT"
         assert batch_id.startswith("intel-scan-contradictions-")
 

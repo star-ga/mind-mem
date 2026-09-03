@@ -6,7 +6,9 @@ from __future__ import annotations
 import hashlib
 import os
 from datetime import datetime, timezone
+from typing import Any
 
+from ..enums import INITIAL_STATUS, IngestTier
 from ..observability import get_logger
 from ._types import Mutation, SkillScore, SkillSpec, TestCase, ValidationResult
 from .analyzer import aggregate_analysis, analyze_skill
@@ -141,46 +143,146 @@ async def validate_mutation(
     )
 
 
+class SkillGovernanceError(RuntimeError):
+    """A skill mutation could not be staged for governance review.
+
+    Raised rather than returned, and rather than degraded to a warning. The
+    caller (``mm skill-optimize``) records the returned id as the mutation's
+    governance handle, so a submission that half-happened would be recorded
+    as a submission that happened. Mirrors ``LintAutofixError`` and
+    ``ImportQuarantineError``, which refuse the same way for the same reason.
+    """
+
+
+#: The tier a staged skill mutation is admitted under, and the status it
+#: therefore declares. AUTO_CAPTURE is what this is: a machine-proposed
+#: edit nobody has reviewed. Its ``INITIAL_STATUS`` row is ``PENDING``, so
+#: the block is withheld from recall until a governance release admits it --
+#: which is the whole point of "submitting to governance".
+SIGNAL_TIER = IngestTier.AUTO_CAPTURE
+_SIGNAL_STATUS_OR_NONE = INITIAL_STATUS[SIGNAL_TIER]
+if _SIGNAL_STATUS_OR_NONE is None:  # pragma: no cover - import-time invariant
+    # NOT an ``assert``: ``python -O`` strips those. An UNSTATED status is
+    # SERVABLE, so a ``None`` here would publish every unreviewed skill
+    # mutation straight into recall.
+    raise RuntimeError(
+        f"skill mutations are staged under tier {SIGNAL_TIER!r}, which mints no initial "
+        "status; an unstated status is SERVABLE, so this would publish them"
+    )
+SIGNAL_STATUS = _SIGNAL_STATUS_OR_NONE
+
+#: Block-id prefix for captured signals. ``corpus_registry.CORPUS_TABLE``
+#: routes it to ``intelligence/SIGNALS.md``; that row landed in 5.0.2, and
+#: before it existed ``write_block`` refused every ``SIG`` id -- which is
+#: the mechanical reason this function used to splice the file by hand.
+_SIGNAL_PREFIX = "SIG"
+
+
+def _next_signal_id(store: Any, today_compact: str) -> str:
+    """The next free ``SIG-<date>-###`` id, read from the STORE.
+
+    Read through the store rather than off the file for the same reason
+    ``intel_scan._recorded_findings`` does: on a non-Markdown backend the
+    canonical file stays empty, so a file-only scan would restart the daily
+    counter and hand a new signal an id an existing one already holds.
+    """
+    stamp = f"{_SIGNAL_PREFIX}-{today_compact}-"
+    used: list[int] = []
+    for block in store.get_all(active_only=False):
+        block_id = str(block.get("_id") or "")
+        tail = block_id[len(stamp) :]
+        if block_id.startswith(stamp) and tail.isdigit():
+            used.append(int(tail))
+    return f"{stamp}{max(used, default=0) + 1:03d}"
+
+
 def submit_to_governance(
     mutation: Mutation,
     validation: ValidationResult,
     workspace: str,
 ) -> str:
-    """Write a governance proposal for this mutation via SIGNALS.md.
+    """Stage this mutation for governance review as a governed signal block.
 
-    Returns the signal block ID for tracking.
+    Returns the block id, and it is a real id: ``get_by_id`` resolves it,
+    and recall withholds it until a governance release admits it.
+
+    This used to append a ``## SKILL-<mutation_id>`` markdown heading to
+    ``intelligence/SIGNALS.md`` with a bare ``open(..., "a")``. Two things
+    were wrong with that and only one of them was the bypass. The heading
+    is not block syntax, so the id it returned -- recorded by ``mm
+    skill-optimize`` as the mutation's ``governance_signal`` -- resolved to
+    nothing; and the write reached a file recall serves with no admission,
+    no evidence row and no chain row. "Submitted to governance" named a
+    write governance never saw.
+
+    Raises:
+        SkillGovernanceError: an identical mutation is already staged.
     """
-    signal_id = f"SKILL-{mutation.mutation_id}"
-    signal_block = {
-        "signal_id": signal_id,
-        "type": "edit",
-        "source": "skill_opt",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "skill_id": mutation.skill_id,
-        "mutation_id": mutation.mutation_id,
-        "rationale": mutation.rationale,
-        "score_before": validation.score_before,
-        "score_after": validation.score_after,
-        "improved": validation.improved,
-        "accepted": validation.accepted,
-        "critic_votes": validation.critic_votes,
+    from ..governance_gate import get_gate
+    from ..storage import get_block_store
+
+    store = get_block_store(workspace)
+    now = datetime.now(timezone.utc)
+    today_compact = now.strftime("%Y%m%d")
+
+    preimage = f"{mutation.skill_id}\x1f{mutation.mutation_id}\x1f{mutation.proposed_content}"
+    fingerprint = hashlib.sha256(preimage.encode()).hexdigest()[:16]
+    for block in store.get_all(active_only=False):
+        if str(block.get("_id") or "").startswith(f"{_SIGNAL_PREFIX}-") and str(block.get("ContentHash") or "") == fingerprint:
+            raise SkillGovernanceError(
+                f"an identical skill mutation is already staged as {block.get('_id')} "
+                f"(fingerprint {fingerprint}); review or reject it before staging another"
+            )
+
+    signal_id = _next_signal_id(store, today_compact)
+    verdict = "accepted" if validation.accepted else "rejected"
+    statement = (
+        f"Skill mutation {mutation.mutation_id} for {mutation.skill_id}: "
+        f"score {validation.score_before:.4f} → {validation.score_after:.4f} ({verdict})."
+    )
+    block = {
+        "_id": signal_id,
+        "Statement": statement,
+        "Date": now.strftime("%Y-%m-%d"),
+        "Status": SIGNAL_STATUS.value,
+        "Type": "auto-capture-skill-mutation",
+        "Subject": mutation.skill_id,
+        "Object": mutation.mutation_id,
+        "Rationale": mutation.rationale,
+        # Provenance that is TRUE. The block says it came from the skill
+        # optimiser, because it did; it does not borrow ``capture``'s
+        # ``memory/<date>.md:<line>`` shape, which would claim a daily-log
+        # origin this content never had.
+        "Source": "skill_opt.validator",
+        "ContentHash": fingerprint,
+        "Confidence": f"{validation.score_after:.4f}",
+        "Evidence": [
+            f"score_before: {validation.score_before:.4f}",
+            f"score_after: {validation.score_after:.4f}",
+            f"improved: {validation.improved}",
+            f"accepted: {validation.accepted}",
+            f"critic_votes: {validation.critic_votes}",
+        ],
+        "Action": "Review and apply the mutation, or reject it.",
     }
 
-    signals_dir = os.path.join(workspace, "intelligence")
-    os.makedirs(signals_dir, exist_ok=True)
-    signals_path = os.path.join(signals_dir, "SIGNALS.md")
+    # Admit BEFORE the bytes land, and let a refusal propagate.
+    with get_gate(workspace).admit_block(
+        action="WRITE",
+        block_id=signal_id,
+        content=statement,
+        tier=SIGNAL_TIER,
+        actor="skill_opt",
+        target_file=os.path.join("intelligence", "SIGNALS.md"),
+        metadata={"skill_id": mutation.skill_id, "mutation_id": mutation.mutation_id, "fingerprint": fingerprint},
+    ):
+        store.write_block(block)
 
-    entry = (
-        f"\n## {signal_id}\n"
-        f"- **Type:** skill mutation\n"
-        f"- **Skill:** {mutation.skill_id}\n"
-        f"- **Score:** {validation.score_before:.4f} → {validation.score_after:.4f}\n"
-        f"- **Status:** {'accepted' if validation.accepted else 'rejected'}\n"
-        f"- **Rationale:** {mutation.rationale}\n"
-        f"- **Timestamp:** {signal_block['timestamp']}\n"
+    _log.info(
+        "skill_mutation_staged",
+        signal_id=signal_id,
+        skill_id=mutation.skill_id,
+        mutation_id=mutation.mutation_id,
+        status=SIGNAL_STATUS.value,
     )
-
-    with open(signals_path, "a", encoding="utf-8") as f:
-        f.write(entry)
-
     return signal_id

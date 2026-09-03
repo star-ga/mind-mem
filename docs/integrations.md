@@ -44,7 +44,7 @@ Currently supported:
 | OpenClaw | OpenClaw | `~/.openclaw/openclaw.json` |
 | NanoClaw / NemoClaw | OpenClaw forks | `~/.openclaw/openclaw.json` |
 
-**What this means**: each of these tools can call MIND-Mem's 89 MCP
+**What this means**: each of these tools can call MIND-Mem's 102 MCP
 tools (recall, propose_update, scan, hybrid_search, mic_convert_tool,
 mic_inspect_tool, etc.) the same way it calls any other MCP server.
 

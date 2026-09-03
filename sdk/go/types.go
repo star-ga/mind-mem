@@ -50,7 +50,7 @@ type RecallResult struct {
 	LatencyMs   float64      `json:"latency_ms"`
 }
 
-// BlockResult is the response envelope for GET /v1/blocks/{id}.
+// BlockResult is the response envelope for GET /v1/block/{block_id}.
 type BlockResult struct {
 	Block Block `json:"block"`
 }

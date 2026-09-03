@@ -51,6 +51,7 @@ from mind_mem.importers.quarantine import (
     build_release_proposal,
 )
 from mind_mem.init_workspace import init
+from mind_mem.mm_cli import config_set
 from mind_mem.recall import recall
 
 FIXTURES = Path(__file__).parent / "fixtures" / "importers"
@@ -69,15 +70,18 @@ VAULT_QUERY = "append-only block store canonical file prefix"
 
 
 def _governed_ws(mode: str = "enforce") -> str:
-    """A fully initialised workspace whose governance gate is armed."""
+    """A fully initialised workspace whose governance gate is armed.
+
+    ``mind-mem.json`` is written through ``mm config set``, never by
+    hand: ``init`` arms the gate, so a hand edit is drift and every
+    governed write in the test then fails on a setting change nobody was
+    hiding. ``memory/intel-state.json`` is not the bound config, so it is
+    still written directly.
+    """
     ws = tempfile.mkdtemp(prefix="mm_quarantine_")
     init(ws)
     config_path = os.path.join(ws, "mind-mem.json")
-    with open(config_path, encoding="utf-8") as handle:
-        config = json.load(handle)
-    config["governance_mode"] = mode
-    with open(config_path, "w", encoding="utf-8") as handle:
-        json.dump(config, handle)
+    config_set(config_path, "governance_mode", mode)
     state_path = os.path.join(ws, "memory", "intel-state.json")
     with open(state_path, encoding="utf-8") as handle:
         state = json.load(handle)
@@ -185,12 +189,7 @@ def test_quarantined_blocks_are_not_recallable() -> None:
 def test_quarantine_filter_survives_the_sqlite_recall_backend() -> None:
     """The filter is on the shared post-filter funnel, not one backend."""
     ws = _governed_ws()
-    config_path = os.path.join(ws, "mind-mem.json")
-    with open(config_path, encoding="utf-8") as handle:
-        config = json.load(handle)
-    config["recall"] = {"backend": "sqlite"}
-    with open(config_path, "w", encoding="utf-8") as handle:
-        json.dump(config, handle)
+    config_set(os.path.join(ws, "mind-mem.json"), "recall", {"backend": "sqlite"})
 
     result = run_import(ws, "markdown", VAULT)
     from mind_mem.sqlite_index import build_index

@@ -20,6 +20,7 @@ resolver shared by ``delete_memory_item`` and ``get_block``.
 
 from __future__ import annotations
 
+import getpass
 import json
 import os
 import re as _re_mod
@@ -537,6 +538,49 @@ def reindex(include_vectors: bool = False) -> str:
 #: verbatim.
 DEFAULT_DELETE_RATIONALE = "mcp-delete-memory-item"
 
+#: Prefix of the actor recorded for anything this MCP server destroys.
+#: The suffix is the door's name, never its ACL scope: "admin" is a
+#: permission this call held, not somebody who held it.
+MCP_STDIO_ACTOR_PREFIX = "mcp-stdio:"
+
+#: Operator-set name for the client on the other end of the stdio pipe
+#: (``"claude-code"``, ``"the-nightly-compactor"``). A stdio transport has
+#: no credential to derive an identity from — the pipe is the trust
+#: boundary — so the operator who wired the client is the one who can
+#: name it. Unset falls back to the OS account the server runs as, which
+#: is a real, checkable identity rather than a placeholder.
+MCP_CLIENT_ENV = "MIND_MEM_MCP_CLIENT"
+
+#: Used when the process has no resolvable OS account (no ``LOGNAME`` /
+#: ``USER`` / ``USERNAME`` and no passwd entry — a distroless container
+#: running under a bare numeric uid). Still prefixed, so it still names
+#: the door even when it cannot name the operator.
+MCP_UNRESOLVED_USER = "unresolved-user"
+
+
+def _mcp_door_actor() -> str:
+    """Identity recorded for a delete arriving over MCP stdio.
+
+    Measured on 5.0.1: this tool passed ``actor=""``, the gate resolved
+    that through the REST contextvar, and every MCP delete landed in the
+    chain as ``actor="anonymous"`` — on the most-used delete door in the
+    product. There is no credential on a stdio pipe to hash the way the
+    HTTP door hashes its bearer token, so the identity is the door's
+    configured name, and the account it runs as when nobody configured
+    one. Both are concrete; neither can be empty, because the prefix
+    cannot be.
+    """
+    configured = os.environ.get(MCP_CLIENT_ENV, "").strip()
+    if not configured:
+        try:
+            configured = getpass.getuser().strip()
+        except Exception:  # pragma: no cover - no passwd entry and no env
+            configured = ""
+    # ``isprintable`` already excludes CR/LF/NUL, which is what a log or a
+    # JSONL row needs kept out of a free-text name.
+    name = "".join(ch for ch in configured if ch.isprintable())[:64].strip()
+    return f"{MCP_STDIO_ACTOR_PREFIX}{name or MCP_UNRESOLVED_USER}"
+
 
 def _delete_from_store(ws: str, block_id: str, backend: str, receipt: AdmissionReceipt) -> str:
     """Remove *block_id* through the configured block store.
@@ -736,6 +780,12 @@ def delete_memory_item(block_id: str, rationale: str = "") -> str:
     (line-splice + atomic replace, with a recovery journal); every other
     backend deletes through its own block store.
 
+    Every record this tool mints is attributed to
+    :func:`_mcp_door_actor` — ``mcp-stdio:<name>``, from
+    :data:`MCP_CLIENT_ENV` or the account the server runs as. It used to
+    pass ``actor=""``, which the gate resolves through a REST contextvar
+    an MCP process never sets, so the chain said ``anonymous``.
+
     Args:
         block_id: The block to remove.
         rationale: Why it is being removed. Optional, and empty records
@@ -792,15 +842,16 @@ def delete_memory_item(block_id: str, rationale: str = "") -> str:
         with get_gate(ws).admit_delete(
             block_id,
             rationale=rationale.strip() or DEFAULT_DELETE_RATIONALE,
-            # Empty lets the gate resolve the caller, exactly as
-            # ``_handle_delete_memory`` does: the authenticated REST agent
-            # when the REST layer is in front, else that contextvar's
-            # ``"anonymous"`` default, else ``"system"`` when the API
-            # module is absent (measured: an MCP stdio delete records
-            # ``anonymous``). A stdio call has no authenticated identity
-            # to pass, and recording the ACL scope ("admin") instead would
-            # put a role in the actor field and call it a name.
-            actor="",
+            # A concrete door identity, never "". Empty used to be passed
+            # here on the reasoning that a stdio call has no authenticated
+            # identity — true, and it does not follow that the record
+            # should name nobody: the gate resolved "" through the REST
+            # contextvar this process never sets, so every MCP delete was
+            # attributed to ``anonymous``. The ACL scope ("admin") is
+            # still not the answer — that is a permission, not a name —
+            # so :func:`_mcp_door_actor` names the door and the account
+            # it runs as.
+            actor=_mcp_door_actor(),
             target_file=os.path.relpath(filepath, ws) if filepath else "",
             metadata={"door": "mcp.delete_memory_item", "backend": backend},
         ) as receipt:

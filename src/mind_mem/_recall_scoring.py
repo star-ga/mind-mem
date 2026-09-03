@@ -27,6 +27,7 @@ from datetime import timezone as _timezone
 from ._recall_constants import _BLOCK_ID_RE, BM25_B, BM25_K1, FIELD_WEIGHTS, SEARCH_FIELDS
 
 __all__ = [
+    "bm25_idf",
     "bm25f_score_terms",
     "compute_weighted_tf",
     "date_score",
@@ -70,6 +71,35 @@ def compute_weighted_tf(
         for t in tokens:
             weighted_tf[t] += w  # type: ignore[assignment]
     return weighted_tf, wdl
+
+
+def bm25_idf(n_docs: int, df: int) -> float:
+    """BM25 probabilistic inverse document frequency for one term.
+
+    ``log((N - df + 0.5) / (df + 0.5) + 1)`` — the same expression the main
+    scoring loop, the RM3 / PRF expansions and the bridge re-score all use.
+    It lives here, beside :func:`bm25f_score_terms`, because this module is
+    the single source of truth for BM25 arithmetic and a second spelling of
+    the IDF would let two legs disagree about how rare a term is.
+
+    The ``+ 1`` inside the log is what keeps the value non-negative for a term
+    that appears in more than half the corpus; without it a very common term
+    scores negatively and *subtracts* from a document that contains it.
+
+    Args:
+        n_docs: Corpus size. Values below 1 are treated as 1 so a
+            single-document corpus (or an empty one) cannot divide by zero or
+            take the log of a non-positive number.
+        df: Document frequency of the term. Clamped into ``[0, n_docs]``, so a
+            caller that counted df against a larger corpus than it passed
+            cannot drive the argument of the log negative.
+
+    Returns:
+        The IDF weight, always finite and >= 0.
+    """
+    n = max(1, int(n_docs))
+    d = min(max(0, int(df)), n)
+    return math.log((n - d + 0.5) / (d + 0.5) + 1)
 
 
 def bm25f_score_terms(

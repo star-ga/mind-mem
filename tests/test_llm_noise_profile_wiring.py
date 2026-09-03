@@ -62,6 +62,7 @@ from mind_mem.llm_noise_profile import (
     report_domains,
 )
 from mind_mem.mcp.infra.workspace import use_workspace
+from mind_mem.mm_cli import config_set
 from mind_mem.outcome_attribution import report_outcome
 
 _ID_A = "D-20260401-001"
@@ -81,6 +82,34 @@ _ALPHA = 0.95
 # ---------------------------------------------------------------------------
 
 
+def _point_handler_at(handler: logging.StreamHandler, stream: object) -> None:
+    """``handler.setStream(stream)``, tolerating an already-closed old stream.
+
+    ``setStream`` flushes the stream it is replacing, which is right and
+    which raises ``ValueError: I/O operation on closed file`` when the
+    stream it finds is a pytest capture object that was closed at the end
+    of some *earlier* test. ``observability.StructuredLogger`` captures
+    ``sys.stderr`` once, when the logger is first built, so whichever test
+    in the session happened to build it decides what this handler holds
+    for every test after — and this file's own passing or failing then
+    depends on what ran before it, which is not a property of the code
+    under test.
+
+    The fallback runs only when the flush actually fails, and a closed
+    stream has no buffered output left to lose. Everything else —
+    including the flush — is unchanged, so nothing is skipped on a stream
+    that is alive.
+    """
+    try:
+        handler.setStream(stream)  # type: ignore[arg-type]
+    except ValueError:
+        handler.acquire()
+        try:
+            handler.stream = stream  # type: ignore[assignment]
+        finally:
+            handler.release()
+
+
 @contextlib.contextmanager
 def _mind_mem_stderr():
     """Collect everything mind-mem's own loggers write, as an operator sees it.
@@ -98,7 +127,7 @@ def _mind_mem_stderr():
         for handler in logger.handlers:
             if isinstance(handler, logging.StreamHandler):
                 restore.append((handler, handler.stream))
-                handler.setStream(buffer)
+                _point_handler_at(handler, buffer)
     saved_stderr = sys.stderr
     sys.stderr = buffer
     try:
@@ -106,7 +135,7 @@ def _mind_mem_stderr():
     finally:
         sys.stderr = saved_stderr
         for handler, stream in restore:
-            handler.setStream(stream)
+            _point_handler_at(handler, stream)
 
 
 def _events(buffer: io.StringIO) -> list[str]:
@@ -124,12 +153,48 @@ def _events(buffer: io.StringIO) -> list[str]:
     return names
 
 
+#: Written by ``init`` since 5.0.2 — the spec binding that arms the gate.
+_BINDING_FILE = ".spec_binding.json"
+
+
+def _digest_bytes(root: Path, path: Path) -> bytes:
+    """The file's bytes, with location- and clock-derived fields normalised.
+
+    Exactly one file needs this, for reasons that have nothing to do with
+    the flag under test. ``init`` arms every workspace it creates, and the
+    binding it writes records the *absolute path* of the config it
+    attested and the *instant* it did so. Two workspaces, in two
+    directories, created microseconds apart, therefore differ in those
+    two fields no matter what the flag says — so comparing them raw makes
+    this test fail permanently on a difference the wiring cannot cause.
+
+    This is normalisation, not a narrowed scan. The file stays in the
+    digest and every other field stays in it byte for byte — including
+    ``spec_hash``, which is the SHA3-512 of the config the flag lives in,
+    so a flag that reached the config would still move this digest.
+    ``config_path`` is kept, made workspace-relative rather than dropped.
+    A binding that will not parse is digested raw: corruption must show
+    up as a difference, never be normalised away.
+    """
+    raw = path.read_bytes()
+    if path.name != _BINDING_FILE:
+        return raw
+    try:
+        record = json.loads(raw)
+        record["bound_at"] = "<normalised: bind instant>"
+        record["config_path"] = Path(os.path.relpath(record["config_path"], root)).as_posix()
+    except (ValueError, KeyError, TypeError):
+        return raw
+    return json.dumps(record, sort_keys=True).encode("utf-8")
+
+
 def _tree_digest(root: Path) -> dict[str, str]:
     """SHA-256 of every regular file under *root*, keyed by POSIX relative path.
 
     SQLite's ``-wal`` / ``-shm`` sidecars are skipped: opening a WAL database
     creates them, so their presence is a property of having connected at all.
     The bytes that matter — ``recall.db`` and any profile file — are covered.
+    ``.spec_binding.json`` goes through :func:`_digest_bytes` first; see there.
     """
     digest: dict[str, str] = {}
     for dirpath, _dirnames, filenames in os.walk(root):
@@ -141,7 +206,7 @@ def _tree_digest(root: Path) -> dict[str, str]:
             # this map with backslashes on Windows, so every membership test
             # against a forward-slash constant would miss and the comparison
             # would silently lose its teeth.
-            digest[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+            digest[path.relative_to(root).as_posix()] = hashlib.sha256(_digest_bytes(root, path)).hexdigest()
     return digest
 
 
@@ -155,13 +220,10 @@ def _make_workspace(tmp_path: Path, name: str, flag: object) -> str:
     workspace = str(tmp_path / name)
     os.makedirs(workspace)
     init(workspace)
-    cfg_path = os.path.join(workspace, "mind-mem.json")
-    with open(cfg_path, encoding="utf-8") as fh:
-        cfg = json.load(fh)
+    # Through ``mm config set``: ``init`` arms the gate against the config
+    # it wrote, so a hand edit is drift rather than configuration.
     if flag is not ...:
-        cfg.setdefault("v4", {})[NOISE_PROFILE_FLAG] = flag
-    with open(cfg_path, "w", encoding="utf-8") as fh:
-        json.dump(cfg, fh)
+        config_set(os.path.join(workspace, "mind-mem.json"), f"v4.{NOISE_PROFILE_FLAG}", flag)
     return workspace
 
 
@@ -550,6 +612,34 @@ class TestFlagOffIsByteIdentical:
         assert sorted(digest_a) == sorted(digest_b)
         assert digest_a == digest_b
         assert events_a == events_b
+
+    def test_the_binding_normalisation_has_teeth(self, tmp_path, pinned_config) -> None:
+        """Positive control for ``_digest_bytes``: it normalises two fields, not the file.
+
+        Without this, replacing the binding's digest with a constant would
+        look exactly the same from ``test_off_equals_the_wiring_being_absent``,
+        and a real change to the attestation would stop being compared.
+        """
+        ws = Path(pinned_config(_make_workspace(tmp_path, "norm", {"enabled": False})))
+        binding = ws / _BINDING_FILE
+        assert binding.is_file(), "init did not arm the workspace; this control proves nothing"
+        before = _tree_digest(ws)[_BINDING_FILE]
+
+        record = json.loads(binding.read_text(encoding="utf-8"))
+        record["spec_hash"] = "0" * len(record["spec_hash"])
+        binding.write_text(json.dumps(record), encoding="utf-8")
+
+        assert _tree_digest(ws)[_BINDING_FILE] != before, "a changed spec_hash left the digest unmoved"
+
+    def test_the_binding_normalisation_survives_a_corrupt_file(self, tmp_path, pinned_config) -> None:
+        """A binding that will not parse is digested raw, never normalised away."""
+        ws = Path(pinned_config(_make_workspace(tmp_path, "corrupt", {"enabled": False})))
+        binding = ws / _BINDING_FILE
+        before = _tree_digest(ws)[_BINDING_FILE]
+
+        binding.write_text("{ not json", encoding="utf-8")
+
+        assert _tree_digest(ws)[_BINDING_FILE] != before
 
     def test_the_off_comparison_has_teeth(self, tmp_path, pinned_config) -> None:
         """Positive control: the same comparison FAILS when the flag is on.

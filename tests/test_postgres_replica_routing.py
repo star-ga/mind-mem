@@ -9,6 +9,7 @@ from typing import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
+from _restore_scope import restoring
 
 from mind_mem.governance_gate import get_gate
 
@@ -127,8 +128,15 @@ class TestWriteRouting:
         rep_store.snapshot("/tmp/snap")
         rep_store._primary.snapshot.assert_called_once()
 
-    def test_restore_always_primary(self, rep_store) -> None:
-        rep_store.restore("/tmp/snap")
+    def test_restore_always_primary(self, rep_store, tmp_path: Path) -> None:
+        """The adapter checks the RESTORE receipt itself, then forwards.
+
+        ``rep_store._primary`` is a ``MagicMock`` that enforces nothing, so
+        without the check on the adapter this call would reach it ungated —
+        which is exactly what it did before 5.0.2.
+        """
+        with restoring(str(tmp_path)):
+            rep_store.restore("/tmp/snap")
         rep_store._primary.restore.assert_called_once_with("/tmp/snap")
 
 

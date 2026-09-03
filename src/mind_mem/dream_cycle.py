@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+from .enums import INITIAL_STATUS, IngestTier
 from .observability import get_logger, metrics, timed
 
 _log = get_logger("dream_cycle")
@@ -895,42 +896,120 @@ class RepairAction:
     detail: str
 
 
+#: Entity type -> block-id prefix. Every value must be a prefix
+#: ``corpus_registry.CORPUS_TABLE`` routes, or the block this module mints
+#: cannot be written at all — see :func:`_assert_entity_prefixes_route`.
 _ENTITY_PREFIX_MAP = {"project": "PRJ", "tool": "TOOL", "person": "PER"}
 
 
-def _create_entity_file(workspace: str, proposal: EntityProposal) -> str | None:
-    """Auto-create a stub entity file from a discovery proposal.
+def _assert_entity_prefixes_route() -> None:
+    """Fail at import if an entity type maps to a prefix nothing routes.
 
-    Returns the file path if created, None if skipped.
+    The old code read this table with ``.get(entity_type, "UNK")`` and
+    wrote ``entities/UNK-<slug>.md`` by hand, so an entity type nobody had
+    given a prefix produced a file on disk and no error. Now the write goes
+    through ``BlockStore.write_block``, which raises for an id it cannot
+    route — and a repair pass that raises halfway through is worse than one
+    that never starts. So the check runs once, here, against the registry
+    that decides routing, rather than per-call against a literal.
+
+    ``_ENTITY_GROUPS`` is the only producer of ``EntityProposal.
+    entity_type``, so both directions are pinned: a group with no prefix
+    row, and a prefix row the corpus table cannot route.
     """
-    entities_dir = os.path.join(workspace, "entities")
-    os.makedirs(entities_dir, exist_ok=True)
+    from .corpus_registry import BLOCK_PREFIX_MAP
 
-    prefix = _ENTITY_PREFIX_MAP.get(proposal.entity_type, "UNK")
+    missing_group = sorted({etype for etype, _p, _i, _m in _ENTITY_GROUPS} - set(_ENTITY_PREFIX_MAP))
+    if missing_group:  # pragma: no cover - import-time invariant
+        raise RuntimeError(f"entity types {missing_group} have no _ENTITY_PREFIX_MAP row; the dream cycle could not write their blocks")
+    unroutable = sorted(p for p in _ENTITY_PREFIX_MAP.values() if p not in BLOCK_PREFIX_MAP)
+    if unroutable:  # pragma: no cover - import-time invariant
+        # NOT an ``assert``: ``python -O`` strips those, and an invariant
+        # that disappears under an optimisation flag is not an invariant.
+        raise RuntimeError(
+            f"entity prefixes {unroutable} are not in corpus_registry.CORPUS_TABLE; write_block would refuse every block they name"
+        )
+
+
+_assert_entity_prefixes_route()
+
+
+#: The status an auto-created entity block declares, READ OFF the one
+#: table that decides it rather than spelled as a literal. AUTO_CAPTURE is
+#: what the dream cycle is: text mined out of the corpus that nobody
+#: reviewed. Its row is ``PENDING``, which recall withholds until a
+#: governance release admits it.
+_ENTITY_TIER = IngestTier.AUTO_CAPTURE
+_ENTITY_STATUS_OR_NONE = INITIAL_STATUS[_ENTITY_TIER]
+if _ENTITY_STATUS_OR_NONE is None:  # pragma: no cover - import-time invariant
+    # An UNSTATED status is SERVABLE, so a ``None`` here would publish
+    # every auto-discovered entity instead of withholding it.
+    raise RuntimeError(
+        f"auto-created entities are written under tier {_ENTITY_TIER!r}, which mints no "
+        "initial status; an unstated status is SERVABLE, so this would publish them"
+    )
+ENTITY_STATUS = _ENTITY_STATUS_OR_NONE
+
+
+def _create_entity_block(workspace: str, proposal: EntityProposal) -> str | None:
+    """Auto-create a stub entity BLOCK from a discovery proposal.
+
+    Returns the block id if created, ``None`` if one already exists.
+
+    This used to write ``entities/<PREFIX>-<slug>.md`` with a bare
+    ``open(..., "w")``. Measured on a fresh workspace, that produced a file
+    **no reader could resolve**: ``parse_file`` found 0 blocks in it (the
+    ``# [ID]`` heading is not a block header), ``get_by_id`` answered
+    ``None``, it was absent from ``get_all`` and ``iter_active_blocks`` —
+    and it was present in ``list_blocks``, so it inflated ``GET /status``
+    ``memory_count`` while resolving to nothing. Evidence chain +0, hash
+    chain +0. The ``RepairAction`` reported ``entity_created`` for an id
+    that did not exist.
+
+    It is now one governed ``write_block`` under an ``admit_block`` scope,
+    so the id the ``RepairAction`` names is the id ``get_by_id`` returns,
+    the write appears in both ledgers, and the block lands ``pending`` —
+    withheld from recall until a governance release admits it, which is the
+    right default for text a pattern-matcher scraped out of a log.
+    """
+    from .governance_gate import get_gate
+    from .storage import get_block_store
+
+    prefix = _ENTITY_PREFIX_MAP[proposal.entity_type]
     entity_id = f"{prefix}-{proposal.slug}"
-    filename = f"{entity_id}.md"
-    filepath = os.path.join(entities_dir, filename)
 
-    if os.path.exists(filepath):
+    store = get_block_store(workspace)
+    if store.get_by_id(entity_id) is not None:
         return None
 
     today = datetime.now().strftime("%Y-%m-%d")
-    content = (
-        f"# [{entity_id}]\n\n"
-        f"**Type:** {proposal.entity_type}\n"
-        f"**Discovered:** {today} (auto-created by dream cycle)\n"
-        f"**Source:** `{proposal.source_file}` ({proposal.source_pattern})\n\n"
-        f"## Context\n\n"
-        f"> {proposal.excerpt}\n\n"
-        f"## Notes\n\n"
-        f"*(Auto-created — review and enrich manually.)*\n"
-    )
+    block = {
+        "_id": entity_id,
+        "Statement": f"{proposal.entity_type.capitalize()} {proposal.slug} — auto-discovered by the dream cycle; review and enrich.",
+        "Date": today,
+        "Status": ENTITY_STATUS.value,
+        "Type": proposal.entity_type,
+        "Source": f"{proposal.source_file} ({proposal.source_pattern})",
+        "Excerpt": proposal.excerpt,
+    }
 
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
+    # Admit BEFORE the bytes land, and let a refusal propagate. There is no
+    # "gate unreachable -> write anyway" fallback, for the same reason
+    # session_summarizer has none: a door that writes when it cannot reach
+    # the gate is a door with no gate.
+    with get_gate(workspace).admit_block(
+        action="WRITE",
+        block_id=entity_id,
+        content=str(block["Statement"]),
+        tier=_ENTITY_TIER,
+        actor="dream_cycle",
+        target_file=os.path.join("entities", f"{proposal.entity_type}s.md"),
+        metadata={"pass": "auto_repair", "entity_type": proposal.entity_type, "source_pattern": proposal.source_pattern},
+    ):
+        store.write_block(block)
 
-    _log.info("entity_auto_created", entity_id=entity_id, path=filepath)
-    return filepath
+    _log.info("entity_auto_created", entity_id=entity_id, status=ENTITY_STATUS.value)
+    return entity_id
 
 
 def _find_closest_block_id(cited_id: str, defined_ids: set[str]) -> str | None:
@@ -1058,15 +1137,13 @@ def pass_auto_repair(
     for proposal in report.entity_proposals:
         if created >= max_entity_creates:
             break
-        path = _create_entity_file(workspace, proposal)
-        if path:
-            prefix = _ENTITY_PREFIX_MAP.get(proposal.entity_type, "UNK")
-            entity_id = f"{prefix}-{proposal.slug}"
+        entity_id = _create_entity_block(workspace, proposal)
+        if entity_id:
             actions.append(
                 RepairAction(
                     action_type="entity_created",
                     target=entity_id,
-                    detail=f"Created {path}",
+                    detail=f"Created governed block {entity_id} (status {ENTITY_STATUS.value}; withheld until released)",
                 )
             )
             created += 1

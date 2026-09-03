@@ -17,6 +17,7 @@ from mind_mem.verify_cli import (
     EXIT_GENERIC,
     EXIT_MERKLE,
     EXIT_OK,
+    EXIT_SCOPE,
     EXIT_SNAPSHOT,
     EXIT_SPEC,
     VerifyReport,
@@ -330,3 +331,124 @@ class TestReport:
         report = verify_workspace(str(empty_ws))
         # First failure was hash_chain, so exit code sticks at EXIT_CHAIN.
         assert report.exit_code == EXIT_CHAIN
+
+
+class TestOpenWriteScopes:
+    """``unclosed_write_scopes`` shipped with no caller in any verifier.
+
+    The function was complete and tested; the product could compute
+    "opened, not landed" and never did, because nothing on a reachable
+    path asked. That is the same shape as ``verify_served_chain`` before
+    5.0.2 — a checker that exists but is not invoked is indistinguishable
+    from one that does not exist. ``verify_workspace`` is where the
+    reachable verifiers converge (``mind-mem-verify``, the ``verify_chain``
+    MCP tool, ``mm`` accountability), so it is where the call belongs.
+    """
+
+    @staticmethod
+    def _armed_workspace(ws: Path):
+        """A workspace with a gate that has written at least one scope."""
+        from mind_mem.enums import IngestTier
+        from mind_mem.governance_gate import get_gate
+
+        _seed_config(ws)
+        gate = get_gate(str(ws))
+        with gate.admit_block("WRITE", "IMP-20260902-001", "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+        return gate
+
+    def test_the_row_is_unconditional_on_an_empty_workspace(self, empty_ws: Path) -> None:
+        """A check that only speaks up when it has news cannot be told
+        apart from one that never ran."""
+        report = verify_workspace(str(empty_ws))
+        assert "open_scopes" in report.checks
+        assert report.checks["open_scopes"] is True
+        assert report.details["open_scopes"] == {"open_scopes": 0, "scope_ids": []}
+
+    def test_a_closed_scope_leaves_the_workspace_clean(self, empty_ws: Path) -> None:
+        self._armed_workspace(empty_ws)
+        report = verify_workspace(str(empty_ws))
+        assert report.checks["open_scopes"] is True, report.messages
+        assert report.details["open_scopes"]["open_scopes"] == 0
+        assert report.exit_code == EXIT_OK
+
+    def test_positive_control_a_suppressed_close_is_reported_and_exits_9(self, empty_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Proof the clean verdict above is a measurement, not a default.
+
+        Suppressing the close record is what a process dying inside the
+        scope leaves in the ledger. Without this control,
+        ``checks["open_scopes"] is True`` could equally mean "the detector
+        is wired but blind".
+        """
+        gate = self._armed_workspace(empty_ws)
+        assert verify_workspace(str(empty_ws)).checks["open_scopes"] is True, "precondition: clean before the kill"
+
+        from mind_mem.enums import IngestTier
+
+        monkeypatch.setattr(type(gate), "_record_scope_close", lambda self, *a, **k: None)
+        with gate.admit_block("WRITE", "IMP-20260902-002", "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+
+        report = verify_workspace(str(empty_ws))
+        assert report.checks["open_scopes"] is False, report.messages
+        assert report.details["open_scopes"]["open_scopes"] == 1
+        assert report.ok is False
+        assert report.exit_code == EXIT_SCOPE
+
+    def test_an_open_scope_does_not_fail_the_evidence_chain_row(self, empty_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The two conditions are different facts and must localise.
+
+        A broken chain means the ledger cannot be trusted. An open scope
+        means the ledger is intact and records a write that never
+        finished. Collapsing them into one code loses the half that tells
+        an operator what to do.
+        """
+        gate = self._armed_workspace(empty_ws)
+
+        from mind_mem.enums import IngestTier
+
+        monkeypatch.setattr(type(gate), "_record_scope_close", lambda self, *a, **k: None)
+        with gate.admit_block("WRITE", "IMP-20260902-003", "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+
+        report = verify_workspace(str(empty_ws))
+        assert report.checks["evidence_chain"] is True, "the chain itself is intact"
+        assert report.checks["open_scopes"] is False
+        assert report.exit_code == EXIT_SCOPE
+
+    def test_the_detector_is_reachable_from_the_console_script(self, empty_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`mind-mem-verify` must exit 9, not merely report in JSON.
+
+        The whole finding was that the detector had no reachable caller;
+        an entry that returns the right dict but the wrong exit code is
+        still unusable as a gate.
+        """
+        gate = self._armed_workspace(empty_ws)
+
+        from mind_mem.enums import IngestTier
+
+        monkeypatch.setattr(type(gate), "_record_scope_close", lambda self, *a, **k: None)
+        with gate.admit_block("WRITE", "IMP-20260902-004", "body", tier=IngestTier.EXTERNAL_INGEST):
+            pass
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main([str(empty_ws), "--json"])
+        assert code == EXIT_SCOPE, buf.getvalue()
+        payload = json.loads(buf.getvalue())
+        assert payload["checks"]["open_scopes"] is False
+        assert payload["details"]["open_scopes"]["open_scopes"] == 1
+
+    def test_open_scopes_is_declared_a_non_ledger_check(self) -> None:
+        """It answers a question ABOUT the evidence ledger; it is not one.
+
+        ``LEDGER_CHECKS`` and ``NON_LEDGER_CHECKS`` partition every row
+        ``verify_workspace`` can emit, and ``tests/test_ledger_hierarchy``
+        asserts the partition holds. Misfiling this row would read as a
+        fifth ledger arriving unannounced.
+        """
+        from mind_mem.verify_cli import LEDGER_CHECKS, NON_LEDGER_CHECKS
+
+        assert "open_scopes" in NON_LEDGER_CHECKS
+        assert "open_scopes" not in LEDGER_CHECKS
+        assert not (set(LEDGER_CHECKS) & set(NON_LEDGER_CHECKS)), "a row in both tuples has no single classification"

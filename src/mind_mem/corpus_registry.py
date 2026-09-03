@@ -190,6 +190,114 @@ CORPUS_FILE_MAP: dict[str, str] = _derive_file_map()
 #: read" equal to "what recall serves".
 CORPUS_RELPATHS: tuple[str, ...] = tuple(entry.relpath for entry in CORPUS_TABLE)
 
+#: Workspace-relative path -> recall label, for the rows the table names.
+#: Derived, like everything else here, so a new row cannot land in one
+#: direction and be missing from the other.
+_LABEL_BY_RELPATH: dict[str, str] = {entry.relpath: entry.label for entry in CORPUS_TABLE}
+
+
+def corpus_label_for(rel_path: str) -> str:
+    """The ``_source_label`` a corpus file carries.
+
+    A file the table names gets the table's label. A file it does not —
+    an ``.md`` sitting directly in a corpus directory under a name
+    nobody registered — gets its **directory** name, which is what
+    ``v4.block_kinds._LABEL_KIND`` already keys on (``entities`` ->
+    ENTITY, ``intelligence`` -> SYNTHESIS) and what
+    ``memory_index._block_category`` reports as the category. Directory
+    names and table labels are allowed to coincide: a
+    ``decisions/ARCHIVE-2025.md`` split out of ``DECISIONS.md`` really is
+    a ``decisions`` block, and ``governance._is_decision_block`` should
+    count it.
+
+    Total, and never raises: an unrecognised path answers with its first
+    segment, so a caller can label a file that has since left the disk
+    (which is exactly what the SQLite deletion sweep has to do).
+    """
+    rel = _normalise(rel_path)
+    named = _LABEL_BY_RELPATH.get(rel)
+    if named is not None:
+        return named
+    head = rel.split("/", 1)[0]
+    return head or rel
+
+
+def discover_corpus_files(
+    workspace: str,
+    corpus_dirs: tuple[str, ...] | None = None,
+) -> list[tuple[str, str]]:
+    """``(label, relpath)`` for every file that holds corpus blocks (I-14).
+
+    THE discovery function. ``MarkdownBlockStore._discover_files`` and the
+    five retrieval/enumeration legs used to answer this question
+    differently, and the difference was a hole rather than a nuance: the
+    store lists **every** ``.md`` directly inside :data:`CORPUS_DIRS`,
+    while recall, the SQLite index, the vector index and the
+    admissibility status map all iterated :data:`CORPUS_FILE_MAP` — the
+    table only. So a well-formed active block in a corpus-directory file
+    the table does not name (``intelligence/BRIEFINGS.md``, an
+    ``entities/`` split, an archive carved out of ``DECISIONS.md``) was
+    ``get_by_id``-readable, ``get_all``-listable, ``export_memory``-visible
+    and ``GET /memories``-visible, and recall never served it. Measured on
+    5.0.1 and again on 5.0.2 before this landed::
+
+        store._discover_files()          intelligence/BRIEFINGS.md  present
+        store.get_by_id(probe)           True   (control: True)
+        store.get_all(active_only=True)  True   (control: True)
+        iter_active_blocks(ws)           False  (control: True)
+        recall(ws, ...)                  absent (control: present)
+
+    Two halves, unioned, and the order is load-bearing:
+
+    * **the table**, first and in table order, EVERY row — existence is
+      not checked here because :data:`CORPUS_FILE_MAP` never checked it
+      either and every caller filters with ``os.path.isfile``. Keeping the
+      table half first and whole is what makes this a drop-in for
+      ``CORPUS_FILES.items()``: an existing workspace's recall order does
+      not move by a single position.
+    * **the walk**, after it: each directory in *corpus_dirs* in order,
+      each ``.md`` directly inside it in sorted order, skipping anything
+      the table already produced. Subdirectories are not descended and
+      non-``.md`` files are ignored — the same two rules the store's walk
+      applies, so the two sets are equal by construction rather than by
+      two lists someone keeps in step.
+
+    *corpus_dirs* is a **narrowing**, exactly as it is on
+    ``MarkdownBlockStore``: ``None`` means the whole corpus; an explicit
+    tuple restricts the walk to those directories and drops table rows
+    that live elsewhere.
+
+    ``tests/test_one_corpus_definition.py`` pins the result equal to
+    ``MarkdownBlockStore._discover_files()`` over the same workspace, and
+    its mutation twin drops the walk half and watches that pin go red.
+    """
+    import os  # noqa: PLC0415 — stdlib, and this module is otherwise import-free
+
+    dirs = CORPUS_DIRS if corpus_dirs is None else corpus_dirs
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for entry in CORPUS_TABLE:
+        if corpus_dirs is not None and entry.subdir not in corpus_dirs:
+            continue
+        if entry.relpath in seen:  # pragma: no cover — duplicate relpath is a typo
+            continue
+        seen.add(entry.relpath)
+        out.append((entry.label, entry.relpath))
+    for subdir in dirs:
+        dir_path = os.path.join(workspace, *subdir.split("/"))
+        if not os.path.isdir(dir_path):
+            continue
+        for fname in sorted(os.listdir(dir_path)):
+            if not fname.endswith(".md"):
+                continue
+            rel = f"{subdir}/{fname}"
+            if rel in seen:
+                continue
+            seen.add(rel)
+            out.append((corpus_label_for(rel), rel))
+    return out
+
+
 # ─── Ledgers of record ────────────────────────────────────────────────────────
 #
 # The append-only ledgers are NOT corpus. They are the record *about* the

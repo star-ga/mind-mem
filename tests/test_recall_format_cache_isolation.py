@@ -1,7 +1,7 @@
 """``format`` is not in the recall-cache key, so it must not be applied inside it.
 
 ``recall_cache.make_cache_key`` digests exactly
-``(query, namespace, limit, backend, active_only, scoring_instant)``.
+``(query, namespace, limit, backend, active_only, scoring_instant, index_anchor)``.
 ``format`` is absent. Building the ``format="bundle"`` envelope inside the
 cached region therefore stored one caller's chosen SHAPE under a key the other
 shape hashes to identically, and every later caller inside the TTL window was
@@ -106,6 +106,7 @@ def test_the_cached_payload_is_the_blocks_shape_regardless_of_the_first_caller(
     # runs 3.10. timezone.utc is the same instant on every supported version.
     from datetime import datetime, timezone
 
+    from mind_mem.prefetch import chain_head
     from mind_mem.recall_cache import get_cache, make_cache_key
 
     # The instant is resolved inside _recall_impl, so it is bracketed here
@@ -115,10 +116,22 @@ def test_the_cached_payload_is_the_blocks_shape_regardless_of_the_first_caller(
     cached_recall_module._recall_impl(QUERY, limit=5, backend="bm25", format="bundle")
     after = datetime.now(timezone.utc).date().isoformat()
 
+    # The key also carries the governed-ledger head, which is what makes a cached
+    # answer belong to one corpus state. Read through the same resolver the
+    # recall path used, so this reconstructs the real key rather than a
+    # hand-rolled guess at it.
+    anchor = chain_head(cached_recall_module._workspace())
     cache = get_cache(None)
     stored = None
     for instant in dict.fromkeys((before, after)):
-        key = make_cache_key(QUERY, limit=5, backend="bm25", active_only=False, scoring_instant=instant)
+        key = make_cache_key(
+            QUERY,
+            limit=5,
+            backend="bm25",
+            active_only=False,
+            scoring_instant=instant,
+            index_anchor=anchor,
+        )
         stored = stored or cache.get(key)
     assert stored is not None, "cache should have been populated on the miss"
     assert _shape(stored) == "blocks", "the cache must hold the format-independent envelope"

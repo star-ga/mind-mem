@@ -8,6 +8,7 @@ from typing import Iterator
 from unittest.mock import MagicMock
 
 import pytest
+from _restore_scope import restoring
 
 from mind_mem.governance_gate import get_gate
 from mind_mem.storage.sharded_pg import (
@@ -312,7 +313,7 @@ class TestSnapshotAndRestoreHonesty:
         from mind_mem.block_store import BlockStoreError
 
         store, stores, _router = _cluster()
-        with pytest.raises(BlockStoreError):
+        with restoring(str(tmp_path)), pytest.raises(BlockStoreError):
             store.restore(str(tmp_path))
         assert all(not s.restored_from for s in stores.values())
 
@@ -322,7 +323,7 @@ class TestSnapshotAndRestoreHonesty:
         store, stores, _router = _cluster()
         for idx in (0, 1, 2):  # shard-03 missing
             (tmp_path / f"shard-{idx:02d}").mkdir()
-        with pytest.raises(BlockStoreError):
+        with restoring(str(tmp_path)), pytest.raises(BlockStoreError):
             store.restore(str(tmp_path))
         assert all(not s.restored_from for s in stores.values())
 
@@ -330,7 +331,8 @@ class TestSnapshotAndRestoreHonesty:
         store, stores, _router = _cluster()
         for idx in range(4):
             (tmp_path / f"shard-{idx:02d}").mkdir()
-        store.restore(str(tmp_path))
+        with restoring(str(tmp_path)):
+            store.restore(str(tmp_path))
         assert all(len(s.restored_from) == 1 for s in stores.values())
 
 

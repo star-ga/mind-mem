@@ -50,13 +50,27 @@ _REPORT_BODY = "compaction pass 1\n"
 
 
 def _enable_flag(ws: str) -> None:
-    """Turn ``v4.maintenance_layout`` ON in the workspace's own config."""
-    config_path = os.path.join(ws, "mind-mem.json")
-    with open(config_path, encoding="utf-8") as handle:
-        config = json.load(handle)
-    config.setdefault("v4", {})["maintenance_layout"] = {"enabled": True}
-    with open(config_path, "w", encoding="utf-8") as handle:
-        json.dump(config, handle, indent=2)
+    """Turn ``v4.maintenance_layout`` ON in the workspace's own config.
+
+    Set through ``config_set``, for the same reason the ``ws`` fixture
+    sets the mode that way. ``init`` arms a spec binding over
+    ``mind-mem.json``; a hand-written edit to that file is, by
+    definition, the drift the binding exists to catch, so the very next
+    governed write is refused with "spec-hash drifted" -- correctly.
+    This helper used to hand-edit the JSON, which armed that refusal
+    *after* the fixture had bound the workspace, and every apply below
+    died on it.
+
+    ``config_set`` writes the key and re-attests the config it just
+    wrote in one step: exactly what an operator running
+    ``mm config set v4.maintenance_layout.enabled true`` does, and the
+    only mechanism that changes a setting without laundering an
+    unreviewed edit (it refuses outright on an already-drifted config).
+    """
+    from mind_mem.governance_gate import config_path_for
+    from mind_mem.mm_cli import config_set
+
+    config_set(config_path_for(ws), "v4.maintenance_layout.enabled", True)
 
 
 def _write_flat_maintenance(ws: str) -> None:
@@ -121,16 +135,41 @@ def _clear_no_touch_window(ws: str) -> None:
 
 @pytest.fixture
 def ws(tmp_path: Path) -> str:
-    """A real initialised workspace in ``propose`` mode with a flat maintenance/."""
+    """A real initialised workspace in ``propose`` mode with a flat maintenance/.
+
+    The mode is set in the file the gate ATTESTS, resolved through
+    :func:`~mind_mem.governance_gate.config_path_for`, rather than spelled
+    here. This fixture used to write ``memory/intel-state.json``, which the
+    apply engine read while the gate read the bound config — two sources for
+    one attested fact, so the mode that was enforced and the mode that was
+    recorded could disagree. The engine now reads the attested file, and a
+    fixture that seeds the other one leaves the workspace in the shipped
+    ``detect_only`` default and every apply is refused.
+
+    Going through ``config_path_for`` rather than joining the path means a
+    future move of the config takes this fixture with it: a second reader
+    that spells the path itself is exactly the defect being avoided.
+
+    Set through ``config_set``, which is the supported way and what an
+    operator does. Writing the JSON by hand leaves the spec binding armed
+    against the OLD bytes, so the very next governed write is refused with
+    "spec-hash drifted" -- correctly, because a config edited after ``init``
+    armed it must stay blocked until someone says the edit was intended.
+    The fixture is not exempt from that; it just has to do the intending,
+    and ``config_set`` does the write and the re-attestation as one step.
+    An explicit ``SpecBindingManager.rebind`` afterwards is therefore
+    redundant, not required: ``config_set`` already rebound the config it
+    wrote (it rebinds whenever the workspace is armed, and ``init`` arms
+    every workspace it creates). ``_enable_flag`` sets its flag the same
+    way, for the same reason.
+    """
+    from mind_mem.governance_gate import config_path_for
+    from mind_mem.mm_cli import config_set
+
     workspace = str(tmp_path / "ws")
     init(workspace)
 
-    state_path = os.path.join(workspace, "memory", "intel-state.json")
-    with open(state_path, encoding="utf-8") as handle:
-        state = json.load(handle)
-    state["governance_mode"] = "propose"
-    with open(state_path, "w", encoding="utf-8") as handle:
-        json.dump(state, handle)
+    config_set(config_path_for(workspace), "governance_mode", "propose")
 
     _write_flat_maintenance(workspace)
     return workspace

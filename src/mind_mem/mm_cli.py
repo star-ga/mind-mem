@@ -28,7 +28,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Final, Mapping, Optional, Sequence
 
 # ---------------------------------------------------------------------------
 # Workspace resolution (mirrors mcp_server._workspace)
@@ -1735,9 +1735,31 @@ def _cmd_graph_backfill(args: argparse.Namespace) -> int:
         attach_source_excerpts,
         backfill,
         pending_relation_signals,
+        schema_report,
+        stale_schema_blocks,
     )
 
     ws = _workspace()
+
+    if args.schema:
+        report = schema_report(ws)
+        if args.json:
+            import json as _json
+
+            print(_json.dumps(report, indent=2))
+            return 0
+        print(f"graph schema  : {report['current']}")
+        for key, value in report["components"].items():
+            print(f"  {key:<24}: {value}")
+        print("  edges by schema id:")
+        if report["versions"]:
+            for version, count in report["versions"].items():
+                print(f"    {version or '(unstamped)':<20} {count}")
+        else:
+            print("    (no edges)")
+        print(f"  stale edges             : {report['stale_edges']}")
+        print(f"  blocks to re-extract    : {len(report['stale_blocks'])} (run `mm graph-backfill --reextract-stale`)")
+        return 0
 
     if args.approve:
         report = approve_relation_signals(ws, args.approve)
@@ -1768,11 +1790,17 @@ def _cmd_graph_backfill(args: argparse.Namespace) -> int:
         return 0
 
     dry_run = not args.write
+    # None means "no restriction"; an empty list means "restrict to
+    # nothing". A graph already on the current schema must therefore scan
+    # zero blocks under --reextract-stale, not silently fall back to the
+    # whole corpus.
+    restrict = stale_schema_blocks(ws) if args.reextract_stale else None
     report = backfill(
         ws,
         limit=args.limit,
         offset=args.offset,
         dry_run=dry_run,
+        restrict_to_blocks=restrict,
     )
     if args.json:
         import json as _json
@@ -1781,6 +1809,9 @@ def _cmd_graph_backfill(args: argparse.Namespace) -> int:
         return 0
     mode = "DRY RUN (no writes)" if dry_run else "write mode (signals staged for review)"
     print(f"graph-backfill — {mode}")
+    print(f"  schema version       : {report['schema_version']}")
+    if report["restricted_to_blocks"] is not None:
+        print(f"  re-extract targets   : {report['restricted_to_blocks']} block(s) with stale-schema edges")
     print(f"  blocks scanned       : {report['blocks_scanned']}")
     print(f"  blocks with edges    : {report['blocks_with_edges']}")
     print(f"  edges extracted      : {report['edges_extracted']}")
@@ -1794,6 +1825,54 @@ def _cmd_graph_backfill(args: argparse.Namespace) -> int:
         print("    (none)")
     if not dry_run:
         print(f"  signals staged       : {report['signals_written']} (approve with `mm graph-backfill --approve SIG-...`)")
+    return 0
+
+
+def _cmd_graph_answer(args: argparse.Namespace) -> int:
+    """Answer about an entity using ONLY the governed edges, with citations."""
+    import os as _os
+
+    from mind_mem.edge_grounded_answer import answer, build_context, corpus_block_ids
+    from mind_mem.knowledge_graph import KnowledgeGraph, default_db_path
+
+    ws = _workspace()
+    db_path = default_db_path(ws)
+    if not _os.path.isfile(db_path):
+        # An absent graph is a gap, not a crash -- and opening the store
+        # here would CREATE the database as a side effect of a question.
+        print(f"no knowledge graph at {db_path}; run `mm graph-backfill --write` first")
+        return 1
+    kg = KnowledgeGraph(db_path)
+    try:
+        context = build_context(
+            kg,
+            args.entity,
+            hops=args.hops,
+            predicates=args.predicate or None,
+            direction=args.direction,
+            max_triples=args.max_triples,
+            include_expired=args.include_expired,
+            as_of=args.as_of or None,
+            known_block_ids=corpus_block_ids(ws),
+        )
+        result = answer(kg, args.entity, context=context)
+    finally:
+        kg.close()
+
+    if args.json:
+        import json as _json
+
+        print(_json.dumps(result.as_dict(), indent=2))
+        return 0
+    if args.context:
+        print(context.serialize())
+        return 0
+    print(result.text)
+    if context.gaps:
+        print()
+        print("the graph does NOT establish:")
+        for gap in context.gaps:
+            print(f"  - {gap.kind}: {gap.detail}")
     return 0
 
 
@@ -1846,6 +1925,47 @@ def _cmd_accountability(args: argparse.Namespace) -> int:
 
     print(json.dumps(accountability_report(_workspace()), indent=2, sort_keys=True))
     return 0
+
+
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    """RA.5 — the lifecycle-tier dashboard, plus the ledger's own chain verdict.
+
+    Read-only by construction: :mod:`mind_mem.accountability_dashboard` reuses
+    the ``mode=ro`` opener every accountability surface shares, so this verb
+    can be run against a live workspace without changing it.
+
+    Exit status is the one verdict on the page: ``1`` when the served-set
+    ledger fails :func:`~mind_mem.served_ledger.verify_served_chain`, ``0``
+    otherwise. That check has existed since RA.1 and this is the first surface
+    from which an operator can run it — a tamper-evidence control nobody can
+    invoke is a claim, not a control.
+    """
+    from mind_mem.accountability_dashboard import dashboard, render
+
+    report = dashboard(_workspace())
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print(render(report))
+    return 0 if report["ledger"]["ok"] else 1
+
+
+def _cmd_replay_check(args: argparse.Namespace) -> int:
+    """Check one recall attestation against the served-set ledger.
+
+    The join RA exists for, as a verb: the attestation says which question,
+    pipeline and answer digest; the ledger says which ids, in which order. A
+    matching ``run_id`` means they describe the same answer, and the ledger's
+    id count is an independent witness of the ``result_count`` the attestation
+    binds but nothing outside it can check.
+
+    Reads the attestation from ``--attestation`` (a file, or ``-`` for stdin);
+    accepts either a bare attestation object or a whole recall envelope. Exit
+    status ``0`` when the ledger corroborates it, ``1`` otherwise.
+    """
+    from mind_mem.replay_check import main as _replay_main
+
+    return _replay_main(["--workspace", _workspace(), "--attestation", args.attestation])
 
 
 def _cmd_inbox_watch(args: argparse.Namespace) -> int:
@@ -2469,6 +2589,227 @@ def _cmd_bind(args: argparse.Namespace) -> int:
     )
 
 
+# ---------------------------------------------------------------------------
+# config set — the supported way to change a bound config
+# ---------------------------------------------------------------------------
+
+#: Sentinel for "this dotted path resolved to nothing". ``None`` cannot be
+#: used: ``null`` is a legal config value, so a caller must be able to tell
+#: "the key holds null" from "the key is absent".
+_MISSING: Final = object()
+
+
+class ConfigSetError(Exception):
+    """A ``config set`` that must not be applied.
+
+    Raised *before* anything is written, so a refused set leaves both the
+    config and its binding exactly as they were.
+    """
+
+
+def _parse_config_value(raw: str) -> Any:
+    """Interpret *raw* as JSON, falling back to the bare string.
+
+    ``true`` / ``500`` / ``{"a": 1}`` become the JSON values an operator
+    means by them; ``enforce`` is not valid JSON and stays the string
+    ``"enforce"``. The fallback is deliberate — requiring ``'"enforce"'``
+    on a shell command line is the kind of quoting trap that sends people
+    back to hand-editing the file, which is the thing this command exists
+    to replace.
+    """
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return raw
+
+
+def _split_config_key(key: str) -> list[str]:
+    """Split a dotted config key into path segments, refusing empty ones.
+
+    ``v4.multi_modal.enabled`` → ``["v4", "multi_modal", "enabled"]``.
+    ``a..b``, ``.a`` and ``""`` are refused rather than silently writing a
+    key named ``""``, which no reader would ever look up.
+    """
+    if not key or not key.strip():
+        raise ConfigSetError("refusing to set an empty config key")
+    parts = key.split(".")
+    if any(not part for part in parts):
+        raise ConfigSetError(f"malformed config key {key!r}: empty path segment")
+    return parts
+
+
+def _set_in(config: Mapping[str, Any], path: Sequence[str], value: Any) -> dict[str, Any]:
+    """Return a **new** config with *path* set to *value*.
+
+    Copies each mapping it descends through and leaves the input object
+    untouched, so a caller that refuses the result (an unwritable file, a
+    failed rebind) is not left holding a half-mutated config. Intermediate
+    levels are created as needed; a non-mapping in the way is an error,
+    never something to overwrite — silently replacing
+    ``{"recall": "sqlite"}`` with ``{"recall": {"backend": ...}}`` would
+    destroy a value the operator did not name.
+    """
+    head, rest = path[0], path[1:]
+    updated = dict(config)
+    if not rest:
+        updated[head] = value
+        return updated
+    child = updated.get(head, _MISSING)
+    if child is _MISSING:
+        child = {}
+    if not isinstance(child, Mapping):
+        raise ConfigSetError(f"cannot descend into {head!r}: it holds a {type(child).__name__}, not an object")
+    updated[head] = _set_in(child, rest, value)
+    return updated
+
+
+def _get_in(config: Mapping[str, Any], path: Sequence[str]) -> Any:
+    """Return the value at *path*, or :data:`_MISSING` when absent."""
+    cursor: Any = config
+    for part in path:
+        if not isinstance(cursor, Mapping) or part not in cursor:
+            return _MISSING
+        cursor = cursor[part]
+    return cursor
+
+
+def config_set(config_path: str, key: str, value: Any) -> dict[str, Any]:
+    """Set *key* to *value* in the config at *config_path*, re-attesting it.
+
+    This is the supported configuration path, and the reason it exists is
+    that there was not one. ``GovernanceGate`` step 1 verifies the config
+    against ``.spec_binding.json``; ``init`` arms every workspace it
+    creates; and the only way the product offered to change a setting was
+    to hand-edit the file, which is *by definition* the drift the gate
+    refuses. Under ``enforce`` that made every documented setting a write
+    outage until someone remembered ``mm bind --rebind``. Remembering is
+    not a mechanism — this is.
+
+    The write and the re-attestation are one step, in this order:
+
+    1. read and validate the current config (an unreadable or non-object
+       config is refused, never overwritten — replacing it would destroy
+       whatever an operator was in the middle of fixing);
+    2. refuse outright when the config has *already* drifted from its
+       binding — see below;
+    3. build the new config as a *copy*;
+    4. write it atomically (tmp + fsync + ``os.replace``);
+    5. rebind, **only when a binding already exists**.
+
+    Step 2 is what keeps this from becoming a laundering tool. Writing
+    over a drifted config and re-attesting the result would turn any
+    unreviewed edit into an attested one, for free, via any unrelated
+    key — the precise thing ``mm bind`` refuses to do without
+    ``--rebind``. So a drifted config is refused here too, and the
+    operator is sent to review it.
+
+    Step 5's condition is load-bearing in both directions. Rebinding an
+    armed workspace is what keeps the attestation current, so the write
+    the operator just authorised is not read back as tampering. *Not*
+    binding an unarmed one is what keeps this command out of the arming
+    decision: ``mm bind`` arms, and a ``config set`` that silently armed
+    would change what the gate enforces as a side effect of setting an
+    unrelated key. Armed-ness before equals armed-ness after, always.
+
+    What this does **not** do is launder a hostile edit. It re-attests the
+    config *it just wrote*, from the value it was handed — exactly the
+    rule ``init`` follows (bind only the config this call authored) and
+    the one ``mm bind`` enforces by refusing drift without ``--rebind``.
+    An edit made by any other means is still drift, and the gate still
+    refuses it under ``enforce``.
+
+    Returns:
+        A dict describing the change: ``config_path``, ``key``, ``value``,
+        ``previous`` (absent when the key was not set before), ``changed``,
+        ``rebound`` and ``spec_hash`` (``None`` when unarmed).
+
+    Raises:
+        ConfigSetError: on a malformed key, a missing or unparseable
+            config, or a path that runs through a non-object value.
+            Raised before any write, so nothing is left half-applied.
+    """
+    from mind_mem.spec_binding import SpecBindingManager
+
+    path = _split_config_key(key)
+    abs_path = os.path.abspath(os.path.expanduser(config_path))
+    if not os.path.isfile(abs_path):
+        raise ConfigSetError(f"no config to set at {abs_path}")
+    try:
+        with open(abs_path, encoding="utf-8") as handle:
+            config = json.load(handle)
+    except ValueError as exc:
+        raise ConfigSetError(f"config at {abs_path} is not valid JSON: {exc}") from exc
+    except OSError as exc:
+        raise ConfigSetError(f"cannot read config at {abs_path}: {exc}") from exc
+    if not isinstance(config, dict):
+        raise ConfigSetError(f"config at {abs_path} is a {type(config).__name__}, not a JSON object")
+
+    binding_path = os.path.join(os.path.dirname(abs_path), ".spec_binding.json")
+    manager = SpecBindingManager(abs_path)
+    armed = os.path.exists(binding_path)
+    if armed:
+        valid, reason = manager.verify()
+        if not valid:
+            raise ConfigSetError(
+                f"refusing to set {key!r}: the config has already drifted from its binding — {reason}. "
+                "Review that change and attest it with `mm bind --rebind` first; writing over it here "
+                "would re-attest an edit nobody reviewed."
+            )
+
+    previous = _get_in(config, path)
+    updated = _set_in(config, path, value)
+
+    tmp_path = abs_path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as handle:
+        json.dump(updated, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp_path, abs_path)
+
+    spec_hash: Optional[str] = None
+    rebound = False
+    if armed:
+        binding = manager.rebind(abs_path)
+        spec_hash = binding.spec_hash
+        rebound = True
+
+    result: dict[str, Any] = {
+        "config_path": abs_path,
+        "key": key,
+        "value": value,
+        "changed": previous is _MISSING or previous != value,
+        "rebound": rebound,
+        "spec_hash": spec_hash,
+    }
+    if previous is not _MISSING:
+        result["previous"] = previous
+    return result
+
+
+def _cmd_config_set(args: argparse.Namespace) -> int:
+    """``mm config set <key> <value>`` — set a config key and re-attest it."""
+    workspace = os.path.realpath(os.path.expanduser(args.workspace)) if args.workspace else _workspace()
+    config_path = os.path.abspath(os.path.expanduser(args.config)) if args.config else os.path.join(workspace, "mind-mem.json")
+    value = args.value if args.raw_string else _parse_config_value(args.value)
+
+    try:
+        result = config_set(config_path, args.key, value)
+    except ConfigSetError as exc:
+        if args.json:
+            print(json.dumps({"changed": False, "config_path": config_path, "error": str(exc)}, indent=2))
+        else:
+            print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(json.dumps(result, indent=2, default=str))
+    else:
+        state = "rebound" if result["rebound"] else "not bound — run `mm bind` to arm this workspace"
+        print(f"set {args.key} = {json.dumps(result['value'], default=str)}\n  config:  {result['config_path']}\n  binding: {state}")
+    return 0
+
+
 def _cmd_doctor(args: argparse.Namespace) -> int:
     """Diagnose + repair common workspace drifts.
 
@@ -2901,6 +3242,338 @@ def _cmd_self_update(args: argparse.Namespace) -> int:
     from mind_mem import self_update
 
     return self_update.cmd_self_update(args)
+
+
+# ---------------------------------------------------------------------------
+# Compliance — redaction, provenance policy, deterministic export
+#
+# Exit codes across this family:
+#   0  the surface ran and the corpus satisfied the policy
+#   1  the corpus does NOT satisfy a `required` policy (a finding, not an error)
+#   2  the caller asked for something that does not exist (policy, format, date)
+#   3  the feature is off for this workspace
+#   4  a `reject`-mode workspace refused the text
+# ---------------------------------------------------------------------------
+
+#: Mirror of :data:`mind_mem.compliance.export.FORMATS`, held as a literal so
+#: that building the parser does not import the compliance package on every
+#: ``mm`` invocation — an OFF feature must not cost the CLI an import. The two
+#: are asserted equal by ``tests/test_compliance_export.py``, so the mirror
+#: cannot drift silently.
+_EXPORT_FORMATS: tuple[str, ...] = ("jsonl", "markdown")
+
+_COMPLIANCE_DISABLED = 3
+_COMPLIANCE_BAD_REQUEST = 2
+_COMPLIANCE_REFUSED = 4
+
+
+def _compliance_text(args: argparse.Namespace) -> tuple[str, str]:
+    """``(text, label)`` for the ``--file`` / ``--text`` pair.
+
+    ``--text`` is labelled ``(stdin)``-style rather than given a path, so
+    an audit entry never claims a file that does not exist.
+    """
+    if getattr(args, "file", ""):
+        path = os.path.expanduser(args.file)
+        with open(path, "r", encoding="utf-8") as handle:
+            return handle.read(), path
+    return str(args.text or ""), "(inline)"
+
+
+def _compliance_mode_or_refuse(workspace: str) -> tuple[str, int]:
+    """Resolve the redaction mode, or explain how to turn the surface on."""
+    from mind_mem.compliance.redaction import MODE_OFF, RedactionConfigError, resolve_mode
+
+    try:
+        mode = resolve_mode(workspace)
+    except RedactionConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return "", _COMPLIANCE_BAD_REQUEST
+    if mode == MODE_OFF:
+        print(
+            'error: redaction is disabled for this workspace. Enable via mind-mem.json: "v4": { "redaction": { "enabled": true } }',
+            file=sys.stderr,
+        )
+        return "", _COMPLIANCE_DISABLED
+    return mode, 0
+
+
+def _cmd_compliance_detectors(args: argparse.Namespace) -> int:
+    """``mm compliance detectors`` — what the chain would run, and why it is complete.
+
+    Reads the registry, which every concrete detector joins by existing.
+    A detector missing from this list is a detector that does not exist.
+    """
+    from mind_mem.compliance.detectors import registered_detectors
+
+    rows = [{"name": d.name, "category": d.category, "class": type(d).__qualname__} for d in registered_detectors()]
+    if args.json:
+        print(json.dumps({"detectors": rows, "count": len(rows)}, indent=2))
+    else:
+        for row in rows:
+            print(f"{row['name']:<20} {row['category']:<8} {row['class']}")
+        print(f"\n{len(rows)} registered detector(s)")
+    return 0
+
+
+def _cmd_compliance_scan(args: argparse.Namespace) -> int:
+    """``mm compliance scan`` — report findings without changing or recording anything."""
+    from mind_mem.compliance.redaction import MODE_FLAG, RedactionConfigError, redact, redaction_chain_for_workspace
+
+    workspace = _workspace()
+    mode, code = _compliance_mode_or_refuse(workspace)
+    if code:
+        return code
+    try:
+        chain = redaction_chain_for_workspace(workspace)
+    except RedactionConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+    try:
+        text, label = _compliance_text(args)
+    except OSError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+
+    # Always MODE_FLAG: `scan` is the read-only verb, so it never rewrites
+    # and never appends to the ledger, whatever the workspace's own mode is.
+    result = redact(text, mode=MODE_FLAG, detectors=chain)
+    if args.json:
+        print(json.dumps({"target": label, "workspace_mode": mode, **result.to_dict()}, indent=2))
+    else:
+        print(result.summary())
+        for finding in result.findings:
+            print(f"  {finding.detector:<20} {finding.category:<8} [{finding.start}:{finding.end}]")
+    return 0
+
+
+def _cmd_compliance_redact(args: argparse.Namespace) -> int:
+    """``mm compliance redact`` — rewrite, and record the rewrite in the ledger.
+
+    The redaction half only. The provenance policy is deliberately not
+    consulted here: this verb takes a document, not a pending block, so it
+    has no attribution to judge and refusing it for missing ``ActorId``
+    would be refusing the wrong thing. ``mm compliance screen`` is the verb
+    that runs both controls.
+    """
+    from mind_mem.compliance.audit import record_redaction
+    from mind_mem.compliance.redaction import MODE_REDACT, RedactionConfigError, RedactionRefused, redact, redaction_chain_for_workspace
+
+    workspace = _workspace()
+    mode, code = _compliance_mode_or_refuse(workspace)
+    if code:
+        return code
+    try:
+        chain = redaction_chain_for_workspace(workspace)
+    except RedactionConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+    try:
+        text, label = _compliance_text(args)
+    except OSError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+
+    target = args.target or label
+    try:
+        result = redact(text, mode=mode, detectors=chain)
+    except RedactionRefused as exc:
+        # A `reject` workspace refused the text. The refusal is still an
+        # event worth a ledger entry -- "we were asked to store this and
+        # said no" is exactly the record a compliance reviewer wants.
+        record_redaction(workspace, exc.result, target=target, agent=args.agent)
+        print(f"error: {exc}", file=sys.stderr)
+        if args.json:
+            print(json.dumps({"target": target, "refused": True, **exc.result.to_dict()}, indent=2))
+        return _COMPLIANCE_REFUSED
+
+    entry = record_redaction(workspace, result, target=target, agent=args.agent)
+
+    if args.in_place and mode == MODE_REDACT:
+        if not getattr(args, "file", ""):
+            print("error: --in-place needs --file", file=sys.stderr)
+            return _COMPLIANCE_BAD_REQUEST
+        with open(os.path.expanduser(args.file), "w", encoding="utf-8") as handle:
+            handle.write(result.text)
+
+    if args.json:
+        payload = {"target": target, "in_place": bool(args.in_place), "audit_seq": entry.seq if entry else None, **result.to_dict()}
+        print(json.dumps(payload, indent=2))
+    elif args.in_place:
+        print(result.summary())
+    else:
+        sys.stdout.write(result.text)
+    return 0
+
+
+def _cmd_compliance_screen(args: argparse.Namespace) -> int:
+    """``mm compliance screen`` — the full pre-write door, provenance first.
+
+    This is the verb a hook or an agent runs before writing: it refuses on
+    missing attribution under a ``required`` policy, refuses on a finding
+    under a ``reject`` policy, and otherwise prints the text that may be
+    written, having recorded the pass in the ledger.
+    """
+    from mind_mem.compliance.prewrite import PreWritePolicy, screen
+    from mind_mem.compliance.provenance_policy import ProvenanceConfigError, ProvenanceRequired
+    from mind_mem.compliance.redaction import RedactionConfigError, RedactionRefused
+
+    workspace = _workspace()
+    try:
+        policy = PreWritePolicy.resolve(workspace)
+    except (ProvenanceConfigError, RedactionConfigError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+    if policy.inert:
+        print(
+            'error: no compliance control is on for this workspace. Enable via mind-mem.json: "v4": { "redaction": { "enabled": true } } '
+            'and/or { "provenance": { "enabled": true, "policy": "required" } }',
+            file=sys.stderr,
+        )
+        return _COMPLIANCE_DISABLED
+    try:
+        text, label = _compliance_text(args)
+    except OSError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+
+    provenance = {
+        "ActorId": args.actor_id,
+        "ActorRole": args.actor_role,
+        "SessionId": args.session_id,
+        "ToolId": args.tool_id,
+        "Purpose": args.purpose,
+    }
+    target = args.target or label
+    try:
+        screening = screen(text, policy=policy, provenance=provenance, target=target, agent=args.agent, record=True)
+    except ProvenanceRequired as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        if args.json:
+            print(json.dumps({"target": target, "refused": "provenance", **exc.decision.to_dict()}, indent=2))
+        return _COMPLIANCE_REFUSED
+    except RedactionRefused as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        if args.json:
+            print(json.dumps({"target": target, "refused": "redaction", **exc.result.to_dict()}, indent=2))
+        return _COMPLIANCE_REFUSED
+
+    if args.json:
+        print(json.dumps({"target": target, "policy": policy.to_dict(), **screening.to_dict()}, indent=2))
+    else:
+        for warning in screening.provenance.warnings:
+            print(warning, file=sys.stderr)
+        sys.stdout.write(screening.text)
+    return 0
+
+
+def _cmd_compliance_provenance(args: argparse.Namespace) -> int:
+    """``mm compliance provenance`` — how much of the admitted corpus is attributed.
+
+    Exit 1 when the policy is ``required`` and any admitted block is
+    missing a required field: a policy that reports a violation and exits
+    0 is a report, not a policy.
+    """
+    from mind_mem.compliance.export import load_admitted_blocks
+    from mind_mem.compliance.provenance_policy import (
+        POLICY_OFF,
+        POLICY_REQUIRED,
+        ProvenanceConfigError,
+        evaluate_provenance,
+        resolve_policy,
+        resolve_required_fields,
+    )
+
+    workspace = _workspace()
+    try:
+        policy = resolve_policy(workspace)
+        required = resolve_required_fields(workspace) if policy != POLICY_OFF else ()
+    except ProvenanceConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+    if policy == POLICY_OFF:
+        print(
+            "error: the provenance policy is off for this workspace. Enable via mind-mem.json: "
+            '"v4": { "provenance": { "enabled": true, "policy": "required" } }',
+            file=sys.stderr,
+        )
+        return _COMPLIANCE_DISABLED
+
+    admitted, withheld = load_admitted_blocks(workspace)
+    rows: list[dict[str, Any]] = []
+    for block in admitted:
+        decision = evaluate_provenance(block, policy=policy, required=required)
+        if decision.missing:
+            rows.append({"id": str(block.get("_id") or ""), "source": str(block.get("_source") or ""), "missing": list(decision.missing)})
+    rows.sort(key=lambda r: (r["source"], r["id"]))
+
+    listed = rows if args.verbose else rows[:20]
+    report: dict[str, Any] = {
+        "policy": policy,
+        "required": list(required),
+        "admitted_blocks": len(admitted),
+        "withheld_count": withheld,
+        "blocks_missing_provenance": len(rows),
+        "blocks": listed,
+    }
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"policy={policy} required={','.join(required)} admitted={len(admitted)} withheld={withheld} missing={len(rows)}")
+        for row in listed:
+            print(f"  {row['source']}::{row['id']} missing {','.join(row['missing'])}")
+    return 1 if (policy == POLICY_REQUIRED and rows) else 0
+
+
+def _cmd_export(args: argparse.Namespace) -> int:
+    """``mm export`` — write a deterministic compliance bundle.
+
+    Two runs over an unchanged corpus produce byte-identical output; that
+    is the property that makes the bundle evidence rather than a dump, and
+    ``tests/test_compliance_export.py`` asserts it against a positive
+    control that shows the comparison can fail.
+    """
+    from datetime import date as _date
+
+    from mind_mem.compliance.export import UnknownExportPolicyError, build_bundle, render_bundle
+    from mind_mem.compliance.redaction import RedactionConfigError, redaction_chain_for_workspace
+    from mind_mem.v4.feature_flags import FeatureDisabledError
+
+    workspace = _workspace()
+    since = None
+    if args.since:
+        try:
+            since = _date.fromisoformat(args.since)
+        except ValueError:
+            print(f"error: --since {args.since!r} is not an ISO date (YYYY-MM-DD)", file=sys.stderr)
+            return _COMPLIANCE_BAD_REQUEST
+    try:
+        chain = redaction_chain_for_workspace(workspace)
+    except RedactionConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+
+    try:
+        bundle = build_bundle(workspace, policy=args.policy, since=since, fmt=args.format, detectors=chain)
+    except FeatureDisabledError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_DISABLED
+    except (UnknownExportPolicyError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _COMPLIANCE_BAD_REQUEST
+
+    payload = render_bundle(bundle)
+    if args.out and args.out != "-":
+        out_path = os.path.expanduser(args.out)
+        parent = os.path.dirname(os.path.abspath(out_path))
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(out_path, "wb") as handle:
+            handle.write(payload)
+        print(json.dumps({"out": out_path, "bytes": len(payload), **bundle.envelope}, indent=2))
+    else:
+        sys.stdout.write(payload.decode("utf-8"))
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -3514,8 +4187,56 @@ def build_parser() -> argparse.ArgumentParser:
         help="Apply the named staged relation signal(s) to the knowledge graph.",
     )
     p_gbf.add_argument("--list-pending", action="store_true", help="List staged relation signals awaiting approval.")
+    p_gbf.add_argument(
+        "--schema",
+        action="store_true",
+        help=(
+            "Report the live graph schema id, the inputs it is derived from, and how many stored edges were extracted under an older one."
+        ),
+    )
+    p_gbf.add_argument(
+        "--reextract-stale",
+        action="store_true",
+        help=("Scan only the blocks behind edges whose schema id is not the live one. On an up-to-date graph this scans nothing."),
+    )
     p_gbf.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     p_gbf.set_defaults(func=_cmd_graph_backfill)
+
+    # graph-answer — answer from the governed edges only, citing each one
+    p_gans = sub.add_parser(
+        "graph-answer",
+        help=(
+            "Answer about an entity using ONLY the k-hop subgraph of governed "
+            "edges: every claim cites its edge and provenance block, and what "
+            "the graph does not contain is listed explicitly."
+        ),
+    )
+    p_gans.add_argument("entity", help="Seed entity (any alias; never created if unknown).")
+    p_gans.add_argument("--hops", type=int, default=2, help="Subgraph radius (default: 2, max 8).")
+    p_gans.add_argument(
+        "--predicate",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="Restrict to this predicate (repeatable). A predicate with no edges is reported as a gap.",
+    )
+    p_gans.add_argument(
+        "--direction",
+        default="both",
+        choices=["outgoing", "incoming", "both"],
+        help="Edge direction to follow (default: both).",
+    )
+    p_gans.add_argument("--max-triples", type=int, default=128, help="Cap on served triples (default: 128).")
+    p_gans.add_argument("--include-expired", action="store_true", help="Also serve edges past their valid_until.")
+    p_gans.add_argument(
+        "--as-of",
+        default="",
+        metavar="ISO8601",
+        help="Evaluate edge validity at this instant instead of now, so the answer replays exactly.",
+    )
+    p_gans.add_argument("--context", action="store_true", help="Print the serialised triple context instead of the answer.")
+    p_gans.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    p_gans.set_defaults(func=_cmd_graph_answer)
 
     # pipeline-status — v3.9 hash-of-code invalidation inspection
     p_pipeline = sub.add_parser(
@@ -3536,6 +4257,34 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_acct.set_defaults(func=_cmd_accountability)
+
+    # dashboard — RA.5 the one lifecycle tier axis, rendered, + the ledger verdict
+    p_dash = sub.add_parser(
+        "dashboard",
+        help=(
+            "RA.5 lifecycle-tier dashboard: the one MemoryTier ladder crossed with "
+            "retention class, the served-set ledger's chain verdict, and RA.2's "
+            "precision / waste / serve counts. Read-only; exits 1 on a broken chain."
+        ),
+    )
+    p_dash.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of the text panels.")
+    p_dash.set_defaults(func=_cmd_dashboard)
+
+    # replay-check — does the ledger corroborate one recall attestation?
+    p_replay = sub.add_parser(
+        "replay-check",
+        help=(
+            "Check a recall attestation against the served-set ledger: same run id, "
+            "and the recorded id count agrees with the attested result_count. "
+            "Exits 1 unless the ledger corroborates it."
+        ),
+    )
+    p_replay.add_argument(
+        "--attestation",
+        default="-",
+        help="Path to a JSON attestation or recall envelope; '-' reads stdin (default).",
+    )
+    p_replay.set_defaults(func=_cmd_replay_check)
 
     # audit-model — static security scan of any local model checkpoint
     p_audit = sub.add_parser(
@@ -3695,6 +4444,44 @@ def build_parser() -> argparse.ArgumentParser:
     p_bind.add_argument("--json", action="store_true")
     p_bind.set_defaults(func=_cmd_bind)
 
+    # config — the supported way to change a bound config
+    p_config = sub.add_parser(
+        "config",
+        help=(
+            "Read/write mind-mem.json. `config set` writes the key and "
+            "re-attests .spec_binding.json in one step, so a setting change "
+            "is not read back by GovernanceGate as config tampering."
+        ),
+    )
+    config_sub = p_config.add_subparsers(dest="config_action", required=True)
+    p_config_set = config_sub.add_parser(
+        "set",
+        help=(
+            "Set KEY (dotted, e.g. v4.multi_modal.enabled) to VALUE and rebind. "
+            "VALUE is parsed as JSON when it is valid JSON (true, 500, {...}) and "
+            "kept as a string otherwise (enforce). Never arms an unbound workspace."
+        ),
+    )
+    p_config_set.add_argument("key", help="Dotted config key, e.g. governance_mode or proposal_budget.backlog_limit.")
+    p_config_set.add_argument("value", help="Value; JSON when parseable, otherwise the literal string.")
+    p_config_set.add_argument(
+        "--raw-string",
+        action="store_true",
+        help="Store VALUE verbatim as a string, skipping JSON parsing (for a value like 'true' or '5' that is meant to stay text).",
+    )
+    p_config_set.add_argument(
+        "--workspace",
+        default=None,
+        help="Workspace to configure (default: $MIND_MEM_WORKSPACE or cwd).",
+    )
+    p_config_set.add_argument(
+        "--config",
+        default=None,
+        help="Config to write (default: <workspace>/mind-mem.json).",
+    )
+    p_config_set.add_argument("--json", action="store_true")
+    p_config_set.set_defaults(func=_cmd_config_set)
+
     # audit-pinned — release-CI gate that audits every pinned model
     p_pinned = sub.add_parser(
         "audit-pinned",
@@ -3825,6 +4612,72 @@ def build_parser() -> argparse.ArgumentParser:
     p_trace.set_defaults(func=_cmd_trace)
 
     # ── self-update — PyPI check + in-place upgrade ───────────────────────
+    # export — deterministic compliance bundle over the ADMITTED corpus
+    p_export = sub.add_parser(
+        "export",
+        help=("Deterministic compliance bundle over the admitted corpus. Two runs over an unchanged corpus produce byte-identical output."),
+    )
+    p_export.add_argument(
+        "--policy",
+        default="full",
+        help="Export policy: full | redacted | metadata-only (an unknown name is refused and the real ones listed).",
+    )
+    p_export.add_argument(
+        "--since",
+        default="",
+        metavar="YYYY-MM-DD",
+        help="Only blocks dated on or after this date. Undated blocks are excluded and counted.",
+    )
+    p_export.add_argument("--format", default="jsonl", choices=list(_EXPORT_FORMATS), help="Bundle serialisation.")
+    p_export.add_argument(
+        "--out", default="-", help="Write the bundle here ('-' for stdout). With a path, the envelope is printed instead."
+    )
+    p_export.set_defaults(func=_cmd_export)
+
+    # compliance — redaction chain, pre-write door, provenance policy
+    p_comp = sub.add_parser("compliance", help="Redaction detectors, the pre-write screening door, and the provenance policy.")
+    csub = p_comp.add_subparsers(dest="compliance_cmd", required=True)
+
+    c_det = csub.add_parser("detectors", help="List every registered detector. A detector missing here does not exist.")
+    c_det.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    c_det.set_defaults(func=_cmd_compliance_detectors)
+
+    c_scan = csub.add_parser("scan", help="Report findings without rewriting anything and without touching the ledger.")
+    c_scan_src = c_scan.add_mutually_exclusive_group(required=True)
+    c_scan_src.add_argument("--file", default="", help="Read the text from this path.")
+    c_scan_src.add_argument("--text", default="", help="Screen this literal text.")
+    c_scan.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    c_scan.set_defaults(func=_cmd_compliance_scan)
+
+    c_red = csub.add_parser("redact", help="Rewrite findings out of the text and record the pass in the audit chain.")
+    c_red_src = c_red.add_mutually_exclusive_group(required=True)
+    c_red_src.add_argument("--file", default="", help="Read the text from this path.")
+    c_red_src.add_argument("--text", default="", help="Redact this literal text.")
+    c_red.add_argument("--in-place", action="store_true", help="Write the redacted text back over --file.")
+    c_red.add_argument("--target", default="", help="Label recorded in the audit entry (defaults to the file path).")
+    c_red.add_argument("--agent", default="", help="Actor recorded in the audit entry.")
+    c_red.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    c_red.set_defaults(func=_cmd_compliance_redact)
+
+    c_screen = csub.add_parser("screen", help="The full pre-write door: provenance policy first, then the detector chain, then the ledger.")
+    c_screen_src = c_screen.add_mutually_exclusive_group(required=True)
+    c_screen_src.add_argument("--file", default="", help="Read the text from this path.")
+    c_screen_src.add_argument("--text", default="", help="Screen this literal text.")
+    c_screen.add_argument("--actor-id", default="", help="ActorId for the pending write.")
+    c_screen.add_argument("--actor-role", default="", help="ActorRole for the pending write.")
+    c_screen.add_argument("--session-id", default="", help="SessionId for the pending write.")
+    c_screen.add_argument("--tool-id", default="", help="ToolId for the pending write.")
+    c_screen.add_argument("--purpose", default="", help="Purpose for the pending write.")
+    c_screen.add_argument("--target", default="", help="Label recorded in the audit entry.")
+    c_screen.add_argument("--agent", default="", help="Actor recorded in the audit entry.")
+    c_screen.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    c_screen.set_defaults(func=_cmd_compliance_screen)
+
+    c_prov = csub.add_parser("provenance", help="Report the provenance policy and every admitted block that does not satisfy it.")
+    c_prov.add_argument("--verbose", action="store_true", help="List every offending block instead of the first 20.")
+    c_prov.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    c_prov.set_defaults(func=_cmd_compliance_provenance)
+
     p_self_update = sub.add_parser(
         "self-update",
         help="Check PyPI for a newer mind-mem and upgrade this install.",

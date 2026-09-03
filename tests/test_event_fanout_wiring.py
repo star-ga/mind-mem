@@ -59,6 +59,7 @@ from mind_mem.event_fanout import (
 )
 from mind_mem.init_workspace import init
 from mind_mem.lint import RULE_DUPLICATE_BLOCK
+from mind_mem.mm_cli import config_set
 
 # The canary goes in the STATEMENT of the block the apply rewrites, so it is
 # carried by the proposal, by the apply diff and by the apply log — every
@@ -205,14 +206,14 @@ def _make_ws(tmp_path: Path, name: str = "ws", *, events: Any = None) -> str:
     ws = str(tmp_path / name)
     init(ws)
 
+    # ``init`` arms the gate, so ``mind-mem.json`` is configured through
+    # ``mm config set`` (write + re-attest in one step). A hand edit here
+    # is drift, and under ``enforce`` it refuses every governed write the
+    # fan-out tests depend on. ``intel-state.json`` is not bound.
     config_path = os.path.join(ws, "mind-mem.json")
-    with open(config_path, encoding="utf-8") as handle:
-        config = json.load(handle)
-    config["governance_mode"] = "enforce"
+    config_set(config_path, "governance_mode", "enforce")
     if events is not None:
-        config["events"] = events
-    with open(config_path, "w", encoding="utf-8") as handle:
-        json.dump(config, handle, indent=2)
+        config_set(config_path, "events", events)
 
     state_path = os.path.join(ws, "memory", "intel-state.json")
     with open(state_path, encoding="utf-8") as handle:
@@ -280,12 +281,7 @@ def _isolate_mcp_env(monkeypatch, tmp_path):
 
 
 def _enable_lint(ws: str) -> None:
-    path = os.path.join(ws, "mind-mem.json")
-    with open(path, encoding="utf-8") as handle:
-        config = json.load(handle)
-    config.setdefault("v4", {})["lint"] = {"enabled": True}
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(config, handle, indent=2)
+    config_set(os.path.join(ws, "mind-mem.json"), "v4.lint", {"enabled": True})
 
 
 def _applied_receipt_ts(ws: str) -> str:

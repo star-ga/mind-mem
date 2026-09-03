@@ -22,6 +22,7 @@ import re
 import subprocess  # nosec B404 — subprocess is used with a fixed argument list (shell=False) for internal tooling; no user input reaches the command
 import sys
 from datetime import datetime, timedelta, timezone
+from typing import Final, Optional
 
 # Import block parser from same directory
 from .backup_restore import WAL
@@ -34,7 +35,7 @@ from .block_store import (
     _read_manifest,  # noqa: F401 — re-exported; tests import from apply_engine
     _safe_copy,  # noqa: F401 — re-exported; tests import from apply_engine
 )
-from .corpus_registry import SNAPSHOT_DIRS
+from .corpus_registry import SNAPSHOT_DIRS, is_ledger_path
 from .enums import IngestTier
 from .mind_filelock import FileLock, LockTimeout
 from .namespaces import NamespaceManager
@@ -96,6 +97,61 @@ VALID_RISKS = {"low", "medium", "high"}
 VALID_STATUSES = {"staged", "applied", "rejected", "deferred", "expired", "rolled_back"}
 VALID_TYPES = {"decision", "task", "edit"}
 
+
+#: :attr:`ApplyAborted.stage` values — the phase of the apply that withdrew
+#: its own work. Additive detail, not a new outcome: the gate still records
+#: ``scope_outcome=error`` for both, so a reader that knows only ``ok`` and
+#: ``error`` loses nothing by ignoring the stage.
+STAGE_OP: Final = "op"
+STAGE_POST_CHECK: Final = "post_check"
+
+
+class ApplyAborted(Exception):
+    """An apply undid its own work and must leave the admission scope by raising.
+
+    The governance gate writes one close record on **both** exits of a
+    write scope, and it reads ``outcome=ok`` for any exit that was not an
+    exception — including a plain ``return``. The op-failure branch used
+    to ``return False`` from inside the still-open
+    :meth:`~mind_mem.governance_gate.GovernanceGate.admit_proposal`
+    scope, so a rolled-back apply closed its scope claiming success.
+    Measured on a fresh workspace with ``execute_op`` forced to fail:
+    ``APPLY(P-…) → ROLLBACK(restore:…) → CLOSE outcome=ok landed=0``,
+    against a control run's ``APPLY → CLOSE outcome=ok landed=1``. The
+    two differed only in ``landed`` and in a sibling ``RESTORE`` row an
+    auditor had to think to join — the close record itself said the same
+    word for a landed apply and an undone one.
+
+    Raising instead of returning is the whole fix: the exception is what
+    the gate needs in order to write ``outcome=error``, and it is caught
+    immediately outside the ``with`` so the caller still receives the
+    ordinary ``(False, message)`` tuple. It is deliberately *not* part of
+    the public surface — no caller of ``apply_proposal`` should ever see
+    it — which is why the ``except`` clause sits as tightly around the
+    scope as the ``with`` does.
+
+    Two branches raise it, and they are the *only* two paths that undo a
+    committed op: the op-failure branch and the post-check branch. The
+    second is why the post-checks moved inside the scope — see the
+    comment at that call site.
+
+    Attributes:
+        step: Index of the op that failed, or ``None`` when the abort was
+            not attributable to a single op (the post-check branch).
+        stage: Which phase withdrew the work — :data:`STAGE_OP` or
+            :data:`STAGE_POST_CHECK`. Carried for the transcript and for
+            the tests; the chain records both as ``scope_outcome=error``,
+            because "the work did not stand" is one fact, not two.
+        message: The message ``apply_proposal`` returns to its caller.
+    """
+
+    def __init__(self, step: Optional[int], message: str, *, stage: str = STAGE_OP) -> None:
+        super().__init__(message)
+        self.step = step
+        self.stage = stage
+        self.message = message
+
+
 PROPOSED_FILES = [
     "intelligence/proposed/DECISIONS_PROPOSED.md",
     "intelligence/proposed/TASKS_PROPOSED.md",
@@ -139,6 +195,27 @@ def _list_workspace_files(ws):
 def _cleanup_orphan_files(ws, pre_apply_files):
     """Delete files created during a failed transaction (orphan cleanup).
 
+    **Never a ledger of record.** The sweep is "files that were not here
+    before the apply", and on a workspace's *first* apply that set
+    contains ``memory/evidence_chain.jsonl`` and
+    ``memory/hash_chain_v2.db``: the gate is constructed after the
+    pre-apply inventory is taken, so the ledgers it creates look brand
+    new to this function. Measured before the fix, with ``execute_op``
+    forced to fail on a freshly-``init``-ed workspace::
+
+        Cleaned orphan: memory/evidence_chain.jsonl
+        Cleaned orphan: memory/hash_chain_v2.db
+        EvidenceChainCompromisedError: ... the store this chain was
+        loaded from no longer exists
+
+    — the rollback destroyed the record of the rollback, and the close
+    record the gate then tried to write raised out of ``apply_proposal``
+    instead of returning ``(False, msg)``. The exclusion uses
+    :func:`~mind_mem.corpus_registry.is_ledger_path`, the same predicate
+    ``block_store``'s restore-side orphan sweep already applies, rather
+    than a second hand-written list of filenames — one definition, so a
+    new ledger row is excluded here the moment it exists.
+
     On Windows, SQLite connections may still hold a handle on ``.db``
     files created during the aborted op; :func:`os.remove` then raises
     ``PermissionError: [WinError 32]``. Those locks release when the
@@ -148,7 +225,7 @@ def _cleanup_orphan_files(ws, pre_apply_files):
     immediate delete succeeding.
     """
     current_files = _list_workspace_files(ws)
-    orphans = current_files - pre_apply_files
+    orphans = {f for f in current_files - pre_apply_files if not is_ledger_path(f)}
     for orphan in orphans:
         path = os.path.join(ws, orphan)
         if os.path.isfile(path):
@@ -701,16 +778,37 @@ def update_receipt(receipt_path, post_checks, delta, status, diff_text=None):
 
 
 def _get_mode(ws="."):
-    """Read current governance_mode from intel-state.json.
+    """Current ``governance_mode``, read from the file the gate attests.
 
-    Supports legacy 'self_correcting_mode' for backward compatibility.
+    The apply gate and the governance gate now read **one** file. They
+    did not: this function read ``memory/intel-state.json`` while
+    :class:`~mind_mem.governance_gate.GovernanceGate` read
+    ``mind-mem.json``, so an edit to the unattested file flipped what
+    the engine would apply while the attested file — the one whose
+    changes the spec binding records as ``DRIFT`` — said otherwise. Two
+    files, one word, and only one of them accountable. Measured before
+    the change: setting ``governance_mode`` to ``propose`` in
+    ``mind-mem.json`` alone left the engine printing
+    ``Mode: detect_only`` and refusing the apply.
+
+    ``intel-state.json`` is no longer consulted for this key by the
+    engine or by :mod:`mind_mem.review_queue`, which reports what the
+    engine will do and therefore has to read what the engine reads.
+
+    The strict answer here is :data:`~mind_mem.governance_gate.DETECT_ONLY_MODE`,
+    not ``ENFORCE_MODE``: an apply proceeds under ``enforce``, so a
+    config nobody can read must land on the mode that refuses, and an
+    absent key lands on the package's shipped default (also
+    ``detect_only``). Legacy ``self_correcting_mode`` is not read here
+    for the same reason the gate does not read it — the
+    :mod:`mind_mem.schema_version` 2.0 → 2.1 migration renames it in
+    both files, and an unmigrated config falls to the blocking default
+    rather than to a mode this reader guessed.
     """
-    try:
-        with open(os.path.join(ws, "memory/intel-state.json"), encoding="utf-8") as f:
-            state = json.load(f)
-        return state.get("governance_mode", state.get("self_correcting_mode", "detect_only"))
-    except Exception:
-        return "detect_only"
+    from .governance_gate import DETECT_ONLY_MODE, config_path_for, read_governance_mode
+
+    mode = read_governance_mode(config_path_for(ws))
+    return DETECT_ONLY_MODE if mode is None else mode
 
 
 # ═══════════════════════════════════════════════
@@ -1670,83 +1768,105 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     # One admission per proposal, opened BEFORE any op runs and held
     # for the whole execution: the ops below write blocks through
     # store.write_block, which refuses a write with no receipt open.
-    with gate.admit_proposal(
-        proposal_id,
-        json.dumps(proposal.get("Ops", []), default=str),
-        actor="apply_engine",
-        target_file=source_file,
-        metadata={"proposal_id": proposal_id, "phase": "pre_apply"},
-    ):
-        # 6. Execute ops with WAL protection
-        print(f"\n--- Executing {len(proposal.get('Ops', []))} Ops (WAL-protected) ---")
-        delta: dict[str, list[str]] = {"created": [], "modified": []}
-        wal_entries = []  # Track WAL entries for this apply
-        actually_modified_files: set[str] = set()  # Track all files modified during execution
-        # Resolve the BlockStore once for the whole proposal — avoids
-        # re-resolving on every op and gives all ops a consistent view
-        # of the configured backend (v3.2.1).
-        store = _store_for(ws)
-        for i, op in enumerate(proposal.get("Ops", [])):
-            raw_file = op.get("file", "")
-            try:
-                filepath = _safe_resolve(ws, raw_file)
-            except ValueError:
-                filepath = raw_file
+    # The op-failure branch below rolls the workspace back and must leave
+    # this scope by RAISING: the gate writes its close record on both exits
+    # and reads a plain ``return`` as outcome=ok, which is how a rolled-back
+    # apply used to close its scope claiming success. ApplyAborted is caught
+    # immediately below, so the caller still gets the (False, message) tuple.
+    try:
+        with gate.admit_proposal(
+            proposal_id,
+            json.dumps(proposal.get("Ops", []), default=str),
+            actor="apply_engine",
+            target_file=source_file,
+            metadata={"proposal_id": proposal_id, "phase": "pre_apply"},
+        ):
+            # 6. Execute ops with WAL protection
+            print(f"\n--- Executing {len(proposal.get('Ops', []))} Ops (WAL-protected) ---")
+            delta: dict[str, list[str]] = {"created": [], "modified": []}
+            wal_entries = []  # Track WAL entries for this apply
+            actually_modified_files: set[str] = set()  # Track all files modified during execution
+            # Resolve the BlockStore once for the whole proposal — avoids
+            # re-resolving on every op and gives all ops a consistent view
+            # of the configured backend (v3.2.1).
+            store = _store_for(ws)
+            for i, op in enumerate(proposal.get("Ops", [])):
+                raw_file = op.get("file", "")
+                try:
+                    filepath = _safe_resolve(ws, raw_file)
+                except ValueError:
+                    filepath = raw_file
 
-            # WAL: log intention before mutation
-            wal_id = wal.begin(
-                operation=op.get("op", "unknown"),
-                target_path=filepath,
-                content=json.dumps(op, default=str),
-            )
-            wal_entries.append(wal_id)
+                # WAL: log intention before mutation
+                wal_id = wal.begin(
+                    operation=op.get("op", "unknown"),
+                    target_path=filepath,
+                    content=json.dumps(op, default=str),
+                )
+                wal_entries.append(wal_id)
 
-            ok, msg = execute_op(ws, op, store=store)
-            print(f"  [{i}] {op.get('op')}: {msg}")
+                ok, msg = execute_op(ws, op, store=store)
+                print(f"  [{i}] {op.get('op')}: {msg}")
+                if not ok:
+                    # WAL: rollback this failed op's WAL entry
+                    wal.rollback(wal_id)
+                    print(f"\nOP FAILED at step {i} — rolling back.")
+                    # Also rollback any previously committed WAL entries via snapshot
+                    restore_snapshot(ws, snap_dir)
+                    _cleanup_orphan_files(ws, pre_apply_files)
+                    update_receipt(receipt_path, ["ABORTED: op failure"], delta, "rolled_back")
+                    raise ApplyAborted(i, f"Op {i} failed: {msg}", stage=STAGE_OP)
+
+                # WAL: commit successful op
+                wal.commit(wal_id)
+
+                # Track actually modified files for accurate rollback scope
+                if filepath:
+                    actually_modified_files.add(filepath)
+
+                # Track delta
+                target = op.get("target", "")
+                if op.get("op") in ("append_block", "insert_after_block", "supersede_decision"):
+                    delta["created"].append(target or "new")
+                else:
+                    delta["modified"].append(target)
+            # 6b. Post-checks — INSIDE the scope, because they can still roll
+            # the whole apply back, and a rollback that happens after the scope
+            # has closed cannot change the word the close record already wrote.
+            # Measured on a fresh workspace before this moved: a post-check
+            # failure closed the proposal's scope `outcome=ok landed=1` —
+            # byte-identical to the successful control's close record — while
+            # the receipt and the proposal status both said `rolled_back`. The
+            # scope IS the transaction: every path that withdraws the work
+            # leaves it by raising, and its only normal exit is an apply that
+            # stands. `tests/test_scope_outcome_is_truthful.py` holds that
+            # shape structurally, so the next branch added here cannot quietly
+            # put a rollback back outside the scope.
+            print("\n--- Post-checks ---")
+            ok, post_report = check_preconditions(ws)
+            for r in post_report:
+                print(f"  {r}")
+
             if not ok:
-                # WAL: rollback this failed op's WAL entry
-                wal.rollback(wal_id)
-                print(f"\nOP FAILED at step {i} — rolling back.")
-                # Also rollback any previously committed WAL entries via snapshot
+                print("\nPOST-CHECKS FAILED — rolling back.")
+                print(
+                    "  WARNING: WAL entries were already committed. Recovery relies on "
+                    "snapshot restore. If files_touched is incomplete, workspace may be "
+                    "inconsistent. Actually modified files: %s" % sorted(actually_modified_files)
+                )
                 restore_snapshot(ws, snap_dir)
                 _cleanup_orphan_files(ws, pre_apply_files)
-                update_receipt(receipt_path, ["ABORTED: op failure"], delta, "rolled_back")
-                return False, f"Op {i} failed: {msg}"
-
-            # WAL: commit successful op
-            wal.commit(wal_id)
-
-            # Track actually modified files for accurate rollback scope
-            if filepath:
-                actually_modified_files.add(filepath)
-
-            # Track delta
-            target = op.get("target", "")
-            if op.get("op") in ("append_block", "insert_after_block", "supersede_decision"):
-                delta["created"].append(target or "new")
-            else:
-                delta["modified"].append(target)
-
-    # 6. Post-checks
-    print("\n--- Post-checks ---")
-    ok, post_report = check_preconditions(ws)
-    for r in post_report:
-        print(f"  {r}")
-
-    if not ok:
-        print("\nPOST-CHECKS FAILED — rolling back.")
-        print(
-            "  WARNING: WAL entries were already committed. Recovery relies on "
-            "snapshot restore. If files_touched is incomplete, workspace may be "
-            "inconsistent. Actually modified files: %s" % sorted(actually_modified_files)
-        )
-        restore_snapshot(ws, snap_dir)
-        _cleanup_orphan_files(ws, pre_apply_files)
-        update_receipt(receipt_path, post_report, delta, "rolled_back")
-        # Also mark proposal as rolled back
-        _mark_proposal_status(source_file, proposal_id, "rolled_back")
-        _record_belief_update(ws, proposal.get("TargetBlock", ""), 0.0, "rollback")
-        return False, "Post-checks failed, rolled back"
+                update_receipt(receipt_path, post_report, delta, "rolled_back")
+                # Also mark proposal as rolled back
+                _mark_proposal_status(source_file, proposal_id, "rolled_back")
+                _record_belief_update(ws, proposal.get("TargetBlock", ""), 0.0, "rollback")
+                raise ApplyAborted(None, "Post-checks failed, rolled back", stage=STAGE_POST_CHECK)
+    except ApplyAborted as aborted:
+        # The rollback, the receipt, the proposal status and the WAL entry were
+        # all handled inside the scope; the exception exists to end the scope
+        # truthfully, not to signal unfinished cleanup. Nothing above this line
+        # re-raises it, so ApplyAborted never reaches a caller of apply_proposal.
+        return False, aborted.message
 
     # 7. Generate DIFF text
     # Use actually_modified_files to ensure all touched files are included in diff

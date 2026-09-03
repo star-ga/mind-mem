@@ -7,6 +7,7 @@ import pytest
 
 from mind_mem.audit_chain import (
     _GENESIS_HASH,
+    RETIRED_OPERATIONS,
     VALID_OPERATIONS,
     AuditChain,
     AuditEntry,
@@ -137,7 +138,7 @@ class TestAuditChain:
     def test_append_chain_linkage(self, chain):
         e1 = chain.append("create_block", "a.md")
         e2 = chain.append("update_field", "a.md")
-        e3 = chain.append("set_status", "a.md")
+        e3 = chain.append("apply_proposal", "a.md")
 
         assert e1.prev_hash == _GENESIS_HASH
         assert e2.prev_hash == e1.entry_hash
@@ -149,7 +150,7 @@ class TestAuditChain:
     def test_verify_valid_chain(self, chain):
         chain.append("create_block", "a.md")
         chain.append("update_field", "a.md")
-        chain.append("delete_block", "a.md")
+        chain.append("apply_proposal", "a.md")
 
         ok, errors = chain.verify()
         assert ok
@@ -177,7 +178,7 @@ class TestAuditChain:
     def test_verify_detects_deleted_entry(self, chain):
         chain.append("create_block", "a.md")
         chain.append("update_field", "a.md")
-        chain.append("set_status", "a.md")
+        chain.append("apply_proposal", "a.md")
 
         # Delete middle entry
         chain_path = chain._chain_path
@@ -197,7 +198,7 @@ class TestAuditChain:
     def test_entries_returns_all(self, chain):
         chain.append("create_block", "a.md")
         chain.append("update_field", "b.md")
-        chain.append("set_status", "c.md")
+        chain.append("apply_proposal", "c.md")
 
         entries = chain.entries()
         assert len(entries) == 3
@@ -296,6 +297,18 @@ class TestAuditChain:
         for op in sorted(VALID_OPERATIONS):
             entry = chain.append(op, "test.md")
             assert entry.operation == op
+
+    def test_retired_operations_are_refused(self, chain):
+        """Verbs the sidecar advertised until 5.0.2 but no door ever wrote.
+
+        They are recorded in the chain of record instead, so refusing them
+        here loses no record — it stops the ledger claiming one it never
+        kept. ``tests/test_ledger_hierarchy.py`` proves an existing ledger
+        carrying them still reads and still verifies.
+        """
+        for op in sorted(RETIRED_OPERATIONS):
+            with pytest.raises(ValueError, match="retired"):
+                chain.append(op, "test.md")
 
     def test_concurrent_safety(self, chain):
         """Verify sequential appends maintain chain integrity."""

@@ -18,7 +18,7 @@ LOAD-BEARING WEDGE — three rails, each with a test in
    provenance flags (``_retrieval_source``, ``_graph_hop``), the backend's own
    ``vector_enabled`` / ``vector_available`` flags, the pipeline-probe config
    SHA (:func:`mind_mem.pipeline_hash.current_pipeline_hash`, *reused* — this
-   module never invents a config hash), and the audit-chain head. None of it is
+   module never invents a config hash), and the governed-ledger head. None of it is
    a string a producer typed. We do **not** copy an external "trust tier"
    granted by prefixing a text file; a verdict here is derived from the artifact
    the run left behind or it does not exist.
@@ -31,8 +31,20 @@ LOAD-BEARING WEDGE — three rails, each with a test in
    query, and persisting it would be storing a credibility score — exactly what
    the spec refuses. There is intentionally **no** ``attest_*`` / ``anchor_*`` /
    ``append`` / ``write`` function in this module. Even reading the index anchor
-   is done through a read-only file peek (:func:`_resolve_index_anchor`) that
+   is done through a read-only open (:func:`_resolve_index_anchor`) that
    creates nothing.
+
+   The served-set ledger is the one thing a *run* does write, and it is
+   written by :func:`mind_mem.served_ledger.attach_served_run` after this
+   module is done — never from here, because a scoring-path module that could
+   reach a ledger is a scoring-path module that could read one back. That is
+   also why the record this module produces is silent about the ledger:
+   ``served_proof`` / ``served_seq`` / ``served_row_hash`` / ``ledger_error``
+   are added to :meth:`RecallAttestation.to_dict`'s output by that function,
+   which owns their names and their values. A surface that publishes
+   ``to_dict()`` raw therefore publishes a record that says nothing about
+   whether the run was recorded — publish through ``attach_served_run``, and
+   do not mint a second answer to that question here.
 
 3. **DETERMINISTIC — and complete enough to mean it.** The
    ``RECALL_ATTEST_v2`` preimage carries content-derived digests, the config
@@ -92,9 +104,10 @@ LOAD-BEARING WEDGE — three rails, each with a test in
    ids and their order, **not the scores**: two runs that serve the same blocks
    in the same order with different score *values* still collide. (b) The
    corpus is bound only through ``index_anchor``, which is
-   :data:`GENESIS_ANCHOR` on a workspace with no audit chain — so what the
-   record pins is the answer, not the store it came from. (c) ``result_count``
-   and ``served_ids`` are supplied separately by
+   :data:`GENESIS_ANCHOR` on a workspace whose governed ledger is still empty,
+   so on a *fresh* store what the record pins is the answer alone; once one
+   admitted write has landed the anchor is real and moves with every later
+   one. (c) ``result_count`` and ``served_ids`` are supplied separately by
    :func:`build_recall_attestation`'s callers and are not cross-checked, so a
    hand-built record may claim a count its digest does not carry;
    :func:`derive_recall_attestation` always derives both from the same hit
@@ -130,12 +143,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import os
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
+from .hash_chain_v2 import HashChainV2
 from .observability import get_logger, metrics
 from .preimage import preimage
 from .recall_digests import marker_digest, query_hash, run_id, seq_digest, served_set_digest
@@ -163,10 +177,17 @@ LEG_VECTOR = "vector"  # dense embedding leg — only the hybrid backend runs it
 LEG_GRAPH = "graph"  # multi-hop graph expansion — leaves ``_graph_hop`` on hits
 LEG_HYBRID = "hybrid"  # the two-leg fusion mode — present iff bm25 AND vector ran
 
-# Sentinel anchor when no audit chain exists yet. Mirrors audit_chain._GENESIS_HASH
-# (SHA-256 width of zeros) so an absent chain is a stable, recomputable value
-# rather than an empty string that could be confused with "unresolved".
+# Sentinel anchor when the governed ledger holds nothing yet. 64 zeros — the
+# SHA-256 width every anchor carries (see _resolve_index_anchor's WIDTH note)
+# — so an absent ledger is a stable, recomputable value rather than an empty
+# string that could be confused with "unresolved".
 GENESIS_ANCHOR = "0" * 64
+
+# Domain tag for the index anchor's preimage class. The anchor is a tagged
+# SHA-256 of the governed ledger's head ``entry_hash``, so it needs its own
+# separator for the same reason every other hash here does: without one, an
+# anchor and some other 64-hex digest over the same bytes would coincide.
+INDEX_ANCHOR_TAG = "MM_INDEX_ANCHOR_v1"
 
 # Provenance of an attestation's leg/config values (rail 1 hardening, Finding 3).
 # ``derived`` — legs were recomputed from the recorded ``RecallResults`` run
@@ -304,35 +325,79 @@ def _served_ids(results: Any) -> tuple[str, ...]:
     return tuple(str(r.get("_id", "") or "") if isinstance(r, dict) else "" for r in it)
 
 
-def _resolve_index_anchor(workspace: str) -> str:
-    """Read the audit-chain head hash for *workspace* — read-only, creates nothing.
+def index_anchor_ledger_path(workspace: str) -> str:
+    """Absolute path of the ledger :func:`_resolve_index_anchor` reads.
 
-    Deliberately does **not** instantiate :class:`~mind_mem.audit_chain.AuditChain`
-    (whose ``__init__`` ``makedirs`` the audit dir), because deriving an
-    attestation must have zero side effects on the store (rail 2). Peeks the
-    last non-empty line of ``chain.jsonl`` directly; returns
-    :data:`GENESIS_ANCHOR` when the chain is absent, empty, or unreadable.
+    Public because the anticipation cache memoizes the anchor on an
+    ``os.stat`` of the file it was read from. A freshness check aimed at a
+    *different* file than the read is a stale-cache generator, so the path
+    is published here rather than restated there — one definition, and a
+    future move of the ledger cannot leave a watcher behind on the old one.
+
+    The file may not exist; an absent ledger is :data:`GENESIS_ANCHOR`.
     """
-    chain_path = os.path.join(os.path.abspath(workspace), ".mind-mem-audit", "chain.jsonl")
-    if not os.path.isfile(chain_path):
+    return os.path.join(os.path.abspath(workspace), "memory", "hash_chain_v2.db")
+
+
+def _resolve_index_anchor(workspace: str) -> str:
+    """Read the **governed-ledger** head for *workspace* — read-only, creates nothing.
+
+    The anchor's whole job is to pin the corpus state a run observed, so it
+    has to move whenever the corpus can. It reads
+    :func:`index_anchor_ledger_path` — ``memory/hash_chain_v2.db``, the
+    ledger :class:`~mind_mem.governance_gate.GovernanceGate` appends to on
+    every mint — through :meth:`~mind_mem.hash_chain_v2.HashChainV2.open_readonly`,
+    the same ``file:…?mode=ro`` URI :func:`mind_mem.verify_cli.check_hash_chain`
+    audits with. Every admitted write and every admitted delete therefore
+    moves it *by construction*: nothing enters or leaves the store without a
+    receipt, and minting a receipt is what appends the row this reads.
+
+    It used to read ``.mind-mem-audit/chain.jsonl`` — the field-audit
+    sidecar, whose only writer is
+    :meth:`~mind_mem.field_audit.FieldAuditor.record_change`. Measured on a
+    fresh workspace: a governed ``write_block`` put one row in the hash chain
+    and one in the evidence chain and left that file untouched, and so did a
+    governed delete through the HTTP door. The anchor was a **constant** —
+    ``GENESIS_ANCHOR`` for the entire life of a store nobody had run a field
+    audit against — and every served-ledger row inherited it, because
+    :func:`mind_mem.served_ledger.append_served_run` takes the attestation's
+    value verbatim. A served proof that binds to a constant proves nothing
+    about what was in the store when it was served.
+
+    WIDTH, and why the head is normalised rather than copied. The retired
+    sidecar hashed SHA-256, so an anchor was 64 hex characters, and that
+    width is a *contract* on the consuming side:
+    :func:`mind_mem.recall_digests.hex64` rejects anything else, and
+    ``append_served_run`` validates ``index_anchor`` through it.
+    ``HashChainV2`` hashes SHA3-512 — 128 characters — so passing its
+    ``entry_hash`` through verbatim would raise inside the ledger append,
+    where the recall path swallows the exception and logs it: the served
+    ledger would have stopped recording every run, silently, the moment the
+    anchor started being real. So the head is bound into a tagged SHA-256,
+    keeping one width across the sentinel and every real value. It is still
+    a pure function of the head — an auditor recomputes it from the
+    ``entry_hash`` ``mm verify`` reports as
+    ``sha256(preimage(INDEX_ANCHOR_TAG, head))`` — and it still moves iff
+    the head moves, which is the property the anchor exists to carry.
+
+    Zero side effects, as rail 2 requires: ``open_readonly`` neither creates
+    the directory nor runs the schema touch, and the URI opens the database
+    without creating it and without taking a write lock. An absent, empty or
+    unreadable ledger is :data:`GENESIS_ANCHOR`.
+    """
+    db_path = index_anchor_ledger_path(workspace)
+    if not os.path.isfile(db_path):
         return GENESIS_ANCHOR
-    last_line = ""
     try:
-        with open(chain_path, encoding="utf-8") as fh:
-            for line in fh:
-                stripped = line.strip()
-                if stripped:
-                    last_line = stripped
-    except OSError:
+        latest = HashChainV2.open_readonly(db_path).get_latest(n=1)
+    except (sqlite3.DatabaseError, OSError):
         return GENESIS_ANCHOR
-    if not last_line:
+    if not latest:
         return GENESIS_ANCHOR
-    try:
-        entry = json.loads(last_line)
-        head = entry.get("entry_hash") if isinstance(entry, dict) else None
-    except (json.JSONDecodeError, ValueError):
+    head = str(latest[-1].entry_hash or "")
+    if not head:
         return GENESIS_ANCHOR
-    return str(head) if head else GENESIS_ANCHOR
+    return hashlib.sha256(preimage(INDEX_ANCHOR_TAG, head)).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -751,7 +816,7 @@ def derive_recall_attestation(
             Required: the ranking is a function of the question, so a record
             that omits it cannot distinguish two runs that happened to serve
             the same list for different reasons, and cannot be replayed.
-        index_anchor: The audit-chain head / index snapshot hash
+        index_anchor: The governed-ledger head / index snapshot hash
             (:func:`_resolve_index_anchor`), or :data:`GENESIS_ANCHOR`.
         scoring_instant: The UTC date the run's recency layer scored against —
             the value ``recall()`` resolved, passed through so the record binds
@@ -874,6 +939,7 @@ __all__ = [
     "DERIVATION_ASSERTED",
     "DERIVATION_DERIVED",
     "GENESIS_ANCHOR",
+    "INDEX_ANCHOR_TAG",
     "LEG_BM25",
     "LEG_GRAPH",
     "LEG_HYBRID",

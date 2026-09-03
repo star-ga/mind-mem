@@ -60,6 +60,44 @@ curl http://127.0.0.1:8080/openapi.json | jq .paths
 
 ---
 
+## The stdlib HTTP transport (`mm http-serve`)
+
+This page documents the FastAPI server (`mm serve`, `/v1/…`). mind-mem ships a
+**second**, dependency-free HTTP surface — `mm http-serve`, served by
+`mind_mem.http_transport` on a different path space — and it was documented
+nowhere: 9 of its 11 routes appeared in no reference at all — including every
+one of the five that mutate the corpus (`/consolidate`, `/clear`,
+`/federation/write`, `/federation/resolve`, and `DELETE /memories/{id}`).
+
+**Generated** from `http_transport.ROUTES`, the same tuple the dispatcher
+matches against. Each route's declarations travel with it: *serves block
+content* is the classification the admission sweep in
+`tests/test_http_read_admission.py` measures against a quarantined canary, and
+*mutates state* is what makes the dispatcher hand the handler a door identity.
+`tests/test_docs_alignment.py::TestGeneratedRouteTable` fails the build when
+this table and that tuple disagree.
+
+<!-- BEGIN GENERATED: http-transport-routes — regenerate with tests/test_docs_alignment.py -->
+| Method | Path | Serves block content | Mutates state |
+| --- | --- | --- | --- |
+| `GET` | `/status` | no | no |
+| `GET` | `/memories` | yes | no |
+| `GET` | `/federation/conflicts` | no | no |
+| `GET` | `/federation/vclock/{tail}` | no | no |
+| `POST` | `/query` | yes | no |
+| `POST` | `/consolidate` | no | yes |
+| `POST` | `/walkthrough` | no | no |
+| `POST` | `/clear` | no | yes |
+| `POST` | `/federation/write` | no | yes |
+| `POST` | `/federation/resolve` | no | yes |
+| `DELETE` | `/memories/{tail}` | no | yes |
+<!-- END GENERATED: http-transport-routes -->
+
+A `{tail}` path is a prefix match: the remainder is passed to the handler
+(a block id for `/memories/`, `/federation/vclock/`).
+
+---
+
 ## Endpoints
 
 ### GET /v1/health
