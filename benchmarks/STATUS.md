@@ -110,14 +110,27 @@ every metric, so the pipeline is deterministic at this configuration.
 | `mind_mem` | `sqlite` (BM25F, vector off, caps off) | 0.9404 | 0.8170 | 0.8277 | 0.9000 | 0.8776 |
 | `bm25_baseline` | in-memory BM25 (zero-dep) | 0.9702 | 0.8298 | 0.8660 | 0.9021 | 0.9081 |
 
-**Read this the unflattering way, because that is what it says.** On this
-configuration the zero-dependency BM25 floor **beats** the product on every
-column. That is a real result, not a harness fault: the probe recorded
+**Read this the unflattering way, but read it exactly.** Comparing the two
+adapters question-by-question (paired exact McNemar over the same 470 ids,
+recomputed from the committed NDJSON):
+
+| comparison | mind_mem only | bm25 only | discordant | p | verdict |
+|---|---:|---:|---:|---:|---|
+| `recall_any@5` | 4 | 18 | 22 | 0.0043 | baseline better, **significant** |
+| `recall_all@5` (official) | 22 | 28 | 50 | 0.4799 | **indistinguishable** |
+| MRR (paired sign test) | 24 | 53 | 77 | 0.0013 | baseline better, **significant** |
+
+So the honest statement is *not* "the baseline beats us on every column" — that
+overstates our own artifact. On the **stricter official LongMemEval protocol
+(`recall_all@5`) the two systems are statistically indistinguishable**; the
+baseline's win is real on `recall_any@5` and on MRR, i.e. on *where the first
+gold session lands*, not on *whether all gold sessions are recovered*.
+
+Either way it is a real result, not a harness fault: the probe recorded
 `effective_backend: sqlite` with no pipeline mismatch, so `mind_mem` really did
 run its own index. What it does *not* show is a ceiling — the dense/RRF/expansion
-legs are off. The honest summary is that **BM25F alone does not beat plain BM25
-here**, and any claim to the contrary needs the hybrid number that does not yet
-exist.
+legs are off. **BM25F alone does not beat plain BM25 here**, and any claim to
+the contrary needs the hybrid number that does not yet exist.
 
 It also retires the FINDINGS' `~0.30 any@5`: that figure measured the
 config-less scan fallback with the recall caps on. With caps off and the index
