@@ -17,12 +17,7 @@ from benchmarks.memory_ab_analysis import REDUCERS, build, load_runs, poisoning,
 
 
 def _artifact(rows: list[tuple[str, bool, bool]]) -> dict[str, Any]:
-    return {
-        "results": [
-            {"task_id": tid, "excluded": None, "outcome": {"memory_success": m, "control_success": c}}
-            for tid, m, c in rows
-        ]
-    }
+    return {"results": [{"task_id": tid, "excluded": None, "outcome": {"memory_success": m, "control_success": c}} for tid, m, c in rows]}
 
 
 def _write(tmp_path: Any, name: str, rows: list[tuple[str, bool, bool]]) -> str:

@@ -252,9 +252,7 @@ def build(paths: list[str], *, reduce: str = "majority", agent_cutoff: str = "")
         "summary": summary.as_dict(),
         "rep_stability": rep_instability(usable),
         "context_poisoning": poisoning(pairs),
-        "per_task": {
-            tid: {"memory": arms["memory"], "control": arms["control"]} for tid, arms in sorted(usable.items())
-        },
+        "per_task": {tid: {"memory": arms["memory"], "control": arms["control"]} for tid, arms in sorted(usable.items())},
     }
 
 
@@ -287,7 +285,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"memory_ab_agent_cutoff: {payload['disclosure']['agent_cutoff']}")
     print(f"memory_ab_harness_changed_mid_run: {payload['harness']['harness_changed_after_first_artifact']}")
     print(f"memory_ab_mean_prompt_gap_tokens: {payload['prompt_lengths'].get('mean_gap_tokens')}")
-    print(f"memory_ab_placebo_arm_present: False")
+    # Not an f-string: this line is a constant assertion, and it stays False
+    # until a length-matched placebo arm actually runs.
+    print("memory_ab_placebo_arm_present: False")
     if a.out:
         out = a.out if os.path.isabs(a.out) else os.path.join(os.getcwd(), a.out)
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
