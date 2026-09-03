@@ -14,6 +14,7 @@ that never ran reads exactly like a clean bill of health.
 from __future__ import annotations
 
 import ast
+import fnmatch
 import io
 import re
 import subprocess  # nosec B404 - fixed argv, no shell, repo-local commands only
@@ -83,51 +84,120 @@ def _load_toml(path: Path) -> dict:
         raise AuthorityError(f"could not parse {path}: {exc}") from exc
 
 
-def collect_test_count(root: Path | None = None, python: str | None = None) -> int:
-    """Number of tests CI collects, using CI's exact selector.
+# --------------------------------------------------------------------------
+# Test count -- static, so it is a fact about the TREE and not about the
+# machine reading it.
+#
+# Through 5.0.1 this authority was ``pytest --collect-only`` with the CI
+# selector. Collection is a function of the environment: a module whose
+# module-level ``pytest.importorskip`` misses its extra is dropped whole, so
+# the number moved with what the host had installed. Measured 2026-09-03 on
+# one commit: 11,726 on a workstation with every extra, 11,662 on the CI rows
+# that install ``[test]`` alone (four Postgres modules dropped), and no single
+# number a doc could state was true on both. ``--fix`` wrote the workstation's
+# count twice and CI rejected it twice. Reproduced here by hiding ``psycopg``
+# from the import system: 11,665 against 11,726 on the same tree.
+#
+# What the tree contains does not depend on who is looking. The count below is
+# ``def test_*`` functions -- at module level or inside a ``Test*`` class,
+# nested ``Test*`` classes included -- in every ``tests/**/test_*.py``, which
+# is the ``[tool.pytest.ini_options]`` collection rule applied to SOURCE. It
+# never imports a test module, so a missing extra cannot change it;
+# ``tests/test_docs_alignment.py`` proves that by hiding ``psycopg`` and
+# ``sqlite_vec`` from the import system and requiring the same number.
+#
+# It is a different number from a runner's, and the docs say so: parametrised
+# cases are counted once (they are one function), stress-marked tests are
+# counted (they are in the tree), ``tests/integration`` is counted (so is
+# that). Every doc surface therefore says "test functions", never "tests" --
+# a measurement that changes while the claim's wording stays turns a true
+# sentence into a false one, and ``check_docs_alignment`` refuses the old
+# spelling at suite scale for exactly that reason.
+# --------------------------------------------------------------------------
 
-    ``ci.yml`` runs ``python3 -m pytest tests/ --ignore=tests/integration
-    ... -m "not stress"``; the badge claims that number, so the badge's
-    authority has to be that selector and nothing looser. Collection is
-    environment-sensitive (a missing optional extra can drop a module), which
-    is why the CI step pins ubuntu + 3.12 and why a failure here is loud
-    rather than defaulted.
+#: pytest's own defaults, used only when ``pyproject.toml`` does not set the
+#: key (it does; see ``[tool.pytest.ini_options]``).
+_PYTEST_DEFAULTS = {
+    "testpaths": ["tests"],
+    "python_files": ["test_*.py", "*_test.py"],
+    "python_classes": ["Test*"],
+    "python_functions": ["test*"],
+}
+
+
+def _pytest_option(root: Path, key: str) -> tuple[str, ...]:
+    """A ``[tool.pytest.ini_options]`` list, from pyproject or pytest's default.
+
+    Read from the same file pytest reads, so the counting rule follows the
+    collection rule by construction rather than by a copy that can drift.
+    A string value (pytest accepts ``python_files = "test_*.py"``) is
+    whitespace-split, exactly as pytest splits it.
+    """
+    options = _load_toml(root / "pyproject.toml").get("tool", {}).get("pytest", {}).get("ini_options", {})
+    value = options.get(key, _PYTEST_DEFAULTS[key])
+    if isinstance(value, str):
+        value = value.split()
+    return tuple(str(v) for v in value)
+
+
+def _matches_any(name: str, patterns: tuple[str, ...]) -> bool:
+    return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
+
+
+def _test_functions_in(body: list[ast.stmt], classes: tuple[str, ...], functions: tuple[str, ...]) -> int:
+    count = 0
+    for item in body:
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and _matches_any(item.name, functions):
+            count += 1
+        elif isinstance(item, ast.ClassDef) and _matches_any(item.name, classes):
+            count += _test_functions_in(item.body, classes, functions)
+    return count
+
+
+def test_functions_in_source(
+    source: str,
+    filename: str = "<test module>",
+    *,
+    classes: tuple[str, ...] = tuple(_PYTEST_DEFAULTS["python_classes"]),
+    functions: tuple[str, ...] = ("test_*",),
+) -> int:
+    """Test functions pytest would collect from *source*, counted without importing it.
+
+    Module-level functions and methods of matching classes, nested matching
+    classes included. A ``def`` nested inside a function is not a test and is
+    not counted; neither is a method of a class pytest would not collect.
+    """
+    tree = ast.parse(source, filename=filename)
+    return _test_functions_in(tree.body, classes, functions)
+
+
+def static_test_count(root: Path | None = None) -> int:
+    """Test functions the tree contains -- counted from source, never from a run.
+
+    Raises :class:`AuthorityError` when there is nothing to count or a file
+    cannot be parsed: a zero from a suite this size means the counting rule
+    broke, and a broken authority must exit 2 rather than report every
+    four-digit claim stale.
     """
     root = root or _project_root()
-    exe = python or sys.executable
-    cmd = [
-        exe,
-        "-m",
-        "pytest",
-        "tests/",
-        "--ignore=tests/integration",
-        "--collect-only",
-        "-q",
-        "-m",
-        "not stress",
-    ]
-    try:
-        proc = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=1800)  # nosec B603
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise AuthorityError(f"could not run pytest collection: {exc}") from exc
-    if proc.returncode != 0:
-        tail = "\n".join((proc.stdout + proc.stderr).splitlines()[-15:])
-        raise AuthorityError(f"pytest collection exited {proc.returncode}:\n{tail}")
-    return parse_collected(proc.stdout)
-
-
-# "9701/10034 tests collected (333 deselected) in 13.19s" and the simpler
-# "9701 tests collected in 13.19s" that pytest prints with no deselection.
-_COLLECTED_RE = re.compile(r"^(\d+)(?:/\d+)?\s+tests?\s+collected\b", re.MULTILINE)
-
-
-def parse_collected(stdout: str) -> int:
-    """Pull the selected-test count out of ``pytest --collect-only -q`` output."""
-    matches = _COLLECTED_RE.findall(stdout)
-    if not matches:
-        tail = "\n".join(stdout.splitlines()[-15:])
-        raise AuthorityError(f"no 'N tests collected' line in pytest output:\n{tail}")
-    return int(matches[-1])
+    file_patterns = _pytest_option(root, "python_files")
+    classes = _pytest_option(root, "python_classes")
+    functions = _pytest_option(root, "python_functions")
+    files: list[Path] = []
+    for testpath in _pytest_option(root, "testpaths"):
+        base = root / testpath
+        files.extend(p for p in sorted(base.rglob("*.py")) if p.is_file() and _matches_any(p.name, file_patterns))
+    if not files:
+        raise AuthorityError(f"no test files under {root} match {file_patterns} -- the test-count authority has nothing to count")
+    total = 0
+    for path in files:
+        try:
+            total += test_functions_in_source(path.read_text(encoding="utf-8"), str(path), classes=classes, functions=functions)
+        except (OSError, SyntaxError) as exc:
+            raise AuthorityError(f"could not parse {path}: {exc}") from exc
+    if total == 0:
+        raise AuthorityError(f"{len(files)} test file(s) under {root} define no test functions -- counting rule broke")
+    return total
 
 
 def live_tool_count() -> int:

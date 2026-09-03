@@ -237,6 +237,28 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python3 -m pytest tests/integration/ -v -m "not stress"
 
+      # (f) Every counted claim, INCLUDING the model card published on the
+      #     HuggingFace hub -- the one surface no CI checkout contains, and
+      #     therefore the one nothing could gate. Measured 2026-09-02: the live
+      #     card says the weights know 84 MCP tools and advertises a 35-flag
+      #     inventory; the authorities are 83 and 38, which is what the in-tree
+      #     card already says. `check_live_hf_card` has existed since this gate
+      #     landed and `--check-live` was wired into nothing
+      #     (`grep -n check-live .github/workflows/*.yml` -> no hits), so a card
+      #     that disagreed with the release it documents shipped with it every
+      #     time.
+      #
+      #     Fails CLOSED: a fetch error raises AuthorityError and exits 2, so a
+      #     hub outage blocks the release rather than reporting an agreement it
+      #     never measured. Release-only, because the network is not a CI
+      #     dependency and a tag push is the moment the card's claims become
+      #     true or false for a version.
+      #     The test-function leg is static (counted from source, never from a
+      #     run), so this step takes no collected count: the checker computes
+      #     every authority itself, here exactly as in ci.yml's version-check.
+      - name: "Gate (f) — every counted claim, including the published model card"
+        run: python scripts/check_docs_alignment.py --check-live
+
   build:
     # Nothing is built, signed, published or released until release-preflight
     # passes, so every downstream job inherits all five preflight gates.

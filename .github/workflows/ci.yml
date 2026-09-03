@@ -179,9 +179,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          # The doc-alignment gate below resolves two authorities out of git
+          # history -- the tool count and the flag inventory AT THE TRAINED
+          # REVISION -- via `git archive <rev>`. A shallow checkout makes both
+          # unresolvable, and that path exits 2 rather than reporting agreement.
+          fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
+      # The doc-alignment gate imports the MCP server to count its live tools,
+      # which reaches fastmcp; the test extra is the one every other
+      # gate-running job installs, so it is the one this job installs.
+      - run: pip install -e ".[test]"
       - name: Check version consistency
         run: python src/mind_mem/check_version.py
       - name: Check MCP tool count consistency
@@ -213,6 +223,33 @@ jobs:
         # records are exempt: a release note must keep the number that was
         # true for its release.
         run: python scripts/count_mcp_tools.py --check-docs
+
+      # The tests badge had no authority but ITSELF. tests/test_docs_alignment.py
+      # resolved the authorities with `tests_collected=readme_tests_badge()` and
+      # then asserted the tree agreed with them -- the badge injected as the
+      # expected value for itself, which it satisfies whatever it says. Its
+      # docstring claimed "CI asserts the badge agrees with the collector";
+      # `grep -n check_docs_alignment .github/workflows/*.yml` returned nothing,
+      # so nothing did, and the badge read 10,550 against a selector that
+      # collected 11,137.
+      #
+      # The first repair collected the suite HERE and handed the number to the
+      # checker. That moved the defect rather than closing it: collection is a
+      # property of the environment (a module whose optional extra is absent
+      # is dropped whole), so the workstation that ran `--fix` wrote 11,718 and
+      # this row, with fewer extras, measured 11,662 -- twice. No number a doc
+      # can state is true on both machines when the authority is a run.
+      #
+      # The authority is now static: `def test_*` functions counted from
+      # source (scripts/alignment_authorities.py::static_test_count), the same
+      # on every machine because it imports nothing. The checker computes every
+      # leg itself and takes no injected value, so there is no seam left for a
+      # badge -- or a YAML step -- to feed it the answer.
+      - name: Check every counted doc claim against its authority
+        # Badges, prose counts, table cells and wrapped claims across README,
+        # CLAUDE.md, docs/** and train/**. An authority that cannot be computed
+        # exits 2 -- a dead verifier is not a passing one.
+        run: python scripts/check_docs_alignment.py
 
       - name: Reachability gate (no caller, no tick)
         run: python scripts/check_reachable_modules.py --check

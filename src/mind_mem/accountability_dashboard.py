@@ -354,7 +354,16 @@ def ledger_panel(workspace: str) -> LedgerPanel:
         rows = -1
     reason = verdict.reason
     if verdict.ok and not present:
-        reason = "no ledger in this workspace: the served-set ledger is default OFF, so there is nothing to verify"
+        # Default ON since 5.0.2 (``served_ledger.ledger_enabled`` is the
+        # authority): an absent file no longer means the feature is off, so
+        # the old wording printed a stale default into an operator-facing
+        # verdict. Same three-way silence as ``replay_check._silence_reason``.
+        reason = (
+            "no ledger in this workspace: the served-set ledger records by default since 5.0.2, "
+            "so an absent file means nothing has been served here yet, or the workspace opted out "
+            'with {"served_ledger": {"enabled": false}}, or there is no readable mind-mem.json to '
+            "serve from. `enabled` on this panel says which. Nothing to verify either way"
+        )
     return LedgerPanel(
         enabled=ledger_enabled(workspace),
         present=present,

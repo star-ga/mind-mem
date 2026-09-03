@@ -137,6 +137,21 @@ mind-mem-chat = "mind_mem.chat_cli:main"
 mind-mem-bench-tasks = "mind_mem.bench.repo_task_cli:main"
 mind-mem-bench-ab = "mind_mem.bench.ab_cli:main"
 mind-mem-bootstrap = "mind_mem.bootstrap_corpus:main"
+mind-mem-connect = "mind_mem.federation_connect:main"
+# The OpenAPI artifact's generator, which lives in the package (it must import the
+# live app) while its artifact stays at sdk/spec/openapi.json. This line is the
+# only route scripts/check_reachable_modules.py can see it by: nothing under src/
+# imports it (it reads the app and writes a file), and the documented way to run
+# it -- `python3 -m mind_mem.spec.export_openapi --check`, in sdk/spec/README.md
+# and the sdk/release runbook -- is a module invocation, which is neither an
+# import nor the file PATH the gate matches in workflow steps. Verified
+# 2026-09-02: no workflow invokes the exporter at all, and `spec.export_openapi`
+# is absent from scripts/reachability_baseline.txt, so without this entry point
+# the gate reports a shipped, working module as NEW unreachable debt -- the gate
+# crying wolf at the exact code it exists to protect. Targets `_main` for the same
+# reason mind-mem-baseline targets `_cli`: the module names its own entry point
+# and pyproject follows it rather than renaming it.
+mind-mem-openapi = "mind_mem.spec.export_openapi:_main"
 mm = "mind_mem.mm_cli:main"
 
 [tool.setuptools.packages.find]

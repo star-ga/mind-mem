@@ -528,14 +528,21 @@ def test_a_legacy_in_corpus_briefing_is_carried_over_not_reread(workspace: str) 
 
     legacy = intel_scan.legacy_derived_path(workspace, "BRIEFINGS.md")
     os.makedirs(os.path.dirname(legacy), exist_ok=True)
+    legacy_text = "# Intelligence Briefings\n\nB-2020-W01 an old briefing\n"
     with open(legacy, "w", encoding="utf-8") as fh:
-        fh.write("# Intelligence Briefings\n\nB-2020-W01 an old briefing\n")
+        fh.write(legacy_text)
     legacy_bytes = open(legacy, "rb").read()
     assert b"B-2020-W01" in legacy_bytes, "the control file is empty; carrying it over would prove nothing"
 
-    assert intel_scan.read_derived(workspace, "BRIEFINGS.md") == legacy_bytes.decode("utf-8")
+    # Compared as TEXT, the way both the writer above and ``read_derived``
+    # open the file: on Windows the bytes on disk hold CRLF and universal
+    # newlines hand back LF, so ``legacy_bytes.decode()`` was asserting the
+    # platform's newline translation rather than the content (red on every
+    # Windows CI row). The bytes are still the positive control, and the
+    # later assertion that they are untouched is still on the bytes.
+    assert intel_scan.read_derived(workspace, "BRIEFINGS.md") == legacy_text
 
-    intel_scan.write_derived(workspace, "BRIEFINGS.md", legacy_bytes.decode("utf-8") + "\nB-2026-W36 a new briefing\n")
+    intel_scan.write_derived(workspace, "BRIEFINGS.md", legacy_text + "\nB-2026-W36 a new briefing\n")
 
     derived = intel_scan.derived_path(workspace, "BRIEFINGS.md")
     carried = open(derived, encoding="utf-8").read()

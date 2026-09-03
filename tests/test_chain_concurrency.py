@@ -67,6 +67,18 @@ from mind_mem.mind_filelock import _BREAK_ADOPTED, _BREAK_NOTHING, _BREAK_REMOVE
 #: any writer has appended its round-*r* record. Under the fix they queue
 #: on the store lock and come out as one chain; under the pre-fix path
 #: they all link to their own private tail and the file forks.
+#:
+#: That sentence was true of the evidence path by construction (a private
+#: in-memory tail) and only usually true of the audit path, whose pre-fix
+#: defect is simply "no lock": three writers released by the round barrier
+#: still read the file tail and append in microseconds, and a scheduler
+#: that runs them one after another produces a clean chain -- measured once
+#: in a full-suite run, 60 rows all linking, the twin red for the wrong
+#: reason. The audit control therefore adds a second barrier INSIDE the
+#: unlocked section (after the tail is read, before the record is written),
+#: which forces exactly the interleaving the lock exists to prevent. It is
+#: applied only in defeat mode: under the lock a barrier inside the
+#: critical section would deadlock, which is the lock doing its job.
 _WORKER_SOURCE = '''\
 import os, sys, time
 
@@ -89,15 +101,15 @@ class _NullLock:
         return False
 
 
-def barrier(r):
-    open(os.path.join(barrier_dir, "r%d-%s" % (r, tag)), "w").close()
-    prefix = "r%d-" % r
+def barrier(label):
+    open(os.path.join(barrier_dir, "%s-%s" % (label, tag)), "w").close()
+    prefix = "%s-" % label
     deadline = time.monotonic() + 60.0
     while time.monotonic() < deadline:
         if sum(1 for f in os.listdir(barrier_dir) if f.startswith(prefix)) >= nprocs:
             return
         time.sleep(0.002)
-    raise SystemExit("barrier timeout at round %d" % r)
+    raise SystemExit("barrier timeout at %s" % label)
 
 
 if mode == "evidence":
@@ -110,7 +122,7 @@ if mode == "evidence":
         )
     chain = eo.EvidenceChain(store_path=store)
     for r in range(rounds):
-        barrier(r)
+        barrier("r%d" % r)
         chain.create(
             action=eo.EvidenceAction.APPLY,
             actor=tag,
@@ -123,9 +135,24 @@ else:
 
     if defeat:
         ac.FileLock = _NullLock
+        # Every writer resolves the tail before any writer appends -- the
+        # interleaving the lock prevents, forced rather than hoped for. The
+        # barrier label counts tail reads; ``append`` is the only caller of
+        # ``_last_entry`` and every writer makes the same calls in the same
+        # order, so the counts agree across processes.
+        _read_tail = ac.AuditChain._last_entry
+        _tail_reads = [0]
+
+        def _tail_then_wait(self):
+            last = _read_tail(self)
+            barrier("t%d" % _tail_reads[0])
+            _tail_reads[0] += 1
+            return last
+
+        ac.AuditChain._last_entry = _tail_then_wait
     chain = ac.AuditChain(store)
     for r in range(rounds):
-        barrier(r)
+        barrier("r%d" % r)
         chain.append(
             "update_field",
             "decisions/DECISIONS.md",

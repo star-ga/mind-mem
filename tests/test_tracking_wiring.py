@@ -508,13 +508,45 @@ class TestFlagOff:
             assert _retrieval_metrics_enabled(broken) is False
         assert log.mock_calls == [], "the OFF probe emitted a log line"
 
-    def test_the_probe_emits_no_log_records_at_all(self, caplog: pytest.LogCaptureFixture) -> None:
-        from mind_mem.mcp.tools._helpers import _retrieval_metrics_enabled
+    def test_the_probe_emits_no_log_records_at_all(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Every logger in the process, not only the ones that propagate to root.
 
-        ws = _ws()
-        with caplog.at_level(logging.DEBUG):
-            assert _retrieval_metrics_enabled(ws) is False
-        assert caplog.records == []
+        This used to assert ``caplog.records == []``. ``caplog`` listens on
+        the ROOT logger, and ``observability.StructuredLogger`` sets
+        ``propagate = False`` on every ``mind-mem.*`` logger it creates -- so
+        a root-level capture cannot see a mind-mem record at all, and the
+        assertion passed VACUOUSLY on every machine where those loggers had
+        been configured first. On the CI rows whose test order left
+        ``mind-mem.spec_binding`` propagating it failed instead, on a record
+        the probe never emitted: ``spec_binding.bound``, logged by the
+        workspace SETUP (``init`` binds the spec) inside the call phase.
+        Neither outcome measured the probe.
+
+        Captured at ``logging.Logger.handle`` instead, which every record any
+        logger handles passes through, propagation or not; installed AFTER
+        the workspace exists and BEFORE the probe; and preceded by a positive
+        control proving the capture sees a mind-mem record when one is
+        emitted. Order-independent by construction.
+        """
+        from mind_mem.mcp.tools._helpers import _retrieval_metrics_enabled
+        from mind_mem.observability import get_logger
+
+        ws = _ws()  # setup, deliberately outside the capture window
+        handled: list[logging.LogRecord] = []
+        original_handle = logging.Logger.handle
+
+        def recording_handle(self: logging.Logger, record: logging.LogRecord) -> None:
+            handled.append(record)
+            original_handle(self, record)
+
+        monkeypatch.setattr(logging.Logger, "handle", recording_handle)
+        # Positive control: a mind-mem logger's record IS seen here, propagate=False notwithstanding.
+        get_logger("tracking_probe_control").error("probe_capture_control")
+        assert [r.getMessage() for r in handled] == ["probe_capture_control"], "the capture cannot see mind-mem records"
+        handled.clear()
+
+        assert _retrieval_metrics_enabled(ws) is False
+        assert handled == [], "the OFF probe emitted: " + ", ".join(f"{r.name}: {r.getMessage()}" for r in handled)
 
 
 # ---------------------------------------------------------------------------

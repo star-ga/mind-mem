@@ -57,9 +57,10 @@ def exporter() -> Any:
     the generator moved to ``src/mind_mem/spec/`` (see that package's
     docstring). The by-path load outlived its reason and cost something real:
     ``scripts/check_reachable_modules.py`` walks imports, a path load is not
-    one, and CI invokes the module as ``python3 -m mind_mem.spec.export_openapi``
-    which is not a path either — so the gate reported a shipped, working module
-    as NEW unreachable debt. A plain import is the honest edge, and the
+    one, and the documented way to run the exporter is
+    ``python3 -m mind_mem.spec.export_openapi`` — a module invocation, not a
+    path either — so the gate reported a shipped, working module as NEW
+    unreachable debt. A plain import is the honest edge, and the
     ``mind-mem-openapi`` console script is the one the gate can see.
     """
     return export_openapi
@@ -218,11 +219,13 @@ class TestExporterIsReachable:
     ``scripts/check_reachable_modules.py`` walks imports under ``src/``, entry
     points in ``[project.scripts]``, three consumer trees, and workflow steps
     that name a FILE PATH. The exporter is reached by none of those on its own:
-    nothing in the package imports it, and CI runs it as
-    ``python3 -m mind_mem.spec.export_openapi``, which is a module invocation,
-    not a path. It therefore read as NEW unreachable debt while shipping and
-    working — a false positive from the gate that exists to stop working code
-    being deleted, which is the failure mode that costs the most.
+    nothing in the package imports it, and the route the runbooks document
+    (``sdk/spec/README.md``, ``sdk/release/README.md``) is
+    ``python3 -m mind_mem.spec.export_openapi``, a module invocation rather than
+    a path — no workflow names it at all, verified 2026-09-02. It therefore read
+    as NEW unreachable debt while shipping and working — a false positive from
+    the gate that exists to stop working code being deleted, which is the
+    failure mode that costs the most.
 
     The console script is the fix, and this is the gate on the fix.
     """

@@ -50,8 +50,11 @@ with ``--fix`` to rewrite the stale numbers in place.
 Authorities
 -----------
 =====================  =====================================================
-tests                  ``pytest tests/ --ignore=tests/integration
-                       --collect-only -q -m "not stress"`` (the CI selector)
+test functions         ``def test_*`` in every ``tests/**/test_*.py`` --
+                       pytest's collection rule applied to SOURCE, never a
+                       run, so the number cannot depend on which optional
+                       extras the host has installed (it did through 5.0.1;
+                       see ``alignment_authorities.static_test_count``)
 live tools             ``scripts/count_mcp_tools.count_tools()``
 trained-on tools       the same counting rule applied to
                        ``git archive <TRAINED_REVISION> src/mind_mem/mcp``
@@ -88,7 +91,6 @@ Usage:
     python3 scripts/check_docs_alignment.py --fix            # rewrite stale numbers
     python3 scripts/check_docs_alignment.py --print          # just print the authorities
     python3 scripts/check_docs_alignment.py --check-live     # + the published hub card
-    python3 scripts/check_docs_alignment.py --tests-collected 9701
 """
 
 from __future__ import annotations
@@ -115,7 +117,6 @@ from scripts.alignment_authorities import (  # noqa: E402  (path shim above must
     _project_root,
     ci_matrix,
     client_count,
-    collect_test_count,
     core_dependency_count,
     eval_probe_counts,
     live_flag_count,
@@ -125,9 +126,9 @@ from scripts.alignment_authorities import (  # noqa: E402  (path shim above must
     module_line_count,
     module_test_count,
     package_version,
-    parse_collected,  # noqa: F401  re-exported: this module is the one entry point callers and tests import
     python_support,
     resource_count,
+    static_test_count,
     storage_backends,
     trained_flag_count,
     trained_tool_count,
@@ -183,13 +184,20 @@ class Authorities:
         return self.eval_main_probes + self.eval_holdout_probes
 
 
-def resolve_authorities(root: Path | None = None, tests_collected: int | None = None) -> Authorities:
+def resolve_authorities(root: Path | None = None) -> Authorities:
+    """Every authority, computed from the tree at *root* and nothing else.
+
+    No caller may inject a value for a leg -- the previous signature took
+    ``tests_collected`` so CI could pass the number it had just collected,
+    and that hand-off was the seam through which the badge became its own
+    authority once. Every leg is computed here or the gate exits 2.
+    """
     root = root or _project_root()
     matrix = ci_matrix(root)
     eval_probes = eval_probe_counts(root)
     py_support = python_support(root)
     return Authorities(
-        tests=tests_collected if tests_collected is not None else collect_test_count(root),
+        tests=static_test_count(root),
         live_tools=live_tool_count(),
         trained_tools=trained_tool_count(root=root),
         clients=client_count(root),
@@ -229,14 +237,32 @@ _SMALL = r"\d{2,3}"
 _TINY = r"\d{1,3}"
 
 _TESTS_PATTERNS = (
-    # shields.io badge path: ...badge/tests-9%2C701-brightgreen...
-    re.compile(rf"tests-(?P<n>{_GROUPED})(?P<plus>)-", re.IGNORECASE),
+    # shields.io badge path: ...badge/test_functions-10%2C617-brightgreen...
+    re.compile(rf"test_functions-(?P<n>{_GROUPED})(?P<plus>)-", re.IGNORECASE),
     # the badge's alt text, which drifts independently of the path
-    re.compile(rf"Tests:\s*(?P<n>{_GROUPED})(?P<plus>)", re.IGNORECASE),
-    # "7,500+ tests" -- the trailing "+" is part of the claim and is replaced
-    # with it, so a fix produces "9,707 tests" and not "9,707+ tests".
-    re.compile(rf"\b(?P<n>{_GROUPED})(?P<plus>\+?)\s+tests\b", re.IGNORECASE),
+    re.compile(rf"Test functions:\s*(?P<n>{_GROUPED})(?P<plus>)", re.IGNORECASE),
+    # "7,500+ test functions" -- the trailing "+" is part of the claim and is
+    # replaced with it, so a fix produces "10,617 test functions" and not
+    # "10,617+ test functions".
+    re.compile(rf"\b(?P<n>{_GROUPED})(?P<plus>\+?)\s+test\s+functions\b", re.IGNORECASE),
 )
+
+# The RETIRED spelling. "N tests" at suite scale was the shape of every claim
+# through 5.0.1, and it named a runner's count -- which is a property of the
+# machine that ran it (see ``alignment_authorities.static_test_count``). The
+# authority now counts test FUNCTIONS in the tree, and no number this gate can
+# compute makes "N tests" true on every machine. So the old shape is refused
+# rather than re-numbered: rewriting the digits under an unchanged noun is how
+# a true sentence becomes a false one with the gate green. Not auto-fixable on
+# purpose -- the fix is to say what is measured. Module-scale claims ("18
+# tests") are outside suite scale and untouched; the ``module_facts`` leg owns
+# those.
+_RETIRED_TESTS_PATTERNS = (
+    re.compile(rf"tests-(?P<n>{_GROUPED})(?P<plus>)-", re.IGNORECASE),
+    re.compile(rf"\bTests:\s*(?P<n>{_GROUPED})(?P<plus>)", re.IGNORECASE),
+    re.compile(rf"\b(?P<n>{_GROUPED})(?P<plus>\+?)\s+tests\b(?!\s+functions)", re.IGNORECASE),
+)
+_RETIRED_TESTS_ACTUAL = "a 'test functions' claim (a runner's count depends on the machine; see scripts/alignment_authorities.py)"
 
 _CLIENT_PATTERNS = (
     re.compile(rf"clients-(?P<n>{_SMALL})(?P<plus>)-", re.IGNORECASE),
@@ -591,7 +617,30 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
                         )
                     )
     findings.extend(_scan_python_support(rel, lineno, line, auth))
+    findings.extend(_scan_retired_tests_spelling(rel, lineno, line, seen))
     return findings
+
+
+def _scan_retired_tests_spelling(rel: str, lineno: int, line: str, seen: set[tuple[int, int]]) -> list[Finding]:
+    """A suite-scale "N tests" claim, in any of the three shapes the gate used to renumber.
+
+    Same qualifiers as the live leg -- a version-qualified record is history,
+    and a number under the floor with no scope word is a module claim -- so
+    this refuses exactly the sentences the old authority used to *rewrite*.
+    """
+    out: list[Finding] = []
+    for pattern in _RETIRED_TESTS_PATTERNS:
+        for match in pattern.finditer(line):
+            span = (match.start("n"), match.end("plus"))
+            if span in seen:
+                continue
+            if cmt._version_qualifies(line, match):
+                continue
+            if not (_parse_int(match.group("n")) >= _SUITE_SCALE_FLOOR or _SUITE_SCOPE.search(line)):
+                continue
+            seen.add(span)
+            out.append(Finding(rel, lineno, "tests_spelling", match.group("n"), _RETIRED_TESTS_ACTUAL, match.group(0), span[0], span[1]))
+    return out
 
 
 def _scan_python_support(rel: str, lineno: int, line: str, auth: Authorities) -> list[Finding]:
@@ -1212,16 +1261,10 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Also check the model card published on the HuggingFace hub (needs the network; release preflight only).",
     )
-    parser.add_argument(
-        "--tests-collected",
-        type=int,
-        default=None,
-        help="Use this collected-test count instead of running pytest (CI passes the count it already collected with the CI selector).",
-    )
     args = parser.parse_args(argv)
 
     try:
-        auth = resolve_authorities(tests_collected=args.tests_collected)
+        auth = resolve_authorities()
     except AuthorityError as exc:
         # An unreachable authority is NOT a pass. Say so, loudly, and exit
         # non-zero -- an empty finding list here would read as "aligned".
@@ -1229,7 +1272,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print("Authorities:")
-    print(f"  tests (CI selector)              : {auth.tests}")
+    print(f"  test functions (tests/**, static): {auth.tests}")
     print(f"  MCP tools (live)                 : {auth.live_tools}")
     print(f"  MCP tools (weights, {TRAINED_REVISION:<8})   : {auth.trained_tools}")
     print(f"  AI clients (AGENT_REGISTRY)      : {auth.clients}")

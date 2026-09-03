@@ -38,13 +38,85 @@ already vacuous on Windows against a live holder, before any of this. That is a
 pre-existing defect, and the docstrings now state per-platform only what has
 been measured.
 
-### Known, not fixed
+### Fixed — the Windows release wedge, measured and closed
 
-Five of the six Windows test failures in this area are NOT explained by the
-unlink. Under a simulation of Windows unlink semantics they pass; two of them
-never construct a lock at all. Their cause is unknown and is recorded as
-unknown rather than assumed closed. Fixing the lock will not by itself turn the
-matrix green, and this note exists so that is not misread when it does not.
+The note that stood here said five of the six Windows failures in this area
+were unexplained. CI run 33707752303 explained them: on every Windows row
+`test_chain_concurrency` (five tests) and `test_served_ledger_concurrency` fail
+with `LockTimeout (10.0s)` raised from `mind_filelock._acquire_file_lock` while
+the holder is alive, after a handful of successful rounds, `exit_codes=(1, 1,
+1)`. That is the release gap the module docstring had inferred from documented
+Windows semantics and could not measure in-process: a waiter reading the
+lockfile inside `_stale_identity` makes the holder's post-close unlink fail
+with `ERROR_SHARING_VIOLATION`, the refusal was swallowed, and a lockfile
+naming a live pid stayed on disk with nothing entitled to break it.
+
+Closed by construction rather than by retrying the unlink: the holder now
+overwrites its pid with a `released` sentinel while it still holds the OS lock
+(so no breaker can be mid-adoption), then unlocks, closes and unlinks as
+before. A refused unlink leaves a file every waiter reads as confirmed free,
+and the existing break arbitration — the OS lock, taken by exactly one — adopts
+it in place. Windows-only at runtime through one module constant; the POSIX
+release path is byte-identical to 5.0.1. Proved on Linux by simulation in
+`tests/test_filelock.py`: `os.unlink` refused for the lockfile the way Windows
+refuses it, the wedge reproduced with the sentinel off (the positive control
+and the mutation proof in one), the adoption with it on. "No wedge on Windows"
+is still not written anywhere: a green Windows CI row is the measurement, and
+this entry is only the mechanism.
+
+### Fixed — CI red on the rows the workstation is not
+
+* **The test-count authority was a property of the machine.** It ran
+  `pytest --collect-only` with the CI selector, and collection drops any
+  module whose module-level `importorskip` misses its extra: the workstation
+  with every extra collected 11,726 on a commit the CI rows (which install
+  `[test]` alone) collected 11,662 on, and `--fix` wrote the wrong number
+  twice. The authority is now `scripts/alignment_authorities.static_test_count`
+  — `def test_*` functions counted from source under pytest's own
+  `python_files` / `python_classes` / `python_functions`, never importing a
+  test module — so it is the same number everywhere; proven by hiding
+  `psycopg` and `sqlite_vec` from the import system and requiring equality.
+  Because that is a different quantity from a runner's count, every surface
+  now says **test functions**, and `check_docs_alignment` refuses the retired
+  "N tests" spelling at suite scale instead of renumbering it. The checker
+  takes no injected count any more (no `--tests-collected`, no
+  `tests_collected=`), which was the seam through which the badge once fed
+  itself. Wired into `version-check` in `ci.yml` and gate (f) of the release
+  workflow, with `fetch-depth: 0` so the two git-history authorities resolve.
+* **`mind-mem-openapi` was never repointed** when the generator moved into the
+  package (`src/mind_mem/spec/export_openapi.py`) to stop a cross-package
+  import; the console script now targets it, the artifact stays at
+  `sdk/spec/openapi.json`, and the reachability gate sees the module through
+  the entry point. `mind-mem-connect` gained its entry point the same way.
+* **Four Postgres restore tests predated the RESTORE seam** and called
+  `store.restore()` under a proposal-scoped receipt — ambient authority the
+  seam rightly refuses. They open the batch RESTORE scope
+  `apply_engine.restore_snapshot` opens (one shared helper,
+  `tests/_restore_scope.py`), keep every assertion, and each file gained a
+  positive control that an ungated restore still raises and reverts nothing.
+* **`tests/test_postgres_active_admission.py` failed instead of skipping**
+  on rows without `psycopg` (fourteen `ModuleNotFoundError`s): the classes
+  that render `psycopg.sql` now `importorskip` it through one fixture, and
+  the `postgres backend` job runs them for real.
+* **`auto_recall` was read by nothing** — the commit that claimed the wiring
+  left `hooks/session-start.sh` uncommitted. The hook honours it now, and the
+  gate executes the hook rather than grepping for the key.
+* **The audit-ledger mutation twin was scheduler-dependent.** Its defeat
+  mode only nulled the lock, so whether three unlocked writers forked the
+  ledger depended on whether the OS interleaved "read tail, append" — one
+  full-suite run produced 60 cleanly linking rows and a red twin. The
+  control now forces every writer to resolve its tail before any writer
+  appends (a barrier inside the unlocked section, defeat mode only), which
+  is the property the evidence twin already had by construction.
+* **A flag-off probe test was vacuous on one machine and wrong on another**:
+  it asserted `caplog.records == []` against loggers that never propagate to
+  root. It captures at `logging.Logger.handle` now, with a positive control.
+* **`mind-mem-connect` could not write a config on Windows below 3.13**
+  (`os.fchmod` does not exist there); **`apply_engine.restore_snapshot` raised
+  `ValueError`** for a snapshot on another drive than the workspace; and one
+  corpus test compared text to bytes across the platform's newline
+  translation. All three fixed; the unexplained `DELETE /memories/<missing>`
+  500 on Windows now logs its traceback so the next run names its cause.
 
 
 ### Fixed

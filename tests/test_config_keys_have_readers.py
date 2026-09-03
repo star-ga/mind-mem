@@ -36,11 +36,25 @@ before relying on it:
   directions of the method before any verdict is trusted, and
   :func:`test_the_hooks_leg_actually_scanned_the_hooks` pins the new leg
   the same way -- an empty corpus finds nothing and calls it clean.
+* **the scan cannot tell a reader from a mention.** The needle is a
+  quoted literal anywhere in a file, so a comment, a docstring or a
+  dead branch satisfies it exactly as well as a live read -- and a file
+  that exists in a working tree satisfies it without existing in the
+  commit. Both halves of that bit us at once in a4a1759 (see the
+  behavioural section at the foot of this module), so the one key whose
+  wiring this release claims is additionally EXECUTED:
+  :func:`test_auto_recall_false_actually_silences_the_hook` runs the
+  shipped hook and requires the observable output to change. Text is
+  the cheap check and stays; behaviour is the one that cannot be
+  satisfied by a comment.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import sys
 
 import pytest
 
@@ -65,6 +79,11 @@ _HOOKS = os.path.join(os.path.dirname(_HERE), "hooks")
 #:                         docstring), not by excusing it.
 #: * ``auto_recall``    -- WIRED. ``hooks/session-start.sh`` now honours
 #:                         it, which is what the docs always claimed.
+#:                         The wiring is EXECUTED by the behavioural
+#:                         tests at the foot of this module, not merely
+#:                         matched as text: the first attempt at this
+#:                         entry shipped every claim about the wiring
+#:                         and left the hook itself uncommitted.
 #: * ``workspace_path`` -- REMOVED, substitute named: the workspace is an
 #:                         argument / ``MIND_MEM_WORKSPACE``.
 #: * ``scan_schedule``  -- REMOVED, substitute named: ``cron_runner``'s
@@ -258,3 +277,163 @@ def test_the_rate_limit_substitute_is_real() -> None:
     assert DEFAULT_CONFIG["limits"]["query_timeout_seconds"] == 30
     assert "rate_limit_calls_per_minute" in _DEFAULT_LIMITS
     assert "query_timeout_seconds" in _DEFAULT_LIMITS
+
+
+# ---------------------------------------------------------------------------
+# The string scan is necessary and NOT sufficient.
+# ---------------------------------------------------------------------------
+#
+# Every assertion above this line is satisfied by the *characters*
+# ``"auto_recall"`` appearing in ``hooks/session-start.sh``. That is a
+# statement about text, not about behaviour, and the release that
+# introduced these tests proved how far apart the two can drift: commit
+# a4a1759 landed the emptied ``KNOWN_UNREAD``, the two assertions above,
+# the ``init_workspace`` comment reading "now WIRED
+# (hooks/session-start.sh)", and the README and ``docs/configuration.md``
+# rows describing the switch -- and did not land ``hooks/session-start.sh``
+# itself. The wiring existed only in a working tree. Locally the gate was
+# green because the scan found a file no one had committed; CI, checking
+# out the same SHA, reported ``['auto_recall']`` reader-less. Five
+# artefacts asserted the wiring and none of them executed it.
+#
+# So the switch is exercised: run the shipped hook, flip the key, and
+# require the observable behaviour to change. A comment mentioning the key
+# satisfies the scan; it cannot satisfy this.
+
+
+def _hook_is_runnable() -> tuple[bool, str]:
+    """Can this platform actually run the hook, rather than merely find it?
+
+    Two things are required and neither is implied by the other. ``bash``
+    must run a command -- on a Windows runner a bare ``bash`` resolves to
+    the WSL launcher, which with no distribution installed exits 1, so
+    ``shutil.which`` says yes and is wrong (the same probe guards the
+    ``validate.sh`` tests in ``test_apply_engine.py``). And ``python3``
+    must parse JSON, because that is what the hook shells out to; without
+    it the hook takes its ``|| echo "true"`` fallback and a test asserting
+    "false silences it" would be testing the fallback, not the switch.
+
+    Returned as a reason string rather than a bare bool so a skip on the
+    canonical row names which half was missing.
+    """
+    try:
+        bash = subprocess.run(["bash", "-c", "echo mm_bash_ok"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False, "bash could not be executed"
+    if bash.returncode != 0 or "mm_bash_ok" not in (bash.stdout or ""):
+        return False, "no usable bash (on Windows a bare `bash` is the WSL launcher)"
+    try:
+        py = subprocess.run(
+            ["python3", "-c", "import json; print('mm_py_ok')"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False, "python3 could not be executed (the hook shells out to it)"
+    if py.returncode != 0 or "mm_py_ok" not in (py.stdout or ""):
+        return False, "python3 present but not usable (the hook shells out to it)"
+    return True, ""
+
+
+_HOOK_RUNS, _HOOK_SKIP_REASON = _hook_is_runnable()
+
+_SESSION_START = os.path.join(_HOOKS, "session-start.sh")
+
+
+def _run_session_start(workspace: str) -> subprocess.CompletedProcess[str]:
+    """Run the shipped hook exactly as ``hooks.json`` registers it."""
+    return subprocess.run(
+        ["bash", _SESSION_START],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env={**os.environ, "MIND_MEM_WORKSPACE": workspace},
+    )
+
+
+def _workspace(tmp_path: object, config: dict[str, object] | None) -> str:
+    """A workspace the hook has something to say about.
+
+    The state file is what makes the ON case produce output; without it
+    the hook prints its "not initialized" line instead, and an assertion
+    that OFF prints nothing would pass against a hook that prints nothing
+    either way.
+    """
+    ws = str(tmp_path)
+    os.makedirs(os.path.join(ws, "memory"), exist_ok=True)
+    with open(os.path.join(ws, "memory", "intel-state.json"), "w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "governance_mode": "detect_only",
+                "last_scan": "2026-09-02",
+                "counters": {"contradictions_open": 0},
+            },
+            handle,
+        )
+    if config is not None:
+        with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as handle:
+            json.dump(config, handle)
+    return ws
+
+
+def test_the_hook_probe_is_live_on_the_canonical_row() -> None:
+    """A guard that always skips is a test that never ran.
+
+    The behavioural tests below are the only ones in this module that
+    execute anything, and they are conditional. On Linux -- every row
+    where this gate is enforced -- the condition must hold, so a broken
+    probe fails the build here instead of quietly turning the two tests
+    that matter into no-ops.
+    """
+    if sys.platform.startswith("linux"):
+        assert _HOOK_RUNS, f"the hook probe failed on Linux: {_HOOK_SKIP_REASON}"
+
+
+@pytest.mark.skipif(not _HOOK_RUNS, reason=_HOOK_SKIP_REASON or "hook not runnable")
+def test_auto_recall_false_actually_silences_the_hook(tmp_path: object) -> None:
+    """The round trip, on one workspace, with only the key changed.
+
+    The negative half -- "``false`` prints nothing" -- passes on its own
+    against a hook that is broken, missing, or silent for some unrelated
+    reason. It is only evidence next to the positive control immediately
+    before it: the same hook, the same workspace, the same command, with
+    ``true`` in place of ``false``, must print the health line. One of the
+    two assertions proves the method can see output; the other proves the
+    switch removes it.
+    """
+    on = _workspace(tmp_path, {"auto_recall": True})
+    lit = _run_session_start(on)
+    assert lit.returncode == 0, lit.stderr
+    assert "mind-mem health" in lit.stdout, (
+        f"positive control failed: the hook said nothing with auto_recall true — stdout={lit.stdout!r} stderr={lit.stderr!r}"
+    )
+
+    with open(os.path.join(on, "mind-mem.json"), "w", encoding="utf-8") as handle:
+        json.dump({"auto_recall": False}, handle)
+
+    off = _run_session_start(on)
+    assert off.returncode == 0, off.stderr
+    assert off.stdout == "", (
+        f"auto_recall false did not silence the hook: {off.stdout!r}. "
+        "The key is documented as the switch for this hook; if the literal is "
+        "present but the behaviour is not, the scan above is measuring a comment."
+    )
+
+
+@pytest.mark.skipif(not _HOOK_RUNS, reason=_HOOK_SKIP_REASON or "hook not runnable")
+def test_the_hook_still_speaks_when_no_config_names_the_key(tmp_path: object) -> None:
+    """Wiring a key must not change what an existing workspace does.
+
+    Every workspace initialised before the key was read has no opinion
+    about it, and many have no ``mind-mem.json`` at all. The default is
+    ``True`` in ``DEFAULT_CONFIG`` and the hook defaults the same way, so
+    the silent majority keeps its context. A wiring that switched a
+    documented feature off for everyone who never asked would be a
+    regression wearing a fix's clothes.
+    """
+    assert DEFAULT_CONFIG["auto_recall"] is True, "the default this test pins has moved"
+
+    bare = _run_session_start(_workspace(tmp_path, None))
+    assert bare.returncode == 0, bare.stderr
+    assert "mind-mem health" in bare.stdout, bare.stdout

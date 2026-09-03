@@ -12,6 +12,23 @@ this gate got two things wrong that only a positive control could show:
 
 Every negative assertion below ("this is not flagged") is paired with the
 positive control that proves the same code path CAN flag a true positive.
+
+The test-count leg changed shape once more on 2026-09-03, and the tests that
+covered the old shape were REPLACED rather than deleted. The authority had
+been ``pytest --collect-only`` with the CI selector, and this module went to
+some length to make that honest (``collected_or_skip`` refused to compare the
+badge against a machine that dropped modules at collection). It was still a
+property of the machine: CI, installing ``[test]`` alone, collected 11,662 on
+a commit the workstation collected 11,726 on, and ``--fix`` could not write a
+number both would accept. ``alignment_authorities.static_test_count`` now
+counts ``def test_*`` functions from source and imports nothing;
+:class:`TestStaticTestCount` covers its counting rule and
+:class:`TestTheAuthorityIsEnvironmentIndependent` proves the number does not
+move when ``psycopg`` and ``sqlite_vec`` are hidden from the import system --
+the equality that the collection-based authority could never satisfy. The
+retired "N tests" spelling is refused at suite scale
+(:class:`TestRetiredTestsSpelling`), because renumbering it under the new
+authority would state a runner's count that no machine measured.
 """
 
 from __future__ import annotations
@@ -69,66 +86,16 @@ def scan(line: str, *, rel: str = "docs/example.md", auth=None, historical: bool
     return cda.scan_line(rel, 1, line, auth or make_authorities(), historical=historical)
 
 
-# CI's exact collection selector, duplicated here so this module can ask the
-# collector a second question (what did this environment DROP?) that the
-# authority's ``-> int`` signature cannot answer. Duplication is the drift
-# risk, so it is gated: ``test_the_local_selector_is_the_authoritys_selector``
-# fails if the authority's selector ever stops containing these tokens.
-_CI_SELECTOR = ("tests/", "--ignore=tests/integration", "--collect-only", "-q", "-m", "not stress")
-
-# ``pytest -rs`` reports a module dropped at collection time (a module-level
-# ``pytest.importorskip`` whose extra is absent) as
-# ``SKIPPED [1] tests/test_rest_api.py:18: could not import 'fastapi'``.
-_DROPPED_MODULE_RE = re.compile(r"^SKIPPED \[\d+\]\s+(\S+?):\d+:")
-
-
-def dropped_modules(stdout: str) -> tuple[str, ...]:
-    """Test modules this environment dropped at COLLECTION time, from ``-rs`` output."""
-    return tuple(sorted({m.group(1) for m in (_DROPPED_MODULE_RE.match(line) for line in stdout.splitlines()) if m}))
-
-
-@functools.lru_cache(maxsize=1)
-def collected_tests() -> tuple[int, tuple[str, ...]]:
-    """``(count, dropped)`` from ONE collection with CI's selector.
-
-    *count* is what the badge must equal. *dropped* is the environment fact
-    that says whether this machine can answer the question at all: a partial
-    install (no ``fastapi``, no ``psycopg``) silently removes whole modules
-    from collection, and comparing the tree's badge to a short count would
-    report drift that is really a missing extra. CI installs ``.[test]`` in
-    every cell that runs pytest, so *dropped* is empty there and the
-    comparison is always made.
-    """
-    proc = subprocess.run(  # nosec B603 - fixed argv, no shell
-        [sys.executable, "-m", "pytest", *_CI_SELECTOR, "-rs"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=1800,
-    )
-    if proc.returncode != 0:
-        tail = "\n".join((proc.stdout + proc.stderr).splitlines()[-15:])
-        raise cda.AuthorityError(f"pytest collection exited {proc.returncode}:\n{tail}")
-    return cda.parse_collected(proc.stdout), dropped_modules(proc.stdout)
-
-
-def collected_or_skip() -> int:
-    """The collected count, or skip naming the modules this environment lacks."""
-    count, dropped = collected_tests()
-    if dropped:
-        names = ", ".join(dropped[:5])
-        pytest.skip(f"this environment drops {len(dropped)} module(s) at collection ({names}); its count is a floor, not the authority")
-    return count
-
-
 @functools.lru_cache(maxsize=1)
 def _real_authorities() -> cda.Authorities:
     """The tree's own authorities, resolved once (git archive is not free).
 
-    The test-count leg is COLLECTED, not read off the badge: a badge injected
-    as its own authority agrees with itself no matter what it says.
+    Every leg is computed by ``resolve_authorities`` from the tree; nothing
+    here injects a value. The test-count leg is a static count of the source,
+    so it is the same number on this machine as on every CI row, and no
+    ``skip`` is needed to keep the comparison honest.
     """
-    return cda.resolve_authorities(ROOT, tests_collected=collected_tests()[0])
+    return cda.resolve_authorities(ROOT)
 
 
 def real_auth_kwargs() -> dict:
@@ -145,23 +112,99 @@ def _lines(rel: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-class TestAuthorities:
-    def test_parse_collected_reads_the_selector_tail(self):
-        out = "tests/test_a.py::test_one\n\n9701/10034 tests collected (333 deselected) in 13.19s\n"
-        assert cda.parse_collected(out) == 9701
+_PYPROJECT_PYTEST = (
+    "[tool.pytest.ini_options]\n"
+    'testpaths = ["tests"]\n'
+    'python_files = ["test_*.py"]\n'
+    'python_classes = ["Test*"]\n'
+    'python_functions = ["test_*"]\n'
+)
 
-    def test_parse_collected_reads_the_undeselected_form(self):
-        assert cda.parse_collected("42 tests collected in 0.10s\n") == 42
 
-    def test_a_collector_that_said_nothing_is_an_error_not_a_zero(self):
+def _tree(tmp_path: Path, files: dict[str, str], pyproject: str = _PYPROJECT_PYTEST) -> Path:
+    """A throwaway repo root with the given test files and pytest options."""
+    (tmp_path / "pyproject.toml").write_text(pyproject, encoding="utf-8")
+    for rel, body in files.items():
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body, encoding="utf-8")
+    return tmp_path
+
+
+class TestStaticTestCount:
+    """The counting rule is pytest's collection rule applied to source."""
+
+    def test_module_level_functions_and_test_class_methods_are_counted(self):
+        src = "def test_a(): pass\n\nclass TestX:\n    def test_b(self): pass\n    def test_c(self): pass\n"
+        assert aa.test_functions_in_source(src) == 3
+
+    def test_nested_test_classes_are_counted(self):
+        src = "class TestOuter:\n    class TestInner:\n        def test_deep(self): pass\n"
+        assert aa.test_functions_in_source(src) == 1
+
+    def test_helpers_non_test_classes_and_nested_defs_are_not(self):
+        """Positive control is the test above: same walker, counting shapes it should."""
+        src = (
+            "def helper(): pass\n"
+            "class Fixture:\n    def test_not_collected(self): pass\n"
+            "def test_outer():\n    def test_inner(): pass\n"
+            "async def test_async(): pass\n"
+        )
+        assert aa.test_functions_in_source(src) == 2, "test_outer and test_async; nothing else is collected by pytest"
+
+    def test_the_tree_count_sums_every_matching_file_including_integration(self, tmp_path):
+        root = _tree(
+            tmp_path,
+            {
+                "tests/test_a.py": "def test_1(): pass\n",
+                "tests/integration/test_b.py": "def test_2(): pass\ndef test_3(): pass\n",
+                "tests/helpers.py": "def test_ignored_file(): pass\n",
+                "tests/conftest.py": "def test_not_a_test_file(): pass\n",
+            },
+        )
+        assert aa.static_test_count(root) == 3
+
+    def test_the_file_rule_is_read_from_pyproject_not_hard_coded(self, tmp_path):
+        """Change ``python_files`` and the count follows -- the rule is pytest's, by construction."""
+        root = _tree(
+            tmp_path,
+            {"tests/a_spec.py": "def test_1(): pass\n", "tests/test_b.py": "def test_2(): pass\n"},
+            pyproject=_PYPROJECT_PYTEST.replace('python_files = ["test_*.py"]', 'python_files = ["*_spec.py"]'),
+        )
+        assert aa.static_test_count(root) == 1
+
+    def test_a_tree_with_nothing_to_count_is_an_error_not_a_zero(self, tmp_path):
         """A verifier that died is not a verifier that passed.
 
         Returning 0 here would make every four-digit badge look stale and,
         worse, would make an empty finding list readable as "aligned".
         """
         with pytest.raises(cda.AuthorityError):
-            cda.parse_collected("INTERNALERROR> boom\n")
+            aa.static_test_count(_tree(tmp_path, {}))
+        with pytest.raises(cda.AuthorityError):
+            aa.static_test_count(_tree(tmp_path, {"tests/test_empty.py": "def helper(): pass\n"}))
 
+    def test_an_unparseable_test_file_is_an_error_not_a_short_count(self, tmp_path):
+        root = _tree(tmp_path, {"tests/test_ok.py": "def test_1(): pass\n", "tests/test_bad.py": "def (:\n"})
+        with pytest.raises(cda.AuthorityError, match="could not parse"):
+            aa.static_test_count(root)
+
+    def test_the_real_tree_is_counted_without_importing_a_test_module(self, monkeypatch):
+        """The authority reads files; it must never execute them.
+
+        A counting rule that imported test modules would inherit every
+        ``importorskip`` in the suite -- the exact dependence on the host this
+        authority exists to remove. ``sys.modules`` is snapshotted around the
+        call; a test module appearing in it is the failure.
+        """
+        before = set(sys.modules)
+        count = aa.static_test_count(ROOT)
+        assert count > 1000, "the suite has been four digits since v3.x"
+        imported = {name for name in set(sys.modules) - before if name.startswith("test_") or name.startswith("tests.")}
+        assert imported == set(), f"the static authority imported test modules: {sorted(imported)[:5]}"
+
+
+class TestAuthorities:
     def test_trained_tool_count_is_measured_from_git_history(self):
         """83, and measured -- not the 96 the card asserted or the hub's 84."""
         trained = cda.trained_tool_count()
@@ -209,7 +252,7 @@ class TestAuthorities:
 
 
 class TestTestCountClaims:
-    BADGE = '<img src="https://img.shields.io/badge/tests-{n}-brightgreen?style=flat-square" alt="Tests: {alt}">'
+    BADGE = '<img src="https://img.shields.io/badge/test_functions-{n}-brightgreen?style=flat-square" alt="Test functions: {alt}">'
 
     def test_a_stale_badge_is_caught(self):
         findings = scan(self.BADGE.format(n="9%2C366", alt="9,366"))
@@ -222,23 +265,67 @@ class TestTestCountClaims:
         assert scan(self.BADGE.format(n="9%2C707", alt="9,707")) == []
 
     def test_a_suite_scale_prose_claim_is_caught(self):
-        findings = scan("- **CI** on every push and PR - full pytest matrix (7,500+ tests across the suite).")
+        findings = scan("- **CI** on every push and PR - full pytest matrix (7,500+ test functions across the suite).")
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tests", "7,500", "9,707")]
 
     def test_the_trailing_plus_is_part_of_the_claim_it_replaces(self):
-        """ "7,500+ tests" must become "9,707 tests", never "9,707+ tests"."""
-        line = "full pytest matrix (7,500+ tests across the suite)."
+        """ "7,500+ test functions" must become "9,707 test functions", never "9,707+ ..."."""
+        line = "full pytest matrix (7,500+ test functions across the suite)."
         finding = scan(line)[0]
         assert line[finding.start : finding.end] == "7,500+"
 
     def test_a_module_scale_claim_is_not_gated(self):
-        """ "18 tests" is about one module; the suite gate has no business there."""
-        assert scan("Recompaction ships with 18 tests covering the merge path.") == []
+        """ "18 test functions" is about one module; the suite gate has no business there."""
+        assert scan("Recompaction ships with 18 test functions covering the merge path.") == []
 
     def test_but_a_small_number_the_sentence_calls_suite_wide_IS_gated(self):
         """The floor is a size heuristic, not an escape hatch -- scope words win."""
-        findings = scan("The whole test suite is 900 tests today.")
+        findings = scan("The whole test suite is 900 test functions today.")
         assert [(f.kind, f.claimed) for f in findings] == [("tests", "900")]
+
+
+class TestRetiredTestsSpelling:
+    """ "N tests" at suite scale named a runner's count. It is refused, not renumbered.
+
+    The number the authority computes is a count of functions in the tree; a
+    sentence saying "N tests" reads as what pytest reported, and that depends
+    on the machine. Renumbering it would keep the gate green over a claim the
+    authority does not measure -- which is the failure this whole gate exists
+    to catch.
+    """
+
+    OLD_BADGE = '<img src="https://img.shields.io/badge/tests-{n}-brightgreen?style=flat-square" alt="Tests: {alt}">'
+
+    def test_the_old_badge_is_refused_in_both_spellings(self):
+        findings = scan(self.OLD_BADGE.format(n="9%2C707", alt="9,707"))
+        assert [(f.kind, f.claimed) for f in findings] == [("tests_spelling", "9%2C707"), ("tests_spelling", "9,707")]
+
+    def test_it_is_refused_even_when_the_number_equals_the_authority(self):
+        """The finding is about the noun, not the digits."""
+        findings = scan("full pytest matrix (9,707 tests across the suite).")
+        assert [(f.kind, f.claimed) for f in findings] == [("tests_spelling", "9,707")]
+        assert "test functions" in findings[0].actual
+
+    def test_it_is_not_auto_fixable(self, tmp_path):
+        doc = tmp_path / "docs" / "x.md"
+        doc.parent.mkdir(parents=True)
+        doc.write_text("the suite has 9,707 tests\n", encoding="utf-8")
+        findings = cda.scan_line("docs/x.md", 1, "the suite has 9,707 tests", make_authorities())
+        fixed, skipped = cda.apply_fixes(findings, tmp_path)
+        assert (fixed, [f.kind for f in skipped]) == (0, ["tests_spelling"])
+        assert doc.read_text(encoding="utf-8") == "the suite has 9,707 tests\n", "a refused claim must not be rewritten"
+
+    def test_a_module_scale_old_spelling_is_left_alone(self):
+        """Negative control: module claims are the module_facts leg's business."""
+        assert scan("Recompaction ships with 18 tests covering the merge path.") == []
+
+    def test_a_version_qualified_record_is_left_alone(self):
+        """Positive control for the qualifier: the same sentence, unqualified, is refused."""
+        assert scan("(9,701 tests in v4.1)") == []
+        assert [f.kind for f in scan("the suite has 9,701 tests")] == ["tests_spelling"]
+
+    def test_the_new_spelling_does_not_trip_the_retired_pattern(self):
+        assert [f.kind for f in scan("full pytest matrix (9,707 test functions across the suite).")] == []
 
 
 class TestToolCountScoping:
@@ -422,7 +509,7 @@ class TestFixMode:
         doc = tmp_path / "docs" / "x.md"
         doc.parent.mkdir(parents=True)
         doc.write_text(
-            '<img src="https://img.shields.io/badge/tests-9%2C366-x" alt="Tests: 9,366">\n',
+            '<img src="https://img.shields.io/badge/test_functions-9%2C366-x" alt="Test functions: 9,366">\n',
             encoding="utf-8",
         )
         auth = make_authorities()
@@ -430,16 +517,17 @@ class TestFixMode:
         assert len(findings) == 2, "both the path and the alt text must be found"
         fixed, skipped = cda.apply_fixes(findings, tmp_path)
         assert (fixed, skipped) == (2, [])
-        assert doc.read_text(encoding="utf-8") == '<img src="https://img.shields.io/badge/tests-9%2C707-x" alt="Tests: 9,707">\n'
+        expected = '<img src="https://img.shields.io/badge/test_functions-9%2C707-x" alt="Test functions: 9,707">\n'
+        assert doc.read_text(encoding="utf-8") == expected
 
     def test_fix_refuses_a_finding_whose_line_moved(self, tmp_path):
         doc = tmp_path / "docs" / "x.md"
         doc.parent.mkdir(parents=True)
-        doc.write_text("the suite has 900 tests\n", encoding="utf-8")
-        stale = cda.Finding("docs/x.md", 1, "tests", "8888", "9707", "8888 tests", 0, 4)
+        doc.write_text("the suite has 900 test functions\n", encoding="utf-8")
+        stale = cda.Finding("docs/x.md", 1, "tests", "8888", "9707", "8888 test functions", 0, 4)
         fixed, skipped = cda.apply_fixes([stale], tmp_path)
         assert fixed == 0 and skipped == [stale]
-        assert doc.read_text(encoding="utf-8") == "the suite has 900 tests\n"
+        assert doc.read_text(encoding="utf-8") == "the suite has 900 test functions\n"
 
 
 # ---------------------------------------------------------------------------
@@ -447,7 +535,7 @@ class TestFixMode:
 # ---------------------------------------------------------------------------
 
 
-_BADGE_TESTS_RE = re.compile(r"badge/tests-([\d%C2c]+)-")
+_BADGE_TESTS_RE = re.compile(r"badge/test_functions-([\d%C2c]+)-")
 
 
 def readme_tests_badge() -> int:
@@ -464,26 +552,33 @@ class TestRepositoryIsAligned:
     not: ``grep -n check_docs_alignment .github/workflows/*.yml`` returned
     nothing, so the badge was the only authority for itself and agreed with
     itself no matter what it said -- it read 10,550 while the selector
-    collected 11,137. The number is now COLLECTED here, once per session
-    (``functools.lru_cache``), and CI's ``version-check`` job collects it once
-    more with the same selector and passes it to the CLI. Two independent
-    checks, neither of which can be satisfied by the badge alone.
+    collected 11,137. The repair collected the count here and in CI, and
+    that was a second defect: the two machines collected different numbers
+    (11,726 against 11,662 on one commit) because collection is a property
+    of the environment. The number is now a static count of the source, so
+    this test and CI's ``version-check`` compute the same value from the
+    same files with nothing injected by either.
     """
 
     def test_no_claim_disagrees_with_its_authority(self):
-        auth = cda.resolve_authorities(ROOT, tests_collected=collected_or_skip())
+        auth = cda.resolve_authorities(ROOT)
         findings = cda.scan_docs(auth, ROOT)
         assert findings == [], "stale claims:\n" + "\n".join(str(f) for f in findings)
 
     def test_the_badge_is_not_its_own_authority(self):
-        """The README badge equals what the CI selector actually collects."""
-        assert readme_tests_badge() == collected_or_skip()
+        """The README badge equals the count of test functions in the tree."""
+        assert readme_tests_badge() == aa.static_test_count(ROOT)
 
-    def test_the_local_selector_is_the_authoritys_selector(self):
-        """``_CI_SELECTOR`` is a copy; this fails the moment the original moves."""
-        source = inspect.getsource(aa.collect_test_count)
-        for token in _CI_SELECTOR:
-            assert f'"{token}"' in source, f"{token!r} is no longer in the authority's selector"
+    def test_the_checker_takes_no_injected_count(self):
+        """The seam through which the badge once fed itself is gone.
+
+        ``resolve_authorities`` computes every leg; a keyword that let a
+        caller supply the test count is exactly what made the badge its own
+        authority, and the CLI flag that fed it from a YAML step is the same
+        seam one layer up.
+        """
+        assert "tests_collected" not in inspect.signature(cda.resolve_authorities).parameters
+        assert "--tests-collected" not in inspect.getsource(cda.main)
 
     def test_the_scan_actually_read_something(self):
         """An empty finding list is only evidence when the search happened."""
@@ -495,7 +590,7 @@ class TestRepositoryIsAligned:
 
     def test_the_cli_exits_zero_on_an_aligned_tree(self):
         proc = subprocess.run(  # nosec B603
-            [sys.executable, "scripts/check_docs_alignment.py", "--tests-collected", str(collected_or_skip())],
+            [sys.executable, "scripts/check_docs_alignment.py"],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -510,7 +605,7 @@ class TestRepositoryIsAligned:
             raise cda.AuthorityError("git is gone")
 
         monkeypatch.setattr(cda, "trained_tool_count", boom)
-        assert cda.main(["--tests-collected", "1"]) == 2
+        assert cda.main([]) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -667,37 +762,87 @@ class TestTrainedClaimsAreReferredNotJudged:
         assert _cmt_claims("the server currently exposes 89 MCP\ntools.\n") == [(1, 89)]
 
 
-class TestSkippedModuleDetection:
-    """``collected_tests`` skips rather than reports drift when this
-    environment cannot collect the whole tree. The detector needs a positive
-    control, or an always-empty result would silently make the skip
-    unreachable and the count a lie."""
+class _HideImports:
+    """A ``sys.meta_path`` finder that makes the named top-level packages unimportable.
 
-    def test_it_reads_a_real_collection_time_skip(self, tmp_path):
-        (tmp_path / "test_dropped.py").write_text(
-            "import pytest\n\npytest.importorskip('mind_mem_no_such_extra')\n\n\ndef test_never_collected():\n    pass\n",
-            encoding="utf-8",
+    Raises ``ModuleNotFoundError`` exactly as an absent package would, so
+    code under it sees what a CI row without the extra sees.
+    """
+
+    def __init__(self, *names: str) -> None:
+        self.names = frozenset(names)
+
+    def find_spec(self, name: str, path: object = None, target: object = None) -> None:
+        if name.split(".")[0] in self.names:
+            raise ModuleNotFoundError(f"No module named {name!r} (hidden for the environment-independence proof)", name=name)
+        return None
+
+
+class TestTheAuthorityIsEnvironmentIndependent:
+    """THE deliverable for the static authority: the same number with the extras hidden.
+
+    The collection-based authority this replaced produced 11,726 on a
+    workstation with every extra and 11,662 on CI rows without ``psycopg``
+    (four Postgres modules importorskip at module level and were dropped
+    whole). A static count cannot see an import, so hiding the extras must
+    change nothing -- and the assertion is only evidence beside the positive
+    control that the hiding actually works in this process.
+    """
+
+    HIDDEN = ("psycopg", "psycopg_pool", "pgvector", "sqlite_vec")
+
+    def test_the_count_is_identical_with_psycopg_and_sqlite_vec_hidden(self, monkeypatch):
+        import importlib
+
+        with_everything = aa.static_test_count(ROOT)
+
+        hider = _HideImports(*self.HIDDEN)
+        monkeypatch.setattr(sys, "meta_path", [hider, *sys.meta_path])
+        for name in self.HIDDEN:
+            monkeypatch.delitem(sys.modules, name, raising=False)
+        # Positive control: the hidden packages really are unimportable now.
+        for name in ("psycopg", "sqlite_vec"):
+            with pytest.raises(ModuleNotFoundError):
+                importlib.import_module(name)
+
+        hidden = aa.static_test_count(ROOT)
+        assert hidden == with_everything, (
+            f"the test-count authority moved when the extras were hidden ({with_everything} -> {hidden}); "
+            "it is reading the environment, not the tree"
         )
+
+    def test_the_hider_would_have_changed_a_collection(self, tmp_path):
+        """Positive control for the proof's method, not just its subject.
+
+        A module-level ``importorskip`` on a hidden name drops the module
+        at collection -- the exact mechanism that made the old authority
+        environment-dependent. The static count of the same file is one
+        either way.
+        """
+        src = "import pytest\n\npytest.importorskip('psycopg')\n\n\ndef test_needs_the_extra():\n    pass\n"
+        (tmp_path / "test_dropped.py").write_text(src, encoding="utf-8")
+        assert aa.test_functions_in_source(src) == 1
         proc = subprocess.run(  # nosec B603 - fixed argv, no shell
-            [sys.executable, "-m", "pytest", str(tmp_path), "--collect-only", "-q", "-rs", "-p", "no:cacheprovider"],
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys, pytest\n"
+                    "class H:\n"
+                    "    def find_spec(self, name, path=None, target=None):\n"
+                    "        if name.split('.')[0] == 'psycopg':\n"
+                    "            raise ModuleNotFoundError(name, name=name)\n"
+                    "sys.meta_path.insert(0, H())\n"
+                    f"raise SystemExit(pytest.main([{str(tmp_path)!r}, '--collect-only', '-q', '-p', 'no:cacheprovider']))\n"
+                ),
+            ],
             cwd=tmp_path,
             capture_output=True,
             text=True,
             timeout=300,
         )
-        dropped = dropped_modules(proc.stdout)
-        assert dropped and dropped[0].endswith("test_dropped.py"), proc.stdout
-
-    def test_a_clean_collection_reports_nothing_dropped(self, tmp_path):
-        (tmp_path / "test_fine.py").write_text("def test_ok():\n    pass\n", encoding="utf-8")
-        proc = subprocess.run(  # nosec B603 - fixed argv, no shell
-            [sys.executable, "-m", "pytest", str(tmp_path), "--collect-only", "-q", "-rs", "-p", "no:cacheprovider"],
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        assert dropped_modules(proc.stdout) == ()
+        assert "1 test collected" not in proc.stdout, proc.stdout
+        assert "no tests collected" in proc.stdout or "0 tests collected" in proc.stdout or "skipped" in proc.stdout, proc.stdout
 
 
 class TestPublishedModelCard:
@@ -786,7 +931,7 @@ class TestMutationTwin:
         # scan_line, so neutering scan_line alone no longer empties the scan --
         # which is itself the proof that the new leg is load-bearing.
         monkeypatch.setattr(cda, "scan_table_tools", lambda *a, **k: [])
-        auth = cda.resolve_authorities(tests_collected=collected_or_skip())
+        auth = cda.resolve_authorities(ROOT)
         # With the scanner neutered a KNOWN-BAD tree would still report clean,
         # which is exactly what the real assertion must be able to detect.
         assert cda.scan_docs(auth, ROOT) == []

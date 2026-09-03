@@ -9,9 +9,12 @@ rather than written by hand. It is the contract both in-tree clients
 Regenerate after any change to the routes:
 
 ```bash
-python3 -m mind_mem.spec.export_openapi --write     # rewrite the artifact
-python3 -m mind_mem.spec.export_openapi --check     # exit 1 if it has drifted
+mind-mem-openapi --write     # rewrite the artifact
+mind-mem-openapi --check     # exit 1 if it has drifted
 ```
+
+(`python3 -m mind_mem.spec.export_openapi` is the same program; the console
+script is the route the reachability gate can see.)
 
 A committed spec is only worth having if something stops it disagreeing with
 the server, so it ships with three gates in

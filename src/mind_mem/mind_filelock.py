@@ -16,19 +16,30 @@ Platform status — say only what is measured:
   process holds open, which is what a Windows runner does). No syscall in
   the break path removes or renames the lockfile any more: the winner
   adopts the abandoned file in place. See :meth:`FileLock._break_stale`.
-* **Windows, release** — a **known open gap**, inferred from documented
-  Windows semantics and measured by nothing in this repo: the gate above
-  refuses unlinks only for handles open in the *breaking* process, and this
-  gap needs another process's handle, so it is invisible there by
-  construction. ``os.open``/``open`` never request
-  ``FILE_SHARE_DELETE``, so :meth:`FileLock.release`'s post-close unlink
-  can be refused with ``ERROR_SHARING_VIOLATION`` while any *other*
-  process has the lockfile open — including a waiter inside
-  :meth:`FileLock._stale_identity`'s read. :meth:`FileLock._unlink_if_ours`
-  swallows that error, leaving a lockfile that names a live pid, which
-  nothing here ever breaks until that process exits. This predates the
-  break arbitration and is not closed by it. Do not write "no wedge on
-  Windows" until a cross-process number is 0 and a Windows CI row is green.
+* **Windows, release** — was a known open gap, inferred from documented
+  Windows semantics; **measured** by CI run 33707752303 on every Windows
+  row: three writers, ``LockTimeout (10.0s)`` from
+  :meth:`FileLock._acquire_file_lock` after a handful of successful rounds,
+  the holder alive, ``exit_codes=(1, 1, 1)``. The mechanism is the one the
+  inference named. ``os.open``/``open`` never request ``FILE_SHARE_DELETE``,
+  so :meth:`FileLock.release`'s post-close unlink is refused with
+  ``ERROR_SHARING_VIOLATION`` while any *other* process has the lockfile
+  open — a waiter inside :meth:`FileLock._stale_identity`'s read is enough
+  — and :meth:`FileLock._unlink_if_ours` swallows the refusal, leaving a
+  lockfile that names a live pid, which nothing breaks until that process
+  exits. **Closed by construction**, not by retrying the unlink: the holder
+  overwrites its pid with :data:`_RELEASED_SENTINEL` while it still holds
+  the OS lock (so no breaker can be mid-adoption), then unlocks, closes and
+  unlinks as before. A refused unlink now leaves a file every waiter reads
+  as *confirmed free*, and the existing break arbitration — the OS lock,
+  taken by exactly one — adopts it in place. On POSIX the unlink succeeds
+  and the sentinel is never written (:data:`_UNLINK_MAY_BE_REFUSED` is a
+  module constant; the OFF path is byte-identical to 5.0.1). Verified on
+  Linux by simulation in ``tests/test_filelock.py``: ``os.unlink`` refused
+  for the lockfile, the wedge reproduced with the sentinel off (positive
+  control), the adoption with it on. Do not write "no wedge on Windows"
+  until a Windows CI row is green; this note is the mechanism, the row is
+  the measurement.
 
 Usage:
     from filelock import FileLock
@@ -96,6 +107,22 @@ _LOCK_REGION_OFFSET = 1 << 20
 _BREAK_ADOPTED = "adopted"
 _BREAK_REMOVED = "removed"
 _BREAK_NOTHING = "nothing"
+
+#: Whether :meth:`FileLock.release`'s unlink can be refused by another
+#: process merely reading the lockfile. True on Windows (no
+#: ``FILE_SHARE_DELETE`` on any handle CPython opens); on POSIX a name can
+#: always be removed, so the release path below stays exactly what it was.
+#: A module constant rather than a per-call probe so the OFF path costs one
+#: attribute read, and so a Linux test can flip it to run the Windows path.
+_UNLINK_MAY_BE_REFUSED: bool = sys.platform == "win32"
+
+#: What a releasing holder writes over its pid when its unlink might be
+#: refused. Read by :meth:`FileLock._stale_identity` as "the owner finished
+#: and said so": confirmed free, not merely unknown, so a waiter may break
+#: it at once instead of waiting for the owner's pid to die. It is written
+#: while the OS lock is still held, so a reader can never see it beside an
+#: adoption in progress.
+_RELEASED_SENTINEL = "released"
 
 
 def _seek_lock_region(fd: int) -> None:
@@ -257,6 +284,8 @@ class FileLock:
         self._lock_fd = None
         self._lock_identity = None
         if fd is not None:
+            if _UNLINK_MAY_BE_REFUSED:
+                self._mark_released(fd)
             try:
                 self._os_unlock(fd)
             except OSError:
@@ -287,6 +316,25 @@ class FileLock:
     #: only mean a crash, never a writer mid-handshake.
     _UNREADABLE_LOCK_GRACE_SECONDS = 300
 
+    @staticmethod
+    def _mark_released(fd: int) -> None:
+        """Overwrite the pid with :data:`_RELEASED_SENTINEL` before the unlink is attempted.
+
+        Called with the OS lock still held, so the file cannot be mid-adoption
+        by a breaker while the sentinel lands. If the unlink that follows is
+        refused (a waiter had the file open), the file left behind says
+        "released" instead of naming a live pid, and the next
+        :meth:`_stale_identity` breaks it through the same arbitration a
+        crashed holder's file goes through. Best effort: a failure here leaves
+        exactly the file the unlink-only release left, no worse.
+        """
+        try:
+            os.ftruncate(fd, 0)
+            os.lseek(fd, 0, os.SEEK_SET)
+            os.write(fd, _RELEASED_SENTINEL.encode())
+        except OSError:
+            pass
+
     def _unlink_if_ours(self, identity: tuple[int, int] | None) -> None:
         """Remove the lockfile only while it is still the one in *identity*.
 
@@ -294,10 +342,11 @@ class FileLock:
         Windows as far as *this* process is concerned. It is not legal as
         far as every other process is concerned: a waiter with the lockfile
         open inside :meth:`_stale_identity`'s read is enough to make the
-        unlink fail with ``ERROR_SHARING_VIOLATION``, and the ``except
-        OSError: pass`` below then leaves a lockfile naming a live pid that
-        nothing ever breaks. Known open gap, inferred from documented
-        Windows semantics and **not measured** — see the module docstring.
+        unlink fail with ``ERROR_SHARING_VIOLATION`` (measured; see the
+        module docstring), and the ``except OSError: pass`` below swallows
+        it. That is safe only because :meth:`release` wrote
+        :data:`_RELEASED_SENTINEL` over the pid first on such platforms, so
+        the file left behind is one every waiter may break.
         """
         if identity is None:
             return
@@ -347,6 +396,12 @@ class FileLock:
             # Being written right now, or a crash between create and write.
             # Only the clock can tell the two apart.
             return identity if self._older_than_grace(st) else None
+
+        if pid_str == _RELEASED_SENTINEL:
+            # The owner finished, said so, and its unlink was refused (see
+            # ``_mark_released``). Confirmed free, not unknown: no grace, no
+            # pid probe. ``_break_stale`` still arbitrates WHO takes it.
+            return identity
 
         try:
             pid = int(pid_str)

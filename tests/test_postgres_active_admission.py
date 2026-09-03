@@ -37,8 +37,29 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
+from _restore_scope import restoring
 
 # ─── Fake Postgres plumbing (no live DB; renders the real SQL) ────────────────
+#
+# "No live DB" is not "no psycopg". The fake pool records what the store
+# EXECUTES, and the store composes every statement with ``psycopg.sql`` --
+# that is the point of the rendering tests: they read the real Composable the
+# real driver would send. Without the ``[postgres]`` extra those statements
+# cannot be composed at all, and through 5.0.1 that surfaced as fourteen
+# ``ModuleNotFoundError`` FAILURES on every CI row that installs ``[test]``
+# alone -- an environment error wearing a red X, on a gate that has nothing
+# to say about that environment. The three classes that render SQL therefore
+# ``importorskip`` psycopg through one fixture, the same way every other
+# Postgres module in this suite does; the ``postgres backend`` job installs
+# the extra and runs them for real. The classes that do NOT touch the driver
+# (:class:`TestIterActiveBlocksWithholdsQuarantined`,
+# :class:`TestAdaptersHaveNoSecondWritePath`, the source-inspection test) run
+# on every row, unchanged.
+
+
+@pytest.fixture
+def needs_psycopg() -> None:
+    pytest.importorskip("psycopg", reason="renders psycopg.sql Composables; needs the [postgres] extra")
 
 
 class _FakeCursor:
@@ -154,6 +175,7 @@ def _block(bid: str, status: str | None, *, statement: str = "seed") -> dict[str
 # ─── 1. write_block writes the column, from the Status ────────────────────────
 
 
+@pytest.mark.usefixtures("needs_psycopg")
 class TestWriteBlockWritesActiveFromStatus:
     """The column is derived at the door, so ``WHERE active`` is truthful."""
 
@@ -222,6 +244,7 @@ class TestWriteBlockWritesActiveFromStatus:
 # ─── 2. the SQL derivation cannot drift from the Python one ───────────────────
 
 
+@pytest.mark.usefixtures("needs_psycopg")
 class TestActiveFromStatusSqlTracksThePythonAllowList:
     def test_the_predicate_lists_exactly_the_recognised_statuses(self) -> None:
         from mind_mem.admissibility import RECOGNISED_STATUSES
@@ -244,6 +267,7 @@ class TestActiveFromStatusSqlTracksThePythonAllowList:
 
 
 class TestSchemaMigrationBackfillsActive:
+    @pytest.mark.usefixtures("needs_psycopg")
     def test_claiming_the_migration_runs_the_update(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mind_mem import block_store_postgres as bsp
 
@@ -256,6 +280,7 @@ class TestSchemaMigrationBackfillsActive:
         assert len(updates) == 1, conn.statements
         assert "active" in updates[0] and "metadata" in updates[0]
 
+    @pytest.mark.usefixtures("needs_psycopg")
     def test_an_already_applied_migration_runs_no_update(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Positive control is the test above: same path, claim granted."""
         from mind_mem import block_store_postgres as bsp
@@ -517,11 +542,37 @@ class TestLivePostgresActiveColumn:
             fresh.close()
 
     def test_restore_does_not_reactivate_a_quarantined_block(self, live_pg: tuple[Any, str], admitted, tmp_path: Path) -> None:
+        """Through the RESTORE scope ``apply_engine.restore_snapshot`` opens.
+
+        The ``admitted`` fixture's receipt is proposal-scoped, which the seam
+        refuses for a restore (ambient authority over every id); the scope
+        below is the batch receipt the sanctioned caller mints, naming the ids
+        the snapshot holds. The assertions are unchanged -- and
+        :func:`test_an_ungated_restore_is_refused_and_the_quarantine_stands`
+        is the positive control that the seam still shuts.
+        """
         store, _ = live_pg
         store.write_block(_block("D-live", "active"))
         store.write_block(_block("D-quar", "quarantined"))
         snap_dir = str(tmp_path / "snap-active")
         store.snapshot(snap_dir)
-        store.restore(snap_dir)
+        with restoring(str(tmp_path), batch_id="restore:snap-active", block_ids=("D-live", "D-quar")):
+            store.restore(snap_dir)
         assert _live_active(store, "D-live") is True, "positive control failed — restore lost the admissible row"
         assert _live_active(store, "D-quar") is False
+
+    def test_an_ungated_restore_is_refused_and_the_quarantine_stands(self, live_pg: tuple[Any, str], admitted, tmp_path: Path) -> None:
+        """Positive control for the scope above: the same call with no RESTORE scope raises,
+        and the corpus is re-read to prove nothing moved."""
+        from mind_mem.admission import UngatedRestoreError
+
+        store, _ = live_pg
+        store.write_block(_block("D-live", "active"))
+        snap_dir = str(tmp_path / "snap-active-ungated")
+        store.snapshot(snap_dir)
+        store.write_block(_block("D-live", "active", statement="after the snapshot"))
+        with pytest.raises(UngatedRestoreError, match="proposal-scoped"):
+            store.restore(snap_dir)
+        row = store.get_by_id("D-live")
+        assert row is not None, "positive control failed — the seed block is not there to be reverted"
+        assert row["Statement"] == "after the snapshot", "the refused restore reverted the corpus anyway"

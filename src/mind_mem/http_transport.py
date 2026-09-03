@@ -920,8 +920,16 @@ def _handle_delete_memory(
         )
         return (403, {"error": "delete refused by governance", "id": block_id})
     except Exception as exc:
+        # ``exc_info`` on purpose: this is the one branch that answers 500 for
+        # a reason the code did not anticipate, and the stdlib formatter does
+        # not render ``extra``, so a bare event name is what reached the log
+        # -- which is all the Windows CI rows had to say about
+        # ``DELETE /memories/<missing>`` answering 500 where every other row
+        # answers 404. The traceback goes to the server log only; the
+        # response body is unchanged and names nothing.
         _log.error(
             "delete_memory_failed",
+            exc_info=True,
             extra={"error": _safe_log(exc), "block_id": _safe_log(block_id)},
         )
         return (500, {"error": "internal block store error"})

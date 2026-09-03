@@ -1,6 +1,8 @@
 # Governed writes
 
-`UngatedWriteError` points here. This is that page.
+`UngatedWriteError`, `UngatedDeleteError` and `UngatedRestoreError` point here. This is
+that page: the three ways content can leave or enter the store, and the receipt each one
+requires.
 
 ## The rule
 
@@ -74,6 +76,57 @@ a quarantine marker — folding it in would withhold every `open` block in the p
 `tests/test_quarantine_redteam.py` pins the confined set to exactly one tier, so a second
 one has to be argued for rather than added.
 
+## Deletes
+
+**No block leaves the store without a delete receipt.** Every `BlockStore.delete_block`
+begins with `require_delete_admission(block_id)`, exactly as every write begins with
+`require_admission`. A WRITE receipt is not transferable to a delete: the two are different
+operations and a receipt names one of them. The openers are `admit_delete(block_id, …)` for
+one id and `admit_delete_batch(batch_id, block_ids, …)` for a named set; a proposal-scoped
+receipt is refused for a delete outright, because "any block, for the scope" is ambient
+authority to destroy anything.
+
+The scope records what it destroyed, not what it was asked to destroy: the store calls
+`receipt.record_removal(block_id, content)` for each block it actually removed, and the
+close record carries a Merkle root over those removals. A delete that removed nothing
+writes no removal record — there is nothing to claim — while the admission row that opened
+the scope stays in the chain, so "asked and found nothing" is still auditable.
+
+## Restores
+
+**A restore is the third door, and it is admitted at the seam too.** A restore withdraws
+every block written since the snapshot and reinstates the versions under it — the most
+destructive operation the product has — and through 5.0.1 it was the one mutation held up
+by convention: every sanctioned caller went through `apply_engine.restore_snapshot`, and
+nothing made a caller that did not fail. Measured on 5.0.2 with the write and delete gates
+already closed: a governed block died to a bare `store.restore(snap)` and neither ledger
+moved.
+
+Every `BlockStore.restore` now begins with `require_restore_admission(snap_dir)`, before
+the snapshot is read, so an ungated caller fails by authorisation and cannot learn whether
+a snapshot exists. The receipt it accepts has four properties, each refusing a receipt that
+would otherwise be silently transferable into a restore:
+
+| property | must be | why |
+|---|---|---|
+| `operation` | `WRITE` | a restore re-writes content; a DELETE receipt is not transferable to it |
+| `kind` | `BATCH` | a restore reinstates a set and withdraws another, so it needs a receipt naming both — a block receipt covers one id, a proposal receipt covers whatever it is asked about |
+| `tier` | `RESTAMP` | minted for a re-stamp of already-governed content, never for an ingest |
+| `chain_verified` | true | the gate read the admission back out of the durable chain |
+
+`apply_engine.restore_snapshot` is the opener: it hashes the snapshot manifest, computes the
+ids it will reinstate and — from the live tree, before anything moves — the ids it will
+withdraw, and opens `admit_batch(action="RESTORE", tier=RESTAMP, block_ids=<both sets>, …)`
+around the store call. The load-bearing refusal is the `kind` row: the apply engine rolls
+back from *inside* an open `admit_proposal`, and without it the proposal's ambient receipt
+would authorise a bare `store.restore()` on that path.
+
+Tests that exercise restore mechanics open the same scope through one shared helper,
+`tests/_restore_scope.py::restoring(workspace, batch_id=…, block_ids=…)`, which mints a real
+receipt through the gate — never a stand-in — so a test using it fails if the gate stops
+minting the shape the seam accepts. Each such test file carries a positive control that an
+ungated restore still raises and reverts nothing.
+
 ## Threads
 
 `contextvars` do not cross a new `threading.Thread`. That is fail-closed and correct: a
@@ -94,3 +147,9 @@ direct corpus append, and fails on any caller outside an allowlist that must car
 written justification. It is built not to pass vacuously — a corpus floor, a positive
 control on a known call site, and a negative control run against synthetic rogue source.
 Without that test the invariant would decay at the next feature.
+
+`tests/test_governed_restore_seam.py` does the same for the third door: it pins
+`apply_engine.restore_snapshot` as the only opener of a `.restore(` call in `src/`, checks
+that every `restore` implementation calls `require_restore_admission` (an import alone does
+not count, and the matcher is itself tested against source that lacks the call), and runs
+the ungated restore against a live block to show it raises and the block survives.

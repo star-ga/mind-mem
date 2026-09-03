@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import sys
 
 import pytest
 
@@ -170,6 +171,7 @@ class TestWriting:
         assert written["block_store"]["dsn"] == DSN
         assert written["cache"]["redis_url"] == REDIS
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits do not exist on Windows; owner-only there is the directory ACL")
     def test_the_file_holding_a_password_is_owner_only_whatever_the_umask(self, tmp_path) -> None:
         """The mode must come from the writer, not from the caller's umask.
 

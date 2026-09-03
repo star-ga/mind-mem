@@ -618,6 +618,26 @@ def create_snapshot(ws, ts, files_touched=None):
     return snap_dir
 
 
+def _snapshot_target_file(ws, snap_dir):
+    """What the RESTORE record names as its target: *snap_dir* relative to *ws* when that exists.
+
+    ``os.path.relpath`` raises ``ValueError`` on Windows when the two paths
+    are on different drives -- a snapshot under ``C:\\Temp`` restored into a
+    workspace on ``D:`` -- and through 5.0.1 that ValueError escaped from the
+    one function every apply-engine restore goes through, so the restore
+    itself failed on a path spelling (measured on every Windows CI row by
+    ``test_apply_engine_backend_routing``). There is no relative path in that
+    case; the absolute one is the honest record. ``audit_chain.append``
+    already makes the same choice for the same reason.
+    """
+    if not os.path.isabs(snap_dir):
+        return snap_dir
+    try:
+        return os.path.relpath(snap_dir, ws)
+    except ValueError:  # different drives on Windows: no relative path exists
+        return snap_dir
+
+
 def restore_snapshot(ws, snap_dir, *, action=RESTORE_VERB, actor="apply_engine", metadata=None):
     """Restore workspace from a snapshot directory, inside a recorded scope.
 
@@ -694,7 +714,7 @@ def restore_snapshot(ws, snap_dir, *, action=RESTORE_VERB, actor="apply_engine",
         content=json.dumps(record, sort_keys=True, default=str),
         tier=IngestTier.RESTAMP,
         actor=actor,
-        target_file=os.path.relpath(snap_dir, ws) if os.path.isabs(snap_dir) else snap_dir,
+        target_file=_snapshot_target_file(ws, snap_dir),
         metadata=door_metadata,
     ) as receipt:
         _store_for(ws).restore(snap_dir)

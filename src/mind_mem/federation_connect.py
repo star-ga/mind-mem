@@ -241,7 +241,19 @@ def _write_config(path: str, config: dict[str, Any]) -> None:
     os.makedirs(directory, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".mind-mem-connect-", suffix=".json")
     try:
-        os.fchmod(fd, 0o600)
+        # ``os.fchmod`` exists on Windows only from 3.13; ``requires-python``
+        # admits 3.10, and every Windows CI row below 3.13 raised
+        # AttributeError here -- `mind-mem-connect` could not write a config on
+        # that platform at all. ``mkstemp`` already creates the file 0600 on
+        # POSIX regardless of umask; the fchmod is the belt to that braces and
+        # the chmod-by-path is its portable spelling. On Windows the mode bits
+        # only carry read-only, so the owner-only property there is the
+        # directory's ACL, which this function cannot express and does not
+        # claim to.
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        else:  # pragma: no cover - Windows below 3.13
+            os.chmod(tmp_path, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             json.dump(config, fh, indent=2, sort_keys=True)
             fh.write("\n")

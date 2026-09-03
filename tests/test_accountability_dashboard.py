@@ -357,10 +357,24 @@ def test_d4_a_tampered_row_fails_the_panel_and_names_it(workspace: str) -> None:
 
 
 def test_d4_an_absent_ledger_is_a_stated_pass_not_a_bare_green(workspace: str) -> None:
+    """An absent ledger is green, and the reason must say WHY it is green.
+
+    This assertion used to pin the phrase "default OFF". That was true
+    through 5.0.1 and is false from 5.0.2: ``served_ledger.ledger_enabled``
+    returns True for a workspace whose config sets nothing, which
+    ``tests/test_docs_alignment.py::TestServedLedgerDefault`` computes from
+    the function rather than quoting from a comment. The gate was not
+    measuring the default -- it was pinning a sentence, and the sentence it
+    pinned was printed into an operator-facing verdict. Pinned to the live
+    default instead, and additionally to the opt-out spelling, which is what
+    an operator who reads "no ledger" needs next. Strictly stronger than the
+    single substring it replaces; nothing was relaxed.
+    """
     panel = ledger_panel(workspace)
     assert panel.ok is True
     assert panel.present is False
-    assert "default OFF" in panel.reason
+    assert "records by default since 5.0.2" in panel.reason
+    assert '{"served_ledger": {"enabled": false}}' in panel.reason
 
 
 # ---------------------------------------------------------------------------

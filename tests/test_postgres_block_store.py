@@ -22,10 +22,12 @@ from pathlib import Path
 from typing import Generator
 
 import pytest
+from _restore_scope import restoring
 
 # Skip entire module when psycopg is absent — no install, no failure.
 psycopg = pytest.importorskip("psycopg", reason="psycopg not installed; skipping Postgres tests")
 
+from mind_mem.admission import UngatedRestoreError  # noqa: E402
 from mind_mem.block_store_postgres import BlockStoreError, PostgresBlockStore  # noqa: E402
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -559,6 +561,20 @@ class TestSnapshotRestore:
         assert (tmp_path / "snap01" / "MANIFEST.json").is_file()
 
     def test_snapshot_then_restore_reverts_changes(self, store: PostgresBlockStore, tmp_path: Path, admitted) -> None:
+        """Restore mechanics, exercised through the door the product actually opens.
+
+        From 5.0.2 ``restore`` is admitted at the store seam like ``write_block``
+        and ``delete_block``: ``require_restore_admission`` is its first
+        statement and refuses anything but a BATCH receipt minted under the
+        RESTORE tier. The proposal-scoped receipt the ``admitted`` fixture opens
+        is ambient authority over every id, and the seam refuses exactly that
+        (:func:`test_an_ungated_restore_is_refused_and_reverts_nothing` proves
+        it still does). So the restore runs inside the scope
+        ``apply_engine.restore_snapshot`` opens -- one shared definition,
+        :func:`tests._restore_scope.restoring`, naming both the id it reinstates
+        and the id it withdraws, which is what a restore receipt has to name.
+        Every assertion below is unchanged.
+        """
         store.write_block(_make_block("D-20260419-110", statement="Before snapshot"))
         snap_dir = str(tmp_path / "snap02")
         store.snapshot(snap_dir)
@@ -568,7 +584,8 @@ class TestSnapshotRestore:
         store.write_block(_make_block("D-20260419-111", statement="New block after snapshot"))
 
         # Restore must revert to pre-mutation state.
-        store.restore(snap_dir)
+        with restoring(str(tmp_path), batch_id="restore:snap02", block_ids=("D-20260419-110", "D-20260419-111")):
+            store.restore(snap_dir)
 
         reverted = store.get_by_id("D-20260419-110")
         assert reverted is not None
@@ -577,6 +594,31 @@ class TestSnapshotRestore:
         # Block added after snapshot should be gone.
         gone = store.get_by_id("D-20260419-111")
         assert gone is None
+
+    def test_an_ungated_restore_is_refused_and_reverts_nothing(self, store: PostgresBlockStore, tmp_path: Path, admitted) -> None:
+        """Positive control for the scope above: the seam still refuses.
+
+        Without this, :func:`restoring` could become a no-op or the
+        ``require_restore_admission`` call could vanish from the store, and
+        the test above would go on passing while ``store.restore()`` was once
+        again callable from anywhere. Refused under the very receipt this
+        file's other tests run under -- the proposal-scoped one -- and the
+        corpus is re-read afterwards, because a check that ran *after* the
+        transaction would raise and still have reverted the workspace.
+        """
+        store.write_block(_make_block("D-20260419-115", statement="Before snapshot"))
+        snap_dir = str(tmp_path / "snap02-ungated")
+        store.snapshot(snap_dir)
+        store.write_block(_make_block("D-20260419-115", statement="After mutation"))
+        store.write_block(_make_block("D-20260419-116", statement="New block after snapshot"))
+
+        with pytest.raises(UngatedRestoreError, match="proposal-scoped"):
+            store.restore(snap_dir)
+
+        kept = store.get_by_id("D-20260419-115")
+        assert kept is not None, "positive control failed -- the seed block is not there to be reverted"
+        assert kept["Statement"] == "After mutation", "the refused restore reverted the corpus anyway"
+        assert store.get_by_id("D-20260419-116") is not None, "the refused restore withdrew a block anyway"
 
     def test_diff_empty_when_no_changes(self, store: PostgresBlockStore, tmp_path: Path, admitted) -> None:
         store.write_block(_make_block("D-20260419-120"))
@@ -597,9 +639,23 @@ class TestSnapshotRestore:
         assert len(changes) >= 1
 
     def test_restore_unknown_snap_raises(self, store: PostgresBlockStore, tmp_path: Path) -> None:
+        """An unknown snapshot is refused by EXISTENCE -- once authorisation has passed.
+
+        Inside the RESTORE scope, so the failure this test pins is the store's
+        own ``BlockStoreError`` for a snap_id it does not hold, not the seam's
+        refusal of an ungated caller (which comes first, by design: an ungated
+        caller must not learn from the error whether a snapshot exists).
+        """
         snap_dir = str(tmp_path / "nonexistent_snap")
         os.makedirs(snap_dir)
-        with pytest.raises(BlockStoreError):
+        with restoring(str(tmp_path), batch_id="restore:nonexistent_snap", block_ids=()), pytest.raises(BlockStoreError):
+            store.restore(snap_dir)
+
+    def test_an_ungated_unknown_snapshot_is_refused_by_authorisation_not_existence(self, store: PostgresBlockStore, tmp_path: Path) -> None:
+        """Positive control for the ordering the test above relies on."""
+        snap_dir = str(tmp_path / "nonexistent_snap_ungated")
+        os.makedirs(snap_dir)
+        with pytest.raises(UngatedRestoreError, match="no governance admission is open"):
             store.restore(snap_dir)
 
 
