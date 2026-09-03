@@ -5,7 +5,30 @@ Live status page for benchmark holds. Linked from `README.md` and
 root-cause and methodology live in the linked artifacts below; do not
 duplicate them here.
 
-## Memory A/B (does memory HELP?) — harness landed, NO measurement yet
+## Memory A/B (does memory HELP?) — measurement RUNNING, no claim yet
+
+### Pre-registered stopping rule (recorded 2026-09-03, BEFORE the data landed)
+
+This run sits near a significance boundary, which is exactly where a benchmark
+gets fooled. So the rule is fixed in advance and in version control:
+
+- **Pre-committed stratum:** the full primary stratum — `single_file` (29) +
+  `small` (43) = **72 tasks**, at **420 s per arm**, one rep.
+- **The run is played out.** It does not stop when the p-value first crosses
+  0.05. Optional stopping inflates the false-positive rate, and a win taken at
+  the first significant look would be indefensible *because* it looks good.
+- **A null is reported as a null**, with the discordant count in **both**
+  directions, not just the net.
+- If the session budget ends the run early, the result is reported as
+  **INTERIM and explicitly not a significance claim**, because a stopping point
+  chosen by the clock is still not a stopping point chosen by the protocol.
+- **420 s/arm was fixed before any 420 s result was seen**, from a 120 s pilot
+  in which the agent solved *nothing* in either arm on 14/14 tasks while the
+  same first task passed in *both* arms at 420 s. That pilot is reported below
+  in full; the budget was changed because the benchmark could not produce any
+  result at 120 s, not because 420 s produced a nicer one.
+
+
 
 Every other row on this page measures **retrieval**. None of them measures
 whether the retrieved memory changed an outcome. That join is what
