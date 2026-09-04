@@ -4,6 +4,69 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Fixed — the score column now orders the results it is attached to
+
+`rrf_fuse` wrote `rrf_score` and never wrote `score`. The fused item is a copy
+of exactly one leg's dict, so the `score` it carried was whichever leg won that
+copy: an unbounded BM25F number on some hits and a `[0, 1]` cosine on others,
+in one column. Measured across 45 served lists on the fused path, 24 were not
+non-increasing in the `score` the API returns — the column did not order the
+results it was attached to. Fusion now sets the scale it produced
+(`score = rrf_score`), and both legs' raw values survive beside it under
+`leg_scores` instead of one of them being destroyed by the copy.
+
+That column is the one the cross-encoder min-maxes, so a vector-sourced hit's
+original weight collapsed to roughly zero. The ensemble members normalised
+nothing at all: the BGE member blended a raw logit against it and the LLM
+member a 0-100 integer, which made `blend_weight` a fiction — one column
+decided the order at every weight an operator could set. Both members now
+min-max their own output onto `[0, 1]` within the candidate set, as the
+single-model reranker already did. The raw values stay on `_bge_score` and
+`_llm_rerank_score`, so nothing readable before is lost.
+
+`_explain.final` reported a stale `rrf_score` — stale because every stage after
+fusion rewrites `score` — and the runtime check guarding it compared
+`rrf_score or score` against `rrf_score or score`, a field against itself, so
+it could not fail and never had. `final` now reads `score`, `bm25` reads the
+BM25 leg's raw value out of `leg_scores`, and the invariant asserted is the one
+that can be false: the ranked hits are non-increasing in `score`. Hits the
+expansion stages append are excluded, because appending after the ranked list
+is their documented design rather than a violation of it.
+
+### Fixed — reranking over the response set could not change what was recalled
+
+The hybrid path sliced `fused[:limit]` before the cross-encoder ran, so every
+block the reranker could promote was already being served. Reranking could not
+change recall@k by construction: the model's latency bought a permutation. The
+scan/sqlite path never had this defect — it has always reranked over up to
+`MAX_RERANK_CANDIDATES`.
+
+The order is now fuse -> rerank over `rerank_depth` -> filters -> `[:limit]`.
+The new `recall.rerank_depth` defaults to `min(50, 5 * limit)`, is capped at
+`MAX_RERANK_CANDIDATES` and then floored at `limit` — the floor is applied last
+so a depth under the response size can never truncate the response — and is
+threaded from the MCP `recall` surface, which previously passed only `limit`.
+Every retrieval leg fetches at least that depth, and a test reads the `limit`
+each leg was actually called with, because a depth the legs never filled is not
+a depth.
+
+Widening is conditional on a reranker actually running, since more candidates
+change what RRF sees. Measured against the pre-change tree on the reranker-off
+path, the served `(id, score)` list is identical in id order for 18 of 18 fused
+cases and for the default, chunked-dedup and trust-scores corpus shapes. It
+moves only where a stage re-sorts on `score`: `session_boost` (3 of 3) and the
+opt-in `temporal_decay_hot_path` (2 of 3) — both of which were previously
+re-sorting on the mixed-scale value, that is, discarding the fusion ranking
+they had been handed.
+
+The probe that decides whether a reranker will run reads the ensemble's enabled
+flag rather than calling `create_ensemble`, which constructs its members and
+logs: a probe whose answer is "no" must leave no trace. The net effect on the
+off path is one fewer query classification per search (4 to 3, measured), not
+one more. Sixteen mutations of the new guards were each shown to turn a named
+test red.
+
+
 ### Added — a paired scorecard, so a ranking change is measured rather than argued
 
 Every retrieval fix can move ranking, and this project has shipped a silent
