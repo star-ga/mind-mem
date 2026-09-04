@@ -305,13 +305,54 @@ Pure deterministic retrieval pipeline — no vector DB, no embeddings required.
 
 ## LongMemEval (ICLR 2025, 470 questions)
 
-| Category         |       N |      R@1 |      R@5 |     R@10 |      MRR |
-| ---------------- | ------: | -------: | -------: | -------: | -------: |
-| **Overall**      | **470** | **73.2** | **85.3** | **88.1** | **.784** |
-| Multi-session    |     121 |     83.5 |     95.9 |     95.9 |     .885 |
-| Temporal         |     127 |     76.4 |     91.3 |     92.9 |     .826 |
-| Knowledge update |      72 |     80.6 |     88.9 |     91.7 |     .844 |
-| Single-session   |      56 |     82.1 |     89.3 |     89.3 |     .847 |
+> **RETRACTED 2026-09-04.** The table that stood here — headline `R@5 = 85.3`,
+> entered 2026-02-18 — is withdrawn, not merely held. Three independent grounds:
+>
+> 1. **No artifact and no methodology.** It is not reproducible from any harness
+>    in this repository, and two attempts to reproduce it failed.
+> 2. **It does not add up.** Its own per-category rows sum to
+>    121 + 127 + 72 + 56 = **376** under a stated `Overall N = 470` — a 94-question
+>    gap that no reading of the protocol explains.
+> 3. **It has been superseded** by a full-set measurement with committed
+>    per-question artifacts (below).
+>
+> A hold exists to stop an unreproducible number being cited. The remedy for a
+> number that cannot be reproduced after two attempts is retraction, so the hold
+> is now closed rather than left open indefinitely.
+
+### Measured, 2026-09-03 — the row of record
+
+Full eligible set (470 of 500; 30 abstention questions excluded), two reps,
+identical per question, per-question NDJSON committed under `docs/benchmarks/`.
+Configuration: **BM25F/SQLite, vector leg OFF, caps off** (config sha
+`b90090007f728b47`). This is one leg of the product, not the shipped hybrid;
+the hybrid number does not exist yet and nothing here may be read as one.
+
+| adapter | recall_any@5 | recall_all@5 (official) | MRR |
+| --- | ---: | ---: | ---: |
+| `mind_mem` (BM25F/SQLite, vector off) | 0.9404 | 0.8170 | 0.8776 |
+| `bm25_baseline` (zero-dependency, in-memory) | 0.9702 | 0.8298 | 0.9081 |
+
+Paired over the same 470 question ids:
+
+| comparison | mind_mem only | baseline only | discordant | p | verdict |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `recall_any@5` (McNemar exact) | 4 | 18 | 22 | 0.0043 | baseline better, significant |
+| `recall_all@5` (McNemar exact) | 22 | 28 | 50 | 0.4799 | **indistinguishable** |
+| MRR (paired sign test) | 24 | 53 | 77 | 0.0013 | baseline better, significant |
+
+**What this licenses us to say, and nothing more:** on the official strict
+protocol the two are statistically indistinguishable; on the lenient protocol
+and on first-gold-rank the zero-dependency baseline is better. An independent
+audit refuted every artefact explanation — the recall caps are genuinely off in
+the pinned config, there is no ingest truncation, and index fragment ids never
+reach recall — so the deficit is ordering quality, not candidate recall.
+
+*Observation, not a reproduction:* the retracted 85.3 falls between the measured
+`recall_any@5` (94.0) and `recall_all@5` (81.7), and its multi-session 95.9 is
+close to the measured any@5 for that type — consistent with the old harness
+having scored an "any" protocol. That is a plausible account of where the number
+came from; it is not evidence that it was correct, and it does not un-retract it.
 
 ## MIND Kernel Benchmark
 
