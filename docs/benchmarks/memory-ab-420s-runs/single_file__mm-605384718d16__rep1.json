@@ -1,0 +1,263 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-605384718d16",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 264,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    },
+    "memory": {
+      "prompt_tokens": 1632,
+      "memory_tokens": 1368,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-605384718d16",
+      "sha": "605384718d16761f310f770d0cce37ad79343d89",
+      "parent_sha": "d2eaf19dfc910e944f5b4c919a884462ca973ab2",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 652,
+        "corpus_bytes": 277926,
+        "cutoff": "2026-04-20T17:37:22Z",
+        "newest_seeded_at": "2026-04-20T17:37:22Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 17,
+          "files": [
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 264,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 12,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "ROADMAP.md",
+              "src/mind_mem/rerank_ensemble.py"
+            ],
+            "tail": "PASSED tests/test_rerank_ensemble.py::TestEnsembleFailureHandling::test_empty_candidates_unchanged\nPASSED tests/test_rerank_ensemble.py::TestCreateEnsemble::test_disabled_returns_none\nPASSED tests/test_rerank_ensemble.py::TestCreateEnsemble::test_unknown_reranker_skipped\nPASSED tests/test_rerank_ensemble.py::TestCreateEnsemble::test_no_members_returns_none\nPASSED tests/test_rerank_ensemble.py::TestCreateEnsemble::test_multi_reranker_config\n12 passed in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1632,
+            "memory_tokens": 1368,
+            "memory_blocks": [
+              "D-FCDB6064DE82",
+              "D-D83EF7A0EC62",
+              "D-A2EEFF6D5A27",
+              "D-E7BA6AE32DE5",
+              "D-4DA44D09E06A",
+              "D-2C55EC32DE04",
+              "D-0C69561A16E5",
+              "D-96A3AE6DFB5B",
+              "D-C0E486664354",
+              "D-A63D572DDB0D",
+              "D-410F3F13BAFE",
+              "D-E013DEA74270",
+              "D-83937A43B204",
+              "D-1419399FD392",
+              "D-AA239FE56747"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "feat(recall): v3.3.0 Tier 4 #9 — reranker ensemble via Borda count rerank ensemble",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": false,
+            "reason": "tests_failed",
+            "returncode": 2,
+            "timed_out": false,
+            "n_passed_required": 0,
+            "missing_required": [
+              "tests/test_rerank_ensemble.py::TestCreateEnsemble::test_disabled_returns_none",
+              "tests/test_rerank_ensemble.py::TestCreateEnsemble::test_multi_reranker_config",
+              "tests/test_rerank_ensemble.py::TestCreateEnsemble::test_no_members_returns_none",
+              "tests/test_rerank_ensemble.py::TestCreateEnsemble::test_unknown_reranker_skipped",
+              "tests/test_rerank_ensemble.py::TestEnsembleFailureHandling::test_all_members_fail_returns_original",
+              "tests/test_rerank_ensemble.py::TestEnsembleFailureHandling::test_empty_candidates_unchanged",
+              "tests/test_rerank_ensemble.py::TestEnsembleFailureHandling::test_one_member_fails_ensemble_continues",
+              "tests/test_rerank_ensemble.py::TestEnsembleVoting::test_borda_count_fuses_rankings",
+              "tests/test_rerank_ensemble.py::TestEnsembleVoting::test_borda_count_majority_wins",
+              "tests/test_rerank_ensemble.py::TestEnsembleVoting::test_borda_score_annotated",
+              "tests/test_rerank_ensemble.py::TestEnsembleVoting::test_empty_raises",
+              "tests/test_rerank_ensemble.py::TestEnsembleVoting::test_single_reranker_passthrough"
+            ],
+            "tampered_paths": [],
+            "changed_paths": [],
+            "tail": "\n=========================== short test summary info ============================\nERROR tests/test_rerank_ensemble.py\n!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": false,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 2,
+          "returncode": -1,
+          "timed_out": true
+        },
+        "memory": {
+          "changed_files": 0,
+          "returncode": -1,
+          "timed_out": true
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 420.0
+        },
+        "memory": {
+          "wall_seconds": 420.1
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 0,
+    "control_successes": 1,
+    "delta_successes": -1,
+    "both_passed": 0,
+    "memory_only": 0,
+    "control_only": 1,
+    "neither_passed": 0,
+    "n_discordant": 1,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "underpowered",
+    "note": "1 discordant pair(s): below 6, no split can reach p<=0.05, so this difference cannot be evidence at any effect size. Report it as noise."
+  },
+  "digest": "ce8709978c78a69421b99f387142c2f2bc0da089a975620bbf1f3e8e27a79c59"
+}

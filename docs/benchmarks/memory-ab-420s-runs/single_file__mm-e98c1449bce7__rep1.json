@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-e98c1449bce7",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 259,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 446,
+      "timeouts": 0
+    },
+    "memory": {
+      "prompt_tokens": 1659,
+      "memory_tokens": 1400,
+      "agent_output_tokens_lower_bound": 361,
+      "timeouts": 0
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-e98c1449bce7",
+      "sha": "e98c1449bce783875550c4f23beeca20099a7004",
+      "parent_sha": "05b50c8b94424909be3db2fec87e278c39e1e726",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 656,
+        "corpus_bytes": 282435,
+        "cutoff": "2026-04-20T17:55:26Z",
+        "newest_seeded_at": "2026-04-20T17:55:26Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 17,
+          "files": [
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 259,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 446,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "- **`truth_score(block, *, contradiction_votes=None, age_half_life_days=None)`** → float clamped to `[0.01, 0.99]`, composed as:\n  - status prior (`verified` 0.95, `active` 0.75, `superseded` 0.25, `rejected` 0.05; unknown/missing → default 0.60, matched case-insensitively)\n  - × exponential age decay `2^(−age/half_life)` on the `Created` date (date-granularity; default half-life 365d, configurable; missing/unparseable dates don't decay)\n  - × contradiction factor `Π(1 − weight)` with weights clamped to [0,1] — empty/`None` votes are an exact no-op\n  - + bounded log-scaled access bonus from `_access_count` (exactly 0.0 for zero accesses, capped at 0.05)\n- **`annotate_results(results, *, contradiction_graph=None)`** — returns non-mutated copies with a `truth_score` key; votes threaded through the graph by `_id`.\n- **`is_truth_score_enabled(config)`** — opt-in via `retrieval.truth_score.enabled`, defaulting `False` with every config level (incl. `None`) handled defensively.\n\nAlso marked the roadmap item as shipped in `ROADMAP.md` (docs are in scope; no CHANGELOG entry since no 3.3.0 section exists yet, matching how the other v3.3.0 tier items were recorded).\n\n**Verification:** `pytest tests/test_truth_score.py` → `22 passed`, exit 0. No test files or `conftest.py` touched; the change is purely additive so no other module is affected.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 22,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "ROADMAP.md",
+              "src/mind_mem/truth_score.py"
+            ],
+            "tail": "PASSED tests/test_truth_score.py::TestAnnotateResults::test_annotates_each\nPASSED tests/test_truth_score.py::TestAnnotateResults::test_contradiction_graph_threads_through\nPASSED tests/test_truth_score.py::TestEnableResolution::test_off_without_config\nPASSED tests/test_truth_score.py::TestEnableResolution::test_off_by_default\nPASSED tests/test_truth_score.py::TestEnableResolution::test_explicit_on\n22 passed in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1659,
+            "memory_tokens": 1400,
+            "memory_blocks": [
+              "D-A93338F37452",
+              "D-05B50C8B9442",
+              "D-2C55EC32DE04",
+              "D-E013DEA74270",
+              "D-23B4A0DFDADB",
+              "D-4487F1999303",
+              "D-A63D572DDB0D",
+              "D-FCDB6064DE82",
+              "D-3C3097C042A1",
+              "D-C0E486664354",
+              "D-96A3AE6DFB5B",
+              "D-D83EF7A0EC62",
+              "D-0E710A4CC9CB",
+              "D-A2EEFF6D5A27",
+              "D-67D65DE9C743"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "feat(recall): v3.3.0 — probabilistic truth score truth score",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 361,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "\n**Changes** (confined to `src/` + docs):\n\n1. **`src/mind_mem/truth_score.py` (new)** — the v3.3.0 probabilistic truth score, following the standalone/opt-in pattern of the other v3.3.0 scorers (`session_boost.py`, `evidence_bundle.py`):\n   - `truth_score(block, *, contradiction_votes=None, age_half_life_days=90)` — pure function clamped to [0.01, 0.99]: status prior (verified 0.95, active 0.80, draft 0.50, superseded 0.30, rejected 0.10, unknown/missing 0.6 — priors aligned with `evidence_bundle.py`'s Status blend) × exponential age decay `0.5 ** (age/half_life)` on `Created`/`Date` (undated blocks are not decayed, per the test contract) × compounding contradiction discount `∏(1 − weight)` + a bounded access bonus (0.002/access, capped at 0.05).\n   - `annotate_results(results, *, contradiction_graph=None, ...)` — returns copies of results with a `truth_score` key, threading votes by `_id`; order preserved, input not mutated.\n   - `is_truth_score_enabled(config)` — strictly opt-in via `retrieval.truth_score.enabled` (off by default, no auto-enable).\n\n2. **`ROADMAP.md`** — marked the \"Probabilistic truth score\" item shipped, matching the roadmap's tracking style for other v3.3.0 items.\n\nNo files under `tests/` or `conftest.py` were touched; no existing source was modified, so nothing else can regress. Verification: `pytest tests/test_truth_score.py` → **22 passed**.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 22,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "ROADMAP.md",
+              "src/mind_mem/truth_score.py"
+            ],
+            "tail": "PASSED tests/test_truth_score.py::TestAnnotateResults::test_annotates_each\nPASSED tests/test_truth_score.py::TestAnnotateResults::test_contradiction_graph_threads_through\nPASSED tests/test_truth_score.py::TestEnableResolution::test_off_without_config\nPASSED tests/test_truth_score.py::TestEnableResolution::test_off_by_default\nPASSED tests/test_truth_score.py::TestEnableResolution::test_explicit_on\n22 passed in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 2,
+          "returncode": 0,
+          "timed_out": false
+        },
+        "memory": {
+          "changed_files": 2,
+          "returncode": 0,
+          "timed_out": false
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 372.33
+        },
+        "memory": {
+          "wall_seconds": 340.18
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "79645d5fcf15f3a166a44b57aa63de3a3d3a9387589141eb4e14324546617d0c"
+}
