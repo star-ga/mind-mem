@@ -122,6 +122,17 @@ def agent_inject(query: str, agent: str = "generic", limit: int = 10, scoring_in
     ``scoring_instant`` is an ISO-8601 UTC date pinning the recency layer of the
     recall underneath; empty means today in UTC. Two agents handed the same
     instant get the same snippet.
+
+    The envelope carries the recall's own ``attestation`` — the
+    ``RECALL_ATTEST_v2`` record committing to the run that produced this
+    snippet. It is the same record ``recall`` publishes, forwarded rather than
+    re-derived, so the two surfaces cannot disagree about what was served.
+    Without it this tool was the one door that handed an agent block content
+    with no receipt: the snippet went into a system prompt and nothing
+    downstream could say which recall, at which index anchor, produced it.
+    ``None`` when the recall underneath produced no record (an error envelope,
+    or an anticipation-cache hit, which deliberately does not fabricate one) —
+    absent evidence is reported as absent, never invented.
     """
     from mind_mem.agent_bridge import KNOWN_AGENTS, AgentFormatter, UnknownAgentError
 
@@ -147,8 +158,10 @@ def agent_inject(query: str, agent: str = "generic", limit: int = 10, scoring_in
     from mind_mem.mcp_server import _recall_impl
 
     raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
+    attestation = None
     if isinstance(raw, dict):
         results = raw.get("results", []) or []
+        attestation = raw.get("attestation")
     elif isinstance(raw, list):
         results = raw
     else:
@@ -160,7 +173,13 @@ def agent_inject(query: str, agent: str = "generic", limit: int = 10, scoring_in
     except UnknownAgentError as exc:
         return json.dumps({"error": str(exc)})
     return json.dumps(
-        {"agent": agent, "query": query, "snippet": text, "_schema_version": "1.0"},
+        {
+            "agent": agent,
+            "query": query,
+            "snippet": text,
+            "attestation": attestation,
+            "_schema_version": "1.0",
+        },
         indent=2,
     )
 

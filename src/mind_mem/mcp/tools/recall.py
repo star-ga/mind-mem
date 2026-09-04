@@ -1194,9 +1194,12 @@ def find_similar(block_id: str, limit: int = 5, kind: str = "") -> str:
         if kind_payload is not None:
             return json.dumps(kind_payload, indent=2)
     try:
-        from mind_mem.block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager, block_meta_db_path
 
-        db_path = os.path.join(ws, "memory", "block_meta.db")
+        # The canonical store -- same file the recall writer records
+        # co-occurrence into. This used to read ``memory/block_meta.db``,
+        # which nothing writes, so "similar" was always empty.
+        db_path = block_meta_db_path(ws)
         mgr = BlockMetadataManager(db_path)
         co_blocks = mgr.get_co_occurring_blocks(block_id, limit=limit)
         metrics.inc("mcp_find_similar_queries")

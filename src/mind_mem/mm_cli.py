@@ -174,6 +174,53 @@ def _cmd_resume(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_resume_on_start(args: argparse.Namespace) -> int:
+    """``mm resume-on-start`` — the session-start context injection.
+
+    A ``SessionStart`` hook fires before anyone has typed a query, so the
+    verb it runs cannot take one. That is why the hook installer has been
+    pointing at ``mm status`` and carrying a note about a future
+    ``mm inject-on-start``: ``mm inject`` needs a positional query and
+    would have failed on every session. This is that verb, built on the
+    query-free surface the product already has — the active task frame's
+    resume brief.
+
+    Two properties a hook needs and a terminal command does not:
+
+    * **The output is framed.** What this prints is read into a system
+      prompt automatically, with nobody looking at it first, so the brief
+      (goal, steps, tried approaches, dead ends — all corpus content) is
+      wrapped by :func:`~mind_mem.data_marking.mark` and introduced by the
+      data preamble. Unframed, a task frame whose goal reads "ignore your
+      instructions and ..." would be indistinguishable from the operator
+      saying it.
+    * **It always exits 0.** A hook that fails blocks session start. Any
+      failure is reported on stderr and swallowed as an exit code, so a
+      broken workspace costs the operator a warning line, never a session.
+      Nothing is silent: no-frame, unreadable-frame and crashed all print
+      something different.
+    """
+    from mind_mem.data_marking import DATA_PREAMBLE, mark
+    from mind_mem.resume_brief import render_resume_brief, resume_brief
+
+    try:
+        ws = _workspace()
+        brief = resume_brief(ws, policy=_frame_policy(ws))
+        body = render_resume_brief(brief).rstrip()
+    except Exception as exc:  # noqa: BLE001 — a hook must not break the session
+        print(
+            f"mind-mem: resume brief unavailable ({type(exc).__name__}: {exc})",
+            file=sys.stderr,
+        )
+        return 0
+    print("# mind-mem resume brief")
+    print()
+    print(DATA_PREAMBLE)
+    print()
+    print(mark(body))
+    return 0
+
+
 def _cmd_dead_ends(args: argparse.Namespace) -> int:
     """List the dead-end registry as JSON, optionally filtered by context.
 
@@ -297,7 +344,7 @@ def _cmd_tool_run(args: argparse.Namespace) -> int:
 
     # The command is intentionally caller-supplied (that is the feature); argv list,
     # shell=False, so there is no shell-injection surface.
-    proc = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603 — no shell, argv list
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")  # nosec B603 — no shell, argv list
     combined = (proc.stdout or "") + (proc.stderr or "")
     r = ToolOutputStore().store_and_summarize(combined, source=" ".join(cmd), exit_code=proc.returncode)
     print(r.summary)
@@ -829,6 +876,8 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
             text=True,
             timeout=180,
             check=False,
+            encoding="utf-8",
+            errors="replace",
         )
         output["ollama_create_returncode"] = result.returncode
         if result.returncode != 0:
@@ -859,6 +908,8 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
             timeout=60,
             check=False,
             env=smoke_env,
+            encoding="utf-8",
+            errors="replace",
         )
         output["smoke_returncode"] = smoke.returncode
         if smoke.returncode == 0:
@@ -1462,7 +1513,9 @@ def _cmd_trace(args: argparse.Namespace) -> int:
         if log_file and os.path.isfile(log_file):
             import subprocess  # nosec B404 — subprocess is used with a fixed argument list
 
-            proc = subprocess.Popen(["tail", "-f", "-n", str(last_n), log_file], stdout=subprocess.PIPE, text=True)  # nosec B603 B607 — fixed arg list; log_file is from MIND_MEM_LOG_FILE env var (operator-controlled), validated isfile above; shell=False (default)
+            proc = subprocess.Popen(
+                ["tail", "-f", "-n", str(last_n), log_file], stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
+            )  # nosec B603 B607 — fixed arg list; log_file is from MIND_MEM_LOG_FILE env var (operator-controlled), validated isfile above; shell=False (default)
             try:
                 for line in proc.stdout:  # type: ignore[union-attr]
                     rows = _parse_log_lines([line], tool_filter=tool_filter)
@@ -3200,6 +3253,69 @@ def _cmd_token_rotate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_anchor(args: argparse.Namespace) -> int:
+    """Report — and optionally admit — corpus blocks the ledger never landed.
+
+    The operator door for the ``unanchored_blocks`` verify row. A corpus
+    written before write scopes existed, or edited by hand, holds blocks
+    that recall serves and no chain entry accounts for; this admits them
+    in one governed batch rather than leaving the choice between a
+    permanently-red verifier and deleting real content.
+
+    Reports by default and writes only with ``--apply``, because the
+    batch it opens is a real governed write over real content and an
+    operator should see the id list before it lands.
+    """
+    from mind_mem.anchoring import restamp_unanchored, unanchored_report
+
+    ws = args.workspace
+    report = unanchored_report(ws)
+    limit = args.limit if args.limit and args.limit > 0 else None
+
+    if not args.apply:
+        # Hand the already-computed ids back rather than letting the dry run
+        # walk the corpus a second time to reach the same answer.
+        planned = restamp_unanchored(ws, ids=report.unanchored, limit=limit, dry_run=True)
+        payload = {
+            "applied": False,
+            "unanchored": len(report.unanchored),
+            "corpus_blocks": report.corpus_blocks,
+            "files_scanned": report.files_scanned,
+            "truncated_scopes": report.truncated_scopes,
+            "would_anchor": list(planned.anchored),
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(
+                f"{len(report.unanchored)} of {report.corpus_blocks} corpus block(s) "
+                f"are not anchored ({report.files_scanned} file(s) scanned)"
+            )
+            if report.over_reports:
+                print(f"note: {report.truncated_scopes} close record(s) listed their ids truncated, so this count is an upper bound")
+            for bid in planned.anchored[:20]:
+                print(f"  {bid}")
+            if len(planned.anchored) > 20:
+                print(f"  … and {len(planned.anchored) - 20} more")
+            print("\nre-run with --apply to admit them under a restamp batch")
+        return 0
+
+    result = restamp_unanchored(ws, actor=args.actor, limit=limit)
+    payload = {
+        "applied": True,
+        "anchored": list(result.anchored),
+        "skipped": list(result.skipped),
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"anchored {len(result.anchored)} block(s); {len(result.skipped)} could not be resolved in the store")
+    # A block the store could not resolve is a corpus id with no block
+    # behind it — reported, never invented, and worth a non-zero exit so
+    # a script does not read a partial pass as a full one.
+    return 1 if result.skipped else 0
+
+
 def _cmd_verify_model(args: argparse.Namespace) -> int:
     from mind_mem.model_signing import ED25519_PUBLIC_KEY_BYTES, verify_model
 
@@ -3647,6 +3763,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_resume.add_argument("--frame", default="", help="A specific TF-... frame id (default: the active frame).")
     p_resume.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
     p_resume.set_defaults(func=_cmd_resume)
+
+    # resume-on-start — the query-free SessionStart hook verb (5.0.2)
+    p_resume_start = sub.add_parser(
+        "resume-on-start",
+        help="Print the active task frame's resume brief, data-framed, for a SessionStart hook. Takes no arguments and always exits 0.",
+    )
+    p_resume_start.set_defaults(func=_cmd_resume_on_start)
 
     # dead-ends — negative action-space memory (v4.10.1)
     p_dead = sub.add_parser(
@@ -4507,6 +4630,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit machine-readable JSON instead of human-readable lines.",
     )
     p_pinned.set_defaults(func=_cmd_audit_pinned)
+
+    # ── anchor — admit corpus blocks the write ledger never landed ────────
+    p_anchor = sub.add_parser(
+        "anchor",
+        help=(
+            "Report corpus blocks that no write scope ever landed, and (with --apply) "
+            "admit them under a restamp batch. The repair for the unanchored_blocks "
+            "row of `mind-mem-verify`; content is rewritten unchanged and no status "
+            "is minted, so anchoring cannot escalate a block."
+        ),
+    )
+    p_anchor.add_argument("workspace", nargs="?", default=".", help="Workspace path (default: current directory).")
+    p_anchor.add_argument(
+        "--apply",
+        action="store_true",
+        help="Open the governed batch and admit the blocks. Without it, nothing is written.",
+    )
+    p_anchor.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Anchor at most this many ids, so a large corpus can be admitted in reviewable passes.",
+    )
+    p_anchor.add_argument("--actor", default="", help="Identity to attribute the anchoring to.")
+    p_anchor.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    p_anchor.set_defaults(func=_cmd_anchor)
 
     # ── mic — MIND IR graph serialization (mic@2 / mic-b) ─────────────────
     p_mic = sub.add_parser(

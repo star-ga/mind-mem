@@ -97,6 +97,8 @@ def _run(root: str, args: Sequence[str], timeout: float) -> tuple[int, str]:
             timeout=timeout,
             check=False,
             env=_child_env(),
+            encoding="utf-8",
+            errors="replace",
         )
     except (OSError, subprocess.SubprocessError):
         return -1, ""

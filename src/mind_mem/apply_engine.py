@@ -443,6 +443,8 @@ def check_preconditions(ws):
             text=True,
             timeout=60,
             env=env,
+            encoding="utf-8",
+            errors="replace",
         )
         # Find the TOTAL line
         total_line = ""

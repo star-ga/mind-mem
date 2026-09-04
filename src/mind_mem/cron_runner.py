@@ -207,10 +207,7 @@ def run_job(job_name: str, workspace: str) -> dict:
     start = time.monotonic()
     try:
         result = subprocess.run(  # nosec B603 — cmd is [sys.executable, "-m", "mind_mem.<module>", workspace] + extra_args; module is a fixed package-internal name from JOB_DEFS validated to exist under SCRIPTS_DIR; shell=False (default)
-            cmd,
-            timeout=120,
-            capture_output=True,
-            text=True,
+            cmd, timeout=120, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         elapsed_ms = (time.monotonic() - start) * 1000
         metrics.observe(f"job_{job_name}_ms", elapsed_ms)

@@ -321,7 +321,7 @@ def _tail(text: str, n: int = 15) -> str:
 
 def _run_pip_cmd(cmd: list[str], log: Callable[[str], None]) -> subprocess.CompletedProcess[str]:
     log(f"running: {' '.join(cmd)}")
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # nosec B603 — fixed argv built from sys.executable/PACKAGE constants; shell=False
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")  # nosec B603 — fixed argv built from sys.executable/PACKAGE constants; shell=False
 
 
 def _perform_pipx_upgrade(log: Callable[[str], None]) -> int:

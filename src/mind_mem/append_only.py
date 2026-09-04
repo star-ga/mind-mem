@@ -229,6 +229,8 @@ def _apply(path: str, mechanism: str) -> str | None:
             text=True,
             timeout=_CHATTR_TIMEOUT_S,
             check=False,
+            encoding="utf-8",
+            errors="replace",
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return f"chattr +a could not run: {exc}"

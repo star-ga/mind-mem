@@ -162,13 +162,7 @@ def _run(args: list[str], *, timeout: float = 60.0) -> dict[str, Any]:
     binary = _resolve_binary()
     cmd = [binary, *args]
     try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         raise ArchMindError(f"arch-mind timed out after {timeout}s: {' '.join(cmd)}")
     parsed: Any = None

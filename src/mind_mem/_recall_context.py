@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from ._recall_constants import _STOPWORDS
-from ._recall_detection import _parse_speaker_from_tags, get_block_type, get_excerpt
+from ._recall_detection import _parse_speaker_from_tags, get_block_type, get_excerpt, normalise_tags
 from .observability import get_logger, metrics
 
 __all__ = ["context_pack", "_parse_dia_id", "_block_to_result"]
@@ -77,7 +77,7 @@ def _parse_dia_id(dia: str) -> tuple[str, int] | None:
 
 def _block_to_result(block: dict, score: float = 0.0) -> dict:
     """Convert a raw parsed block to a result dict."""
-    tags_str = block.get("Tags", "")
+    tags_str = normalise_tags(block.get("Tags", ""))
     return {
         "_id": block.get("_id", "?"),
         "type": get_block_type(block.get("_id", "")),

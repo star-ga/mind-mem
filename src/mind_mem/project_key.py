@@ -134,6 +134,8 @@ def _run(directory: str, args: list[str]) -> tuple[int, str]:
             timeout=PROBE_TIMEOUT_SECONDS,
             check=False,
             env=_child_env(),
+            encoding="utf-8",
+            errors="replace",
         )
     except (OSError, subprocess.SubprocessError):
         return -1, ""
