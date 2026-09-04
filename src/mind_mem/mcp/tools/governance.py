@@ -1248,11 +1248,15 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
         return json.dumps({"error": f"Invalid block_id format: {block_id}"})
     ws = _workspace()
-    db_path = os.path.join(ws, "memory", "block_meta.db")
 
     try:
-        from mind_mem.block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager, block_meta_db_path
 
+        # The canonical store. This tool used to read ``memory/block_meta.db``,
+        # a third location no writer in the tree ever touches, so it reported
+        # importance 1.0 and no co-occurrence for every block no matter how
+        # much telemetry recall had recorded.
+        db_path = block_meta_db_path(ws)
         mgr = BlockMetadataManager(db_path)
 
         if action == "update":

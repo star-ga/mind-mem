@@ -80,6 +80,12 @@ DIRS = [
     "intelligence/state/snapshots",
     "maintenance",
     "maintenance/weeklog",
+    # Runtime state owned by block_metadata.BlockMetadataManager (access
+    # counts, evolved keywords, importance). It was in no DIRS list and
+    # nothing created it, so on every workspace this tool has ever produced
+    # the recall telemetry writer was skipped entirely. New workspaces get it
+    # here; existing ones get it from the manager's own create-on-first-use.
+    ".mind-mem",
 ]
 
 TEMPLATE_MAP = {

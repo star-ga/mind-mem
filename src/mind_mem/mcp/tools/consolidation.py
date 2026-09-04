@@ -16,6 +16,7 @@ settles over time" surface:
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 from typing import Any
@@ -44,6 +45,62 @@ def _index_db_path(ws: str) -> str:
     from mind_mem.sqlite_index import _db_path
 
     return _db_path(ws)
+
+
+#: Telemetry for a block the writer has never recorded an access for.
+#: Read-only and shared, so it is never mutated by a caller.
+_NO_TELEMETRY: dict[str, Any] = {"access_count": 0, "last_accessed": None, "connection_count": 0}
+
+
+def _load_access_telemetry(ws: str) -> dict[str, dict[str, Any]]:
+    """Access telemetry for *ws*, read from the store the writer writes.
+
+    The planner used to join a ``block_meta`` table inside the recall index
+    (``.mind-mem-index/recall.db``). ``sqlite_index`` creates that table and
+    nothing has ever inserted a row into it: the only writer of block
+    telemetry is :class:`~mind_mem.block_metadata.BlockMetadataManager`, and
+    it writes ``.mind-mem/block_meta.db``. Reader and writer named different
+    files, so every block reached the decision functions with no telemetry
+    and the default the reader substituted -- 0.5, on a scale the writer
+    cannot produce -- sat above the mark threshold. The plan was empty by
+    construction on any corpus of any size.
+
+    Strictly read-only: this is a dry run, so it opens ``mode=ro`` and never
+    creates the store or its directory. A missing or unreadable store yields
+    an empty mapping, which prices every block as never-accessed rather than
+    crashing the preview.
+    """
+    import sqlite3 as _sqlite3
+
+    from mind_mem.block_metadata import block_meta_db_path
+
+    telemetry: dict[str, dict[str, Any]] = {}
+    path = block_meta_db_path(ws)
+    if not os.path.isfile(path):
+        return telemetry
+    try:
+        conn = _sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute("SELECT id, access_count, last_accessed, connections FROM block_meta").fetchall()
+        finally:
+            conn.close()
+    except _sqlite3.Error as exc:
+        _log.warning("consolidation_telemetry_unreadable", path=path, error=str(exc))
+        return telemetry
+
+    for r in rows:
+        raw = r["connections"]
+        try:
+            parsed = json.loads(raw) if raw else []
+        except (json.JSONDecodeError, TypeError, ValueError):
+            parsed = []
+        telemetry[r["id"]] = {
+            "access_count": int(r["access_count"] or 0),
+            "last_accessed": r["last_accessed"],
+            "connection_count": len(parsed) if isinstance(parsed, list) else 0,
+        }
+    return telemetry
 
 
 @mcp_tool_observe
@@ -97,31 +154,54 @@ def plan_consolidation(
 
     import sqlite3 as _sqlite3
 
+    from mind_mem.block_metadata import compute_importance, keep_value
+
     db_path = _index_db_path(ws)
+    # One moment for the whole plan: the importance of a block decays with
+    # time since last access, and the staleness checks compare against the
+    # same clock. Two reads of the clock would price two blocks in the same
+    # plan against two different "now"s.
+    now = _dt.datetime.now(_dt.timezone.utc)
+    telemetry = _load_access_telemetry(ws)
     blocks: list[BlockCognition] = []
     if os.path.isfile(db_path):
         conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
         conn.row_factory = _sqlite3.Row
         try:
-            rows = conn.execute(
-                """
-                SELECT b.id AS block_id,
-                       COALESCE(bm.importance, 0.5) AS importance,
-                       bm.last_accessed AS last_accessed,
-                       COALESCE(bm.access_count, 0) AS access_count
-                FROM blocks b
-                LEFT JOIN block_meta bm ON bm.id = b.id
-                """
-            ).fetchall()
-            for r in rows:
+            # ``date`` is the block's creation date. It used to be dropped and
+            # ``created_at=None`` passed instead, which made every block with
+            # no access record unconditionally stale -- the age check had no
+            # date to compare against and fell through to True.
+            rows = conn.execute("SELECT id AS block_id, status, date AS created_at FROM blocks").fetchall()
+
+            # ADMISSION GATE. Selecting ``status`` is not filtering on it. This
+            # leg emitted nothing at all until the telemetry read was fixed, so
+            # it had never disclosed anything; the moment it can emit, a
+            # USER-scope tool naming a QUARANTINED or PENDING block id would
+            # tell a caller that a withheld block exists. Every other
+            # block-reading leg in the package filters here -- including the
+            # ``granularity_align`` leg in this same file -- and this one is
+            # now one of them.
+            from mind_mem.admissibility import admit_corpus
+
+            for r in admit_corpus([{"_id": r["block_id"], "Status": r["status"], "_row": r} for r in rows]):
+                r = r["_row"]
+                tel = telemetry.get(r["block_id"], _NO_TELEMETRY)
                 try:
                     blocks.append(
                         BlockCognition(
                             block_id=r["block_id"],
-                            importance=float(r["importance"]),
-                            last_accessed=r["last_accessed"],
-                            access_count=int(r["access_count"]),
-                            created_at=None,
+                            importance=keep_value(
+                                compute_importance(
+                                    access_count=tel["access_count"],
+                                    last_accessed=tel["last_accessed"],
+                                    connection_count=tel["connection_count"],
+                                    now=now,
+                                )
+                            ),
+                            last_accessed=tel["last_accessed"],
+                            access_count=tel["access_count"],
+                            created_at=r["created_at"] or None,
                             size_bytes=0,
                             lifecycle=BlockLifecycle.ACTIVE,
                         )
@@ -153,7 +233,7 @@ def plan_consolidation(
     if not maturity_gate:
         # Default path — no gate object is ever built, so the response is
         # identical to the pre-gate implementation.
-        payload["plan"] = _plan(blocks, config=cfg).as_dict()
+        payload["plan"] = _plan(blocks, config=cfg, now=now).as_dict()
         if granularity_on:
             payload["granularity_align"] = _granularity_section(db_path, granularity)
         return json.dumps(payload, indent=2)
@@ -175,7 +255,7 @@ def plan_consolidation(
         contradicted_ids=collect_contradicted_block_ids(ws),
     )
     decision = gate.evaluate(blocks)
-    payload["plan"] = _plan(blocks, config=cfg, gate=gate).as_dict()
+    payload["plan"] = _plan(blocks, config=cfg, gate=gate, now=now).as_dict()
     payload["maturity_gate"] = {"min_maturity": gate_cfg.min_maturity, **decision.as_dict()}
     if granularity_on:
         payload["granularity_align"] = _granularity_section(db_path, granularity)
