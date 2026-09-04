@@ -20,6 +20,7 @@ The sections below this index cover the frequently-used verbs in depth.
 | `mm context` | Recall + token-budget pack into a context snippet (JSON). |
 | `mm inject` | Render a context snippet in the format a specific agent expects. |
 | `mm resume` | Print the resume brief for the active task frame, with dead-end warnings. |
+| `mm resume-on-start` | Print the active task frame's resume brief, data-framed, for a SessionStart hook. Takes no arguments and always exits 0. |
 | `mm dead-ends` | List recorded dead ends (JSON), optionally filtered by an about-to-happen action. |
 | `mm review` | Batch-review the HITL proposal queue: diff, evidence, approve/reject. |
 | `mm status` | Print workspace status as JSON. |
@@ -61,6 +62,7 @@ The sections below this index cover the frequently-used verbs in depth.
 | `mm bind` | Attest the current mind-mem.json by writing .spec_binding.json. Until this runs, GovernanceGate's spec-hash check is inert and config tampering is not detected. Exits 3 on drift unless --rebind. |
 | `mm config` | Read/write mind-mem.json. `config set` writes the key and re-attests .spec_binding.json in one step, so a setting change is not read back by GovernanceGate as config tampering. |
 | `mm audit-pinned` | Run the seven-check audit (and optional Ed25519 verify) on every entry in audit_pinned_models of mind-mem.json. Designed for release CI — non-zero exit on any HIGH finding or verify failure. |
+| `mm anchor` | Report corpus blocks that no write scope ever landed, and (with --apply) admit them under a restamp batch. The repair for the unanchored_blocks row of `mind-mem-verify`; content is rewritten unchanged and no status is minted, so anchoring cannot escalate a block. |
 | `mm mic` | MIND IR graph serialization (mic@2 text + mic-b binary). Subcommands: convert, inspect. |
 | `mm inspect` | Print full block fields and provenance tree for a block ID. |
 | `mm explain` | Show per-stage retrieval scores (BM25 → vector → RRF → rerank) for a query. |

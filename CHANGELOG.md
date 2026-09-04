@@ -4,6 +4,76 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Fixed — an out-of-band corpus write was served, and verify stayed green
+
+The corpus is human-editable Markdown. A decision appended to
+`decisions/DECISIONS.md` by hand — no receipt, no scope, `Status: active` —
+was indexed, **served by recall**, and verified 7/7 green against a hash chain
+of 0 rows and an evidence chain of 0 rows. `admissibility.is_admissible_status`
+and `RECOGNISED_STATUSES` judge the status *string*, which was fine; nothing
+asked whether the id had ever been admitted.
+
+`mind-mem-verify` gains an `unanchored_blocks` row: every corpus id (the one
+`corpus_registry.discover_corpus_files` walk) minus every id a write scope's
+close record reports landing (`metadata["landed"]` — the existing ledger, not a
+new field). Reported **always**, fatal under `--strict` (exit 10), because a
+workspace written before close records existed carries a corpus that is
+legitimately unanchored and must not be condemned by an upgrade.
+
+`mm anchor` is the repair: one `admit_batch` scope on `IngestTier.RESTAMP`, a
+*carrying* tier that mints no status, so anchoring preserves `active` and
+cannot escalate anything. Reports by default; writes only with `--apply`. An
+empty candidate set opens no scope — a receipt covering nothing authorises
+nothing.
+
+Two limits are named rather than left to be discovered: a close record caps its
+inline id list, so a >256-block batch makes the answer an upper bound
+(`truncated_scopes` says so); and the Markdown walk is blind on the `postgres`
+and `encrypted` backends, where the row is recorded *absent* naming the backend
+instead of reporting a corpus it never read as "all anchored". Withholding an
+unanchored block at serve time is **not** in this release, and a test pins that.
+
+### Fixed — chain truncation was invisible, and three ledgers never met
+
+Deleting the two tail rows of `memory/hash_chain_v2.db` left
+`verify_workspace` green: `hash_chain: 2 entries verified` where there had been
+four, `evidence_chain: 4 entries verified`, `served_ledger: 2 rows verified`.
+Emptying the table outright reported `hash_chain: 0 entries verified` — still
+green. The link walk proves the rows that are *present* link correctly; the
+last entry has no successor to bind it, and the database held nothing outside
+itself to be compared against.
+
+Two additions, using keys that already existed:
+
+* **A head sidecar**, `memory/hash_chain_v2.head`, written on every
+  `HashChainV2.append` and `import_jsonl` — the pattern `served_ledger`
+  already shipped, including that an *absent* seal and a *blank* one are
+  different facts. The comparison is unconditional: a seal with no rows left to
+  name, and a seal that outlived its deleted database, are both convicted. A
+  seal lagging the tail by exactly one row is admitted (the commit-then-seal
+  crash window) and no removal can forge that state. Chains written before this
+  release have no seal; they are reported absent (strict-fail) and sealed by
+  their next admission rather than turned red on upgrade. The seal is written
+  under the same `BEGIN IMMEDIATE` lock that orders commits, so concurrent
+  processes cannot commit in one order and seal in another.
+* **A `cross_ledger` row** reconciling the three: every close record's
+  `admission_entry_id` resolves in the chain; the chain is never shorter than
+  the admission rows it recorded (tolerating exactly one, the documented
+  evidence-then-chain crash window, which the seal convicts instead); every
+  served row's `index_anchor` resolves to a chain entry that still exists.
+  Exit 11, distinct from a chain-integrity failure: every walk passed and the
+  finding is only visible by joining them.
+
+`memory/hash_chain_v2.head` joins `corpus_registry.LEDGER_FILES`, so a snapshot
+cannot capture it and a restore cannot put it back — a rewound seal that agrees
+with a rewound chain is worse than a rewound chain alone.
+
+Both checks report their counts typed in `details` and distinguish "nothing
+disagreed" from "nothing was compared": `searched`, `checked` and `sealed` are
+separate from `ok`, because "0 entries verified" reported as green is the exact
+failure shape being fixed. Each guard is proved by mutation — disable it, watch
+the test go red, restore.
+
 ### Corrections to this changelog's own record
 
 Commit `6a8854f`, whose message describes closing the governance enter and
@@ -235,6 +305,74 @@ this entry is only the mechanism.
 * A capability claim gets the same treatment as a count: nothing under an
   "Experimental" / "not yet shipped" heading in `docs/status.md` may name an
   MCP tool module whose tools are in the registry the tool badge counts.
+
+### Fixed — the scope that mints ACTIVE had seven openers and no bound
+
+`docs/GOVERNED_WRITES.md` says the apply engine applying an approved proposal
+is "the only path to `ACTIVE`". The tree did not say that. Seven functions
+opened `GovernanceGate.admit_proposal`, and nothing structural bounded the
+number: the write-path invariant asks whether a sanctioned caller opens *some*
+admission scope, never *which*. That scope is the broad one — it mints the one
+tier whose `INITIAL_STATUS` row is `ACTIVE`, and its receipt answers "yes" to
+every block id it is asked about — so each opener carried ambient authority to
+write any block in the corpus at a status recall serves.
+
+Measured, with no proposal of that id anywhere: `find_proposal(ws,
+"P-19990101-999")` returned `(None, None)`, and `admit_proposal("P-19990101-999",
+"fabricated")` followed by a `write_block(Status: active)` landed the block,
+served it, and wrote two hash-chain rows — a receipt attesting to a review that
+never happened.
+
+Two changes. `tests/test_admit_proposal_openers.py` pins the openers by
+`(file, function)` and fails the build on an unlisted one, with the corpus
+floor, positive control and synthetic-rogue negative control the other
+structural scans carry. And knowledge-graph edges got the scope they always
+needed: `GovernanceGate.admit_edge` + `IngestTier.EDGE_APPROVAL`, covering the
+edge id it commits plus whatever block ids the same decision re-stamps, and
+nothing else. `graph_ingest.approve_relation_signals`, `mcp.graph_add_edge` and
+`mcp.approve_edge` moved onto it, leaving exactly one production opener of the
+`ACTIVE`-minting scope — the apply engine, which is what the document always
+claimed.
+
+The edge tier's `INITIAL_STATUS` row is `None` because an edge has no `Status`
+field, and a `None` row constrains no status — so `governance_gate.
+SCOPE_BOUND_TIERS` pairs tier and scope in both directions: `EDGE_APPROVAL` is
+unreachable from `admit_block` / `admit_batch`, and an edge scope can mint no
+other tier. Both directions read off one table.
+
+Not fixed, and deliberately named: `admit_proposal` still takes a proposal **id
+string** and never resolves it, so the receipt above is still forgeable by a
+listed opener. `TestTheScopeIsAmbient` keeps that reproduction green so nobody
+reads the allowlist as a closure; making the scope take a resolved proposal
+record — and giving the two benchmark seeders a tier of their own instead of
+borrowing the apply scope — is the next slice.
+
+### Fixed — one list-valued `Tags` field bricked reindex for the whole workspace
+
+`MarkdownBlockStore.write_block` accepts a block whose `Tags` is a list, renders
+it in the corpus's list form, and the parser reads a **list** back. Every
+consumer downstream of the parser was written for the string form. Measured: one
+such block made `build_index` raise `'list' object has no attribute 'split'`
+out of `_parse_speaker_from_tags`, and because the crash is inside the per-block
+insert of a whole-workspace loop, the workspace's *other* blocks never got
+indexed either.
+
+Fixed at the layer the shape belongs to. `_recall_detection.normalise_tags`
+renders the field as the comma-separated string its readers expect — a `str` is
+returned unchanged, so a corpus that never held a list is unaffected — and
+`_parse_speaker_from_tags` normalises before splitting. The five sibling readers
+that put the raw value into a result payload, a SQLite parameter binding or an
+FTS5 row (`sqlite_index._insert_block`, `sqlite_index._extract_fts_fields`,
+`_recall_core._pg_block_to_hit`, two more in `_recall_core.recall`, and
+`_recall_context._block_to_result`) normalise too: a guard added only where the
+traceback pointed would have left a list in two parameter bindings.
+
+Honest scope: the measured reach is the store API. `propose_update` passes tags
+as a comma-separated string, so whether the sanctioned proposal path can produce
+such a block is unverified and is not claimed. Other `Tags` readers outside the
+recall/index path (`intel_scan`, `category_distiller`, `validate_py`,
+`recall_vector`) still call `.split(",")` on the raw value and are untouched by
+this change.
 
 ## [5.0.1] - 2026-09-01
 
