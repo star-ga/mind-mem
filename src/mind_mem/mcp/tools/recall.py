@@ -453,6 +453,54 @@ def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
     return resolve_vector_flags(ws, backend, _load_config(ws))
 
 
+def _served_backend(envelope: dict[str, Any], requested: str) -> str:
+    """Name the leg the run ACTUALLY used, not the one the caller asked for.
+
+    ``envelope["backend"]`` is ``used_backend``: the value
+    :func:`_recall_impl_uncached` writes *after* the legs have run, so it
+    already records the BM25 fallback the hybrid arm takes when
+    ``HybridBackend`` is unavailable or raises. Resolving the vector flags from
+    the *requested* string instead let the record disagree with the run it
+    attests — a fallback serve published ``warnings: "falling back to BM25"``
+    beside ``legs_ran`` naming a hybrid fusion that never executed, which is
+    two opinions of one run and exactly what an attestation exists to prevent.
+
+    ``sqlite`` and ``scan`` are the lexical engines, so both map to ``bm25``,
+    which :func:`~mind_mem.recall.resolve_vector_flags` answers without probing
+    the config. Anything else (``hybrid``) keeps its own name and resolves the
+    flags it really depends on.
+
+    The *requested* string is the fallback for an envelope carrying no
+    ``backend`` field: an attestation degrades, it never raises.
+    """
+    used = envelope.get("backend")
+    if not isinstance(used, str) or not used:
+        return requested
+    return "bm25" if used in ("sqlite", "scan") else used
+
+
+def _note_warning(raw_json: str, message: str) -> str:
+    """Append *message* to the envelope's ``warnings`` list, re-serialize.
+
+    A diagnostic that fails must leave a trace on a surface the caller can
+    actually read. ``warnings`` is that surface; the server log is not, because
+    the client holding the envelope never sees it.
+
+    Builds a new list rather than mutating the parsed one, and degrades to the
+    unchanged input on any failure — it runs inside an exception handler, so it
+    must not be able to raise a second one.
+    """
+    try:
+        envelope = json.loads(raw_json)
+        if not isinstance(envelope, dict):
+            return raw_json
+        existing = envelope.get("warnings")
+        envelope["warnings"] = [*existing, message] if isinstance(existing, list) else [message]
+        return json.dumps(envelope, indent=2, default=str)
+    except Exception:  # pragma: no cover — a trace must not cost the answer
+        return raw_json
+
+
 def _apply_bundle_format(query: str, raw_json: str) -> str:
     """Re-shape a blocks envelope into the ``format="bundle"`` envelope.
 
@@ -520,7 +568,8 @@ def _apply_attestation(raw_json: str, backend: str, scoring_instant: str, query:
         degraded = envelope.get("degraded")
         if isinstance(degraded, dict):
             carrier.degraded = degraded
-        vector_requested, vector_available = _current_vector_flags(ws, backend)
+        # The served leg, not the requested one — see :func:`_served_backend`.
+        vector_requested, vector_available = _current_vector_flags(ws, _served_backend(envelope, backend))
         attestation = derive_recall_attestation_for_workspace(
             carrier,
             ws,
@@ -608,9 +657,13 @@ def _apply_explain(query: str, raw_json: str) -> str:
         intent_match = detect_query_type(query)
         attach_explain(results, intent_match=intent_match, workspace=_workspace())
         return json.dumps(envelope, indent=2, default=str)
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:
+        # Swallowing keeps the answer, but a silent swallow makes a missing
+        # ``_explain`` indistinguishable from ``explain=False`` — the caller
+        # asked for the decomposition and is handed a response that never says
+        # it could not be produced. Leave the trace where the caller looks.
         _log.warning("recall_explain_injection_failed", error=str(exc))
-        return raw_json
+        return _note_warning(raw_json, f"Explain annotation unavailable: {exc}")
 
 
 def _recall_impl_uncached(

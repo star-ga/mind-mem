@@ -288,12 +288,38 @@ def _serving_log() -> Any:
     return get_logger("recall")
 
 
+def default_backend_for(workspace: str) -> str:
+    """Which leg name a serve through this module should attest, unasked.
+
+    Resolved from the workspace, never assumed: :func:`_load_backend` is the
+    same function :func:`mind_mem._recall_core.recall` dispatches on, so the
+    name reported is the one the run really went through rather than a constant
+    chosen once and hoped to still be true.
+
+    The rule is the one the CLI door already applies — the lexical engines are
+    ``bm25`` (``"sqlite"``, and the built-in BM25 scan, which resolves to
+    ``None``); a configured backend *object* is ``auto``, so the config's
+    vector flags — which on that path ARE the run's own — get reported instead
+    of being suppressed.
+
+    Any failure degrades to ``bm25``, the shape that claims least: an auxiliary
+    artifact must not break recall, and a record that under-claims on a broken
+    config is safer than one that over-claims.
+    """
+    try:
+        resolved = _load_backend(workspace)
+    except Exception as exc:  # pragma: no cover — defensive
+        _serving_log().warning("recall_attestation_backend_probe_failed", error=str(exc))
+        return "bm25"
+    return "auto" if isinstance(resolved, RecallBackend) else "bm25"
+
+
 def attest_and_record(
     workspace: str,
     query: str,
     results: Any,
     *,
-    backend: str = "bm25",
+    backend: str | None = None,
     scoring_instant: date | str | None = None,
 ) -> dict[str, Any] | None:
     """Derive this run's attestation and append its served-ledger row.
@@ -312,13 +338,25 @@ def attest_and_record(
     the eager-import closure of the scoring path, which
     ``tests/test_recall_attestation_v2.py`` fails the build over.
 
-    *backend* names the leg the run actually used, and it defaults to ``bm25``
-    because that is what :func:`recall` is — ``_recall_core.recall`` is the
-    lexical engine and runs no dense leg on any path. Reporting the config's
-    vector flags for it would mark a vector leg DEGRADED on every call in a
-    workspace that has vector recall enabled elsewhere, which reads as "the
-    dense leg was requested and not served" about a run that never asked for
-    it. A caller that really did run a different backend passes its own name.
+    *backend* names the leg the run actually used. Omitted, it is RESOLVED from
+    the workspace by :func:`default_backend_for` rather than assumed.
+
+    It used to default to the literal ``"bm25"``, justified here by the claim
+    that ``_recall_core.recall`` "is the lexical engine and runs no dense leg on
+    any path". That claim was false. ``_load_backend`` returns a
+    ``VectorBackend`` for ``recall.backend: "vector"`` (dense-only) and a
+    ``PostgresRecallBackend`` for a Postgres block store (server-side BM25 +
+    pgvector); on both, a serve through this module published
+    ``legs_ran=['bm25']`` with ``vector_requested=False`` about a run that did
+    ask for a dense leg — under-claiming, the mirror image of a record naming a
+    leg that never ran.
+
+    What the old default got right is preserved by the resolution rule: on the
+    lexical engines the answer is still ``bm25``, so a workspace with vector
+    recall enabled for some *other* surface does not get a vector leg marked
+    DEGRADED on every scan-backed call — that would read as "the dense leg was
+    requested and not served" about a run that never asked for it. A caller
+    that knows its own leg still passes its own name.
 
     Returns the attestation dict, or ``None`` when derivation failed. Never
     raises: an answer that was computed must be served even if the proof of it
@@ -336,6 +374,8 @@ def attest_and_record(
     try:
         from .recall_attestation import _served_ids, derive_recall_attestation_for_workspace
 
+        if backend is None:
+            backend = default_backend_for(workspace)
         vector_requested, vector_available = resolve_vector_flags(workspace, backend)
         attestation = derive_recall_attestation_for_workspace(
             results,
@@ -497,6 +537,7 @@ __all__ = [
     # Serving entry
     "ServedResults",
     "attest_and_record",
+    "default_backend_for",
     "in_serving_scope",
     "LEG_MODULES",
     "resolve_vector_flags",
