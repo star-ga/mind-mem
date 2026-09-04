@@ -1,12 +1,14 @@
 {
   "schema_version": 2,
   "inputs": {
-    "n_artifacts": 21,
+    "n_artifacts": 24,
     "artifacts": [
       "single_file__mm-00bb4eeb3eb0__rep1.json",
       "single_file__mm-1ddc953ce424__rep1.json",
       "single_file__mm-27c60f9b55ad__rep1.json",
       "single_file__mm-28203bdf502e__rep1.json",
+      "single_file__mm-39b49f88e7ab__rep1.json",
+      "single_file__mm-3b811e71490d__rep1.json",
       "single_file__mm-5d66147a3d1d__rep1.json",
       "single_file__mm-605384718d16__rep1.json",
       "single_file__mm-66b03be1ef24__rep1.json",
@@ -16,6 +18,7 @@
       "single_file__mm-81142206d8ac__rep1.json",
       "single_file__mm-8ac223858f56__rep1.json",
       "single_file__mm-9956b7aba6cf__rep1.json",
+      "single_file__mm-a63d572ddb0d__rep1.json",
       "single_file__mm-d048b5565cd9__rep1.json",
       "single_file__mm-d59f9832a452__rep1.json",
       "single_file__mm-db4e90b3bf73__rep1.json",
@@ -50,11 +53,11 @@
     "note": "True means this artifact set spans a change to the memory arm's rendering; the runs are not one experiment and must be re-run, not blended."
   },
   "prompt_lengths": {
-    "n": 21,
-    "mean_memory_prompt_tokens": 1621.6,
-    "mean_control_prompt_tokens": 263.1,
-    "mean_gap_tokens": 1358.4,
-    "median_gap_tokens": 1411,
+    "n": 24,
+    "mean_memory_prompt_tokens": 1629.9,
+    "mean_control_prompt_tokens": 263.5,
+    "mean_gap_tokens": 1366.5,
+    "median_gap_tokens": 1416.0,
     "min_gap_tokens": 349,
     "max_gap_tokens": 1455,
     "placebo_required": true,
@@ -72,23 +75,23 @@
     "agent_cutoff": "UNSTATED (vendor does not publish it)",
     "agent_cutoff_note": "The agent's training cutoff. If it postdates the commits these tasks were mined from, the agent may reproduce a fix from memorised training data in BOTH arms, which suppresses any measurable memory effect. Recorded as UNSTATED rather than guessed."
   },
-  "n_tasks": 21,
+  "n_tasks": 24,
   "summary": {
-    "n_tasks": 21,
-    "memory_successes": 18,
-    "control_successes": 14,
+    "n_tasks": 24,
+    "memory_successes": 20,
+    "control_successes": 16,
     "delta_successes": 4,
-    "both_passed": 13,
-    "memory_only": 5,
-    "control_only": 1,
+    "both_passed": 14,
+    "memory_only": 6,
+    "control_only": 2,
     "neither_passed": 2,
-    "n_discordant": 6,
+    "n_discordant": 8,
     "test": "mcnemar_exact_two_sided",
-    "p_value": 0.21875,
+    "p_value": 0.289062,
     "alpha": 0.05,
     "min_discordant_for_significance": 6,
     "verdict": "not_significant",
-    "note": "6 discordant pair(s) split 5/1; p=0.2188 does not clear 0.05."
+    "note": "8 discordant pair(s) split 6/2; p=0.2891 does not clear 0.05."
   },
   "rep_stability": {
     "cells_with_multiple_reps": 0,
@@ -100,12 +103,12 @@
   },
   "context_poisoning": {
     "definition": "poisoned / passed_without_memory; a task the agent could do WITHOUT memory and could not do WITH it",
-    "passed_without_memory": 14,
-    "poisoned": 1,
-    "context_poisoning_rate": 0.0714,
-    "failed_without_memory": 7,
-    "rescued": 5,
-    "memory_rescue_rate": 0.7143
+    "passed_without_memory": 16,
+    "poisoned": 2,
+    "context_poisoning_rate": 0.125,
+    "failed_without_memory": 8,
+    "rescued": 6,
+    "memory_rescue_rate": 0.75
   },
   "per_task": {
     "mm-00bb4eeb3eb0": {
@@ -133,6 +136,22 @@
       ]
     },
     "mm-28203bdf502e": {
+      "memory": [
+        true
+      ],
+      "control": [
+        false
+      ]
+    },
+    "mm-39b49f88e7ab": {
+      "memory": [
+        true
+      ],
+      "control": [
+        true
+      ]
+    },
+    "mm-3b811e71490d": {
       "memory": [
         true
       ],
@@ -207,6 +226,14 @@
     "mm-9956b7aba6cf": {
       "memory": [
         true
+      ],
+      "control": [
+        true
+      ]
+    },
+    "mm-a63d572ddb0d": {
+      "memory": [
+        false
       ],
       "control": [
         true

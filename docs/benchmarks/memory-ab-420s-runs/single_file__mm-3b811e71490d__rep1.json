@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-3b811e71490d",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 262,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    },
+    "memory": {
+      "prompt_tokens": 1687,
+      "memory_tokens": 1425,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-3b811e71490d",
+      "sha": "3b811e71490d52d33538c14eaafd59dc010d1120",
+      "parent_sha": "124829c12953331976983d26888f82f2187a402e",
+      "tier": "behavioral",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 627,
+        "corpus_bytes": 256948,
+        "cutoff": "2026-04-20T09:51:24Z",
+        "newest_seeded_at": "2026-04-20T09:51:24Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 17,
+          "files": [
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 262,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": false,
+            "reason": "tests_failed",
+            "returncode": 1,
+            "timed_out": false,
+            "n_passed_required": 0,
+            "missing_required": [
+              "tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_admin_scope_names_env_override",
+              "tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_invalid_oidc_token_rejected_as_401",
+              "tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_oidc_user_scope_rejected_from_admin_gate"
+            ],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/api/rest.py"
+            ],
+            "tail": "PASSED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_oidc_token_passes_user_gate\nPASSED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_no_oidc_config_skips_oidc_path\nFAILED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_oidc_user_scope_rejected_from_admin_gate\nFAILED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_invalid_oidc_token_rejected_as_401\nFAILED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_admin_scope_names_env_override\n3 failed, 3 passed, 1 warning in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1687,
+            "memory_tokens": 1425,
+            "memory_blocks": [
+              "D-7F22A1F64C5B",
+              "D-903C6ED4190D",
+              "D-E3DC0662AE38",
+              "D-E461A1C61F82",
+              "D-28950440799F",
+              "D-1917A81A8DCB",
+              "D-3768F82F0688",
+              "D-EDC15E4606E5",
+              "D-31996E7151D5",
+              "D-91CAC3B0C5BD",
+              "D-061BCF28D6D6",
+              "D-2B96A102C917",
+              "D-52DF1DCB35D3",
+              "D-0B4C37A76E1B",
+              "D-1782C78A8179"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "feat(auth): v3.2.1 — OIDC JWTs drive _require_admin oidc admin enforcement",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 3,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/api/rest.py"
+            ],
+            "tail": "PASSED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_oidc_user_scope_rejected_from_admin_gate\nPASSED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_oidc_token_passes_user_gate\nPASSED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_invalid_oidc_token_rejected_as_401\nPASSED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_admin_scope_names_env_override\nPASSED tests/test_oidc_admin_enforcement.py::TestOIDCAdminEnforcement::test_no_oidc_config_skips_oidc_path\n6 passed, 1 warning in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": false
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 1,
+          "returncode": -1,
+          "timed_out": true
+        },
+        "memory": {
+          "changed_files": 1,
+          "returncode": -1,
+          "timed_out": true
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 420.1
+        },
+        "memory": {
+          "wall_seconds": 420.04
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 0,
+    "delta_successes": 1,
+    "both_passed": 0,
+    "memory_only": 1,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 1,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "underpowered",
+    "note": "1 discordant pair(s): below 6, no split can reach p<=0.05, so this difference cannot be evidence at any effect size. Report it as noise."
+  },
+  "digest": "7a006efd4d0109cb95fe39276c87b482aeb59cb201382fee02015a6ac275120f"
+}

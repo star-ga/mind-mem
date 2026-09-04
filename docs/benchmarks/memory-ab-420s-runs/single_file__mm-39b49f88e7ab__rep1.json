@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-39b49f88e7ab",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 272,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 369,
+      "timeouts": 0
+    },
+    "memory": {
+      "prompt_tokens": 1707,
+      "memory_tokens": 1435,
+      "agent_output_tokens_lower_bound": 318,
+      "timeouts": 0
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-39b49f88e7ab",
+      "sha": "39b49f88e7abd36906f03253282b29faf26fe234",
+      "parent_sha": "481217ae30d6becfc9057654db3e0f35bbab4820",
+      "tier": "behavioral",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 602,
+        "corpus_bytes": 235629,
+        "cutoff": "2026-04-20T07:09:06Z",
+        "newest_seeded_at": "2026-04-20T07:09:06Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 17,
+          "files": [
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 272,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 369,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "1. **`src/mind_mem/apply_engine.py`**\n   - Added `from .storage import get_block_store`.\n   - New `_store_for(ws)` — resolves the BlockStore through the storage factory (`mind_mem.storage.get_block_store`), which reads `block_store.backend` from `mind-mem.json`. Any factory failure (malformed config, unknown backend, missing passphrase) logs a warning and falls back to `MarkdownBlockStore` so apply_engine never crashes on store resolution.\n   - `create_snapshot`, `restore_snapshot`, `snapshot_diff` now delegate to `_store_for(ws).snapshot/restore/diff` instead of hard-coding `MarkdownBlockStore`. Call signatures and return values unchanged, so all internal callers (apply, rollback paths) work as before.\n\n2. **`src/mind_mem/block_store_encrypted.py`** — `EncryptedBlockStore` now forwards `snapshot`/`restore`/`diff` to its inner store (mirroring its existing `list_blocks` forwarding). Without this, the factory could return an encrypted store that lacks the snapshot surface the routing now calls.\n\n**Verification:**\n- `tests/test_apply_engine_backend_routing.py`: **7/7 passed, exit 0**\n- Related regression suites (apply_engine, block_store, block_store_lock/snapshot/write, storage_factory, encryption): **150 passed**\n- postgres block store tests: 2 passed, 20 skipped (no live DB); package imports clean\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 7,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/apply_engine.py",
+              "src/mind_mem/block_store_encrypted.py"
+            ],
+            "tail": "PASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_encrypted_backend_with_passphrase\nPASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_create_snapshot_delegates_to_store\nPASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_restore_snapshot_delegates_to_store\nPASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_snapshot_diff_delegates_to_store\nPASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_factory_failure_falls_back_to_markdown\n7 passed in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1707,
+            "memory_tokens": 1435,
+            "memory_blocks": [
+              "D-CBABEFAA63F9",
+              "D-C99BF16DEE8B",
+              "D-3C3097C042A1",
+              "D-DCEAF38F833F",
+              "D-78577028EBE3",
+              "D-359204043233",
+              "D-A597DE231C2E",
+              "D-B56932397DCD",
+              "D-720B4FC8895B",
+              "D-CE2532E2B39E",
+              "D-64F53A07DAE4",
+              "D-C835A3946ECE",
+              "D-9351B7970D94",
+              "D-4EC0ECD94DC3",
+              "D-A00F76DB84CE"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "feat(apply_engine): v3.2.0 §1.4 PR-6 — route snapshot/restore through storage factory apply engine backend routing",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 318,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "\n**Change** (confined to `src/mind_mem/apply_engine.py`):\n- Added `_store_for(ws)` — resolves the workspace's BlockStore through the storage factory (`mind_mem.storage.get_block_store`), honoring `block_store.backend` from `mind-mem.json`. On any factory failure (broken config, unknown backend, missing passphrase/dsn) it logs a warning and falls back to `MarkdownBlockStore`, so apply/rollback never crashes on storage misconfiguration.\n- Re-routed the three snapshot wrappers through it: `create_snapshot` (still computes `snap_dir` itself, then delegates to `store.snapshot(...)`), `restore_snapshot` → `store.restore(snap_dir)`, `snapshot_diff` → `store.diff(snap_dir)`. The previous direct `MarkdownBlockStore(ws)` construction is gone; call signatures are unchanged.\n\n**Verification:**\n- `tests/test_apply_engine_backend_routing.py`: **7/7 passed**\n- Regression sweep — `test_apply_engine`, `test_block_store_snapshot`, `test_storage_factory`, `test_atomicity_maintenance_scope`, `test_backup_restore`, `test_block_store*` (4 files): **148 passed**\n- Remaining `apply_engine` consumers (`test_memory_practical_e2e`, `test_intel_scan`, `test_concurrent_integration`): **65 passed**\n\nNo test files or `conftest.py` were touched.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 7,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/apply_engine.py"
+            ],
+            "tail": "PASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_encrypted_backend_with_passphrase\nPASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_create_snapshot_delegates_to_store\nPASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_restore_snapshot_delegates_to_store\nPASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_snapshot_diff_delegates_to_store\nPASSED tests/test_apply_engine_backend_routing.py::TestBackendRouting::test_factory_failure_falls_back_to_markdown\n7 passed in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 2,
+          "returncode": 0,
+          "timed_out": false
+        },
+        "memory": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 280.41
+        },
+        "memory": {
+          "wall_seconds": 184.59
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "b5d8e912998ed729e96dc51163857f56c45da6d52cbe9edc2d6c97fc298fbff9"
+}
