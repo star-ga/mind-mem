@@ -1680,14 +1680,11 @@ class HybridBackend:
         """
         ce_cfg = self._cross_encoder_config()
         auto = bool(ce_cfg.get("auto_enable", True))
+        auto_fired = False
         if bool(ce_cfg.get("enabled", False)):
             pass
         elif auto and query_type in ("multi-hop", "temporal"):
-            _log.info(
-                "cross_encoder_auto_enabled",
-                query_type=query_type,
-                reason="v3.3.0_tier2_ambiguous_query",
-            )
+            auto_fired = True
         else:
             return False
         # Configured on, but is there a reranker to run? Answering this here
@@ -1701,14 +1698,26 @@ class HybridBackend:
         # that builds the feature it is asking about. An ensemble may hold
         # members needing no local weights, so its flag alone answers yes.
         if self._reranker_ensemble_enabled():
-            return True
-        try:
-            from .cross_encoder_reranker import CrossEncoderReranker
+            available = True
+        else:
+            try:
+                from .cross_encoder_reranker import CrossEncoderReranker
 
-            return bool(CrossEncoderReranker.is_available())
-        except Exception as exc:  # pragma: no cover — defensive
-            _log.debug("ce_availability_probe_failed", error=str(exc))
-            return False
+                available = bool(CrossEncoderReranker.is_available())
+            except Exception as exc:  # pragma: no cover — defensive
+                _log.debug("ce_availability_probe_failed", error=str(exc))
+                available = False
+        # Announced only once a reranker will really run. Logging
+        # "auto enabled" and then finding nothing to run announces a feature
+        # the request never got, and an operator reading that line would be
+        # looking for rerank latency that was never spent.
+        if auto_fired and available:
+            _log.info(
+                "cross_encoder_auto_enabled",
+                query_type=query_type,
+                reason="v3.3.0_tier2_ambiguous_query",
+            )
+        return available
 
     def _reranker_ensemble_enabled(self) -> bool:
         """``retrieval.reranker_ensemble.enabled``, read without building it."""
