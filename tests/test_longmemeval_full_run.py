@@ -121,3 +121,38 @@ def test_a_killed_unit_is_scored_as_a_miss_and_labelled(tmp_path: Any, monkeypat
     assert row["n_retrieved"] == 0
     assert row["hit"] is False
     assert row["recall_any_at_k"]["5"] == 0
+
+
+def test_vector_exercised_is_not_the_same_as_deps_available() -> None:
+    """The disclosure must separate "deps import" from "the leg ran".
+
+    On this box ``sentence_transformers`` imports, so ``vector_available`` is
+    True even for a pure-BM25 run. A scorecard that prints that next to a
+    lexical-only number recreates the declared-vs-effective confusion the
+    probe exists to kill.
+    """
+    from benchmarks.longmemeval_full_run import embedder_disclosure
+
+    probes = [{"vector_available": True, "effective_backend": "sqlite"}]
+    lexical = embedder_disclosure({"recall": {"backend": "sqlite"}}, probes)
+    assert "**Vector leg exercised:** `False`" in lexical
+    assert "lexical-only" in lexical
+    assert "**Vector deps importable:** `True`" in lexical, "deps fact must still be shown, just not conflated"
+
+
+def test_a_configured_hybrid_leg_is_reported_as_exercised() -> None:
+    from benchmarks.longmemeval_full_run import embedder_disclosure
+
+    probes = [{"vector_available": True, "effective_backend": "hybrid"}]
+    for cfg in ({"recall": {"backend": "hybrid"}}, {"recall": {"backend": "sqlite", "vector": {"enabled": True}}}):
+        got = embedder_disclosure(cfg, probes)
+        assert "**Vector leg exercised:** `True`" in got, cfg
+
+
+def test_disclosure_states_its_own_basis() -> None:
+    """A derived fact must not be readable as instrumentation."""
+    from benchmarks.longmemeval_full_run import embedder_disclosure
+
+    got = embedder_disclosure(None, [{"vector_available": False, "effective_backend": "scan"}])
+    assert "derived from the config" in got
+    assert "not instrumentation" in got

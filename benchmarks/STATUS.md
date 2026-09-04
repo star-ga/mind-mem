@@ -69,17 +69,31 @@ python3 benchmarks/memory_ab_bench.py selfcheck --select bucket:single_file:1
 python3 benchmarks/memory_ab_bench.py run --select bucket:single_file:1 --agent none
 ```
 
-## LongMemEval — HELD (hold unchanged; full run now measured)
+## LongMemEval — hold CLOSED: 85.3 RETRACTED and replaced
 
-**Status: provenance hold active.** The headline `R@5 = 85.3` published in
-`benchmarks/REPORT.md` (entered the repo 2026-02-18, no committed artifact or
-methodology) is **not reproducible** from any documented harness and is
-excluded from MIND-Mem positioning until a clean full-run number replaces it.
+**Status: the provenance hold is closed.** The headline `R@5 = 85.3` (entered
+`benchmarks/REPORT.md` 2026-02-18) was **retracted** on 2026-09-04 (commit
+`129cbf3`) and the measured 2026-09-03 run published in its place, with both
+protocols and the paired tests.
 
-**The hold is NOT lifted by the 2026-09-03 full run below.** That run measures
-a *stated* configuration under a *disclosed* protocol; `85.3` names neither, so
-there is nothing to compare it against. A number cannot replace a number whose
-methodology is unknown — it can only sit beside it and say so.
+Three grounds, not one:
+
+1. **No artifact and no methodology** — it named no harness, no config, no
+   environment, and left nothing behind to re-run.
+2. **Two failed reproduction attempts** — no documented configuration produces
+   it (see the FINDINGS below).
+3. **It does not add up on its own terms** — its per-category rows sum to
+   121+127+72+56 = **376** under a stated Overall N = **470**. A table that is
+   internally inconsistent needs no external refutation.
+
+An earlier revision of this page argued that a disclosed number "can only sit
+beside" an undisclosed one and never replace it. **That reasoning was wrong and
+is withdrawn.** It inverts the burden: it lets a figure with no methodology
+outrank a measured one indefinitely, purely because nobody can say what it
+measured. Unfalsifiable is not unimpeachable. A measured, artifact-backed,
+reproduced number replaces an unreproducible one — that is what publishing
+means. Retraction is the correct disposition, and holding forever would have
+been lowering the ceiling instead of raising the code.
 
 ### What's resolved
 

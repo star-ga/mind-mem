@@ -247,6 +247,60 @@ def run(
     }
 
 
+def embedder_disclosure(config: dict[str, Any] | None, probe_rows: list[dict[str, Any]]) -> str:
+    """Whether the vector leg was actually EXERCISED — measured, not labelled.
+
+    The scorecard's ``Embedder:`` line is free text a caller types on the
+    command line. It is not evidence of anything: a run can print
+    ``Embedder: mxbai`` while the dense leg never executes. The probe is
+    closer but still not the answer — ``vector_available`` records that
+    ``sentence_transformers`` *imports*, which on this box is ``True`` even
+    for a pure-BM25 run. Reporting deps-present next to a lexical-only number
+    is exactly the declared-vs-effective confusion the probe exists to kill.
+
+    So this renders three separate facts and never collapses them:
+
+    * deps importable (from the probe),
+    * whether a vector leg was **configured** for this run (from the config
+      that was actually handed to the adapter, not from a CLI string),
+    * the effective backend the probe reconciled against disk.
+
+    It is derived from config + probe rather than instrumented inside
+    ``recall``; the line says so, so nobody upgrades it to a stronger claim
+    than it is.
+    """
+    recall_cfg = (config or {}).get("recall", {}) if isinstance(config, dict) else {}
+    recall_cfg = recall_cfg if isinstance(recall_cfg, dict) else {}
+    vector_cfg = recall_cfg.get("vector", {})
+    vector_cfg = vector_cfg if isinstance(vector_cfg, dict) else {}
+    backend = str(recall_cfg.get("backend", "scan"))
+    configured = bool(vector_cfg.get("enabled", False)) or backend in {"hybrid", "vector"}
+
+    deps = sorted({bool(p.get("vector_available", False)) for p in probe_rows})
+    backends = sorted({str(p.get("effective_backend", "unknown")) for p in probe_rows})
+
+    lines = ["", "## Retrieval legs actually exercised", ""]
+    deps_shown = deps if len(deps) != 1 else deps[0]
+    lines.append(f"- **Vector deps importable:** `{deps_shown}` — this is a *dependency* fact, not a pipeline fact.")
+    lines.append(
+        f"- **Vector leg exercised:** `{configured}` "
+        + (
+            "— a dense/hybrid leg was configured for this run."
+            if configured
+            else "— **no** dense leg was configured, so this number is lexical-only regardless of what the `Embedder:` line above says."
+        )
+    )
+    lines.append(f"- **Effective backend(s) probed:** `{', '.join(backends) if backends else 'unknown'}`")
+    lines.append(f"- **Effective embedder:** `{'see config' if configured else 'none — BM25F lexical only'}`")
+    lines.append(
+        "- *Basis:* derived from the config handed to the adapter plus the per-question "
+        "pipeline probe. It is not instrumentation inside `recall`, and is not evidence "
+        "that a configured leg produced every score."
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def timeout_disclosure(timed_out: int, evaluated: int, qtimeout_s: float) -> str:
     """The paragraph a reader needs to interpret the number above it."""
     lines = ["", "## Unit isolation and timeouts", ""]
@@ -338,6 +392,7 @@ def main(argv: list[str] | None = None) -> int:
         else f"first {a.limit} eligible questions (rep {a.rep}) — NOT the full set"
     )
     scorecard = render_scorecard(result, dataset_path=data_path, k=a.k, embedder=a.embedder, sampling=sampling)
+    scorecard += embedder_disclosure(config, probe_rows)
     scorecard += timeout_disclosure(timed_out, len(scores), a.qtimeout)
     scorecard_path = a.scorecard or f"docs/benchmarks/{stamp}-longmemeval-s-full-{a.adapter}-rep{a.rep}.md"
     os.makedirs(os.path.dirname(os.path.abspath(scorecard_path)), exist_ok=True)

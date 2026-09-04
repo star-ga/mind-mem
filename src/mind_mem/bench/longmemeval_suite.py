@@ -318,14 +318,17 @@ def render_scorecard(result: SuiteResult, *, dataset_path: str, k: int, embedder
         "neither is cherry-picked."
     )
     lines.append(
-        f"- **Prior published R@5 = 85.3 is UNREPRODUCED.** Per `{FINDINGS_REF}`, that figure "
-        "entered the repo without a committed artifact/methodology and is not reproducible from "
-        "any documented harness (measured BM25-only was ~0.30 any@5). It is not restated as truth "
-        "here; this scorecard reports only what this run measured."
+        f"- **Prior published R@5 = 85.3 is RETRACTED** (2026-09-04, commit `129cbf3`), not merely "
+        f"unreproduced. Per `{FINDINGS_REF}` it entered the repo with no committed "
+        "artifact or methodology, survived two failed reproduction attempts, and its per-category "
+        "rows sum to 376 under a stated Overall N of 470. It has been replaced by the measured run "
+        "published in `benchmarks/REPORT.md`; this scorecard reports only what this run measured."
     )
     lines.append(
-        "- **No new competitor comparison** is printed while 85.3 sits unreproduced. Cross-system "
-        "numbers require the same box, same dataset, same protocol, ≥2 reps — out of scope here."
+        "- **Competitor comparisons are permitted**, gated on the ordinary requirements: same box, "
+        "same dataset, same protocol, >=2 reps, committed artifacts. They are no longer gated on "
+        "85.3. Blocking them on an unreproducible figure lowered the ceiling instead of raising "
+        "the code."
     )
     lines.append(
         "- **Self-asserting pipeline.** Every NDJSON row carries a `pipeline` probe "
