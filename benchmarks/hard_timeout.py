@@ -26,6 +26,12 @@ child, waits out the deadline, and then ``SIGKILL``s the child's whole
 process group -- descendants included, because a worker pool that outlives
 its parent is the same hang wearing a different pid.
 
+Platform note: process groups are POSIX. On Windows the child is still
+killed hard, so the timeout is real, but grandchildren are not reaped --
+that would need a Job Object, which this module does not set up. The
+limitation is stated rather than hidden, because "the hang was preempted"
+and "nothing it spawned survived" are different claims.
+
 Not a redesign of the scorer: the caller still decides what the unit of
 work is and how it is scored. This module only owns "run it, or give up on
 it in bounded time, and say which happened".
@@ -90,18 +96,34 @@ class Outcome:
         }
 
 
-def _child(result_q: "multiprocessing.Queue[Any]", func: Callable[..., Any], args: tuple, kwargs: dict) -> None:
-    """Run ``func`` in the child and post the outcome back.
+def _become_group_leader() -> bool:
+    """Make this process its own group leader, where the platform has groups.
 
-    ``setsid`` first: it makes this process its own group leader, so the
-    parent can kill the whole subtree with one ``killpg``. Without it a
-    hung native stage that had already forked workers leaves them running
-    after the parent "recovered".
+    On POSIX this lets the parent kill the whole subtree with one ``killpg``,
+    so a hung native stage that had already forked workers does not leave them
+    running after the parent "recovered".
+
+    Windows has no ``os.setsid`` **at all**, so calling it there raises
+    ``AttributeError`` — which is not an ``OSError`` and was therefore not
+    caught. The child then died before posting any result, so on Windows
+    EVERY unit came back ``crashed``, including ones that completed fine.
+    That is why this is a ``hasattr`` check and not a wider ``except``:
+    an absent syscall is a platform fact to branch on, not an error to
+    swallow. Returns whether group leadership was actually established, so
+    the caller does not assume subtree semantics it does not have.
     """
+    if not hasattr(os, "setsid"):
+        return False
     try:
         os.setsid()
-    except OSError:  # pragma: no cover - already a leader, or no setsid
-        pass
+    except OSError:  # pragma: no cover - already a group leader
+        return False
+    return True
+
+
+def _child(result_q: "multiprocessing.Queue[Any]", func: Callable[..., Any], args: tuple, kwargs: dict) -> None:
+    """Run ``func`` in the child and post the outcome back."""
+    _become_group_leader()
     try:
         result_q.put((OK, func(*args, **kwargs), ""))
     except BaseException:  # noqa: BLE001 - the child reports, never crashes silently
@@ -111,7 +133,8 @@ def _child(result_q: "multiprocessing.Queue[Any]", func: Callable[..., Any], arg
 def _kill_tree(proc: "multiprocessing.process.BaseProcess") -> bool:
     """SIGKILL the child and every descendant it leads. Returns True if reaped."""
     pid = proc.pid
-    if pid is not None:
+    have_groups = hasattr(os, "killpg") and hasattr(os, "getpgid")
+    if pid is not None and have_groups:
         try:
             os.killpg(os.getpgid(pid), signal.SIGKILL)
         except (ProcessLookupError, PermissionError, OSError):
@@ -121,6 +144,16 @@ def _kill_tree(proc: "multiprocessing.process.BaseProcess") -> bool:
                 proc.kill()
             except (ProcessLookupError, OSError, ValueError):  # pragma: no cover
                 pass
+    else:
+        # No process groups (Windows). ``Process.kill`` still terminates the
+        # child hard, so the timeout is real and the run continues -- but any
+        # grandchildren it spawned are NOT reaped. Stated rather than papered
+        # over: killing the subtree there needs a Job Object, which this
+        # module does not set up.
+        try:
+            proc.kill()
+        except (ProcessLookupError, OSError, ValueError):  # pragma: no cover
+            pass
     proc.join(_REAP_SECONDS)
     return not proc.is_alive()
 

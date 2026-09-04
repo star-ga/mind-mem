@@ -329,12 +329,42 @@ def test_scorecard_sampling_line_present():
 
 
 def test_render_scorecard_honesty_rails(tmp_path):
+    """The scorecard must keep carrying its rails — the CURRENT ones.
+
+    This test exists so the rails cannot be silently dropped, which is a real
+    property worth pinning. It previously asserted the retired
+    "85.3 / UNREPRODUCED" wording; 85.3 was RETRACTED on 2026-09-04 (commit
+    129cbf3) rather than held, and the rail that blocked all competitor
+    comparisons until it was reproduced was removed with it — that rail made
+    an unreproducible figure a permanent veto on cross-system numbers.
+
+    So the assertions move to the rails that are actually load-bearing now.
+    Asserting the old text would pin a claim the retraction makes false;
+    asserting nothing would be worse than having no test at all.
+    """
     ds = _synthetic_dataset()
     result = run_suite("bm25_baseline", ds, k=5, turns="all")
     card = render_scorecard(result, dataset_path="longmemeval_s.json", k=5, embedder="none (BM25-only)")
-    assert "85.3" in card and "UNREPRODUCED" in card
+
+    # 85.3 is still named — but as retracted-and-replaced, not as merely unreproduced.
+    assert "85.3" in card, "the retracted figure must still be named, or readers cannot connect the two"
+    assert "RETRACTED" in card
+    assert "UNREPRODUCED" not in card, "the retired 'unreproduced' framing must not come back"
+
+    # Competitor comparisons are permitted, gated on the ordinary requirements.
+    assert "No new competitor comparison" not in card, "the permanent-veto rail must stay removed"
+    assert "Competitor comparisons are permitted" in card
+    assert ">=2 reps" in card
+
+    # Both protocols, never one cherry-picked.
     assert "recall_any@k" in card and "recall_all@k" in card
-    assert "No new competitor comparison" in card
+    assert "neither is cherry-picked" in card
+
+    # The self-asserting pipeline rail: config hash + declared-vs-effective.
+    assert "Self-asserting pipeline" in card
+    assert "Config SHA-256" in card
+    assert "Effective backend (probed)" in card
+
     # no mismatch on the baseline
     assert "PIPELINE MISMATCH" not in card
 

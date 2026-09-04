@@ -154,3 +154,43 @@ def test_zero_timeout_is_refused() -> None:
     """A non-positive deadline is a caller bug, not a silent no-op."""
     with pytest.raises(ValueError):
         run_with_hard_timeout(quick_value, 0)
+
+
+# -- platform portability ---------------------------------------------------
+
+
+def test_group_leadership_is_skipped_where_the_platform_has_no_setsid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Windows bug, pinned.
+
+    ``os.setsid`` does not merely fail on Windows — it does not EXIST, so the
+    call raised ``AttributeError``, which is not an ``OSError`` and so escaped
+    the guard. The child then died before posting anything, and every unit came
+    back ``crashed``, including ones that had completed fine. The fix is a
+    ``hasattr`` branch, so this asserts the absent-syscall path returns cleanly
+    instead of raising.
+    """
+    from benchmarks.hard_timeout import _become_group_leader
+
+    monkeypatch.delattr(os, "setsid", raising=False)
+    assert _become_group_leader() is False, "an absent setsid must be reported, not raised"
+
+
+def test_group_leadership_reports_success_where_setsid_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The caller must be able to tell whether it really got subtree semantics."""
+    from benchmarks import hard_timeout as ht
+
+    called: list[bool] = []
+    monkeypatch.setattr(os, "setsid", lambda: called.append(True), raising=False)
+    assert ht._become_group_leader() is True
+    assert called == [True]
+
+
+def test_group_leadership_swallows_an_oserror_but_reports_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Already-a-group-leader is not fatal, but is not success either."""
+    from benchmarks import hard_timeout as ht
+
+    def _boom() -> None:
+        raise OSError("already a process group leader")
+
+    monkeypatch.setattr(os, "setsid", _boom, raising=False)
+    assert ht._become_group_leader() is False
