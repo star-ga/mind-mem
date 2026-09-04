@@ -33,6 +33,7 @@ from .block_store import (
     _atomic_write,
     _is_in_excluded_dir,
     _read_manifest,  # noqa: F401 — re-exported; tests import from apply_engine
+    _safe_child_path,
     _safe_copy,  # noqa: F401 — re-exported; tests import from apply_engine
 )
 from .corpus_registry import SNAPSHOT_DIRS, is_ledger_path
@@ -557,7 +558,26 @@ def _block_ids_in_snapshot(snap_dir, files):
     for rel in files:
         if not rel.endswith(".md"):
             continue
-        path = os.path.join(snap_dir, rel.replace("/", os.sep))
+        try:
+            # The same containment guard the restore itself applies to
+            # this same list: BlockStore.restore routes every manifest
+            # entry through _safe_child_path and skips the ones that
+            # escape, so an escaping entry is never copied back. Counting
+            # its ids here would make the record claim a reinstatement
+            # that did not happen — and because `withdrawn` is computed
+            # as the live ids MINUS these, a crafted MANIFEST.json naming
+            # a file outside the snapshot could delete ids from the one
+            # list the record has to spell out. Guarding in one place and
+            # not the other is what made that possible.
+            path = _safe_child_path(snap_dir, rel.replace("/", os.sep))
+        except ValueError as exc:
+            _log.warning(
+                "restore_record_unsafe_manifest_entry",
+                snap_dir=snap_dir,
+                entry=rel,
+                reason=str(exc),
+            )
+            continue
         if not os.path.isfile(path):
             continue
         try:
@@ -2074,7 +2094,11 @@ def rollback(ws, receipt_ts, reason="", strict=False):
     """
     ws = os.path.realpath(ws)
     # Sanitize receipt_ts: must match YYYYMMDD-HHMMSS format (no traversal)
-    if not re.match(r"^\d{8}-\d{6}$", receipt_ts):
+    # \Z, not $: `$` also matches just before a trailing newline, so
+    # "20260101-120000\n" passed this gate. No traversal followed (the class
+    # admits no separator), but the gate is the stated reason the snapshot
+    # path is safe, so it states exactly what it accepts.
+    if not re.match(r"^\d{8}-\d{6}\Z", receipt_ts):
         print(f"ERROR: Invalid receipt timestamp format: {receipt_ts} (expected YYYYMMDD-HHMMSS)")
         return False
 
