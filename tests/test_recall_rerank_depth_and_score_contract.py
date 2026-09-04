@@ -22,6 +22,10 @@ guard is removed, not merely one that passes while it is present.
 
 from __future__ import annotations
 
+import json
+from datetime import date
+from pathlib import Path
+
 import pytest
 
 from mind_mem.cross_encoder_reranker import normalize_scores
@@ -770,3 +774,312 @@ class TestExplainSurvivesTheRealPipeline:
         assert len(hits) >= 2, "fewer than two ranked hits: the ordering claim would be vacuous"
         scores = [float(h["score"]) for h in hits]
         assert scores == sorted(scores, reverse=True), scores
+
+
+# ---------------------------------------------------------------------------
+# F1 -- the two stages that RE-SORT on ``score``: session boost and temporal
+# ---------------------------------------------------------------------------
+
+
+#: A config that names no ``retrieval`` section. The session-boost gate reads
+#: an absent section as an empty one (``implicit_section``), so this is the
+#: shape an unconfigured workspace presents -- and the shape under which the
+#: stage auto-enables. ``None`` and ``{}`` are a hard OFF and would make every
+#: gate test below pass for the wrong reason.
+_UNCONFIGURED = {"vector_enabled": True}
+
+
+def _fused_with_sessions() -> list[dict]:
+    """A fused list on the post-F1 contract: ``score`` is the fused scale."""
+    rows = [
+        ("A1", 0.0330, "S1"),
+        ("B1", 0.0320, "S2"),
+        ("C1", 0.0310, "S1"),
+        ("D1", 0.0250, "S2"),
+        ("E1", 0.0240, "S1"),
+    ]
+    return [{"_id": i, "score": s, "rrf_score": s, "SessionId": sid, "Date": "2026-09-01"} for i, s, sid in rows]
+
+
+class TestSessionBoostReSortsOnTheFusedScale:
+    """``apply_session_boost`` multiplies ``score`` and re-sorts by it.
+
+    Before F1 that column was the surviving leg's raw value, so the stage was
+    re-sorting a mixture of an unbounded BM25F number and a ``[0, 1]`` cosine
+    -- which is to say it was discarding the fusion ranking it had been
+    handed. These name the stage the 5.0.2 entry says the served order moves
+    in, which the rest of this file did not.
+    """
+
+    def test_the_boost_multiplies_the_fused_score(self):
+        from mind_mem.session_boost import apply_session_boost
+
+        out = apply_session_boost(_fused_with_sessions(), top_seed_count=3, boost=0.3)
+        by_id = {h["_id"]: h for h in out}
+        # A1/C1/E1 are in S1 and B1/D1 in S2; both sessions are seeded from
+        # the top three, so every hit is boosted off the SAME column.
+        for block_id in ("A1", "B1", "C1", "D1", "E1"):
+            assert by_id[block_id]["_session_boost"] == 0.3
+            assert by_id[block_id]["score"] == pytest.approx(by_id[block_id]["rrf_score"] * 1.3)
+
+    def test_a_boost_confined_to_one_session_promotes_across_the_seed_line(self):
+        """The re-sort has to be able to change the order, or it proves nothing."""
+        from mind_mem.session_boost import apply_session_boost
+
+        hits = [
+            {"_id": "TOP", "score": 0.0330, "rrf_score": 0.0330, "SessionId": "S1"},
+            {"_id": "MID", "score": 0.0300, "rrf_score": 0.0300, "SessionId": "S2"},
+            {"_id": "LOW", "score": 0.0290, "rrf_score": 0.0290, "SessionId": "S1"},
+        ]
+        # Only the head seat seeds, so S1 is active and S2 is not.
+        out = apply_session_boost(hits, top_seed_count=1, boost=0.3)
+        assert [h["_id"] for h in out] == ["TOP", "LOW", "MID"]
+        assert [h["_id"] for h in hits] == ["TOP", "MID", "LOW"], "input list was mutated"
+
+    def test_the_served_order_is_non_increasing_in_the_column_it_sorted_on(self):
+        from mind_mem.session_boost import apply_session_boost
+
+        out = apply_session_boost(_fused_with_sessions(), top_seed_count=3, boost=0.3)
+        scores = [h["score"] for h in out]
+        assert scores == sorted(scores, reverse=True), scores
+
+    def test_the_gate_opens_on_session_carrying_hits_and_stays_shut_otherwise(self):
+        from mind_mem.session_boost import is_session_boost_enabled
+
+        # A config with no ``retrieval`` section at all: ``implicit_section``
+        # reads that as "the section is present and empty", which is how the
+        # stage comes on for a workspace nobody configured for it.
+        assert is_session_boost_enabled(_UNCONFIGURED, _fused_with_sessions()) is True
+        bare = [{"_id": "A1", "score": 0.03}, {"_id": "B1", "score": 0.02}]
+        assert is_session_boost_enabled(_UNCONFIGURED, bare) is False
+
+    @pytest.mark.parametrize("key", ["SessionId", "session_id", "Session"])
+    def test_every_documented_session_field_opens_the_gate(self, key):
+        from mind_mem.session_boost import is_session_boost_enabled
+
+        assert is_session_boost_enabled(_UNCONFIGURED, [{"_id": "A1", "score": 0.03, key: "S1"}]) is True
+
+    def test_auto_enable_false_is_the_stable_no_boost_order(self):
+        """The escape hatch the 5.0.2 entry names.
+
+        ``retrieval.session_boost.auto_enable: false`` shuts the gate on a
+        corpus that would otherwise open it, so an operator who wants the
+        unboosted fused order can have it. No capability is lost by shipping
+        the fix unflagged.
+        """
+        from mind_mem.session_boost import is_session_boost_enabled
+
+        hits = _fused_with_sessions()
+        assert is_session_boost_enabled(_UNCONFIGURED, hits) is True
+        assert is_session_boost_enabled({"retrieval": {"session_boost": {"auto_enable": False}}}, hits) is False
+
+    def test_the_hatch_is_reachable_through_the_backend_config(self):
+        """Shutting the gate must stop the STAGE, not merely leave the order alone.
+
+        Asserting only that the ids came back in the same order would pass
+        even with the gate forced open: when every session is active every
+        score is multiplied by the same factor and nothing reorders. So the
+        marker the stage stamps is what is checked -- it is present if and
+        only if the stage ran.
+        """
+        backend_off = HybridBackend(config={"retrieval": {"session_boost": {"auto_enable": False}}})
+        backend_on = HybridBackend(config=dict(_UNCONFIGURED))
+        hits = _fused_with_sessions()
+
+        off = backend_off._maybe_session_boost(list(hits))
+        assert [h["_id"] for h in off] == [h["_id"] for h in hits]
+        assert [h["score"] for h in off] == [h["score"] for h in hits]
+        assert not [h["_id"] for h in off if "_session_boost" in h]
+
+        on = backend_on._maybe_session_boost(list(hits))
+        assert [h["_id"] for h in on if "_session_boost" in h], "the gate never opened, so the OFF case proves nothing"
+
+
+class TestTemporalDecayReSortsOnTheFusedScale:
+    """The other stage that multiplies ``score`` and re-sorts by it.
+
+    Opt-in via ``retrieval.temporal_decay_hot_path``, and named here because
+    the 5.0.2 entry counts it as a place the served order moves.
+    """
+
+    @staticmethod
+    def _dated_hits() -> list[dict]:
+        return [
+            {"_id": "OLD", "score": 0.0330, "rrf_score": 0.0330, "Date": "2024-01-01"},
+            {"_id": "NEW", "score": 0.0300, "rrf_score": 0.0300, "Date": "2026-08-30"},
+        ]
+
+    def test_off_by_default_the_list_is_returned_untouched(self):
+        backend = HybridBackend(config=dict(_UNCONFIGURED))
+        hits = self._dated_hits()
+        out = backend._maybe_temporal_decay(hits, scoring_instant=date(2026, 9, 1))
+        assert out is hits
+        assert all("_temporal_decay" not in h for h in out)
+
+    def test_on_it_decays_the_fused_score_and_re_sorts_by_it(self):
+        backend = HybridBackend(config={"retrieval": {"temporal_decay_hot_path": True}})
+        hits = self._dated_hits()
+        out = backend._maybe_temporal_decay(hits, scoring_instant=date(2026, 9, 1))
+        assert [h["_id"] for h in out] == ["NEW", "OLD"], "the older, higher-fused hit was not overtaken"
+        for hit in out:
+            # ``_temporal_decay`` is the multiplier rounded to four places, so
+            # the exact relation is checked the other way round: the ratio the
+            # stage actually applied, rounded, is what it recorded.
+            ratio = hit["score"] / hit["rrf_score"]
+            assert 0.0 < ratio <= 1.0, ratio
+            assert round(ratio, 4) == hit["_temporal_decay"]
+        scores = [h["score"] for h in out]
+        assert scores == sorted(scores, reverse=True), scores
+
+    def test_the_input_list_is_not_mutated(self):
+        backend = HybridBackend(config={"retrieval": {"temporal_decay_hot_path": True}})
+        hits = self._dated_hits()
+        backend._maybe_temporal_decay(hits, scoring_instant=date(2026, 9, 1))
+        assert [h["score"] for h in hits] == [0.0330, 0.0300]
+
+
+# ---------------------------------------------------------------------------
+# F1 -- the committed artifacts, not a sentence about them
+# ---------------------------------------------------------------------------
+
+_EVIDENCE = Path(__file__).resolve().parents[1] / "docs" / "evidence" / "5.0.2-f1"
+_BEFORE = _EVIDENCE / "score-contract-before-6cd37e5.json"
+_AFTER = _EVIDENCE / "score-contract-after-5.0.2.json"
+
+
+def _load(path: Path) -> dict:
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+class TestCommittedScoreContractArtifact:
+    """The 5.0.2 ranking claims, re-derived from the committed artifacts.
+
+    ``benchmarks/f1_score_contract_probe.py`` captured the served lists of a
+    pre-F1 tree (``6cd37e5``) and this one; these read the two artifacts back
+    and re-run the comparison, so the CHANGELOG's numbers are checked against
+    a file in the tree rather than against a report nobody can re-open.
+    """
+
+    def test_the_two_artifacts_came_from_different_trees(self):
+        """Otherwise every comparison below is one tree compared with itself."""
+        before, after = _load(_BEFORE), _load(_AFTER)
+        assert before["provenance"]["hybrid_recall_sha256"] != after["provenance"]["hybrid_recall_sha256"]
+
+    def test_the_default_fused_path_did_not_move(self):
+        from benchmarks.f1_evidence_report import build_report
+
+        report = build_report(_load(_BEFORE), _load(_AFTER))
+        assert report["default_path"]["identical"] is True
+        assert report["default_path"]["cases"] >= 80
+        assert report["default_path"]["hits"] >= 1000
+
+    def test_the_identity_assertion_can_fail(self):
+        """Swap two ids in one default-path case; the gate must go red."""
+        from benchmarks.f1_evidence_report import build_report
+        from benchmarks.ranking_identity import RankingMoved
+
+        after = _load(_AFTER)
+        key = next(k for k in after["cases"] if k.startswith("deep|"))
+        rows = after["cases"][key]
+        rows[0], rows[1] = rows[1], rows[0]
+        with pytest.raises(RankingMoved):
+            build_report(_load(_BEFORE), after)
+
+    def test_comparing_one_tree_with_itself_is_refused(self):
+        from benchmarks.f1_evidence_report import SameTreeTwice, build_report
+
+        after = _load(_AFTER)
+        with pytest.raises(SameTreeTwice):
+            build_report(after, _load(_AFTER))
+
+    def test_the_pre_fix_column_did_not_order_24_of_the_45_served_lists(self):
+        """The number the CHANGELOG quotes, re-derived rather than recalled.
+
+        27 of the 45 carry two or more hits, so 27 is the count that could
+        have failed and 24 of those did.
+        """
+        from benchmarks.f1_evidence_report import monotonicity
+        from benchmarks.f1_score_contract_probe import LEGACY_PREFIXES
+
+        stats = monotonicity(_load(_BEFORE)["cases"], LEGACY_PREFIXES)
+        assert stats["lists"] == 45
+        assert stats["orderable_lists"] == 27
+        assert stats["not_non_increasing"] == 24
+
+    def test_the_post_fix_column_orders_every_served_list(self):
+        from benchmarks.f1_evidence_report import monotonicity
+        from benchmarks.f1_score_contract_probe import LEGACY_PREFIXES
+
+        stats = monotonicity(_load(_AFTER)["cases"], LEGACY_PREFIXES)
+        # 27 before, more after: several session-shaped cases served one hit
+        # under the mixed column and three under the fused one, so a list that
+        # could not be out of order became one that could.
+        assert stats["orderable_lists"] >= 27, "nothing orderable: the count below would be vacuous"
+        assert stats["not_non_increasing"] == 0, stats["violating_cases"]
+
+    def test_the_monotonicity_count_can_be_non_zero(self):
+        """A counter that cannot count is not evidence that the count is 0."""
+        from benchmarks.f1_evidence_report import monotonicity
+        from benchmarks.f1_score_contract_probe import LEGACY_PREFIXES
+
+        after = _load(_AFTER)
+        key = next(k for k in after["cases"] if k.startswith("stage|") and len(after["cases"][k]) >= 2)
+        after["cases"][key][0][1] = -1.0
+        assert monotonicity(after["cases"], LEGACY_PREFIXES)["not_non_increasing"] == 1
+
+    def test_every_case_that_moved_is_a_case_a_re_sorting_stage_reached(self):
+        """The order moves only where ``session_boost`` or temporal decay ran."""
+        from benchmarks.f1_evidence_report import build_report
+
+        report = build_report(_load(_BEFORE), _load(_AFTER))
+        moved = [entry["case"] for entry in report["served_order_moved"]["detail"]]
+        assert moved, "nothing moved: the claim below would be vacuous"
+        for case in moved:
+            assert "session_boost" in case or "temporal_decay" in case, case
+
+
+class TestCommittedSessionScorecard:
+    """F1 is non-inferior where the order moves, measured and committed.
+
+    Three scorecards over a session-shaped corpus, one per leg-correlation
+    setting, each a paired comparison of 400 questions. The assertion is
+    non-inferiority: no metric, at any setting, comes back ``baseline_better``.
+    """
+
+    @staticmethod
+    def _cards() -> list[dict]:
+        cards = [_load(path) for path in sorted(_EVIDENCE.glob("session-scorecard-sn*.json"))]
+        assert len(cards) == 3, [p.name for p in sorted(_EVIDENCE.glob("session-scorecard-sn*.json"))]
+        return cards
+
+    def test_every_scorecard_paired_the_full_question_set(self):
+        for card in self._cards():
+            assert card["n_pairs"] == 400, card["candidate_label"]
+            assert card["dropped_non_ok"] == []
+
+    def test_no_metric_at_any_setting_favours_the_pre_fix_tree(self):
+        offenders = [
+            (card["candidate_label"], comparison["label"], comparison["note"])
+            for card in self._cards()
+            for comparison in card["comparisons"]
+            if comparison["verdict"] == "baseline_better"
+        ]
+        assert not offenders, offenders
+
+    def test_both_discordant_directions_are_recorded(self):
+        """A net would let 4-vs-18 and 11-vs-11 print the same headline."""
+        for card in self._cards():
+            for comparison in card["comparisons"]:
+                assert "candidate_only" in comparison and "baseline_only" in comparison
+                assert comparison["n_discordant"] == comparison["candidate_only"] + comparison["baseline_only"]
+
+    def test_at_least_one_setting_moved_enough_questions_to_be_testable(self):
+        """All-concordant scorecards would make the non-inferiority claim vacuous."""
+        testable = [
+            comparison["label"]
+            for card in self._cards()
+            for comparison in card["comparisons"]
+            if comparison["n_discordant"] >= comparison["min_discordant_for_significance"]
+        ]
+        assert testable, "every comparison was underpowered or concordant; nothing was actually tested"

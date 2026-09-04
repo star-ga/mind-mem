@@ -1,0 +1,214 @@
+{
+  "after": {
+    "hybrid_recall_path": "/home/n/mind-mem/src/mind_mem/hybrid_recall.py",
+    "hybrid_recall_sha256": "5f6e16a4a499ab152f3c887e39b668b8a081f796fcda39d156d676561b8306e9"
+  },
+  "before": {
+    "hybrid_recall_path": "/tmp/claude-1000/-home-n/fc74df2c-72fb-4904-a620-cbb8f40fe87f/scratchpad/f1evidence/base-6cd37e5/src/mind_mem/hybrid_recall.py",
+    "hybrid_recall_sha256": "116566d2298426b483dd9183e201190014f154e70202f1d1fb548bf25c6ef4a5"
+  },
+  "cases": 125,
+  "default_path": {
+    "cases": 89,
+    "digest": "dd8c22fcb07097063428ad1471c7699ceade3d7cbffb7232672939097b712c21",
+    "hits": 1405,
+    "identical": true,
+    "min_results": 2,
+    "prefixes": [
+      "fused|default|",
+      "stage|plain|default|",
+      "deep|"
+    ]
+  },
+  "monotonicity_after": {
+    "lists": 45,
+    "not_non_increasing": 0,
+    "orderable_lists": 38,
+    "prefixes": [
+      "fused|",
+      "stage|"
+    ],
+    "violating_cases": []
+  },
+  "monotonicity_before": {
+    "lists": 45,
+    "not_non_increasing": 24,
+    "orderable_lists": 27,
+    "prefixes": [
+      "fused|",
+      "stage|"
+    ],
+    "violating_cases": [
+      "fused|default|how does fusion relate to scoring and why|10",
+      "fused|default|how does fusion relate to scoring and why|25",
+      "fused|default|how does fusion relate to scoring and why|3",
+      "fused|default|retrieval fusion scoring|10",
+      "fused|default|retrieval fusion scoring|25",
+      "fused|default|retrieval fusion scoring|3",
+      "fused|rrf_k_10|how does fusion relate to scoring and why|10",
+      "fused|rrf_k_10|how does fusion relate to scoring and why|25",
+      "fused|rrf_k_10|how does fusion relate to scoring and why|3",
+      "fused|rrf_k_10|retrieval fusion scoring|10",
+      "fused|rrf_k_10|retrieval fusion scoring|25",
+      "fused|rrf_k_10|retrieval fusion scoring|3",
+      "stage|chunked_dedup|default|10",
+      "stage|chunked_dedup|default|25",
+      "stage|chunked_dedup|default|5",
+      "stage|chunked_dedup|trust_scores|10",
+      "stage|chunked_dedup|trust_scores|25",
+      "stage|chunked_dedup|trust_scores|5",
+      "stage|plain|default|10",
+      "stage|plain|default|25",
+      "stage|plain|default|5",
+      "stage|plain|trust_scores|10",
+      "stage|plain|trust_scores|25",
+      "stage|plain|trust_scores|5"
+    ]
+  },
+  "reproduce": [
+    "python3.12 benchmarks/f1_score_contract_probe.py AFTER.json",
+    "F1_PROBE_SRC=<tree>/src python3.12 benchmarks/f1_score_contract_probe.py BEFORE.json",
+    "python3.12 benchmarks/f1_evidence_report.py BEFORE.json AFTER.json REPORT.json"
+  ],
+  "score_column_changed": {
+    "cases": 125,
+    "note": "F1 rewrites the score column by design; a case here without a served_order_moved entry kept its order and changed only the number attached to it."
+  },
+  "served_order_moved": {
+    "cases": 11,
+    "detail": [
+      {
+        "after_ids": [
+          "BLK-019.2",
+          "BLK-018.2",
+          "BLK-017.2"
+        ],
+        "before_ids": [
+          "BLK-004.0"
+        ],
+        "case": "stage|chunked_dedup|temporal_decay|10",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-013.2",
+          "BLK-012.2",
+          "BLK-011.2"
+        ],
+        "before_ids": [
+          "BLK-008.0"
+        ],
+        "case": "stage|chunked_dedup|temporal_decay|25",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-059",
+          "BLK-058",
+          "BLK-057"
+        ],
+        "before_ids": [
+          "BLK-004"
+        ],
+        "case": "stage|plain|temporal_decay|10",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-053",
+          "BLK-052",
+          "BLK-051"
+        ],
+        "before_ids": [
+          "BLK-008"
+        ],
+        "case": "stage|plain|temporal_decay|25",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-059",
+          "BLK-058",
+          "BLK-056"
+        ],
+        "before_ids": [
+          "BLK-000"
+        ],
+        "case": "stage|session_boost|default|10",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-059",
+          "BLK-058",
+          "BLK-056"
+        ],
+        "before_ids": [
+          "BLK-000"
+        ],
+        "case": "stage|session_boost|default|25",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-059",
+          "BLK-058",
+          "BLK-057"
+        ],
+        "before_ids": [
+          "BLK-000"
+        ],
+        "case": "stage|session_boost|default|5",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-059",
+          "BLK-058",
+          "BLK-056"
+        ],
+        "before_ids": [
+          "BLK-004"
+        ],
+        "case": "stage|session_boost|temporal_decay|10",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-059",
+          "BLK-058",
+          "BLK-056"
+        ],
+        "before_ids": [
+          "BLK-000"
+        ],
+        "case": "stage|session_boost|trust_scores|10",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-059",
+          "BLK-058",
+          "BLK-056"
+        ],
+        "before_ids": [
+          "BLK-000"
+        ],
+        "case": "stage|session_boost|trust_scores|25",
+        "first_divergence_rank": 1
+      },
+      {
+        "after_ids": [
+          "BLK-059",
+          "BLK-058",
+          "BLK-057"
+        ],
+        "before_ids": [
+          "BLK-000"
+        ],
+        "case": "stage|session_boost|trust_scores|5",
+        "first_divergence_rank": 1
+      }
+    ]
+  }
+}
