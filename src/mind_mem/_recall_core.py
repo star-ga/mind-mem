@@ -2203,6 +2203,16 @@ def recall(
     return top
 
 
+#: Every ``recall.backend`` value this loader has a case for. Anything else
+#: falls through to the built-in BM25 Markdown scan, which is the right
+#: fallback and was the wrong silence: unknown config *keys* were logged and
+#: unknown config *values* were not, so a workspace configured
+#: ``"backend": "hybrid"`` was served the scan with nothing said, and the
+#: benchmark harness above it reported "hybrid" read off the config string.
+#: Naming the value costs one warning on a path no valid config takes.
+_KNOWN_RECALL_BACKENDS = frozenset({"scan", "tfidf", "sqlite", "vector"})
+
+
 def _load_backend(workspace: str) -> str | RecallBackend | None:
     """Load recall backend from config. Falls back to BM25 scan.
 
@@ -2239,6 +2249,8 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
             if unknown:
                 _log.warning("unknown_recall_config_keys", keys=sorted(unknown))
             recall_backend = recall_cfg.get("backend", "scan")
+            if isinstance(recall_backend, str) and recall_backend not in _KNOWN_RECALL_BACKENDS:
+                _log.warning("unknown_recall_backend", backend=recall_backend, known=sorted(_KNOWN_RECALL_BACKENDS), fallback="bm25_scan")
             if recall_backend == "sqlite":
                 return "sqlite"
             if recall_backend == "vector":
