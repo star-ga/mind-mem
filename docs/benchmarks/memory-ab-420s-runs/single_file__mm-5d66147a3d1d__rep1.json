@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-5d66147a3d1d",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 1,
+    "agent_inert_task_ids": [
+      "mm-5d66147a3d1d"
+    ]
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 261,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    },
+    "memory": {
+      "prompt_tokens": 1642,
+      "memory_tokens": 1382,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-5d66147a3d1d",
+      "sha": "5d66147a3d1d4b3e8f6b30c301b3bff680583f1b",
+      "parent_sha": "e94acc7bb86c5b21e9e79fe09463be22ff708815",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 664,
+        "corpus_bytes": 289896,
+        "cutoff": "2026-04-20T18:12:24Z",
+        "newest_seeded_at": "2026-04-20T18:12:24Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 17,
+          "files": [
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 261,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": false,
+            "reason": "tests_failed",
+            "returncode": 2,
+            "timed_out": false,
+            "n_passed_required": 0,
+            "missing_required": [
+              "tests/test_tenant_audit.py::TestGetChain::test_different_secrets_produce_different_genesis",
+              "tests/test_tenant_audit.py::TestGetChain::test_different_tenants_get_independent_chains",
+              "tests/test_tenant_audit.py::TestGetChain::test_genesis_deterministic_for_same_secret",
+              "tests/test_tenant_audit.py::TestGetChain::test_rejects_empty_tenant_id",
+              "tests/test_tenant_audit.py::TestGetChain::test_rejects_short_secret",
+              "tests/test_tenant_audit.py::TestGetChain::test_returns_cached_chain_on_second_call",
+              "tests/test_tenant_audit.py::TestGetChain::test_spec_change_refreshes_handle",
+              "tests/test_tenant_audit.py::TestListTenants::test_after_init_returns_tenant_ids",
+              "tests/test_tenant_audit.py::TestListTenants::test_empty_registry_returns_empty",
+              "tests/test_tenant_audit.py::TestVerifyTenant::test_chain_with_records_reports_count",
+              "tests/test_tenant_audit.py::TestVerifyTenant::test_clean_chain_verifies",
+              "tests/test_tenant_audit.py::TestVerifyTenant::test_verify_failure_returns_false"
+            ],
+            "tampered_paths": [],
+            "changed_paths": [],
+            "tail": "\n=========================== short test summary info ============================\nERROR tests/test_tenant_audit.py\n!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1642,
+            "memory_tokens": 1382,
+            "memory_blocks": [
+              "D-47BCFC00A824",
+              "D-1917A81A8DCB",
+              "D-A93338F37452",
+              "D-AA239FE56747",
+              "D-410F3F13BAFE",
+              "D-7F22A1F64C5B",
+              "D-93D7C4308EDA",
+              "D-28FEA9318FA5",
+              "D-46794357C08B",
+              "D-E94ACC7BB86C",
+              "D-B01B56A9FF27",
+              "D-52DF1DCB35D3",
+              "D-F5BCAB5D4BD6",
+              "D-5602D44C0BE3",
+              "D-8BC2F3F683E5"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "feat(audit): v4.0 prep — per-tenant audit chain façade tenant audit",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": false,
+            "reason": "tests_failed",
+            "returncode": 2,
+            "timed_out": false,
+            "n_passed_required": 0,
+            "missing_required": [
+              "tests/test_tenant_audit.py::TestGetChain::test_different_secrets_produce_different_genesis",
+              "tests/test_tenant_audit.py::TestGetChain::test_different_tenants_get_independent_chains",
+              "tests/test_tenant_audit.py::TestGetChain::test_genesis_deterministic_for_same_secret",
+              "tests/test_tenant_audit.py::TestGetChain::test_rejects_empty_tenant_id",
+              "tests/test_tenant_audit.py::TestGetChain::test_rejects_short_secret",
+              "tests/test_tenant_audit.py::TestGetChain::test_returns_cached_chain_on_second_call",
+              "tests/test_tenant_audit.py::TestGetChain::test_spec_change_refreshes_handle",
+              "tests/test_tenant_audit.py::TestListTenants::test_after_init_returns_tenant_ids",
+              "tests/test_tenant_audit.py::TestListTenants::test_empty_registry_returns_empty",
+              "tests/test_tenant_audit.py::TestVerifyTenant::test_chain_with_records_reports_count",
+              "tests/test_tenant_audit.py::TestVerifyTenant::test_clean_chain_verifies",
+              "tests/test_tenant_audit.py::TestVerifyTenant::test_verify_failure_returns_false"
+            ],
+            "tampered_paths": [],
+            "changed_paths": [],
+            "tail": "\n=========================== short test summary info ============================\nERROR tests/test_tenant_audit.py\n!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": false,
+        "control_success": false
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 0,
+          "returncode": -1,
+          "timed_out": true
+        },
+        "memory": {
+          "changed_files": 0,
+          "returncode": -1,
+          "timed_out": true
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 420.02
+        },
+        "memory": {
+          "wall_seconds": 420.09
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 0,
+    "control_successes": 0,
+    "delta_successes": 0,
+    "both_passed": 0,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 1,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "228bf8bdc26e688882e6670e3b4a16abcd4edccac809255de346e597b6771194"
+}

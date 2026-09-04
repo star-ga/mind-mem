@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-66b03be1ef24",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 261,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 405,
+      "timeouts": 0
+    },
+    "memory": {
+      "prompt_tokens": 1684,
+      "memory_tokens": 1423,
+      "agent_output_tokens_lower_bound": 435,
+      "timeouts": 0
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-66b03be1ef24",
+      "sha": "66b03be1ef2489f279c877b122d9a7a6093df3f3",
+      "parent_sha": "5d66147a3d1d4b3e8f6b30c301b3bff680583f1b",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 665,
+        "corpus_bytes": 291027,
+        "cutoff": "2026-04-20T18:17:30Z",
+        "newest_seeded_at": "2026-04-20T18:17:30Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 17,
+          "files": [
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 261,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 405,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "\nThe test file `tests/test_tenant_kms.py` imports `mind_mem.tenant_kms` — a module that didn't exist (the \"v4.0 prep: per-tenant KMS envelope encryption\" feature listed in ROADMAP.md). I implemented it as a single new file, `src/mind_mem/tenant_kms.py`, following project conventions (`tenant_audit.py` structure, `encryption.py`'s pure-stdlib HMAC-SHA256 counter-mode + encrypt-then-MAC construction, observability logger):\n\n- `MasterKey` — frozen dataclass validating bytes type and ≥32-byte length (error message contains the exact `≥32 bytes` text the test matches)\n- `WrappedDEK` — frozen dataclass (`tenant_id`, `nonce`, `wrapped`, `tag`) with versioned, magic-tagged `to_b64()`/`from_b64()` round-trip\n- `generate_tenant_dek()` — random 32-byte DEK wrapped under the master key; tag binds the envelope to the tenant ID as AAD; rejects empty tenant IDs\n- `unwrap_tenant_dek()` — constant-time tag verification first, so a wrong master key or tampered envelope raises `ValueError` instead of returning garbage\n- `rotate_tenant_dek()` — returns `(new_dek, new_wrapped, old_dek)` so callers keep both keys across the re-encryption window; old envelope stays valid\n- `create_master_key_from_env()` — reads base64 (standard or URL-safe alphabet, strict validation) from an env var; `RuntimeError(\"… not set\")` when missing, `ValueError` on non-base64\n\nVerification: `pytest tests/test_tenant_kms.py` → **12 passed**, exit 0. No files under `tests/` or `conftest.py` were touched.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 12,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/tenant_kms.py"
+            ],
+            "tail": "PASSED tests/test_tenant_kms.py::TestWrappedDEKSerialisation::test_to_from_b64_roundtrip\nPASSED tests/test_tenant_kms.py::TestRotateTenantDEK::test_rotation_produces_new_key_and_preserves_old\nPASSED tests/test_tenant_kms.py::TestCreateMasterKeyFromEnv::test_reads_b64_env\nPASSED tests/test_tenant_kms.py::TestCreateMasterKeyFromEnv::test_missing_env_raises\nPASSED tests/test_tenant_kms.py::TestCreateMasterKeyFromEnv::test_non_base64_raises\n12 passed in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1684,
+            "memory_tokens": 1423,
+            "memory_blocks": [
+              "D-47BCFC00A824",
+              "D-5D66147A3D1D",
+              "D-A93338F37452",
+              "D-1917A81A8DCB",
+              "D-410F3F13BAFE",
+              "D-AA239FE56747",
+              "D-E94ACC7BB86C",
+              "D-28FEA9318FA5",
+              "D-FCFE4849EA73",
+              "D-3EE2357ED41A",
+              "D-93D7C4308EDA",
+              "D-632EFD0DDC4F",
+              "D-2178E16FCCAE",
+              "D-D61925EC641A",
+              "D-4BD53C972DC5"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "feat(kms): v4.0 prep — per-tenant KMS envelope encryption tenant kms",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 435,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "\n**What was added** — `src/mind_mem/tenant_kms.py`, a per-tenant KMS envelope-encryption module following the repo's v4.0-prep façade pattern (mirrors `tenant_audit.py`'s structure/docstring style and `encryption.py`'s pure-stdlib crypto — no new dependencies):\n\n- `MasterKey` — frozen dataclass validating `bytes_` (must be `bytes`, ≥32 bytes; error message matches the test's `≥32 bytes` regex).\n- `WrappedDEK` — frozen dataclass (`tenant_id`, `nonce`, `wrapped`, `tag`) with `to_b64()`/`from_b64()` via a versioned JSON envelope; `from_b64` rejects malformed/unknown-version blobs with `ValueError`.\n- `generate_tenant_dek(master, tenant_id)` — mints a random 32-byte DEK and wraps it under the master key using an HMAC-SHA256 counter-mode keystream with encrypt-then-MAC; the MAC binds the ciphertext to the tenant ID (blocks cross-tenant DEK transplanting). Empty tenant IDs raise `ValueError`.\n- `unwrap_tenant_dek(master, wrapped)` — constant-time MAC verification (fails with `ValueError` on wrong master key/tampering), then keystream decrypt.\n- `rotate_tenant_dek(master, current)` — unwraps first (proves authority), mints a new DEK, returns `(new_dek, new_wrapped, old_dek)` so callers hold both plaintexts during the re-encrypt window; the old wrapped blob stays valid.\n- `create_master_key_from_env(name)` — reads base64 (standard or URL-safe, padding-tolerant) from the environment; `RuntimeError(\"…not set…\")` when missing, `ValueError` on invalid base64 or short keys.\n\nVerified: `tests/test_tenant_kms.py` 12/12 passed, and the sibling `tests/test_tenant_audit.py` still passes (12/12). Tests and `conftest.py` untouched.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 12,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/tenant_kms.py"
+            ],
+            "tail": "PASSED tests/test_tenant_kms.py::TestWrappedDEKSerialisation::test_to_from_b64_roundtrip\nPASSED tests/test_tenant_kms.py::TestRotateTenantDEK::test_rotation_produces_new_key_and_preserves_old\nPASSED tests/test_tenant_kms.py::TestCreateMasterKeyFromEnv::test_reads_b64_env\nPASSED tests/test_tenant_kms.py::TestCreateMasterKeyFromEnv::test_missing_env_raises\nPASSED tests/test_tenant_kms.py::TestCreateMasterKeyFromEnv::test_non_base64_raises\n12 passed in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        },
+        "memory": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 311.36
+        },
+        "memory": {
+          "wall_seconds": 381.59
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "3c35e3b1861dc21467f2bd1d88fe39c05d590d69bee68dc64210a9035f96204b"
+}
