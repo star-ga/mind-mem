@@ -104,6 +104,37 @@ _CONTENDED_LOCK_ERRNOS: frozenset[int] = frozenset(
     if code is not None
 )
 
+#: Win32 error codes that mean "another process has this file open in a way
+#: that forbids what we just asked for" -- contention, not a fault.
+#:
+#:   32  ERROR_SHARING_VIOLATION -- the file is open by someone else
+#:   33  ERROR_LOCK_VIOLATION    -- a byte range someone else has locked
+#:
+#: Consulted only when CPython actually supplies ``winerror``, which it does
+#: for the calls it makes through Win32 directly and does NOT for the ones it
+#: makes through the CRT. ``os.open`` is a CRT call (``_wopen``): the failure
+#: measured on the runners rendered as ``[Errno 13] Permission denied``, and
+#: an ``OSError`` carrying a ``winerror`` renders ``[WinError 32] ...`` --
+#: so on that path ``winerror`` was NULL and only ``errno`` was set. Hence
+#: this set is a supplement to the errno test below, never a replacement for
+#: it: matching on ``winerror`` alone would have caught nothing.
+_SHARING_VIOLATION_WINERRORS: frozenset[int] = frozenset({32, 33})
+
+
+def _is_lock_contention(exc: OSError) -> bool:
+    """Whether *exc* means "somebody else has it", not "this is broken".
+
+    The single definition of contention for every arm in this module, so a
+    new call site cannot invent its own answer. Hard failures -- EIO,
+    ENOSPC, EBADF -- are in neither vocabulary and keep propagating by name,
+    because a failing disk reported as a lock timeout names the wrong thing.
+    """
+    winerror = getattr(exc, "winerror", None)
+    if winerror is not None and winerror in _SHARING_VIOLATION_WINERRORS:
+        return True
+    return exc.errno in _CONTENDED_LOCK_ERRNOS
+
+
 #: Byte offset of the one-byte region every OS lock in this module takes.
 #:
 #: ``msvcrt.locking`` locks *from the current file position*. A holder locks
@@ -226,9 +257,8 @@ class FileLock:
     def _acquire_file_lock(self, start: float) -> None:
         """Acquire the filesystem-level lock."""
         while True:
-            try:
-                fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError:
+            fd = self._try_create_claim()
+            if fd is None:
                 abandoned = self._stale_identity()
                 if abandoned is not None:
                     outcome = self._break_stale(abandoned)
@@ -266,7 +296,7 @@ class FileLock:
             try:
                 self._os_lock(fd)
             except OSError as exc:
-                if exc.errno not in _CONTENDED_LOCK_ERRNOS:
+                if not _is_lock_contention(exc):
                     # A HARD failure -- EIO, ENOSPC, EBADF. Not contention,
                     # and not something waiting can fix. It keeps the
                     # behaviour it always had: undo the claim (so no
@@ -330,6 +360,52 @@ class FileLock:
                 self._lock_identity = None
             self._lock_fd = fd
             return
+
+    def _try_create_claim(self) -> int | None:
+        """Create the lockfile and return its fd, or ``None`` if it is held.
+
+        Raises for anything that is not contention, so a real fault still
+        reaches the caller by name.
+
+        POSIX says "held" with ``FileExistsError`` and nothing else, which is
+        why this arm caught only that for as long as the module existed.
+        Windows has a second answer. Measured on windows-latest 3.12 (CI run
+        33904519141, job 101126178298), six processes contending for one
+        lock: four died with ``PermissionError: [Errno 13] Permission
+        denied: 'C:\\...\\shared_fixed.dat.lock'`` raised straight out of
+        ``acquire``, and the same error killed a worker in the served-ledger
+        gate. Zero mutual-exclusion violations were ever reported -- the lock
+        was correct throughout. Only the LOSER of the race was wrong: it
+        raised where the ``FileExistsError`` answer would have waited.
+
+        ``EACCES`` on a create is ambiguous in a way ``EEXIST`` is not: it is
+        also what a directory nobody may write to answers. The lockfile
+        EXISTING is what disambiguates -- refused because it is already there
+        is contention; refused with nothing there at all is a permissions
+        fault.
+
+        Hence the second attempt, and it is not belt-and-braces. The
+        existence check races the holder's release: a lockfile can be gone by
+        the time we stat it, and reading that as a fault would crash a caller
+        for winning a race. One retry resolves it without guessing -- if the
+        file really did vanish the create now SUCCEEDS, and if it is still
+        refused with still nothing there, nothing was ever there to hold and
+        the error is real. Bounded at two attempts so a genuinely
+        unwritable directory cannot spin.
+        """
+        for last_attempt in (False, True):
+            try:
+                return os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                return None
+            except OSError as exc:
+                if not _is_lock_contention(exc):
+                    raise
+                if os.path.exists(self.lock_path):
+                    return None  # somebody has it: poll, do not raise
+                if last_attempt:
+                    raise  # refused, and nothing is there to refuse it FOR
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _discard_lock_file(self, fd: int) -> None:
         """Close ``fd`` and remove the lockfile, ignoring cleanup errors.
@@ -623,9 +699,29 @@ class FileLock:
                 return _BREAK_NOTHING  # the path names somebody else's claim
             # Adopt. From here the file is ours: same inode, our pid, our
             # descriptor, our OS lock. release() unwinds it like any other.
-            os.ftruncate(fd, 0)
-            os.lseek(fd, 0, os.SEEK_SET)
-            os.write(fd, f"{os.getpid()}\n".encode())
+            try:
+                os.ftruncate(fd, 0)
+                os.lseek(fd, 0, os.SEEK_SET)
+                os.write(fd, f"{os.getpid()}\n".encode())
+            except OSError as exc:
+                if not _is_lock_contention(exc):
+                    raise
+                # The rewrite that MAKES the adoption could not land, so no
+                # adoption happened: report the break as not taken and let
+                # the acquire poll on with its deadline still running. The
+                # ``finally`` below releases the OS lock and closes the
+                # descriptor, and nothing was unlinked, so the corpse is
+                # left exactly as it was for the next waiter to try.
+                #
+                # Reachable on Windows for the same reason the create arm is:
+                # ``ftruncate`` is ``_chsize_s`` and ``write`` is ``_write``,
+                # both CRT calls that answer EACCES where the platform means
+                # ERROR_SHARING_VIOLATION / ERROR_LOCK_VIOLATION. Truncating a
+                # file whose byte range someone still has locked is precisely
+                # the second of those. A hard error here -- EIO, ENOSPC --
+                # still propagates: an adoption that failed because the disk
+                # failed must not be reported as a lost race.
+                return _BREAK_NOTHING
             self._lock_identity = identity
             self._lock_fd = fd
             adopted = True

@@ -1274,6 +1274,109 @@ class TestAHarnessThatCannotSayWhyIsNotAHarness:
         assert probe.stderr_tail == "", probe.stderr_tail
 
 
+#: Injected into the lock probe to make ``os.open`` answer the way Windows
+#: does under contention: EACCES on the create, not EEXIST.
+#:
+#: Not a guess about Windows. It is the error windows-latest 3.12 actually
+#: produced -- CI run 33904519141, job 101126178298, six processes on one
+#: lock, four of them killed by
+#: ``PermissionError: [Errno 13] Permission denied: '...shared_fixed.dat.lock'``
+#: raised straight out of ``acquire``. Errno-only, with no ``winerror``:
+#: ``OSError.__str__`` renders ``[WinError n]`` whenever one is set, and that
+#: message did not, because ``os.open`` reaches the CRT's ``_wopen``.
+#:
+#: Fires only while the lockfile genuinely exists, which is the state the
+#: platform reports it for, and only half the time, so both the refused and
+#: the ordinary path are exercised in one run.
+_WINDOWS_CREATE_REFUSAL = """\
+import os as _os, errno as _errno, random as _random
+_real_open = _os.open
+
+
+def _windows_sharing_violation(path, flags, *a, **k):
+    p = _os.fspath(path)
+    if (flags & _os.O_CREAT) and p.endswith(".lock") and _random.random() < 0.5:
+        if _os.path.exists(p):
+            raise PermissionError(_errno.EACCES, "Permission denied", p)
+    return _real_open(path, flags, *a, **k)
+
+
+_os.open = _windows_sharing_violation
+"""
+
+#: The create arm as it stood before the refusal was handled: EEXIST is
+#: contention and every other answer escapes ``acquire``. Applied on top of
+#: :data:`_WINDOWS_CREATE_REFUSAL` in the twin below.
+_PRE_FIX_CREATE_ARM = """\
+def _create_claim_that_only_knows_eexist(self):
+    try:
+        return os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return None
+
+
+mfl.FileLock._try_create_claim = _create_claim_that_only_knows_eexist
+"""
+
+
+def _probe_with(source_extra: str, tmp_path, tag: str, monkeypatch, iters: int = 150):
+    """Run the lock probe with *source_extra* spliced into the worker."""
+    monkeypatch.setattr("test_chain_concurrency._LOCK_ITERS", iters)
+    head = "import os, sys, time, traceback\nimport mind_mem.mind_filelock as mfl\n"
+    assert head in _LOCK_PROBE_SOURCE, "the worker preamble moved"
+    monkeypatch.setattr(
+        "test_chain_concurrency._LOCK_PROBE_SOURCE",
+        _LOCK_PROBE_SOURCE.replace(head, head + source_extra, 1),
+    )
+    return _run_lock_probe(tmp_path, defeat=False, tag=tag)
+
+
+class TestTheWindowsCreateRefusalDoesNotKillWorkers:
+    """The evidenced Windows failure, reproduced across real processes here.
+
+    ``FileLock`` answers ``O_CREAT|O_EXCL`` contention correctly on POSIX
+    because POSIX only ever says ``EEXIST``. Windows also says ``EACCES``,
+    and that answer escaped ``acquire`` and killed the worker: four of six in
+    ``test_no_two_processes_are_ever_inside_the_section``, four of six in
+    ``test_the_clean_run_reports_no_diagnosis``, and one of two in
+    ``test_served_ledger_concurrency``.
+
+    What is simulated is the ERRNO, not the platform. That Windows raises it
+    is established by the CI transcript, not by this file; what these two
+    tests establish is that the shipped lock handles it -- and, in the twin,
+    that the handling is load-bearing rather than decorative.
+    """
+
+    def test_six_contending_workers_all_survive_the_refusal(self, tmp_path, monkeypatch) -> None:
+        probe = _probe_with(_WINDOWS_CREATE_REFUSAL, tmp_path, "winsim", monkeypatch)
+
+        assert probe.diagnosis == "", f"{probe.diagnosis}\n{probe}"
+        assert probe.exit_codes == (0,) * _LOCK_PROCS, f"a worker died on a contended create:\n{probe}"
+        assert probe.reported == _LOCK_PROCS, f"only {probe.reported}/{_LOCK_PROCS} workers reported\n{probe}"
+        assert probe.completed == _LOCK_PROCS * 150, f"the refusal cost acquisitions:\n{probe}"
+        # The refusal must be waited out, never routed around: exclusion is
+        # still the property, and a "fix" that let a second process in would
+        # pass every assertion above.
+        assert probe.violations == 0, f"two processes held the same lock {probe.violations} times\n{probe}"
+
+    def test_the_pre_fix_create_arm_kills_them(self, tmp_path, monkeypatch) -> None:
+        """MUTATION TWIN. Put back "only EEXIST is contention" and it dies.
+
+        Without this the test above would also pass on a platform where the
+        injection never fires, and the guard it exists to prove would be
+        untested. Measured here: the same ``PermissionError: [Errno 13]``
+        text, from the same assertion line, as the Windows rows produced.
+        """
+        probe = _probe_with(_WINDOWS_CREATE_REFUSAL + _PRE_FIX_CREATE_ARM, tmp_path, "winsim_prefix", monkeypatch)
+
+        assert probe.exit_codes != (0,) * _LOCK_PROCS, f"the pre-fix arm survived — the injection did not fire:\n{probe}"
+        assert "PermissionError" in probe.diagnosis, f"it died of something else:\n{probe}"
+        assert "Errno 13" in probe.diagnosis, f"not the errno the runners reported:\n{probe}"
+        # And the lock was never actually broken by it — the workers died
+        # LOSING a race, which is exactly why raising was the wrong answer.
+        assert probe.violations == 0, f"the pre-fix arm also let two processes in:\n{probe}"
+
+
 def _v501_stale_identity(self):
     """The v5.0.1 ``_is_stale`` verdict, in this code's identity protocol.
 
