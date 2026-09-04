@@ -777,8 +777,10 @@ class KnowledgeGraph:
         servable — which is the truth here, since ``graph_query`` serves
         every edge it finds. The consequence is deliberate: a tier that
         mints a withheld status (external ingest, agent message, auto
-        capture) **cannot** land an edge, and the scopes that can are the
-        proposal apply and the carrying tiers.
+        capture) **cannot** land an edge, and the scopes that can are
+        ``admit_edge`` — the one the three doors open, whose
+        :attr:`~mind_mem.enums.IngestTier.EDGE_APPROVAL` tier exists for
+        exactly this — the proposal apply, and the carrying tiers.
 
         Raises:
             UngatedWriteError: no admission scope is open, or the open one
@@ -1016,7 +1018,7 @@ class KnowledgeGraph:
 
         Governance: this opens no scope of its own — it commits through
         :meth:`add_edge`, so it runs inside the caller's. The door is
-        ``mcp.tools.graph.approve_edge``, which opens ``admit_proposal``
+        ``mcp.tools.graph.approve_edge``, which opens ``admit_edge``
         over :func:`edge_id` of the proposal's own tuple (computable from
         the proposal before this is called, because both ids are derived
         from the same canonical preimage). An approval with no scope open

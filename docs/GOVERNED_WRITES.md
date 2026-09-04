@@ -26,14 +26,30 @@ the store, so a new door cannot forget.
 
 ## How to write a block
 
-Open an admission through the gate. There are three, and which one you may use is decided
+Open an admission through the gate. There are four, and which one you may use is decided
 by your tier, not by you:
 
 | opener | covers | who uses it |
 |---|---|---|
 | `admit_block(action, block_id, content, …)` | exactly that id | a single authored block |
 | `admit_batch(action, batch_id, block_ids, content, …)` | the named set | bulk ingest, migration, re-extraction |
+| `admit_edge(edge_id, content, block_ids=…, …)` | that edge, plus any block ids it names | the three knowledge-graph doors committing one edge |
 | `admit_proposal(proposal_id, content, …)` | any block, for the scope | `apply_engine` applying an approved proposal — **the only path to `ACTIVE`** |
+
+`admit_proposal` is the broad one, and the phrase "the only path to `ACTIVE`" is a claim
+about **who opens it**, not only about the tier table. In 5.0.2 that claim was checked and
+found untrue of the tree: seven functions opened it, three of them to commit a
+knowledge-graph edge. `tests/test_admit_proposal_openers.py` now pins the openers by name
+and fails the build on an unlisted one, and the edge doors moved to `admit_edge` — a scope
+whose receipt covers the ids it names instead of every id it is asked about. One production
+opener remains, and it is the apply engine.
+
+**Known limit, stated rather than implied:** `admit_proposal` takes a proposal **id
+string** and does not resolve it. Opening the scope with an id that names no proposal
+succeeds, and the block it lands carries a chain record naming a review that did not
+happen. Bounding the openers is what 5.0.2 does about it; making the scope take a resolved
+proposal record is the next slice, and `TestTheScopeIsAmbient` in that test file is the
+reproduction to invert when it lands.
 
 ```python
 from mind_mem.governance_gate import get_gate
@@ -58,6 +74,18 @@ ingest door fails closed rather than landing recallable blocks.
 Untrusted sources — the inbox drop folder, importers, agent messages — arrive
 `QUARANTINED` with an external-ingest tier and stay invisible to recall until a governance
 proposal releases them.
+
+### Edges are not blocks
+
+`admit_edge` mints `IngestTier.EDGE_APPROVAL`, whose `INITIAL_STATUS` row is `None`. That
+is not an exemption granted to an ingest door: what the scope writes is a knowledge-graph
+edge, which has no `Status` field, so there is no honest value to put in the row. A `None`
+row constrains no status, so the narrowness has to come from somewhere else — and it does,
+from two directions at once. The receipt covers the edge id and whatever block ids the
+caller named, and nothing else; and `governance_gate.SCOPE_BOUND_TIERS` makes the tier
+unreachable from `admit_block` / `admit_batch`, so no other door can borrow a row that
+constrains nothing. `E-` is also not a prefix the block store can route, so the covered id
+cannot name a corpus file even in principle.
 
 ### Confined tiers
 

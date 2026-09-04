@@ -20,8 +20,14 @@ import os
 SRC_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "mind_mem")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-#: Context managers on ``GovernanceGate`` that open an admission scope.
-ADMIT_OPENERS: frozenset[str] = frozenset({"admit_block", "admit_batch", "admit_proposal"})
+#: Context managers on ``GovernanceGate`` that open a WRITE admission scope.
+#:
+#: ``admit_edge`` joined the set in 5.0.2 when knowledge-graph edges got
+#: their own scope. It is a write scope like the other three — it mints a
+#: WRITE receipt over a frozen id set — so a caller that opens it and then
+#: writes the block the same decision re-stamps is admitted, exactly as an
+#: ``admit_batch`` caller is.
+ADMIT_OPENERS: frozenset[str] = frozenset({"admit_block", "admit_batch", "admit_edge", "admit_proposal"})
 
 #: The DELETE-side scopes, kept as a SEPARATE set rather than folded into
 #: :data:`ADMIT_OPENERS`. A receipt is not transferable between the two
@@ -300,6 +306,31 @@ def scan_write_block_calls(files: tuple[str, ...]) -> tuple[tuple[str, str, int]
     hits: list[tuple[str, str, int]] = []
     for path in files:
         hits.extend(find_write_block_calls(parse(path), relpath(path)))
+    return tuple(sorted(hits))
+
+
+def find_scope_openers(tree: ast.AST, rel: str, opener: str) -> list[tuple[str, str, int]]:
+    """``(file, enclosing qualname, lineno)`` for every call to *opener*.
+
+    The same shape as :func:`find_write_block_calls`, generalised over the
+    method name, because "who may open this scope" is a question worth
+    asking of a scope other than the write one. ``opens_admission`` asks
+    only whether SOME opener is present in a function; this reports every
+    opener call site by name, which is what an allowlist needs.
+    """
+    names = qualnames(tree)
+    hits = [
+        (rel, names.get(node, "") or "<module>", node.lineno)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and called_name(node) == opener
+    ]
+    return sorted(hits, key=lambda h: (h[0], h[2]))
+
+
+def scan_scope_openers(files: tuple[str, ...], opener: str) -> tuple[tuple[str, str, int], ...]:
+    hits: list[tuple[str, str, int]] = []
+    for path in files:
+        hits.extend(find_scope_openers(parse(path), relpath(path), opener))
     return tuple(sorted(hits))
 
 

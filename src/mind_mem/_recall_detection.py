@@ -19,6 +19,7 @@ __all__ = [
     "_INTENT_TO_QUERY_TYPE",
     "chunk_text",
     "get_excerpt",
+    "normalise_tags",
     "_parse_speaker_from_tags",
     "get_block_type",
 ]
@@ -613,11 +614,59 @@ def get_excerpt(block: dict, max_len: int = 300) -> str:
     return str(block.get("_id", "?"))
 
 
-def _parse_speaker_from_tags(tags_str: str) -> str:
-    """Extract speaker name from Tags field. Tags format: 'FACT, Caroline'."""
-    if not tags_str:
+def normalise_tags(tags: object) -> str:
+    """Render a block's ``Tags`` field as the comma-separated string its readers expect.
+
+    The field round-trips out of the corpus in **two** shapes, and every
+    consumer downstream of the parser was written for one of them.
+    ``Tags: FACT, Caroline`` parses back as the string it was written as;
+    a list-valued ``Tags`` renders in the block store's list form ::
+
+        Tags:
+        - probe
+
+    and parses back as ``["probe"]``. Measured on 5.0.2, a single block
+    written that way through ``MarkdownBlockStore.write_block`` made
+    ``build_index`` raise ``'list' object has no attribute 'split'`` out
+    of :func:`_parse_speaker_from_tags` — so one malformed block bricked
+    the reindex for the whole workspace, not just for itself. The same
+    value reaches a SQLite parameter binding and an FTS5 insert one line
+    later, where a list is not a bindable type either.
+
+    Normalising here rather than at each reader is the point: the shape
+    of the ``Tags`` field is this module's concern, and a guard added at
+    the call site that crashed would have left the other five call sites
+    holding the same list.
+
+    A ``str`` is returned **unchanged** — no strip, no re-join — so a
+    corpus that never held a list is byte-identical through this
+    function. A list or tuple is folded into the comma-separated
+    spelling the string form already uses, empty entries dropped. Any
+    other **falsy** value reads as the empty field, which is exactly what
+    the ``block.get("Tags", "") or ""`` these call sites used to spell
+    did; and anything else is stringified rather than raising, because a
+    reader of an already-stored block has no way to reject it and
+    failing here would brick the same reindex this exists to unbrick.
+    """
+    if isinstance(tags, str):
+        return tags
+    if not tags:
         return ""
-    parts = [t.strip() for t in tags_str.split(",")]
+    if isinstance(tags, (list, tuple)):
+        return ", ".join(part for part in (str(t).strip() for t in tags) if part)
+    return str(tags)
+
+
+def _parse_speaker_from_tags(tags_str: object) -> str:
+    """Extract speaker name from Tags field. Tags format: 'FACT, Caroline'.
+
+    Accepts any shape :func:`normalise_tags` accepts — the list form
+    included, which is what a list-valued ``Tags`` parses back as.
+    """
+    tags = normalise_tags(tags_str)
+    if not tags:
+        return ""
+    parts = [t.strip() for t in tags.split(",")]
     # First tag is the card type (FACT/EVENT/etc), rest are speaker/metadata
     for p in parts[1:]:
         if (

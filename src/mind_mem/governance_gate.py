@@ -55,7 +55,7 @@ Callers do not use :meth:`GovernanceGate.admit` directly — they open an
     with gate.admit_block("WRITE", block_id, content, tier=IngestTier.EXTERNAL_INGEST):
         store.write_block(block)
 
-Five scopes. Three for the shapes a governed write takes:
+Six scopes. Four for the shapes a governed write takes:
 
 ``admit_block``     one block (an inbox drop, a single message).
 ``admit_batch``     a named set written in one operation (bulk ingest,
@@ -63,6 +63,11 @@ Five scopes. Three for the shapes a governed write takes:
 ``admit_proposal``  every block written while applying one approved
                     proposal — the gate admits once per proposal, so
                     this is the honest encoding of an apply's scope.
+``admit_edge``      one operator-approved knowledge-graph edge, plus
+                    whichever blocks the same decision re-stamps. Added
+                    in 5.0.2 because the three edge doors were opening
+                    ``admit_proposal`` — the broadest scope the gate
+                    has — to land content that needs none of its reach.
 
 …and two for the shapes a governed *delete* takes, which had no gate at
 all before 5.0.2 (``delete_block`` checked nothing in any of the five
@@ -84,11 +89,20 @@ write receipt cannot be spent on a delete.
 ``admit_block`` / ``admit_batch`` take a required ``tier`` keyword and
 refuse any tier whose :data:`~mind_mem.enums.INITIAL_STATUS` row is
 servable; ``admit_proposal`` takes no tier at all and always mints
-:attr:`~mind_mem.enums.IngestTier.PROPOSAL_APPLY`. So "only an approved
+:attr:`~mind_mem.enums.IngestTier.PROPOSAL_APPLY`, and ``admit_edge``
+likewise always mints
+:attr:`~mind_mem.enums.IngestTier.EDGE_APPROVAL`. So "only an approved
 proposal can produce a recallable block" is enforced by construction
 rather than by every door remembering to stamp ``Status: quarantined``
 — a caller cannot request a status, and a source with no tier cannot
 obtain a receipt at all.
+
+The two hardcoded tiers are paired with their scopes in **both**
+directions: ``admit_proposal`` is the only scope that may mint
+``PROPOSAL_APPLY``, and ``admit_edge`` is the only scope that may mint
+``EDGE_APPROVAL``. So the count of production callers of the
+``ACTIVE``-minting scope is a number a structural test can pin, which
+is what ``tests/test_admit_proposal_openers.py`` does.
 """
 
 from __future__ import annotations
@@ -98,7 +112,8 @@ import json
 import os
 import threading
 from contextlib import contextmanager
-from typing import Final, Iterable, Iterator, Optional, Sequence
+from types import MappingProxyType
+from typing import Final, Iterable, Iterator, Mapping, Optional, Sequence
 
 from .admission import (
     BATCH,
@@ -278,7 +293,60 @@ _MAX_LANDED_LISTED: Final = 256
 
 #: Tiers a non-proposal scope may open. Derived from the table rather
 #: than hand-listed, so a new row is classified the moment it exists.
+#:
+#: :attr:`~mind_mem.enums.IngestTier.EDGE_APPROVAL` is in this set by
+#: derivation — its row is ``None``, so it mints nothing servable — and is
+#: nonetheless refused for a ``BLOCK`` / ``BATCH`` scope by
+#: :meth:`GovernanceGate._check_tier`. Membership here says "this tier
+#: cannot mint a servable status"; it does not say "any scope may open
+#: it", and the edge tier is minted by :meth:`GovernanceGate.admit_edge`
+#: alone.
 MINTABLE_TIERS: frozenset[IngestTier] = frozenset(t for t in IngestTier if not mints_servable(t))
+
+#: Admission covering exactly one knowledge-graph edge, plus whichever
+#: blocks the same operator decision re-stamps.
+#:
+#: The fourth scope kind, and the reason the third stopped being the
+#: catch-all. ``BLOCK`` / ``BATCH`` / ``PROPOSAL`` live in
+#: :mod:`mind_mem.admission` beside the receipt they describe; this one
+#: lives here because it is the gate that mints it and
+#: :class:`~mind_mem.admission.AdmissionReceipt` treats ``kind`` as an
+#: opaque label everywhere except its ``PROPOSAL`` special case — an
+#: ``EDGE`` receipt therefore covers a frozen id set exactly as a
+#: ``BLOCK`` one does, and (unlike ``BATCH``) cannot be spent on a
+#: restore.
+EDGE: Final = "edge"
+
+#: The id prefix :func:`~mind_mem.knowledge_graph.edge_id` mints, and the
+#: only subject :meth:`GovernanceGate.admit_edge` will admit. Copied
+#: rather than imported: ``knowledge_graph`` imports ``admission``, and
+#: the gate must not acquire a dependency on the graph to authorise one.
+#: ``tests/test_governed_edge_scope.py`` fails the build if the two
+#: spellings drift.
+EDGE_ID_PREFIX: Final = "E-"
+
+#: Scope kind -> the one ingest tier it mints, for every scope whose tier
+#: is hardcoded rather than passed in.
+#:
+#: One table, read in **both** directions by
+#: :meth:`GovernanceGate._check_tier`: a listed scope may mint no other
+#: tier, and a listed tier may be minted by no other scope. Writing the
+#: pairing once is what keeps the second direction from being forgotten —
+#: it was, for ``PROPOSAL_APPLY``, harmlessly (the tier is servable, so
+#: the ``MINTABLE_TIERS`` rule refused it anyway); for ``EDGE_APPROVAL``
+#: it would not be harmless, because a carrying tier's row constrains no
+#: status at all.
+SCOPE_BOUND_TIERS: Mapping[str, IngestTier] = MappingProxyType(
+    {
+        PROPOSAL: IngestTier.PROPOSAL_APPLY,
+        EDGE: IngestTier.EDGE_APPROVAL,
+    }
+)
+
+#: Tiers an unnamed scope (``admit_block`` / ``admit_batch``) may open:
+#: everything that mints nothing servable, less the tiers bound above to
+#: a scope of their own. Derived from both tables, never hand-listed.
+OPEN_SCOPE_TIERS: frozenset[IngestTier] = MINTABLE_TIERS - frozenset(SCOPE_BOUND_TIERS.values())
 
 
 # Resolve the current_agent_id contextvar lazily so the API layer is not a
@@ -854,6 +922,65 @@ class GovernanceGate:
         receipt = self._mint("APPLY", proposal_id, content, PROPOSAL, frozenset(), IngestTier.PROPOSAL_APPLY, actor, target_file, metadata)
         yield from self._run_write_scope(receipt, "APPLY", str(proposal_id), target_file)
 
+    @contextmanager
+    def admit_edge(
+        self,
+        edge_id: str,
+        content: str,
+        *,
+        block_ids: Iterable[str] = (),
+        actor: str = "",
+        target_file: str = "",
+        metadata: Optional[dict] = None,
+    ) -> Iterator[AdmissionReceipt]:
+        """Admit one operator-approved knowledge-graph edge.
+
+        The three edge doors — ``mcp.graph_add_edge``,
+        ``mcp.approve_edge`` and
+        ``graph_ingest.approve_relation_signals`` — used to open
+        :meth:`admit_proposal` for this, because it was the only scope
+        that could land served content. That receipt authorises *every*
+        id it is asked about (``AdmissionReceipt.authorizes`` returns
+        ``True`` unconditionally for a ``PROPOSAL`` kind) at the one tier
+        that mints ``ACTIVE``, so committing an edge handed the door
+        ambient authority over the whole corpus for the length of the
+        scope. Nothing in an edge needs that.
+
+        This scope is the narrow shape the operation actually has: the
+        id set is **frozen when the scope opens**, exactly as
+        :meth:`admit_batch` freezes it, and the subject must be an
+        :func:`~mind_mem.knowledge_graph.edge_id` — an
+        :data:`EDGE_ID_PREFIX` id, which is not a prefix any block store
+        can route, so an edge scope cannot be spent on a corpus block it
+        was not asked to cover.
+
+        Args:
+            edge_id: The edge being committed, as
+                :func:`~mind_mem.knowledge_graph.edge_id` computes it.
+                The door computes it *before* opening the scope, so an
+                edge that cannot be named mints no authorisation record.
+            block_ids: Blocks the same decision re-stamps, if any.
+                ``graph_ingest.approve_relation_signals`` writes the
+                signal block back carrying ``Status: applied`` under the
+                same approval, and that is one decision rather than two —
+                so it is one scope, and the ids it may touch are named in
+                it rather than left ambient.
+
+        Raises:
+            GovernanceBypassError: The subject is not an edge id, or the
+                gate is retired / its spec binding has drifted.
+        """
+        subject = str(edge_id)
+        if not subject.startswith(EDGE_ID_PREFIX):
+            raise GovernanceBypassError(
+                f"refusing an edge admission for {subject!r}: an edge scope's subject must be an "
+                f"edge id ({EDGE_ID_PREFIX}…) as knowledge_graph.edge_id mints it. A scope named "
+                "after anything else is a block scope wearing an edge's tier; open admit_block."
+            )
+        covers = frozenset({subject}) | frozenset(str(bid) for bid in block_ids)
+        receipt = self._mint("WRITE", subject, content, EDGE, covers, IngestTier.EDGE_APPROVAL, actor, target_file, metadata)
+        yield from self._run_write_scope(receipt, "WRITE", subject, target_file)
+
     # ------------------------------------------------------------------
     # Delete scopes — the only way to authorise a block delete
     # ------------------------------------------------------------------
@@ -1288,14 +1415,27 @@ class GovernanceGate:
     def _check_tier(kind: str, block_id: str, tier: Optional[IngestTier]) -> None:
         """Refuse a tier the scope is not entitled to mint.
 
-        ``admit_proposal`` hardcodes its tier, so the ``PROPOSAL`` arm is
-        defence in depth; the ``BLOCK`` / ``BATCH`` arm is the live rule.
+        ``admit_proposal`` and ``admit_edge`` hardcode their tiers, so
+        the :data:`SCOPE_BOUND_TIERS` arm is defence in depth on the way
+        in; the ``BLOCK`` / ``BATCH`` arms are the live rule.
+
+        The pairing runs **both ways**, off one table: a scope listed in
+        :data:`SCOPE_BOUND_TIERS` may mint no other tier, and a tier
+        listed there may be minted by no other scope. Only the second
+        direction is load-bearing for
+        :attr:`~mind_mem.enums.IngestTier.EDGE_APPROVAL` — its
+        :data:`~mind_mem.enums.INITIAL_STATUS` row is ``None``, the
+        *carrying* row, which constrains no status at all, so an
+        ``admit_block`` able to name that tier would be able to land any
+        status on any id. Its narrowness is the scope's, so the scope
+        has to be the only way in.
         """
         if not isinstance(tier, IngestTier):
             raise GovernanceBypassError(f"admission for {block_id!r} named ingest tier {tier!r}, which is not an IngestTier member")
-        if kind == PROPOSAL:
-            if tier is not IngestTier.PROPOSAL_APPLY:
-                raise GovernanceBypassError(f"a proposal admission may only use {IngestTier.PROPOSAL_APPLY.value!r}, not {tier.value!r}")
+        bound = SCOPE_BOUND_TIERS.get(kind)
+        if bound is not None:
+            if tier is not bound:
+                raise GovernanceBypassError(f"a {kind} admission may only use {bound.value!r}, not {tier.value!r}")
             return
         if tier not in MINTABLE_TIERS:
             row = INITIAL_STATUS[tier]
@@ -1303,7 +1443,14 @@ class GovernanceGate:
                 f"refusing admission for {block_id!r}: ingest tier {tier.value!r} mints "
                 f"{(row.value if row else None)!r}, which recall serves. Only an approved "
                 f"proposal (admit_proposal) may do that; a {kind} scope must use one of "
-                f"{sorted(t.value for t in MINTABLE_TIERS)}."
+                f"{sorted(t.value for t in OPEN_SCOPE_TIERS)}."
+            )
+        if tier not in OPEN_SCOPE_TIERS:
+            raise GovernanceBypassError(
+                f"refusing admission for {block_id!r}: ingest tier {tier.value!r} is bound to its "
+                f"own scope, which names exactly what it may touch — its INITIAL_STATUS row "
+                f"constrains no status, so the scope is the whole of the constraint. A {kind} "
+                f"scope must use one of {sorted(t.value for t in OPEN_SCOPE_TIERS)}."
             )
 
     def current_spec_hash(self) -> Optional[str]:

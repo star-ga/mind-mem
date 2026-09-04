@@ -186,13 +186,28 @@ SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     ("src/mind_mem/bench/ab_seed.py", "write_seed"): LOCAL,
     # --- one operator approval of one staged relation signal. The signal
     # moves from `pending` (withheld) to `applied` (served), which is a mint
-    # of servable content, so the scope is admit_proposal and the block goes
-    # through the store like any other applied proposal. It used to be a
+    # of servable content, so it runs inside a scope -- admit_edge since
+    # 5.0.2, naming the edge id it commits and the signal block id it
+    # re-stamps, and nothing else. It was admit_proposal, which authorises
+    # every id it is asked about at the tier that mints ACTIVE; one relation
+    # approval never needed that reach. It used to be a
     # `re.subn` on SIGNALS.md with no scope at all -- measured: served after,
     # ledgers +0 -- because `write_block` REFUSED every SIG id until the
     # corpus table gave the prefix a row. See
     # tests/test_governed_signal_and_edge.py.
     ("src/mind_mem/graph_ingest.py", "approve_relation_signals"): LOCAL,
+    # --- anchoring a pre-gate corpus (H1). `mm anchor --apply` re-writes
+    # blocks that are ALREADY in the corpus and that no write scope ever
+    # landed, so the chain has no record of them: measured on a fresh
+    # workspace, a decision appended to DECISIONS.md by hand was indexed,
+    # served by recall, and verified 7/7 green against 0 chain rows and 0
+    # evidence rows. One admit_batch per pass under IngestTier.RESTAMP --
+    # a CARRYING tier whose INITIAL_STATUS row is None, so it mints no
+    # status: an `active` block stays `active` and this scope cannot be
+    # spent to escalate anything. The block written is the one `get_by_id`
+    # returned, never a synthesised one, and an id the store cannot
+    # resolve is reported skipped rather than invented.
+    ("src/mind_mem/anchoring.py", "restamp_unanchored"): LOCAL,
     # --- the enforcement point itself, and the three delegating adapters.
     ("src/mind_mem/block_store_postgres_replica.py", "ReplicatedPostgresBlockStore.write_block"): IMPLEMENTATION,
     ("src/mind_mem/storage/sharded_pg.py", "ShardedPostgresBlockStore.write_block"): IMPLEMENTATION,

@@ -259,17 +259,27 @@ class TestApprovingARelationSignal:
 
         approve_relation_signals(workspace, [sig_id])
 
-        rows = _rows_for(workspace, f"{RELATION_APPROVAL_PREFIX}{sig_id}")
+        eid = edge_id(SUBJECT, "depends_on", OBJECT, SOURCE_BLOCK)
+        rows = _rows_for(workspace, eid)
         assert len(rows) == 1, f"expected exactly one authorisation record, got {len(rows)}"
         assert len(_authorisations(workspace)) == before + 1
         meta = _meta(rows[0])
+        # The evidence action is unchanged by the move to admit_edge — WRITE
+        # and APPLY both classify as EvidenceAction.APPLY — so a 5.0.1 reader
+        # parses this row exactly as before. The raw verb is the thing that
+        # moved, and it is kept in the record rather than dropped.
         assert rows[0]["action"] == "APPLY"
+        assert _meta(rows[0])["action_verb"] == "WRITE"
         assert meta["door"] == "graph_ingest.approve_relation_signals"
         assert meta["signal_id"] == sig_id
+        # The scope's subject moved to the edge id in 5.0.2 (admit_edge names
+        # what it writes); the approval handle a chain reader joins back to the
+        # signal is kept in the record rather than lost.
+        assert meta["approval_id"] == f"{RELATION_APPROVAL_PREFIX}{sig_id}"
         assert meta["status_from"] == "pending"
         assert meta["status_to"] == APPLIED_STATUS
-        assert meta["edge_id"] == edge_id(SUBJECT, "depends_on", OBJECT, SOURCE_BLOCK)
-        assert meta["ingest_tier"] == IngestTier.PROPOSAL_APPLY.value
+        assert meta["edge_id"] == eid
+        assert meta["ingest_tier"] == IngestTier.EDGE_APPROVAL.value
 
     @pytest.mark.unit
     def test_the_edge_and_the_served_status_land_in_the_same_scope(self, workspace: str) -> None:
@@ -291,7 +301,7 @@ class TestApprovingARelationSignal:
         def _refuse(*_args: Any, **_kwargs: Any) -> Any:
             raise GovernanceBypassError("spec binding drifted")
 
-        monkeypatch.setattr("mind_mem.governance_gate.GovernanceGate.admit_proposal", _refuse)
+        monkeypatch.setattr("mind_mem.governance_gate.GovernanceGate.admit_edge", _refuse)
         report = approve_relation_signals(workspace, [sig_id])
 
         assert report["applied"] == []
@@ -382,7 +392,7 @@ class TestApprovingARelationSignal:
         assert mm_cli.main(["graph-backfill", "--approve", sig_id]) == 0
 
         assert sig_id in _served(workspace)
-        assert len(_rows_for(workspace, f"{RELATION_APPROVAL_PREFIX}{sig_id}")) == 1
+        assert len(_rows_for(workspace, edge_id(SUBJECT, "depends_on", OBJECT, SOURCE_BLOCK))) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +500,7 @@ class TestTheEdgeDoors:
         def _refuse(*_args: Any, **_kwargs: Any) -> Any:
             raise GovernanceBypassError("spec binding drifted")
 
-        monkeypatch.setattr("mind_mem.governance_gate.GovernanceGate.admit_proposal", _refuse)
+        monkeypatch.setattr("mind_mem.governance_gate.GovernanceGate.admit_edge", _refuse)
         out = json.loads(graph_add_edge(SUBJECT, "depends_on", OBJECT, SOURCE_BLOCK))
 
         assert out["error"] == "Edge refused by governance."
@@ -508,11 +518,15 @@ class TestTheEdgeDoors:
         out = json.loads(approve_edge(pid))
 
         assert out.get("approved") == pid, out
-        rows = _rows_for(mcp_ws, pid)
+        eid = edge_id(SUBJECT, "depends_on", OBJECT, SOURCE_BLOCK)
+        assert _rows_for(mcp_ws, pid) == [], "the scope is named after the edge it writes, not the proposal"
+        rows = _rows_for(mcp_ws, eid)
         assert len(rows) == 1
         assert _meta(rows[0])["door"] == "mcp.approve_edge"
         assert _meta(rows[0])["origin"] == EDGE_ORIGIN_HITL_APPROVED
-        assert _meta(rows[0])["edge_id"] == edge_id(SUBJECT, "depends_on", OBJECT, SOURCE_BLOCK)
+        # Which proposal released it is still in the record — an audit needs
+        # both halves, and only the subject moved.
+        assert _meta(rows[0])["proposal_id"] == pid
         assert len(_edges(mcp_ws)) == 1
 
     @pytest.mark.unit
@@ -628,8 +642,10 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #: caller that forgets is exactly the hole this scan closes.
 EDGE_COMMITTERS: frozenset[str] = frozenset({"add_edge", "approve_edge"})
 
-#: Scopes that authorise an edge write.
-ADMIT_OPENERS: frozenset[str] = frozenset({"admit_block", "admit_batch", "admit_proposal"})
+#: Scopes that authorise an edge write. ``admit_edge`` is the one the three
+#: doors open since 5.0.2; the others stay in the set because an edge written
+#: inside a wider legitimate scope (an apply, a migration) is still admitted.
+ADMIT_OPENERS: frozenset[str] = frozenset({"admit_block", "admit_batch", "admit_edge", "admit_proposal"})
 
 #: The caller opens its own scope.
 LOCAL = "local"

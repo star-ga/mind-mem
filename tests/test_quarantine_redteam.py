@@ -417,23 +417,54 @@ class TestEveryWriteDoorStillWithholds:
             unroutable = sorted(p for p in prefixes if p not in _BLOCK_PREFIX_MAP)
             assert not unroutable, f"{tier} may mint {unroutable}, which the block store cannot route"
 
-    def test_the_carry_only_tiers_are_exactly_the_two_documented_ones(self) -> None:
+    def test_the_carry_only_tiers_are_exactly_the_three_documented_ones(self) -> None:
         """A new tier minting None must be argued for, not inherited.
 
         Minting None means "keep whatever status the block already has". That
         is safe ONLY for a tier that moves or re-stamps already-governed
-        content. A new ingest door that minted None would write blocks with no
-        status at all -- and an unstated status is SERVABLE -- so this is the
+        content -- RESTAMP and STORE_MIGRATION -- or, since 5.0.2, for a tier
+        that writes no block at all: EDGE_APPROVAL lands a knowledge-graph
+        EDGE, which has no Status field, so there is no honest value for its
+        row and inventing one would put a false claim in the audit record.
+
+        A new ingest door that minted None would write blocks with no status
+        at all -- and an unstated status is SERVABLE -- so this is the
         assertion that stops that arriving quietly.
         """
         from mind_mem.enums import INITIAL_STATUS, IngestTier
 
         carry_only = {t for t, st in INITIAL_STATUS.items() if st is None}
-        assert carry_only == {IngestTier.RESTAMP, IngestTier.STORE_MIGRATION}, (
+        assert carry_only == {IngestTier.RESTAMP, IngestTier.STORE_MIGRATION, IngestTier.EDGE_APPROVAL}, (
             f"carry-only tiers changed: {carry_only}. A tier that mints no status "
             "writes blocks whose status is unstated, and an unstated status is "
             "servable. Justify it here or give it a quarantine status."
         )
+
+    def test_the_edge_tier_buys_its_carrying_row_with_a_bound_scope(self) -> None:
+        """The third carry-only tier's exemption, checked rather than asserted.
+
+        RESTAMP and STORE_MIGRATION are safe because of what they write.
+        EDGE_APPROVAL is safe because of WHERE it can be minted: a carrying
+        row constrains no status, so if an open scope could name this tier it
+        could land `Status: active` on any id -- the very reach `admit_edge`
+        was introduced to withdraw from the edge doors. That containment is
+        `governance_gate.SCOPE_BOUND_TIERS`, and it is what this pins.
+        """
+        from mind_mem.enums import INITIAL_STATUS, IngestTier
+        from mind_mem.governance_gate import EDGE, OPEN_SCOPE_TIERS, SCOPE_BOUND_TIERS
+
+        assert INITIAL_STATUS[IngestTier.EDGE_APPROVAL] is None
+        assert SCOPE_BOUND_TIERS.get(EDGE) is IngestTier.EDGE_APPROVAL
+        assert IngestTier.EDGE_APPROVAL not in OPEN_SCOPE_TIERS, (
+            "the edge tier is reachable from admit_block/admit_batch, where its carrying row constrains nothing at all"
+        )
+        # Every carry-only tier is EITHER a re-stamp of already-governed
+        # content OR bound to a scope that names what it may touch. Derived,
+        # so a fourth one has to satisfy one of the two arguments.
+        carry_only = {t for t, st in INITIAL_STATUS.items() if st is None}
+        restampers = {IngestTier.RESTAMP, IngestTier.STORE_MIGRATION}
+        unargued = sorted(t.value for t in carry_only - restampers if t not in set(SCOPE_BOUND_TIERS.values()))
+        assert not unargued, f"carry-only tiers that neither re-stamp nor own a scope: {unargued}"
 
     def test_proposal_apply_is_the_only_admitting_tier(self) -> None:
         """Pinned so a second one cannot be added without this failing."""

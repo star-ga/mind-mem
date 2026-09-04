@@ -12,16 +12,16 @@ writing the graph from an un-reviewed model call:
    ``auto-capture-relation``) via the same ``append_signals`` path the
    entity ingester uses. Nothing touches the graph here.
 3. :func:`approve_relation_signals` is the apply-on-approve step: for
-   each operator-approved signal it opens ONE ``admit_proposal`` scope,
+   each operator-approved signal it opens ONE ``admit_edge`` scope,
    calls ``KnowledgeGraph.add_edge`` with the real ``source_block_id``,
    a ``valid_from`` timestamp and an origin marker, and writes the
    signal back through the block store carrying ``Status: applied`` so
    approval is idempotent.
 
-**Why the approval is a proposal apply (5.0.2).** ``pending`` is withheld
+**Why the approval opens a scope at all (5.0.2).** ``pending`` is withheld
 by ``admissibility.is_admissible_status``; ``applied`` is served. Moving a
-signal between them is a mint of servable content, and the gate's rule is
-that only an approved proposal mints one. It used to be a ``re.subn`` over
+signal between them is a mint of servable content, so it needs an
+authorisation record naming what moved. It used to be a ``re.subn`` over
 ``SIGNALS.md`` — measured: on-disk ``Status: pending -> applied``, recall
 before "not served" and after "served", **all three ledgers +0**. The
 regex existed because ``write_block`` refused every ``SIG`` id: the prefix
@@ -29,7 +29,10 @@ map had no row for it, so an approval had no store to write through and
 spliced the file itself. The fix removed the reason rather than adding a
 check — ``corpus_registry`` routes ``SIG`` to ``intelligence/SIGNALS.md``,
 this function writes the block through the store inside the scope that
-also lands the edge, and ``_flip_signal_status`` is gone.
+also lands the edge, and ``_flip_signal_status`` is gone. The scope it
+does that in is ``admit_edge``, which names the edge id and the signal
+block id and nothing else — not ``admit_proposal``, which would have
+licensed the same approval to write any block in the corpus.
 
 The extractor is injected (``extract_fn``) so the loop proves out with
 zero model calls in CI; the default binds to the configured extraction
@@ -74,9 +77,10 @@ _TAG_SCHEMA_VERSION = "schema-version="
 #: ``INITIAL_STATUS``), which is withheld.
 APPLIED_STATUS = "applied"
 
-#: Verb recorded for one relation-signal approval. ``admit_proposal``
-#: hard-codes ``"APPLY"``; this is the id prefix that names *which*
-#: approval, so a chain reader can join the record back to the signal.
+#: Names *which* approval a chain record belongs to, so a reader can join
+#: it back to the signal. It was the scope's subject until 5.0.2, when the
+#: door moved to ``admit_edge`` — whose subject is the ``edge_id`` being
+#: committed — and it became the record's ``approval_id`` instead.
 RELATION_APPROVAL_PREFIX = "relsig-"
 
 
@@ -328,14 +332,19 @@ def approve_relation_signals(
     """Apply operator-approved relation signals to the knowledge graph.
 
     For each signal id: validate it is a pending relation signal, open one
-    :meth:`~mind_mem.governance_gate.GovernanceGate.admit_proposal` scope
-    named ``relsig-<signal id>``, and inside it write the edge via
-    ``KnowledgeGraph.add_edge`` (real ``source_block_id``, ``valid_from``
-    stamped, origin marker in metadata) **and** the signal block back
-    through the store carrying :data:`APPLIED_STATUS`.
+    :meth:`~mind_mem.governance_gate.GovernanceGate.admit_edge` scope
+    named after the ``edge_id`` being committed (with ``relsig-<signal
+    id>`` kept in the record as ``approval_id``), and inside it write the
+    edge via ``KnowledgeGraph.add_edge`` (real ``source_block_id``,
+    ``valid_from`` stamped, origin marker in metadata) **and** the signal
+    block back through the store carrying :data:`APPLIED_STATUS`.
 
     One scope covers both halves because they are one decision: the
     authorisation is recorded before either lands, and both land under it.
+    The scope names **both** ids — the edge and the signal block — and
+    nothing else. It opened ``admit_proposal`` until 5.0.2, which
+    authorised every id it was asked about at the tier that mints
+    ``ACTIVE``; approving one relation signal never needed that reach.
     Two stores (SQLite and a Markdown file) cannot be committed atomically,
     so the order is chosen for the direction its failure falls in — the
     edge first, because it is idempotent (``INSERT OR IGNORE`` on the
@@ -411,14 +420,16 @@ def approve_relation_signals(
             if rel.get("schema_version"):
                 edge_metadata[SCHEMA_METADATA_KEY] = rel["schema_version"]
             try:
-                with gate.admit_proposal(
-                    proposal_id=f"{RELATION_APPROVAL_PREFIX}{sig_id}",
+                with gate.admit_edge(
+                    edge_id=eid,
                     content=f"{rel['subject']}\t{rel['predicate']}\t{rel['object']}\t{rel['source_block_id']}",
+                    block_ids=(str(approved_block.get("_id", "")),),
                     actor="graph-ingest",
                     target_file=os.path.relpath(_signals_path(workspace), workspace),
                     metadata={
                         "door": "graph_ingest.approve_relation_signals",
                         "origin": EDGE_ORIGIN,
+                        "approval_id": f"{RELATION_APPROVAL_PREFIX}{sig_id}",
                         "signal_id": sig_id,
                         "edge_id": eid,
                         "predicate": rel["predicate"],

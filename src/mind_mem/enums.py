@@ -199,6 +199,20 @@ class IngestTier(str, Enum):
     STORE_MIGRATION = "store-migration"
     #: Applying an approved proposal. The only tier that reaches ACTIVE.
     PROPOSAL_APPLY = "proposal-apply"
+    #: Committing one knowledge-graph edge, through
+    #: :meth:`~mind_mem.governance_gate.GovernanceGate.admit_edge`.
+    #:
+    #: An edge is not a block: it lives in the graph database and has no
+    #: ``Status`` field, so its :data:`INITIAL_STATUS` row is ``None`` —
+    #: there is no status to mint and inventing one would put a false
+    #: claim in the audit record. What makes that safe is the *scope*
+    #: rather than the row: ``admit_edge`` freezes the ids it covers,
+    #: refuses a subject that is not an :func:`edge id
+    #: <mind_mem.knowledge_graph.edge_id>`, and is the only scope the
+    #: gate will mint this tier for. Before it existed the three edge
+    #: doors opened ``admit_proposal`` — a scope that authorises *every*
+    #: id it is asked about, at the one tier that reaches ``ACTIVE``.
+    EDGE_APPROVAL = "edge-approval"
     #: The integrity scanner's own findings — contradictions and drift.
     #:
     #: Derived content: every input is a block already admitted to the
@@ -217,6 +231,11 @@ class IngestTier(str, Enum):
 #: ``ACTIVE`` in the sense that matters — it cannot raise a block's status,
 #: only preserve it.
 #:
+#: :attr:`IngestTier.EDGE_APPROVAL` is ``None`` for the neighbouring
+#: reason: what it lands is a graph *edge*, which has no ``Status`` field
+#: at all. Its narrowness therefore comes from its scope rather than from
+#: this table — see the member's own note.
+#:
 #: OPERATOR DECISION (this change): ``AGENT_MESSAGE`` arrives
 #: :attr:`Status.QUARANTINED`, reversing what shipped. A peer agent is the
 #: standard prompt-injection carrier, and a single-operator model does not
@@ -230,6 +249,7 @@ INITIAL_STATUS: Mapping[IngestTier, Optional[Status]] = MappingProxyType(
         IngestTier.RESTAMP: None,
         IngestTier.STORE_MIGRATION: None,
         IngestTier.PROPOSAL_APPLY: Status.ACTIVE,
+        IngestTier.EDGE_APPROVAL: None,
         IngestTier.DETECTOR_FINDING: Status.OPEN,
     }
 )

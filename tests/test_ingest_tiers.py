@@ -41,7 +41,7 @@ from mind_mem.enums import (
     is_servable,
     mints_servable,
 )
-from mind_mem.governance_gate import GovernanceBypassError, get_gate
+from mind_mem.governance_gate import OPEN_SCOPE_TIERS, SCOPE_BOUND_TIERS, GovernanceBypassError, get_gate
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -59,10 +59,11 @@ def workspace(tmp_path: Path) -> str:
     return str(ws)
 
 
-#: Tiers that mint nothing servable — the only ones a non-proposal scope
-#: may open. Derived from the table, never hand-listed, so a new row is
-#: covered the moment it exists.
-CARRYING_OR_WITHHELD = tuple(t for t in IngestTier if not mints_servable(t))
+#: Tiers an unnamed (``admit_block`` / ``admit_batch``) scope may open:
+#: they mint nothing servable **and** are not bound to a scope of their
+#: own. Derived from the gate's two tables, never hand-listed, so a new
+#: row is covered the moment it exists.
+CARRYING_OR_WITHHELD = tuple(t for t in IngestTier if t in OPEN_SCOPE_TIERS)
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +182,42 @@ def test_minting_scopes_stamp_the_tier_on_the_receipt(workspace: str, tier: Inge
     with gate.admit_block(action="WRITE", block_id="IMP-20260829-001", content="x", tier=tier) as receipt:
         assert receipt.tier is tier
         assert not is_servable(INITIAL_STATUS[receipt.tier])
+
+
+@pytest.mark.parametrize("scope", ["admit_block", "admit_batch"])
+def test_minting_scopes_refuse_a_scope_bound_tier(workspace: str, scope: str) -> None:
+    """A tier bound to its own scope is unreachable from the open ones.
+
+    ``PROPOSAL_APPLY`` was already refused by the servable rule; the arm
+    that matters is ``EDGE_APPROVAL``, whose ``INITIAL_STATUS`` row is
+    ``None``. A carrying row constrains no status, so if ``admit_block``
+    could name that tier it could land ``Status: active`` on any id —
+    which is exactly the reach ``admit_edge`` exists to withdraw.
+    """
+    gate = get_gate(workspace)
+    assert SCOPE_BOUND_TIERS, "no scope-bound tier at all — this guard would pass over nothing"
+    for tier in SCOPE_BOUND_TIERS.values():
+        assert tier not in OPEN_SCOPE_TIERS
+        with pytest.raises(GovernanceBypassError):
+            if scope == "admit_block":
+                with gate.admit_block(action="WRITE", block_id="IMP-20260829-001", content="x", tier=tier):
+                    pass
+            else:
+                with gate.admit_batch(action="WRITE", batch_id="b1", block_ids=["IMP-20260829-001"], content="x", tier=tier):
+                    pass
+
+
+def test_the_open_scope_tiers_are_the_positive_control(workspace: str) -> None:
+    """The same call, on every tier the open scopes DO admit, must pass.
+
+    Without this the refusal test above would still pass if ``admit_block``
+    had been broken into refusing everything.
+    """
+    gate = get_gate(workspace)
+    assert OPEN_SCOPE_TIERS, "no open-scope tier at all — the refusals would prove nothing"
+    for tier in OPEN_SCOPE_TIERS:
+        with gate.admit_block(action="WRITE", block_id="IMP-20260829-001", content="x", tier=tier) as receipt:
+            assert receipt.tier is tier
 
 
 def test_admit_proposal_is_the_only_path_to_active(workspace: str) -> None:

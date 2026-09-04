@@ -12,12 +12,20 @@ Extracted from ``mcp_server.py`` per docs/v3.2.0-mcp-decomposition-plan.md
 served content, and ``graph_add_edge`` and ``approve_edge`` were both
 landing one with all three ledgers unmoved. ``KnowledgeGraph.add_edge``
 is now the choke point that refuses an unadmitted write, and these two
-doors are what open the scope: one ``admit_proposal`` each, keyed on the
-subject of the decision (the edge id for the direct admin write, the
-staged proposal's id for the approval) with the origin marker in
-metadata — so the chain records that an admin bypassed review, which is
-the fact an audit needs. ``propose_edge`` and ``reject_edge`` open
-nothing: neither lands an edge.
+doors are what open the scope: one ``admit_edge`` each, keyed on the
+``edge_id`` being committed, with the origin marker in metadata — so the
+chain records that an admin bypassed review, which is the fact an audit
+needs. ``propose_edge`` and ``reject_edge`` open nothing: neither lands
+an edge.
+
+Both doors opened ``admit_proposal`` when the scopes first landed. That
+receipt authorises **every** id it is asked about at the one tier that
+mints ``ACTIVE``, so committing an edge carried ambient authority over
+the whole corpus; ``admit_edge`` covers the edge and nothing else. For
+``approve_edge`` the scope's subject moved with it — from the staged
+proposal's id to the ``edge_id`` it commits, with ``proposal_id`` kept
+in the record's metadata, so the chain still names which proposal was
+approved while the receipt names what was written.
 """
 
 from __future__ import annotations
@@ -55,7 +63,7 @@ def graph_add_edge(
     ``graph_ingest`` signal-staging + approval path. The origin marker is forced
     here and cannot be overridden by the caller.
 
-    Governed since 5.0.2: one ``admit_proposal`` scope per edge, keyed on
+    Governed since 5.0.2: one ``admit_edge`` scope per edge, keyed on
     the deterministic ``edge_id``, carrying ``origin="direct_admin"`` in
     the record. That is what an audit needs to read — not that an edge
     appeared, but that an admin put it there without review. A refused
@@ -91,8 +99,8 @@ def graph_add_edge(
 
     kg = KnowledgeGraph(_kg_path(ws))
     try:
-        with get_gate(ws).admit_proposal(
-            proposal_id=eid,
+        with get_gate(ws).admit_edge(
+            edge_id=eid,
             content=f"{subject}\t{pred.value}\t{object}\t{source_block_id}",
             actor="",
             metadata={
@@ -184,11 +192,12 @@ def approve_edge(proposal_id: str) -> str:
     explicit operator signal — the source-of-truth edges table is never modified
     without it.
 
-    Governed since 5.0.2: the approval runs inside one ``admit_proposal``
-    scope named after the *staged proposal* — that is the subject of the
-    decision — with the ``edge_id`` it commits in the record's metadata.
-    An unknown or already-rejected proposal is refused **before** the
-    scope opens, so an approval that cannot happen mints no authorisation.
+    Governed since 5.0.2: the approval runs inside one ``admit_edge``
+    scope named after the ``edge_id`` it commits, with the staged
+    ``proposal_id`` in the record's metadata — so the chain says both
+    what was written and which decision released it. An unknown or
+    already-rejected proposal is refused **before** the scope opens, so
+    an approval that cannot happen mints no authorisation.
     """
     from mind_mem.knowledge_graph import EDGE_ORIGIN_HITL_APPROVED, PROPOSAL_REJECTED, KnowledgeGraph, edge_id
 
@@ -216,14 +225,14 @@ def approve_edge(proposal_id: str) -> str:
         if prop.status == PROPOSAL_REJECTED:
             return json.dumps({"error": f"cannot approve a rejected proposal: {pid!r}"})
         eid = edge_id(prop.subject, prop.predicate, prop.object, prop.source_block_id)
-        with get_gate(ws).admit_proposal(
-            proposal_id=pid,
+        with get_gate(ws).admit_edge(
+            edge_id=eid,
             content=f"{prop.subject}\t{prop.predicate.value}\t{prop.object}\t{prop.source_block_id}",
             actor="",
             metadata={
                 "door": "mcp.approve_edge",
                 "origin": EDGE_ORIGIN_HITL_APPROVED,
-                "edge_id": eid,
+                "proposal_id": pid,
                 "predicate": prop.predicate.value,
                 "source_block_id": prop.source_block_id,
             },
