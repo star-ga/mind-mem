@@ -565,7 +565,7 @@ def load_workspace_blocks(workspace_path):
     for fpath in [decisions_path, signals_path]:
         if not os.path.isfile(fpath):
             continue
-        with open(fpath) as f:
+        with open(fpath, encoding="utf-8") as f:
             content = f.read()
         # Extract block text between markers
         for match in re.finditer(r"\[([A-Z]+-\d{8}-\d+)\](.*?)(?=\n\[|\Z)", content, re.DOTALL):
@@ -625,7 +625,7 @@ def main():
     random.shuffle(examples)
 
     # Write
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for ex in examples:
             f.write(json.dumps(ex) + "\n")
 

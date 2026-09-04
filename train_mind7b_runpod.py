@@ -103,7 +103,7 @@ print(f"LoRA: {trainable:,} trainable / {total:,} total ({trainable / total * 10
 from datasets import Dataset
 
 examples = []
-with open(dataset_path) as f:
+with open(dataset_path, encoding="utf-8") as f:
     for line in f:
         d = json.loads(line)
         if "messages" in d:

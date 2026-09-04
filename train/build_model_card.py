@@ -334,7 +334,7 @@ def _current_tool_count() -> str:
     if not script.is_file():
         return "unknown"
     try:
-        out = subprocess.run(["python3", str(script)], capture_output=True, text=True, timeout=120, check=True).stdout.strip().splitlines()
+        out = subprocess.run(["python3", str(script)], capture_output=True, text=True, timeout=120, check=True, encoding="utf-8", errors="replace").stdout.strip().splitlines()
     except (OSError, subprocess.SubprocessError):
         return "unknown"
     for line in reversed(out):
@@ -347,7 +347,7 @@ def main() -> None:
     init_path = Path(os.environ.get("MM_INIT_PATH", str(Path(__file__).resolve().parents[1] / "src" / "mind_mem" / "__init__.py")))
     package_version = os.environ.get("MM_VERSION_OVERRIDE", "3.9.0")
     if init_path.is_file() and not os.environ.get("MM_VERSION_OVERRIDE"):
-        for line in init_path.read_text().splitlines():
+        for line in init_path.read_text(encoding="utf-8").splitlines():
             if line.startswith("__version__"):
                 package_version = line.split("=", 1)[1].strip().strip('"').strip("'")
                 break

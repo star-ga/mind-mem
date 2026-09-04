@@ -116,7 +116,7 @@ def write_modelfile(gguf: Path) -> Path:
         "PARAMETER top_p 0.9\n"
         "PARAMETER num_ctx 8192\n"
     )
-    MODELFILE_OUT.write_text(content)
+    MODELFILE_OUT.write_text(content, encoding="utf-8")
     print(f"  ✓ Modelfile: {MODELFILE_OUT}")
     return MODELFILE_OUT
 
@@ -139,7 +139,7 @@ def smoke_test(tag: str) -> bool:
         r = subprocess.run(
             ["ollama", "run", tag, prompt],
             capture_output=True, text=True, timeout=120,
-        )
+         encoding="utf-8", errors="replace")
         resp = r.stdout.strip()
         miss = [s for s in needed if s not in resp]
         status = "PASS" if not miss else f"FAIL (missing {miss})"

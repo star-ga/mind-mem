@@ -94,7 +94,7 @@ def workspace(tmp_path: Path) -> str:
         "workspace_path": str(ws),
         "block_store": {"backend": "markdown"},
     }
-    (ws / "mind-mem.json").write_text(json.dumps(config))
+    (ws / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
 
     # Drop a single decision block so /memories and /query have data.
     decisions_md = """# Decisions
@@ -105,7 +105,21 @@ def workspace(tmp_path: Path) -> str:
 - **Status:** active
 - **Timestamp:** 2026-05-03T10:00:00
 """
-    (ws / "decisions" / "DECISIONS.md").write_text(decisions_md)
+    # encoding= on BOTH writes above is load-bearing, not decoration. Without
+    # it Python encodes with the LOCALE codec, which is cp1252 on the Windows
+    # runners, so the em dash on the heading line landed as the single byte
+    # 0x97 -- and `delete_block`, which reads the corpus strictly as UTF-8,
+    # died on it. Every Windows CI row answered 500 to
+    # `DELETE /memories/<missing-id>` where every Linux and macOS row answered
+    # 404. Asserted below rather than trusted.
+    target = ws / "decisions" / "DECISIONS.md"
+    target.write_text(decisions_md, encoding="utf-8")
+    assert "—" in decisions_md, "the seed must carry a non-ASCII character or it cannot detect the defect"
+    # Bytes, not text: `read_text()` would decode with the same locale codec
+    # that wrote the file, so the round trip would agree with itself on
+    # Windows and prove nothing. Decoding the raw bytes strictly as UTF-8 is
+    # the assertion -- it raises on exactly the byte that reddened CI.
+    assert "\u2014" in target.read_bytes().decode("utf-8"), "the seeded corpus file is not UTF-8 on disk"
     return str(ws)
 
 
@@ -310,6 +324,79 @@ class TestMemoriesEndpoints:
         assert status in (400, 404)
 
     def test_delete_missing_id(self, server_localhost_unauth) -> None:
+        port, _ = server_localhost_unauth
+        status, body = _request(port, "DELETE", "/memories/D-20990101-999")
+        assert status == 404
+        assert body["error"] == "block not found"
+
+
+class TestACorpusFileTheServerCannotDecode:
+    """One legacy-encoded file must not become an anonymous 500.
+
+    This is the Windows failure reproduced on every platform: the runner's
+    cp1252 locale wrote an em dash as the single byte 0x97, `delete_block`
+    reads the corpus strictly as UTF-8, the ``UnicodeDecodeError`` reached
+    the handler's catch-all, and the body said "internal block store error"
+    -- which is what a defect looks like, not what a fixable workspace looks
+    like. Written as raw bytes so the condition is created directly rather
+    than waiting for a locale to create it.
+    """
+
+    #: What `"— example"` looks like when a cp1252 writer produced it.
+    LEGACY = b"# Decisions\n\n## D-20260503-002 \x97 legacy decision\n- **Status:** active\n"
+
+    @pytest.fixture
+    def undecodable(self, workspace: str) -> str:
+        path = Path(workspace) / "decisions" / "LEGACY.md"
+        path.write_bytes(self.LEGACY)
+        # Positive control: the seed really is undecodable, so a 500 below is
+        # about the product and not about a file that never existed.
+        with pytest.raises(UnicodeDecodeError):
+            path.read_bytes().decode("utf-8")
+        return str(path)
+
+    @pytest.fixture
+    def server(self, workspace, undecodable):
+        port = _free_port()
+        thread, stop = serve_http(
+            workspace=workspace,
+            port=port,
+            host="127.0.0.1",
+            token=None,
+            allow_unauthenticated_localhost=True,
+        )
+        try:
+            yield port
+        finally:
+            stop()
+
+    def test_the_answer_names_the_file_and_the_byte(self, server) -> None:
+        status, body = _request(server, "DELETE", "/memories/D-20990101-999")
+        assert status == 500, "the fault is the server's own stored data, not the request"
+        assert body["code"] == "corpus_encoding"
+        assert body["error"] != "internal block store error", "this is the anonymous answer it replaces"
+        assert body["file"].endswith("LEGACY.md"), body
+        assert "0x97" in body["detail"]
+        assert "utf-8" in body["detail"].lower()
+
+    def test_the_answer_is_never_404(self, server) -> None:
+        """404 would be a lie: the id could be inside the file we cannot read."""
+        status, _ = _request(server, "DELETE", "/memories/D-20990101-999")
+        assert status != 404
+
+    def test_no_traceback_reaches_the_client(self, server) -> None:
+        status, body = _request(server, "DELETE", "/memories/D-20990101-999")
+        assert status == 500
+        blob = json.dumps(body)
+        for leak in ("Traceback", 'File "', "block_store.py", "http_transport.py", "site-packages"):
+            assert leak not in blob, f"{leak!r} leaked into the response body: {blob}"
+
+    def test_a_decodable_corpus_still_answers_404(self, server_localhost_unauth) -> None:
+        """Mutation-style control: the 500 is about the bytes, not the route.
+
+        Without it, every assertion above would also pass against a handler
+        that answered 500 to every delete.
+        """
         port, _ = server_localhost_unauth
         status, body = _request(port, "DELETE", "/memories/D-20990101-999")
         assert status == 404

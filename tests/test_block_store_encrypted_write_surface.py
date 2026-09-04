@@ -30,7 +30,7 @@ import pytest
 from _restore_scope import restoring
 
 from mind_mem.admission import UngatedWriteError
-from mind_mem.block_store import BlockStore, BlockStoreError, MarkdownBlockStore
+from mind_mem.block_store import BlockStore, BlockStoreError, CorpusEncodingError, MarkdownBlockStore
 from mind_mem.block_store_encrypted import EncryptedBlockStore, encrypt_workspace
 from mind_mem.encryption import _MAGIC
 from mind_mem.enums import IngestTier
@@ -154,6 +154,14 @@ class TestWriteSurface:
         ciphertext on its own. It cannot — it reads the target with a
         strict UTF-8 decode — and this pins that, so the first test can
         only be passing because of ``_decrypted_target``.
+
+        The decode is unchanged; only its report is. It used to surface as a
+        bare ``UnicodeDecodeError``, which named neither the file nor the
+        cause, and 5.0.2 gives it a name and a path (``CorpusEncodingError``)
+        so an operator with one legacy-encoded file is told which one. The
+        error is still a ``ValueError``, so ``execute_op``'s mid-transaction
+        rollback still catches it — asserted below rather than assumed,
+        because that is what the rename could have broken.
         """
 
         @contextlib.contextmanager
@@ -162,9 +170,15 @@ class TestWriteSurface:
 
         before = _decisions(workspace).read_bytes()
         object.__setattr__(store, "_decrypted_target", _no_unseal)
-        with _admitted(workspace), pytest.raises(UnicodeDecodeError):
+        with _admitted(workspace), pytest.raises(CorpusEncodingError) as excinfo:
             store.write_block({"_id": "D-20260410-002", "Date": "2026-04-13", "Status": "active", "Rationale": "second"})
         assert _decisions(workspace).read_bytes() == before
+        # It failed on the corpus file it was handed, not somewhere else.
+        assert excinfo.value.path == str(_decisions(workspace))
+        # And it is still a ValueError, which is what every existing handler
+        # of the old UnicodeDecodeError catches — `execute_op`'s rollback
+        # among them.
+        assert isinstance(excinfo.value, ValueError)
 
     def test_file_is_resealed_when_the_inner_write_raises(self, workspace: Path, store: EncryptedBlockStore) -> None:
         """A failed write must not leave the corpus decrypted on disk."""

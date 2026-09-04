@@ -78,6 +78,40 @@ from typing import Any, Callable
 from .admission import admit_read
 from .protection import AUTH_HEADER
 
+
+def _corpus_encoding_response(exc: Any, workspace: str, **extra: Any) -> tuple[int, dict[str, Any]]:
+    """The deliberate answer for a corpus file that is not valid UTF-8.
+
+    500, not 4xx: the request was well formed and the fault is entirely on
+    this side -- a file in the operator's own workspace holds bytes this
+    server cannot read. But a *bare* 500 saying "internal block store error"
+    is the wrong 500. It is indistinguishable from a defect, so an operator
+    whose only problem is one legacy-encoded file has nothing to act on, and
+    the traceback that would tell them lands in the server log they are not
+    reading. This body names the file and what is wrong with it.
+
+    404 would be worse than unhelpful, it would be a lie: the block may well
+    be IN the file that could not be read, and "not found" for a block that
+    exists is the one answer a memory product must never give.
+
+    The path is reported relative to the workspace. Absolute paths are the
+    server's filesystem layout, and the caller already knows the workspace.
+    """
+    path = getattr(exc, "path", "") or ""
+    try:
+        shown = os.path.relpath(path, workspace)
+    except (ValueError, TypeError):  # different drive on Windows, or no path
+        shown = os.path.basename(path)
+    body: dict[str, Any] = {
+        "error": "corpus file is not valid UTF-8",
+        "code": "corpus_encoding",
+        "file": shown,
+        "detail": getattr(exc, "reason", str(exc)),
+    }
+    body.update(extra)
+    return (500, body)
+
+
 __all__ = [
     "ANONYMOUS_ACTORS",
     "CONTENT",
@@ -886,6 +920,7 @@ def _handle_delete_memory(
         _log.error("delete_memory_unnamed_actor", extra={"block_id": _safe_log(block_id)})
         return (500, {"error": "delete requires a named actor"})
 
+    from .block_store import CorpusEncodingError
     from .governance_gate import GovernanceBypassError, get_gate
     from .storage import get_block_store
 
@@ -910,6 +945,17 @@ def _handle_delete_memory(
             removed = store.delete_block(block_id)
     except (FileNotFoundError, KeyError):
         return (404, {"error": "block not found", "id": block_id})
+    except CorpusEncodingError as exc:
+        # Anticipated and answered by name. Before this branch existed the
+        # decode error fell through to the generic handler below and every
+        # Windows CI row answered 500 to `DELETE /memories/<missing-id>`,
+        # because the workspace fixture had written an em dash through the
+        # locale codepage and `delete_block` scans the corpus.
+        _log.error(
+            "delete_memory_corpus_encoding",
+            extra={"error": _safe_log(exc), "block_id": _safe_log(block_id), "file": _safe_log(exc.path)},
+        )
+        return _corpus_encoding_response(exc, workspace, id=block_id)
     except GovernanceBypassError as exc:
         # The block is still there. Reporting this as anything but a
         # refusal would tell a caller their content is gone when it is
@@ -1010,6 +1056,7 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = DIRECT_C
             },
         )
 
+    from .block_store import CorpusEncodingError
     from .governance_gate import GovernanceBypassError, get_gate
     from .storage import get_block_store
 
@@ -1038,6 +1085,8 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = DIRECT_C
     batch_id = _clear_batch_id(block_ids)
     deleted = 0
     admission_id = ""
+    #: block id -> the CorpusEncodingError that stopped its removal.
+    undecodable: dict[str, Exception] = {}
     try:
         gate = get_gate(workspace)
         with gate.admit_delete_batch(batch_id, block_ids, rationale=rationale, actor=actor) as receipt:
@@ -1061,6 +1110,19 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = DIRECT_C
                     # the loop disagree about what was authorised, which
                     # is exactly the failure the scope exists to catch.
                     raise
+                except CorpusEncodingError as enc_exc:
+                    # NOT a debug-level skip. The block may be sitting in
+                    # the very file that could not be decoded, so counting
+                    # this as "handled" and answering `ok` is a partial
+                    # purge reported as a whole one. It is named in the
+                    # response instead, beside the ids that resolved to no
+                    # file at all.
+                    undecodable[bid] = enc_exc
+                    _log.warning(
+                        "clear_block_corpus_encoding",
+                        extra={"block_id": _safe_log(bid), "file": _safe_log(enc_exc.path)},
+                    )
+                    continue
                 except Exception as block_exc:
                     # One bad block must not abort the wipe — record the
                     # failure at debug so the operator can investigate
@@ -1085,9 +1147,14 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = DIRECT_C
             "rationale": _safe_log(rationale, max_len=120),
         },
     )
-    out: dict[str, Any] = {"ok": True, "deleted": deleted, "rationale": rationale, "admission": admission_id}
+    out: dict[str, Any] = {"ok": bool(not undecodable), "deleted": deleted, "rationale": rationale, "admission": admission_id}
     if unidentified:
         out["unreachable"] = unidentified
+    if undecodable:
+        out["undecodable"] = [
+            {"id": bid, "file": os.path.basename(getattr(exc, "path", "")), "detail": getattr(exc, "reason", str(exc))}
+            for bid, exc in sorted(undecodable.items())
+        ]
     return (200, out)
 
 

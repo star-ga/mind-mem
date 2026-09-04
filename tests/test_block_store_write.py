@@ -54,7 +54,7 @@ class TestWriteBlockAppend:
         assert out_id == "D-20260420-001"
         target = ws / "decisions" / "DECISIONS.md"
         assert target.is_file()
-        content = target.read_text()
+        content = target.read_text(encoding="utf-8")
         assert "[D-20260420-001]" in content
         assert "Statement: Use SQLite for v3.2.0 default backend" in content
         assert "- storage" in content
@@ -65,7 +65,7 @@ class TestWriteBlockAppend:
         store.write_block({"_id": "D-20260420-001", "Statement": "first", "Status": "active"})
         store.write_block({"_id": "D-20260420-002", "Statement": "second", "Status": "active"})
 
-        content = (ws / "decisions" / "DECISIONS.md").read_text()
+        content = (ws / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
         # Both blocks must be present and in the order they were written.
         first_pos = content.index("[D-20260420-001]")
         second_pos = content.index("[D-20260420-002]")
@@ -89,7 +89,7 @@ class TestWriteBlockReplace:
         # Now update 001 in place.
         store.write_block({"_id": "D-20260420-001", "Statement": "first v2", "Status": "superseded"})
 
-        content = (ws / "decisions" / "DECISIONS.md").read_text()
+        content = (ws / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
         assert "first v2" in content
         assert "first v1" not in content
         # Second block still there in the same relative position.
@@ -118,7 +118,7 @@ class TestWriteBlockReplace:
                 # Rationale dropped intentionally.
             }
         )
-        content = (ws / "tasks" / "TASKS.md").read_text()
+        content = (ws / "tasks" / "TASKS.md").read_text(encoding="utf-8")
         assert "Rationale" not in content
         assert "Status: doing" in content
 
@@ -156,7 +156,7 @@ class TestWriteBlockSecurity:
                 "Status": "active",
             }
         )
-        content = (ws / "decisions" / "DECISIONS.md").read_text()
+        content = (ws / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
         # Original header form must be absent at column zero.
         assert "\n[D-20260420-999]" not in content
         # The neutralized form is ``\\n D-...]`` — space replaces
@@ -180,7 +180,7 @@ class TestDeleteBlock:
         with deleting(ws, "D-20260420-002"):
             assert store.delete_block("D-20260420-002") is True
 
-        content = (ws / "decisions" / "DECISIONS.md").read_text()
+        content = (ws / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
         assert "[D-20260420-002]" not in content
         assert "[D-20260420-001]" in content
 
@@ -203,7 +203,7 @@ class TestDeleteBlock:
 
         log_path = ws / "memory" / "deleted_blocks.jsonl"
         assert log_path.is_file()
-        entries = [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
+        entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
         assert len(entries) == 1
         assert entries[0]["block_id"] == "D-20260420-001"
         assert "about to be deleted" in entries[0]["content"]
@@ -239,3 +239,102 @@ class TestRoundTrip:
         all_blocks = store.get_all()
         assert len(all_blocks) == 1
         assert all_blocks[0]["_id"] == "D-20260420-010"
+
+
+class TestACorpusFileThatIsNotUtf8:
+    """A read-modify-write must never silently rewrite bytes it misread.
+
+    :func:`block_parser.parse_file` reads with ``errors="replace"`` and its
+    comment says why: on a read-only path a stray byte should shadow one
+    character rather than hide a whole file from recall. ``write_block`` and
+    ``delete_block`` are not that path. They read the text, edit it, and put
+    the result back over the original, so a tolerant decode there would
+    substitute U+FFFD for the byte it could not read and then PERSIST the
+    substitution -- an irreversible edit to stored memory, made by an
+    operation the caller asked to do something else.
+
+    The byte used here is the one that reddened five Windows CI rows: an em
+    dash written through the cp1252 locale codepage is the single byte 0x97,
+    which is not valid UTF-8. Written as raw bytes so the test measures the
+    same condition on every platform rather than only where the locale
+    happens to produce it.
+    """
+
+    #: ``"## D-… — example"`` as cp1252 would encode it: the em dash is 0x97.
+    LEGACY_BYTES = b"[D-20260420-001]\nStatus: active\nStatement: dash \x97 here\n"
+
+    def _seed(self, ws: Path) -> Path:
+        target = ws / "decisions" / "DECISIONS.md"
+        target.write_bytes(self.LEGACY_BYTES)
+        # Positive control: the file really is undecodable as UTF-8, so the
+        # refusals below are about the product and not about an empty file.
+        with pytest.raises(UnicodeDecodeError):
+            target.read_bytes().decode("utf-8")
+        return target
+
+    def test_delete_names_the_file_instead_of_failing_anonymously(self, ws: Path, admitted) -> None:
+        from mind_mem.block_store import CorpusEncodingError
+
+        target = self._seed(ws)
+        store = MarkdownBlockStore(str(ws))
+        with deleting(ws, "D-20260420-001"), pytest.raises(CorpusEncodingError) as excinfo:
+            store.delete_block("D-20260420-001")
+
+        assert excinfo.value.path == str(target)
+        assert "0x97" in excinfo.value.reason
+        # Derived from the seed rather than hard-coded: a literal offset is a
+        # fact about this docstring's example, not about the product.
+        assert f"position {self.LEGACY_BYTES.index(0x97)}" in excinfo.value.reason
+
+    def test_write_refuses_rather_than_persisting_a_replacement_character(self, ws: Path, admitted) -> None:
+        from mind_mem.block_store import CorpusEncodingError
+
+        target = self._seed(ws)
+        before = target.read_bytes()
+        store = MarkdownBlockStore(str(ws))
+        with pytest.raises(CorpusEncodingError):
+            store.write_block({"_id": "D-20260420-002", "Statement": "new", "Status": "active"})
+
+        # The whole point: not one byte of the file it could not read moved.
+        assert target.read_bytes() == before
+        assert b"\xef\xbf\xbd" not in target.read_bytes(), "U+FFFD was written into the corpus"
+
+    def test_the_apply_engine_still_rolls_back_instead_of_escaping(self, ws: Path, admitted) -> None:
+        """WIRED, not inferred: the rename must not widen what the error escapes.
+
+        ``execute_op`` guards every store write with
+        ``except (OSError, IOError, ValueError, KeyError, IndexError)`` and
+        turns a failure into ``(False, msg)`` so the caller can roll the
+        transaction back. The old ``UnicodeDecodeError`` is a ``ValueError``
+        and was caught there. A ``CorpusEncodingError`` deriving only from
+        ``BlockStoreError`` would have sailed straight past that handler,
+        mid-transaction, past the rollback — the exact escape the handler
+        exists to stop. So this calls the real ``execute_op`` rather than
+        asserting the class hierarchy and hoping it means something.
+        """
+        from mind_mem.apply_engine import execute_op
+
+        self._seed(ws)
+        op = {
+            "op": "update_field",
+            "file": "decisions/DECISIONS.md",
+            "target": "D-20260420-001",
+            "field": "Status",
+            "value": "superseded",
+        }
+        ok, msg = execute_op(str(ws), op, store=MarkdownBlockStore(str(ws)))
+
+        assert ok is False, "an undecodable corpus file must fail the op"
+        assert "utf-8" in msg.lower(), f"the rollback message does not name the cause: {msg!r}"
+
+    def test_a_clean_file_is_still_read(self, ws: Path, admitted) -> None:
+        """Mutation-style control: the refusal is about the bytes, not the path.
+
+        Without this, both assertions above would also pass against a
+        ``_read_corpus_for_edit`` that refused every file it was handed.
+        """
+        target = ws / "decisions" / "DECISIONS.md"
+        target.write_text("[D-20260420-001]\nStatus: active\nStatement: dash — here\n", encoding="utf-8")
+        store = MarkdownBlockStore(str(ws))
+        with deleting(ws, "D-20260420-001"):
+            assert store.delete_block("D-20260420-001") is True

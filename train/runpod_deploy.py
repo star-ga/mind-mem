@@ -68,7 +68,7 @@ DEFAULT_VOLUME_GB = 40
 
 
 def _api_key() -> str:
-    for line in RUNPOD_CONFIG.read_text().splitlines():
+    for line in RUNPOD_CONFIG.read_text(encoding="utf-8").splitlines():
         if "api_key" in line or line.strip().startswith("apikey"):
             return line.split("=", 1)[1].strip().strip('"').strip("'")
     raise RuntimeError(f"no api_key found in {RUNPOD_CONFIG}")
@@ -101,7 +101,7 @@ def _api_call(method: str, path: str, body: dict | None = None) -> dict:
 
 def provision(gpu_type: str = DEFAULT_GPU_TYPE, image: str = DEFAULT_IMAGE) -> str:
     """Create a pod, return its ID once it's running."""
-    pub = Path(f"{SSH_KEY}.pub").read_text().strip()
+    pub = Path(f"{SSH_KEY}.pub").read_text(encoding="utf-8").strip()
     # SECURE cloud: a v3.9.2 retrain on COMMUNITY was preempted twice on
     # 2026-05-05 (~2h of compute lost each time, EXITED pods couldn't be
     # restarted), so we eat the small SECURE premium to get an
@@ -206,7 +206,7 @@ def _ssh_cmd(ip: str, port: int, cmd: str) -> str:
     # `errors="replace"` so a mid-byte slice from `tail -c` (e.g. a multi-byte
     # UTF-8 char split) does NOT crash the polling loop with UnicodeDecodeError
     # (observed crash mid-retrain v1 on 2026-05-09 — byte 0x96 from training log).
-    result = subprocess.run(full, capture_output=True, text=True, errors="replace")
+    result = subprocess.run(full, capture_output=True, text=True, errors="replace", encoding="utf-8")
     if result.returncode != 0:
         raise RuntimeError(f"ssh failed: {result.stderr[:400]}")
     return result.stdout
@@ -301,7 +301,7 @@ def main() -> None:
     if not Path(f"{SSH_KEY}.pub").is_file():
         sys.exit(f"SSH key missing: {SSH_KEY}(.pub)")
 
-    hf_token = HF_TOKEN_FILE.read_text().strip()
+    hf_token = HF_TOKEN_FILE.read_text(encoding="utf-8").strip()
 
     pod_id = args.pod_id or provision(gpu_type=args.gpu_type, image=args.image)
     if args.pod_id:

@@ -54,7 +54,7 @@ def _find_symbol_files(symbol: str) -> set[str]:
             out = subprocess.run(
                 ["grep", "-rlE", pat, str(SRC)],
                 capture_output=True, text=True, timeout=10,
-            )
+             encoding="utf-8", errors="replace")
             for line in out.stdout.splitlines():
                 p = Path(line)
                 if "__pycache__" in p.parts:

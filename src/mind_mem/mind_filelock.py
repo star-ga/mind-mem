@@ -80,6 +80,30 @@ _UNSUPPORTED_LOCK_ERRNOS: frozenset[int] = frozenset(
     if code is not None
 )
 
+#: errnos that mean "another process holds this OS lock right now".
+#:
+#: The complement of :data:`_UNSUPPORTED_LOCK_ERRNOS`: that set is "this
+#: filesystem cannot lock", this one is "it can, and somebody else has it".
+#: Everything in NEITHER set is a hard failure -- EIO, ENOSPC, EBADF -- and
+#: must keep propagating by name, because "the disk is failing" reported as
+#: "lock timeout" names the wrong thing to whoever reads it.
+#:
+#: ``fcntl.flock(LOCK_NB)`` answers EWOULDBLOCK/EAGAIN. ``msvcrt.locking``
+#: with ``LK_NBLCK`` answers EDEADLOCK, and EACCES on some CRT versions;
+#: both are listed because the module cannot test the one it is not running
+#: on. Platform-specific names go through getattr, as above.
+_CONTENDED_LOCK_ERRNOS: frozenset[int] = frozenset(
+    code
+    for code in (
+        getattr(errno, "EWOULDBLOCK", None),
+        getattr(errno, "EAGAIN", None),
+        getattr(errno, "EACCES", None),
+        getattr(errno, "EDEADLK", None),
+        getattr(errno, "EDEADLOCK", None),
+    )
+    if code is not None
+)
+
 #: Byte offset of the one-byte region every OS lock in this module takes.
 #:
 #: ``msvcrt.locking`` locks *from the current file position*. A holder locks
@@ -236,7 +260,66 @@ class FileLock:
             # live-pid lockfile and block to LockTimeout.
             try:
                 os.write(fd, f"{os.getpid()}\n".encode())
+            except BaseException:
+                self._discard_lock_file(fd)
+                raise
+            try:
                 self._os_lock(fd)
+            except OSError as exc:
+                if exc.errno not in _CONTENDED_LOCK_ERRNOS:
+                    # A HARD failure -- EIO, ENOSPC, EBADF. Not contention,
+                    # and not something waiting can fix. It keeps the
+                    # behaviour it always had: undo the claim (so no
+                    # live-pid lockfile survives to wedge the path) and
+                    # propagate by name, because an I/O error reported as a
+                    # lock timeout names the wrong thing.
+                    self._discard_lock_file(fd)
+                    raise
+                # LOST THE ARBITRATION, not a failure. ``acquire`` promises
+                # the lock or ``LockTimeout``; a caller writing
+                # ``with FileLock(p, timeout=30):`` has nothing it can do
+                # with a bare ``OSError``, and gets none of the retry the
+                # ``FileExistsError`` arm above performs for the very same
+                # situation one syscall earlier. So this is the same answer,
+                # reached one step later: undo the claim and go back to the
+                # poll with the deadline still running.
+                #
+                # The situation: we created this lockfile with ``O_EXCL``, so
+                # nothing else should be able to hold its OS lock — and on
+                # POSIX nothing can, which is why this arm is unreachable
+                # there and the module behaved for years as though it did not
+                # need to exist. It is reachable where a filesystem hands a
+                # breaker the SAME ``(st_dev, st_ino)`` for a brand-new file
+                # as for the corpse it judged: NTFS reuses a freed MFT record
+                # immediately, so a ``_break_stale`` racing our create passes
+                # its identity check against OUR file and adopts it in the
+                # window between our ``os.open`` and this lock. ``_break_stale``
+                # holds the OS lock across that adoption on purpose — it is
+                # "the only thing here that is atomic" — so the arbitration is
+                # already correct and exactly one process is inside the
+                # section. Only the loser's behaviour was wrong: it raised.
+                #
+                # Measured against the shipped code, injecting the EWOULDBLOCK
+                # this arm now catches: ``FileLock.acquire`` propagated
+                # ``BlockingIOError`` straight through the ``with`` statement.
+                # Two Windows CI suites lost workers to that, reporting only
+                # ``a worker failed: (0, 0, 1, 1, 0, 1)``.
+                #
+                # ``_discard_lock_file`` is unchanged and is what the raising
+                # path already did before re-raising, so this adds no unlink
+                # that was not already attempted — and on the platform where
+                # an adopter can be holding this file, that unlink is refused
+                # for want of ``FILE_SHARE_DELETE`` and the adopter keeps its
+                # claim. ``ENOSPC``/``EIO`` from the ``os.write`` above still
+                # propagate by name; only the lock attempt polls.
+                self._discard_lock_file(fd)
+                if self.timeout == 0:
+                    raise LockTimeout(f"Could not acquire lock: {self.lock_path}") from None
+                elapsed = time.monotonic() - start
+                if self.timeout > 0 and elapsed >= self.timeout:
+                    raise LockTimeout(f"Lock timeout ({self.timeout}s) for: {self.lock_path}") from None
+                time.sleep(self.poll_interval)
+                continue
             except BaseException:
                 self._discard_lock_file(fd)
                 raise

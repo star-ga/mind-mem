@@ -24,6 +24,7 @@ import sys
 
 __all__ = [
     "append_only_settable_unprivileged",
+    "atomic_cross_process_append",
     "child_import_path",
     "child_pythonpath",
     "chmod_denies_read",
@@ -53,6 +54,38 @@ __all__ = [
 #               neither present it falls through to hardcoded candidates such
 #               as ``C:\temp`` that need not exist on a runner.
 _WINDOWS_CHILD_ENV = ("SYSTEMROOT", "PATH", "PATHEXT", "COMSPEC", "TEMP", "TMP")
+
+
+def atomic_cross_process_append() -> bool:
+    """True where two processes appending to one file cannot lose each other's writes.
+
+    POSIX gives ``open(path, "a")`` the ``O_APPEND`` flag, and a single
+    ``write()`` on an ``O_APPEND`` descriptor seeks to end and writes as one
+    atomic operation, so unsynchronised appenders interleave whole records
+    and never overwrite one another. The Windows CRT has no such guarantee:
+    ``_O_APPEND`` is emulated as *seek to end, then write*, two operations
+    with a window between them, so two processes can compute the same end
+    offset and the second write lands on top of the first.
+
+    Measured, not assumed. Three processes appending 20 chain records each
+    with the store lock defeated, on the windows-latest runners:
+    **46 of 60 rows** survived on the evidence chain and **54 of 60** on the
+    audit ledger, with every worker exiting 0 and stderr empty. The same run
+    on ubuntu-latest and macos-latest lands all 60 every time.
+
+    This is a fact about the OS, not about mind-mem: under the lock the
+    appends are serialised and every row lands on every platform, which is
+    what the gates in ``test_chain_concurrency`` assert and what the Windows
+    rows already prove. It matters only where a test deliberately removes
+    the lock -- a mutation twin -- and must therefore not expect the
+    filesystem to do the lock's job.
+
+    Branching on the platform name rather than probing it, unlike the
+    predicates below: a probe for this needs a genuine cross-process race,
+    and a probe that can come out either way by luck is worse than none.
+    Both sides of the branch assert; neither skips.
+    """
+    return sys.platform != "win32"
 
 
 def is_root() -> bool:

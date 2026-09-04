@@ -24,7 +24,7 @@ import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-V29_SHA = subprocess.check_output(["git", "rev-parse", "v2.9.0"], cwd=REPO, text=True).strip()
+V29_SHA = subprocess.check_output(["git", "rev-parse", "v2.9.0"], cwd=REPO, text=True, encoding="utf-8", errors="replace").strip()
 
 # First 7 (v2.0.0a1..v2.1.0) shipped before disk-full hit. Resume
 # from v2.2.0. twine --skip-existing handles any inadvertent repeats.
@@ -46,7 +46,7 @@ WORKTREE_ROOT = Path("/data/checkpoints/mm-workspace/mm-backport")
 
 def run(cmd: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess:
     print(f"  $ {' '.join(cmd)}")
-    return subprocess.run(cmd, cwd=cwd, check=check, text=True, capture_output=True)
+    return subprocess.run(cmd, cwd=cwd, check=check, text=True, capture_output=True, encoding="utf-8", errors="replace")
 
 
 def backport(tag: str) -> None:
@@ -66,7 +66,7 @@ def backport(tag: str) -> None:
         cwd=worktree,
         text=True,
         capture_output=True,
-    )
+     encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         # Delete any unmerged paths so we can commit the partial fix set.
         unmerged = subprocess.run(
@@ -74,7 +74,7 @@ def backport(tag: str) -> None:
             cwd=worktree,
             text=True,
             capture_output=True,
-        ).stdout.split()
+         encoding="utf-8", errors="replace").stdout.split()
         for p in unmerged:
             subprocess.run(["git", "rm", "-f", p], cwd=worktree, capture_output=True)
         run(["git", "add", "-A"], worktree)
@@ -89,7 +89,7 @@ def backport(tag: str) -> None:
         check=True,
         text=True,
         capture_output=True,
-    )
+     encoding="utf-8", errors="replace")
     run(
         [
             "git",
@@ -144,19 +144,19 @@ def backport(tag: str) -> None:
 
 def _bump_version(worktree: Path, version: str) -> None:
     pyproject = worktree / "pyproject.toml"
-    text = pyproject.read_text()
+    text = pyproject.read_text(encoding="utf-8")
     text = re.sub(r'version = "[^"]+"', f'version = "{version}"', text, count=1)
-    pyproject.write_text(text)
+    pyproject.write_text(text, encoding="utf-8")
 
     # The __init__.py may live at src/mind_mem or scripts/mind_mem depending
     # on the release age; patch whichever exists.
     for rel in ("src/mind_mem/__init__.py", "scripts/mind_mem/__init__.py"):
         init = worktree / rel
         if init.is_file():
-            t2 = init.read_text()
+            t2 = init.read_text(encoding="utf-8")
             if "__version__" in t2:
                 t2 = re.sub(r'__version__\s*=\s*"[^"]+"', f'__version__ = "{version}"', t2)
-                init.write_text(t2)
+                init.write_text(t2, encoding="utf-8")
                 break
 
 

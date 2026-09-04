@@ -20,7 +20,7 @@ def main():
 
     # Create some decision blocks
     decisions_file = os.path.join(ws, "decisions", "example.md")
-    with open(decisions_file, "w") as f:
+    with open(decisions_file, "w", encoding="utf-8") as f:
         f.write("""[DEC-001]
 Type: Decision
 Statement: Use PostgreSQL for the primary database

@@ -17,14 +17,14 @@ from mind_mem.validate_py import Validator  # noqa: E402
 @pytest.fixture
 def empty_workspace(tmp_path):
     """Workspace with mind-mem.json but no data files."""
-    (tmp_path / "mind-mem.json").write_text(json.dumps({"version": "1.1.0"}))
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"version": "1.1.0"}), encoding="utf-8")
     return str(tmp_path)
 
 
 @pytest.fixture
 def minimal_workspace(tmp_path):
     """Workspace with all required structure for a passing validation."""
-    (tmp_path / "mind-mem.json").write_text(json.dumps({"version": "1.1.0"}))
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"version": "1.1.0"}), encoding="utf-8")
 
     # Create directories
     for d in [
@@ -50,7 +50,8 @@ def minimal_workspace(tmp_path):
         "Rationale: Testing\n"
         "Supersedes: none\n"
         "Tags: test\n"
-        "Sources: manual\n"
+        "Sources: manual\n",
+        encoding="utf-8",
     )
     (tmp_path / "tasks" / "TASKS.md").write_text(
         "# Tasks\n\n"
@@ -66,11 +67,12 @@ def minimal_workspace(tmp_path):
         "Next: complete it\n"
         "Dependencies: none\n"
         "Sources: manual\n"
-        "History: created\n"
+        "History: created\n",
+        encoding="utf-8",
     )
-    (tmp_path / "entities" / "projects.md").write_text("[PRJ-test]\nName: Test Project\n")
-    (tmp_path / "entities" / "people.md").write_text("[PER-alice]\nName: Alice\n")
-    (tmp_path / "entities" / "tools.md").write_text("[TOOL-pytest]\nName: pytest\n")
+    (tmp_path / "entities" / "projects.md").write_text("[PRJ-test]\nName: Test Project\n", encoding="utf-8")
+    (tmp_path / "entities" / "people.md").write_text("[PER-alice]\nName: Alice\n", encoding="utf-8")
+    (tmp_path / "entities" / "tools.md").write_text("[TOOL-pytest]\nName: pytest\n", encoding="utf-8")
     (tmp_path / "entities" / "incidents.md").write_text(
         "[INC-20260101-test]\n"
         "Date: 2026-01-01\n"
@@ -80,18 +82,19 @@ def minimal_workspace(tmp_path):
         "RootCause: testing\n"
         "Fix: fixed\n"
         "Prevention: tests\n"
-        "Sources: manual\n"
+        "Sources: manual\n",
+        encoding="utf-8",
     )
-    (tmp_path / "memory" / "maint-state.json").write_text("{}")
-    (tmp_path / "memory" / "intel-state.json").write_text("{}")
-    (tmp_path / "summaries" / "weekly" / "2026-W01.md").write_text("# Week 1\n")
+    (tmp_path / "memory" / "maint-state.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "memory" / "intel-state.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "summaries" / "weekly" / "2026-W01.md").write_text("# Week 1\n", encoding="utf-8")
 
     # MEMORY.md with protocol header
-    (tmp_path / "MEMORY.md").write_text("# Memory Protocol v1.0\n\nTest memory.\n")
+    (tmp_path / "MEMORY.md").write_text("# Memory Protocol v1.0\n\nTest memory.\n", encoding="utf-8")
 
     # Intelligence files
     for f in ["SIGNALS.md", "CONTRADICTIONS.md", "DRIFT.md", "IMPACT.md", "BRIEFINGS.md", "AUDIT.md"]:
-        (tmp_path / "intelligence" / f).write_text(f"# {f}\n")
+        (tmp_path / "intelligence" / f).write_text(f"# {f}\n", encoding="utf-8")
 
     return str(tmp_path)
 
@@ -250,22 +253,25 @@ class TestCheckDecisions:
         assert v.issues == 0
 
     def test_bad_decision_id(self, tmp_path):
-        (tmp_path / "mind-mem.json").write_text("{}")
+        (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
         (tmp_path / "decisions").mkdir()
         (tmp_path / "decisions" / "DECISIONS.md").write_text(
-            "[BAD-ID]\nDate: 2026-01-01\nStatus: active\nScope: global\nStatement: x\nRationale: x\nSupersedes: none\nTags: x\nSources: x\n"
+            "[BAD-ID]\nDate: 2026-01-01\nStatus: active\nScope: global\n"
+            "Statement: x\nRationale: x\nSupersedes: none\nTags: x\nSources: x\n",
+            encoding="utf-8",
         )
         v = Validator(str(tmp_path))
         v._check_decisions()
         assert v.issues > 0
 
     def test_invalid_scope(self, tmp_path):
-        (tmp_path / "mind-mem.json").write_text("{}")
+        (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
         (tmp_path / "decisions").mkdir()
         (tmp_path / "decisions" / "DECISIONS.md").write_text(
             "[D-20260101-001]\nDate: 2026-01-01\nStatus: active\n"
             "Scope: invalid-scope\nStatement: x\nRationale: x\n"
-            "Supersedes: none\nTags: x\nSources: x\n"
+            "Supersedes: none\nTags: x\nSources: x\n",
+            encoding="utf-8",
         )
         v = Validator(str(tmp_path))
         v._check_decisions()
@@ -283,13 +289,14 @@ class TestCheckTasks:
         assert v.issues == 0
 
     def test_invalid_priority(self, tmp_path):
-        (tmp_path / "mind-mem.json").write_text("{}")
+        (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
         (tmp_path / "tasks").mkdir()
         (tmp_path / "tasks" / "TASKS.md").write_text(
             "[T-20260101-001]\nDate: 2026-01-01\nTitle: x\n"
             "Status: todo\nPriority: P9\nProject: x\n"
             "Due: 2026-02-01\nOwner: user\nContext: x\n"
-            "Next: x\nDependencies: none\nSources: x\nHistory: x\n"
+            "Next: x\nDependencies: none\nSources: x\nHistory: x\n",
+            encoding="utf-8",
         )
         v = Validator(str(tmp_path))
         v._check_tasks()
@@ -317,12 +324,13 @@ class TestCheckProvenance:
         assert v.issues == 0
 
     def test_missing_sources(self, tmp_path):
-        (tmp_path / "mind-mem.json").write_text("{}")
+        (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
         (tmp_path / "decisions").mkdir()
         (tmp_path / "decisions" / "DECISIONS.md").write_text(
             "[D-20260101-001]\nDate: 2026-01-01\nStatus: active\n"
             "Scope: global\nStatement: x\nRationale: x\n"
-            "Supersedes: none\nTags: x\n"  # No Sources field
+            "Supersedes: none\nTags: x\n",  # No Sources field
+            encoding="utf-8",
         )
         v = Validator(str(tmp_path))
         v._check_provenance()
@@ -342,7 +350,7 @@ class TestCheckCrossRefs:
         """Reference to nonexistent ID should fail."""
         # Add a decision that references a nonexistent task
         dec_path = os.path.join(minimal_workspace, "decisions", "DECISIONS.md")
-        with open(dec_path, "a") as f:
+        with open(dec_path, "a", encoding="utf-8") as f:
             f.write(
                 "\n[D-20260101-002]\n"
                 "Date: 2026-01-01\n"

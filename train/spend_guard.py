@@ -122,7 +122,7 @@ def preflight(args) -> None:
             f"approval file missing: {approval}. "
             f"Create with budget_usd={args.budget_usd}, tag={args.tag} "
             "and re-run preflight.")
-    content = approval.read_text()
+    content = approval.read_text(encoding="utf-8")
     if f"tag: {args.tag}" not in content:
         _refuse("R2", f"approval file does not declare tag '{args.tag}'")
     if f"budget_usd: {args.budget_usd}" not in content:

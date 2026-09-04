@@ -536,6 +536,64 @@ class BlockStoreError(Exception):
     """
 
 
+class CorpusEncodingError(BlockStoreError, ValueError):
+    """A corpus file on the read-modify-write path is not valid UTF-8.
+
+    Carries the offending ``path`` so a caller can say *which* file needs
+    fixing instead of reporting an anonymous internal failure.
+
+    **Also a ``ValueError``, deliberately.** This replaces the bare
+    ``UnicodeDecodeError`` the strict decode used to raise, and that is a
+    ``ValueError`` — so every existing handler catching one still catches
+    this. ``apply_engine.execute_op`` guards a mid-transaction write with
+    ``except (OSError, ValueError, KeyError, IndexError)`` and rolls back;
+    narrowing the base class to ``BlockStoreError`` alone would have let an
+    undecodable corpus file escape that handler *past the rollback*, which
+    is the failure mode the handler exists to prevent. Naming an error more
+    precisely must not quietly widen what it escapes.
+    """
+
+    def __init__(self, path: str, reason: str) -> None:
+        super().__init__(f"corpus file is not valid UTF-8: {path} ({reason})")
+        self.path = path
+        self.reason = reason
+
+
+def _read_corpus_for_edit(path: str) -> str:
+    """Read a corpus file that is about to be REWRITTEN, strictly as UTF-8.
+
+    Deliberately different from :func:`block_parser.parse_file`, which reads
+    with ``errors="replace"`` and says why: a stray byte should shadow one
+    character rather than hide a whole file from recall. That is right for a
+    read-only path and wrong for this one. ``write_block`` and
+    ``delete_block`` read the text, edit it, and write the result back over
+    the original with :func:`_atomic_write`. Decoding with ``errors="replace"``
+    here would substitute U+FFFD for the byte it could not read and then
+    PERSIST that substitution — a silent, irreversible edit to stored memory,
+    performed by an operation the caller asked to do something else entirely.
+    So the read-modify-write path fails instead, and fails by name.
+
+    The failure is reported rather than swallowed for the same reason
+    ``_delete_candidates`` scans the whole corpus: a file this store cannot
+    read may be the file that holds the id, and answering "not found" for a
+    block that exists is the one answer a memory product must never give.
+
+    Raises:
+        CorpusEncodingError: *path* holds bytes that are not UTF-8 — most
+            often a legacy file written in a locale codepage (an em dash
+            arrives as the single byte 0x97 under cp1252).
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return fh.read()
+    except UnicodeDecodeError as exc:
+        raise CorpusEncodingError(
+            path,
+            f"byte 0x{exc.object[exc.start]:02x} at position {exc.start} is not valid UTF-8; "
+            "re-save the file as UTF-8 (mind-mem writes UTF-8 on every platform)",
+        ) from exc
+
+
 @runtime_checkable
 class BlockStore(Protocol):
     """Protocol for block storage backends.
@@ -892,8 +950,7 @@ class MarkdownBlockStore:
 
         with FileLock(target):
             if os.path.isfile(target):
-                with open(target, "r", encoding="utf-8") as fh:
-                    existing_text = fh.read()
+                existing_text = _read_corpus_for_edit(target)
             else:
                 existing_text = ""
 
@@ -951,8 +1008,7 @@ class MarkdownBlockStore:
         receipt = require_delete_admission(str(block_id))
         for target in self._delete_candidates(str(block_id)):
             with FileLock(target):
-                with open(target, "r", encoding="utf-8") as fh:
-                    text = fh.read()
+                text = _read_corpus_for_edit(target)
                 loc = _locate_block_in_text(text, block_id)
                 if loc is None:
                     continue

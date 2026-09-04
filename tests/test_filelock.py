@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for filelock.py — cross-platform advisory locking."""
 
+import errno
 import os
 import shutil
 import sys
@@ -126,7 +127,7 @@ class TestFileLockBasic(unittest.TestCase):
         try:
             lock = FileLock(path)
             lock.acquire()
-            with open(path + ".lock") as lf:
+            with open(path + ".lock", encoding="utf-8") as lf:
                 pid_str = lf.read().strip()
             self.assertEqual(int(pid_str), os.getpid())
             lock.release()
@@ -211,6 +212,152 @@ class TestFileLockTimeout(unittest.TestCase):
                 lock1.release()
         finally:
             os.unlink(path)
+
+
+class TestAcquireNeverRaisesABareOSError(unittest.TestCase):
+    """``acquire`` promises the lock or ``LockTimeout``. Nothing else.
+
+    ``_os_lock``'s docstring says every error other than the
+    "unsupported filesystem" errnos "propagates to the caller", and it did:
+    a caller writing ``with FileLock(p, timeout=30):`` had no handler for a
+    raw ``OSError`` and simply died. Measured against the shipped code by
+    injecting the EWOULDBLOCK that arm exists to report: ``acquire``
+    propagated ``BlockingIOError`` straight out through the ``with``.
+
+    On POSIX the arm is unreachable -- we hold ``O_EXCL`` on an inode we just
+    created, so nobody else can hold its ``flock``. It is reachable where a
+    filesystem can hand a breaker the SAME ``(st_dev, st_ino)`` for a NEW
+    file as for the corpse it judged, which is ordinary NTFS behaviour: a
+    freed MFT record is reused at once, so a ``_break_stale`` racing the
+    create passes its identity check against the fresh file and adopts it
+    between the ``os.open`` and the lock. ``_break_stale`` holds the OS lock
+    across that adoption deliberately, so the arbitration is already right
+    and exactly one process is inside the section -- only the loser's
+    behaviour was wrong.
+
+    Injected rather than raced, for the reason the class above exists: the
+    question is what ``acquire`` does with that answer, and the answer is not
+    producible on the platform running this test.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.target = os.path.join(self.dir, "contested.dat")
+        with open(self.target, "w", encoding="utf-8") as fh:
+            fh.write("")
+        self._real_os_lock = FileLock._os_lock
+
+    def tearDown(self):
+        FileLock._os_lock = self._real_os_lock
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _refuse_the_os_lock(self):
+        def _held_by_someone_else(self, fd):
+            raise BlockingIOError(11, "Resource temporarily unavailable")
+
+        FileLock._os_lock = _held_by_someone_else
+
+    def test_a_refused_os_lock_times_out_instead_of_raising(self):
+        self._refuse_the_os_lock()
+        lock = FileLock(self.target, timeout=0.3, poll_interval=0.01)
+        started = time.monotonic()
+        with self.assertRaises(LockTimeout):
+            lock.acquire()
+        # It waited rather than failing fast: the deadline is what ends it.
+        self.assertGreaterEqual(time.monotonic() - started, 0.3)
+
+    def test_the_zero_timeout_form_also_answers_LockTimeout(self):
+        self._refuse_the_os_lock()
+        with self.assertRaises(LockTimeout):
+            FileLock(self.target, timeout=0).acquire()
+
+    def test_no_lockfile_is_left_behind(self):
+        """A claim we could not keep must not wedge the path for everyone else."""
+        self._refuse_the_os_lock()
+        with self.assertRaises(LockTimeout):
+            FileLock(self.target, timeout=0.1, poll_interval=0.01).acquire()
+        self.assertFalse(
+            os.path.exists(self.target + ".lock"),
+            "the failed acquire left a lockfile naming a live pid",
+        )
+        # And the path is usable again, by the real lock.
+        FileLock._os_lock = self._real_os_lock
+        with FileLock(self.target, timeout=2.0):
+            pass
+
+    def test_the_thread_lock_is_handed_back(self):
+        """Twice in a row: the second attempt must not block on the first."""
+        self._refuse_the_os_lock()
+        for _ in range(2):
+            with self.assertRaises(LockTimeout):
+                FileLock(self.target, timeout=0.1, poll_interval=0.01).acquire()
+
+    def test_a_write_failure_still_propagates_by_name(self):
+        """Control: only the LOCK attempt polls.
+
+        Without this the change would read as "swallow every OSError in the
+        claim", and an ``ENOSPC`` from the pid write would come back as a
+        ``LockTimeout`` -- a diagnosis that names the wrong thing.
+        """
+        real_write = os.write
+
+        def _no_space(fd, data):
+            raise OSError(28, "No space left on device")
+
+        os.write = _no_space
+        try:
+            with self.assertRaises(OSError) as caught:
+                FileLock(self.target, timeout=0.3).acquire()
+        finally:
+            os.write = real_write
+        self.assertNotIsInstance(caught.exception, LockTimeout)
+        self.assertEqual(caught.exception.errno, 28)
+
+    def test_a_hard_lock_error_still_propagates_by_name(self):
+        """Control: only CONTENTION polls. EIO is not contention.
+
+        The boundary this fix must not cross. ``test_medlow_batch12_regressions
+        .test_failed_os_lock_leaves_no_lockfile_behind`` was written for a
+        synthetic ``EIO`` and asserts the lockfile does not survive it;
+        catching every ``OSError`` here turned that hard failure into a
+        one-second wait and a ``LockTimeout``, which tells an operator whose
+        disk is failing that a lock was busy.
+        """
+
+        def _hard_io_error(self, fd):
+            raise OSError(errno.EIO, "synthetic I/O error")
+
+        FileLock._os_lock = _hard_io_error
+        with self.assertRaises(OSError) as caught:
+            FileLock(self.target, timeout=5.0).acquire()
+        self.assertNotIsInstance(caught.exception, LockTimeout)
+        self.assertEqual(caught.exception.errno, errno.EIO)
+        self.assertFalse(
+            os.path.exists(self.target + ".lock"),
+            "a hard failure left a live-pid lockfile behind",
+        )
+
+    def test_the_two_errno_sets_do_not_overlap(self):
+        """ "cannot lock" and "somebody else has it" are different answers.
+
+        An errno in both sets would be swallowed by ``_os_lock`` as
+        "unsupported filesystem" AND retried here as contention — two
+        different beliefs about the same code, and the first one wins
+        silently.
+        """
+        self.assertEqual(
+            mfl._CONTENDED_LOCK_ERRNOS & mfl._UNSUPPORTED_LOCK_ERRNOS,
+            frozenset(),
+            "an errno cannot mean both 'no locking here' and 'lock is taken'",
+        )
+        self.assertIn(errno.EWOULDBLOCK, mfl._CONTENDED_LOCK_ERRNOS)
+        self.assertNotIn(errno.EIO, mfl._CONTENDED_LOCK_ERRNOS)
+
+    def test_an_uncontested_acquire_is_unchanged(self):
+        """Control: the real lock still works, and this arm is not on its path."""
+        with FileLock(self.target, timeout=2.0) as lock:
+            self.assertIsNotNone(lock._lock_fd)
+        self.assertFalse(os.path.exists(self.target + ".lock"))
 
 
 if __name__ == "__main__":

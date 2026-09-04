@@ -91,7 +91,7 @@ def _eval(ship_dir: Path) -> dict:
             env=env,
             capture_output=True,
             text=True,
-        )
+         encoding="utf-8", errors="replace")
         print(r.stdout)
         if r.returncode != 0:
             print(f"  stderr: {r.stderr[:500]}")
@@ -102,14 +102,14 @@ def _eval(ship_dir: Path) -> dict:
     hold_report = hold_report_path
     summary: dict = {}
     if main_report.is_file():
-        d = json.loads(main_report.read_text())
+        d = json.loads(main_report.read_text(encoding="utf-8"))
         # eval_harness writes per-group dicts at top level with hits/total
         group_keys = [k for k, v in d.items()
                       if isinstance(v, dict) and "hits" in v and "total" in v]
         summary["main_total"] = sum(d[k]["total"] for k in group_keys)
         summary["main_hits"] = sum(d[k]["hits"] for k in group_keys)
     if hold_report.is_file():
-        d = json.loads(hold_report.read_text())
+        d = json.loads(hold_report.read_text(encoding="utf-8"))
         summary["holdout_total"] = d["total_probes"]
         summary["holdout_hits"] = d["total_hits"]
         summary["holdout_misses"] = (

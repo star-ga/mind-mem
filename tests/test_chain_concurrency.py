@@ -42,6 +42,7 @@ import time
 from dataclasses import dataclass
 
 import pytest
+from _platform_compat import atomic_cross_process_append
 
 from mind_mem.audit_chain import AuditChain
 from mind_mem.evidence_objects import (
@@ -80,7 +81,7 @@ from mind_mem.mind_filelock import _BREAK_ADOPTED, _BREAK_NOTHING, _BREAK_REMOVE
 #: applied only in defeat mode: under the lock a barrier inside the
 #: critical section would deadlock, which is the lock doing its job.
 _WORKER_SOURCE = '''\
-import os, sys, time
+import os, sys, time, traceback
 
 store, tag, rounds, barrier_dir, defeat, mode, nprocs = (
     sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4],
@@ -102,7 +103,7 @@ class _NullLock:
 
 
 def barrier(label):
-    open(os.path.join(barrier_dir, "%s-%s" % (label, tag)), "w").close()
+    open(os.path.join(barrier_dir, "%s-%s" % (label, tag)), "w", encoding="utf-8").close()
     prefix = "%s-" % label
     deadline = time.monotonic() + 60.0
     while time.monotonic() < deadline:
@@ -112,54 +113,77 @@ def barrier(label):
     raise SystemExit("barrier timeout at %s" % label)
 
 
-if mode == "evidence":
-    import mind_mem.evidence_objects as eo
+def _run():
+  if mode == "evidence":
+      import mind_mem.evidence_objects as eo
 
-    if defeat:
-        eo.FileLock = _NullLock
-        eo.EvidenceChain._linkable_previous_hash = lambda self: (
-            self._entries[-1].evidence_hash if self._entries else eo._GENESIS_HASH
-        )
-    chain = eo.EvidenceChain(store_path=store)
-    for r in range(rounds):
-        barrier("r%d" % r)
-        chain.create(
-            action=eo.EvidenceAction.APPLY,
-            actor=tag,
-            target_block_id="%s-%04d" % (tag, r),
-            target_file="decisions/DECISIONS.md",
-            payload=("%s-%d" % (tag, r)).encode(),
-        )
-else:
-    import mind_mem.audit_chain as ac
+      if defeat:
+          eo.FileLock = _NullLock
+          eo.EvidenceChain._linkable_previous_hash = lambda self: (
+              self._entries[-1].evidence_hash if self._entries else eo._GENESIS_HASH
+          )
+      chain = eo.EvidenceChain(store_path=store)
+      for r in range(rounds):
+          barrier("r%d" % r)
+          chain.create(
+              action=eo.EvidenceAction.APPLY,
+              actor=tag,
+              target_block_id="%s-%04d" % (tag, r),
+              target_file="decisions/DECISIONS.md",
+              payload=("%s-%d" % (tag, r)).encode(),
+          )
+  else:
+      import mind_mem.audit_chain as ac
 
-    if defeat:
-        ac.FileLock = _NullLock
-        # Every writer resolves the tail before any writer appends -- the
-        # interleaving the lock prevents, forced rather than hoped for. The
-        # barrier label counts tail reads; ``append`` is the only caller of
-        # ``_last_entry`` and every writer makes the same calls in the same
-        # order, so the counts agree across processes.
-        _read_tail = ac.AuditChain._last_entry
-        _tail_reads = [0]
+      if defeat:
+          ac.FileLock = _NullLock
+          # Every writer resolves the tail before any writer appends -- the
+          # interleaving the lock prevents, forced rather than hoped for. The
+          # barrier label counts tail reads; ``append`` is the only caller of
+          # ``_last_entry`` and every writer makes the same calls in the same
+          # order, so the counts agree across processes.
+          _read_tail = ac.AuditChain._last_entry
+          _tail_reads = [0]
 
-        def _tail_then_wait(self):
-            last = _read_tail(self)
-            barrier("t%d" % _tail_reads[0])
-            _tail_reads[0] += 1
-            return last
+          def _tail_then_wait(self):
+              last = _read_tail(self)
+              barrier("t%d" % _tail_reads[0])
+              _tail_reads[0] += 1
+              return last
 
-        ac.AuditChain._last_entry = _tail_then_wait
-    chain = ac.AuditChain(store)
-    for r in range(rounds):
-        barrier("r%d" % r)
-        chain.append(
-            "update_field",
-            "decisions/DECISIONS.md",
-            agent=tag,
-            reason="round %d" % r,
-            payload={"tag": tag, "round": r},
-        )
+          ac.AuditChain._last_entry = _tail_then_wait
+      chain = ac.AuditChain(store)
+      for r in range(rounds):
+          barrier("r%d" % r)
+          chain.append(
+              "update_field",
+              "decisions/DECISIONS.md",
+              agent=tag,
+              reason="round %d" % r,
+              payload={"tag": tag, "round": r},
+          )
+  return rounds
+
+
+# The worker's own testimony, on stdout, in ONE line the parent parses.
+#
+# A harness that infers "the writers ran" from rows in the file is inferring
+# it from the very artefact under test. Where an append can be lost -- on
+# Windows, with the store lock deliberately defeated -- a writer that
+# completed every round is indistinguishable from one that never started.
+# Measured on the windows-latest runners: 46 of 60 evidence rows and 54 of 60
+# audit rows, with every worker exiting 0 and stderr empty.
+try:
+    done = _run()
+except BaseException:
+    # Printed, never swallowed. An anonymous exit code is what left five CI
+    # rows saying only "a worker failed: (0, 0, 1, 1, 0, 1)".
+    sys.stdout.write("FAILED %s\\n" % tag)
+    sys.stdout.flush()
+    traceback.print_exc()
+    raise SystemExit(1)
+sys.stdout.write("DONE %s %d\\n" % (tag, done))
+sys.stdout.flush()
 '''
 
 
@@ -175,23 +199,58 @@ class ChainReport:
     broken: tuple
     exit_codes: tuple
     stderr_tail: str
+    #: Rounds the workers themselves reported completing, summed over the
+    #: ``DONE <tag> <n>`` lines they print. The writers' own testimony, which
+    #: is what "the control really ran" is a claim about -- as distinct from
+    #: ``rows``, which is what survived in the file.
+    attempted: int = 0
+    #: Tags that printed ``FAILED`` instead of ``DONE``.
+    failed_writers: tuple = ()
 
     def is_one_intact_chain(self) -> bool:
         """Every row links, nothing restarted at genesis, and it verifies."""
         return self.nonlinking == 0 and self.genesis_rooted_after_first == 0 and self.verified and not self.broken
 
+    def why_the_writers_did_not_run(self, procs: int, rounds: int) -> str:
+        """A ONE-LINE diagnosis, or "" when the writers did all their work.
+
+        First line on purpose. pytest's short summary shows only the first
+        line of an assertion message, so ``f"the control did not write:\n{report}"``
+        printed exactly ``the control did not write:`` and nothing else --
+        five CI rows whose whole visible content was the name of a symptom.
+        """
+        if self.failed_writers:
+            return f"{len(self.failed_writers)} writer(s) raised: {', '.join(self.failed_writers)} (stderr below)"
+        if self.exit_codes != (0,) * procs:
+            return f"a writer exited non-zero: exit_codes={self.exit_codes} (stderr below)"
+        if self.attempted != procs * rounds:
+            return f"writers reported {self.attempted} of {procs * rounds} appends"
+        if self.writers_seen != procs:
+            return f"records came from {self.writers_seen} of {procs} writers"
+        if self.rows == 0:
+            return "the file is empty"
+        return ""
+
     def __str__(self) -> str:  # pragma: no cover - only rendered on failure
         return (
-            f"rows={self.rows} nonlinking={self.nonlinking} "
+            f"rows={self.rows} attempted={self.attempted} nonlinking={self.nonlinking} "
             f"genesis_rooted_after_first={self.genesis_rooted_after_first} "
             f"writers_seen={self.writers_seen} verified={self.verified} "
-            f"broken={len(self.broken)} exit_codes={self.exit_codes}\n"
+            f"broken={len(self.broken)} exit_codes={self.exit_codes} "
+            f"failed_writers={self.failed_writers}\n"
             f"{self.stderr_tail}"
         )
 
 
-def _spawn_writers(tmp_path, *, mode: str, target: str, procs: int, rounds: int, defeat: bool) -> tuple[tuple, str]:
-    """Run *procs* real OS processes appending *rounds* records each."""
+def _spawn_writers(tmp_path, *, mode: str, target: str, procs: int, rounds: int, defeat: bool) -> tuple[tuple, str, int, tuple]:
+    """Run *procs* real OS processes appending *rounds* records each.
+
+    Returns ``(exit_codes, stderr, appends_reported, failed_tags)``. The last
+    two come from the workers' own ``DONE``/``FAILED`` lines rather than from
+    the file they wrote, because on a platform where an unsynchronised append
+    can be lost the file cannot distinguish "did not run" from "ran and was
+    overwritten".
+    """
     worker = tmp_path / f"writer_{mode}_{'defeat' if defeat else 'fixed'}.py"
     worker.write_text(_WORKER_SOURCE, encoding="utf-8")
     barrier_dir = tmp_path / f"barrier_{mode}_{'defeat' if defeat else 'fixed'}"
@@ -220,15 +279,24 @@ def _spawn_writers(tmp_path, *, mode: str, target: str, procs: int, rounds: int,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         for i in range(procs)
     ]
-    codes, errs = [], []
+    codes, errs, attempted, failed = [], [], 0, []
     for proc in running:
-        _, err = proc.communicate(timeout=180)
+        out, err = proc.communicate(timeout=180)
         codes.append(proc.returncode)
-        errs.append(err[-800:] if err else "")
-    return tuple(codes), "\n".join(e for e in errs if e.strip())
+        if err and err.strip():
+            errs.append(err[-2000:])
+        for line in (out or "").splitlines():
+            parts = line.split()
+            if parts[:1] == ["DONE"] and len(parts) == 3:
+                attempted += int(parts[2])
+            elif parts[:1] == ["FAILED"] and len(parts) == 2:
+                failed.append(parts[1])
+    return tuple(codes), "\n".join(errs), attempted, tuple(failed)
 
 
 def _read_evidence(store: str) -> list[dict]:
@@ -238,7 +306,7 @@ def _read_evidence(store: str) -> list[dict]:
         return [json.loads(line) for line in fh if line.strip()]
 
 
-def _evidence_report(store: str, codes: tuple, stderr: str) -> ChainReport:
+def _evidence_report(store: str, codes: tuple, stderr: str, attempted: int = 0, failed: tuple = ()) -> ChainReport:
     rows = _read_evidence(store)
     prev = _GENESIS_HASH
     nonlinking = 0
@@ -260,10 +328,12 @@ def _evidence_report(store: str, codes: tuple, stderr: str) -> ChainReport:
         broken=tuple(broken),
         exit_codes=codes,
         stderr_tail=stderr,
+        attempted=attempted,
+        failed_writers=failed,
     )
 
 
-def _audit_report(workspace: str, codes: tuple, stderr: str) -> ChainReport:
+def _audit_report(workspace: str, codes: tuple, stderr: str, attempted: int = 0, failed: tuple = ()) -> ChainReport:
     path = os.path.join(workspace, ".mind-mem-audit", "chain.jsonl")
     rows = []
     if os.path.isfile(path):
@@ -288,6 +358,8 @@ def _audit_report(workspace: str, codes: tuple, stderr: str) -> ChainReport:
         broken=tuple(errors),
         exit_codes=codes,
         stderr_tail=stderr,
+        attempted=attempted,
+        failed_writers=failed,
     )
 
 
@@ -298,15 +370,15 @@ _ROUNDS = 20
 def _run_evidence(tmp_path, *, defeat: bool) -> ChainReport:
     store = str(tmp_path / ("defeat" if defeat else "fixed") / "evidence_chain.jsonl")
     os.makedirs(os.path.dirname(store), exist_ok=True)
-    codes, stderr = _spawn_writers(tmp_path, mode="evidence", target=store, procs=_PROCS, rounds=_ROUNDS, defeat=defeat)
-    return _evidence_report(store, codes, stderr)
+    codes, stderr, attempted, failed = _spawn_writers(tmp_path, mode="evidence", target=store, procs=_PROCS, rounds=_ROUNDS, defeat=defeat)
+    return _evidence_report(store, codes, stderr, attempted, failed)
 
 
 def _run_audit(tmp_path, *, defeat: bool) -> ChainReport:
     workspace = str(tmp_path / ("audit_defeat" if defeat else "audit_fixed"))
     os.makedirs(workspace, exist_ok=True)
-    codes, stderr = _spawn_writers(tmp_path, mode="audit", target=workspace, procs=_PROCS, rounds=_ROUNDS, defeat=defeat)
-    return _audit_report(workspace, codes, stderr)
+    codes, stderr, attempted, failed = _spawn_writers(tmp_path, mode="audit", target=workspace, procs=_PROCS, rounds=_ROUNDS, defeat=defeat)
+    return _audit_report(workspace, codes, stderr, attempted, failed)
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +393,13 @@ class TestConcurrentWritersCannotForkTheEvidenceChain:
         # Positive control first: the run must actually have happened.
         # `nonlinking == 0` over an empty file is a pass that proves
         # nothing, and so is a run where every child died on import.
-        assert report.exit_codes == (0,) * _PROCS, f"a writer failed:\n{report}"
+        assert report.exit_codes == (0,) * _PROCS, f"a writer failed: {report.why_the_writers_did_not_run(_PROCS, _ROUNDS)}\n{report}"
+        # NOT lifted into the platform-conditional below. Under the lock the
+        # appends are serialised, so "every record survives" is a product
+        # guarantee on every platform including Windows -- which the Windows
+        # rows already prove, and which is precisely why the twin's version of
+        # this assertion (with the lock removed) was measuring the filesystem
+        # instead of the product.
         assert report.rows == _PROCS * _ROUNDS, f"writers did not all land their records:\n{report}"
         assert report.writers_seen == _PROCS, f"records came from {report.writers_seen} of {_PROCS} writers:\n{report}"
 
@@ -334,7 +412,7 @@ class TestConcurrentWritersCannotForkTheEvidenceChain:
     def test_exactly_one_record_is_rooted_at_genesis(self, tmp_path):
         """The fork's signature is a *second* chain root, not a bad link."""
         report = _run_evidence(tmp_path, defeat=False)
-        assert report.exit_codes == (0,) * _PROCS, f"a writer failed:\n{report}"
+        assert report.exit_codes == (0,) * _PROCS, f"a writer failed: {report.why_the_writers_did_not_run(_PROCS, _ROUNDS)}\n{report}"
         store = str(tmp_path / "fixed" / "evidence_chain.jsonl")
         rooted = [row for row in _read_evidence(store) if row["previous_hash"] == _GENESIS_HASH]
         assert len(rooted) == 1, f"{len(rooted)} chains rooted at genesis in one file:\n{report}"
@@ -346,7 +424,7 @@ class TestAuditChainLockIsLoadBearing:
     def test_every_entry_links_and_the_ledger_verifies(self, tmp_path):
         report = _run_audit(tmp_path, defeat=False)
 
-        assert report.exit_codes == (0,) * _PROCS, f"a writer failed:\n{report}"
+        assert report.exit_codes == (0,) * _PROCS, f"a writer failed: {report.why_the_writers_did_not_run(_PROCS, _ROUNDS)}\n{report}"
         assert report.rows == _PROCS * _ROUNDS, f"writers did not all land their entries:\n{report}"
         assert report.writers_seen == _PROCS, f"entries came from {report.writers_seen} of {_PROCS} writers:\n{report}"
 
@@ -357,6 +435,56 @@ class TestAuditChainLockIsLoadBearing:
 # ---------------------------------------------------------------------------
 # The controls: the same body, run against the code without the gate
 # ---------------------------------------------------------------------------
+
+
+def _assert_the_control_really_ran(report: ChainReport) -> None:
+    """The twin's positive control: the writers did the work, in full.
+
+    ``assert report.rows == _PROCS * _ROUNDS`` used to stand here, and it was
+    the wrong statement in the wrong place. With the lock defeated -- which is
+    the whole point of a twin -- nothing serialises the appends, so how many
+    of them survive is a property of the OS, not of mind-mem. POSIX gives
+    ``open(path, "a")`` the ``O_APPEND`` flag and a single write on it is
+    atomic, so all sixty always land; the Windows CRT emulates append as seek
+    then write, and the second writer overwrites the first. Measured on the
+    windows-latest runners: 46 of 60 evidence rows, 54 of 60 audit rows,
+    **every worker exiting 0 with empty stderr** -- the writers ran perfectly
+    and the control called them absent.
+
+    So the control asks the writers, not the file. Each worker prints
+    ``DONE <tag> <rounds>`` as its last act, and this checks that testimony.
+    That is strictly stronger than the row count it replaces: it also catches
+    a worker that exits non-zero (which the twins never checked at all, though
+    the gates did) and a worker that dies mid-loop, and it cannot be satisfied
+    by a run that never happened.
+    """
+    reason = report.why_the_writers_did_not_run(_PROCS, _ROUNDS)
+    assert reason == "", f"the control did not run: {reason}\n{report}"
+    assert report.exit_codes == (0,) * _PROCS, f"the control did not run: exit_codes={report.exit_codes}\n{report}"
+    assert report.attempted == _PROCS * _ROUNDS, f"the control did not run: {report.attempted} appends reported\n{report}"
+    assert report.writers_seen == _PROCS, f"the control did not run concurrently: {report.writers_seen} writers\n{report}"
+    assert report.rows > 0, f"the control did not run: the file is empty\n{report}"
+
+
+def _assert_lost_appends_are_the_platform_and_nothing_else(report: ChainReport) -> None:
+    """State the platform difference explicitly; assert on BOTH sides.
+
+    Never a skip. Where the OS gives atomic cross-process append the twin
+    keeps the exact assertion it always had -- not one record lost. Where it
+    does not, the weaker relation that is still true everywhere is asserted,
+    and the run is required to have lost records for the documented reason
+    rather than for an unexamined one.
+    """
+    assert report.rows <= report.attempted, f"more rows than appends — the harness is miscounting:\n{report}"
+    if atomic_cross_process_append():
+        assert report.rows == report.attempted, f"an append was lost on a platform whose append is atomic:\n{report}"
+    else:
+        # Windows. Losing appends here is the CRT's seek-then-write, and it is
+        # reachable only because this twin removed the lock -- the gate above
+        # runs the same writers WITH the lock and lands every record on this
+        # same runner, which is what proves the loss is the missing lock and
+        # not a broken harness.
+        assert report.rows <= report.attempted
 
 
 class TestMutationTwin:
@@ -370,9 +498,8 @@ class TestMutationTwin:
     def test_without_the_store_lock_the_evidence_chain_forks(self, tmp_path):
         report = _run_evidence(tmp_path, defeat=True)
 
-        # Same positive control as the gate: the writers really ran.
-        assert report.rows == _PROCS * _ROUNDS, f"the control did not write:\n{report}"
-        assert report.writers_seen == _PROCS, f"the control did not run concurrently:\n{report}"
+        _assert_the_control_really_ran(report)
+        _assert_lost_appends_are_the_platform_and_nothing_else(report)
 
         assert not report.is_one_intact_chain(), (
             f"the pre-fix code path produced one intact chain — this test cannot detect the fork it exists to detect:\n{report}"
@@ -384,13 +511,89 @@ class TestMutationTwin:
     def test_without_its_lock_the_audit_ledger_forks(self, tmp_path):
         report = _run_audit(tmp_path, defeat=True)
 
-        assert report.rows == _PROCS * _ROUNDS, f"the control did not write:\n{report}"
-        assert report.writers_seen == _PROCS, f"the control did not run concurrently:\n{report}"
+        _assert_the_control_really_ran(report)
+        _assert_lost_appends_are_the_platform_and_nothing_else(report)
 
         assert not report.is_one_intact_chain(), (
             f"the audit ledger survived losing its lock — the concurrency assertion above is not measuring the lock:\n{report}"
         )
         assert report.verified is False
+
+
+class TestTheControlAsksTheWritersNotTheFile:
+    """Pin the exact CI observation the twin's control used to misread.
+
+    These are the numbers the windows-latest rows reported, verbatim: three
+    writers, sixty appends between them, **every worker exited 0 with empty
+    stderr**, the chain came out forked exactly as the twin requires -- and
+    46 of the 60 rows were in the file, because with the lock defeated the
+    Windows CRT's non-atomic append lets one writer land on top of another.
+    The old control read that as "the control did not write".
+
+    Constructed rather than raced: the point is what the control CONCLUDES
+    from a given observation, and an observation you have to provoke on one
+    OS cannot be asserted on the others.
+    """
+
+    #: (evidence, audit) as measured on windows-latest at 2697baf.
+    MEASURED = ((46, 27, 1), (54, 34, 1))
+
+    def _report(self, rows: int, nonlinking: int, genesis_after: int, **over) -> ChainReport:
+        fields = dict(
+            rows=rows,
+            nonlinking=nonlinking,
+            genesis_rooted_after_first=genesis_after,
+            writers_seen=_PROCS,
+            verified=False,
+            broken=("load_integrity_compromised",),
+            exit_codes=(0,) * _PROCS,
+            stderr_tail="",
+            attempted=_PROCS * _ROUNDS,
+            failed_writers=(),
+        )
+        fields.update(over)
+        return ChainReport(**fields)
+
+    @pytest.mark.parametrize("rows,nonlinking,genesis_after", MEASURED)
+    def test_lost_appends_are_not_read_as_an_absent_writer(self, rows, nonlinking, genesis_after) -> None:
+        report = self._report(rows, nonlinking, genesis_after)
+        assert report.rows < report.attempted, "this fixture is supposed to have lost appends"
+        _assert_the_control_really_ran(report)
+        assert not report.is_one_intact_chain(), "and the property under test still holds"
+
+    def test_the_control_still_fails_when_a_writer_really_is_absent(self) -> None:
+        """Mutation control. Without it the relaxation above proves nothing.
+
+        Four independent ways a writer can fail to do its work; each must
+        still be caught, and each must say so on the FIRST line.
+        """
+        cases = {
+            "raised": self._report(46, 27, 1, failed_writers=("w1",), exit_codes=(0, 1, 0)),
+            "non-zero exit": self._report(46, 27, 1, exit_codes=(0, 1, 0)),
+            "short": self._report(46, 27, 1, attempted=_PROCS * _ROUNDS - 1),
+            "one writer": self._report(46, 27, 1, writers_seen=1),
+            "empty": self._report(0, 0, 0),
+        }
+        for name, report in cases.items():
+            with pytest.raises(AssertionError) as excinfo:
+                _assert_the_control_really_ran(report)
+            first_line = str(excinfo.value).splitlines()[0]
+            assert first_line.strip(), f"{name}: the diagnosis line is empty"
+            assert "the control did not run" in first_line, f"{name}: {first_line!r}"
+            assert first_line != "the control did not run:", f"{name}: the reason is missing from the first line"
+
+    def test_a_platform_with_atomic_append_still_demands_every_row(self) -> None:
+        """The other side of the platform branch, asserted rather than assumed."""
+        lossy = self._report(46, 27, 1)
+        if atomic_cross_process_append():
+            with pytest.raises(AssertionError, match="append was lost"):
+                _assert_lost_appends_are_the_platform_and_nothing_else(lossy)
+        else:
+            _assert_lost_appends_are_the_platform_and_nothing_else(lossy)
+        # True on every platform: the harness may never report more rows than
+        # appends, whatever the filesystem does.
+        with pytest.raises(AssertionError, match="miscounting"):
+            _assert_lost_appends_are_the_platform_and_nothing_else(self._report(61, 1, 1))
 
 
 # ---------------------------------------------------------------------------
@@ -818,7 +1021,7 @@ class TestExportGuardMutationTwin:
 #: let one process break a lock another was in the middle of taking, and let
 #: a releasing process delete its successor's claim.
 _LOCK_PROBE_SOURCE = '''\
-import os, sys, time
+import os, sys, time, traceback
 import mind_mem.mind_filelock as mfl
 
 target, tag, iters, report, defeat = (
@@ -869,30 +1072,77 @@ if defeat:
 
 holder = target + ".holder"
 violations = 0
-for i in range(iters):
-    with mfl.FileLock(target, timeout=30.0):
-        with open(holder, "w", encoding="utf-8") as fh:
-            fh.write(tag)
-        time.sleep(0.0005)
-        with open(holder, encoding="utf-8") as fh:
-            if fh.read() != tag:
-                violations += 1
-with open(report, "a", encoding="utf-8") as fh:
-    fh.write("%s %d\\n" % (tag, violations))
+done = 0
+failure = ""
+try:
+    for i in range(iters):
+        with mfl.FileLock(target, timeout=30.0):
+            with open(holder, "w", encoding="utf-8") as fh:
+                fh.write(tag)
+            time.sleep(0.0005)
+            with open(holder, encoding="utf-8") as fh:
+                if fh.read() != tag:
+                    violations += 1
+        done += 1
+except BaseException as exc:
+    # NAMED, not swallowed. A worker that dies here used to leave the parent
+    # holding nothing but an exit code -- five CI rows whose entire visible
+    # evidence was "a worker failed: (0, 0, 1, 1, 0, 1)". The class and the
+    # message go into the report line so the parent can put them on the
+    # FIRST line of its assertion; the full traceback goes to stderr, which
+    # the parent now also captures.
+    failure = "%s: %s" % (type(exc).__name__, exc)
+    traceback.print_exc()
+
+# One report file PER WORKER, never one shared file appended by six of them.
+# That shared append had the defect this suite exists to catch, one layer
+# down: on Windows an unsynchronised append is seek-then-write, so the
+# harness could lose a worker's line and then report the worker as missing.
+with open("%s.%s" % (report, tag), "w", encoding="utf-8") as fh:
+    fh.write("%s %d %d %s\\n" % (tag, violations, done, failure or "-"))
+if failure:
+    raise SystemExit(1)
 '''
 
 _LOCK_PROCS = 6
 _LOCK_ITERS = 600
 
 
-def _run_lock_probe(tmp_path, *, defeat: bool, tag: str) -> tuple[int, tuple, int]:
-    """Return (violations, exit codes, workers that reported)."""
+@dataclass(frozen=True)
+class LockProbeResult:
+    """What the probe measured, and — when a worker died — why.
+
+    ``violations``/``exit_codes``/``reported`` are what the assertions read.
+    ``diagnosis`` is a ONE-LINE reason, because pytest's short summary shows
+    only the first line of an assertion message: ``a worker failed: (0, 0, 1,
+    1, 0, 1)`` was the whole of what four Windows CI rows had to say, and the
+    child's traceback — which the harness had captured into a pipe and then
+    dropped on the floor — was the only thing that could have named the cause.
+    """
+
+    violations: int
+    exit_codes: tuple
+    reported: int
+    completed: int
+    diagnosis: str
+    stderr_tail: str
+
+    def __str__(self) -> str:  # pragma: no cover - only rendered on failure
+        return (
+            f"{self.diagnosis or 'all workers finished'}\n"
+            f"violations={self.violations} exit_codes={self.exit_codes} "
+            f"reported={self.reported} completed={self.completed}\n"
+            f"{self.stderr_tail}"
+        )
+
+
+def _run_lock_probe(tmp_path, *, defeat: bool, tag: str) -> LockProbeResult:
+    """Run the probe and report what happened, including why a worker died."""
     worker = tmp_path / f"lock_probe_{tag}.py"
     worker.write_text(_LOCK_PROBE_SOURCE, encoding="utf-8")
     target = tmp_path / f"shared_{tag}.dat"
     target.write_text("", encoding="utf-8")
     report = tmp_path / f"lock_report_{tag}.txt"
-    report.write_text("", encoding="utf-8")
 
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
@@ -905,15 +1155,39 @@ def _run_lock_probe(tmp_path, *, defeat: bool, tag: str) -> tuple[int, tuple, in
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         for i in range(_LOCK_PROCS)
     ]
-    codes = []
+    codes, errs = [], []
     for proc in running:
-        proc.communicate(timeout=300)
+        _, err = proc.communicate(timeout=300)
         codes.append(proc.returncode)
-    lines = [ln for ln in report.read_text(encoding="utf-8").splitlines() if ln.strip()]
-    return sum(int(ln.split()[1]) for ln in lines), tuple(codes), len(lines)
+        if err and err.strip():
+            errs.append(err[-2000:])
+
+    violations = completed = reported = 0
+    failures: list[str] = []
+    for part in sorted(tmp_path.glob(f"{report.name}.*")):
+        line = part.read_text(encoding="utf-8").strip()
+        if not line:
+            continue
+        reported += 1
+        fields = line.split(None, 3)
+        violations += int(fields[1])
+        completed += int(fields[2])
+        if len(fields) > 3 and fields[3] != "-":
+            failures.append(f"{fields[0]} {fields[3]}")
+
+    diagnosis = ""
+    if failures:
+        diagnosis = "a worker raised: " + "; ".join(failures)
+    elif tuple(codes) != (0,) * _LOCK_PROCS:
+        diagnosis = f"a worker exited non-zero without reporting why: {tuple(codes)}"
+    elif reported != _LOCK_PROCS:
+        diagnosis = f"only {reported} of {_LOCK_PROCS} workers left a report file"
+    return LockProbeResult(violations, tuple(codes), reported, completed, diagnosis, "\n".join(errs))
 
 
 class TestTheStoreLockActuallyExcludes:
@@ -929,14 +1203,75 @@ class TestTheStoreLockActuallyExcludes:
     """
 
     def test_no_two_processes_are_ever_inside_the_section(self, tmp_path):
-        violations, codes, reported = _run_lock_probe(tmp_path, defeat=False, tag="fixed")
+        probe = _run_lock_probe(tmp_path, defeat=False, tag="fixed")
 
         # Positive control: zero violations must mean zero overlaps, not
-        # zero work. Every worker has to have finished and reported.
-        assert codes == (0,) * _LOCK_PROCS, f"a worker failed: {codes}"
-        assert reported == _LOCK_PROCS, f"only {reported}/{_LOCK_PROCS} workers reported"
+        # zero work. Every worker has to have finished and reported — and
+        # when one did not, the FIRST line has to say why it did not.
+        assert probe.diagnosis == "", f"{probe.diagnosis}\n{probe}"
+        assert probe.exit_codes == (0,) * _LOCK_PROCS, f"a worker failed: {probe}"
+        assert probe.reported == _LOCK_PROCS, f"only {probe.reported}/{_LOCK_PROCS} workers reported\n{probe}"
+        assert probe.completed == _LOCK_PROCS * _LOCK_ITERS, (
+            f"workers completed {probe.completed} of {_LOCK_PROCS * _LOCK_ITERS} acquisitions\n{probe}"
+        )
 
-        assert violations == 0, f"two processes held the same lock {violations} times"
+        assert probe.violations == 0, f"two processes held the same lock {probe.violations} times\n{probe}"
+
+
+class TestAHarnessThatCannotSayWhyIsNotAHarness:
+    """The child's failure must reach the assertion, on its FIRST line.
+
+    This is the defect that made the Windows lock failures unreadable. The
+    harness passed ``stderr=subprocess.PIPE``, dropped the value
+    ``communicate()`` handed back, and asserted on exit codes alone. Four CI
+    rows therefore reported the entirety of what they knew as
+    ``a worker failed: (0, 0, 1, 1, 0, 1)`` — six integers, and a traceback
+    that had been captured and discarded. A harness that can watch a child
+    die and not say of what is not measuring the child.
+
+    Proven by killing a worker deliberately and reading what comes back, so
+    the claim is demonstrated rather than asserted about the code.
+    """
+
+    def test_a_dying_worker_names_its_exception(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "test_chain_concurrency._LOCK_PROBE_SOURCE",
+            "import sys\nraise RuntimeError('the child died of this')\n",
+        )
+        probe = _run_lock_probe(tmp_path, defeat=False, tag="dying")
+
+        assert probe.exit_codes != (0,) * _LOCK_PROCS, "the mutation did not actually kill anything"
+        assert "the child died of this" in str(probe), f"the child's reason never reached the parent:\n{probe}"
+        assert "RuntimeError" in probe.stderr_tail, f"the child's traceback was dropped:\n{probe}"
+        assert str(probe).splitlines()[0].strip(), "the diagnosis line is empty"
+
+    def test_a_worker_that_raises_inside_the_section_is_named_not_counted(self, tmp_path, monkeypatch) -> None:
+        """A failure INSIDE the loop, where the worker still writes a report.
+
+        Distinct from the case above: here the worker survives to report, so
+        the diagnosis has to come from the report line rather than from the
+        exit code, and the acquisitions it did NOT complete must not be
+        counted as done.
+        """
+        mutant = _LOCK_PROBE_SOURCE.replace(
+            "    for i in range(iters):",
+            "    for i in range(iters):\n        if i == 3: raise OSError(99, 'lock exploded')",
+            1,
+        )
+        assert mutant != _LOCK_PROBE_SOURCE, "the mutation did not apply"
+        monkeypatch.setattr("test_chain_concurrency._LOCK_PROBE_SOURCE", mutant)
+        probe = _run_lock_probe(tmp_path, defeat=False, tag="exploding")
+
+        assert probe.reported == _LOCK_PROCS, f"the workers did not report:\n{probe}"
+        assert "lock exploded" in probe.diagnosis, f"the reason is not on the first line:\n{probe}"
+        assert "OSError" in probe.diagnosis, probe.diagnosis
+        assert probe.completed == _LOCK_PROCS * 3, f"unfinished acquisitions were counted as done:\n{probe}"
+
+    def test_the_clean_run_reports_no_diagnosis(self, tmp_path) -> None:
+        """Control: the diagnosis is not a string this harness always emits."""
+        probe = _run_lock_probe(tmp_path, defeat=False, tag="clean")
+        assert probe.diagnosis == "", probe.diagnosis
+        assert probe.stderr_tail == "", probe.stderr_tail
 
 
 def _v501_stale_identity(self):
@@ -1348,6 +1683,8 @@ def _run_stale_race(request, tmp_path, *, tag: str, preamble: str = "") -> _Race
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         for i in range(_RACE_PROCS)
     ]
@@ -1751,6 +2088,8 @@ def _try_to_break_a_corpse(tmp_path, *, tag: str, preamble: str, patience: float
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     try:
         proc.communicate(timeout=patience)

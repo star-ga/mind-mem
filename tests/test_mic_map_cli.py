@@ -59,7 +59,10 @@ def _run_mm(args: list[str], **kwargs) -> subprocess.CompletedProcess:
         [sys.executable, "-m", "mind_mem.mm_cli", *args],
         capture_output=True,
         check=False,
-        text=False,  # bytes — mic-b output is binary
+        # bytes — mic-b output is binary, so NO encoding= here: passing one
+        # would put the pipe into text mode and every `b"..." in result.stderr`
+        # below would raise TypeError instead of comparing.
+        text=False,
         **kwargs,
     )
 
