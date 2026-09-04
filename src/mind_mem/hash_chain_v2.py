@@ -47,6 +47,140 @@ from .preimage import preimage
 # Genesis sentinel — 128 zeros (SHA3-512 produces 128 hex chars)
 GENESIS_HASH: str = "0" * 128
 
+#: Extension of the sidecar sealing the chain head, beside the database.
+#:
+#: THE DEFECT IT CLOSES, measured on a fresh workspace. Two governed
+#: writes (four chain rows, four evidence rows), then
+#: ``DELETE FROM hash_chain WHERE rowid IN (… ORDER BY rowid DESC LIMIT
+#: 2)``::
+#:
+#:     AFTER   chain=2 evidence=4
+#:     [ok] hash_chain: 2 entries verified
+#:     verify ok: True  exit: 0
+#:
+#: and after ``DELETE FROM hash_chain`` outright, ``[ok] hash_chain: 0
+#: entries verified``. :meth:`HashChainV2.verify_chain` walks links
+#: between the rows that are *present*, so removing a contiguous tail
+#: leaves a chain that is internally perfect and shorter than it was.
+#: The last row has no successor to bind it and the database has nothing
+#: outside itself to be compared against, which is why truncation was
+#: undetectable rather than merely unreported.
+#:
+#: :mod:`~mind_mem.served_ledger` already had this seal
+#: (``.mind-mem-ledger/served.head``) and the reasoning is copied
+#: wholesale: the sidecar is written after the row, read back
+#: unconditionally, and an ABSENT seal is a distinct fact from a blank
+#: one — collapsing them is what makes deleting the seal the way to
+#: unseal the tail.
+HEAD_SUFFIX: str = ".head"
+
+
+def head_path(db_path: str) -> str:
+    """Path of the head sidecar for the chain at *db_path*.
+
+    Derived from the one path :class:`HashChainV2` is given rather than
+    from a workspace, so a chain opened anywhere seals beside itself.
+    For the workspace ledger this is ``memory/hash_chain_v2.head``, which
+    is declared in :data:`~mind_mem.corpus_registry.LEDGER_FILES` — a
+    seal a snapshot could capture and a restore could put back is a seal
+    that rewinds with the thing it is sealing.
+    """
+    return os.path.splitext(db_path)[0] + HEAD_SUFFIX
+
+
+def write_head(db_path: str, head: str) -> None:
+    """Replace the head sidecar in one step — temp file, then ``os.replace``.
+
+    ``open(path, "w")`` truncates first and writes second, so between
+    those two the seal on disk is zero-length. A blank seal is not a
+    neutral value — :func:`read_head` reports it as an OVERWRITTEN seal,
+    which would convict an untouched chain — so the rename is atomic and
+    no reader ever observes a partial one. The temp name carries the pid
+    so a file left by a crashed writer is never the one being renamed.
+
+    Durability is NOT claimed: neither the SQLite commit nor this replace
+    is fsync-paired with the other, so a power loss can leave the seal one
+    row behind the chain. :func:`verify_head` admits exactly that lag and
+    nothing else — see its docstring for why no removal can forge it.
+    """
+    final = head_path(db_path)
+    tmp = f"{final}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(head + "\n")
+        os.replace(tmp, final)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:  # pragma: no cover - the replace already consumed it
+                pass
+
+
+def _seal_tail(conn: sqlite3.Connection, db_path: str) -> None:
+    """Seal the chain's CURRENT tail, under the write lock that orders commits.
+
+    Called after the insert has committed, never before: a seal written
+    ahead of its row is the exact state :func:`verify_head` convicts, so
+    doing it first would manufacture a tamper report out of every failed
+    commit.
+
+    The second ``BEGIN IMMEDIATE`` is the whole point, and it is about
+    PROCESSES rather than threads. :class:`HashChainV2` serialises its own
+    threads with an ``RLock`` and leaves cross-process ordering to SQLite's
+    write lock — correct for the rows, and the sidecar is not a row. Two
+    processes appending to one workspace (an MCP server and a ``mm``
+    command, the ordinary pairing that made
+    :func:`mind_mem.served_ledger.append_served_run` take a cross-process
+    lock) can therefore commit in one order and write their seals in the
+    other, leaving the sidecar naming an entry two or more rows behind the
+    tail — which :func:`verify_head` reports as tampering. Re-taking the
+    write lock puts every seal write into the same total order as every
+    commit, so the last seal written is always the last row committed.
+
+    Read the tail back rather than sealing the caller's own ``entry_hash``:
+    under that lock the tail may legitimately be another process's newer
+    row, and sealing our own would be writing a seal that is already stale.
+
+    Measured cost of the extra lock round trip, three runs on a loaded
+    box, each comparing the two shapes inside ONE process so the load is
+    common to both: +0.010, +0.014 and +0.027 ms per append over sealing
+    straight after the commit — against ``HashChainV2.append``'s own
+    ~0.85 ms, roughly 1-3%. (A two-process A/B of the whole ``append``
+    swung from +98% to -11% on the same box and is reported here as
+    unusable rather than as a number.) ``BEGIN IMMEDIATE`` + ``commit``
+    was also measured against ``BEGIN IMMEDIATE`` + ``rollback``; the
+    rollback is not cheaper, so the commit stays.
+
+    The window this closes did not reproduce in 7 200 appends across 6
+    concurrent processes, so it is bought on structure rather than on an
+    observed failure. What it prevents is a sticky FALSE RED on a tamper
+    verifier — a seal left naming an older entry reads exactly like a
+    truncation and clears only on the next admission.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    row = conn.execute("SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1").fetchone()
+    if row is not None:
+        write_head(db_path, row["entry_hash"])
+    conn.commit()
+
+
+def read_head(db_path: str) -> Optional[str]:
+    """The sealed head, or ``None`` when the sidecar is **absent**.
+
+    Absent and empty are different facts and stay distinguishable.
+    Collapsing both to ``""`` is what lets a deleted sidecar read as "no
+    seal to check against", and a truthiness test on the result then
+    skips the comparison entirely — removing the seal would remove the
+    check with it.
+    """
+    try:
+        with open(head_path(db_path), encoding="utf-8") as handle:
+            return handle.read().strip()
+    except OSError:
+        return None
+
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS hash_chain (
     rowid        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -334,6 +468,7 @@ class HashChainV2:
                     (entry_id, timestamp, block_id, action, content_hash, previous_hash, entry_hash),
                 )
                 conn.commit()
+                _seal_tail(conn, self._db_path)
 
         return HashEntry(
             entry_id=entry_id,
@@ -617,8 +752,166 @@ class HashChainV2:
                     ],
                 )
                 conn.commit()
+                # The head moved, so the seal moves with it. Without this an
+                # ordinary import left the sidecar naming the pre-import tail
+                # and `verify_head` would convict a chain nobody touched — a
+                # seal that only some writers maintain is a seal that reports
+                # legitimate writes as tampering.
+                if entries:
+                    _seal_tail(conn, self._db_path)
 
         return len(entries)
+
+
+# ---------------------------------------------------------------------------
+# The head seal
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class HeadVerdict:
+    """Outcome of :func:`verify_head`.
+
+    ``ok`` means *no disagreement was found*, which is not the same as
+    *the tail was checked*: on a chain with no sidecar there is nothing to
+    disagree with, and ``ok`` is ``True`` with :attr:`sealed` ``False``.
+    A caller that reads ``ok`` alone will report an unsealed chain as a
+    verified one — the exact shape "0 entries verified, GREEN" had. Read
+    both.
+    """
+
+    ok: bool
+    #: A sidecar was on disk. ``False`` means the comparison did not run.
+    sealed: bool
+    length: int
+    #: The chain's actual tail ``entry_hash``, or :data:`GENESIS_HASH`.
+    head: str
+    #: What the sidecar said, or ``None`` when it is absent.
+    recorded: Optional[str]
+    reason: str
+
+
+def verify_head(db_path: str) -> HeadVerdict:
+    """Compare the chain's tail against its head sidecar. Read-only.
+
+    The comparison is **unconditional**, and both halves of that matter,
+    for the same reasons :func:`mind_mem.served_ledger.verify_served_chain`
+    gives:
+
+    * it runs when the chain holds NO rows. A recorded head with nothing
+      left to name means every row was removed — the one deletion the
+      link walk cannot see, because an emptied table has no broken link.
+    * it runs when the sidecar is ABSENT with rows present. That state is
+      reported (``sealed=False``), never silently passed: skipping the
+      check because the seal is gone makes deleting the seal the way to
+      unseal the tail.
+
+    THE ONE ALLOWED DISAGREEMENT. :meth:`HashChainV2.append` commits the
+    row and *then* replaces the seal, so a process killed between the two
+    leaves a chain one row ahead of its sidecar. Refusing that would make
+    an ordinary ``SIGKILL`` a permanent one-way door. It is admitted only
+    when the tail row NAMES the sealed value as its ``previous_hash``, and
+    that state cannot be manufactured by a removal: taking the tail away
+    leaves the seal naming a row that is *gone* (neither branch matches),
+    and taking any earlier row away breaks the links
+    :meth:`HashChainV2.verify_chain` still convicts.
+
+    WHAT THIS DOES NOT CLOSE, named rather than implied: a chain written
+    before 5.0.2 has no sidecar, so its tail is unsealed until the next
+    admission seals it. Removing the database AND the sidecar together
+    leaves a directory indistinguishable from one that never ran — the
+    residual :func:`verify_served_chain` names for its own ledger, and for
+    the same reason: both records live inside the workspace.
+    """
+    if not os.path.isfile(db_path):
+        orphan = read_head(db_path)
+        if orphan is None:
+            return HeadVerdict(ok=True, sealed=False, length=0, head=GENESIS_HASH, recorded=None, reason="")
+        # A seal that outlived its ledger. Fatal in both modes, and NOT the
+        # same finding as ``check_hash_chain``'s "no ledger present": an
+        # absent database is a workspace that may never have written, while
+        # an absent database beside a surviving seal is positive evidence
+        # that one did and the ledger was removed. Treating this as merely
+        # unsealed would make "delete the database" quieter than "empty the
+        # table", which is the wrong way round.
+        return HeadVerdict(
+            ok=False,
+            sealed=True,
+            length=0,
+            head=GENESIS_HASH,
+            recorded=orphan,
+            reason=(
+                f"the ledger {os.path.basename(db_path)} is gone but "
+                f"{os.path.basename(head_path(db_path))} still seals {(orphan or 'a blank value')[:16]}…: "
+                "the chain was removed"
+            ),
+        )
+    try:
+        chain = HashChainV2.open_readonly(db_path)
+        length = chain.length
+        latest = chain.get_latest(n=1) if length else []
+    except (sqlite3.DatabaseError, OSError) as exc:
+        return HeadVerdict(
+            ok=False,
+            sealed=False,
+            length=0,
+            head=GENESIS_HASH,
+            recorded=read_head(db_path),
+            reason=f"cannot read ledger: {exc}",
+        )
+
+    recorded = read_head(db_path)
+    head = latest[-1].entry_hash if latest else GENESIS_HASH
+
+    if not latest:
+        if recorded is None:
+            return HeadVerdict(ok=True, sealed=False, length=0, head=head, recorded=None, reason="")
+        return HeadVerdict(
+            ok=False,
+            sealed=True,
+            length=0,
+            head=head,
+            recorded=recorded,
+            reason=(
+                f"the chain holds no entry but {os.path.basename(head_path(db_path))} still seals "
+                f"{(recorded or 'a blank value')[:16]}…: the rows were removed"
+            ),
+        )
+    if recorded is None:
+        return HeadVerdict(
+            ok=True,
+            sealed=False,
+            length=length,
+            head=head,
+            recorded=None,
+            reason=f"{length} entries, tail unsealed — no {os.path.basename(head_path(db_path))} on disk",
+        )
+    if recorded == head:
+        return HeadVerdict(ok=True, sealed=True, length=length, head=head, recorded=recorded, reason="")
+    if recorded and recorded == latest[-1].previous_hash:
+        # The crash window: the seal lags the tail by exactly one row, and
+        # that row names the seal as its predecessor. See the docstring for
+        # why no removal reaches this state.
+        return HeadVerdict(
+            ok=True,
+            sealed=True,
+            length=length,
+            head=head,
+            recorded=recorded,
+            reason="seal lags the tail by one row (append committed, seal not yet replaced)",
+        )
+    return HeadVerdict(
+        ok=False,
+        sealed=True,
+        length=length,
+        head=head,
+        recorded=recorded,
+        reason=(
+            f"the chain ends at {head[:16]}… but {os.path.basename(head_path(db_path))} seals "
+            f"{(recorded or 'a blank value')[:16]}…, which is neither that entry nor its "
+            "predecessor: entries were removed or edited"
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

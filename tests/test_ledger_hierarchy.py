@@ -62,7 +62,23 @@ from mind_mem.verify_cli import (
 SRC = pathlib.Path(mind_mem.__file__).parent
 
 PIPELINE = "b" * 64
-ANCHOR = "c" * 64
+
+
+#: NOT a constant. ``index_anchor`` is ``sha256(preimage(INDEX_ANCHOR_TAG,
+#: head))`` over the chain entry a run observed, and the 5.0.2
+#: ``cross_ledger`` check joins on exactly that. A hand-picked 64-hex
+#: value describes a workspace no run could produce -- a served row
+#: anchored to an entry that never existed -- so the fixture resolved it
+#: from the live chain instead. Strengthening the fixture, not relaxing
+#: the check: with the literal back in place, `cross_ledger` correctly
+#: convicts the row (measured: "1 served row(s) anchor to a chain entry
+#: that is gone: seq [0]", exit 11).
+def _live_anchor(ws: str) -> str:
+    from mind_mem.recall_attestation import _resolve_index_anchor
+
+    return _resolve_index_anchor(ws)
+
+
 INSTANT = "2026-09-01"
 SERVED_IDS = ("D-20260901-201", "D-20260901-202")
 
@@ -94,7 +110,7 @@ def _write_all_four(ws: str) -> None:
         served_digest=served_set_digest(SERVED_IDS),
         ids=SERVED_IDS,
         pipeline_hash=PIPELINE,
-        index_anchor=ANCHOR,
+        index_anchor=_live_anchor(ws),
         scoring_instant=INSTANT,
     )
     assert row is not None, "positive control: the served ledger must be enabled or the rest is vacuous"

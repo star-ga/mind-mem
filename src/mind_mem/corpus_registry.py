@@ -333,6 +333,13 @@ def discover_corpus_files(
 #: second edit somebody has to remember.
 LEDGER_FILES: tuple[str, ...] = (
     "memory/hash_chain_v2.db",
+    # The chain's head seal (5.0.2). Not a ledger of its own — it holds
+    # one line — but it is the record that makes the ledger beside it
+    # non-truncatable, and a snapshot that captured the chain's seal and
+    # put it back would rewind the two together, which is worse than
+    # rewinding one: the restored pair agree with each other and the
+    # verifier reports a clean chain over the wrong history.
+    "memory/hash_chain_v2.head",
     "memory/evidence_chain.jsonl",
     ".mind-mem-audit/chain.jsonl",
     ".mind-mem-ledger/served.jsonl",
