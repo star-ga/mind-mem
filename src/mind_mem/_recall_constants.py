@@ -537,5 +537,9 @@ _VALID_RECALL_KEYS = frozenset(
         # "max_warnings": int, "frame_sources": [paths],
         # "dead_end_sources": [paths]}. Read by task_frames.FramePolicy.
         "frames",
+        # Build the FTS5 index on first recall when absent (default FALSE).
+        # Read by hybrid_recall.HybridBackend; see sqlite_index.ensure_index
+        # for why turning it on changes which leg serves, and therefore rank.
+        "auto_build_index",
     }
 )

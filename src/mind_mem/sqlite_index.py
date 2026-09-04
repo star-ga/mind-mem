@@ -49,6 +49,7 @@ from .recall import (
     expand_query,
     get_block_type,
     get_excerpt,
+    normalise_tags,
     rerank_hits,
     tokenize,
 )
@@ -457,8 +458,19 @@ def _file_hash(path: str) -> str:
     editor that truncates-and-rewrites within the same second on
     coarse-mtime filesystems) was treated as unchanged and skipped on
     the next reindex. Reading the whole file is unconditionally
-    correct; the cheap pre-filter in ``_get_changed_files`` keeps
-    the common steady-state path I/O-free.
+    correct.
+
+    COST, stated because the previous version of this docstring said the
+    opposite. The size + ``mtime_ns`` pre-filter in
+    :func:`_get_changed_files` does NOT keep the steady state I/O-free: it
+    short-circuits only when the metadata *differs*. A corpus where nothing
+    changed falls through both cheap checks and reaches this function for
+    EVERY file, so the unchanged path is the one that hashes the whole
+    corpus. Measured on a 24 MB / 5,000-block workspace: 10.6 ms per
+    ``is_stale`` call, ~20% of an indexed query. That is why
+    :func:`_get_changed_files` now takes ``verify_hash`` and the query-side
+    gate (:func:`is_stale`) passes ``False``; the build path keeps the full
+    hash, unconditionally.
     """
     h = hashlib.sha256()
     try:
@@ -470,7 +482,12 @@ def _file_hash(path: str) -> str:
     return h.hexdigest()
 
 
-def _get_changed_files(conn: sqlite3.Connection, workspace: str) -> list[tuple[str, str]]:
+def _get_changed_files(
+    conn: sqlite3.Connection,
+    workspace: str,
+    *,
+    verify_hash: bool = True,
+) -> list[tuple[str, str]]:
     """Return list of (label, rel_path) for corpus files that changed since last index.
 
     A file is considered changed if:
@@ -480,7 +497,24 @@ def _get_changed_files(conn: sqlite3.Connection, workspace: str) -> list[tuple[s
       recorded value is NULL — happens once per pre-3.7.0 row after
       the M8 migration, which forces a single rehash)
     - Its full SHA-256 differs (catches the same-size + same-mtime_ns
-      case where an in-place edit kept the metadata stable)
+      case where an in-place edit kept the metadata stable) — this last
+      check only when *verify_hash* is true
+
+    ``verify_hash`` splits the two callers that were paying the same price
+    for different needs. The BUILD path (:func:`build_index`) keeps the
+    default ``True``: it is about to rewrite rows, it runs once per change,
+    and a missed in-place edit there would leave a wrong index behind. The
+    QUERY path (:func:`is_stale`) passes ``False``: it runs on every recall,
+    it only decides whether to *log* staleness / resolve statuses live, and
+    the full hash made it linear in corpus BYTES (10.6 ms on 24 MB, ~20% of
+    an indexed query — see :func:`_file_hash`).
+
+    RESIDUAL, stated rather than hidden. With ``verify_hash=False`` a file
+    rewritten in place that preserves BOTH its byte size and its
+    *nanosecond* mtime is reported unchanged. It is still caught by the
+    next build (which hashes), so the index cannot end up permanently
+    wrong; what the query path loses is only the ability to notice that
+    one class of edit before the next reindex.
 
     Discovery is :func:`~mind_mem.corpus_registry.discover_corpus_files`
     (I-14): the corpus table PLUS every ``.md`` directly inside a corpus
@@ -537,7 +571,11 @@ def _get_changed_files(conn: sqlite3.Connection, workspace: str) -> list[tuple[s
             continue
 
         # Same size + same nanosecond mtime — verify the full hash to
-        # catch in-place edits that kept the metadata stable.
+        # catch in-place edits that kept the metadata stable. Skipped on
+        # the query path, which is the only reason this branch was linear
+        # in corpus bytes on a corpus where nothing changed.
+        if not verify_hash:
+            continue
         current_hash = _file_hash(full_path)
         if current_hash != row["hash"]:
             changed.append((label, rel_path))
@@ -615,7 +653,7 @@ def _extract_fts_fields(block: dict) -> dict:
         "title": block.get("Title", "") or block.get("Name", ""),
         "name": block.get("Name", ""),
         "description": block.get("Description", "") or block.get("Summary", ""),
-        "tags": block.get("Tags", "") or block.get("Keywords", ""),
+        "tags": normalise_tags(block.get("Tags", "") or block.get("Keywords", "")),
         "context": block.get("Context", "") or block.get("Rationale", ""),
         "all_text": " ".join(str(block.get(f, "")) for f in SEARCH_FIELDS if block.get(f)),
     }
@@ -798,7 +836,11 @@ def _insert_block(
     shape every admitted result's score. Its fact sub-blocks inherit the
     verdict, for the same reason.
     """
-    tags_str = block.get("Tags", "")
+    # ``normalise_tags`` and not ``block.get`` directly: the value is
+    # bound as a SQLite parameter two statements down, and a
+    # list-valued ``Tags`` -- which the block store renders and the
+    # parser reads back as a list -- is not a bindable type.
+    tags_str = normalise_tags(block.get("Tags", ""))
     speaker = _parse_speaker_from_tags(tags_str)
 
     conn.execute(
@@ -1507,6 +1549,21 @@ def query_index(
 
     _scoring_moment = as_utc_datetime(resolve_scoring_instant(scoring_instant))
 
+    # Calibration weights for the whole candidate list in one batched pass.
+    # This was a statement PER ROW inside the loop below while the batch form
+    # sat unused on the manager: 2.2 ms of the ~52 ms query at 200 candidates,
+    # 58.3 ms at 5,000. Same rows, same ``_compute_weight``, same 1.0 for a
+    # block with no feedback — latency only, ordering untouched. ``rows`` is
+    # bounded by ``max(retrieve_wide_k, limit)``, and the helper chunks anyway.
+    _cal_weights: dict[str, float] = {}
+    if _cal_mgr is not None and rows:
+        try:
+            from ._recall_core import batch_calibration_weights
+
+            _cal_weights = batch_calibration_weights(_cal_mgr, [row["id"] for row in rows], now=_scoring_moment)
+        except Exception as exc:
+            _log.debug("calibration_weight_skipped", blocks=len(rows), error=str(exc))  # graceful degradation; non-fatal
+
     results = []
     for row in rows:
         if active_only and row["status"] not in {"active", TaskStatus.TODO, TaskStatus.DOING, "open"}:
@@ -1537,13 +1594,12 @@ def query_index(
         if priority in ("P0", "P1"):
             score *= 1.1
 
-        # Calibration feedback weight
-        if _cal_mgr is not None:
-            try:
-                cal_weight = _cal_mgr.get_block_weight(row["id"], now=_scoring_moment)
-                score *= cal_weight
-            except Exception as exc:
-                _log.debug("calibration_weight_skipped", block_id=row["id"], error=str(exc))  # graceful degradation; non-fatal
+        # Calibration feedback weight (resolved above, in one batch). A row
+        # absent from the map gets 1.0 — the same neutral multiplier the
+        # per-row lookup returned for a block with no feedback, and the same
+        # one it returned when the lookup itself failed.
+        if _cal_weights:
+            score *= _cal_weights.get(row["id"], 1.0)
 
         result = {
             "_id": row["id"],
@@ -1777,19 +1833,123 @@ def _apply_graph_boost(
 # ---------------------------------------------------------------------------
 
 
-def is_stale(workspace: str) -> bool:
+#: Workspaces this process has already tried to auto-build. A build that
+#: fails (unreadable corpus, read-only volume, a lock we lost) must not be
+#: retried on every subsequent query — "on first recall" is once, not always.
+_AUTO_BUILD_ATTEMPTED: set[str] = set()
+_AUTO_BUILD_LOCK = threading.Lock()
+
+
+def _index_present(workspace: str) -> bool:
+    """Does *workspace* have a usable FTS index (schema, not merely a file)?
+
+    See :func:`ensure_index` for why the file is not the question.
+    """
+    if not os.path.isfile(_db_path(workspace)):
+        return False
+    conn = None
+    try:
+        conn = _connect(workspace, readonly=True)
+        return _index_schema_present(conn)
+    except (OSError, sqlite3.Error):
+        return False
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def ensure_index(workspace: str, *, enabled: bool) -> dict | None:
+    """Build the FTS5 index on first recall when it is absent. Opt-in.
+
+    ``docs/performance-tuning.md`` has promised "The FTS5 index is built
+    automatically on first recall" for as long as it has existed, and nothing
+    in the package ever built one: a default install answered every query
+    with the O(corpus) scan. Measured on a 24 MB / 5,000-block workspace,
+    that is 1,928 ms per query against 51.9 ms indexed — 37x, paid by the
+    first thing anyone evaluating this product does.
+
+    WHY THIS IS OPT-IN, and must stay opt-in until row 9's paired scorecard
+    runs. Building the index does not merely make the existing path faster —
+    it CHANGES WHICH LEG SERVES. Both this module's caller
+    (``hybrid_recall.HybridBackend._bm25_search_raw``) and the MCP ``recall``
+    tool dispatch on "does recall.db exist", so creating one moves a default
+    workspace from the in-memory BM25F scan to FTS5 bm25(), and those two
+    rank differently. This project has already shipped a silently degraded
+    recall path once. Latency wins are free; ranking changes are not, so the
+    machinery lands here and the default does not move.
+
+    Args:
+        workspace: Workspace root.
+        enabled: The resolved ``recall.auto_build_index`` flag. ``False``
+            returns immediately — no ``stat``, no config read, no work — so
+            the default path pays one boolean test for the whole feature.
+
+    "ABSENT" is decided by the FTS SCHEMA, not by the file. ``recall.db`` is
+    shared with :class:`~mind_mem.calibration.CalibrationManager`, whose
+    constructor runs on the recall path and creates the file with a
+    ``calibration_feedback`` table and nothing else — so on a default install
+    the database exists from the first query while ``blocks``/``blocks_fts``
+    never do, ``query_index`` raises ``OperationalError`` and silently falls
+    back to the scan. A file-existence probe here would therefore report an
+    index that is not there and build nothing, forever.
+
+    Returns:
+        The :func:`build_index` summary when a build ran, else ``None``
+        (feature off, index already present, already attempted this process,
+        or the build failed — the failure is logged, never raised: a recall
+        must not fail because an optional index could not be created).
+    """
+    if not enabled:
+        return None
+    ws = os.path.abspath(workspace)
+    if _index_present(ws):
+        return None
+    with _AUTO_BUILD_LOCK:
+        if ws in _AUTO_BUILD_ATTEMPTED:
+            return None
+        _AUTO_BUILD_ATTEMPTED.add(ws)
+    try:
+        summary = build_index(ws, incremental=False)
+    except Exception as exc:
+        _log.warning("auto_build_index_failed", workspace=ws, error=str(exc))
+        return None
+    _log.info(
+        "auto_build_index",
+        workspace=ws,
+        blocks_indexed=summary.get("blocks_indexed", 0),
+        elapsed_ms=summary.get("elapsed_ms", 0),
+        note="recall.auto_build_index is on; subsequent recalls take the FTS leg",
+    )
+    metrics.inc("recall_index_auto_built")
+    return summary
+
+
+def is_stale(workspace: str, *, verify_hash: bool = False) -> bool:
     """Check whether any corpus .md files have changed since last index build.
 
-    Returns True if the index doesn't exist or any file mtime differs from
-    the recorded state.  This is a lightweight O(files) check that avoids
-    hashing -- suitable for a pre-query gate.
+    Returns True if the index doesn't exist, or any corpus file's size or
+    ``mtime_ns`` differs from the recorded state.
+
+    This docstring used to claim the check "avoids hashing". It did not:
+    the size + mtime pre-filter short-circuits only on a file that CHANGED,
+    so a corpus where nothing changed — the steady state, and the state
+    every query is in — fell through to a full SHA-256 of every corpus
+    file. Measured at 10.6 ms on a 24 MB / 5,000-block workspace, ~20% of
+    an indexed query, and linear in corpus bytes.
+
+    It is now true by construction: ``verify_hash`` defaults to ``False``,
+    so this really is an O(files) metadata check, and the full hash stays
+    where it belongs — on the build path, which passes ``True``. A caller
+    that wants the stronger (and much more expensive) verdict asks for it
+    explicitly. See :func:`_get_changed_files` for the residual that
+    default costs.
     """
     db = _db_path(workspace)
     if not os.path.isfile(db):
         return True
     try:
         conn = _connect(workspace, readonly=True)
-        changed = _get_changed_files(conn, workspace)
+        changed = _get_changed_files(conn, workspace, verify_hash=verify_hash)
         conn.close()
         return len(changed) > 0
     except (OSError, sqlite3.OperationalError):

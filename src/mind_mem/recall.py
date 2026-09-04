@@ -82,6 +82,7 @@ from ._recall_detection import (
     get_block_type,
     get_excerpt,
     is_skeptical_query,
+    normalise_tags,
 )
 
 # --- Query Expansion (_recall_expansion) ---
@@ -353,6 +354,17 @@ def attest_and_record(
     return attach_served_run(record, workspace, ids=_served_ids(results))
 
 
+def _carry_degraded(raw: Any, served: "ServedResults") -> None:
+    """Copy a ``degraded`` marker from the engine's result onto the served one.
+
+    One implementation for both return paths of :func:`recall`, so a marker
+    cannot be preserved on one and silently dropped on the other again.
+    """
+    degraded = getattr(raw, "degraded", None)
+    if isinstance(degraded, dict):
+        served.degraded = degraded
+
+
 def recall(
     workspace: str,
     query: str,
@@ -385,16 +397,23 @@ def recall(
     """
     kwargs["scoring_instant"] = resolve_scoring_instant(kwargs.get("scoring_instant"))
     if in_serving_scope() or _called_as_leg():
-        return ServedResults(_engine_recall(workspace, query, *args, **kwargs))
+        # The marker is carried on THIS branch too. It used to be dropped here
+        # and re-presented only below, which meant a degraded engine result
+        # lost its marker on exactly the path that serves it: ``hybrid_recall``
+        # and ``sqlite_index`` are both in ``LEG_MODULES``, so every recall
+        # reached through the hybrid arm or the FTS fallback took this return.
+        # A degradation that cannot survive the leg hop is not in-band.
+        raw_leg = _engine_recall(workspace, query, *args, **kwargs)
+        served_leg = ServedResults(raw_leg)
+        _carry_degraded(raw_leg, served_leg)
+        return served_leg
     with serving_scope():
         raw = _engine_recall(workspace, query, *args, **kwargs)
         served = ServedResults(raw)
         # ``derive_legs`` reads the ``.degraded`` marker off the results object;
         # re-presenting it here keeps a degraded vector leg visible through the
         # wrapper instead of being lost with the engine's own return type.
-        degraded = getattr(raw, "degraded", None)
-        if isinstance(degraded, dict):
-            served.degraded = degraded
+        _carry_degraded(raw, served)
         served.attestation = attest_and_record(
             workspace,
             query,
@@ -440,6 +459,7 @@ __all__ = [
     "chunk_text",
     "get_excerpt",
     "_parse_speaker_from_tags",
+    "normalise_tags",
     "get_block_type",
     # Scoring
     "date_score",

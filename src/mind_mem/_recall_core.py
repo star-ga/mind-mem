@@ -51,6 +51,7 @@ from ._recall_detection import (
     get_block_type,
     get_excerpt,
     is_skeptical_query,
+    normalise_tags,
 )
 from ._recall_expansion import expand_months, expand_query, rm3_expand
 from ._recall_reranking import llm_rerank, rerank_hits
@@ -145,6 +146,46 @@ def _get_config(workspace: str) -> dict[str, Any]:
     return _config_cache[workspace]
 
 
+# ---------------------------------------------------------------------------
+# Batched per-candidate lookups
+#
+# Both the scan leg (below) and the FTS leg (``sqlite_index.query_index``) used
+# to resolve the calibration weight ONE BLOCK AT A TIME, inside the scoring
+# loop, while the batch query that answers the whole list in one statement had
+# been sitting in ``CalibrationManager`` unused. Measured on a 5,000-block
+# workspace: 58.3 ms of per-candidate lookups against 1.9 ms batched.
+# ---------------------------------------------------------------------------
+
+#: Ids per ``IN (...)`` batch. SQLite's compiled ``SQLITE_MAX_VARIABLE_NUMBER``
+#: is 32766 on 3.32+ but only 999 on older builds, and the scan leg can carry
+#: up to ``MAX_BLOCKS_PER_QUERY`` candidates — so the batch is chunked rather
+#: than trusting the host's limit. 900 keeps the whole 50k cap to 56 statements
+#: instead of 50,000 and stays under the oldest limit we can be built against.
+_WEIGHT_BATCH_SIZE = 900
+
+
+def batch_calibration_weights(cal_mgr: Any, block_ids: list[str], *, now: Any) -> dict[str, float]:
+    """``{block_id: weight}`` for *block_ids* in chunked batch queries.
+
+    A thin, chunking wrapper over
+    :meth:`~mind_mem.calibration.CalibrationManager.get_block_weights`. The
+    per-id and batch forms compute the same value from the same rows via the
+    same ``_compute_weight`` and both default a block with no feedback to
+    1.0, so this changes latency and nothing else — the ORDER of results is
+    identical, which is the property this release is not allowed to move.
+
+    Failure is absorbed the way the per-id call absorbed it: a missing id
+    resolves to 1.0 at the call site, so a chunk that raises leaves those
+    blocks unweighted rather than unranked.
+    """
+    if not block_ids:
+        return {}
+    out: dict[str, float] = {}
+    for start in range(0, len(block_ids), _WEIGHT_BATCH_SIZE):
+        out.update(cal_mgr.get_block_weights(block_ids[start : start + _WEIGHT_BATCH_SIZE], now=now))
+    return out
+
+
 # Log optional subsystem availability at import time (#5: hidden coupling)
 if not _HAS_BLOCK_META:
     _log.info("optional_subsystem_unavailable", subsystem="block_metadata", impact="A-MEM importance boost disabled")
@@ -158,6 +199,7 @@ if not _HAS_CALIBRATION:
 
 __all__ = [
     "RecallBackend",
+    "batch_calibration_weights",
     "recall",
     "_load_backend",
     "prefetch_context",
@@ -254,7 +296,7 @@ def _pg_block_to_hit(block: dict[str, Any], score: float) -> dict[str, Any]:
     :func:`_apply_post_filters` unchanged.
     """
     bid = str(block.get("_id", "?"))
-    tags_str = block.get("Tags", "") or ""
+    tags_str = normalise_tags(block.get("Tags", ""))
     hit: dict[str, Any] = {
         "_id": bid,
         "type": get_block_type(bid),
@@ -767,6 +809,10 @@ def recall(
     # own — see mind_mem.scoring_instant for why that split is the product.
     _scoring_instant = resolve_scoring_instant(scoring_instant)
     _scoring_moment = as_utc_datetime(_scoring_instant)
+    # Set only when the corpus cap actually truncates (see MAX_BLOCKS_PER_QUERY
+    # below). ``None`` on every other run, and a ``None`` marker costs one
+    # identity test at the single return that reads it.
+    _degraded_marker: dict[str, object] | None = None
     _guardrail_ctx = GuardrailContext.from_mapping(guardrail_context)
     _guardrail_policy = GuardrailPolicy.from_config(_get_config(workspace)) if _guardrail_ctx else None
     query_tokens = tokenize(query)
@@ -889,13 +935,22 @@ def recall(
         graph_boost = True
 
     # --- A-MEM block metadata manager (optional) ---
+    #
+    # The reader-side ``if os.path.isdir(meta_dir)`` that used to guard this
+    # is gone. ``.mind-mem/`` was in no DIRS list until 5.0.2, so on EVERY
+    # workspace ``mind-mem-init`` has ever produced the directory was absent,
+    # the guard pre-empted BlockMetadataManager's own create-on-first-use, and
+    # ``meta_mgr`` was permanently None: the importance boost was a constant
+    # 1.0 and ``record_access`` / ``evolve_keywords`` never fired. Adding the
+    # directory to DIRS fixes NEW workspaces only; creating it here is what
+    # reaches the existing ones.
     meta_mgr = None
     if _HAS_BLOCK_META:
         try:
             meta_db = os.path.join(workspace, ".mind-mem", "block_meta.db")
             meta_dir = os.path.dirname(meta_db)
-            if os.path.isdir(meta_dir):
-                meta_mgr = BlockMetadataManager(meta_db)
+            os.makedirs(meta_dir, mode=0o700, exist_ok=True)
+            meta_mgr = BlockMetadataManager(meta_db)
         except Exception as e:
             _log.warning("block_metadata_init_failed", error=str(e))
 
@@ -1148,6 +1203,16 @@ def recall(
         all_blocks = expanded
 
     # Cap blocks to prevent memory/latency blowup on huge workspaces (#15)
+    #
+    # The cap keeps an ARBITRARY PREFIX of the corpus: the blocks past it are
+    # never scored, so a query whose best answer lives at position 50,001 is
+    # answered from a truncated corpus and the answer looks exactly like a
+    # complete one. A log line the caller cannot see is not a disclosure, so
+    # the truncation now also raises an in-band ``degraded`` marker in the
+    # existing vocabulary (``{leg, reason}`` + the leg's own evidence keys,
+    # the shape ``_bm25_empty_arm_marker`` / the vector-inertness gauge use),
+    # carried on the returned ``RecallResults`` and lifted into the MCP
+    # envelope beside ``degraded`` markers from the hybrid legs.
     if len(all_blocks) > MAX_BLOCKS_PER_QUERY:
         _log.warning(
             "blocks_capped",
@@ -1155,6 +1220,13 @@ def recall(
             cap=MAX_BLOCKS_PER_QUERY,
             hint="consider using FTS5 index for large workspaces",
         )
+        metrics.inc("recall_corpus_truncated")
+        _degraded_marker = {
+            "leg": "bm25",
+            "reason": "corpus_truncated",
+            "blocks_total": str(len(all_blocks)),
+            "blocks_scored": str(MAX_BLOCKS_PER_QUERY),
+        }
         all_blocks = all_blocks[:MAX_BLOCKS_PER_QUERY]
 
     # --- Kernel overrides: local aliases for BM25 params ---
@@ -1207,7 +1279,14 @@ def recall(
         _df_qt = df.get(qt, 0)
         _idf_cache[qt] = math.log((N - _df_qt + 0.5) / (_df_qt + 0.5) + 1)
 
-    results = []
+    results: list[dict[str, Any]] = []
+
+    # Deferred per-candidate weights (see the batched pass after this loop).
+    # ``_weighting`` is False whenever NEITHER optional manager loaded, which
+    # is the default install: in that case nothing below is appended, nothing
+    # is looked up, and the loop runs exactly the work it ran before.
+    _weighting = bool(meta_mgr) or bool(cal_mgr)
+    _pending_weights: list[tuple[int, str, float]] = []
 
     for i, block in enumerate(all_blocks):
         ft = doc_field_tokens[i]
@@ -1294,25 +1373,23 @@ def recall(
         if query_type == "adversarial" and block.get("_has_negation", False):
             score *= ADVERSARIAL_NEGATION_BOOST
 
-        # --- A-MEM importance boost ---
-        if meta_mgr:
-            try:
-                importance = meta_mgr.get_importance_boost(block.get("_id", ""))
-                score *= importance
-            except Exception as e:
-                _log.warning("amem_importance_boost_failed", block_id=block.get("_id", ""), error=str(e))
-
-        # --- Calibration feedback weight ---
-        if cal_mgr:
-            try:
-                cal_weight = cal_mgr.get_block_weight(block.get("_id", ""), now=_scoring_moment)
-                score *= cal_weight
-            except Exception as e:
-                _log.warning("calibration_weight_failed", block_id=block.get("_id", ""), error=str(e))
+        # --- A-MEM importance boost + calibration feedback weight ---
+        # Both used to run HERE, once per surviving candidate: two SQLite
+        # statements per block, on the innermost loop of the scan leg. They
+        # are now deferred to one batched pass after the loop (see
+        # ``_pending_weights`` below). The arithmetic is unchanged — the same
+        # two multipliers, applied to the same unrounded score, in the same
+        # order (importance, then calibration) — so the served ORDER is
+        # identical; only the statement count moves.
+        if _weighting:
+            # ``len(results)`` is the index the result appended a few lines
+            # below will occupy: nothing between here and that append can
+            # ``continue``, so the pairing cannot drift.
+            _pending_weights.append((len(results), block.get("_id", ""), score))
 
         # Build rich result payload with speaker + display text
         raw_excerpt = get_excerpt(block)
-        tags_str = block.get("Tags", "")
+        tags_str = normalise_tags(block.get("Tags", ""))
         speaker = _parse_speaker_from_tags(tags_str)
 
         result = {
@@ -1345,6 +1422,30 @@ def recall(
             if block.get(_prov_field):
                 result[_prov_field] = block[_prov_field]
         results.append(result)
+
+    # --- Batched importance / calibration weights (one query per 900 ids) ---
+    # Deliberately outside the scoring loop and deliberately keyed on the same
+    # ``block.get("_id", "")`` the per-candidate calls used, so a block with no
+    # id resolves to the same (absent -> 1.0) neutral multiplier it did before.
+    if _pending_weights:
+        _boosts: dict[str, float] = {}
+        _weights: dict[str, float] = {}
+        _weight_ids = [bid for _idx, bid, _raw in _pending_weights]
+        if meta_mgr:
+            try:
+                _boosts = meta_mgr.get_importance_boosts(_weight_ids)
+            except Exception as e:
+                _log.warning("amem_importance_boost_failed", blocks=len(_weight_ids), error=str(e))
+        if cal_mgr:
+            try:
+                _weights = batch_calibration_weights(cal_mgr, _weight_ids, now=_scoring_moment)
+            except Exception as e:
+                _log.warning("calibration_weight_failed", blocks=len(_weight_ids), error=str(e))
+        if _boosts or _weights:
+            for _idx, _bid, _raw in _pending_weights:
+                _raw *= _boosts.get(_bid, 1.0)
+                _raw *= _weights.get(_bid, 1.0)
+                results[_idx]["score"] = round(_raw, 4)
 
     _stage_counts["bm25_passed"] = len(results)
 
@@ -1391,7 +1492,7 @@ def recall(
         for nid, nscore in neighbor_scores.items():
             if nid not in score_by_id and nid in block_by_id:
                 nb = block_by_id[nid]
-                nb_tags = nb.get("Tags", "")
+                nb_tags = normalise_tags(nb.get("Tags", ""))
                 results.append(
                     {
                         "_id": nid,
@@ -1644,7 +1745,7 @@ def recall(
                     # zero original query overlap are likely noise
                     orig_overlap = sum(1 for qt in query_tokens if qt in weighted_tf_br)
                     if orig_overlap > 0:
-                        tags_str = block.get("Tags", "")
+                        tags_str = normalise_tags(block.get("Tags", ""))
                         result = {
                             "_id": bid,
                             "type": get_block_type(bid),
@@ -1858,7 +1959,15 @@ def recall(
     if meta_mgr and top:
         try:
             returned_ids = [r["_id"] for r in top]
-            meta_mgr.record_access(returned_ids, query=query)
+            # The instant THIS function already resolved at its clock
+            # boundary, threaded through rather than re-read. ``record_access``
+            # refuses to invent one (a second clock read after ranking, inside
+            # the deterministic core, is exactly what the clock sentinel
+            # catches), so without this pass-through ``last_accessed`` was
+            # never written and the consolidation planner's recency half was
+            # inert. ``_scoring_moment`` is already ``as_utc_datetime`` of the
+            # resolved instant — no new read, no new resolution.
+            meta_mgr.record_access(returned_ids, query=query, now=_scoring_moment)
             for r in top:
                 meta_mgr.evolve_keywords(r["_id"], query_tokens, r.get("excerpt", ""))
         except Exception as e:
@@ -1923,6 +2032,16 @@ def recall(
         guardrail_policy=_guardrail_policy,
         admission_allow=_admission_allow,
     )
+    if _degraded_marker is not None:
+        # ``RecallResults`` IS a list, so wrapping is transparent to every
+        # caller that only iterates/indexes; a degradation-aware caller reads
+        # ``.degraded``. Only built when the corpus was actually truncated —
+        # the untruncated path returns the same plain list it always did.
+        from .hybrid_recall import RecallResults
+
+        marked = RecallResults(top)
+        marked.degraded = _degraded_marker
+        return marked
     return top
 
 

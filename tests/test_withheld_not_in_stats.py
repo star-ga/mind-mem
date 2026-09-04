@@ -566,6 +566,11 @@ class TestAttestedAnchorStillCoversEverything:
 #:     ``argparse`` entry point; returns no aggregate of its own.
 _PUBLIC_SURFACE: dict[str, str] = {
     "build_index": "indexer-truth",
+    # Returns ``build_index``'s summary verbatim, or ``None``. Same numbers,
+    # same operator audience, same side of the gate — and it serves no
+    # content of its own, so there is nothing here for a refused caller to
+    # derive that ``build_index`` did not already report.
+    "ensure_index": "indexer-truth",
     "query_index": "egress",
     "is_stale": "egress",
     "merkle_leaves": "attestation",

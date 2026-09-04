@@ -468,6 +468,15 @@ class HybridBackend:
         # single-arm RRF noise floor.
         self._strict_hybrid: bool = bool(cfg.get("strict_hybrid", False))
 
+        # Auto-build the FTS5 index on first recall when it is absent
+        # (``recall.auto_build_index``, default FALSE). This completes a
+        # promise ``docs/performance-tuning.md`` has always made and nothing
+        # ever kept — but building the index moves a default workspace from
+        # the BM25F scan to FTS5 bm25(), and those RANK DIFFERENTLY, so it
+        # stays opt-in until the paired scorecard shows parity. See
+        # ``sqlite_index.ensure_index``.
+        self._auto_build_index: bool = bool(cfg.get("auto_build_index", False))
+
         # Query expansion config (opt-in: adds ~3x query latency when enabled)
         qe_cfg = cfg.get("query_expansion", {})
         if not isinstance(qe_cfg, dict):
@@ -1631,6 +1640,14 @@ class HybridBackend:
         the vector leg uses (:attr:`RecallResults.degraded`) — asymmetric no
         longer: an empty BM25 arm is now as visible as a failed vector arm.
 
+        A marker the RAW leg already raised is carried through rather than
+        replaced. The scan leg reports ``corpus_truncated`` when a workspace
+        exceeds ``MAX_BLOCKS_PER_QUERY`` and only an arbitrary prefix was
+        scored — a NON-EMPTY degraded result, i.e. exactly the case the
+        early ``if results`` return used to drop on the floor. Passing it up
+        is what stops a truncated answer from being indistinguishable from a
+        complete one at the surface.
+
         Under ``recall.strict_hybrid=true`` the structural failure RAISES
         (:class:`BM25LegError`) instead of degrading.
         """
@@ -1639,12 +1656,13 @@ class HybridBackend:
         # it and the BM25 leg re-resolved to today, which is precisely the
         # pass-through the clock guard exists to catch.
         results = self._bm25_search_raw(query, workspace, limit=limit, scoring_instant=scoring_instant, **kwargs)
+        raw_marker: LegMarker | None = getattr(results, "degraded", None)
         if results:
-            return _as_results(results, None)
+            return _as_results(results, raw_marker)
 
         marker = self._bm25_empty_arm_marker(workspace)
         if marker is None:
-            return _as_results(results, None)
+            return _as_results(results, raw_marker)
         if self._strict_hybrid:
             raise BM25LegError(str(marker["reason"]))
         metrics.inc("hybrid_bm25_leg_index_empty")
@@ -1656,7 +1674,7 @@ class HybridBackend:
             fts_rows=marker.get("fts_rows", "0"),
             advice="BM25 index empty/missing while store has blocks — run reindex / `mm doctor --rebuild-cache`",
         )
-        return _as_results(results, {"leg": marker["leg"], "reason": marker["reason"]})
+        return _as_results(results, _merge_leg_markers(raw_marker, {"leg": marker["leg"], "reason": marker["reason"]}))
 
     def _bm25_search_raw(
         self,
@@ -1679,9 +1697,15 @@ class HybridBackend:
         ``tests/test_recall_clock_guard.py`` — see the seam at every hop.
         """
         try:
-            from .sqlite_index import _db_path, query_index
+            from .sqlite_index import _db_path, ensure_index, query_index
 
             db = _db_path(workspace)
+            # Flag first, deliberately: with ``auto_build_index`` off this is
+            # one attribute test and NOTHING else — no stat, no config read,
+            # no import cost beyond the one already taken above. ``stat`` is
+            # only reached by the ``os.path.isfile`` that was always here.
+            if self._auto_build_index:
+                ensure_index(workspace, enabled=True)
             if os.path.isfile(db):
                 return query_index(workspace, query, limit=limit, scoring_instant=scoring_instant, **kwargs)
         except ImportError:
