@@ -4,6 +4,38 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Added — a paired scorecard, so a ranking change is measured rather than argued
+
+Every retrieval fix can move ranking, and this project has shipped a silent
+recall regression once. Two headline percentages cannot tell 4-vs-18 from
+11-vs-11, so ranking work now has a gate to pass through first.
+
+`benchmarks/compare_runs.py` gains a `paired` mode over two per-question
+NDJSON runs: exact McNemar on `recall_any@k` and `recall_all@k`, a paired
+sign test on MRR, and a bootstrap 95% CI on each mean difference, seeded from
+a committed constant (`20260903`) that travels in the output — an interval
+whose seed is not recorded is not reproducible. Both discordant directions
+are reported always; there is no net. The statistics reuse
+`mind_mem.bench.ab_stats.mcnemar_exact` rather than adding a second
+implementation of the same exact binomial. The default baseline is the
+committed `docs/benchmarks/2026-09-03-longmemeval-s-full-mind_mem-rep1.ndjson`,
+so "did this move ranking?" has one fixed thing to be measured against, and
+its numbers are pinned in the tests against an independent hand-computation.
+
+`--require-identical` is the no-diff assertion at run-artifact level: exit 1
+unless zero questions moved, in both directions, on every metric. Its scope
+is the tested metrics at the tested `k`, so `benchmarks/ranking_identity.py`
+adds the finer form the 5.0.2 hot-path work had to do by hand — the served
+`(id, score)` list, in rank order, scores as `float.hex()` so a one-ULP drift
+is a difference. Three ways such a check silently passes are closed by
+construction: an empty-vs-empty comparison, a battery whose queries changed,
+and a renamed field defaulting every row to the same value all raise instead
+of reporting "identical".
+
+Each new assertion was shown to go red under a mutation of the thing it
+guards (12 of them), because a gate whose green cannot be turned red is not a
+gate.
+
 ### Fixed — an out-of-band corpus write was served, and verify stayed green
 
 The corpus is human-editable Markdown. A decision appended to
