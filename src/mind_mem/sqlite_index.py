@@ -1384,6 +1384,10 @@ def query_index(
     rerank: bool = True,
     rerank_debug: bool = False,
     scoring_instant: date | None = None,
+    *,
+    since: str | None = None,
+    until: str | None = None,
+    return_k: int | None = None,
 ) -> list[dict]:
     """Query the FTS5 index. Returns ranked results matching recall() format.
 
@@ -1393,6 +1397,23 @@ def query_index(
     window score against — the same seam ``recall()`` carries, threaded here so
     the FTS5 leg is reproducible on exactly the same terms as the scan leg
     rather than reading its own clock. ``None`` resolves to today in UTC.
+
+    ``since`` / ``until`` / ``return_k`` are this leg's half of the recall
+    filter push-down. ``recall()``'s date bounds map onto a real column
+    (``blocks.date``), so they ride the FTS5 ``SELECT`` itself and shape which
+    candidates are generated at all. Its other three filters — lifecycle,
+    event id, maturity — live inside ``json_blob`` with no column to test, so
+    they cannot be pushed; ``return_k`` is the answer for those. It says how
+    many ranked hits to hand back (``None`` = ``limit``, the historical
+    behaviour), and ``recall()`` sets it to the wide retrieval width whenever
+    any filter is set so that ``_apply_post_filters`` cuts to ``limit`` AFTER
+    filtering rather than filtering a list already cut to ``limit``. The two
+    together are why a filtered query stopped answering "nothing" when its
+    matches happened to rank below the top-k.
+
+    None of the three is set on an unfiltered query, and each is inert when
+    unset: the emitted SQL, its bound parameters and the returned slice are
+    then character-for-character the ones this function always used.
 
     .. warning::
        Admitted **as of the last index pass**, not as of now. ``blocks_fts``
@@ -1442,6 +1463,11 @@ def query_index(
                 # against "today" and break replay on exactly the paths a
                 # caller cannot see — the leak this seam exists to close.
                 scoring_instant=scoring_instant,
+                # Same argument for the date bounds: the scan leg has its own
+                # push-down, and a fallback that dropped them would answer a
+                # bounded query from an unbounded pool.
+                since=since,
+                until=until,
             )
         finally:
             _active.discard(workspace)
@@ -1511,17 +1537,36 @@ def query_index(
         # ``_recall_core._withhold_inadmissible``. What remains inside it is
         # a second-order effect on the ranking of admitted documents.
         weights = _bm25_weights()
+        date_sql, date_params = _date_predicate(since, until)
+        # Adaptive over-fetch. Widening only the RETURNED slice is not enough
+        # when the filter the caller still has to apply is one this leg cannot
+        # evaluate: the candidates it wants may never have been fetched. The
+        # measured shape — 200 strongly-matching blocks that fail the filter
+        # ahead of 30 weakly-matching blocks that pass it — puts every survivor
+        # outside a 200-row fetch, so the widened slice comes back full of
+        # rejects. The fetch itself therefore widens by the same predicate.
+        #
+        # Stated honestly, because it is a heuristic and not a guarantee: this
+        # widens the window, it does not prove completeness. What IS exact is
+        # ``date_sql`` — a bound this leg can evaluate is answered by the
+        # engine, not by fetching more rows and hoping. The multiplier is
+        # capped so a filtered query cannot turn into an unbounded scan.
+        fetch_k = max(retrieve_wide_k, limit)
+        if return_k is not None:
+            fetch_k = min(max(fetch_k, return_k) * _FILTERED_OVERFETCH, _FILTERED_FETCH_CAP)
         rows = conn.execute(
             f"""SELECT b.*, f.rank as fts_rank,
                        -bm25(blocks_fts, {weights}) as bm25_score
                 FROM blocks_fts f
                 JOIN blocks b ON b.id = f.block_id
-                WHERE blocks_fts MATCH ?
+                WHERE blocks_fts MATCH ?{date_sql}
                 ORDER BY bm25_score DESC
-                LIMIT ?""",  # nosec B608 — `weights` is a comma-separated list of floats derived from FTS5_COLUMNS (a static constant), never from user input
-            (fts_query, max(retrieve_wide_k, limit)),
+                LIMIT ?""",  # nosec B608 — `weights` is a comma-separated list of floats derived from FTS5_COLUMNS (a static constant), never from user input; `date_sql` is a fixed fragment whose bounds are bound parameters
+            (fts_query, *date_params, fetch_k),
         ).fetchall()
-        rows = list(rows) + _released_withheld_rows(conn, workspace, fts_query, weights, max(retrieve_wide_k, limit))
+        rows = list(rows) + _released_withheld_rows(
+            conn, workspace, fts_query, weights, fetch_k, date_sql=date_sql, date_params=date_params
+        )
     except sqlite3.OperationalError as e:
         _log.warning(
             "fts_query_error_fallback",
@@ -1542,6 +1587,8 @@ def query_index(
             rerank=rerank,
             rerank_debug=rerank_debug,
             scoring_instant=scoring_instant,
+            since=since,
+            until=until,
         )
         for r in fallback_results:
             r["_fallback"] = "bm25_scan"
@@ -1654,11 +1701,22 @@ def query_index(
         deduped.append(r)
 
     # Rerank — cap candidates to prevent latency spikes (#9)
+    #
+    # ``rerank_hits`` returns only what it was given, so this cap is also a
+    # truncation of the pool. At the historical 200 it would have discarded
+    # the whole over-fetched tail — the candidates a filtered query widened
+    # the fetch to reach — before ``return_k`` ever got to slice it. The cap
+    # therefore rises to the pool the caller asked for, and stays exactly 200
+    # on every unfiltered query, which is every query that does not set
+    # ``return_k``.
     if rerank and len(deduped) > limit:
-        rerank_cap = min(len(deduped), 200)
+        rerank_cap = min(len(deduped), 200 if return_k is None else max(200, return_k))
         deduped = rerank_hits(query, deduped[:rerank_cap], debug=rerank_debug)
 
-    top = deduped[:limit]
+    # ``return_k`` widens this slice — and only this slice — when the caller
+    # has a filter left to apply. It never narrows: ``limit`` is the floor, so
+    # a caller can only ever be handed at least what it asked for.
+    top = deduped[: limit if return_k is None else max(return_k, limit)]
 
     _log.info(
         "query_complete",
@@ -1672,12 +1730,59 @@ def query_index(
     return top
 
 
+#: How much wider the FTS fetch goes when the caller still holds a filter this
+#: leg cannot evaluate in SQL (lifecycle / event id / maturity all live inside
+#: ``json_blob``). Applied only when ``query_index`` is given a ``return_k``,
+#: so an unfiltered query fetches exactly ``max(retrieve_wide_k, limit)`` rows
+#: as it always has.
+_FILTERED_OVERFETCH: int = 5
+
+#: Hard ceiling on that widened fetch. Over-fetch trades latency for recall on
+#: a filtered query; without a ceiling a small ``limit`` with a rare filter
+#: would degenerate into scanning the index.
+_FILTERED_FETCH_CAP: int = 5000
+
+
+def _date_predicate(since: str | None, until: str | None) -> tuple[str, tuple[str, ...]]:
+    """Compile ``recall``'s date bounds into a SQL fragment plus its parameters.
+
+    The pushed-down twin of ``_recall_core._in_date_range``, and deliberately
+    a transcription of it rather than an interpretation:
+
+    * no bound at all → empty fragment, so the SQL is byte-for-byte the one
+      an unfiltered query has always emitted;
+    * a bound present but empty (``""``) is "open on that side" there, so it
+      contributes no comparison here either;
+    * a block with no date cannot satisfy a bounded query there, so
+      ``b.date <> ''`` is emitted the moment either bound is supplied.
+
+    The comparisons themselves line up because SQLite's default BINARY
+    collation orders ISO-8601 text exactly as Python's ``<`` / ``>`` do. Both
+    bounds travel as bound parameters; nothing from the caller is ever
+    interpolated into the statement.
+    """
+    if since is None and until is None:
+        return "", ()
+    fragment = " AND b.date <> ''"
+    params: list[str] = []
+    if since:
+        fragment += " AND b.date >= ?"
+        params.append(since)
+    if until:
+        fragment += " AND b.date <= ?"
+        params.append(until)
+    return fragment, tuple(params)
+
+
 def _released_withheld_rows(
     conn: sqlite3.Connection,
     workspace: str,
     fts_query: str,
     weights: str,
     limit: int,
+    *,
+    date_sql: str = "",
+    date_params: tuple[str, ...] = (),
 ) -> list:
     """Hits for blocks a governance RELEASE has admitted since the last index pass.
 
@@ -1717,10 +1822,10 @@ def _released_withheld_rows(
                            -bm25(blocks_fts_withheld, {weights}) as bm25_score
                     FROM blocks_fts_withheld f
                     JOIN blocks b ON b.id = f.block_id
-                    WHERE blocks_fts_withheld MATCH ? AND b.id IN ({placeholders})
+                    WHERE blocks_fts_withheld MATCH ? AND b.id IN ({placeholders}){date_sql}
                     ORDER BY bm25_score DESC
-                    LIMIT ?""",  # nosec B608 — `weights` is floats from the static FTS5_COLUMNS; `placeholders` is `? * N` with every id bound
-                [fts_query, *ids, limit],
+                    LIMIT ?""",  # nosec B608 — `weights` is floats from the static FTS5_COLUMNS; `placeholders` is `? * N` with every id bound; `date_sql` is a fixed fragment whose bounds are bound parameters
+                [fts_query, *ids, *date_params, limit],
             ).fetchall()
         )
     except sqlite3.OperationalError as exc:

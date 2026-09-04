@@ -652,6 +652,85 @@ def _apply_as_of_projection(hits: list[dict], workspace: str, as_of: str) -> lis
     return projected
 
 
+def _any_filter_set(
+    since: str | None,
+    until: str | None,
+    lifecycle: str | None,
+    event_id: str | None,
+    min_maturity: float | None,
+) -> bool:
+    """True iff the caller set at least one of the five recall filters.
+
+    The one predicate every push-down site tests, so that "is this query
+    filtered?" cannot be answered two different ways in two different legs.
+    When it is False the push-down is not merely a no-op — it is never
+    entered: an unfiltered query must reach the ranker over exactly the
+    corpus (and, on the sqlite leg, exactly the SQL) it reached before, so
+    that its served ``(id, score)`` list stays byte-identical.
+    """
+    return since is not None or until is not None or lifecycle is not None or event_id is not None or min_maturity is not None
+
+
+def _filter_view(block: dict) -> dict:
+    """Project a corpus block onto the fields the recall filters read.
+
+    The post-filters run on the *hit* dict, not on the block: a hit carries
+    ``status`` plus ``Date`` / ``Lifecycle`` / ``EventId`` / ``Maturity``,
+    and the last four only when the block's value is truthy (see the result
+    payload built in :func:`recall`). Pre-filtering the raw block would
+    therefore be a *different* predicate — a block with ``Maturity: 0``
+    reaches :func:`~mind_mem.block_maturity.maturity_score` as an explicit
+    ``0.0`` here and as an absent field there — and the push-down could
+    reject a block the post-filter would have kept. This projection makes
+    the two predicates the same one, so pushing a filter down moves only
+    WHERE it runs, never WHICH blocks it accepts.
+    """
+    view: dict[str, Any] = {"status": block.get("Status", "") or ""}
+    for key in ("Date", "Lifecycle", "EventId", "Maturity"):
+        val = block.get(key)
+        if val:
+            view[key] = val
+    return view
+
+
+def _prefilter_corpus(
+    blocks: list[dict],
+    *,
+    since: str | None,
+    until: str | None,
+    lifecycle: str | None,
+    event_id: str | None,
+    min_maturity: float | None,
+) -> list[dict]:
+    """Drop blocks the recall filters would reject, before anything ranks them.
+
+    The scan leg's half of the filter push-down. ``_apply_post_filters``
+    used to receive a list that had already been cut to ``limit``, so a
+    filter could only ever subtract from the top-k: a query whose 30
+    in-range matches all ranked below the top 10 returned *nothing*.
+    Filtering the candidate pool instead means the ranker's top-k is drawn
+    from blocks that already satisfy the filter, and the funnel downstream
+    becomes a confirmation rather than a guillotine.
+
+    Every accept/reject decision is delegated to the same helpers the
+    funnel calls, over :func:`_filter_view` — this function re-implements
+    no predicate of its own.
+    """
+    kept: list[dict] = []
+    for block in blocks:
+        view = _filter_view(block)
+        if (since is not None or until is not None) and not _in_date_range(_block_date(view), since, until):
+            continue
+        if lifecycle is not None and not _apply_lifecycle_filter([view], lifecycle):
+            continue
+        if event_id is not None and not _apply_event_id_filter([view], event_id):
+            continue
+        if min_maturity is not None and not _apply_min_maturity_filter([view], min_maturity):
+            continue
+        kept.append(block)
+    return kept
+
+
 def _apply_post_filters(
     hits: list[dict],
     *,
@@ -672,7 +751,17 @@ def _apply_post_filters(
     Single source of truth for date/lifecycle/event_id/min_maturity
     filtering plus the ``as_of`` time-travel projection. Every recall
     dispatch path (sqlite, vector/RecallBackend, BM25 scan) MUST funnel
-    through this so the contract can't diverge per backend. Previously the
+    through this so the contract can't diverge per backend.
+
+    What changed under it is the INPUT. This used to be handed a list its
+    caller had already cut to ``limit``, which made a filter a subtraction
+    from the top-k rather than a choice of what the top-k is drawn from.
+    Callers now push each filter as far up their own leg as it goes and hand
+    this the WIDE pool; the ``[:limit]`` cuts below are the single place the
+    result is narrowed, and they now cut filtered candidates instead of
+    filtering an already-cut list. The funnel itself is unchanged — it is
+    still the only place the contract is stated — and it is still what makes
+    a leg that can push nothing (a custom ``RecallBackend``) correct. Previously the
     sqlite and vector early-returns applied only the date filter, silently
     ignoring lifecycle/event_id/min_maturity — a backend-dependent
     correctness bug (e.g. a consolidation gate's min_maturity returned
@@ -748,9 +837,19 @@ def recall(
         until: ISO-8601 upper bound on block ``Date``; None = no upper bound.
             Time-bounded recall (roadmap v4.0.0 Group E). Comparison is
             string-based so ``YYYY-MM-DD`` and full timestamps both work.
-            Filtering is applied AFTER ranking + reranking — date is a
-            post-filter, not a retrieval-time prefilter, so the ranking
-            quality the reranker provides is preserved.
+
+            These bounds — and the three filters below — are applied to the
+            CANDIDATE POOL, not to the served top-k. They used to be pure
+            post-filters, and that was the defect: the funnel received a list
+            already cut to ``limit``, so a filter could only subtract from the
+            top-k and a query whose in-range matches ranked below it answered
+            with almost nothing. Each leg now pushes what it can evaluate into
+            candidate generation (a ``WHERE`` on ``blocks.date`` for sqlite, a
+            corpus pre-filter for the scan leg) and widens its retrieval for
+            what it cannot, so ``_apply_post_filters`` cuts to ``limit`` after
+            filtering rather than before. Ranking quality is unaffected: an
+            UNFILTERED query takes none of these paths and its served list is
+            byte-for-byte the one it always returned.
         lifecycle: Optional lifecycle filter (``"durable"``, ``"ephemeral"``,
             or ``"generated"``).  When set, only blocks whose ``Lifecycle``
             field matches the value (case-insensitive) are returned.
@@ -835,6 +934,22 @@ def recall(
     # — without it, callers of mind_mem.recall.recall() (including the
     # `mm recall` CLI in mm_cli.py) always get the scan-only behaviour.
     _cfg_backend = _load_backend(workspace)
+
+    # Filter push-down. A post-filter that receives an already-``limit``-sized
+    # list can only subtract from the top-k, so a query whose in-range matches
+    # all rank below the top-k answered with nothing at all. Two moves fix it,
+    # and both are gated on this one predicate so an unfiltered query keeps the
+    # exact retrieval it had:
+    #   * push what the leg can evaluate into candidate generation (a WHERE on
+    #     ``blocks.date`` for sqlite, a corpus pre-filter for the scan leg), and
+    #   * where the leg cannot evaluate it, widen the retrieval and let
+    #     ``_apply_post_filters`` do the cut over the WIDE pool.
+    # ``_apply_post_filters`` stays the single funnel either way: it now
+    # confirms a decision already taken upstream instead of being the only
+    # place the decision is taken.
+    _filters_on = _any_filter_set(since, until, lifecycle, event_id, min_maturity)
+    _wide_pool_k = max(retrieve_wide_k, limit) if _filters_on else None
+
     if _cfg_backend == "sqlite":
         from .sqlite_index import query_index
 
@@ -848,6 +963,13 @@ def recall(
             rerank=rerank,
             rerank_debug=rerank_debug,
             scoring_instant=_scoring_instant,
+            # ``blocks.date`` is a real column, so the date bounds ride the
+            # SQL. Lifecycle / EventId / Maturity live inside ``json_blob``
+            # and have no column to filter on — those are why the pool has
+            # to come back wide.
+            since=since,
+            until=until,
+            return_k=_wide_pool_k,
         )
         return _apply_post_filters(
             hits,
@@ -865,7 +987,11 @@ def recall(
         )
     if isinstance(_cfg_backend, RecallBackend):
         try:
-            backend_hits: list[dict] = _cfg_backend.search(workspace, query, limit=limit, active_only=active_only)
+            # No pushable surface on an arbitrary backend, so the only lever
+            # is over-fetch: ask for the wide pool and let the funnel below cut
+            # it to ``limit`` AFTER filtering. ``_wide_pool_k`` is ``None`` on
+            # an unfiltered query, so that request is the one it always was.
+            backend_hits: list[dict] = _cfg_backend.search(workspace, query, limit=_wide_pool_k or limit, active_only=active_only)
             if backend_hits:
                 return _apply_post_filters(
                     backend_hits,
@@ -1017,6 +1143,18 @@ def recall(
                         # decomposition straddling UTC midnight would merge two
                         # differently-dated rankings into one result set.
                         scoring_instant=_scoring_instant,
+                        # A sub-query used to run UNFILTERED and return its own
+                        # ``sub_limit``-sized top-k, which the merge below then
+                        # filtered — the same after-the-slice mistake, one level
+                        # down and compounded by the smaller slice. Threading
+                        # the filters here lets each sub-query use its own leg's
+                        # push-down; the merge's filters then confirm rather
+                        # than cut. All ``None`` on an unfiltered query.
+                        since=since,
+                        until=until,
+                        lifecycle=lifecycle,
+                        event_id=event_id,
+                        min_maturity=min_maturity,
                         _allow_decompose=False,
                     )
                 except RecursionError:
@@ -1173,6 +1311,26 @@ def recall(
     _pre_admission = len(all_blocks)
     all_blocks = admit_corpus(all_blocks, allow=_admission_allow)
     _stage_counts["withheld"] = _pre_admission - len(all_blocks)
+
+    # The scan leg's push-down: the five filters decide the CANDIDATE POOL,
+    # not just which of an already-cut top-k survives. Placed after admission
+    # (a filter must never be able to re-admit) and before every consumer of
+    # ``all_blocks`` — scoring, the graph-boost neighbour pool and
+    # ``context_pack``'s rescue set all read it, and each of those could
+    # otherwise re-introduce an out-of-range block for the funnel to drop
+    # again. Skipped entirely when nothing is filtered, so the unfiltered
+    # corpus, its BM25 document frequencies and its served list are untouched.
+    if _filters_on:
+        _pre_filter = len(all_blocks)
+        all_blocks = _prefilter_corpus(
+            all_blocks,
+            since=since,
+            until=until,
+            lifecycle=lifecycle,
+            event_id=event_id,
+            min_maturity=min_maturity,
+        )
+        _stage_counts["filter_excluded"] = _pre_filter - len(all_blocks)
 
     if not all_blocks:
         # Empty corpus is not a reason to withhold a constraint.
