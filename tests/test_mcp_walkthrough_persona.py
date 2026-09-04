@@ -39,7 +39,8 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
                 "workspace_path": str(ws),
                 "block_store": {"backend": "markdown"},
             }
-        )
+        ),
+        encoding="utf-8",
     )
 
     decisions = """[D-20260101-001]
@@ -60,7 +61,7 @@ Status: active
 Subject: MFA rollout schedule
 Statement: Authentication MFA gates rolled out per cohort.
 """
-    (ws / "decisions" / "DECISIONS.md").write_text(decisions)
+    (ws / "decisions" / "DECISIONS.md").write_text(decisions, encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
     return str(ws)
 

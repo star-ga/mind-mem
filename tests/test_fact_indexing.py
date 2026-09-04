@@ -22,7 +22,7 @@ class _WorkspaceMixin:
         for d in ["decisions", "tasks", "entities", "intelligence", "memory"]:
             os.makedirs(os.path.join(tmpdir, d), exist_ok=True)
 
-        with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(decisions or "# Decisions\n")
 
         for fname in [

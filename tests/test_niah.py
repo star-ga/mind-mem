@@ -326,7 +326,7 @@ def _build_workspace(
         os.makedirs(os.path.join(ws, d), exist_ok=True)
 
     config = {"version": "1.7.0", "recall": _RECALL_CONFIG.copy()}
-    with open(os.path.join(ws, "mind-mem.json"), "w") as f:
+    with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
         json.dump(config, f)
 
     n_decisions = max(1, int(haystack_size * 0.50))
@@ -346,7 +346,7 @@ def _build_workspace(
             decisions_content += _build_block_md(block_id, block)
             filler_idx += 1
 
-    with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+    with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
         f.write(decisions_content)
 
     tasks_content = ""
@@ -354,7 +354,7 @@ def _build_workspace(
         block = _generate_filler_block(filler_idx + i, "task")
         block_id = f"T-{20250101 + filler_idx + i}-{((filler_idx + i) % 999) + 1:03d}"
         tasks_content += _build_block_md(block_id, block)
-    with open(os.path.join(ws, "tasks", "TASKS.md"), "w") as f:
+    with open(os.path.join(ws, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
         f.write(tasks_content)
 
     incidents_content = ""
@@ -362,14 +362,14 @@ def _build_workspace(
         block = _generate_filler_block(filler_idx + n_tasks + i, "incident")
         block_id = f"INC-{20250101 + filler_idx + n_tasks + i}-x{i:03d}"
         incidents_content += _build_block_md(block_id, block)
-    with open(os.path.join(ws, "entities", "incidents.md"), "w") as f:
+    with open(os.path.join(ws, "entities", "incidents.md"), "w", encoding="utf-8") as f:
         f.write(incidents_content)
 
     for name in ["projects.md", "people.md", "tools.md"]:
-        with open(os.path.join(ws, "entities", name), "w") as f:
+        with open(os.path.join(ws, "entities", name), "w", encoding="utf-8") as f:
             f.write("")
     for name in ["CONTRADICTIONS.md", "DRIFT.md", "SIGNALS.md"]:
-        with open(os.path.join(ws, "intelligence", name), "w") as f:
+        with open(os.path.join(ws, "intelligence", name), "w", encoding="utf-8") as f:
             f.write("")
 
     return ws

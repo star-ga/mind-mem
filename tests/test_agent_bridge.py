@@ -63,7 +63,7 @@ class TestAgentFormatterContent:
     def test_codex_uses_bullet_list(self, fmt: AgentFormatter, sample_blocks: list[dict]) -> None:
         out = fmt.inject("codex", "auth", sample_blocks)
         assert "Context for: auth" in out
-        assert "**decision** [D-001]: Use OAuth2" in out
+        assert "**decision** [D-001] (provenance: unknown): <evidence>Use OAuth2</evidence>" in out
 
     def test_gemini_uses_system_tag(self, fmt: AgentFormatter, sample_blocks: list[dict]) -> None:
         out = fmt.inject("gemini", "auth", sample_blocks)

@@ -275,7 +275,9 @@ def _gh_json(command: list[str], timeout: float) -> Any:
     alert gate), so this adds no new credential path: it inherits ``GH_TOKEN``.
     """
     try:
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+        completed = subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout, check=False, encoding="utf-8", errors="replace"
+        )
     except FileNotFoundError as exc:
         raise GateError("the 'gh' CLI is not available; cannot read CI conclusions") from exc
     except subprocess.TimeoutExpired as exc:

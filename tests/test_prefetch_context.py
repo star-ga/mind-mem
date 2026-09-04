@@ -21,7 +21,7 @@ def _setup_workspace(tmp_path, decisions_md=""):
     with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
         f.write(decisions_md)
     # Stub task file (needed for IDF diversity in recall)
-    with open(os.path.join(ws, "tasks", "TASKS.md"), "w") as f:
+    with open(os.path.join(ws, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
         f.write("[T-20260218-099]\nTitle: Placeholder task\nStatus: active\n")
     # Stub remaining corpus files
     for fname in [
@@ -148,7 +148,7 @@ def test_prefetch_category_aware(tmp_path):
     # prior distill output
     cats_dir = os.path.join(ws, "categories")
     os.makedirs(cats_dir, exist_ok=True)
-    with open(os.path.join(cats_dir, "architecture.md"), "w") as f:
+    with open(os.path.join(cats_dir, "architecture.md"), "w", encoding="utf-8") as f:
         f.write("# Architecture\n\n[D-20260218-030]\nStatement: Use Redis for caching layer\n")
 
     result = prefetch_context(ws, ["architecture caching"])

@@ -204,7 +204,7 @@ class TestLoadConfig(unittest.TestCase):
     def test_loads_and_validates(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             cfg = {"recall": {"bm25_k1": 99.0, "backend": "bm25"}}
-            with open(os.path.join(ws, "mind-mem.json"), "w") as f:
+            with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
             result = load_config(ws)
             self.assertAlmostEqual(result["recall"]["bm25_k1"], 3.0)
@@ -216,7 +216,7 @@ class TestLoadConfig(unittest.TestCase):
 
     def test_malformed_json_returns_default(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
-            with open(os.path.join(ws, "mind-mem.json"), "w") as f:
+            with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
                 f.write("{bad json")
             result = load_config(ws)
             self.assertEqual(result["version"], DEFAULT_CONFIG["version"])
@@ -230,7 +230,7 @@ class TestInitWorkspace(unittest.TestCase):
             created, skipped = init(ws)
             config_path = os.path.join(ws, "mind-mem.json")
             self.assertTrue(os.path.exists(config_path))
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 cfg = json.load(f)
             self.assertEqual(cfg["version"], DEFAULT_CONFIG["version"])
 
@@ -240,7 +240,7 @@ class TestInitWorkspace(unittest.TestCase):
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({"custom": True}, f)
             init(ws)
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 cfg = json.load(f)
             self.assertTrue(cfg.get("custom"))
 
@@ -304,14 +304,14 @@ class TestInitBackendAware(unittest.TestCase):
         """Default markdown init writes a config with no block_store (SQLite path)."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             init(ws)
-            with open(os.path.join(ws, "mind-mem.json")) as f:
+            with open(os.path.join(ws, "mind-mem.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
             self.assertNotIn("block_store", cfg)
 
     def test_postgres_init_writes_block_store(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             init(ws, backend="postgres", dsn="postgresql://u:p@h/db", schema="s1")
-            with open(os.path.join(ws, "mind-mem.json")) as f:
+            with open(os.path.join(ws, "mind-mem.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
             self.assertEqual(cfg["block_store"]["backend"], "postgres")
             self.assertEqual(cfg["block_store"]["dsn"], "postgresql://u:p@h/db")
@@ -345,7 +345,7 @@ class TestMainCli(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             rc, _out, _err = self._run_main([ws])
             self.assertEqual(rc, 0)
-            with open(os.path.join(ws, "mind-mem.json")) as f:
+            with open(os.path.join(ws, "mind-mem.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
             self.assertNotIn("block_store", cfg)
 
@@ -377,7 +377,7 @@ class TestMainCli(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             rc, _out, _err = self._run_main([ws, "--backend", "postgres", "--dsn", "postgresql://u:p@h/db", "--schema", "sch"])
             self.assertEqual(rc, 0)
-            with open(os.path.join(ws, "mind-mem.json")) as f:
+            with open(os.path.join(ws, "mind-mem.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
             self.assertEqual(cfg["block_store"]["backend"], "postgres")
             self.assertEqual(cfg["block_store"]["schema"], "sch")
@@ -392,7 +392,7 @@ class TestMainCli(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, env):
                 rc, _out, _err = self._run_main([ws])
             self.assertEqual(rc, 0)
-            with open(os.path.join(ws, "mind-mem.json")) as f:
+            with open(os.path.join(ws, "mind-mem.json"), encoding="utf-8") as f:
                 cfg = json.load(f)
             self.assertEqual(cfg["block_store"]["backend"], "postgres")
             self.assertEqual(cfg["block_store"]["schema"], "envsch")

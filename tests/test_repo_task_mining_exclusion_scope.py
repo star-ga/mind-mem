@@ -122,6 +122,8 @@ class TestExclusionCoversTheExecutedSet:
             capture_output=True,
             text=True,
             check=True,
+            encoding="utf-8",
+            errors="replace",
         ).stdout.strip()
         source = mining._test_patch_sources(repo_with_pg_conftest, sha, ("tests/conftest.py",))
         assert "psycopg" in source

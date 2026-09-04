@@ -220,10 +220,10 @@ class TestCorpusIsolation(unittest.TestCase):
         decisions_dir = os.path.join(self.tmpdir, "decisions")
         os.makedirs(decisions_dir, exist_ok=True)
         # Write a DECISIONS.md with one active decision
-        with open(os.path.join(decisions_dir, "DECISIONS.md"), "w") as f:
+        with open(os.path.join(decisions_dir, "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("# Decisions\n\n[D-20260226-001]\nDate: 2026-02-26\nStatus: active\nStatement: Use BM25 for scoring\n")
         # Write SIGNALS.md with one pending and one active signal
-        with open(os.path.join(intel_dir, "SIGNALS.md"), "w") as f:
+        with open(os.path.join(intel_dir, "SIGNALS.md"), "w", encoding="utf-8") as f:
             f.write(
                 "# Signals\n\n"
                 "[SIG-20260226-001]\n"

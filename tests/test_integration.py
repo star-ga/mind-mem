@@ -69,7 +69,7 @@ class TestFullLifecycle(unittest.TestCase):
 
         # Verify SIGNALS.md has content
         signals_path = os.path.join(self.ws, "intelligence", "SIGNALS.md")
-        with open(signals_path) as f:
+        with open(signals_path, encoding="utf-8") as f:
             content = f.read()
         self.assertIn("SIG-", content)
         self.assertIn("PostgreSQL", content)

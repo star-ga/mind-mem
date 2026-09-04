@@ -27,7 +27,7 @@ def ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "maintenance/append-only",
     ):
         (tmp_path / d).mkdir(parents=True, exist_ok=True)
-    (tmp_path / "mind-mem.json").write_text("{}")
+    (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
     return tmp_path
 

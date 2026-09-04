@@ -23,7 +23,7 @@ class TestWAL(unittest.TestCase):
         entry_id = wal.begin("write", os.path.join(self.td, "test.md"), "new content")
         entry_path = os.path.join(self.td, ".mind-mem-wal", f"{entry_id}.json")
         self.assertTrue(os.path.isfile(entry_path))
-        with open(entry_path) as f:
+        with open(entry_path, encoding="utf-8") as f:
             entry = json.load(f)
         self.assertEqual(entry["status"], "pending")
         self.assertEqual(entry["operation"], "write")
@@ -43,7 +43,7 @@ class TestWAL(unittest.TestCase):
         entry_id = wal.begin("write", target, "new content")
         backup_path = os.path.join(self.td, ".mind-mem-wal", f"{entry_id}.backup")
         self.assertTrue(os.path.isfile(backup_path))
-        with open(backup_path) as f:
+        with open(backup_path, encoding="utf-8") as f:
             self.assertEqual(f.read(), "original content")
 
     def test_rollback_restores_backup(self):
@@ -58,7 +58,7 @@ class TestWAL(unittest.TestCase):
         # Rollback
         result = wal.rollback(entry_id)
         self.assertTrue(result)
-        with open(target) as f:
+        with open(target, encoding="utf-8") as f:
             self.assertEqual(f.read(), "original")
 
     def test_rollback_removes_new_file(self):
@@ -87,7 +87,7 @@ class TestWAL(unittest.TestCase):
             f.write("during crash")
         replayed = wal.replay()
         self.assertEqual(replayed, 1)
-        with open(target) as f:
+        with open(target, encoding="utf-8") as f:
             self.assertEqual(f.read(), "before crash")
 
     def test_replay_skips_committed(self):
@@ -122,9 +122,9 @@ class TestBackupWorkspace(unittest.TestCase):
         # Create a minimal workspace
         os.makedirs(os.path.join(self.td, "decisions"))
         os.makedirs(os.path.join(self.td, "tasks"))
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Test\nStatus: active\n")
-        with open(os.path.join(self.td, "mind-mem.json"), "w") as f:
+        with open(os.path.join(self.td, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump({"version": "0.5.0"}, f)
 
     def tearDown(self):
@@ -164,7 +164,7 @@ class TestExportJsonl(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.td, "decisions"))
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: First\nStatus: active\n\n---\n\n[D-20260101-002]\nStatement: Second\nStatus: active\n")
 
     def tearDown(self):
@@ -178,7 +178,7 @@ class TestExportJsonl(unittest.TestCase):
     def test_jsonl_is_valid(self):
         output = os.path.join(self.td, "export.jsonl")
         export_jsonl(self.td, output)
-        with open(output) as f:
+        with open(output, encoding="utf-8") as f:
             for line in f:
                 obj = json.loads(line.strip())
                 self.assertIn("_source", obj)
@@ -205,7 +205,7 @@ class TestRestoreWorkspace(unittest.TestCase):
 
     def _create_backup(self):
         os.makedirs(os.path.join(self.td, "decisions"))
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Test\n")
         output = os.path.join(self.td, "backup.tar.gz")
         backup_workspace(self.td, output)
@@ -221,7 +221,7 @@ class TestRestoreWorkspace(unittest.TestCase):
         backup = self._create_backup()
         # Pre-create conflicting file
         os.makedirs(os.path.join(self.restore_td, "decisions"))
-        with open(os.path.join(self.restore_td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.restore_td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("existing content")
         result = restore_workspace(self.restore_td, backup, force=False)
         self.assertGreater(result["skipped"], 0)
@@ -230,7 +230,7 @@ class TestRestoreWorkspace(unittest.TestCase):
         backup = self._create_backup()
         # Pre-create conflicting file
         os.makedirs(os.path.join(self.restore_td, "decisions"))
-        with open(os.path.join(self.restore_td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.restore_td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("existing content")
         result = restore_workspace(self.restore_td, backup, force=True)
         self.assertEqual(result["skipped"], 0)

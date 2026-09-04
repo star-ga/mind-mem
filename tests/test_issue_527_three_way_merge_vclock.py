@@ -23,7 +23,7 @@ def federation_enabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     mind-mem.json with v4.federation.enabled=true and point
     MIND_MEM_CONFIG at it."""
     cfg = tmp_path / "fed-on.json"
-    cfg.write_text(json.dumps({"v4": {"federation": {"enabled": True}}}))
+    cfg.write_text(json.dumps({"v4": {"federation": {"enabled": True}}}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
 
 

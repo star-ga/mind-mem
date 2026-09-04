@@ -42,7 +42,7 @@ def workspace(tmp_path: Path) -> str:
         "workspace_path": str(ws),
         "block_store": {"backend": "markdown"},
     }
-    (ws / "mind-mem.json").write_text(json.dumps(config))
+    (ws / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
     return str(ws)
 
 

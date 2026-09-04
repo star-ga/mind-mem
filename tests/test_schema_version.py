@@ -106,7 +106,7 @@ class TestMigrateWorkspace(unittest.TestCase):
         self._create_v1_workspace()
         migrate_workspace(self.td)
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
         self.assertEqual(config["schema_version"], CURRENT_SCHEMA_VERSION)
 
@@ -114,7 +114,7 @@ class TestMigrateWorkspace(unittest.TestCase):
         self._create_v1_workspace()
         migrate_workspace(self.td)
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
         self.assertEqual(config["version"], "1.0.0")
         self.assertEqual(config["workspace_path"], ".")
@@ -140,7 +140,7 @@ class TestMigrateWorkspace(unittest.TestCase):
         self.assertTrue(os.path.isdir(os.path.join(self.td, "intelligence", "proposed")))
         self.assertTrue(os.path.isdir(os.path.join(self.td, "shared")))
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
         self.assertEqual(config["schema_version"], CURRENT_SCHEMA_VERSION)
 
@@ -160,7 +160,7 @@ class TestMigrateWorkspace(unittest.TestCase):
         # After migration, mind-mem.json should exist with schema_version
         config_path = os.path.join(self.td, "mind-mem.json")
         self.assertTrue(os.path.isfile(config_path))
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
         self.assertEqual(config["schema_version"], CURRENT_SCHEMA_VERSION)
 

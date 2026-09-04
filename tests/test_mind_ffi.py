@@ -19,7 +19,7 @@ def test_load_kernel_config_missing():
 
 
 def test_load_kernel_config_empty():
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False, encoding="utf-8") as f:
         f.write("")
         path = f.name
     try:

@@ -211,7 +211,7 @@ def test_run_suite_and_ndjson_carries_pipeline(tmp_path):
 
     ndjson = tmp_path / "out.ndjson"
     write_ndjson(result, str(ndjson))
-    rows = [json.loads(line) for line in ndjson.read_text().splitlines()]
+    rows = [json.loads(line) for line in ndjson.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 2
     for row in rows:
         assert "pipeline" in row

@@ -31,7 +31,7 @@ def workspace(tmp_path: Path) -> str:
         "workspace_path": str(ws),
         "block_store": {"backend": "markdown"},
     }
-    (ws / "mind-mem.json").write_text(json.dumps(config))
+    (ws / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
     return str(ws)
 
 
@@ -84,14 +84,14 @@ class TestClassifyFile:
 class TestIngestTextFile:
     def test_writes_block(self, workspace: str, tmp_path: Path) -> None:
         f = tmp_path / "note.md"
-        f.write_text("# Hello\nThis is a test note for inbox ingestion.")
+        f.write_text("# Hello\nThis is a test note for inbox ingestion.", encoding="utf-8")
         block_id = ingest_text_file(workspace, str(f))
         assert block_id.startswith("INBOX-")
         assert "note" in block_id
 
     def test_empty_file_still_writes(self, workspace: str, tmp_path: Path) -> None:
         f = tmp_path / "blank.txt"
-        f.write_text("")
+        f.write_text("", encoding="utf-8")
         block_id = ingest_text_file(workspace, str(f))
         assert block_id.startswith("INBOX-")
 
@@ -104,7 +104,7 @@ class TestIngestTextFile:
 
     def test_safe_filename_sanitized(self, workspace: str, tmp_path: Path) -> None:
         f = tmp_path / "weird name & punct!.txt"
-        f.write_text("content")
+        f.write_text("content", encoding="utf-8")
         block_id = ingest_text_file(workspace, str(f))
         # All non-alphanumeric chars (other than - and _) must be replaced.
         suffix = block_id.split("-", 2)[-1]
@@ -119,7 +119,7 @@ class TestIngestTextFile:
 class TestProcessFile:
     def test_success_moves_to_processed(self, workspace: str, inbox: Path) -> None:
         f = inbox / "good.txt"
-        f.write_text("ok content")
+        f.write_text("ok content", encoding="utf-8")
         processed = inbox / "_processed"
         failed = inbox / "_failed"
         result = process_file(workspace, str(f), processed_dir=str(processed), failed_dir=str(failed))
@@ -134,7 +134,7 @@ class TestProcessFile:
 
     def test_unknown_extension_moves_to_failed(self, workspace: str, inbox: Path) -> None:
         f = inbox / "unknown.bin"
-        f.write_text("opaque")
+        f.write_text("opaque", encoding="utf-8")
         processed = inbox / "_processed"
         failed = inbox / "_failed"
         result = process_file(workspace, str(f), processed_dir=str(processed), failed_dir=str(failed))
@@ -145,7 +145,7 @@ class TestProcessFile:
         # Sidecar error file
         errs = list(failed.rglob("unknown.bin.error.txt"))
         assert len(errs) == 1
-        assert "unsupported extension" in errs[0].read_text()
+        assert "unsupported extension" in errs[0].read_text(encoding="utf-8")
 
     def test_image_handler_fails_with_clear_error(self, workspace: str, inbox: Path) -> None:
         f = inbox / "pic.png"
@@ -183,8 +183,8 @@ class TestInboxWatcher:
         assert (inbox / "_failed").is_dir()
 
     def test_process_once_handles_text(self, workspace: str, inbox: Path) -> None:
-        (inbox / "first.md").write_text("First memory")
-        (inbox / "second.txt").write_text("Second memory")
+        (inbox / "first.md").write_text("First memory", encoding="utf-8")
+        (inbox / "second.txt").write_text("Second memory", encoding="utf-8")
         watcher = InboxWatcher(workspace, str(inbox))
         results = watcher.process_once()
         assert len(results) == 2
@@ -193,19 +193,19 @@ class TestInboxWatcher:
     def test_process_once_skips_staging_dirs(self, workspace: str, inbox: Path) -> None:
         watcher = InboxWatcher(workspace, str(inbox))
         # Drop a file inside _processed that should not be re-ingested.
-        (inbox / "_processed" / "old.txt").write_text("already done")
+        (inbox / "_processed" / "old.txt").write_text("already done", encoding="utf-8")
         results = watcher.process_once()
         assert results == []
 
     def test_callback_fires_per_result(self, workspace: str, inbox: Path) -> None:
-        (inbox / "x.md").write_text("hi")
+        (inbox / "x.md").write_text("hi", encoding="utf-8")
         seen: list[str] = []
         watcher = InboxWatcher(workspace, str(inbox), on_result=lambda r: seen.append(r.handler))
         watcher.process_once()
         assert seen == ["text"]
 
     def test_callback_exception_does_not_break(self, workspace: str, inbox: Path) -> None:
-        (inbox / "y.md").write_text("hi")
+        (inbox / "y.md").write_text("hi", encoding="utf-8")
 
         def boom(_r) -> None:
             raise RuntimeError("callback exploded")
@@ -217,10 +217,10 @@ class TestInboxWatcher:
 
     def test_files_processed_in_mtime_order(self, workspace: str, inbox: Path) -> None:
         first = inbox / "a.md"
-        first.write_text("A")
+        first.write_text("A", encoding="utf-8")
         time.sleep(0.05)
         second = inbox / "b.md"
-        second.write_text("B")
+        second.write_text("B", encoding="utf-8")
         watcher = InboxWatcher(workspace, str(inbox))
         results = watcher.process_once()
         assert [Path(r.path).name for r in results] == ["a.md", "b.md"]
@@ -229,7 +229,7 @@ class TestInboxWatcher:
         watcher = InboxWatcher(workspace, str(inbox), interval=0.5)
         watcher.start()
         # Drop a file after the watcher is running.
-        (inbox / "live.md").write_text("live ingest")
+        (inbox / "live.md").write_text("live ingest", encoding="utf-8")
         # Wait up to 3 seconds for the watcher to pick it up.
         deadline = time.time() + 3.0
         while time.time() < deadline:

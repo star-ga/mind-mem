@@ -80,7 +80,7 @@ def build_ws(q: dict, tmp: str, turns: str) -> str:
         for i, s in enumerate(sessions)
     ]
     open(os.path.join(d, "DECISIONS.md"), "w", encoding="utf-8").write("\n---\n\n".join(blocks))
-    json.dump(CONFIG, open(os.path.join(ws, "mind-mem.json"), "w"))
+    json.dump(CONFIG, open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8"))
     return ws
 
 
@@ -149,7 +149,7 @@ def main():
     ap.add_argument("--output")
     a = ap.parse_args()
 
-    data = json.load(open(a.data_path))
+    data = json.load(open(a.data_path, encoding="utf-8"))
     pool = [q for q in data if not q.get("question_id", "").endswith("_abs")
             and q.get("answer_session_ids")]
     if a.sample:
@@ -181,7 +181,7 @@ def main():
     print(json.dumps(out["aggregate"]["overall"], indent=2))
     if a.output:
         out["per_question"] = per_q
-        json.dump(out, open(a.output, "w"), indent=2)
+        json.dump(out, open(a.output, "w", encoding="utf-8"), indent=2)
         print(f"\nWrote {a.output}")
 
 

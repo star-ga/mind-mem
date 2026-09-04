@@ -181,7 +181,7 @@ def test_distill_creates_manifest(tmp_path):
     manifest_path = os.path.join(ws, "categories", "_manifest.json")
     assert os.path.isfile(manifest_path), "_manifest.json should exist"
 
-    with open(manifest_path) as f:
+    with open(manifest_path, encoding="utf-8") as f:
         manifest = json.load(f)
     assert isinstance(manifest, dict)
     assert "categories" in manifest

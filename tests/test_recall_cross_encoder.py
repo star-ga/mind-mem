@@ -79,7 +79,7 @@ class TestCrossEncoderInRecall(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.td, "decisions"))
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Use PostgreSQL for the database\nStatus: active\nDate: 2026-01-01\nTags: database\n")
 
     def tearDown(self):
@@ -98,7 +98,7 @@ class TestCrossEncoderInRecall(unittest.TestCase):
         import json
 
         config = {"recall": {"cross_encoder": {"enabled": False}}}
-        with open(os.path.join(self.td, "mind-mem.json"), "w") as f:
+        with open(os.path.join(self.td, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump(config, f)
 
         from mind_mem.recall import recall as r
@@ -156,7 +156,7 @@ class TestCrossEncoderMindKernel(unittest.TestCase):
 
     def test_kernel_has_blending_section(self):
         kernel_path = os.path.join(os.path.dirname(__file__), "..", "mind", "cross_encoder.mind")
-        with open(kernel_path) as f:
+        with open(kernel_path, encoding="utf-8") as f:
             content = f.read()
         self.assertIn("[blending]", content)
         self.assertIn("blend_weight", content)

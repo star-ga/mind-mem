@@ -337,7 +337,7 @@ class TestWriteSummary:
         write_summary(ws, t_path, _make_messages(5))
         today = datetime.now().strftime("%Y-%m-%d")
         summary_file = os.path.join(ws, "summaries", "daily", f"{today}.md")
-        with open(summary_file) as f:
+        with open(summary_file, encoding="utf-8") as f:
             content = f.read()
         assert content.startswith("# Session Summaries")
 

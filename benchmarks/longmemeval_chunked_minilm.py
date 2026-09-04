@@ -193,7 +193,7 @@ def build_ws(q: dict, tmp: str, turns: str) -> str:
     ]
     with open(os.path.join(d, "DECISIONS.md"), "w", encoding="utf-8") as f:
         f.write("\n---\n\n".join(blocks))
-    with open(os.path.join(ws, "mind-mem.json"), "w") as f:
+    with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
         json.dump(CONFIG, f)
     return ws
 
@@ -514,7 +514,7 @@ def main() -> None:
         urllib.request.urlretrieve(url, a.data_path)  # noqa: S310 — fixed HF URL
         print(f"[dataset] saved -> {a.data_path}", flush=True)
 
-    data = json.load(open(a.data_path))
+    data = json.load(open(a.data_path, encoding="utf-8"))
     pool = [
         q for q in data
         if not q.get("question_id", "").endswith("_abs")
@@ -643,7 +643,7 @@ def main() -> None:
             "aggregate": agg,
             "per_question": pq,
         }
-        with open(a.output, "w") as f:
+        with open(a.output, "w", encoding="utf-8") as f:
             json.dump(out, f, indent=2)
         print(f"\nWrote {a.output}")
 

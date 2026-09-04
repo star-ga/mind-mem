@@ -72,6 +72,8 @@ def _git(*args: str, cwd: Path) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         check=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
 
@@ -530,7 +532,7 @@ class TestStatelessness:
             ),
             encoding="utf-8",
         )
-        out = subprocess.run([sys.executable, str(probe)], capture_output=True, text=True, check=True)
+        out = subprocess.run([sys.executable, str(probe)], capture_output=True, text=True, check=True, encoding="utf-8", errors="replace")
         assert out.stdout.strip() == "LEAKED:", out.stdout
 
     def test_scoring_needs_no_workspace(self) -> None:

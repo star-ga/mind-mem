@@ -71,7 +71,7 @@ class TestAppendSignals(unittest.TestCase):
             count = append_signals(ws, signals, "2026-02-13")
             self.assertEqual(count, 1)
 
-            with open(os.path.join(ws, "intelligence", "SIGNALS.md")) as f:
+            with open(os.path.join(ws, "intelligence", "SIGNALS.md"), encoding="utf-8") as f:
                 content = f.read()
             # Must have [SIG-...] without ## prefix for parser compatibility
             self.assertIn("[SIG-20260213-001]", content)
@@ -94,7 +94,7 @@ class TestAppendSignals(unittest.TestCase):
             count = append_signals(ws, signals, "2026-02-13")
             self.assertEqual(count, 1)
 
-            with open(os.path.join(ws, "intelligence", "SIGNALS.md")) as f:
+            with open(os.path.join(ws, "intelligence", "SIGNALS.md"), encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("[SIG-20260213-003]", content)
 
@@ -178,7 +178,7 @@ class TestCaptureConfidence(unittest.TestCase):
             ]
             count = append_signals(ws, signals, "2026-02-15")
             self.assertEqual(count, 1)
-            with open(os.path.join(ws, "intelligence", "SIGNALS.md")) as f:
+            with open(os.path.join(ws, "intelligence", "SIGNALS.md"), encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Confidence: high", content)
             self.assertIn("Priority: P1", content)

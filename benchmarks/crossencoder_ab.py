@@ -328,7 +328,7 @@ def _correlate_with_judge(data: dict, judge_path: str) -> None:
         print(f"[ce-ab] Judge baseline not found at {judge_path}, skipping correlation")
         return
 
-    with open(judge_path) as f:
+    with open(judge_path, encoding="utf-8") as f:
         judge_data = json.load(f)
 
     judge_by_q = {}
@@ -414,7 +414,7 @@ def main():
     # Don't include per_question in saved file to keep it compact
     save_data = {k: v for k, v in data.items() if k != "per_question"}
     save_data["per_question_count"] = len(data.get("per_question", []))
-    with open(out_path, "w") as f:
+    with open(out_path, "w", encoding="utf-8") as f:
         json.dump(save_data, f, indent=2)
     print(f"Results saved to {out_path}")
 

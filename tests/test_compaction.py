@@ -41,14 +41,14 @@ class TestArchiveCompletedBlocks(unittest.TestCase):
             init(td)
             # Add a completed task with an old date
             tasks_path = os.path.join(td, "tasks", "TASKS.md")
-            with open(tasks_path, "a") as f:
+            with open(tasks_path, "a", encoding="utf-8") as f:
                 f.write("\n[T-20240101-001]\nTitle: Old task\nDate: 2024-01-01\nStatus: done\n\n---\n")
 
             actions = archive_completed_blocks(td, days=30, dry_run=True)
             self.assertTrue(len(actions) > 0)
             self.assertTrue(all("[dry-run]" in a for a in actions))
             # Original file should be unchanged
-            with open(tasks_path) as f:
+            with open(tasks_path, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("T-20240101-001", content)
 
@@ -57,7 +57,7 @@ class TestArchiveCompletedBlocks(unittest.TestCase):
             init(td)
             today = datetime.now().strftime("%Y-%m-%d")
             tasks_path = os.path.join(td, "tasks", "TASKS.md")
-            with open(tasks_path, "a") as f:
+            with open(tasks_path, "a", encoding="utf-8") as f:
                 f.write(f"\n[T-20260215-001]\nTitle: Recent task\nDate: {today}\nStatus: done\n\n---\n")
 
             actions = archive_completed_blocks(td, days=30, dry_run=False)
@@ -67,7 +67,7 @@ class TestArchiveCompletedBlocks(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             tasks_path = os.path.join(td, "tasks", "TASKS.md")
-            with open(tasks_path, "a") as f:
+            with open(tasks_path, "a", encoding="utf-8") as f:
                 f.write("\n[T-20240101-001]\nTitle: Active old task\nDate: 2024-01-01\nStatus: active\n\n---\n")
 
             actions = archive_completed_blocks(td, days=30, dry_run=False)
@@ -80,7 +80,7 @@ class TestCleanupSnapshots(unittest.TestCase):
             init(td)
             old_dir = os.path.join(td, "intelligence", "applied", "20240101-120000")
             os.makedirs(old_dir)
-            with open(os.path.join(old_dir, "APPLY_RECEIPT.md"), "w") as f:
+            with open(os.path.join(old_dir, "APPLY_RECEIPT.md"), "w", encoding="utf-8") as f:
                 f.write("test receipt\n")
 
             actions = cleanup_snapshots(td, days=30)
@@ -93,7 +93,7 @@ class TestCleanupSnapshots(unittest.TestCase):
             recent = datetime.now().strftime("%Y%m%d-%H%M%S")
             snap_dir = os.path.join(td, "intelligence", "applied", recent)
             os.makedirs(snap_dir)
-            with open(os.path.join(snap_dir, "APPLY_RECEIPT.md"), "w") as f:
+            with open(os.path.join(snap_dir, "APPLY_RECEIPT.md"), "w", encoding="utf-8") as f:
                 f.write("test\n")
 
             actions = cleanup_snapshots(td, days=30)
@@ -125,7 +125,7 @@ class TestCleanupDailyLogs(unittest.TestCase):
             # Archive should exist
             archive = os.path.join(td, "memory", "archive-2024.md")
             self.assertTrue(os.path.exists(archive))
-            with open(archive) as f:
+            with open(archive, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Old daily log content", content)
 
@@ -154,7 +154,7 @@ class TestCompactSignals(unittest.TestCase):
 
             actions = compact_signals(td, days=30)
             self.assertTrue(len(actions) > 0)
-            with open(signals_path) as f:
+            with open(signals_path, encoding="utf-8") as f:
                 content = f.read()
             self.assertNotIn("SIG-20240101-001", content)
             self.assertIn("SIG-20260215-001", content)

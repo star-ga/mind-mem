@@ -32,7 +32,8 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
                 "workspace_path": str(ws),
                 "block_store": {"backend": "markdown"},
             }
-        )
+        ),
+        encoding="utf-8",
     )
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
     # ``reindex_dirty`` is an admin tool after the issue #508-#513 ACL
@@ -44,7 +45,9 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
 
 def _seed_dirty_block(workspace: str) -> str:
     block_id = "D-20260503-500"
-    (Path(workspace) / "decisions" / "DECISIONS.md").write_text(f"[{block_id}]\nStatus: active\nStatement: stale block, no TransformHash\n")
+    (Path(workspace) / "decisions" / "DECISIONS.md").write_text(
+        f"[{block_id}]\nStatus: active\nStatement: stale block, no TransformHash\n", encoding="utf-8"
+    )
     return block_id
 
 
@@ -107,7 +110,7 @@ class TestReindexDirty:
         assert out["processed"] == 0
         assert block_id in out["ids"]
         # File should still lack TransformHash.
-        text = (Path(workspace) / "decisions" / "DECISIONS.md").read_text()
+        text = (Path(workspace) / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
         assert "TransformHash:" not in text
 
     def test_processes_and_stamps(self, workspace: str) -> None:
@@ -117,7 +120,7 @@ class TestReindexDirty:
         out = json.loads(reindex_dirty())
         assert out["dry_run"] is False
         assert out["processed"] == 1
-        text = (Path(workspace) / "decisions" / "DECISIONS.md").read_text()
+        text = (Path(workspace) / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
         assert "TransformHash:" in text
 
     def test_after_processing_status_clean(self, workspace: str) -> None:
@@ -142,7 +145,8 @@ class TestReindexDirty:
         (Path(workspace) / "decisions" / "DECISIONS.md").write_text(
             "[D-20260503-600]\nStatus: active\nStatement: a\n\n"
             "[D-20260503-601]\nStatus: active\nStatement: b\n\n"
-            "[D-20260503-602]\nStatus: active\nStatement: c\n"
+            "[D-20260503-602]\nStatus: active\nStatement: c\n",
+            encoding="utf-8",
         )
         out = json.loads(reindex_dirty(limit=0, dry_run=True))
         assert len(out["ids"]) >= 3

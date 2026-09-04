@@ -49,7 +49,7 @@ def test_memory_md_has_content():
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
-        with open(os.path.join(ws, "MEMORY.md")) as f:
+        with open(os.path.join(ws, "MEMORY.md"), encoding="utf-8") as f:
             content = f.read()
         assert len(content) > 0
 

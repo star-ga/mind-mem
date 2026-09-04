@@ -86,7 +86,7 @@ def federation_enabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import json
 
     cfg = tmp_path / "fed-on.json"
-    cfg.write_text(json.dumps({"v4": {"federation": {"enabled": True}}}))
+    cfg.write_text(json.dumps({"v4": {"federation": {"enabled": True}}}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
 
 
@@ -97,7 +97,7 @@ def federation_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     import json
 
     cfg = tmp_path / "fed-off.json"
-    cfg.write_text(json.dumps({"v4": {"federation": {"enabled": False}}}))
+    cfg.write_text(json.dumps({"v4": {"federation": {"enabled": False}}}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
 
 

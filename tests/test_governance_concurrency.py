@@ -69,7 +69,7 @@ class TestAuditChainConcurrentAppends:
         assert ok, f"chain integrity lost under concurrent writes: {errors[:3]}"
 
         seen_targets: set[str] = set()
-        with open(tmp_path / ".mind-mem-audit" / "chain.jsonl") as fh:
+        with open(tmp_path / ".mind-mem-audit" / "chain.jsonl", encoding="utf-8") as fh:
             for line in fh:
                 row = json.loads(line)
                 seen_targets.add(row["target"])

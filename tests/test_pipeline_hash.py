@@ -23,7 +23,7 @@ from mind_mem.pipeline_hash import (
 
 
 def _write_config(workspace: Path, config: dict) -> None:
-    (workspace / "mind-mem.json").write_text(json.dumps(config))
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
 
 
 @pytest.fixture
@@ -119,9 +119,9 @@ class TestCurrentPipelineHash:
 
     def test_prompt_template_path_changes_hash(self, workspace: Path) -> None:
         tpl1 = workspace / "tpl1.txt"
-        tpl1.write_text("one")
+        tpl1.write_text("one", encoding="utf-8")
         tpl2 = workspace / "tpl2.txt"
-        tpl2.write_text("two")
+        tpl2.write_text("two", encoding="utf-8")
 
         _write_config(workspace, {"extraction": {"backend": "ollama", "model": "x", "prompt_template": str(tpl1)}})
         h1 = current_pipeline_hash(str(workspace))
@@ -131,16 +131,16 @@ class TestCurrentPipelineHash:
 
     def test_changing_prompt_template_contents_changes_hash(self, workspace: Path) -> None:
         tpl = workspace / "tpl.txt"
-        tpl.write_text("original")
+        tpl.write_text("original", encoding="utf-8")
         _write_config(workspace, {"extraction": {"backend": "ollama", "model": "x", "prompt_template": str(tpl)}})
         h1 = current_pipeline_hash(str(workspace))
         # Mutate the template; hash must change.
-        tpl.write_text("rewritten")
+        tpl.write_text("rewritten", encoding="utf-8")
         h2 = current_pipeline_hash(str(workspace))
         assert h1 != h2
 
     def test_malformed_config_falls_back_to_defaults(self, workspace: Path) -> None:
-        (workspace / "mind-mem.json").write_text("{ not json }")
+        (workspace / "mind-mem.json").write_text("{ not json }", encoding="utf-8")
         h = current_pipeline_hash(str(workspace))
         assert isinstance(h, str) and len(h) == 64
 
@@ -163,7 +163,9 @@ class TestPipelineDirtyBlocks:
             workspace,
             {"version": "3.9.0", "block_store": {"backend": "markdown"}},
         )
-        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-001]\nStatus: active\nStatement: pre-v3.9 block\n")
+        (workspace / "decisions" / "DECISIONS.md").write_text(
+            "[D-20260503-001]\nStatus: active\nStatement: pre-v3.9 block\n", encoding="utf-8"
+        )
         dirty = pipeline_dirty_blocks(str(workspace))
         assert "D-20260503-001" in dirty
 
@@ -175,7 +177,7 @@ class TestPipelineDirtyBlocks:
         current = current_pipeline_hash(str(workspace))
         assert isinstance(current, str)
         (workspace / "decisions" / "DECISIONS.md").write_text(
-            f"[D-20260503-002]\nStatus: active\nStatement: post-v3.9 block\nTransformHash: {current}\n"
+            f"[D-20260503-002]\nStatus: active\nStatement: post-v3.9 block\nTransformHash: {current}\n", encoding="utf-8"
         )
         dirty = pipeline_dirty_blocks(str(workspace))
         assert "D-20260503-002" not in dirty
@@ -187,7 +189,7 @@ class TestPipelineDirtyBlocks:
         )
         old_hash = hashlib.sha256(b"old pipeline").hexdigest()
         (workspace / "decisions" / "DECISIONS.md").write_text(
-            f"[D-20260503-003]\nStatus: active\nStatement: stale block\nTransformHash: {old_hash}\n"
+            f"[D-20260503-003]\nStatus: active\nStatement: stale block\nTransformHash: {old_hash}\n", encoding="utf-8"
         )
         dirty = pipeline_dirty_blocks(str(workspace))
         assert "D-20260503-003" in dirty
@@ -242,7 +244,7 @@ class TestStampTransformHash:
 class TestReextractDirtyBlocks:
     def test_dry_run_lists_without_writing(self, workspace: Path) -> None:
         _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
-        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-200]\nStatus: active\nStatement: stale\n")
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-200]\nStatus: active\nStatement: stale\n", encoding="utf-8")
         result = reextract_dirty_blocks(str(workspace), dry_run=True)
         assert result["dry_run"] is True
         assert result["processed"] == 0
@@ -250,17 +252,17 @@ class TestReextractDirtyBlocks:
 
     def test_processes_dirty_blocks(self, workspace: Path) -> None:
         _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
-        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-201]\nStatus: active\nStatement: stale\n")
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-201]\nStatus: active\nStatement: stale\n", encoding="utf-8")
         result = reextract_dirty_blocks(str(workspace))
         assert result["dry_run"] is False
         assert result["processed"] == 1
         # After processing, the block should now carry the current hash.
-        text = (workspace / "decisions" / "DECISIONS.md").read_text()
+        text = (workspace / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
         assert "TransformHash:" in text
 
     def test_after_reextract_no_dirty(self, workspace: Path) -> None:
         _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
-        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-202]\nStatus: active\nStatement: stale\n")
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-202]\nStatus: active\nStatement: stale\n", encoding="utf-8")
         reextract_dirty_blocks(str(workspace))
         # Re-check: should now be clean.
         dirty = pipeline_dirty_blocks(str(workspace))
@@ -271,7 +273,8 @@ class TestReextractDirtyBlocks:
         (workspace / "decisions" / "DECISIONS.md").write_text(
             "[D-20260503-300]\nStatus: active\nStatement: a\n\n"
             "[D-20260503-301]\nStatus: active\nStatement: b\n\n"
-            "[D-20260503-302]\nStatus: active\nStatement: c\n"
+            "[D-20260503-302]\nStatus: active\nStatement: c\n",
+            encoding="utf-8",
         )
         result = reextract_dirty_blocks(str(workspace), limit=2, dry_run=True)
         assert len(result["ids"]) == 2

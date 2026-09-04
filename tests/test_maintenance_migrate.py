@@ -35,7 +35,7 @@ def test_classify(name: str, expected: str) -> None:
 class TestMigrate:
     def _mkws(self) -> Path:
         d = Path(tempfile.mkdtemp())
-        (d / "mind-mem.json").write_text("{}")
+        (d / "mind-mem.json").write_text("{}", encoding="utf-8")
         (d / "maintenance").mkdir()
         return d
 
@@ -46,9 +46,9 @@ class TestMigrate:
 
     def test_classifies_and_moves(self) -> None:
         d = self._mkws()
-        (d / "maintenance" / "dedup-state.json").write_text("{}")
-        (d / "maintenance" / "validation-report.txt").write_text("")
-        (d / "maintenance" / "mystery.bin").write_text("\x00")
+        (d / "maintenance" / "dedup-state.json").write_text("{}", encoding="utf-8")
+        (d / "maintenance" / "validation-report.txt").write_text("", encoding="utf-8")
+        (d / "maintenance" / "mystery.bin").write_text("\x00", encoding="utf-8")
 
         counts = migrate_maintenance(str(d), verbose=False)
         assert counts["tracked"] >= 2
@@ -60,7 +60,7 @@ class TestMigrate:
 
     def test_idempotent(self) -> None:
         d = self._mkws()
-        (d / "maintenance" / "dedup-state.json").write_text("{}")
+        (d / "maintenance" / "dedup-state.json").write_text("{}", encoding="utf-8")
 
         migrate_maintenance(str(d), verbose=False)
         # Second call — tracked/append-only subdirs already exist.
@@ -72,8 +72,8 @@ class TestMigrate:
         d = self._mkws()
         (d / "maintenance" / "tracked").mkdir()
         # Pre-populate a file at the destination path.
-        (d / "maintenance" / "tracked" / "mystery.json").write_text("keep me")
+        (d / "maintenance" / "tracked" / "mystery.json").write_text("keep me", encoding="utf-8")
         # ``already_migrated`` returns True so migration is a no-op.
         counts = migrate_maintenance(str(d), verbose=False)
         assert counts == {"tracked": 0, "append-only": 0}
-        assert (d / "maintenance" / "tracked" / "mystery.json").read_text() == "keep me"
+        assert (d / "maintenance" / "tracked" / "mystery.json").read_text(encoding="utf-8") == "keep me"

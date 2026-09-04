@@ -27,7 +27,7 @@ def _write_config(workspace: Path, daemon_block: dict[str, Any]) -> None:
         "workspace_path": str(workspace),
         "daemon": daemon_block,
     }
-    (workspace / "mind-mem.json").write_text(json.dumps(config))
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
 
 
 @pytest.fixture
@@ -90,7 +90,7 @@ class TestLoadConfig:
         assert next(t for t in tasks if t.name == "dream_cycle").interval_seconds == 0
 
     def test_malformed_json_returns_defaults(self, workspace: Path) -> None:
-        (workspace / "mind-mem.json").write_text("{ this is not json }")
+        (workspace / "mind-mem.json").write_text("{ this is not json }", encoding="utf-8")
         enabled, tasks = load_daemon_config(str(workspace))
         assert enabled is True
         assert {t.name for t in tasks} == set(DEFAULT_INTERVALS.keys())

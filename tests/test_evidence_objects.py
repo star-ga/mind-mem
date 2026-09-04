@@ -424,7 +424,7 @@ class TestJsonlRoundTrip:
         out = str(tmp_path / "empty.jsonl")
         chain.export_jsonl(out)
         assert os.path.isfile(out)
-        with open(out) as f:
+        with open(out, encoding="utf-8") as f:
             content = f.read().strip()
         assert content == ""
 

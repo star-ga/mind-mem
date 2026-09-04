@@ -76,7 +76,7 @@ def build_workspace(question: dict, tmpdir: str) -> str:
         f.write("\n---\n\n".join(blocks))
     json.dump(
         {"recall": {"backend": "sqlite", "knee_cutoff": False}},
-        open(os.path.join(ws, "mind-mem.json"), "w"),
+        open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8"),
     )
     return ws
 
@@ -147,7 +147,7 @@ def main():
     ap.add_argument("--output")
     args = ap.parse_args()
 
-    data = json.load(open(args.data_path))
+    data = json.load(open(args.data_path, encoding="utf-8"))
     pool = [q for q in data if not q.get("question_id", "").endswith("_abs") and q.get("answer_session_ids")]
     if args.sample:
         random.seed(args.seed)
@@ -179,7 +179,7 @@ def main():
     print(json.dumps(out, indent=2))
     if args.output:
         out["per_question"] = per_q
-        json.dump(out, open(args.output, "w"), indent=2)
+        json.dump(out, open(args.output, "w", encoding="utf-8"), indent=2)
         print(f"\nWrote {args.output}")
 
 

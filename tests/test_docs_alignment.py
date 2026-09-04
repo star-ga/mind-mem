@@ -595,6 +595,8 @@ class TestRepositoryIsAligned:
             capture_output=True,
             text=True,
             timeout=600,
+            encoding="utf-8",
+            errors="replace",
         )
         assert proc.returncode == 0, proc.stdout + proc.stderr
 
@@ -840,6 +842,8 @@ class TestTheAuthorityIsEnvironmentIndependent:
             capture_output=True,
             text=True,
             timeout=300,
+            encoding="utf-8",
+            errors="replace",
         )
         assert "1 test collected" not in proc.stdout, proc.stdout
         assert "no tests collected" in proc.stdout or "0 tests collected" in proc.stdout or "skipped" in proc.stdout, proc.stdout

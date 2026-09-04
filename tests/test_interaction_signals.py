@@ -98,7 +98,7 @@ class TestSignalStore:
         )
         assert rec is not None
         assert os.path.isfile(store_path)
-        lines = Path(store_path).read_text().splitlines()
+        lines = Path(store_path).read_text(encoding="utf-8").splitlines()
         assert len(lines) == 1
         on_disk = json.loads(lines[0])
         assert on_disk["signal_id"] == rec.signal_id
@@ -124,7 +124,7 @@ class TestSignalStore:
         )
         assert first is not None
         assert second is None  # idempotent replay
-        lines = Path(store_path).read_text().splitlines()
+        lines = Path(store_path).read_text(encoding="utf-8").splitlines()
         assert len(lines) == 1
 
     def test_reload_preserves_seen_ids(self, store_path: str) -> None:

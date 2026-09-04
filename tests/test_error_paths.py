@@ -129,7 +129,7 @@ class TestCorruptedBlockFile(unittest.TestCase):
     @unittest.skipIf(sys.platform == "win32", "chmod 000 not enforced on Windows")
     def test_parse_file_permission_denied(self):
         """parse_file raises on unreadable file."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             f.write("[D-20260215-001]\nStatement: test\n")
             fpath = f.name
         try:
@@ -212,7 +212,7 @@ class TestEmptyWorkspaceRecall(unittest.TestCase):
         """Recall when corpus files exist but are empty returns empty list."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "decisions"), exist_ok=True)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("")
             results = recall(ws, "test query")
             self.assertEqual(results, [])
@@ -394,7 +394,7 @@ class TestLargeLimitValues(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             # Create a corpus file with a block
             os.makedirs(os.path.join(ws, "decisions"), exist_ok=True)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("[D-20260215-001]\nStatement: test query subject\nStatus: active\n")
             results = recall(ws, "test query", limit=1)
             self.assertLessEqual(len(results), 1)
@@ -510,7 +510,7 @@ class TestLoadKernelConfigEdgeCases(unittest.TestCase):
 
     def test_empty_mind_file(self):
         """Empty .mind file returns empty dict."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False, encoding="utf-8") as f:
             fpath = f.name
         try:
             result = load_kernel_config(fpath)
@@ -520,7 +520,7 @@ class TestLoadKernelConfigEdgeCases(unittest.TestCase):
 
     def test_mind_file_no_sections(self):
         """key=value lines without [section] are ignored."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False, encoding="utf-8") as f:
             f.write("k1 = 1.2\nb = 0.75\n")
             fpath = f.name
         try:
@@ -531,7 +531,7 @@ class TestLoadKernelConfigEdgeCases(unittest.TestCase):
 
     def test_mind_file_comments_only(self):
         """.mind file with only comments returns empty dict."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False, encoding="utf-8") as f:
             f.write("# comment line 1\n# comment line 2\n")
             fpath = f.name
         try:
@@ -542,7 +542,7 @@ class TestLoadKernelConfigEdgeCases(unittest.TestCase):
 
     def test_mind_file_malformed_section(self):
         """Malformed section headers are skipped."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False, encoding="utf-8") as f:
             f.write("[invalid section!]\nk1 = 1.2\n[bm25]\nk1 = 1.5\n")
             fpath = f.name
         try:

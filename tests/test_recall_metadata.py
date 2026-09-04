@@ -13,7 +13,7 @@ class TestBlockMetadataIntegration(unittest.TestCase):
         self.td = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.td, "decisions"))
         os.makedirs(os.path.join(self.td, ".mind-mem"))
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(
                 "[D-20260101-001]\n"
                 "Statement: Use PostgreSQL for the database\n"

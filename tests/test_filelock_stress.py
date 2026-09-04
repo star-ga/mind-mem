@@ -36,7 +36,7 @@ class TestFileLockContention:
             try:
                 for i in range(iterations):
                     with FileLock(lock_file):
-                        with open(data_file, "a") as f:
+                        with open(data_file, "a", encoding="utf-8") as f:
                             f.write(f"t{thread_id}:{i}\n")
             except Exception as e:
                 errors.append((thread_id, str(e)))
@@ -48,7 +48,7 @@ class TestFileLockContention:
             t.join(timeout=30)
 
         assert not errors, f"Thread errors: {errors}"
-        with open(data_file) as f:
+        with open(data_file, encoding="utf-8") as f:
             lines = [line.strip() for line in f if line.strip()]
         assert len(lines) == 50, f"Expected 50 lines, got {len(lines)}"
 
@@ -109,7 +109,7 @@ class TestFileLockContention:
             try:
                 for _ in range(iterations):
                     with FileLock(lock_file):
-                        with open(data_file, "a") as f:
+                        with open(data_file, "a", encoding="utf-8") as f:
                             f.write("data\n")
             except Exception as e:
                 errors.append(str(e))

@@ -31,7 +31,7 @@ def encrypted_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tupl
 
     # Write + encrypt a real file via the EncryptionManager.
     target = ws / "decisions" / "secret.md"
-    target.write_text("highly confidential statement")
+    target.write_text("highly confidential statement", encoding="utf-8")
     from mind_mem.encryption import EncryptionManager
 
     EncryptionManager(str(ws), "test-passphrase").encrypt_file(str(target))
@@ -54,7 +54,7 @@ def test_decrypt_file_appends_jsonl_record(
     assert "plaintext_b64" in parsed, f"decrypt failed: {parsed!r}"
 
     assert log.exists(), "decrypted_files.jsonl not created"
-    lines = log.read_text().strip().splitlines()
+    lines = log.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     record = json.loads(lines[0])
 
@@ -78,7 +78,7 @@ def test_decrypt_file_appends_one_record_per_call(
     for _ in range(3):
         decrypt_file(str(target))
 
-    lines = log.read_text().strip().splitlines()
+    lines = log.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 3
     # All three must parse and carry distinct timestamps (or at least
     # be valid JSON — timestamps may collide at second granularity in
@@ -113,7 +113,7 @@ def test_decrypt_file_failure_does_not_append(
     log = ws / "memory" / "decrypted_files.jsonl"
     # No successful decrypt happened → the audit file should not exist
     # (or exist empty).
-    assert not log.exists() or log.read_text().strip() == ""
+    assert not log.exists() or log.read_text(encoding="utf-8").strip() == ""
 
 
 def test_decrypt_file_audit_actor_defaults_to_anonymous(
@@ -131,5 +131,5 @@ def test_decrypt_file_audit_actor_defaults_to_anonymous(
     decrypt_file(str(target))
 
     log = ws / "memory" / "decrypted_files.jsonl"
-    record = json.loads(log.read_text().strip().splitlines()[0])
+    record = json.loads(log.read_text(encoding="utf-8").strip().splitlines()[0])
     assert record["actor"] == "anonymous"

@@ -409,6 +409,8 @@ def _pre_wiring_tool(tmp_path: Path):
             capture_output=True,
             check=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         ).stdout.split()
         blob = None
         for rev in revs:

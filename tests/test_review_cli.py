@@ -73,6 +73,8 @@ class TestWiring:
                 capture_output=True,
                 text=True,
                 check=False,
+                encoding="utf-8",
+                errors="replace",
             ).stdout.splitlines()
             importers = {
                 os.path.basename(line.split(":")[0])

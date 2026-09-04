@@ -266,6 +266,8 @@ def test_t10_two_processes_with_different_hash_seeds_agree_byte_for_byte() -> No
             timeout=120,
             env={**env, "PYTHONHASHSEED": seed},
             check=True,
+            encoding="utf-8",
+            errors="replace",
         ).stdout
         for seed in ("0", "524287")
     ]
@@ -475,6 +477,8 @@ def test_t12_importing_the_scoring_path_does_not_load_a_ledger_module() -> None:
         timeout=120,
         env=env,
         check=True,
+        encoding="utf-8",
+        errors="replace",
     ).stdout
     loaded = set(json.loads(out))
     assert "mind_mem.recall_attestation" in loaded, "child did not import the scoring path — the check is vacuous"

@@ -56,7 +56,7 @@ def cfg(ws, caps_on):
         c["recall"]["dedup"] = {"enabled": False, "type_cap_enabled": False,
                                 "source_cap_enabled": False, "cosine_enabled": False,
                                 "best_per_source": False}
-    json.dump(c, open(os.path.join(ws, "mind-mem.json"), "w"))
+    json.dump(c, open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8"))
 
 
 def run(sample, caps_on):
@@ -86,7 +86,7 @@ def run(sample, caps_on):
 
 if __name__ == "__main__":
     N = int(sys.argv[1]) if len(sys.argv) > 1 else 40
-    data = json.load(open("benchmarks/.cache/longmemeval_s.json"))
+    data = json.load(open("benchmarks/.cache/longmemeval_s.json", encoding="utf-8"))
     random.seed(42)
     pool = [q for q in data if not q.get("question_id", "").endswith("_abs")
             and q.get("answer_session_ids")]

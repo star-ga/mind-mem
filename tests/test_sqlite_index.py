@@ -25,18 +25,18 @@ class _WorkspaceMixin:
             os.makedirs(os.path.join(tmpdir, d), exist_ok=True)
 
         if decisions:
-            with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write(decisions)
         else:
-            with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("# Decisions\n")
 
         if tasks:
-            with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
+            with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
                 f.write(tasks)
 
         if entities_projects:
-            with open(os.path.join(tmpdir, "entities", "projects.md"), "w") as f:
+            with open(os.path.join(tmpdir, "entities", "projects.md"), "w", encoding="utf-8") as f:
                 f.write(entities_projects)
 
         # Create empty files for other corpus entries
@@ -87,7 +87,7 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
         build_index(ws, incremental=False)
 
         # Modify the decisions file
-        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "a") as f:
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "a", encoding="utf-8") as f:
             f.write("\n---\n\n[D-20260101-002]\nStatement: Use Redis\nStatus: active\n")
 
         r2 = build_index(ws, incremental=True)
@@ -228,7 +228,7 @@ class TestQueryIndex(_WorkspaceMixin, unittest.TestCase):
 
     def test_active_only_filter(self):
         # Add a superseded block
-        with open(os.path.join(self.ws, "decisions", "DECISIONS.md"), "a") as f:
+        with open(os.path.join(self.ws, "decisions", "DECISIONS.md"), "a", encoding="utf-8") as f:
             f.write("\n---\n\n[D-20260101-003]\nStatement: Use MySQL for database\nStatus: superseded\n")
         build_index(self.ws, incremental=True)
 
@@ -273,7 +273,7 @@ class TestIndexStatus(_WorkspaceMixin, unittest.TestCase):
         build_index(ws, incremental=False)
 
         # Modify file
-        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "a") as f:
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "a", encoding="utf-8") as f:
             f.write("\n---\n\n[D-20260101-002]\nStatement: New\nStatus: active\n")
 
         status = index_status(ws)
@@ -360,7 +360,7 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
         build_index(ws, incremental=False)
 
         # Modify only the second block
-        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(
                 "[D-20260101-001]\n"
                 "Statement: Use PostgreSQL\n"
@@ -383,7 +383,7 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
         build_index(ws, incremental=False)
 
         # Add a second block
-        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "a") as f:
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "a", encoding="utf-8") as f:
             f.write("\n---\n\n[D-20260101-002]\nStatement: Use Redis\nStatus: active\n")
 
         result = build_index(ws, incremental=True)
@@ -407,7 +407,7 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
         build_index(ws, incremental=False)
 
         # Remove the second block
-        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n")
 
         result = build_index(ws, incremental=True)
@@ -440,7 +440,7 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
         build_index(ws, incremental=False)
 
         # 001: unchanged, 002: modify, 003: delete, 004: new
-        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(
                 "[D-20260101-001]\n"
                 "Statement: Use PostgreSQL\n"
@@ -488,7 +488,7 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
         build_index(ws, incremental=False)
 
         # Modify content
-        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Use PostgreSQL for database\nStatus: active\n")
         build_index(ws, incremental=True)
 
@@ -530,7 +530,7 @@ class TestComputeBlockHash(unittest.TestCase):
 
 class TestFileHash(unittest.TestCase):
     def test_same_content_same_hash(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             f.write("hello world")
             path = f.name
         try:
@@ -541,10 +541,10 @@ class TestFileHash(unittest.TestCase):
             os.unlink(path)
 
     def test_different_content_different_hash(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             f.write("hello")
             path1 = f.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             f.write("world")
             path2 = f.name
         try:

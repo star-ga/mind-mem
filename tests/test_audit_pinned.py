@@ -31,7 +31,7 @@ from mind_mem.audit_pinned import (
 def clean_ckpt(tmp_path: Path) -> Path:
     root = tmp_path / "ckpt"
     root.mkdir()
-    (root / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-8B"}')
+    (root / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-8B"}', encoding="utf-8")
     body = b'{"weight":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}'
     (root / "model.safetensors").write_bytes(struct.pack("<Q", len(body)) + body + b"\x00" * 8)
     return root
@@ -41,7 +41,7 @@ def clean_ckpt(tmp_path: Path) -> Path:
 def evil_ckpt(tmp_path: Path) -> Path:
     root = tmp_path / "evil"
     root.mkdir()
-    (root / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}')
+    (root / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}', encoding="utf-8")
     body = b'{"weight":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}'
     (root / "model.safetensors").write_bytes(struct.pack("<Q", len(body)) + body + b"\x00" * 8)
     return root
@@ -49,7 +49,7 @@ def evil_ckpt(tmp_path: Path) -> Path:
 
 def _write_config(tmp_path: Path, payload: dict) -> Path:
     p = tmp_path / "mind-mem.json"
-    p.write_text(json.dumps(payload))
+    p.write_text(json.dumps(payload), encoding="utf-8")
     return p
 
 
@@ -101,7 +101,7 @@ class TestLoadPinnedModels:
 
     def test_invalid_top_level_raises(self, tmp_path: Path) -> None:
         p = tmp_path / "mind-mem.json"
-        p.write_text('["not", "an", "object"]')
+        p.write_text('["not", "an", "object"]', encoding="utf-8")
         with pytest.raises(PinnedConfigError, match="JSON object"):
             load_pinned_models(p)
 
@@ -125,7 +125,7 @@ class TestLoadPinnedModels:
 
     def test_bad_json_raises(self, tmp_path: Path) -> None:
         p = tmp_path / "mind-mem.json"
-        p.write_text("{not valid json")
+        p.write_text("{not valid json", encoding="utf-8")
         with pytest.raises(PinnedConfigError, match="could not read"):
             load_pinned_models(p)
 

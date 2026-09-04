@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
                 cmd += ["--agent-env", name]
             if a.agent_argv:
                 cmd += ["--", *a.agent_argv]
-            proc = subprocess.run(cmd, cwd=a.repo, capture_output=True, text=True, check=False)  # nosec B603
+            proc = subprocess.run(cmd, cwd=a.repo, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)  # nosec B603
             if proc.returncode != 0 or not os.path.isfile(out):
                 failed += 1
                 print(f"[rep{rep} {i}/{len(tasks)}] {task.task_id} FAILED rc={proc.returncode} :: {proc.stdout[-300:]}", flush=True)

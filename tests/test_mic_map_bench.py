@@ -386,6 +386,8 @@ class TestTheFloorsAreGuardedAgainstTheirOwnInstrumentation:
             capture_output=True,
             text=True,
             timeout=120,
+            encoding="utf-8",
+            errors="replace",
         )
         assert proc.returncode == 0, f"probe failed ({proc.returncode}):\n{proc.stdout}\n{proc.stderr}"
         out = proc.stdout.strip().splitlines()[-1]

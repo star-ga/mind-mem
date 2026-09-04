@@ -148,11 +148,11 @@ def _scaffold_workspace(ws):
         "recall": {"backend": "bm25"},
         "proposal_budget": {"per_run": 3, "per_day": 6, "backlog_limit": 30},
     }
-    with open(os.path.join(ws, "mind-mem.json"), "w") as f:
+    with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
         json.dump(config, f)
 
     # intel-state.json (no last_apply_ts so cooldown check passes)
-    with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
+    with open(os.path.join(ws, "memory", "intel-state.json"), "w", encoding="utf-8") as f:
         json.dump({"governance_mode": "enforce"}, f)
 
     # Empty files that snapshot expects
@@ -313,7 +313,7 @@ class TestPartialFailureRollback(unittest.TestCase):
 
         # Read original content for comparison
         dec_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
-        with open(dec_path) as f:
+        with open(dec_path, encoding="utf-8") as f:
             original_content = f.read()
 
         # Op 1: valid update (will succeed)
@@ -345,7 +345,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         self.assertFalse(ok, f"Expected failure but got success: {msg}")
 
         # Workspace should be rolled back to original state
-        with open(dec_path) as f:
+        with open(dec_path, encoding="utf-8") as f:
             restored_content = f.read()
         self.assertEqual(original_content, restored_content, "Workspace was not restored to pre-apply state after partial failure")
 
@@ -357,7 +357,7 @@ class TestPartialFailureRollback(unittest.TestCase):
             for rd in receipt_dirs:
                 receipt_path = os.path.join(applied_dir, rd, "APPLY_RECEIPT.md")
                 if os.path.isfile(receipt_path):
-                    with open(receipt_path) as f:
+                    with open(receipt_path, encoding="utf-8") as f:
                         receipt_text = f.read()
                     if "rolled_back" in receipt_text:
                         found_receipt = True
@@ -419,7 +419,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         self.assertFalse(ok)
 
         # The appended block text should not remain in the file
-        with open(dec_path) as f:
+        with open(dec_path, encoding="utf-8") as f:
             content = f.read()
         self.assertNotIn("Orphan block that should be removed", content, "Orphan content from failed op remains after rollback")
 
@@ -466,7 +466,7 @@ class TestWALCrashRecovery(unittest.TestCase):
         self.assertEqual(replayed, 1, "Expected exactly 1 WAL entry to be replayed")
 
         # File should be restored to original content
-        with open(target_path) as f:
+        with open(target_path, encoding="utf-8") as f:
             restored = f.read()
         self.assertEqual(restored, original_content, "WAL replay did not restore file to pre-write state")
 
@@ -499,7 +499,7 @@ class TestWALCrashRecovery(unittest.TestCase):
         self.assertEqual(replayed, 0, "Committed entry should not be replayed")
 
         # Content should remain as the new (committed) content
-        with open(target_path) as f:
+        with open(target_path, encoding="utf-8") as f:
             content = f.read()
         self.assertEqual(content, "new content successfully written")
 
@@ -551,9 +551,9 @@ class TestWALCrashRecovery(unittest.TestCase):
         replayed = wal2.replay()
         self.assertEqual(replayed, 2)
 
-        with open(file_a) as f:
+        with open(file_a, encoding="utf-8") as f:
             self.assertEqual(f.read(), "original A")
-        with open(file_b) as f:
+        with open(file_b, encoding="utf-8") as f:
             self.assertEqual(f.read(), "original B")
 
 
@@ -946,7 +946,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
         """After successful ops, if post-checks fail, workspace is restored."""
 
         dec_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
-        with open(dec_path) as f:
+        with open(dec_path, encoding="utf-8") as f:
             original_content = f.read()
 
         ops = [
@@ -980,7 +980,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
         self.assertIn("rolled back", msg.lower(), f"Expected 'rolled back' in message but got: {msg}")
 
         # Workspace should be restored
-        with open(dec_path) as f:
+        with open(dec_path, encoding="utf-8") as f:
             restored_content = f.read()
         self.assertEqual(original_content, restored_content, "Workspace not restored after post-check failure")
 
@@ -1019,7 +1019,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
         for rd in os.listdir(applied_dir):
             receipt_path = os.path.join(applied_dir, rd, "APPLY_RECEIPT.md")
             if os.path.isfile(receipt_path):
-                with open(receipt_path) as f:
+                with open(receipt_path, encoding="utf-8") as f:
                     receipt_text = f.read()
                 if "P-20260204-002" in receipt_text and "rolled_back" in receipt_text:
                     receipt_found = True
@@ -1056,7 +1056,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
 
         # The appended orphan content should not remain
         dec_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
-        with open(dec_path) as f:
+        with open(dec_path, encoding="utf-8") as f:
             content = f.read()
         self.assertNotIn(
             "Orphan decision created by append_block",
@@ -1095,7 +1095,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
 
         # Read the proposal source file and check status
         proposal_path = os.path.join(self.ws, "intelligence", "proposed", "DECISIONS_PROPOSED.md")
-        with open(proposal_path) as f:
+        with open(proposal_path, encoding="utf-8") as f:
             content = f.read()
 
         # The proposal's status should have been changed to rolled_back
@@ -1130,9 +1130,9 @@ class TestSnapshotRestoreFidelity(unittest.TestCase):
         dec_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
         task_path = os.path.join(self.ws, "tasks", "TASKS.md")
 
-        with open(dec_path) as f:
+        with open(dec_path, encoding="utf-8") as f:
             orig_decisions = f.read()
-        with open(task_path) as f:
+        with open(task_path, encoding="utf-8") as f:
             orig_tasks = f.read()
 
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1147,9 +1147,9 @@ class TestSnapshotRestoreFidelity(unittest.TestCase):
         # Restore
         restore_snapshot(self.ws, snap_dir)
 
-        with open(dec_path) as f:
+        with open(dec_path, encoding="utf-8") as f:
             restored_decisions = f.read()
-        with open(task_path) as f:
+        with open(task_path, encoding="utf-8") as f:
             restored_tasks = f.read()
 
         self.assertEqual(orig_decisions, restored_decisions, "Decisions file not restored faithfully")

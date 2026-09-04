@@ -9,7 +9,7 @@ from mind_mem.block_parser import parse_file
 
 
 def test_standard_id():
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write("[TEST-001]\nType: Decision\nStatement: Standard ID\n")
         path = f.name
     blocks = parse_file(path)
@@ -18,7 +18,7 @@ def test_standard_id():
 
 
 def test_numeric_id():
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write("[12345]\nType: Decision\nStatement: Numeric ID\n")
         path = f.name
     blocks = parse_file(path)
@@ -27,7 +27,7 @@ def test_numeric_id():
 
 
 def test_long_id():
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write("[VERY-LONG-IDENTIFIER-NAME-001]\nType: Decision\nStatement: Long ID\n")
         path = f.name
     blocks = parse_file(path)
@@ -36,7 +36,7 @@ def test_long_id():
 
 
 def test_lowercase_id():
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write("[lower-case-001]\nType: Decision\nStatement: Lowercase\n")
         path = f.name
     blocks = parse_file(path)

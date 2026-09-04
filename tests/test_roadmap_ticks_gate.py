@@ -167,11 +167,7 @@ class TestBothRulesCanFireOnOneLine:
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
-        [sys.executable, str(SCRIPT), *args],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-        timeout=120,
+        [sys.executable, str(SCRIPT), *args], capture_output=True, text=True, cwd=REPO_ROOT, timeout=120, encoding="utf-8", errors="replace"
     )
 
 

@@ -29,6 +29,6 @@ def test_winner_is_block_b_prints_winner_hash(tmp_path: Path) -> None:
     ]
     n = generate_resolution_proposals(str(tmp_path), resolutions)
     assert n == 1
-    text = (Path(tmp_path) / "intelligence" / "proposed" / "RESOLUTIONS_PROPOSED.md").read_text()
+    text = (Path(tmp_path) / "intelligence" / "proposed" / "RESOLUTIONS_PROPOSED.md").read_text(encoding="utf-8")
     assert "Winner: D-B (hash: BBBB-blockB)" in text  # winner's own hash
     assert "Loser: D-A (hash: AAAA-blockA)" in text

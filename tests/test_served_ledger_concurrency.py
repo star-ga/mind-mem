@@ -122,6 +122,18 @@ for i in range(count):
 """
 
 
+class _ExitCodes(list):
+    """The worker exit codes, carrying the stderr they came with.
+
+    A ``list`` subclass so ``codes == [0, 0]`` still reads exactly as it did
+    in the three tests below, and so the stderr travels WITH the codes rather
+    than in a side table keyed on identity -- a freed list's id is reusable,
+    and stale stderr attached to the wrong run is worse than none.
+    """
+
+    stderr: str = ""
+
+
 def _workspace(tmp_path: pathlib.Path, name: str) -> str:
     ws = tmp_path / name
     ws.mkdir(parents=True, exist_ok=True)
@@ -130,7 +142,16 @@ def _workspace(tmp_path: pathlib.Path, name: str) -> str:
 
 
 def _run(tmp_path: pathlib.Path, name: str, *, nproc: int, mode: str) -> tuple[str, list[int]]:
-    """Run *nproc* appending workers over one workspace; return it and their exits."""
+    """Run *nproc* appending workers over one workspace; return it and their exits.
+
+    ``.stderr`` is attached to the returned list by :func:`_diagnose`, which
+    every assertion on the exit codes goes through. It used to be captured
+    into a pipe and then closed unread, so ``a worker died — the appends were
+    not all attempted: [0, 1]`` was the entirety of what a Windows CI row
+    could say about a child that had printed a full traceback into a pipe
+    nobody read. ``communicate`` also replaces ``wait``: waiting on a process
+    whose stdout is a pipe deadlocks the moment the child fills the buffer.
+    """
     ws = _workspace(tmp_path, name)
     script = tmp_path / f"worker_{name}.py"
     script.write_text(_WORKER, encoding="utf-8")
@@ -145,11 +166,34 @@ def _run(tmp_path: pathlib.Path, name: str, *, nproc: int, mode: str) -> tuple[s
         )
         for k in range(nproc)
     ]
-    codes = [proc.wait(timeout=300) for proc in procs]
+    codes = _ExitCodes()
+    errs: list[str] = []
     for proc in procs:
-        proc.stdout.close() if proc.stdout else None
-        proc.stderr.close() if proc.stderr else None
+        _, err = proc.communicate(timeout=300)
+        codes.append(proc.returncode)
+        text = (err or b"").decode("utf-8", "replace").strip()
+        if text:
+            errs.append(text[-2000:])
+    codes.stderr = "\n".join(errs)
     return ws, codes
+
+
+def _diagnose(codes: list[int], expected: list[int]) -> str:
+    """A ONE-LINE reason for a worker that died, with its traceback below.
+
+    First line on purpose: pytest's short summary prints only the first line
+    of an assertion message, so a reason on line two is a reason nobody sees.
+    """
+    if list(codes) == expected:
+        return ""
+    err = getattr(codes, "stderr", "")
+    first = ""
+    for line in reversed(err.splitlines()):
+        if line.strip() and not line.startswith(" "):
+            first = line.strip()
+            break
+    head = f"exit codes {list(codes)}, expected {expected}"
+    return f"{head} — {first}\n{err}" if first else f"{head} — the child printed nothing to stderr"
 
 
 def _measure(ws: str) -> dict[str, Any]:
@@ -182,14 +226,14 @@ def test_one_process_appends_a_clean_chain(tmp_path: pathlib.Path) -> None:
     statement about the harness, not about the lock.
     """
     ws, codes = _run(tmp_path, "control", nproc=1, mode=LOCKED)
-    assert codes == [0], f"the single worker did not finish cleanly: {codes}"
+    assert codes == [0], f"the single worker did not finish cleanly: {_diagnose(codes, [0])}"
     assert _measure(ws) == {"rows": APPENDS, "duplicate_seq": 0, "verify_ok": True, "unreadable": ""}
 
 
 def test_two_processes_append_one_unforked_chain(tmp_path: pathlib.Path) -> None:
     """THE GATE. Two interpreters, one ledger, every row present exactly once."""
     ws, codes = _run(tmp_path, "concurrent", nproc=2, mode=LOCKED)
-    assert codes == [0, 0], f"a worker died — the appends were not all attempted: {codes}"
+    assert codes == [0, 0], f"a worker died — the appends were not all attempted: {_diagnose(codes, [0, 0])}"
     assert _measure(ws) == {"rows": 2 * APPENDS, "duplicate_seq": 0, "verify_ok": True, "unreadable": ""}
 
 
@@ -532,3 +576,33 @@ def test_the_link_still_comes_from_the_row_not_from_the_seal(tmp_path: pathlib.P
     assert third.seq == 2
     assert third.prev_row_hash == row_hash(second), "the link came from the seal, not from the last row"
     assert verify_served_chain(ws).ok
+
+
+class TestTheHarnessSurfacesAChildsFailure:
+    """A worker that dies must say of what, on the FIRST line.
+
+    ``a worker died — the appends were not all attempted: [0, 1]`` was the
+    complete visible evidence two Windows CI rows produced for this file. The
+    child had printed a traceback; ``_run`` captured it into a pipe and closed
+    the pipe without reading it. Proven here by killing a worker on purpose
+    rather than asserted about the code.
+    """
+
+    def test_a_dying_worker_names_its_exception(self, tmp_path: pathlib.Path, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "test_served_ledger_concurrency._WORKER",
+            "raise RuntimeError('the child died of this')\n",
+        )
+        _, codes = _run(tmp_path, "dying", nproc=2, mode=LOCKED)
+
+        assert list(codes) != [0, 0], "the mutation did not actually kill anything"
+        reason = _diagnose(codes, [0, 0])
+        assert reason.splitlines()[0].strip(), "the diagnosis line is empty"
+        assert "the child died of this" in reason.splitlines()[0], reason
+        assert "Traceback" in codes.stderr, "the child's traceback was dropped"
+
+    def test_a_clean_run_produces_no_diagnosis(self, tmp_path: pathlib.Path) -> None:
+        """Control: the diagnosis is not a string this harness always emits."""
+        _, codes = _run(tmp_path, "quiet", nproc=1, mode=LOCKED)
+        assert list(codes) == [0]
+        assert _diagnose(codes, [0]) == ""

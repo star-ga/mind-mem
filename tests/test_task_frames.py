@@ -584,10 +584,7 @@ class TestProvenanceRestriction:
 def _run_cli(argv: list[str], workspace: str) -> subprocess.CompletedProcess:
     env = dict(os.environ, MIND_MEM_WORKSPACE=workspace)
     return subprocess.run(
-        [sys.executable, "-m", "mind_mem.mm_cli", *argv],
-        capture_output=True,
-        text=True,
-        env=env,
+        [sys.executable, "-m", "mind_mem.mm_cli", *argv], capture_output=True, text=True, env=env, encoding="utf-8", errors="replace"
     )
 
 

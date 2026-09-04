@@ -26,7 +26,7 @@ def _make_block(bid: str) -> str:
 def seeded_workspace(tmp_path: Path) -> Path:
     decisions = tmp_path / "decisions"
     decisions.mkdir()
-    (decisions / "DECISIONS.md").write_text("\n".join(_make_block(f"D-2026041{i}-001") for i in range(3)) + "\n")
+    (decisions / "DECISIONS.md").write_text("\n".join(_make_block(f"D-2026041{i}-001") for i in range(3)) + "\n", encoding="utf-8")
     return tmp_path
 
 

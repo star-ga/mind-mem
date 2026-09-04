@@ -128,6 +128,8 @@ def _cli(workspace: str, payload: str, *argv: str) -> subprocess.CompletedProces
         text=True,
         env=env,
         timeout=300,
+        encoding="utf-8",
+        errors="replace",
     )
 
 

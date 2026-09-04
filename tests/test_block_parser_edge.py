@@ -12,7 +12,7 @@ from mind_mem.block_parser import parse_file
 
 def test_empty_file():
     """Parse an empty file."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write("")
         path = f.name
     try:
@@ -24,7 +24,7 @@ def test_empty_file():
 
 def test_no_blocks():
     """Parse file with no block markers."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write("Just some text\nNo blocks here\n")
         path = f.name
     try:
@@ -36,7 +36,7 @@ def test_no_blocks():
 
 def test_single_block():
     """Parse file with one block."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write("[TEST-001]\nType: Decision\nStatement: Something\n")
         path = f.name
     try:
@@ -48,7 +48,7 @@ def test_single_block():
 
 def test_multiple_blocks():
     """Parse file with multiple blocks."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         for i in range(5):
             f.write(f"[MULTI-{i:03d}]\nType: Decision\nStatement: Block {i}\n\n")
         path = f.name
@@ -61,7 +61,7 @@ def test_multiple_blocks():
 
 def test_block_with_multiline_statement():
     """Parse block with multi-line statement."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write("[ML-001]\nType: Decision\nStatement: Line one\n  continued here\n")
         path = f.name
     try:

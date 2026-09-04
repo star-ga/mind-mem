@@ -18,7 +18,7 @@ from mind_mem.extraction_feedback import ExtractionFeedback, default_feedback_pa
 
 
 def _write_config(tmpdir: str, extraction: dict) -> None:
-    with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
+    with open(os.path.join(tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
         json.dump({"extraction": extraction}, f)
 
 

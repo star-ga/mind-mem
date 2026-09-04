@@ -381,11 +381,7 @@ class TestOutcomesMoveReliability:
         )
         env = dict(os.environ, MIND_MEM_CONFIG=os.path.join(ws, "mind-mem.json"))
         proc = subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=180,
+            [sys.executable, "-c", script], capture_output=True, text=True, env=env, timeout=180, encoding="utf-8", errors="replace"
         )
         assert proc.returncode == 0, proc.stderr
 
@@ -573,6 +569,8 @@ def _run_report(workspace: str, *, dewired: bool = False) -> tuple[dict, dict[st
         text=True,
         env=dict(os.environ, MIND_MEM_CONFIG=os.path.join(workspace, "mind-mem.json")),
         timeout=180,
+        encoding="utf-8",
+        errors="replace",
     )
     assert proc.returncode == 0, proc.stderr
     script.unlink()

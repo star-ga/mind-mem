@@ -51,9 +51,9 @@ def _make_workspace(tmpdir, decisions_content="", config=None):
     for d in ["decisions", "tasks", "entities", "intelligence", "memory"]:
         os.makedirs(os.path.join(tmpdir, d), exist_ok=True)
 
-    with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+    with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
         f.write(decisions_content)
-    with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
+    with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
         f.write("[T-20260213-099]\nTitle: Placeholder task\nStatus: active\n")
 
     for fname in [
@@ -71,7 +71,7 @@ def _make_workspace(tmpdir, decisions_content="", config=None):
             f.write(f"# {os.path.basename(fname)}\n")
 
     if config is not None:
-        with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
+        with open(os.path.join(tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump(config, f)
 
     return tmpdir
@@ -367,7 +367,7 @@ class TestConfigKeyValidation(unittest.TestCase):
                     "another_invalid": 42,
                 }
             }
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             result = _load_backend(td)
@@ -386,7 +386,7 @@ class TestConfigKeyValidation(unittest.TestCase):
                     "rerank": True,
                 }
             }
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             result = _load_backend(td)
@@ -406,7 +406,7 @@ class TestConfigKeyValidation(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {"recall": {}}
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             result = _load_backend(td)
@@ -417,7 +417,7 @@ class TestConfigKeyValidation(unittest.TestCase):
         from mind_mem.recall import _load_backend
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 f.write("{invalid json content!!!")
 
             result = _load_backend(td)
@@ -429,7 +429,7 @@ class TestConfigKeyValidation(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {"recall": {"backend": "sqlite"}}
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             result = _load_backend(td)

@@ -107,7 +107,7 @@ def time_bounded_workspace(tmp_path) -> str:
     body = ""
     for bid, date, statement in blocks:
         body += f"[{bid}]\nStatement: {statement}\nDate: {date}\nStatus: active\nTags: FACT\nSources: TEST\n\n---\n\n"
-    (ws / "decisions" / "DECISIONS.md").write_text(body)
+    (ws / "decisions" / "DECISIONS.md").write_text(body, encoding="utf-8")
     # Configure SQLite backend with no LLM/CE — pure BM25 path.
     (ws / "mind-mem.json").write_text(
         json.dumps(
@@ -119,7 +119,8 @@ def time_bounded_workspace(tmp_path) -> str:
                     "dedup": {"enabled": False, "type_cap_enabled": False, "source_cap_enabled": False},
                 }
             }
-        )
+        ),
+        encoding="utf-8",
     )
     os.environ.setdefault("MIND_MEM_DISABLE_TELEMETRY", "1")
     build_index(str(ws), incremental=False)

@@ -276,7 +276,9 @@ def gh_get(path: str, timeout: float) -> Response:
     """
     command = ["gh", "api", "-i", "-X", "GET", path]
     try:
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+        completed = subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout, check=False, encoding="utf-8", errors="replace"
+        )
     except FileNotFoundError as exc:
         raise GateError("the 'gh' CLI is not available; cannot read code-scanning alerts") from exc
     except subprocess.TimeoutExpired as exc:

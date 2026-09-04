@@ -41,7 +41,7 @@ class TestTrajectoryId(unittest.TestCase):
             first = generate_id(td)
             self.assertTrue(first.endswith("-001"))
             # Write it
-            with open(os.path.join(traj_dir, f"{first}.md"), "w") as f:
+            with open(os.path.join(traj_dir, f"{first}.md"), "w", encoding="utf-8") as f:
                 f.write("test")
             # Next should be -002
             second = generate_id(td)

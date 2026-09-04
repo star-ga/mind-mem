@@ -272,7 +272,7 @@ class TestMmTrace:
     def test_trace_last_n_from_env_file(self, tmp_path: Any, capsys: Any, monkeypatch: Any) -> None:
         log_file = tmp_path / "mcp.log"
         lines = [self._log_line("recall", i * 10) for i in range(1, 8)]
-        log_file.write_text("\n".join(lines))
+        log_file.write_text("\n".join(lines), encoding="utf-8")
         monkeypatch.setenv("MIND_MEM_LOG_FILE", str(log_file))
 
         rc = _cmd_trace(_make_args(last=5, tool=None, live=False))
@@ -285,7 +285,7 @@ class TestMmTrace:
     def test_trace_tool_filter(self, tmp_path: Any, capsys: Any, monkeypatch: Any) -> None:
         log_file = tmp_path / "mcp.log"
         lines = [self._log_line("recall"), self._log_line("scan"), self._log_line("recall")]
-        log_file.write_text("\n".join(lines))
+        log_file.write_text("\n".join(lines), encoding="utf-8")
         monkeypatch.setenv("MIND_MEM_LOG_FILE", str(log_file))
 
         rc = _cmd_trace(_make_args(last=20, tool="scan", live=False))
@@ -297,7 +297,7 @@ class TestMmTrace:
 
     def test_trace_no_entries(self, tmp_path: Any, capsys: Any, monkeypatch: Any) -> None:
         log_file = tmp_path / "mcp.log"
-        log_file.write_text('{"ts":"t","event":"other","data":{}}\n')
+        log_file.write_text('{"ts":"t","event":"other","data":{}}\n', encoding="utf-8")
         monkeypatch.setenv("MIND_MEM_LOG_FILE", str(log_file))
 
         rc = _cmd_trace(_make_args(last=20, tool=None, live=False))

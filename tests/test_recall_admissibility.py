@@ -500,7 +500,9 @@ def test_recall_never_imports_the_quarantine_module(_import_free_ws: str) -> Non
         f"recall({_import_free_ws!r}, {QUERY!r}, limit=10);"
         "print('quarantine' if 'mind_mem.importers.quarantine' in sys.modules else 'clean')"
     )
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=180, check=False)
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=180, check=False, encoding="utf-8", errors="replace"
+    )
     assert out.stdout.strip().endswith("clean"), out.stdout + out.stderr
 
 

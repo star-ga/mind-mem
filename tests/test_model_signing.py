@@ -30,7 +30,7 @@ def tiny_ckpt(tmp_path: Path) -> Path:
     """Two-file synthetic checkpoint, deterministic content."""
     root = tmp_path / "ckpt"
     root.mkdir()
-    (root / "config.json").write_text('{"model_type":"qwen3"}')
+    (root / "config.json").write_text('{"model_type":"qwen3"}', encoding="utf-8")
     body = b'{"weight":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}'
     (root / "model.safetensors").write_bytes(struct.pack("<Q", len(body)) + body + b"\x00" * 8)
     return root
@@ -60,7 +60,7 @@ class TestComputeManifestText:
     def test_skips_sidecar_files(self, tiny_ckpt: Path) -> None:
         # Pre-seed the directory with sidecars; they MUST NOT enter the
         # manifest (otherwise signing becomes a fixed-point problem).
-        (tiny_ckpt / MANIFEST_FILENAME).write_text("placeholder\n")
+        (tiny_ckpt / MANIFEST_FILENAME).write_text("placeholder\n", encoding="utf-8")
         (tiny_ckpt / SIGNATURE_FILENAME).write_bytes(b"\x00" * 64)
         (tiny_ckpt / PUBKEY_FILENAME).write_bytes(b"\x00" * 32)
         _, by_path = compute_manifest_text(tiny_ckpt)
@@ -188,7 +188,7 @@ class TestVerifyModel:
         sk, _ = generate_keypair()
         sign_model(tiny_ckpt, sk)
         # Tamper with one of the signed files
-        (tiny_ckpt / "config.json").write_text('{"model_type":"BACKDOORED"}')
+        (tiny_ckpt / "config.json").write_text('{"model_type":"BACKDOORED"}', encoding="utf-8")
         result = verify_model(tiny_ckpt)
         assert not result.passed
         assert result.error_kind == "manifest_mismatch"

@@ -35,6 +35,8 @@ def test_validate_sh_emits_deprecation_warning_to_stderr(tmp_path: Path) -> None
         capture_output=True,
         text=True,
         env={**os.environ, "MIND_MEM_VALIDATE_BASH": "0"},
+        encoding="utf-8",
+        errors="replace",
     )
     # v3.1.x emitted "validate.sh is deprecated"; v3.2.0 collapsed the
     # bash engine into a forwarder and now emits "is now a forwarder".
@@ -58,5 +60,7 @@ def test_validate_sh_opt_out_suppresses_warning(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         env={**os.environ, "MIND_MEM_VALIDATE_BASH": "1"},
+        encoding="utf-8",
+        errors="replace",
     )
     assert "[mind-mem][deprecation]" not in result.stderr

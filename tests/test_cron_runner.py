@@ -32,7 +32,7 @@ class TestLoadConfig(unittest.TestCase):
         """Valid mind-mem.json is parsed correctly."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             cfg = {"auto_ingest": {"enabled": True, "transcript_scan": False}}
-            with open(os.path.join(ws, "mind-mem.json"), "w") as f:
+            with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
             result = load_config(ws)
             self.assertEqual(result, cfg)
@@ -46,7 +46,7 @@ class TestLoadConfig(unittest.TestCase):
     def test_malformed_json_returns_empty(self):
         """Malformed JSON returns empty dict without raising."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
-            with open(os.path.join(ws, "mind-mem.json"), "w") as f:
+            with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
                 f.write("{not valid json")
             result = load_config(ws)
             self.assertEqual(result, {})
@@ -54,7 +54,7 @@ class TestLoadConfig(unittest.TestCase):
     def test_empty_config_file(self):
         """Empty JSON object in config is returned as-is."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
-            with open(os.path.join(ws, "mind-mem.json"), "w") as f:
+            with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump({}, f)
             result = load_config(ws)
             self.assertEqual(result, {})

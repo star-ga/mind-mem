@@ -56,7 +56,7 @@ class TestEntityDiscovery:
         ws = _make_workspace(tmp_path)
         today = _today_str()
         log = tmp_path / "memory" / f"{today}.md"
-        log.write_text("Check https://github.com/star-ga/newproject for details.\n")
+        log.write_text("Check https://github.com/star-ga/newproject for details.\n", encoding="utf-8")
 
         proposals = pass_entity_discovery(ws)
         slugs = [p.slug for p in proposals]
@@ -71,7 +71,7 @@ class TestEntityDiscovery:
         ws = _make_workspace(tmp_path)
         today = _today_str()
         log = tmp_path / "memory" / f"{today}.md"
-        log.write_text("Thanks @alice-dev for the review.\n")
+        log.write_text("Thanks @alice-dev for the review.\n", encoding="utf-8")
 
         proposals = pass_entity_discovery(ws)
         slugs = [p.slug for p in proposals]
@@ -84,9 +84,9 @@ class TestEntityDiscovery:
         ws = _make_workspace(tmp_path)
         today = _today_str()
         log = tmp_path / "memory" / f"{today}.md"
-        log.write_text("Using https://github.com/star-ga/mind-mem daily.\n")
+        log.write_text("Using https://github.com/star-ga/mind-mem daily.\n", encoding="utf-8")
         entities = tmp_path / "entities" / "projects.md"
-        entities.write_text("[PRJ-mind-mem] mind-mem project\n")
+        entities.write_text("[PRJ-mind-mem] mind-mem project\n", encoding="utf-8")
 
         proposals = pass_entity_discovery(ws)
         slugs = [p.slug for p in proposals]
@@ -97,7 +97,7 @@ class TestEntityDiscovery:
         ws = _make_workspace(tmp_path)
         old_date = _days_ago_str(30)
         log = tmp_path / "memory" / f"{old_date}.md"
-        log.write_text("Old project: https://github.com/org/ancient-repo\n")
+        log.write_text("Old project: https://github.com/org/ancient-repo\n", encoding="utf-8")
 
         proposals = pass_entity_discovery(ws, lookback_days=7)
         assert len(proposals) == 0
@@ -114,7 +114,7 @@ class TestEntityDiscovery:
         for i in range(3):
             date = _days_ago_str(i)
             log = tmp_path / "memory" / f"{date}.md"
-            log.write_text("Always using @bob-dev for reviews.\n")
+            log.write_text("Always using @bob-dev for reviews.\n", encoding="utf-8")
 
         proposals = pass_entity_discovery(ws)
         slugs = [p.slug for p in proposals]
@@ -133,7 +133,9 @@ class TestCitationRepair:
         """References to nonexistent decision IDs are reported."""
         ws = _make_workspace(tmp_path)
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text("[D-20260101-001]\nStatement: Valid decision\nStatus: active\n\nSee also D-20260101-999 for context.\n")
+        decisions.write_text(
+            "[D-20260101-001]\nStatement: Valid decision\nStatus: active\n\nSee also D-20260101-999 for context.\n", encoding="utf-8"
+        )
 
         broken = pass_citation_repair(ws)
         cited_ids = [b.cited_id for b in broken]
@@ -145,7 +147,8 @@ class TestCitationRepair:
         decisions = tmp_path / "decisions" / "DECISIONS.md"
         decisions.write_text(
             "[D-20260101-001]\nStatement: First decision\nStatus: active\n\n"
-            "[D-20260101-002]\nStatement: Depends on D-20260101-001\nStatus: active\n"
+            "[D-20260101-002]\nStatement: Depends on D-20260101-001\nStatus: active\n",
+            encoding="utf-8",
         )
 
         broken = pass_citation_repair(ws)
@@ -157,7 +160,7 @@ class TestCitationRepair:
         """Broken T- references in entity files are detected."""
         ws = _make_workspace(tmp_path)
         entities = tmp_path / "entities" / "projects.md"
-        entities.write_text("[PRJ-myproject]\nRelated task: T-20260101-999\n")
+        entities.write_text("[PRJ-myproject]\nRelated task: T-20260101-999\n", encoding="utf-8")
         # No tasks file, so T-20260101-999 is broken
         broken = pass_citation_repair(ws)
         cited_ids = [b.cited_id for b in broken]
@@ -173,7 +176,7 @@ class TestCitationRepair:
         """BrokenCitation includes the correct line number."""
         ws = _make_workspace(tmp_path)
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text("# Decisions\n\n[D-20260101-001]\nStatement: Valid\nSee D-20260101-888 here\n")
+        decisions.write_text("# Decisions\n\n[D-20260101-001]\nStatement: Valid\nSee D-20260101-888 here\n", encoding="utf-8")
 
         broken = pass_citation_repair(ws)
         match = next(b for b in broken if b.cited_id == "D-20260101-888")
@@ -192,7 +195,7 @@ class TestStaleDetection:
         """Blocks with old dates in stale files are flagged."""
         ws = _make_workspace(tmp_path)
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text("[D-20240101-001]\nStatement: Ancient decision\nStatus: active\n")
+        decisions.write_text("[D-20240101-001]\nStatement: Ancient decision\nStatus: active\n", encoding="utf-8")
         # Set file mtime to 60 days ago
         old_time = time.time() - (60 * 86400)
         os.utime(str(decisions), (old_time, old_time))
@@ -206,7 +209,7 @@ class TestStaleDetection:
         ws = _make_workspace(tmp_path)
         today_compact = datetime.now().strftime("%Y%m%d")
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text(f"[D-{today_compact}-001]\nStatement: Fresh decision\nStatus: active\n")
+        decisions.write_text(f"[D-{today_compact}-001]\nStatement: Fresh decision\nStatus: active\n", encoding="utf-8")
 
         stale = pass_stale_detection(ws, stale_days=30)
         assert len(stale) == 0
@@ -233,7 +236,7 @@ class TestConsolidation:
         for i in range(4):
             date = _days_ago_str(i)
             log = tmp_path / "memory" / f"{date}.md"
-            log.write_text(f"# {date}\n\n{fact}\n")
+            log.write_text(f"# {date}\n\n{fact}\n", encoding="utf-8")
 
         candidates = pass_consolidation(ws, lookback_days=7, min_occurrences=3)
         assert len(candidates) >= 1
@@ -246,7 +249,7 @@ class TestConsolidation:
         for i in range(5):
             date = _days_ago_str(i)
             log = tmp_path / "memory" / f"{date}.md"
-            log.write_text(f"# {date}\n\nUnique fact number {i} about something.\n")
+            log.write_text(f"# {date}\n\nUnique fact number {i} about something.\n", encoding="utf-8")
 
         candidates = pass_consolidation(ws, lookback_days=7, min_occurrences=3)
         assert len(candidates) == 0
@@ -258,7 +261,7 @@ class TestConsolidation:
         for i in range(5):
             date = _days_ago_str(i)
             log = tmp_path / "memory" / f"{date}.md"
-            log.write_text(f"{short_line}\n")
+            log.write_text(f"{short_line}\n", encoding="utf-8")
 
         candidates = pass_consolidation(ws, lookback_days=7, min_occurrences=3)
         assert len(candidates) == 0
@@ -274,7 +277,7 @@ class TestConsolidation:
         for i, variant in enumerate(variants):
             date = _days_ago_str(i)
             log = tmp_path / "memory" / f"{date}.md"
-            log.write_text(f"# {date}\n\n{variant}\n")
+            log.write_text(f"# {date}\n\n{variant}\n", encoding="utf-8")
 
         candidates = pass_consolidation(ws, lookback_days=7, min_occurrences=3)
         assert len(candidates) >= 1
@@ -307,7 +310,7 @@ class TestIntegritySummary:
         today = _today_str()
         report_path = tmp_path / "memory" / f"dream-cycle-{today}.md"
         assert report_path.exists()
-        on_disk = report_path.read_text()
+        on_disk = report_path.read_text(encoding="utf-8")
         assert "PRJ-foo" in on_disk
         assert "Dream Cycle Report" in on_disk
 
@@ -416,11 +419,11 @@ class TestRunDreamCycle:
         # Add a daily log with an entity
         today = _today_str()
         log = tmp_path / "memory" / f"{today}.md"
-        log.write_text("New tool: @alice-dev mentioned https://github.com/org/newrepo\n")
+        log.write_text("New tool: @alice-dev mentioned https://github.com/org/newrepo\n", encoding="utf-8")
 
         # Add a broken citation
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text("[D-20260101-001]\nStatement: Decision\nStatus: active\n\nDepends on D-20260101-999\n")
+        decisions.write_text("[D-20260101-001]\nStatement: Decision\nStatus: active\n\nDepends on D-20260101-999\n", encoding="utf-8")
 
         report = run_dream_cycle(ws, dry_run=False)
         assert report.total_findings > 0
@@ -436,7 +439,7 @@ class TestRunDreamCycle:
         ws = _make_workspace(tmp_path)
         today = _today_str()
         log = tmp_path / "memory" / f"{today}.md"
-        log.write_text("Using @some-person for reviews.\n")
+        log.write_text("Using @some-person for reviews.\n", encoding="utf-8")
 
         report = run_dream_cycle(ws, dry_run=True)
         assert isinstance(report, DreamCycleReport)

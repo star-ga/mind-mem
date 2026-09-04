@@ -52,7 +52,7 @@ class TestAuditChainDowngradeBlocked:
                 }
             )
             prev = entry_hash
-        chain_file.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
+        chain_file.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
         chain = AuditChain(workspace=str(tmp_path))
         ok, errors = chain.verify()
         assert ok, errors
@@ -118,7 +118,7 @@ class TestAuditChainDowngradeBlocked:
             }
         )
 
-        chain_file.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
+        chain_file.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
         chain = AuditChain(workspace=str(tmp_path))
         ok, errors = chain.verify()
         assert not ok

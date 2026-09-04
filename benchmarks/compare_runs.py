@@ -21,10 +21,10 @@ def load_results(path: str) -> list[dict]:
     """Load per-question results from JSON or JSONL."""
     p = Path(path)
     if p.suffix == ".jsonl" or ".jsonl" in p.name:
-        with open(p) as f:
+        with open(p, encoding="utf-8") as f:
             return [json.loads(line) for line in f if line.strip()]
     else:
-        with open(p) as f:
+        with open(p, encoding="utf-8") as f:
             data = json.load(f)
         return data.get("per_question", [])
 

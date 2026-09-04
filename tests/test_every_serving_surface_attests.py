@@ -604,6 +604,8 @@ def test_the_recall_cli_attests_and_records(seed_template: str) -> None:
             text=True,
             timeout=300,
             env=env,
+            encoding="utf-8",
+            errors="replace",
         )
         assert proc.returncode == 0, proc.stderr
         served = [hit["_id"] for hit in json.loads(proc.stdout)]
@@ -632,6 +634,8 @@ def test_the_mm_cli_attests_and_records(seed_template: str) -> None:
             text=True,
             timeout=300,
             env=env,
+            encoding="utf-8",
+            errors="replace",
         )
         assert proc.returncode == 0, proc.stderr[-2000:]
         assert ACTIVE_ID in proc.stdout, f"the CLI did not reach the corpus: {proc.stdout[:400]}"

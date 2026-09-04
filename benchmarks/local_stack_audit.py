@@ -109,7 +109,7 @@ def check_ollama() -> tuple[str, str]:
         capture_output=True,
         text=True,
         timeout=5,
-    ).stdout
+     encoding="utf-8", errors="replace").stdout
     models = [m.get("name", "") for m in json.loads(out).get("models", [])]
     mm = [m for m in models if m.startswith("mind-mem")]
     if not mm:
@@ -126,7 +126,7 @@ def check_redis() -> tuple[str, str]:
             capture_output=True,
             text=True,
             timeout=2,
-        ).stdout.strip()
+         encoding="utf-8", errors="replace").stdout.strip()
         return _ok(out) if out == "PONG" else _fail(f"unexpected ping: {out}")
     except FileNotFoundError:
         return _warn("redis-cli not on PATH")

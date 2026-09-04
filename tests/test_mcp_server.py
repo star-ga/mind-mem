@@ -47,7 +47,7 @@ class TestMCPServerHelpers(unittest.TestCase):
         os.makedirs(os.path.join(self.td, "intelligence"))
         os.makedirs(os.path.join(self.td, "memory"))
 
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(
                 "[D-20260101-001]\n"
                 "Statement: Use PostgreSQL for user database\n"
@@ -60,10 +60,10 @@ class TestMCPServerHelpers(unittest.TestCase):
                 "Date: 2026-01-02\n"
             )
 
-        with open(os.path.join(self.td, "tasks", "TASKS.md"), "w") as f:
+        with open(os.path.join(self.td, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
             f.write("[T-20260101-001]\nDescription: Set up PostgreSQL in staging\nStatus: open\n")
 
-        with open(os.path.join(self.td, "entities", "projects.md"), "w") as f:
+        with open(os.path.join(self.td, "entities", "projects.md"), "w", encoding="utf-8") as f:
             f.write("[PRJ-001]\nName: mind-mem\nStatus: active\n")
 
         self.mod = _load_server(self.td)
@@ -100,7 +100,7 @@ class TestMCPResources(unittest.TestCase):
         os.makedirs(os.path.join(self.td, "intelligence"))
         os.makedirs(os.path.join(self.td, "memory"))
 
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(
                 "[D-20260101-001]\n"
                 "Statement: Use PostgreSQL\n"
@@ -112,13 +112,13 @@ class TestMCPResources(unittest.TestCase):
                 "Status: superseded\n"
             )
 
-        with open(os.path.join(self.td, "tasks", "TASKS.md"), "w") as f:
+        with open(os.path.join(self.td, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
             f.write("[T-20260101-001]\nDescription: Setup DB\nStatus: open\n")
 
-        with open(os.path.join(self.td, "entities", "projects.md"), "w") as f:
+        with open(os.path.join(self.td, "entities", "projects.md"), "w", encoding="utf-8") as f:
             f.write("[PRJ-001]\nName: mind-mem\n")
 
-        with open(os.path.join(self.td, "intelligence", "SIGNALS.md"), "w") as f:
+        with open(os.path.join(self.td, "intelligence", "SIGNALS.md"), "w", encoding="utf-8") as f:
             f.write("# Signals\n\nNo signals yet.\n")
 
         self.mod = _load_server(self.td)
@@ -195,7 +195,7 @@ class TestMCPRecallEngine(unittest.TestCase):
         os.makedirs(os.path.join(self.td, "entities"))
         os.makedirs(os.path.join(self.td, "intelligence"))
 
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(
                 "[D-20260101-001]\n"
                 "Statement: Use PostgreSQL for the primary database\n"
@@ -237,16 +237,16 @@ class TestMCPApproveApply(unittest.TestCase):
         os.makedirs(os.path.join(self.td, "memory"))
 
         # Create empty decisions file
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("# Decisions\n")
 
         # Create mind-mem.json with detect_only mode (blocks apply)
-        with open(os.path.join(self.td, "mind-mem.json"), "w") as f:
+        with open(os.path.join(self.td, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump({"governance_mode": "detect_only"}, f)
 
         # Create empty proposed files
         for name in ("DECISIONS_PROPOSED.md", "TASKS_PROPOSED.md", "EDITS_PROPOSED.md"):
-            with open(os.path.join(self.td, "intelligence", "proposed", name), "w") as f:
+            with open(os.path.join(self.td, "intelligence", "proposed", name), "w", encoding="utf-8") as f:
                 f.write(f"# {name}\n")
 
         self.mod = _load_server(self.td)
@@ -443,14 +443,14 @@ class TestConfigurableLimits(unittest.TestCase):
         os.makedirs(os.path.join(self.td, "intelligence"))
         os.makedirs(os.path.join(self.td, "memory"))
 
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Use PostgreSQL for user database\nStatus: active\nDate: 2026-01-01\n")
 
     def tearDown(self):
         shutil.rmtree(self.td, ignore_errors=True)
 
     def _write_config(self, config):
-        with open(os.path.join(self.td, "mind-mem.json"), "w") as f:
+        with open(os.path.join(self.td, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump(config, f)
 
     def test_default_limits_returned_when_no_config(self):

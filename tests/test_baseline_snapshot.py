@@ -101,7 +101,7 @@ class TestConfigFingerprint(unittest.TestCase):
 
     def test_reads_config_file(self):
         cfg = {"recall": {"rrf_k": 100, "vector_model": "custom-model"}}
-        with open(os.path.join(self.tmpdir, "mind-mem.json"), "w") as f:
+        with open(os.path.join(self.tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump(cfg, f)
         fp = _config_fingerprint(self.tmpdir)
         self.assertEqual(fp["rrf_k"], 100)
@@ -110,7 +110,7 @@ class TestConfigFingerprint(unittest.TestCase):
     def test_hash_changes_with_config(self):
         fp1 = _config_fingerprint(self.tmpdir)
         cfg = {"recall": {"rrf_k": 999}}
-        with open(os.path.join(self.tmpdir, "mind-mem.json"), "w") as f:
+        with open(os.path.join(self.tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump(cfg, f)
         fp2 = _config_fingerprint(self.tmpdir)
         self.assertNotEqual(fp1["_hash"], fp2["_hash"])
@@ -163,7 +163,7 @@ class TestFreezeBaseline(unittest.TestCase):
         _populate_queries(self.tmpdir, {"WHAT": 5})
         freeze_baseline(self.tmpdir)
         path = os.path.join(self.tmpdir, "intelligence/baselines/intent-baseline-v1.json")
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         self.assertIn("frozen_at", data)
         self.assertIn("config_fingerprint", data)
@@ -231,7 +231,7 @@ class TestDetectDrift(unittest.TestCase):
 
         # Change config
         cfg = {"recall": {"rrf_k": 999, "vector_model": "changed-model"}}
-        with open(os.path.join(self.tmpdir, "mind-mem.json"), "w") as f:
+        with open(os.path.join(self.tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump(cfg, f)
 
         result = detect_drift(self.tmpdir)
@@ -304,9 +304,9 @@ class TestVersioning(unittest.TestCase):
     def test_version_increment(self):
         d = os.path.join(self.tmpdir, "intelligence/baselines")
         os.makedirs(d)
-        with open(os.path.join(d, "intent-baseline-v1.json"), "w") as f:
+        with open(os.path.join(d, "intent-baseline-v1.json"), "w", encoding="utf-8") as f:
             f.write("{}")
-        with open(os.path.join(d, "intent-baseline-v3.json"), "w") as f:
+        with open(os.path.join(d, "intent-baseline-v3.json"), "w", encoding="utf-8") as f:
             f.write("{}")
         self.assertEqual(_list_versions(self.tmpdir), [1, 3])
         self.assertEqual(_next_version(self.tmpdir), 4)
@@ -314,9 +314,9 @@ class TestVersioning(unittest.TestCase):
     def test_ignores_non_baseline_files(self):
         d = os.path.join(self.tmpdir, "intelligence/baselines")
         os.makedirs(d)
-        with open(os.path.join(d, "intent-baseline-v1.json"), "w") as f:
+        with open(os.path.join(d, "intent-baseline-v1.json"), "w", encoding="utf-8") as f:
             f.write("{}")
-        with open(os.path.join(d, "other-file.json"), "w") as f:
+        with open(os.path.join(d, "other-file.json"), "w", encoding="utf-8") as f:
             f.write("{}")
         self.assertEqual(_list_versions(self.tmpdir), [1])
 

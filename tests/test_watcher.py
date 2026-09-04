@@ -27,7 +27,7 @@ class TestFileWatcher(unittest.TestCase):
         watcher.start()
         try:
             time.sleep(0.2)  # let initial scan happen
-            with open(os.path.join(self.td, "test.md"), "w") as f:
+            with open(os.path.join(self.td, "test.md"), "w", encoding="utf-8") as f:
                 f.write("# New file\n")
             time.sleep(0.3)
             self.assertGreater(len(self.changes), 0)
@@ -45,7 +45,7 @@ class TestFileWatcher(unittest.TestCase):
         watcher.start()
         try:
             time.sleep(0.2)
-            with open(path, "a") as f:
+            with open(path, "a", encoding="utf-8") as f:
                 f.write("## Modified\n")
             time.sleep(0.3)
             self.assertGreater(len(self.changes), 0)
@@ -74,7 +74,7 @@ class TestFileWatcher(unittest.TestCase):
         watcher.start()
         try:
             time.sleep(0.2)
-            with open(os.path.join(self.td, "test.txt"), "w") as f:
+            with open(os.path.join(self.td, "test.txt"), "w", encoding="utf-8") as f:
                 f.write("not markdown\n")
             time.sleep(0.3)
             # Should NOT trigger callback for .txt files
@@ -91,7 +91,7 @@ class TestFileWatcher(unittest.TestCase):
         watcher.start()
         try:
             time.sleep(0.2)
-            with open(os.path.join(hidden, "secret.md"), "w") as f:
+            with open(os.path.join(hidden, "secret.md"), "w", encoding="utf-8") as f:
                 f.write("# Hidden\n")
             time.sleep(0.3)
             hidden_found = any("secret.md" in str(c) for c in self.changes)
@@ -128,7 +128,7 @@ class TestFileWatcher(unittest.TestCase):
         watcher.start()
         try:
             time.sleep(0.2)
-            with open(os.path.join(subdir, "DECISIONS.md"), "w") as f:
+            with open(os.path.join(subdir, "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("# Decisions\n")
             time.sleep(0.3)
             self.assertGreater(len(self.changes), 0)

@@ -137,7 +137,7 @@ def _ws(q, tmp):
             if c.strip():
                 bl.append(f"[SESSION-{sid}__t{j}]\nStatement: {c}\nDate: 2024-01-01\nStatus: active\n")
     open(os.path.join(d, "DECISIONS.md"), "w", encoding="utf-8").write("\n---\n\n".join(bl))
-    json.dump(CFG, open(os.path.join(ws, "mind-mem.json"), "w"))
+    json.dump(CFG, open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8"))
     return ws
 
 
@@ -190,7 +190,7 @@ def main():
     ap.add_argument("--expand", type=int, default=3)
     ap.add_argument("--output")
     a = ap.parse_args()
-    data = json.load(open(a.data_path))
+    data = json.load(open(a.data_path, encoding="utf-8"))
     pool = [q for q in data if not q.get("question_id", "").endswith("_abs")
             and q.get("answer_session_ids")]
     if a.sample:
@@ -220,7 +220,7 @@ def main():
     print("by_type any@5:", json.dumps(by), file=sys.stderr)
     if a.output:
         out["per_question"] = pq
-        json.dump(out, open(a.output, "w"), indent=2)
+        json.dump(out, open(a.output, "w", encoding="utf-8"), indent=2)
         print(f"wrote {a.output}", file=sys.stderr)
 
 

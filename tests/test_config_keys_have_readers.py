@@ -317,7 +317,9 @@ def _hook_is_runnable() -> tuple[bool, str]:
     canonical row names which half was missing.
     """
     try:
-        bash = subprocess.run(["bash", "-c", "echo mm_bash_ok"], capture_output=True, text=True, timeout=30)
+        bash = subprocess.run(
+            ["bash", "-c", "echo mm_bash_ok"], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace"
+        )
     except (OSError, subprocess.SubprocessError):
         return False, "bash could not be executed"
     if bash.returncode != 0 or "mm_bash_ok" not in (bash.stdout or ""):
@@ -328,6 +330,8 @@ def _hook_is_runnable() -> tuple[bool, str]:
             capture_output=True,
             text=True,
             timeout=30,
+            encoding="utf-8",
+            errors="replace",
         )
     except (OSError, subprocess.SubprocessError):
         return False, "python3 could not be executed (the hook shells out to it)"
@@ -349,6 +353,8 @@ def _run_session_start(workspace: str) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=120,
         env={**os.environ, "MIND_MEM_WORKSPACE": workspace},
+        encoding="utf-8",
+        errors="replace",
     )
 
 

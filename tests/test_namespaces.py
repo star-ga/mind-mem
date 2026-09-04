@@ -26,7 +26,7 @@ class TestNamespaceManager(unittest.TestCase):
         shutil.rmtree(self.td, ignore_errors=True)
 
     def _write_acl(self, acl):
-        with open(os.path.join(self.td, "mind-mem-acl.json"), "w") as f:
+        with open(os.path.join(self.td, "mind-mem-acl.json"), "w", encoding="utf-8") as f:
             json.dump(acl, f)
 
     def test_no_agent_id_has_full_access(self):
@@ -161,7 +161,7 @@ class TestSharedLedger(unittest.TestCase):
             source_agent="coder-1",
         )
         self.assertTrue(result)
-        with open(ledger.ledger_path) as f:
+        with open(ledger.ledger_path, encoding="utf-8") as f:
             content = f.read()
         self.assertIn("PostgreSQL is the primary database", content)
         self.assertIn("coder-1", content)
@@ -228,7 +228,7 @@ class TestInitMultiAgentWorkspace(unittest.TestCase):
         init_multi_agent_workspace(self.td, agents=["coder-1"])
         acl_path = os.path.join(self.td, "mind-mem-acl.json")
         self.assertTrue(os.path.isfile(acl_path))
-        with open(acl_path) as f:
+        with open(acl_path, encoding="utf-8") as f:
             acl = json.load(f)
         self.assertIn("coder-1", acl["agents"])
 
@@ -243,7 +243,7 @@ class TestInitMultiAgentWorkspace(unittest.TestCase):
         with open(acl_path, "w", encoding="utf-8") as f:
             json.dump({"custom": True}, f)
         init_multi_agent_workspace(self.td, agents=["x"])
-        with open(acl_path) as f:
+        with open(acl_path, encoding="utf-8") as f:
             acl = json.load(f)
         self.assertTrue(acl.get("custom"))
 

@@ -54,7 +54,7 @@ def _load_module():
     sys.modules["_test_arch_mind_pkg.infra"] = infra
     sys.modules["_test_arch_mind_pkg.infra.observability"] = obs
 
-    src_text = SRC.read_text().replace(
+    src_text = SRC.read_text(encoding="utf-8").replace(
         "from ..infra.observability import mcp_tool_observe",
         "from _test_arch_mind_pkg.infra.observability import mcp_tool_observe",
     )
@@ -74,7 +74,7 @@ arch_mind = _load_module()
 
 def test_resolve_binary_via_env(monkeypatch, tmp_path):
     fake = tmp_path / "arch-mind"
-    fake.write_text("")
+    fake.write_text("", encoding="utf-8")
     monkeypatch.setenv("ARCH_MIND_BIN", str(fake))
     assert arch_mind._resolve_binary() == str(fake)
 

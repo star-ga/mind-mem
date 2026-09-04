@@ -113,7 +113,7 @@ class TestEnrichResults:
         results = [{"_id": "C", "excerpt": "baz", "score": 0.8}]
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             config = {"extraction": {"enabled": False, "model": "qwen3.5:9b"}}
-            with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
+            with open(os.path.join(tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(config, f)
             enriched = enrich_results(results, workspace=tmpdir)
             assert enriched is results
@@ -138,7 +138,7 @@ class TestLoadConfig:
                     "backend": "ollama",
                 }
             }
-            with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
+            with open(os.path.join(tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
             config = load_config(tmpdir)
             assert config["enabled"] is True
@@ -148,7 +148,7 @@ class TestLoadConfig:
     def test_partial_config_merges_with_defaults(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cfg = {"extraction": {"enabled": True}}
-            with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
+            with open(os.path.join(tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
             config = load_config(tmpdir)
             assert config["enabled"] is True
@@ -157,7 +157,7 @@ class TestLoadConfig:
 
     def test_invalid_json_returns_defaults(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
-            with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
+            with open(os.path.join(tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
                 f.write("{invalid json!!!")
             config = load_config(tmpdir)
             assert config["enabled"] is False
@@ -166,7 +166,7 @@ class TestLoadConfig:
     def test_missing_extraction_section_returns_defaults(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cfg = {"recall": {"backend": "scan"}}
-            with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
+            with open(os.path.join(tmpdir, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
             config = load_config(tmpdir)
             assert config["enabled"] is False

@@ -48,7 +48,7 @@ def test_init_preserves_existing_files():
             f.write("keep me")
         init(ws)
         assert os.path.isfile(marker)
-        with open(marker) as f:
+        with open(marker, encoding="utf-8") as f:
             assert f.read() == "keep me"
 
 

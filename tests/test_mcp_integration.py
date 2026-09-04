@@ -61,7 +61,7 @@ def _make_workspace(tmp_path):
         "recall": {"backend": "scan"},
         "proposal_budget": {"per_run": 3, "per_day": 6, "backlog_limit": 30},
     }
-    (ws / "mind-mem.json").write_text(json.dumps(cfg))
+    (ws / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
 
     # Add a decision for recall to find
     dec = ws / "decisions" / "DECISIONS.md"
@@ -71,17 +71,18 @@ def _make_workspace(tmp_path):
         "Status: active\n"
         "Statement: Use PostgreSQL for the primary database\n"
         "Tags: database, infrastructure\n"
-        "Rationale: Better JSON support than MySQL\n"
+        "Rationale: Better JSON support than MySQL\n",
+        encoding="utf-8",
     )
 
     # Intelligence files
-    (ws / "intelligence" / "SIGNALS.md").write_text("")
-    (ws / "intelligence" / "CONTRADICTIONS.md").write_text("")
-    (ws / "intelligence" / "DRIFT.md").write_text("")
-    (ws / "intelligence" / "IMPACT.md").write_text("")
-    (ws / "intelligence" / "BRIEFINGS.md").write_text("")
-    (ws / "intelligence" / "AUDIT.md").write_text("")
-    (ws / "intelligence" / "SCAN_LOG.md").write_text("")
+    (ws / "intelligence" / "SIGNALS.md").write_text("", encoding="utf-8")
+    (ws / "intelligence" / "CONTRADICTIONS.md").write_text("", encoding="utf-8")
+    (ws / "intelligence" / "DRIFT.md").write_text("", encoding="utf-8")
+    (ws / "intelligence" / "IMPACT.md").write_text("", encoding="utf-8")
+    (ws / "intelligence" / "BRIEFINGS.md").write_text("", encoding="utf-8")
+    (ws / "intelligence" / "AUDIT.md").write_text("", encoding="utf-8")
+    (ws / "intelligence" / "SCAN_LOG.md").write_text("", encoding="utf-8")
 
     # Entity stubs
     for fname in [
@@ -92,10 +93,10 @@ def _make_workspace(tmp_path):
     ]:
         path = ws / fname
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"# {os.path.basename(fname)}\n")
+        path.write_text(f"# {os.path.basename(fname)}\n", encoding="utf-8")
 
     # Tasks file
-    (ws / "tasks" / "TASKS.md").write_text("# Tasks\n")
+    (ws / "tasks" / "TASKS.md").write_text("# Tasks\n", encoding="utf-8")
 
     return ws
 

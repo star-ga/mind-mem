@@ -21,7 +21,7 @@ def tiny_ckpt(tmp_path: Path) -> Path:
     """Two-file synthetic checkpoint with a real-shaped safetensors header."""
     root = tmp_path / "ckpt"
     root.mkdir()
-    (root / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-8B"}')
+    (root / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-8B"}', encoding="utf-8")
     body = b'{"weight":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}'
     (root / "model.safetensors").write_bytes(struct.pack("<Q", len(body)) + body + b"\x00" * 8)
     return root
@@ -56,14 +56,14 @@ class TestAuditModelTool:
             assert len(digest) == 64
 
     def test_unknown_publisher_fails_provenance(self, tiny_ckpt: Path) -> None:
-        (tiny_ckpt / "config.json").write_text('{"base_model":"evil-org/x"}')
+        (tiny_ckpt / "config.json").write_text('{"base_model":"evil-org/x"}', encoding="utf-8")
         result = json.loads(audit_model_tool(str(tiny_ckpt)))
         prov = next(c for c in result["checks"] if c["name"] == "provenance")
         assert prov["passed"] is False
         assert result["ok"] is False
 
     def test_allow_publisher_extends_allowlist(self, tiny_ckpt: Path) -> None:
-        (tiny_ckpt / "config.json").write_text('{"base_model":"internal-org/x"}')
+        (tiny_ckpt / "config.json").write_text('{"base_model":"internal-org/x"}', encoding="utf-8")
         result = json.loads(audit_model_tool(str(tiny_ckpt), allow_publisher=["internal-org"]))
         prov = next(c for c in result["checks"] if c["name"] == "provenance")
         assert prov["passed"] is True
@@ -171,7 +171,7 @@ class TestVerifyModelTool:
 
     def test_tampered_file_triggers_manifest_mismatch(self, tiny_ckpt: Path, tmp_path: Path) -> None:
         json.loads(sign_model_tool(str(tiny_ckpt), generate_key_prefix=str(tmp_path / "k")))
-        (tiny_ckpt / "config.json").write_text('{"model_type":"BACKDOORED"}')
+        (tiny_ckpt / "config.json").write_text('{"model_type":"BACKDOORED"}', encoding="utf-8")
         result = json.loads(verify_model_tool(str(tiny_ckpt)))
         assert result["ok"] is False
         assert result["error_kind"] == "manifest_mismatch"

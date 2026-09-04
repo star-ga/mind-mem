@@ -401,7 +401,7 @@ class TestScanForPromotableFacts:
 
         for day in ("2026-04-06.md", "2026-04-07.md", "2026-04-08.md", "2026-04-09.md"):
             path = os.path.join(workspace, "memory", day)
-            with open(path, "a") as f:
+            with open(path, "a", encoding="utf-8") as f:
                 f.write(f"\n{fact_b}\n")
 
         results = scan_for_promotable_facts(workspace, min_mentions=3)

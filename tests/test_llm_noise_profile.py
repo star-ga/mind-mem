@@ -264,7 +264,7 @@ def test_saved_json_has_expected_structure(profiler, tmp_path):
     path = str(tmp_path / "p.json")
     profiler.register_provider("a", initial_reliability=0.65)
     profiler.save(path)
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
     assert "version" in data
     assert "profiles" in data

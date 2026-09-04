@@ -40,7 +40,9 @@ def _bash_actually_works() -> bool:
     validator module directly precisely because of this.
     """
     try:
-        r = subprocess.run(["bash", "-c", "echo mm_bash_ok"], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(
+            ["bash", "-c", "echo mm_bash_ok"], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace"
+        )
     except (OSError, subprocess.SubprocessError):
         return False
     return r.returncode == 0 and "mm_bash_ok" in (r.stdout or "")
@@ -193,7 +195,7 @@ class TestSnapshotRollback(unittest.TestCase):
 
             restore_snapshot(ws, snap_dir)
 
-            with open(original) as f:
+            with open(original, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "original content")
 
 
@@ -245,7 +247,7 @@ class TestSnapshotRollbackSymlinkedWorkspace(unittest.TestCase):
             self.assertTrue(os.path.exists(decisions_path), "DECISIONS.md must survive: it is in the manifest")
             self.assertTrue(os.path.exists(sidecar_path), "CUSTOM.md must survive: it is in cleanup_inventory")
             self.assertFalse(os.path.exists(rogue_path), "ROGUE.md must be removed: not in manifest or inventory")
-            with open(decisions_path) as f:
+            with open(decisions_path, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "[D-001]\nStatement: Original\nStatus: active\n")
 
 
@@ -287,7 +289,7 @@ class TestSnapshotIntelligenceRestore(unittest.TestCase):
             signals = os.path.join(ws, "intelligence", "SIGNALS.md")
             with open(signals, "w", encoding="utf-8") as f:
                 f.write("original signals")
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("# D\n")
 
             snap_dir = create_snapshot(ws, "test-intel")
@@ -298,7 +300,7 @@ class TestSnapshotIntelligenceRestore(unittest.TestCase):
 
             restore_snapshot(ws, snap_dir)
 
-            with open(signals) as f:
+            with open(signals, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "original signals")
 
 
@@ -308,7 +310,7 @@ class TestNoTouchWindow(unittest.TestCase):
     def test_no_previous_apply(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "memory"))
-            with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
+            with open(os.path.join(ws, "memory", "intel-state.json"), "w", encoding="utf-8") as f:
                 json.dump({}, f)
             ok, reason = check_no_touch_window(ws)
             self.assertTrue(ok)
@@ -317,7 +319,7 @@ class TestNoTouchWindow(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "memory"))
             recent = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
+            with open(os.path.join(ws, "memory", "intel-state.json"), "w", encoding="utf-8") as f:
                 json.dump({"last_apply_ts": recent}, f)
             ok, reason = check_no_touch_window(ws)
             self.assertFalse(ok)
@@ -327,7 +329,7 @@ class TestNoTouchWindow(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "memory"))
             old = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
+            with open(os.path.join(ws, "memory", "intel-state.json"), "w", encoding="utf-8") as f:
                 json.dump({"last_apply_ts": old}, f)
             ok, reason = check_no_touch_window(ws)
             self.assertTrue(ok)
@@ -379,6 +381,8 @@ class TestFreshInitValidate(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=30,
+                encoding="utf-8",
+                errors="replace",
             )
             self.assertEqual(result.returncode, 0, f"validate.sh failed:\n{result.stdout}")
             self.assertIn("0 issues", result.stdout)
@@ -446,10 +450,7 @@ class TestValidateUninitWorkspace(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             validate_sh = os.path.join(os.path.dirname(__file__), "..", "src", "mind_mem", "validate.sh")
             result = subprocess.run(
-                ["bash", validate_sh, ws],
-                capture_output=True,
-                text=True,
-                timeout=30,
+                ["bash", validate_sh, ws], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace"
             )
             # Should exit with error and helpful message. v3.2.0 collapsed
             # validate.sh into a forwarder to the Python validator, which
@@ -524,7 +525,7 @@ class TestBacklogLimit(unittest.TestCase):
             init(ws)
             # Set limit in mind-mem.json (source of truth for config)
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = json.load(f)
             config["proposal_budget"] = {"backlog_limit": 3}
             with open(config_path, "w", encoding="utf-8") as f:
@@ -533,7 +534,7 @@ class TestBacklogLimit(unittest.TestCase):
             # Create 3 staged proposals
             proposed_dir = os.path.join(ws, "intelligence/proposed")
             os.makedirs(proposed_dir, exist_ok=True)
-            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
+            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w", encoding="utf-8") as f:
                 for i in range(3):
                     f.write(f"\n[P-001-{i}]\nProposalId: P-001-{i}\nStatus: staged\n")
 
@@ -550,7 +551,7 @@ class TestBacklogLimit(unittest.TestCase):
 
             init(ws)
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = json.load(f)
             config["proposal_budget"] = {"backlog_limit": 5}
             with open(config_path, "w", encoding="utf-8") as f:
@@ -558,7 +559,7 @@ class TestBacklogLimit(unittest.TestCase):
 
             proposed_dir = os.path.join(ws, "intelligence/proposed")
             os.makedirs(proposed_dir, exist_ok=True)
-            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
+            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w", encoding="utf-8") as f:
                 for i in range(3):
                     f.write(f"\n[P-001-{i}]\nProposalId: P-001-{i}\nStatus: staged\n")
 
@@ -597,7 +598,7 @@ class TestFingerprintDedupCollision(unittest.TestCase):
             }
             fp = compute_fingerprint(existing_proposal)
 
-            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
+            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w", encoding="utf-8") as f:
                 f.write(
                     f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
                     f"Type: edit\nTargetBlock: D-20260214-001\n"
@@ -651,7 +652,7 @@ class TestFingerprintDedupCollision(unittest.TestCase):
             }
             fp = compute_fingerprint(proposal)
 
-            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
+            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w", encoding="utf-8") as f:
                 f.write(
                     f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
                     f"Type: edit\nTargetBlock: D-20260214-001\n"
@@ -680,7 +681,7 @@ class TestSnapshotRecursionPrevention(unittest.TestCase):
             # Create a fake prior snapshot in intelligence/applied/
             prior_snap = os.path.join(ws, "intelligence/applied/20260213-120000")
             os.makedirs(prior_snap, exist_ok=True)
-            with open(os.path.join(prior_snap, "marker.txt"), "w") as f:
+            with open(os.path.join(prior_snap, "marker.txt"), "w", encoding="utf-8") as f:
                 f.write("I should NOT appear in new snapshots")
 
             # Create a new snapshot
@@ -708,9 +709,9 @@ class TestMinimalSnapshot(unittest.TestCase):
             init(ws)
 
             # Write to multiple files
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("[D-001]\nStatement: Test\nStatus: active\n")
-            with open(os.path.join(ws, "tasks", "TASKS.md"), "w") as f:
+            with open(os.path.join(ws, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
                 f.write("[T-001]\nTitle: Task\nStatus: open\n")
 
             # Minimal snapshot: only touch decisions
@@ -731,7 +732,7 @@ class TestMinimalSnapshot(unittest.TestCase):
             from mind_mem.init_workspace import init
 
             init(ws)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("[D-001]\nStatement: Test\nStatus: active\n")
 
             snap_dir = create_snapshot(ws, "20260217-120001", files_touched=None)
@@ -757,7 +758,7 @@ class TestMinimalSnapshot(unittest.TestCase):
             # Modify source — dst must remain unchanged
             with open(src, "w", encoding="utf-8") as f:
                 f.write("modified content")
-            with open(dst) as f:
+            with open(dst, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "original content")
 
     def test_safe_copy_creates_parent_dirs(self):
@@ -781,12 +782,12 @@ class TestMinimalSnapshot(unittest.TestCase):
 
             init(ws)
             original = "[D-001]\nStatement: PostgreSQL\nStatus: active\n"
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write(original)
 
             snap_dir = create_snapshot(ws, "20260217-120002", files_touched=["decisions/DECISIONS.md"])
 
-            with open(os.path.join(snap_dir, "decisions", "DECISIONS.md")) as f:
+            with open(os.path.join(snap_dir, "decisions", "DECISIONS.md"), encoding="utf-8") as f:
                 snapped = f.read()
             self.assertEqual(snapped, original)
 
@@ -812,7 +813,7 @@ class TestMinimalSnapshot(unittest.TestCase):
             restore_snapshot(ws, snap_dir)
 
             self.assertTrue(os.path.exists(sidecar_path), "Rollback deleted unrelated preexisting file")
-            with open(sidecar_path) as f:
+            with open(sidecar_path, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "preexisting sidecar\n")
 
 
@@ -830,7 +831,7 @@ class TestDeferredCooldown(unittest.TestCase):
 
             # Set cooldown to 7 days
             state_path = os.path.join(ws, "memory/intel-state.json")
-            with open(state_path) as f:
+            with open(state_path, encoding="utf-8") as f:
                 state = json.load(f)
             state["defer_cooldown_days"] = 7
             with open(state_path, "w", encoding="utf-8") as f:
@@ -840,7 +841,7 @@ class TestDeferredCooldown(unittest.TestCase):
             proposed_dir = os.path.join(ws, "intelligence/proposed")
             os.makedirs(proposed_dir, exist_ok=True)
             today = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
+            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w", encoding="utf-8") as f:
                 f.write(
                     f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
                     f"Type: edit\nTargetBlock: D-20260214-001\n"
@@ -863,7 +864,7 @@ class TestDeferredCooldown(unittest.TestCase):
             init(ws)
 
             state_path = os.path.join(ws, "memory/intel-state.json")
-            with open(state_path) as f:
+            with open(state_path, encoding="utf-8") as f:
                 state = json.load(f)
             state["defer_cooldown_days"] = 7
             with open(state_path, "w", encoding="utf-8") as f:
@@ -873,7 +874,7 @@ class TestDeferredCooldown(unittest.TestCase):
             proposed_dir = os.path.join(ws, "intelligence/proposed")
             os.makedirs(proposed_dir, exist_ok=True)
             old_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
-            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
+            with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w", encoding="utf-8") as f:
                 f.write(
                     f"\n[P-20260115-001]\nProposalId: P-20260115-001\n"
                     f"Type: edit\nTargetBlock: D-20260214-001\n"
@@ -916,7 +917,7 @@ class TestOpSupersedeDecision(unittest.TestCase):
                 },
             )
             self.assertTrue(ok, msg)
-            with open(dec_file) as f:
+            with open(dec_file, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Status: superseded", content)
             self.assertIn("[D-20260213-002]", content)
@@ -972,7 +973,7 @@ class TestOpReplaceRange(unittest.TestCase):
                 },
             )
             self.assertTrue(ok, msg)
-            with open(filepath) as f:
+            with open(filepath, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("new content", content)
             self.assertIn("<!-- END -->", content)
@@ -1021,7 +1022,7 @@ class TestRollbackStatusSync(unittest.TestCase):
                 ok = rollback(ws, receipt_ts)
 
             self.assertTrue(ok)
-            with open(proposal_path) as f:
+            with open(proposal_path, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Status: rolled_back", content)
 
@@ -1037,7 +1038,7 @@ class TestManifestFullSnapshot(unittest.TestCase):
             from mind_mem.init_workspace import init
 
             init(ws)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("[D-001]\nStatement: Test\nStatus: active\n")
 
             snap_dir = create_snapshot(ws, "20260227-100000", files_touched=None)
@@ -1059,7 +1060,7 @@ class TestManifestFullSnapshot(unittest.TestCase):
             from mind_mem.init_workspace import init
 
             init(ws)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("[D-001]\nStatement: Test\nStatus: active\n")
 
             snap_dir = create_snapshot(ws, "20260227-100001", files_touched=["decisions/DECISIONS.md"])
@@ -1081,18 +1082,18 @@ class TestManifestRestore(unittest.TestCase):
 
             init(ws)
             original = "[D-001]\nStatement: Test\nStatus: active\n"
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write(original)
 
             snap_dir = create_snapshot(ws, "20260227-100002")
 
             # Corrupt the file
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("CORRUPTED")
 
             restore_snapshot(ws, snap_dir)
 
-            with open(os.path.join(ws, "decisions", "DECISIONS.md")) as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), encoding="utf-8") as f:
                 self.assertEqual(f.read(), original)
 
     def test_manifest_restore_removes_orphans(self):
@@ -1101,7 +1102,7 @@ class TestManifestRestore(unittest.TestCase):
             from mind_mem.init_workspace import init
 
             init(ws)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("original\n")
 
             snap_dir = create_snapshot(ws, "20260227-100003")
@@ -1127,7 +1128,7 @@ class TestLegacySnapshotRestore(unittest.TestCase):
 
             init(ws)
             original = "[D-001]\nStatement: Legacy\nStatus: active\n"
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write(original)
 
             # Create snapshot normally (will have manifest)
@@ -1139,13 +1140,13 @@ class TestLegacySnapshotRestore(unittest.TestCase):
             os.remove(manifest_path)
 
             # Corrupt workspace
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("CORRUPTED")
 
             # Restore should still work via legacy path
             restore_snapshot(ws, snap_dir)
 
-            with open(os.path.join(ws, "decisions", "DECISIONS.md")) as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), encoding="utf-8") as f:
                 self.assertEqual(f.read(), original)
 
 
@@ -1159,13 +1160,13 @@ class TestSnapshotDiff(unittest.TestCase):
             from mind_mem.init_workspace import init
 
             init(ws)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("original\n")
 
             snap_dir = create_snapshot(ws, "20260227-100005")
 
             # Modify file
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("modified\n")
 
             diffs = snapshot_diff(ws, snap_dir)
@@ -1178,7 +1179,7 @@ class TestSnapshotDiff(unittest.TestCase):
             from mind_mem.init_workspace import init
 
             init(ws)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("original\n")
 
             snap_dir = create_snapshot(ws, "20260227-100006")
@@ -1194,7 +1195,7 @@ class TestSnapshotDiff(unittest.TestCase):
             from mind_mem.init_workspace import init
 
             init(ws)
-            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("original\n")
 
             snap_dir = create_snapshot(ws, "20260227-100007")

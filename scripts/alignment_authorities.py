@@ -551,6 +551,8 @@ def trained_flag_count(revision: str = TRAINED_REVISION, root: Path | None = Non
             capture_output=True,
             text=True,
             timeout=300,
+            encoding="utf-8",
+            errors="replace",
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise AuthorityError(f"could not read {_FLAGS_PATH} at {revision}: {exc}") from exc

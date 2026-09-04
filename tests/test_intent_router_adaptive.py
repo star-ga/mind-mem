@@ -204,7 +204,7 @@ class TestPersistence:
     def test_saved_json_structure(self, persistent_router: IntentRouter, workspace: str):
         persistent_router.record_feedback("why X", "WHY", result_count=5, avg_score=0.8)
         path = os.path.join(workspace, "memory", "intent_router_stats.json")
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         assert "intent_stats" in data
         assert "adaptation_weights" in data

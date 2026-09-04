@@ -37,7 +37,7 @@ def clean_ckpt(tmp_path: Path) -> Path:
     """Minimal HF-shaped directory that passes every audit check."""
     root = tmp_path / "ckpt"
     root.mkdir()
-    (root / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-8B"}')
+    (root / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-8B"}', encoding="utf-8")
     body = b'{"weight":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}'
     (root / "model.safetensors").write_bytes(struct.pack("<Q", len(body)) + body + b"\x00" * 8)
     return root
@@ -49,7 +49,7 @@ def evil_ckpt(tmp_path: Path) -> Path:
     canonical publisher allowlist."""
     root = tmp_path / "evil"
     root.mkdir()
-    (root / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}')
+    (root / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}', encoding="utf-8")
     body = b'{"weight":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}'
     (root / "model.safetensors").write_bytes(struct.pack("<Q", len(body)) + body + b"\x00" * 8)
     return root
@@ -66,7 +66,7 @@ class TestBypass:
         monkeypatch.setenv("MIND_MEM_SKIP_GATE", "1")
         _gate_check_local(str(evil_ckpt))  # must not raise
         # Registry stays empty because we bypassed gate_check entirely.
-        assert not isolated_registry.exists() or isolated_registry.read_text().strip() in ("", "{}")
+        assert not isolated_registry.exists() or isolated_registry.read_text(encoding="utf-8").strip() in ("", "{}")
 
     def test_hub_id_bypasses_gate(self, isolated_registry: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         # "Qwen/Qwen3-8B" is an HF hub ID, not a local path. The gate
@@ -96,7 +96,7 @@ class TestGateAllow:
         # Gate registered the checkpoint as audited_now / passed.
         import json
 
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         entry = next(iter(reg.values()))
         assert entry["audit_passed"] is True
 
@@ -108,7 +108,7 @@ class TestGateAllow:
         _gate_check_local(str(clean_ckpt))
         import json
 
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         assert len(reg) == 1
 
 
@@ -127,7 +127,7 @@ class TestGateBlock:
         # caller sees the prior decision.
         import json
 
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         assert reg[str(evil_ckpt.resolve())]["audit_passed"] is False
 
     def test_error_message_mentions_overrides(self, evil_ckpt: Path, isolated_registry: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -154,7 +154,7 @@ class TestTrustOverride:
         # Override is recorded in the ledger for audit trail.
         import json
 
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         assert reg[str(evil_ckpt.resolve())]["trust_without_audit"] is True
 
 
@@ -190,5 +190,5 @@ class TestDriftReAudit:
         _gate_check_local(str(clean_ckpt))
         # Mutate config in a way that's still safe — gate re-audits and
         # passes again.
-        (clean_ckpt / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-14B"}')
+        (clean_ckpt / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-14B"}', encoding="utf-8")
         _gate_check_local(str(clean_ckpt))  # must not raise

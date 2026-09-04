@@ -464,11 +464,7 @@ class TestFlagOff:
         def _imported(ws: str) -> str:
             env = {**os.environ, "MIND_MEM_CONFIG": os.path.join(ws, "mind-mem.json")}
             out = subprocess.run(
-                [sys.executable, "-c", script, ws],
-                capture_output=True,
-                text=True,
-                env=env,
-                check=True,
+                [sys.executable, "-c", script, ws], capture_output=True, text=True, env=env, check=True, encoding="utf-8", errors="replace"
             )
             return out.stdout.strip().splitlines()[-1]
 

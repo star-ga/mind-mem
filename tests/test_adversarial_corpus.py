@@ -188,7 +188,8 @@ class TestAuditChainMalformedInput:
             '"agent":"a","reason":"r","payload_hash":"p","prev_hash":"",'
             '"entry_hash":"deadbeef"}\n'
             "this is not json\n"
-            '{"seq":2}\n'
+            '{"seq":2}\n',
+            encoding="utf-8",
         )
         chain = AuditChain(workspace=str(tmp_path))
         ok, errors = chain.verify()

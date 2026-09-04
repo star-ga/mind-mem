@@ -349,15 +349,15 @@ class TestE2EProposalToApply(unittest.TestCase):
 
         # Empty proposed files for generate_proposals to append to
         for fname in ("DECISIONS_PROPOSED.md", "TASKS_PROPOSED.md", "EDITS_PROPOSED.md"):
-            with open(os.path.join(td, "intelligence/proposed", fname), "w") as f:
+            with open(os.path.join(td, "intelligence/proposed", fname), "w", encoding="utf-8") as f:
                 f.write(f"# Proposed {fname.replace('_PROPOSED.md', '').title()}\n\n")
 
         # Config with proposal mode enabled
-        with open(os.path.join(td, "mind-mem.json"), "w") as f:
+        with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump({"mode": "propose", "proposal_budget": {"per_run": 3, "per_day": 6, "backlog_limit": 30}}, f)
 
         # Intel state
-        with open(os.path.join(td, "intelligence/intel-state.json"), "w") as f:
+        with open(os.path.join(td, "intelligence/intel-state.json"), "w", encoding="utf-8") as f:
             json.dump({"mode": "propose", "counters": {}}, f)
 
         return td
@@ -423,7 +423,7 @@ class TestE2EProposalToApply(unittest.TestCase):
             self._scaffold_workspace(td)
 
             # Override per_run=1
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump({"mode": "propose", "proposal_budget": {"per_run": 1, "per_day": 10, "backlog_limit": 30}}, f)
 
             contradictions = [
@@ -456,11 +456,11 @@ class TestProposalIdCollision(unittest.TestCase):
         os.makedirs(os.path.join(td, "intelligence/proposed"), exist_ok=True)
         os.makedirs(os.path.join(td, "maintenance"), exist_ok=True)
         for fname in ("DECISIONS_PROPOSED.md", "TASKS_PROPOSED.md", "EDITS_PROPOSED.md"):
-            with open(os.path.join(td, "intelligence/proposed", fname), "w") as f:
+            with open(os.path.join(td, "intelligence/proposed", fname), "w", encoding="utf-8") as f:
                 f.write(f"# {fname}\n\n")
-        with open(os.path.join(td, "mind-mem.json"), "w") as f:
+        with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump({"mode": "propose", "proposal_budget": {"per_run": 5, "per_day": 10, "backlog_limit": 30}}, f)
-        with open(os.path.join(td, "intelligence/intel-state.json"), "w") as f:
+        with open(os.path.join(td, "intelligence/intel-state.json"), "w", encoding="utf-8") as f:
             json.dump({"mode": "propose", "counters": {}}, f)
 
     def test_second_run_increments_from_existing(self):
@@ -504,11 +504,11 @@ class TestProposalRouting(unittest.TestCase):
         os.makedirs(os.path.join(td, "intelligence/proposed"), exist_ok=True)
         os.makedirs(os.path.join(td, "maintenance"), exist_ok=True)
         for fname in ("DECISIONS_PROPOSED.md", "TASKS_PROPOSED.md", "EDITS_PROPOSED.md"):
-            with open(os.path.join(td, "intelligence/proposed", fname), "w") as f:
+            with open(os.path.join(td, "intelligence/proposed", fname), "w", encoding="utf-8") as f:
                 f.write(f"# {fname}\n\n")
-        with open(os.path.join(td, "mind-mem.json"), "w") as f:
+        with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
             json.dump({"mode": "propose", "proposal_budget": {"per_run": 5, "per_day": 10, "backlog_limit": 30}}, f)
-        with open(os.path.join(td, "intelligence/intel-state.json"), "w") as f:
+        with open(os.path.join(td, "intelligence/intel-state.json"), "w", encoding="utf-8") as f:
             json.dump({"mode": "propose", "counters": {}}, f)
 
     def test_edit_proposals_go_to_edits_file(self):
@@ -526,9 +526,9 @@ class TestProposalRouting(unittest.TestCase):
             report = IntelReport()
             generate_proposals(contradictions, [], td, {"mode": "propose", "counters": {}}, report)
 
-            with open(os.path.join(td, "intelligence/proposed/EDITS_PROPOSED.md")) as f:
+            with open(os.path.join(td, "intelligence/proposed/EDITS_PROPOSED.md"), encoding="utf-8") as f:
                 edits = f.read()
-            with open(os.path.join(td, "intelligence/proposed/DECISIONS_PROPOSED.md")) as f:
+            with open(os.path.join(td, "intelligence/proposed/DECISIONS_PROPOSED.md"), encoding="utf-8") as f:
                 decisions = f.read()
             self.assertIn("ProposalId:", edits, "Edit proposals should be in EDITS_PROPOSED.md")
             self.assertNotIn("ProposalId:", decisions, "Edit proposals should NOT be in DECISIONS_PROPOSED.md")

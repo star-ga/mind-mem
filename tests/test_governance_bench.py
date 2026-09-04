@@ -91,7 +91,7 @@ Subject: Use MySQL instead
         path = bench.save_results()
         assert os.path.isfile(path)
 
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         assert "timestamp" in data
 

@@ -29,7 +29,7 @@ def pg_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "block_store": {"backend": "postgres", "dsn": "postgresql://invalid"},
         "recall": {"backend": "sqlite"},
     }
-    (tmp_path / "mind-mem.json").write_text(json.dumps(cfg))
+    (tmp_path / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("MIND_MEM_WORKSPACE", raising=False)
     return tmp_path

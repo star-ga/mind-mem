@@ -38,11 +38,11 @@ def _setup_workspace(tmpdir, decisions_content="", tasks_content=""):
     for d in ("decisions", "tasks", "entities", "intelligence"):
         os.makedirs(os.path.join(tmpdir, d), exist_ok=True)
 
-    with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+    with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
         f.write(decisions_content)
 
     default_task = "[T-20260219-099]\nTitle: Unrelated placeholder task\nStatus: active\n"
-    with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
+    with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
         f.write(tasks_content or default_task)
 
     for fname in (

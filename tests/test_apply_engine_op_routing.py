@@ -28,7 +28,7 @@ from mind_mem.block_store import MarkdownBlockStore
 @pytest.fixture
 def ws(tmp_path: Path) -> Path:
     """Minimal workspace with a decision block in place."""
-    (tmp_path / "mind-mem.json").write_text("{}")
+    (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
     (tmp_path / "decisions").mkdir()
     (tmp_path / "tasks").mkdir()
     (tmp_path / "entities").mkdir()

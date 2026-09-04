@@ -38,19 +38,12 @@ def test_install_sh_bootstraps_clean_home(tmp_path):
     else:
         cmd = [INSTALL_SH, *install_args]
 
-    result = subprocess.run(
-        cmd,
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=180,
-    )
+    result = subprocess.run(cmd, cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=180, encoding="utf-8", errors="replace")
 
     assert result.returncode == 0, result.stderr or result.stdout
     config_path = home / ".codex" / "config.toml"
     assert config_path.is_file()
-    config_text = config_path.read_text()
+    config_text = config_path.read_text(encoding="utf-8")
     assert "mind-mem" in config_text
 
     # The wired command must be the console script this run just installed
@@ -76,6 +69,8 @@ def test_mcp_server_help_runs_from_source_checkout(tmp_path):
         capture_output=True,
         text=True,
         timeout=30,
+        encoding="utf-8",
+        errors="replace",
     )
 
     assert result.returncode == 0, result.stderr or result.stdout

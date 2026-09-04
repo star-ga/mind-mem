@@ -241,13 +241,13 @@ class TestSnapshotRestoreRoundTrip:
 
         _seed_corpus(ws, count=20)
         target = ws / "decisions" / "DECISIONS.md"
-        original = target.read_text()
+        original = target.read_text(encoding="utf-8")
         snap_dir = create_snapshot(str(ws), "20260413-120000")
 
         # Mutate + restore
-        target.write_text("MUTATED\n")
+        target.write_text("MUTATED\n", encoding="utf-8")
         restore_snapshot(str(ws), snap_dir)
-        assert target.read_text() == original
+        assert target.read_text(encoding="utf-8") == original
 
 
 # ---------------------------------------------------------------------------

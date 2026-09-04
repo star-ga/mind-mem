@@ -97,10 +97,10 @@ class TestRecall(unittest.TestCase):
         """Create minimal workspace with decisions file and a dummy task for IDF diversity."""
         for d in ["decisions", "tasks", "entities", "intelligence"]:
             os.makedirs(os.path.join(tmpdir, d), exist_ok=True)
-        with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(decisions_content)
         # Create a dummy task block so TF-IDF has >1 document (IDF needs document diversity)
-        with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
+        with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
             f.write("[T-20260213-099]\nTitle: Unrelated placeholder task\nStatus: active\n")
         for fname in [
             "entities/projects.md",
@@ -205,9 +205,9 @@ class TestGraphRecall(unittest.TestCase):
     def _setup_workspace(self, tmpdir, decisions_content="", tasks_content=""):
         for d in ["decisions", "tasks", "entities", "intelligence"]:
             os.makedirs(os.path.join(tmpdir, d), exist_ok=True)
-        with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(decisions_content)
-        with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
+        with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
             f.write(tasks_content or "[T-20260213-099]\nTitle: Unrelated placeholder\nStatus: active\n")
         for fname in [
             "entities/projects.md",

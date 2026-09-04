@@ -133,7 +133,7 @@ def _load_env():
     for env_path in env_paths:
         if not os.path.isfile(env_path):
             continue
-        with open(env_path, "r") as f:
+        with open(env_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
@@ -1435,7 +1435,7 @@ def _setup_hybrid_workspace(workspace: str):
         "recall": recall_cfg,
     }
     config_path = os.path.join(workspace, "mind-mem.json")
-    with open(config_path, "w") as f:
+    with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f)
 
     # Index blocks using llama.cpp embeddings server (Qwen3-Embedding-8B)
@@ -1491,7 +1491,7 @@ def _run_single_conv(conv_index: int, args) -> None:
             print(f"[judge] conv={conv_index} hybrid recall: BM25+Qwen3-Embedding-8B RRF via llama.cpp")
 
         # Open JSONL for streaming writes (context manager ensures close on exception)
-        with open(jsonl_path, "w") as _jsonl_f:
+        with open(jsonl_path, "w", encoding="utf-8") as _jsonl_f:
             results = evaluate_sample_with_judge(
                 sample,
                 workspace,
@@ -1651,7 +1651,7 @@ def main():
         # Read the subprocess's JSONL output
         jsonl_path = out_path + f".conv{ci}.jsonl"
         if os.path.isfile(jsonl_path):
-            with open(jsonl_path, "r") as f:
+            with open(jsonl_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -1679,7 +1679,7 @@ def main():
                     "num_questions": total_questions,
                     "metrics": partial_metrics,
                 }
-                with open(out_path + ".partial", "w") as f:
+                with open(out_path + ".partial", "w", encoding="utf-8") as f:
                     json.dump(partial, f, indent=2)
         else:
             print(f"[judge] WARNING: no JSONL output for conv {ci}")
@@ -1702,7 +1702,7 @@ def main():
     for ci in range(num_convs):
         jsonl_path = out_path + f".conv{ci}.jsonl"
         if os.path.isfile(jsonl_path):
-            with open(jsonl_path, "r") as f:
+            with open(jsonl_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:

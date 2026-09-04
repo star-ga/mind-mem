@@ -51,7 +51,7 @@ def test_load_dataset_returns_sample_list():
 
 def test_load_dataset_rejects_non_list(tmp_path):
     bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps({"not": "a list"}))
+    bad.write_text(json.dumps({"not": "a list"}), encoding="utf-8")
     with pytest.raises(ValueError):
         load_dataset(str(bad))
 
@@ -159,7 +159,7 @@ def test_run_suite_ndjson_carries_pipeline(tmp_path):
     result = run_suite("bm25_baseline", _load(), k=5, turns="all")
     out = tmp_path / "locomo.ndjson"
     write_ndjson(result, str(out))
-    rows = [json.loads(line) for line in out.read_text().splitlines()]
+    rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 5
     for row in rows:
         assert row["pipeline"]["effective_backend"] == "bm25_inmemory"

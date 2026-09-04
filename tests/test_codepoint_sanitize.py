@@ -221,10 +221,10 @@ class TestGate:
         # Missing config → default ON.
         assert sanitize_enabled_for_workspace(str(ws)) is True
         # Explicitly disabled.
-        (ws / "mind-mem.json").write_text(json.dumps({"ingest": {"sanitize_codepoints": False}}))
+        (ws / "mind-mem.json").write_text(json.dumps({"ingest": {"sanitize_codepoints": False}}), encoding="utf-8")
         assert sanitize_enabled_for_workspace(str(ws)) is False
         # Malformed config → default ON (fails closed on the security side).
-        (ws / "mind-mem.json").write_text("{not json")
+        (ws / "mind-mem.json").write_text("{not json", encoding="utf-8")
         assert sanitize_enabled_for_workspace(str(ws)) is True
 
 
@@ -250,7 +250,7 @@ class TestSanitizeTextForIngest:
 
     def test_disabled_workspace_passthrough(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("MIND_MEM_SANITIZE_CODEPOINTS", raising=False)
-        (tmp_path / "mind-mem.json").write_text(json.dumps({"ingest": {"sanitize_codepoints": False}}))
+        (tmp_path / "mind-mem.json").write_text(json.dumps({"ingest": {"sanitize_codepoints": False}}), encoding="utf-8")
         dirty = f"a{ZWSP}b"
         assert sanitize_text_for_ingest(dirty, str(tmp_path), source="unit-test") == dirty
 
@@ -270,7 +270,7 @@ def workspace(tmp_path: Path) -> str:
         "workspace_path": str(ws),
         "block_store": {"backend": "markdown"},
     }
-    (ws / "mind-mem.json").write_text(json.dumps(config))
+    (ws / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
     return str(ws)
 
 
@@ -293,9 +293,9 @@ class TestInboxIntegration:
 
     def test_disabled_gate_preserves_raw_text(self, workspace: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("MIND_MEM_SANITIZE_CODEPOINTS", raising=False)
-        config = json.loads((Path(workspace) / "mind-mem.json").read_text())
+        config = json.loads((Path(workspace) / "mind-mem.json").read_text(encoding="utf-8"))
         config["ingest"] = {"sanitize_codepoints": False}
-        (Path(workspace) / "mind-mem.json").write_text(json.dumps(config))
+        (Path(workspace) / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
         f = tmp_path / "raw.md"
         f.write_text(f"keep{ZWSP}raw", encoding="utf-8")
         ingest_text_file(workspace, str(f))

@@ -518,6 +518,8 @@ def test_the_module_entry_point_prints_a_report(workspace: str) -> None:
         text=True,
         env=env,
         timeout=120,
+        encoding="utf-8",
+        errors="replace",
     )
     assert proc.returncode == 0, proc.stderr
     report = json.loads(proc.stdout)

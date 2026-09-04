@@ -9,7 +9,7 @@ from mind_mem.block_parser import parse_file
 
 
 def _parse_block(content):
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write(content)
         path = f.name
     try:

@@ -31,7 +31,7 @@ class TestLoadExistingEntities:
         """Extracts PRJ- slugs from entity files."""
         edir = tmp_path / "entities"
         edir.mkdir()
-        (edir / "projects.md").write_text("[PRJ-mind-mem] mind-mem project\n")
+        (edir / "projects.md").write_text("[PRJ-mind-mem] mind-mem project\n", encoding="utf-8")
         result = load_existing_entities(str(tmp_path))
         assert "mind-mem" in result["projects"]
 
@@ -39,7 +39,7 @@ class TestLoadExistingEntities:
         """Extracts TOOL- slugs from entity files."""
         edir = tmp_path / "entities"
         edir.mkdir()
-        (edir / "tools.md").write_text("[TOOL-docker] container tool\n")
+        (edir / "tools.md").write_text("[TOOL-docker] container tool\n", encoding="utf-8")
         result = load_existing_entities(str(tmp_path))
         assert "docker" in result["tools"]
 
@@ -47,7 +47,7 @@ class TestLoadExistingEntities:
         """Extracts PER- slugs from entity files."""
         edir = tmp_path / "entities"
         edir.mkdir()
-        (edir / "people.md").write_text("[PER-alice] Alice Smith\n")
+        (edir / "people.md").write_text("[PER-alice] Alice Smith\n", encoding="utf-8")
         result = load_existing_entities(str(tmp_path))
         assert "alice" in result["people"]
 
@@ -56,7 +56,7 @@ class TestLoadExistingEntities:
         edir = tmp_path / "entities"
         edir.mkdir()
         content = "[PRJ-foo] Foo project\n[TOOL-bar] Bar tool\n[PER-baz] Baz person\n"
-        (edir / "mixed.md").write_text(content)
+        (edir / "mixed.md").write_text(content, encoding="utf-8")
         result = load_existing_entities(str(tmp_path))
         assert "foo" in result["projects"]
         assert "bar" in result["tools"]
@@ -66,7 +66,7 @@ class TestLoadExistingEntities:
         """Name: fields are added to the appropriate set based on filename."""
         edir = tmp_path / "entities"
         edir.mkdir()
-        (edir / "project-index.md").write_text("Name: My Cool Project\n")
+        (edir / "project-index.md").write_text("Name: My Cool Project\n", encoding="utf-8")
         result = load_existing_entities(str(tmp_path))
         assert "my-cool-project" in result["projects"]
 
@@ -74,7 +74,7 @@ class TestLoadExistingEntities:
         """Non-.md files in entities/ are skipped."""
         edir = tmp_path / "entities"
         edir.mkdir()
-        (edir / "data.json").write_text('{"PRJ-hidden": true}')
+        (edir / "data.json").write_text('{"PRJ-hidden": true}', encoding="utf-8")
         result = load_existing_entities(str(tmp_path))
         assert result == {"projects": set(), "tools": set(), "people": set()}
 
@@ -83,7 +83,7 @@ class TestLoadExistingEntities:
         edir = tmp_path / "entities"
         edir.mkdir()
         (edir / "broken.md").write_text(
-            "This file has no [brackets or valid entity refs.\nRandom text, PRJ without brackets, [BADPREFIX-foo]\n"
+            "This file has no [brackets or valid entity refs.\nRandom text, PRJ without brackets, [BADPREFIX-foo]\n", encoding="utf-8"
         )
         result = load_existing_entities(str(tmp_path))
         assert result == {"projects": set(), "tools": set(), "people": set()}

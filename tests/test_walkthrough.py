@@ -32,7 +32,7 @@ def workspace(tmp_path: Path) -> str:
         "workspace_path": str(ws),
         "block_store": {"backend": "markdown"},
     }
-    (ws / "mind-mem.json").write_text(json.dumps(config))
+    (ws / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
 
     decisions = """[D-20260101-001]
 Date: 2026-01-01
@@ -52,7 +52,7 @@ Status: active
 Subject: MFA rollout schedule
 Statement: Authentication MFA gates rolled out per cohort starting March 2026.
 """
-    (ws / "decisions" / "DECISIONS.md").write_text(decisions)
+    (ws / "decisions" / "DECISIONS.md").write_text(decisions, encoding="utf-8")
     return str(ws)
 
 

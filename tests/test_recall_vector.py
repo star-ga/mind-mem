@@ -28,7 +28,7 @@ def _make_backend(overrides: dict | None = None) -> VectorBackend:
 def tmp_workspace(tmp_path):
     """Create a minimal workspace with mind-mem.json."""
     config = {"version": "1.1.0", "recall": {"provider": "local"}}
-    (tmp_path / "mind-mem.json").write_text(json.dumps(config))
+    (tmp_path / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
     return str(tmp_path)
 
 
@@ -195,7 +195,7 @@ class TestLocalIndex:
         workspace = str(tmp_path)
         idx_dir = os.path.join(workspace, ".mind-mem-vectors")
         os.makedirs(idx_dir)
-        with open(os.path.join(idx_dir, "index.json"), "w") as f:
+        with open(os.path.join(idx_dir, "index.json"), "w", encoding="utf-8") as f:
             f.write("{corrupt json!!")
         result = vb._load_local_index(workspace)
         assert result is None

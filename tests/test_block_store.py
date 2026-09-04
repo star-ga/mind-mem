@@ -46,10 +46,10 @@ def corpus_workspace(tmp_path):
     os.makedirs(os.path.join(ws, "decisions"))
     os.makedirs(os.path.join(ws, "tasks"))
 
-    with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+    with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
         f.write(DECISIONS_MD)
 
-    with open(os.path.join(ws, "tasks", "TASKS.md"), "w") as f:
+    with open(os.path.join(ws, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
         f.write(TASKS_MD)
 
     return ws
@@ -134,7 +134,7 @@ class TestListBlocks:
         assert basenames == {"DECISIONS.md", "TASKS.md"}
 
     def test_ignores_non_md_files(self, corpus_workspace):
-        with open(os.path.join(corpus_workspace, "decisions", "README.txt"), "w") as f:
+        with open(os.path.join(corpus_workspace, "decisions", "README.txt"), "w", encoding="utf-8") as f:
             f.write("not a markdown block file")
         store = MarkdownBlockStore(corpus_workspace, corpus_dirs=("decisions",))
         files = store.list_blocks()
@@ -213,7 +213,7 @@ class TestInvalidateCache:
         assert len(files_before) == 2
 
         # Add a new file
-        with open(os.path.join(corpus_workspace, "decisions", "NEW.md"), "w") as f:
+        with open(os.path.join(corpus_workspace, "decisions", "NEW.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260301-099]\nStatement: New decision\nStatus: active\n")
 
         # Cache is stale — still 2 files

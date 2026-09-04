@@ -16,7 +16,7 @@ def ws(tmp_path):
     os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "DECISIONS.md")
-    with open(path, "a") as f:
+    with open(path, "a", encoding="utf-8") as f:
         f.write("\n\n[D-20260101-001]\n")
         f.write("Date: 2026-01-01\nStatus: active\nScope: global\n")
         f.write("Statement: Priority test item high importance\n")

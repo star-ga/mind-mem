@@ -92,7 +92,7 @@ class TestIntentRouterInRecall(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.td, "decisions"))
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Use PostgreSQL for the database\nStatus: active\nDate: 2026-01-01\nTags: database\n")
 
     def tearDown(self):

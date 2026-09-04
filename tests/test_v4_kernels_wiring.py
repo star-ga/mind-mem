@@ -202,6 +202,8 @@ class TestImportingIsWhatRegisters:
                 MIND_MEM_CONFIG=str(armed / "mind-mem.json"),
             ),
             timeout=120,
+            encoding="utf-8",
+            errors="replace",
         )
         assert out.returncode == 0, out.stderr
         assert "['default']" in out.stdout, out.stdout

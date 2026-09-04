@@ -36,7 +36,7 @@ def _free_port() -> int:
 def fed_workspace(tmp_path) -> str:
     """Build a minimal mind-mem workspace skeleton."""
     cfg = {"v4": {"federation": {"enabled": True}}}
-    (tmp_path / "mind-mem.json").write_text(json.dumps(cfg))
+    (tmp_path / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
     (tmp_path / "decisions").mkdir()
     return str(tmp_path)
 

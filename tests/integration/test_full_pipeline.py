@@ -25,7 +25,7 @@ def workspace(tmp_path):
 
     # Write blocks into decisions/DECISIONS.md using [ID] block format
     decisions_path = os.path.join(ws, "decisions", "DECISIONS.md")
-    with open(decisions_path, "a") as f:
+    with open(decisions_path, "a", encoding="utf-8") as f:
         f.write(
             "\n[D-20260301-001]\n"
             "Type: decision\n"
@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
     # Write a task into tasks/TASKS.md
     tasks_path = os.path.join(ws, "tasks", "TASKS.md")
-    with open(tasks_path, "a") as f:
+    with open(tasks_path, "a", encoding="utf-8") as f:
         f.write(
             "\n[T-20260303-001]\n"
             "Type: task\n"

@@ -30,7 +30,7 @@ from mind_mem.apply_engine import create_snapshot, restore_snapshot
 @pytest.fixture
 def ws(tmp_path: Path) -> Path:
     """Minimal workspace with the v3.2.0 maintenance/ layout in place."""
-    (tmp_path / "mind-mem.json").write_text("{}")
+    (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
     (tmp_path / "decisions").mkdir()
     (tmp_path / "maintenance" / "tracked").mkdir(parents=True)
     (tmp_path / "maintenance" / "append-only").mkdir(parents=True)
@@ -56,14 +56,14 @@ class TestAtomicityMaintenanceScope:
         """
         state = _dedup_state_path(ws)
         pre_content = {"hash": "pre-apply", "seen": ["block-a", "block-b"]}
-        state.write_text(json.dumps(pre_content))
+        state.write_text(json.dumps(pre_content), encoding="utf-8")
 
         snap_dir = create_snapshot(str(ws), "20260420-000000")
         assert Path(snap_dir).is_dir()
 
         # Simulate Stage B writing a new hash then the process crashing
         # before the apply commits.
-        state.write_text(json.dumps({"hash": "crashed-mid-apply", "seen": ["block-a", "block-b", "block-c"]}))
+        state.write_text(json.dumps({"hash": "crashed-mid-apply", "seen": ["block-a", "block-b", "block-c"]}), encoding="utf-8")
 
         restore_snapshot(str(ws), snap_dir)
 
@@ -71,7 +71,7 @@ class TestAtomicityMaintenanceScope:
         # otherwise the "block-c already seen" hash survives the rollback
         # and the next apply skips re-writing it.
         assert state.exists(), "dedup-state.json was not restored from snapshot"
-        assert json.loads(state.read_text()) == pre_content
+        assert json.loads(state.read_text(encoding="utf-8")) == pre_content
 
     def test_append_only_log_is_not_restored(self, ws: Path) -> None:
         """maintenance/append-only/*.log is NOT restored.
@@ -82,12 +82,12 @@ class TestAtomicityMaintenanceScope:
         otherwise discard.
         """
         # Also populate a tracked file so the snapshot is non-trivial.
-        _dedup_state_path(ws).write_text(json.dumps({"hash": "v1"}))
+        _dedup_state_path(ws).write_text(json.dumps({"hash": "v1"}), encoding="utf-8")
 
         report = _audit_log_path(ws)
-        report.write_text("pre-snapshot line\n")
+        report.write_text("pre-snapshot line\n", encoding="utf-8")
         snap_dir = create_snapshot(str(ws), "20260420-000001")
-        report.write_text("pre-snapshot line\nappended-during-apply\n")
+        report.write_text("pre-snapshot line\nappended-during-apply\n", encoding="utf-8")
 
         restore_snapshot(str(ws), snap_dir)
 
@@ -95,7 +95,7 @@ class TestAtomicityMaintenanceScope:
         # is that rollback preserves whatever was written after the
         # snapshot, because those entries are signal (errors logged during
         # the failed apply, validation progress, etc.).
-        assert "appended-during-apply" in report.read_text(), (
+        assert "appended-during-apply" in report.read_text(encoding="utf-8"), (
             "append-only file was reverted by restore_snapshot — atomicity exclusion rule violated"
         )
 
@@ -108,7 +108,7 @@ class TestAtomicityMaintenanceScope:
         rolled-back corpus still references the tracked entries.
         """
         state = _dedup_state_path(ws)
-        state.write_text(json.dumps({"hash": "original"}))
+        state.write_text(json.dumps({"hash": "original"}), encoding="utf-8")
 
         snap_dir = create_snapshot(str(ws), "20260420-000002")
 
@@ -118,4 +118,4 @@ class TestAtomicityMaintenanceScope:
         restore_snapshot(str(ws), snap_dir)
 
         assert state.exists(), "deleted tracked file was not recreated on restore"
-        assert json.loads(state.read_text()) == {"hash": "original"}
+        assert json.loads(state.read_text(encoding="utf-8")) == {"hash": "original"}

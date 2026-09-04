@@ -62,7 +62,7 @@ def _setup_workspace(td):
     os.makedirs(os.path.join(td, "intelligence"), exist_ok=True)
     os.makedirs(os.path.join(td, "memory"), exist_ok=True)
 
-    with open(os.path.join(td, "decisions", "DECISIONS.md"), "w") as f:
+    with open(os.path.join(td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
         f.write(
             "[D-20260101-001]\n"
             "Statement: Use PostgreSQL for user database\n"
@@ -75,13 +75,13 @@ def _setup_workspace(td):
             "Date: 2026-01-02\n"
         )
 
-    with open(os.path.join(td, "tasks", "TASKS.md"), "w") as f:
+    with open(os.path.join(td, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
         f.write("[T-20260101-001]\nDescription: Set up PostgreSQL in staging\nStatus: open\n")
 
-    with open(os.path.join(td, "entities", "projects.md"), "w") as f:
+    with open(os.path.join(td, "entities", "projects.md"), "w", encoding="utf-8") as f:
         f.write("[PRJ-mind-mem]\nName: mind-mem\nStatus: active\n")
 
-    with open(os.path.join(td, "entities", "tools.md"), "w") as f:
+    with open(os.path.join(td, "entities", "tools.md"), "w", encoding="utf-8") as f:
         f.write("[TOOL-pytest]\nName: pytest\nStatus: active\n")
 
 
@@ -199,7 +199,7 @@ class TestObservabilityDecorator(unittest.TestCase):
 
     def test_decorator_on_list_contradictions(self):
         """list_contradictions should be wrapped with observability."""
-        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w", encoding="utf-8") as f:
             f.write("# Contradictions\n")
         _call_tool(self.mod.list_contradictions)
         self.assertGreater(self.mod.metrics.get("mcp_tool_success"), 0)
@@ -270,7 +270,7 @@ class TestDeleteMemoryItem(unittest.TestCase):
         self.assertEqual(result["_schema_version"], "1.0")
 
         # Verify block is actually gone from file
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md")) as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), encoding="utf-8") as f:
             content = f.read()
         self.assertNotIn("[D-20260101-001]", content)
         # Other blocks should still exist
@@ -284,7 +284,7 @@ class TestDeleteMemoryItem(unittest.TestCase):
         self.assertEqual(result["block_id"], "T-20260101-001")
 
         # Verify block removed
-        with open(os.path.join(self.td, "tasks", "TASKS.md")) as f:
+        with open(os.path.join(self.td, "tasks", "TASKS.md"), encoding="utf-8") as f:
             content = f.read()
         self.assertNotIn("[T-20260101-001]", content)
 
@@ -409,7 +409,7 @@ class TestSchemaVersionInAllResponses(unittest.TestCase):
         self.td = tempfile.mkdtemp()
         _setup_workspace(self.td)
         # Create contradictions file for list_contradictions
-        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w", encoding="utf-8") as f:
             f.write("# Contradictions\n")
         self.mod = _load_server(self.td)
 
@@ -528,7 +528,7 @@ class TestObservabilityIntegration(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
         _setup_workspace(self.td)
-        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w", encoding="utf-8") as f:
             f.write("# Contradictions\n")
         self.mod = _load_server(self.td)
         self.mod.metrics.reset()

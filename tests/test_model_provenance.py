@@ -19,7 +19,7 @@ from mind_mem.model_provenance import (
 def _write_config(root: Path, body: dict) -> None:
     """Helper — emit a HF-flavoured ``config.json``."""
     root.mkdir(parents=True, exist_ok=True)
-    (root / "config.json").write_text(json.dumps(body))
+    (root / "config.json").write_text(json.dumps(body), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------

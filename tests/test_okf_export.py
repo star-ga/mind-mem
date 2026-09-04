@@ -143,7 +143,7 @@ class TestOkfTypeAndCitations:
         }
         core = _load(tmp_core, [block])
         out = write_okf_bundle(core, tmp_path / "bundle")
-        body = (out / "D-1.md").read_text()
+        body = (out / "D-1.md").read_text(encoding="utf-8")
         assert "# Citations" in body
         assert "arXiv:2401.1" in body
         assert "github.com/star-ga/mind" in body
@@ -162,12 +162,12 @@ class TestOkfBundleWriter:
         out = write_okf_bundle(core, tmp_path / "bundle")
         assert (out / "index.md").exists()
         assert (out / "log.md").exists()
-        prj = (out / "PRJ-mind.md").read_text()
+        prj = (out / "PRJ-mind.md").read_text(encoding="utf-8")
         # Required `type` is the first frontmatter field.
         assert prj.startswith("---\ntype: project")
         assert "resource: https://github.com/star-ga/mind" in prj
         # Edge rendered as a bundle-relative markdown link on the subject.
-        dec = (out / "D-1.md").read_text()
+        dec = (out / "D-1.md").read_text(encoding="utf-8")
         assert "# Relationships" in dec
         assert "[PRJ-mind](./PRJ-mind.md)" in dec
 
@@ -177,7 +177,7 @@ class TestOkfBundleWriter:
             [{"_id": "D-1", "type": "decision"}, {"_id": "T-1", "type": "task"}],
         )
         out = write_okf_bundle(core, tmp_path / "bundle")
-        index = (out / "index.md").read_text()
+        index = (out / "index.md").read_text(encoding="utf-8")
         assert "(./D-1.md)" in index
         assert "(./T-1.md)" in index
 

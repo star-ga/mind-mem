@@ -161,16 +161,16 @@ class TestResolveContradictions(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_empty_contradictions(self):
-        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w", encoding="utf-8") as f:
             f.write("# Contradictions\n\nNone detected.\n")
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("")
         result = resolve_contradictions(self.td)
         self.assertEqual(result, [])
 
     def test_resolves_with_blocks(self):
         # Create two decisions
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(
                 "[D-20260101-001]\n"
                 "Statement: Use PostgreSQL\n"
@@ -184,7 +184,7 @@ class TestResolveContradictions(unittest.TestCase):
         # Create contradiction referencing them (use ID format that the block
         # parser accepts but _ID_RE won't match, so the first 2 regex hits
         # are the decision IDs)
-        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w", encoding="utf-8") as f:
             f.write("[CONTRA-001]\nType: contradiction\nBlocks: D-20260101-001 vs D-20260215-001\nDescription: Database choice conflict\n")
         result = resolve_contradictions(self.td)
         self.assertEqual(len(result), 1)
@@ -228,7 +228,7 @@ class TestGenerateResolutionProposals(unittest.TestCase):
         self.assertEqual(count, 1)
         proposed_path = os.path.join(self.td, "intelligence", "proposed", "RESOLUTIONS_PROPOSED.md")
         self.assertTrue(os.path.isfile(proposed_path))
-        with open(proposed_path) as f:
+        with open(proposed_path, encoding="utf-8") as f:
             content = f.read()
         self.assertIn("pending-review", content)
         self.assertIn("D-20260215-001", content)

@@ -169,12 +169,7 @@ print(json.dumps(sorted(m for m in sys.modules if m.startswith("mind_mem."))))
 def _loaded_by(child: str) -> set[str]:
     env = {**os.environ, "PYTHONPATH": str(pathlib.Path(mind_mem.__file__).parent.parent)}
     out = subprocess.run(
-        [sys.executable, "-c", child],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        env=env,
-        check=True,
+        [sys.executable, "-c", child], capture_output=True, text=True, timeout=120, env=env, check=True, encoding="utf-8", errors="replace"
     ).stdout
     return set(json.loads(out))
 

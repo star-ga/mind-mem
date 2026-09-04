@@ -125,9 +125,9 @@ class TestRecallEdgeCases(unittest.TestCase):
         """Create a minimal workspace for recall testing."""
         for d in ["decisions", "tasks", "entities", "intelligence"]:
             os.makedirs(os.path.join(tmpdir, d), exist_ok=True)
-        with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write(decisions_content)
-        with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
+        with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
             f.write("[T-20260213-099]\nTitle: Unrelated placeholder task\nStatus: active\n")
         for fname in [
             "entities/projects.md",
@@ -193,7 +193,7 @@ class TestRecallEdgeCases(unittest.TestCase):
                 "intelligence/DRIFT.md",
                 "intelligence/SIGNALS.md",
             ]:
-                with open(os.path.join(td, fname), "w") as f:
+                with open(os.path.join(td, fname), "w", encoding="utf-8") as f:
                     f.write("")
             results = recall(td, "database")
             self.assertEqual(results, [])
@@ -263,9 +263,9 @@ class TestMCPEdgeCases(unittest.TestCase):
         os.makedirs(os.path.join(self.td, "intelligence"))
         os.makedirs(os.path.join(self.td, "memory"))
 
-        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n")
-        with open(os.path.join(self.td, "tasks", "TASKS.md"), "w") as f:
+        with open(os.path.join(self.td, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
             f.write("[T-20260101-001]\nDescription: Setup DB\nStatus: open\n")
         for fname in [
             "entities/projects.md",

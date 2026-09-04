@@ -85,7 +85,8 @@ Decision: Auto-apply low-risk proposals without human review.
 Evidence:
 - Speeds up workflow
 Rationale: Reduce human review burden.
-"""
+""",
+        encoding="utf-8",
     )
 
     # Write committed tasks
@@ -103,7 +104,8 @@ Title: Add retention policy
 Type: task
 Status: completed
 Action: Implement automatic pruning of old memories based on configurable TTL.
-"""
+""",
+        encoding="utf-8",
     )
 
     # Config
@@ -113,7 +115,8 @@ Action: Implement automatic pruning of old memories based on configurable TTL.
                 "contradiction": {"threshold": 0.7},
                 "proposal_budget": {"backlog_limit": 30},
             }
-        )
+        ),
+        encoding="utf-8",
     )
 
     return ws
@@ -460,7 +463,7 @@ class TestDetectContradictions:
     def test_no_corpus_files(self, tmp_path):
         """Empty workspace returns no conflicts."""
         ws = str(tmp_path)
-        (tmp_path / "mind-mem.json").write_text("{}")
+        (tmp_path / "mind-mem.json").write_text("{}", encoding="utf-8")
         proposal = {"Title": "Test", "Ops": [{"patch": "something"}]}
         results = detect_contradictions(ws, proposal, threshold=0.1, use_bm25=False)
         assert results == []
@@ -521,7 +524,9 @@ class TestCheckProposalContradictions:
         """When mind-mem.json is absent, uses default threshold."""
         ws = str(tmp_path)
         (tmp_path / "decisions").mkdir()
-        (tmp_path / "decisions" / "DECISIONS.md").write_text("[D-001]\nTitle: Test\nStatus: active\nDecision: Hello world\n")
+        (tmp_path / "decisions" / "DECISIONS.md").write_text(
+            "[D-001]\nTitle: Test\nStatus: active\nDecision: Hello world\n", encoding="utf-8"
+        )
         proposal = {"Title": "Test hello world", "Ops": []}
         report = check_proposal_contradictions(ws, proposal)
         assert isinstance(report, dict)
@@ -585,7 +590,7 @@ class TestEdgeCases:
         """Blocks without _id are skipped gracefully."""
         # Write a corpus file with a block missing ID
         decisions_path = os.path.join(workspace, "decisions", "DECISIONS.md")
-        with open(decisions_path, "a") as f:
+        with open(decisions_path, "a", encoding="utf-8") as f:
             f.write("\nTitle: Orphan block with no ID\nStatus: active\n")
 
         proposal = {"Title": "Orphan test", "Ops": []}

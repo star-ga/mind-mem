@@ -191,7 +191,8 @@ class TestGetAlertRouter:
                         "min_severity": "critical",
                     }
                 }
-            )
+            ),
+            encoding="utf-8",
         )
         router = get_alert_router(str(tmp_path))
         assert router.min_severity == "critical"
@@ -207,13 +208,14 @@ class TestGetAlertRouter:
                         "slack_webhook_url": "https://hooks.slack.com/services/T/B/X",
                     }
                 }
-            )
+            ),
+            encoding="utf-8",
         )
         router = get_alert_router(str(tmp_path))
         assert any(s.name == "slack" for s in router.sinks)
 
     def test_malformed_config_does_not_crash(self, tmp_path: Path) -> None:
-        (tmp_path / "mind-mem.json").write_text("not-json")
+        (tmp_path / "mind-mem.json").write_text("not-json", encoding="utf-8")
         router = get_alert_router(str(tmp_path))
         # Log sink always present; malformed config silently dropped.
         assert len(router.sinks) == 1

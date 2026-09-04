@@ -17,9 +17,15 @@ contract:
 * every refusal is a JSON object with an ``error`` key, and the unknown-agent
   refusal carries the full ``valid`` list (it is the only discovery surface a
   caller has for which agents exist);
-* the success envelope is exactly ``{agent, query, snippet, _schema_version}``
-  with ``_schema_version == "1.0"`` — callers parse this, so an added or
-  renamed key is a breaking change and should fail here;
+* the success envelope is exactly
+  ``{agent, query, snippet, attestation, _schema_version}`` with
+  ``_schema_version == "1.0"`` — callers parse this, so an added or renamed
+  key is a breaking change and should fail here. ``attestation`` joined the
+  envelope in 5.0.2: this tool renders block content straight into a system
+  prompt and was the one content door whose reply carried no receipt, so the
+  recall's own ``RECALL_ATTEST_v2`` record is forwarded onto it (forwarded,
+  not re-derived — two derivations of one run can disagree, and then neither
+  is evidence);
 * ``limit`` is enforced twice — threaded into recall *and* used as the
   formatter's ``max_blocks`` — so a recall that over-returns still cannot blow
   past the caller's budget into an agent's context window;
@@ -49,6 +55,7 @@ import json
 
 import pytest
 
+from mind_mem.data_marking import DATA_PREAMBLE
 from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.mcp.tools.agent import agent_inject
 
@@ -108,6 +115,11 @@ def empty_dir(tmp_path):
 # A frozen instant so the recency layer scores the same on every run; without
 # it the snippet depends on the wall clock and these assertions would rot.
 INSTANT = "2020-06-01"
+
+# The whole generic rendering when nothing was recalled. Built from the shared
+# preamble rather than pasted, so a reworded preamble does not silently turn
+# these into assertions about a string the product no longer emits.
+_EMPTY_GENERIC = "Query: {query}\n" + DATA_PREAMBLE + "\nContext:\n"
 
 
 def call(workspace, **kwargs) -> dict:
@@ -196,8 +208,44 @@ class TestArgumentRefusals:
 class TestSuccessEnvelope:
     def test_envelope_has_exactly_the_documented_keys(self, ws) -> None:
         out = call(ws, query="scheduler", agent="codex", limit=3, scoring_instant=INSTANT)
-        assert set(out) == {"agent", "query", "snippet", "_schema_version"}
+        assert set(out) == {"agent", "query", "snippet", "attestation", "_schema_version"}
         assert out["_schema_version"] == "1.0"
+
+    def test_the_envelope_carries_the_recall_attestation(self, ws) -> None:
+        """A door that serves block content has to say which run served it.
+
+        ``agent_inject`` renders straight into a system prompt, which is the
+        surface where "where did this come from" is hardest to answer after
+        the fact -- and until 5.0.2 it was the one content tool whose reply
+        carried no receipt at all. The record is the recall's own, forwarded
+        rather than re-derived, so the two surfaces cannot disagree about
+        what was served.
+        """
+        from mind_mem.recall_digests import served_set_digest
+
+        out = call(ws, query="scheduler quantum", agent="generic", scoring_instant=INSTANT)
+        attestation = out["attestation"]
+        assert isinstance(attestation, dict), attestation
+        assert attestation["schema"] == "RECALL_ATTEST_v2"
+        # Positive control on the forwarding: a receipt that is merely
+        # PRESENT proves nothing -- it has to commit to the ranking this
+        # snippet was rendered from. The snippet names DEC-20200101-001 and
+        # only that, so the canonical digest of exactly that served list is
+        # what the record must carry. Forward the wrong run's attestation
+        # and this goes red.
+        assert "DEC-20200101-001" in out["snippet"]
+        assert attestation["results_digest"] == served_set_digest(["DEC-20200101-001"])
+
+    def test_the_attestation_is_null_rather_than_invented_when_recall_has_none(self, ws, monkeypatch) -> None:
+        """Absent evidence is reported absent. A fabricated receipt is worse
+        than no receipt, because it reads as proof."""
+        monkeypatch.setattr(
+            "mind_mem.mcp_server._recall_impl",
+            lambda *a, **k: json.dumps([{"id": "B9", "excerpt": "no envelope, no attestation"}]),
+        )
+        out = call(ws, query="q")
+        assert out["attestation"] is None
+        assert "B9" in out["snippet"]
 
     def test_envelope_echoes_the_agent_and_query_it_was_given(self, ws) -> None:
         out = call(ws, query="deterministic quantum", agent="aider", scoring_instant=INSTANT)
@@ -311,22 +359,22 @@ class TestRecallShapeReduction:
 
     def test_a_dict_envelope_is_read_from_its_results_key(self, ws, monkeypatch) -> None:
         self._pin(monkeypatch, json.dumps({"results": [{"id": "B1", "excerpt": "hello"}]}))
-        assert "- [B1] hello" in snippet_of(ws, query="q")
+        assert "- [B1] (provenance: unknown) <evidence>hello</evidence>" in snippet_of(ws, query="q")
 
     def test_a_bare_list_is_treated_as_the_results(self, ws, monkeypatch) -> None:
         self._pin(monkeypatch, json.dumps([{"id": "B2", "excerpt": "listed"}]))
-        assert "- [B2] listed" in snippet_of(ws, query="q")
+        assert "- [B2] (provenance: unknown) <evidence>listed</evidence>" in snippet_of(ws, query="q")
 
     @pytest.mark.parametrize("payload", ["5", '"a string"', "null", "true"])
     def test_a_scalar_return_degrades_to_an_empty_context(self, ws, monkeypatch, payload) -> None:
         self._pin(monkeypatch, payload)
         out = call(ws, query="q")
-        assert out["snippet"] == "Query: q\nContext:\n"
+        assert out["snippet"] == _EMPTY_GENERIC.format(query="q")
 
     def test_a_null_results_key_is_treated_as_empty_not_iterated(self, ws, monkeypatch) -> None:
         """``raw.get("results", []) or []`` — the ``or`` exists for this case."""
         self._pin(monkeypatch, json.dumps({"results": None}))
-        assert call(ws, query="q")["snippet"] == "Query: q\nContext:\n"
+        assert call(ws, query="q")["snippet"] == _EMPTY_GENERIC.format(query="q")
 
     def test_a_recall_error_is_swallowed_into_an_empty_snippet(self, ws) -> None:
         """DOCUMENTED SHARP EDGE, pinned as actual behaviour, not endorsed.
@@ -341,7 +389,7 @@ class TestRecallShapeReduction:
         """
         out = call(ws, query="scheduler", agent="generic", scoring_instant="not-a-date")
         assert "error" not in out
-        assert out["snippet"] == "Query: scheduler\nContext:\n"
+        assert out["snippet"] == _EMPTY_GENERIC.format(query="scheduler")
 
 
 class TestAclAndReachability:

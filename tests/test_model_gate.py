@@ -38,7 +38,7 @@ def clean_ckpt(tmp_path: Path) -> Path:
     every audit check including provenance."""
     root = tmp_path / "ckpt"
     root.mkdir()
-    (root / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-8B"}')
+    (root / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-8B"}', encoding="utf-8")
     body = b'{"weight":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}'
     (root / "model.safetensors").write_bytes(struct.pack("<Q", len(body)) + body + b"\x00" * 8)
     return root
@@ -49,7 +49,7 @@ def evil_ckpt(tmp_path: Path) -> Path:
     """A checkpoint that fails the provenance check (unknown publisher)."""
     root = tmp_path / "evil"
     root.mkdir()
-    (root / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}')
+    (root / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}', encoding="utf-8")
     body = b'{"weight":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}'
     (root / "model.safetensors").write_bytes(struct.pack("<Q", len(body)) + body + b"\x00" * 8)
     return root
@@ -68,7 +68,7 @@ class TestFirstAudit:
         assert decision.audit_passed is True
         assert decision.manifest_sha256 != ""
         # Registry persists a single entry.
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         assert len(reg) == 1
         entry = next(iter(reg.values()))
         assert entry["audit_passed"] is True
@@ -90,7 +90,7 @@ class TestDrift:
     def test_drift_triggers_re_audit(self, clean_ckpt: Path, isolated_registry: Path) -> None:
         first = gate_check(clean_ckpt)
         # Mutate a file — manifest_sha256 changes.
-        (clean_ckpt / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-14B"}')
+        (clean_ckpt / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-14B"}', encoding="utf-8")
         second = gate_check(clean_ckpt)
         assert second.passed
         assert second.reason == REASON_DRIFT_RE_AUDITED
@@ -109,7 +109,7 @@ class TestAuditFailure:
         assert decision.reason == REASON_AUDIT_FAILED
         assert decision.audit_passed is False
         # Registry still records the failure so the next caller sees it.
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         assert reg[str(evil_ckpt)]["audit_passed"] is False
 
     def test_allow_extra_publishers_lets_evil_org_pass(self, evil_ckpt: Path, isolated_registry: Path) -> None:
@@ -129,7 +129,7 @@ class TestTrustWithoutAudit:
         assert decision.passed
         assert decision.reason == REASON_NEVER_AUDITED_OVERRIDE
         # Registry records the override so it's auditable.
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         assert reg[str(evil_ckpt)]["trust_without_audit"] is True
 
     def test_failed_audit_override(self, evil_ckpt: Path, isolated_registry: Path) -> None:
@@ -140,7 +140,7 @@ class TestTrustWithoutAudit:
         second = gate_check(evil_ckpt, trust_without_audit=True)
         assert second.passed
         assert second.reason == REASON_AUDIT_FAILED_OVERRIDE
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         assert reg[str(evil_ckpt)]["trust_without_audit"] is True
 
 
@@ -175,7 +175,7 @@ class TestRegistryHelpers:
         # Second remove returns False (idempotent).
         assert gate_remove(clean_ckpt) is False
         # Registry empty.
-        reg = json.loads(isolated_registry.read_text() or "{}")
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8") or "{}")
         assert reg == {}
 
 
@@ -188,18 +188,18 @@ class TestRegistryRobustness:
     def test_corrupt_json_is_treated_as_empty(self, clean_ckpt: Path, isolated_registry: Path) -> None:
         # Pre-corrupt the registry — gate_check should still work.
         isolated_registry.parent.mkdir(parents=True, exist_ok=True)
-        isolated_registry.write_text("{not valid json")
+        isolated_registry.write_text("{not valid json", encoding="utf-8")
         decision = gate_check(clean_ckpt)
         assert decision.passed
         assert decision.reason == REASON_AUDITED_NOW
         # And the registry is now valid JSON again.
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         assert isinstance(reg, dict)
         assert len(reg) == 1
 
     def test_non_dict_registry_treated_as_empty(self, clean_ckpt: Path, isolated_registry: Path) -> None:
         isolated_registry.parent.mkdir(parents=True, exist_ok=True)
-        isolated_registry.write_text("[1, 2, 3]")
+        isolated_registry.write_text("[1, 2, 3]", encoding="utf-8")
         decision = gate_check(clean_ckpt)
         assert decision.passed
 
@@ -224,7 +224,7 @@ class TestOverrideDoesNotLaunderAudit:
         first = gate_check(clean_ckpt)
         assert first.audit_passed is True
         # Swap the checkpoint under the operator.
-        (clean_ckpt / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}')
+        (clean_ckpt / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}', encoding="utf-8")
         decision = gate_check(clean_ckpt, trust_without_audit=True)
         assert decision.passed  # the operator did force it
         assert decision.reason == REASON_DRIFT_OVERRIDE
@@ -233,7 +233,7 @@ class TestOverrideDoesNotLaunderAudit:
         # re-attached to the new manifest.
         assert decision.audit_passed is None
         assert decision.audit_summary == {}
-        entry = json.loads(isolated_registry.read_text())[str(clean_ckpt)]
+        entry = json.loads(isolated_registry.read_text(encoding="utf-8"))[str(clean_ckpt)]
         assert entry["manifest_sha256"] == decision.manifest_sha256
         assert entry["manifest_sha256"] != first.manifest_sha256
         assert entry["audit_passed"] is None
@@ -244,7 +244,7 @@ class TestOverrideDoesNotLaunderAudit:
         survive into the next default check, and the audit that then
         runs actually blocks the swapped-in checkpoint."""
         gate_check(clean_ckpt)
-        (clean_ckpt / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}')
+        (clean_ckpt / "config.json").write_text('{"base_model":"evil-org/malicious-fork"}', encoding="utf-8")
         gate_check(clean_ckpt, trust_without_audit=True)
         after = gate_check(clean_ckpt)
         assert after.reason == REASON_AUDIT_FAILED
@@ -263,7 +263,7 @@ class TestOverrideDoesNotLaunderAudit:
         re-audit.
         """
         gate_check(clean_ckpt)
-        (clean_ckpt / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-14B"}')
+        (clean_ckpt / "config.json").write_text('{"model_type":"qwen3","base_model":"Qwen/Qwen3-14B"}', encoding="utf-8")
         gate_check(clean_ckpt, trust_without_audit=True)
 
         from mind_mem import model_audit
@@ -286,10 +286,10 @@ class TestOverrideDoesNotLaunderAudit:
         ``audit_passed: true`` next to ``trust_without_audit: true``.
         That pair must not be served from the fast path."""
         gate_check(evil_ckpt, trust_without_audit=True)
-        reg = json.loads(isolated_registry.read_text())
+        reg = json.loads(isolated_registry.read_text(encoding="utf-8"))
         reg[str(evil_ckpt)]["audit_passed"] = True  # simulate the old bug
         reg[str(evil_ckpt)]["audit_report_summary"] = {"checks_failed": []}
-        isolated_registry.write_text(json.dumps(reg))
+        isolated_registry.write_text(json.dumps(reg), encoding="utf-8")
         decision = gate_check(evil_ckpt)
         assert decision.reason == REASON_AUDIT_FAILED
         assert decision.passed is False
@@ -303,6 +303,6 @@ class TestOverrideDoesNotLaunderAudit:
             decision = gate_check(evil_ckpt, trust_without_audit=True)
             assert decision.reason == REASON_AUDIT_FAILED_OVERRIDE
             assert decision.audit_passed is False
-        entry = json.loads(isolated_registry.read_text())[str(evil_ckpt)]
+        entry = json.loads(isolated_registry.read_text(encoding="utf-8"))[str(evil_ckpt)]
         assert entry["audit_passed"] is False
         assert entry["trust_without_audit"] is True

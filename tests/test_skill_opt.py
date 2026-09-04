@@ -155,7 +155,7 @@ class TestConfig:
     def test_load_from_json(self, tmp_path):
         data = {"skill_opt": {"enabled": True, "min_critics": 5}}
         cfg_path = tmp_path / "mind-mem.json"
-        cfg_path.write_text(json.dumps(data))
+        cfg_path.write_text(json.dumps(data), encoding="utf-8")
         cfg = load_config(str(tmp_path))
         assert cfg.enabled is True
         assert cfg.min_critics == 5
@@ -204,7 +204,7 @@ class TestOpenClawAdapter:
     def test_discover_and_parse(self, tmp_path):
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\ndescription: test skill\n---\n\n# My Skill")
+        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\ndescription: test skill\n---\n\n# My Skill", encoding="utf-8")
         adapter = OpenClawSkillAdapter()
         paths = adapter.discover(str(tmp_path))
         assert len(paths) == 1
@@ -225,7 +225,8 @@ class TestClaudeAgentAdapter:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
         (agents_dir / "reviewer.md").write_text(
-            '---\nname: reviewer\ndescription: Code reviewer\ntools: ["Read", "Grep"]\nmodel: sonnet\n---\n\nYou are a reviewer.'
+            '---\nname: reviewer\ndescription: Code reviewer\ntools: ["Read", "Grep"]\nmodel: sonnet\n---\n\nYou are a reviewer.',
+            encoding="utf-8",
         )
         adapter = ClaudeAgentAdapter()
         paths = adapter.discover(str(agents_dir))

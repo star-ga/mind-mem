@@ -31,11 +31,11 @@ def _make_workspace(tmpdir, decisions="", tasks=""):
     for d in ("decisions", "tasks", "entities", "intelligence"):
         os.makedirs(os.path.join(tmpdir, d), exist_ok=True)
 
-    with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
+    with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w", encoding="utf-8") as f:
         f.write(decisions)
 
     default_task = "[T-20260101-099]\nTitle: Unrelated placeholder task\nStatus: active\n"
-    with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
+    with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w", encoding="utf-8") as f:
         f.write(tasks or default_task)
 
     # Stub out the remaining corpus files so recall does not skip them
@@ -399,7 +399,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
                     "another_unknown": 42,
                 }
             }
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             result = _load_backend(td)
@@ -414,7 +414,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
                     "limit": 10,
                 }
             }
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             result = _load_backend(td)
@@ -429,7 +429,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
     def test_malformed_json_returns_none(self):
         """_load_backend with malformed JSON returns None without crashing."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 f.write("{invalid json content!!!")
 
             result = _load_backend(td)
@@ -439,7 +439,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
         """_load_backend with empty recall section returns None."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {"recall": {}}
-            with open(os.path.join(td, "mind-mem.json"), "w") as f:
+            with open(os.path.join(td, "mind-mem.json"), "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             result = _load_backend(td)

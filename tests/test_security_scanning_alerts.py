@@ -27,7 +27,7 @@ import pytest
 def federation_enabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Enable the v4.federation feature flag for tests in this module."""
     cfg = tmp_path / "cfg.json"
-    cfg.write_text(json.dumps({"v4": {"federation": {"enabled": True}}}))
+    cfg.write_text(json.dumps({"v4": {"federation": {"enabled": True}}}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
 
 

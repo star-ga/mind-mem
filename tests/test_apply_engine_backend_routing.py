@@ -28,7 +28,7 @@ def ws(tmp_path: Path) -> Path:
 
 
 def _write_config(ws: Path, config: dict) -> None:
-    (ws / "mind-mem.json").write_text(json.dumps(config))
+    (ws / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
 
 
 class TestBackendRouting:
@@ -98,7 +98,7 @@ class TestBackendRouting:
     def test_factory_failure_falls_back_to_markdown(self, ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """A broken config must not crash apply_engine — falls back to MarkdownBlockStore."""
         # Write a malformed config that the factory will choke on.
-        (ws / "mind-mem.json").write_text("{not valid json")
+        (ws / "mind-mem.json").write_text("{not valid json", encoding="utf-8")
 
         from mind_mem.apply_engine import _store_for
         from mind_mem.block_store import MarkdownBlockStore
