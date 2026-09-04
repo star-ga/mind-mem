@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-8009be3fbd79",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, single_file stratum",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 275,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    },
+    "memory": {
+      "prompt_tokens": 624,
+      "memory_tokens": 349,
+      "agent_output_tokens_lower_bound": 489,
+      "timeouts": 0
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-8009be3fbd79",
+      "sha": "8009be3fbd79a51e9650fee1272f103e3914780e",
+      "parent_sha": "a98db55c07d8e25307a580427075f4d9356299c0",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 1023,
+        "corpus_bytes": 570488,
+        "cutoff": "2026-07-25T03:10:41Z",
+        "newest_seeded_at": "2026-07-25T03:10:41Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 24,
+          "files": [
+            ".cursorrules",
+            ".gemini/settings.json",
+            ".github/copilot-instructions.md",
+            ".roo/system-prompt.md",
+            ".windsurfrules",
+            "AGENTS.md",
+            "ANATOMY.md",
+            "CLAUDE.md",
+            "EVIDENCE.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 275,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 28,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/v4/block_versioning.py"
+            ],
+            "tail": "PASSED tests/test_v4_block_versioning.py::test_as_of_ignores_pending_edit_in_the_window\nPASSED tests/test_v4_block_versioning.py::test_versioned_block_ids_lists_only_blocks_with_applied_edits\nPASSED tests/test_v4_block_versioning.py::test_versioned_block_ids_ordered_by_first_edit\nPASSED tests/test_v4_block_versioning.py::test_versioned_block_ids_respects_limit\nPASSED tests/test_v4_block_versioning.py::test_versioned_block_ids_empty_without_db\n28 passed, 2 warnings in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 624,
+            "memory_tokens": 349,
+            "memory_blocks": [
+              "D-34A763A370A0",
+              "D-C137F97BC602",
+              "D-DB0F20088DEF"
+            ],
+            "memory_dropped": 0,
+            "recall_query": "feat(v4): block versioning + time-travel — block_history() and content_as_of() over the applied-edit chain v4 block versioning",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 489,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "\n- **`FLAG`** = `\"self_editing\"` — deliberately shared with the write side (history only exists because self-editing records it; the test fixtures confirm this by enabling one flag for both surfaces). No registry change needed since the flag was already in `ALL_V4_FLAGS`.\n- **`BlockVersion`** — frozen dataclass: `version`, `content`, `valid_from`, `edit_id`, `reason`, `approver`.\n- **`block_history(workspace, block_id)`** — queries only `status = 'applied'` rows ordered by `COALESCE(approved_at, proposed_at)`, then builds the chain: v1 = first edit's `old_content` snapshot with *no* provenance (it predates the record — inventing a timestamp would lie), vN = edit N−1's `new_content` with full provenance. Empty list when there's no DB, no table, or no applied edits — never a fabricated single version.\n- **`content_as_of(workspace, block_id, as_of)`** — walks the chain with inclusive `valid_from` boundaries; returns `None` (=\"fall back to current content\") for empty timestamps or blocks with no history. Timestamps are compared as parsed datetimes (naive instants read as UTC, `Z` normalized), with a raw-string fallback for unparseable input.\n- **`versioned_block_ids(workspace, limit=100)`** — `GROUP BY block_id` over applied edits, ordered by earliest effective edit; `limit <= 0` → `[]`.\n\nVerification:\n- `pytest tests/test_v4_block_versioning.py` → **28 passed**, exit 0\n- `pytest tests/test_v4_round2_extensions.py tests/test_v4_round4_extensions.py` → 90 passed (no regressions in the self-editing surface)\n- No changes under `tests/` or `conftest.py`; the change is a single additive `src/` file imported by nothing else, so no other code path is affected.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 28,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/v4/block_versioning.py"
+            ],
+            "tail": "PASSED tests/test_v4_block_versioning.py::test_as_of_ignores_pending_edit_in_the_window\nPASSED tests/test_v4_block_versioning.py::test_versioned_block_ids_lists_only_blocks_with_applied_edits\nPASSED tests/test_v4_block_versioning.py::test_versioned_block_ids_ordered_by_first_edit\nPASSED tests/test_v4_block_versioning.py::test_versioned_block_ids_respects_limit\nPASSED tests/test_v4_block_versioning.py::test_versioned_block_ids_empty_without_db\n28 passed, 2 warnings in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 1,
+          "returncode": -1,
+          "timed_out": true
+        },
+        "memory": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 420.1
+        },
+        "memory": {
+          "wall_seconds": 350.36
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "a37b86317150b711beb94d09e65e51be0bc67013a9bcdbb4f21ee8c618ab8443"
+}

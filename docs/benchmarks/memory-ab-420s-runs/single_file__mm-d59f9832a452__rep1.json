@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-d59f9832a452",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 258,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 367,
+      "timeouts": 0
+    },
+    "memory": {
+      "prompt_tokens": 1679,
+      "memory_tokens": 1421,
+      "agent_output_tokens_lower_bound": 403,
+      "timeouts": 0
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-d59f9832a452",
+      "sha": "d59f9832a45222ab7dfeb88d246f59858c1ac954",
+      "parent_sha": "e79c2b1f94b3e5c42703d17cd9a6ea0e73a513ed",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 825,
+        "corpus_bytes": 429017,
+        "cutoff": "2026-05-10T09:44:56Z",
+        "newest_seeded_at": "2026-05-10T09:44:56Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 23,
+          "files": [
+            ".cursorrules",
+            ".gemini/settings.json",
+            ".github/copilot-instructions.md",
+            ".roo/system-prompt.md",
+            ".windsurfrules",
+            "AGENTS.md",
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 258,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 367,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "Done. `tests/test_v4_block_kinds.py` passes: **24 passed, exit 0**.\n\n**Change** (confined to `src/`): new file `src/mind_mem/v4/block_kinds.py`, the Group B taxonomy scaffold, written to mirror the existing sibling `v4/tier_memory.py`:\n\n- `BlockKind(str, Enum)` — eight canonical kinds (`entity`, `concept`, `source`, `synthesis`, `image`, `audio`, `code`, `structured`) plus `unspecified` as the v3-compat fallback; `DEFAULT_KIND = BlockKind.UNSPECIFIED`; `ALLOWED_KINDS = frozenset(...)` derived from the enum; `FLAG = \"block_kinds\"` (already registered in `feature_flags.ALL_V4_FLAGS`).\n- `ensure_block_kind_column(workspace)` — gated by `require_enabled(FLAG)`; creates `index.db`/minimal `blocks` table on a fresh workspace, otherwise `ALTER TABLE ... ADD COLUMN kind TEXT NOT NULL DEFAULT 'unspecified'` only when the column is absent (skips if a sibling system added it), then `CREATE INDEX IF NOT EXISTS idx_blocks_kind`. Idempotent; never rewrites existing rows.\n- `get_block_kind(workspace, block_id)` — read-only, fail-soft to `DEFAULT_KIND` for missing db/table/column, unknown block, NULL, or unrecognized stored value.\n- `list_blocks_by_kind(workspace, kind, *, limit=100)` — accepts enum or canonical string (unknown strings raise `ValueError`), non-positive limits return `[]`, empty on missing db/table/column.\n\nNo files under `tests/` or `conftest.py` were touched. Regression check: sibling `tests/test_v4_tier_memory.py` still passes (23 passed).\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 24,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/v4/block_kinds.py"
+            ],
+            "tail": "PASSED tests/test_v4_block_kinds.py::test_list_respects_limit\nPASSED tests/test_v4_block_kinds.py::test_list_limit_zero_returns_empty\nPASSED tests/test_v4_block_kinds.py::test_list_negative_limit_returns_empty\nPASSED tests/test_v4_block_kinds.py::test_list_empty_when_db_missing\nPASSED tests/test_v4_block_kinds.py::test_list_empty_when_kind_column_missing\n24 passed, 26 warnings in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1679,
+            "memory_tokens": 1421,
+            "memory_blocks": [
+              "D-E79C2B1F94B3",
+              "D-34A763A370A0",
+              "D-E94ACC7BB86C",
+              "D-7AAA06D230B9",
+              "D-61B54E79A861",
+              "D-D11C952B754E",
+              "D-239357D89326",
+              "D-6E3F17CBD9E6",
+              "D-1457B410AA7D",
+              "D-B8124A7B45FD",
+              "D-C19C85D345C8",
+              "D-A93338F37452",
+              "D-1917A81A8DCB",
+              "D-BFADBF333F01",
+              "D-5D66147A3D1D"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "v4: block_kinds taxonomy scaffold (Group B) v4 block kinds",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 403,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "\n- **`BlockKind`** — `str` enum with the eight ROADMAP §B kinds (`entity, concept, source, synthesis, image, audio, code, structured`) plus `unspecified` as the v3-compat fallback; unknown strings raise `ValueError`.\n- **`DEFAULT_KIND` / `ALLOWED_KINDS`** — `BlockKind.UNSPECIFIED` and the frozenset derived from the enum.\n- **`ensure_block_kind_column`** — flag-gated, idempotent migration: creates a minimal `blocks` table on a bare workspace, otherwise `ALTER TABLE blocks ADD COLUMN kind TEXT NOT NULL DEFAULT 'unspecified'` (backfills v3 rows), skips the ALTER if `kind` already exists, and always `CREATE INDEX IF NOT EXISTS idx_blocks_kind`.\n- **`get_block_kind`** — returns `DEFAULT_KIND` for unknown blocks, missing DB, pre-migration schemas, and corrupt stored values; never auto-creates schema.\n- **`list_blocks_by_kind`** — accepts enum or canonical string (invalid string → `ValueError`), deterministic `ORDER BY id`, non-positive `limit` → `[]`, empty on missing DB/column.\n\nVerification:\n- `pytest tests/test_v4_block_kinds.py` → **24 passed, exit 0** (the only warnings are the pre-existing unregistered `unit` mark from the test file itself)\n- `pytest tests/test_v4_tier_memory.py tests/test_v4_block_kinds.py` → **47 passed** (no Group A regression)\n- No edits under `tests/`, `conftest.py`, or outside `src/`; nothing else imports the new module, so no other surface is affected.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 24,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/v4/block_kinds.py"
+            ],
+            "tail": "PASSED tests/test_v4_block_kinds.py::test_list_respects_limit\nPASSED tests/test_v4_block_kinds.py::test_list_limit_zero_returns_empty\nPASSED tests/test_v4_block_kinds.py::test_list_negative_limit_returns_empty\nPASSED tests/test_v4_block_kinds.py::test_list_empty_when_db_missing\nPASSED tests/test_v4_block_kinds.py::test_list_empty_when_kind_column_missing\n24 passed, 26 warnings in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        },
+        "memory": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 265.05
+        },
+        "memory": {
+          "wall_seconds": 256.36
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "b7756a365fd68a2eb458feefeaa9ca2483f1ee965e1726705b755818c27ed25f"
+}

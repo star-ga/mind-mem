@@ -1,0 +1,260 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-7571daeac51c",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, single_file stratum",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 261,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    },
+    "memory": {
+      "prompt_tokens": 1694,
+      "memory_tokens": 1434,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-7571daeac51c",
+      "sha": "7571daeac51c150a96e46c3a47263024fc74e783",
+      "parent_sha": "f3dd0968c379b9c8849373f9cc75ffa8eaebc627",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 1099,
+        "corpus_bytes": 627976,
+        "cutoff": "2026-08-20T01:23:38Z",
+        "newest_seeded_at": "2026-08-20T01:23:38Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 24,
+          "files": [
+            ".cursorrules",
+            ".gemini/settings.json",
+            ".github/copilot-instructions.md",
+            ".roo/system-prompt.md",
+            ".windsurfrules",
+            "AGENTS.md",
+            "ANATOMY.md",
+            "CLAUDE.md",
+            "EVIDENCE.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 261,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 8,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/_recall_core.py"
+            ],
+            "tail": "PASSED tests/test_recall_as_of.py::test_block_without_history_keeps_current_content\nPASSED tests/test_recall_as_of.py::test_flag_off_is_graceful_noop\nPASSED tests/test_recall_as_of.py::test_projection_does_not_mutate_input\nPASSED tests/test_recall_as_of.py::test_post_filters_routes_as_of\nPASSED tests/test_recall_as_of.py::test_post_filters_as_of_none_is_noop\n8 passed, 2 warnings in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1694,
+            "memory_tokens": 1434,
+            "memory_blocks": [
+              "D-27FA638FC0A0",
+              "D-8009BE3FBD79",
+              "D-B2F02FDF1B52",
+              "D-4487F1999303",
+              "D-34A763A370A0",
+              "D-22289861DADC",
+              "D-D048B5565CD9",
+              "D-3A0A754AF6A6",
+              "D-DB4E90B3BF73",
+              "D-DB0F20088DEF",
+              "D-5FFF410F0B9A",
+              "D-D50055BEE14C",
+              "D-A63D572DDB0D",
+              "D-62757BB7A370",
+              "D-E98C1449BCE7",
+              "D-D3FB00FB641E",
+              "D-0AEA198155A3"
+            ],
+            "memory_dropped": 23,
+            "recall_query": "feat: expose recall(as_of=date) time-travel projection recall as of",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 8,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/_recall_core.py"
+            ],
+            "tail": "PASSED tests/test_recall_as_of.py::test_block_without_history_keeps_current_content\nPASSED tests/test_recall_as_of.py::test_flag_off_is_graceful_noop\nPASSED tests/test_recall_as_of.py::test_projection_does_not_mutate_input\nPASSED tests/test_recall_as_of.py::test_post_filters_routes_as_of\nPASSED tests/test_recall_as_of.py::test_post_filters_as_of_none_is_noop\n8 passed, 2 warnings in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 1,
+          "returncode": -1,
+          "timed_out": true
+        },
+        "memory": {
+          "changed_files": 1,
+          "returncode": -1,
+          "timed_out": true
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 420.1
+        },
+        "memory": {
+          "wall_seconds": 420.1
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "9ba582b1101c63414ee9e693b33e0e17a97fce1abb74953043df1ed3199e2b48"
+}

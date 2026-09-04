@@ -1,0 +1,199 @@
+{
+  "schema_version": 2,
+  "inputs": {
+    "n_artifacts": 12,
+    "artifacts": [
+      "single_file__mm-1ddc953ce424__rep1.json",
+      "single_file__mm-27c60f9b55ad__rep1.json",
+      "single_file__mm-28203bdf502e__rep1.json",
+      "single_file__mm-7571daeac51c__rep1.json",
+      "single_file__mm-78c09fbe2c2f__rep1.json",
+      "single_file__mm-8009be3fbd79__rep1.json",
+      "single_file__mm-81142206d8ac__rep1.json",
+      "single_file__mm-8ac223858f56__rep1.json",
+      "single_file__mm-d048b5565cd9__rep1.json",
+      "single_file__mm-d59f9832a452__rep1.json",
+      "single_file__mm-db4e90b3bf73__rep1.json",
+      "single_file__mm-fa0b654ca566__rep1.json"
+    ]
+  },
+  "harness": {
+    "files": {
+      "src/mind_mem/bench/ab_arms.py": {
+        "present": true,
+        "sha256_16": "4effdbe6116b564c",
+        "mtime": 1788027641.85691
+      },
+      "src/mind_mem/agent_bridge.py": {
+        "present": true,
+        "sha256_16": "0b78aa8d0ca7388a",
+        "mtime": 1788438453.1107512
+      },
+      "src/mind_mem/data_marking.py": {
+        "present": true,
+        "sha256_16": "6efd85f6aea07e77",
+        "mtime": 1788438373.106238
+      }
+    },
+    "earliest_artifact_mtime": 1788455802.8778124,
+    "newest_prompt_shaping_mtime": 1788438453.1107512,
+    "harness_changed_after_first_artifact": false,
+    "note": "True means this artifact set spans a change to the memory arm's rendering; the runs are not one experiment and must be re-run, not blended."
+  },
+  "prompt_lengths": {
+    "n": 12,
+    "mean_memory_prompt_tokens": 1587.2,
+    "mean_control_prompt_tokens": 264.7,
+    "mean_gap_tokens": 1322.5,
+    "median_gap_tokens": 1414.0,
+    "min_gap_tokens": 349,
+    "max_gap_tokens": 1455,
+    "placebo_required": true,
+    "placebo_note": "A length-matched placebo arm (this many tokens, seeded from a DIFFERENT task's corpus) is required before any positive delta can be attributed to memory rather than to context length. It is NOT present in this artifact."
+  },
+  "reduction": {
+    "reducer": "majority",
+    "known_reducers": [
+      "majority",
+      "all",
+      "any"
+    ]
+  },
+  "disclosure": {
+    "agent_cutoff": "UNSTATED (vendor does not publish it)",
+    "agent_cutoff_note": "The agent's training cutoff. If it postdates the commits these tasks were mined from, the agent may reproduce a fix from memorised training data in BOTH arms, which suppresses any measurable memory effect. Recorded as UNSTATED rather than guessed."
+  },
+  "n_tasks": 12,
+  "summary": {
+    "n_tasks": 12,
+    "memory_successes": 11,
+    "control_successes": 6,
+    "delta_successes": 5,
+    "both_passed": 6,
+    "memory_only": 5,
+    "control_only": 0,
+    "neither_passed": 1,
+    "n_discordant": 5,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 0.0625,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "underpowered",
+    "note": "5 discordant pair(s): below 6, no split can reach p<=0.05, so this difference cannot be evidence at any effect size. Report it as noise."
+  },
+  "rep_stability": {
+    "cells_with_multiple_reps": 0,
+    "cells_that_disagreed_across_reps": 0,
+    "unstable_fraction": null,
+    "reps_per_cell_observed": [
+      1
+    ]
+  },
+  "context_poisoning": {
+    "definition": "poisoned / passed_without_memory; a task the agent could do WITHOUT memory and could not do WITH it",
+    "passed_without_memory": 6,
+    "poisoned": 0,
+    "context_poisoning_rate": 0.0,
+    "failed_without_memory": 6,
+    "rescued": 5,
+    "memory_rescue_rate": 0.8333
+  },
+  "per_task": {
+    "mm-1ddc953ce424": {
+      "memory": [
+        false
+      ],
+      "control": [
+        false
+      ]
+    },
+    "mm-27c60f9b55ad": {
+      "memory": [
+        true
+      ],
+      "control": [
+        true
+      ]
+    },
+    "mm-28203bdf502e": {
+      "memory": [
+        true
+      ],
+      "control": [
+        false
+      ]
+    },
+    "mm-7571daeac51c": {
+      "memory": [
+        true
+      ],
+      "control": [
+        true
+      ]
+    },
+    "mm-78c09fbe2c2f": {
+      "memory": [
+        true
+      ],
+      "control": [
+        false
+      ]
+    },
+    "mm-8009be3fbd79": {
+      "memory": [
+        true
+      ],
+      "control": [
+        true
+      ]
+    },
+    "mm-81142206d8ac": {
+      "memory": [
+        true
+      ],
+      "control": [
+        false
+      ]
+    },
+    "mm-8ac223858f56": {
+      "memory": [
+        true
+      ],
+      "control": [
+        true
+      ]
+    },
+    "mm-d048b5565cd9": {
+      "memory": [
+        true
+      ],
+      "control": [
+        true
+      ]
+    },
+    "mm-d59f9832a452": {
+      "memory": [
+        true
+      ],
+      "control": [
+        true
+      ]
+    },
+    "mm-db4e90b3bf73": {
+      "memory": [
+        true
+      ],
+      "control": [
+        false
+      ]
+    },
+    "mm-fa0b654ca566": {
+      "memory": [
+        true
+      ],
+      "control": [
+        false
+      ]
+    }
+  }
+}

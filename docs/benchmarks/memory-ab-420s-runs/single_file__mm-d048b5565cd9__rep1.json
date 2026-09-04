@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-d048b5565cd9",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 265,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 433,
+      "timeouts": 0
+    },
+    "memory": {
+      "prompt_tokens": 1650,
+      "memory_tokens": 1386,
+      "agent_output_tokens_lower_bound": 412,
+      "timeouts": 0
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-d048b5565cd9",
+      "sha": "d048b5565cd9d3b19802aa815ee69331cab506c8",
+      "parent_sha": "d59f9832a45222ab7dfeb88d246f59858c1ac954",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 826,
+        "corpus_bytes": 430132,
+        "cutoff": "2026-05-10T09:47:12Z",
+        "newest_seeded_at": "2026-05-10T09:47:12Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 23,
+          "files": [
+            ".cursorrules",
+            ".gemini/settings.json",
+            ".github/copilot-instructions.md",
+            ".roo/system-prompt.md",
+            ".windsurfrules",
+            "AGENTS.md",
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 265,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 433,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "**Root cause:** the module didn't exist — the test file imports `mind_mem.v4.cognitive_kernel`, the Group A \"Cognitive Mind Kernel API\" surface referenced in `v4/__init__.py` and `docs/roadmap-v4.md` but never implemented.\n\n**Fix:** one new file, `src/mind_mem/v4/cognitive_kernel.py`, following the conventions of the existing v4 surfaces (`tier_memory.py`, `block_kinds.py`):\n\n- `KernelKind` str-enum with the six named values (`default` + the five routing strategies), `KernelHit` (frozen dataclass → immutable), `KernelResult` with empty `hits`/`metadata` defaults.\n- `FLAG = \"cognitive_kernel\"` (already in `ALL_V4_FLAGS`); `register_kernel`, `available_kernels`, and `mind_recall` all call `require_enabled(FLAG)` → `FeatureDisabledError` when the flag is off.\n- Registry keyed by `KernelKind`; re-registration replaces; DEFAULT is pre-registered at import time (flag-independent) so it exists before any flag flip.\n- `mind_recall` dispatcher: accepts enum or string (invalid strings raise `ValueError` at the enum cast), forwards extra kwargs to the strategy, and raises `KeyError` listing the available kernels for a valid-but-unregistered kind.\n- `_default_kernel` (= `DEFAULT_KERNEL`): lazily imports `mind_mem._recall_core` at call time (so `sys.modules` test doubles work), adapts v3 hit dicts (`_id`/`block_id`/`id`, `rrf_score`/`score`) into `KernelHit`s with empty reason tags, and degrades to an empty `KernelResult` if the v3 recall import fails.\n\nNo changes under `tests/`, `conftest.py`, or anywhere else outside `src/`.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 18,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/v4/cognitive_kernel.py"
+            ],
+            "tail": "PASSED tests/test_v4_cognitive_kernel.py::test_unknown_kernel_raises_keyerror_with_registry\nPASSED tests/test_v4_cognitive_kernel.py::test_unknown_kernel_string_rejected_at_constructor\nPASSED tests/test_v4_cognitive_kernel.py::test_default_kernel_returns_kernelresult\nPASSED tests/test_v4_cognitive_kernel.py::test_default_kernel_degrades_when_v3_missing\nPASSED tests/test_v4_cognitive_kernel.py::test_default_kernel_is_the_module_constant\n18 passed, 20 warnings in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1650,
+            "memory_tokens": 1386,
+            "memory_blocks": [
+              "D-34A763A370A0",
+              "D-C19C85D345C8",
+              "D-92D1C731815F",
+              "D-D59F9832A452",
+              "D-7634A18F6F3E",
+              "D-E79C2B1F94B3",
+              "D-4BE2028C4A29",
+              "D-6E3F17CBD9E6",
+              "D-62757BB7A370",
+              "D-A93338F37452",
+              "D-1917A81A8DCB",
+              "D-47BCFC00A824",
+              "D-BFADBF333F01",
+              "D-3EE2357ED41A",
+              "D-086A9119103E"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "v4: cognitive_kernel registry + mind_recall dispatcher (Group A) v4 cognitive kernel",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 412,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "Done. All 18 tests in `tests/test_v4_cognitive_kernel.py` pass, with no regressions in the sibling v4 suites (65 passed across the three v4 files).\n\n**Change:** one new file, `src/mind_mem/v4/cognitive_kernel.py` — the Group A Cognitive Mind Kernel scaffold, following the exact house conventions of `tier_memory.py` / `block_kinds.py`:\n\n- `KernelKind` (str enum) — `default` plus the five ROADMAP §A routing strategies (`surprise_weighted`, `lineage_first`, `recent_first`, `contradicts_first`, `graph_walk`).\n- `KernelHit` (frozen dataclass: `block_id`, `score`, `reason=\"\"`) and `KernelResult` (`kernel`, `hits=[]`, `metadata={}`).\n- A module-level registry with `register_kernel` (accepts enum or string name, replaces previous entries, validates callability), `available_kernels`, and the `mind_recall(workspace, query, *, kernel=..., **kwargs)` dispatcher — unknown kinds raise `KeyError` listing what's registered; invalid string names fail at the enum cast with `ValueError`; kwargs pass through to the strategy untouched.\n- Flag gating via the existing `require_enabled(\"cognitive_kernel\")` (flag already registered in `feature_flags.ALL_V4_FLAGS`), except the `DEFAULT` slot, which is pre-registered at import time so flipping the flag is sufficient.\n- `_default_kernel` (exported as `DEFAULT_KERNEL`): lazy-imports `mind_mem._recall_core` at call time, adapts v3 hits (`_id`/`block_id`, `rrf_score`/`score`) into `KernelHit` with empty reason tags, and degrades to an empty `KernelResult` if the v3 import fails.\n\nNo test files, `conftest.py`, or ROADMAP touched (prior scaffolds leave the `- [ ]` boxes unchecked, so I matched that).\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 18,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/v4/cognitive_kernel.py"
+            ],
+            "tail": "PASSED tests/test_v4_cognitive_kernel.py::test_unknown_kernel_raises_keyerror_with_registry\nPASSED tests/test_v4_cognitive_kernel.py::test_unknown_kernel_string_rejected_at_constructor\nPASSED tests/test_v4_cognitive_kernel.py::test_default_kernel_returns_kernelresult\nPASSED tests/test_v4_cognitive_kernel.py::test_default_kernel_degrades_when_v3_missing\nPASSED tests/test_v4_cognitive_kernel.py::test_default_kernel_is_the_module_constant\n18 passed, 20 warnings in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        },
+        "memory": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 382.45
+        },
+        "memory": {
+          "wall_seconds": 387.94
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "12c794f3fcca0afa23ea2c8db32679e0c80787f689ea4329f196a5673e395b4b"
+}

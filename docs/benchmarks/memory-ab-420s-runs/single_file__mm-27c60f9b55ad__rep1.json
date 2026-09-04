@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-27c60f9b55ad",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, single_file stratum",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 263,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 285,
+      "timeouts": 0
+    },
+    "memory": {
+      "prompt_tokens": 1687,
+      "memory_tokens": 1425,
+      "agent_output_tokens_lower_bound": 308,
+      "timeouts": 0
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-27c60f9b55ad",
+      "sha": "27c60f9b55ad8eeec64e5e33420dcd5971caed42",
+      "parent_sha": "bb368c8761e262374f83c4ceaa73ba1ab9846490",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 977,
+        "corpus_bytes": 547302,
+        "cutoff": "2026-06-11T13:29:50Z",
+        "newest_seeded_at": "2026-06-11T13:29:50Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 24,
+          "files": [
+            ".cursorrules",
+            ".gemini/settings.json",
+            ".github/copilot-instructions.md",
+            ".roo/system-prompt.md",
+            ".windsurfrules",
+            "AGENTS.md",
+            "ANATOMY.md",
+            "CLAUDE.md",
+            "EVIDENCE.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 263,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 285,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "\n- Added `OKF_VERSION = \"1.0\"` and `export_to_okf(core)`, which emits the OKF envelope: `okf_version`, `source: \"mind-mem\"`, `id: urn:mindmem:<namespace>:<version>`, `manifest`, `units`, and `relations`.\n- Blocks project to OKF units via an **allowlist** (`id`, `type`, `title`, `description`, `resource`, `timestamp`, `tags`), so governance/retrieval/evidence fields (`Status`, `rrf_score`, `evidence_hash`, …) are dropped, never leaked — matching the \"envelope only, lossy by design\" spec.\n- Field mapping uses fallback key chains, accepting both capitalized and lowercase spellings (`Resource`/`resource`, `Name`/`Title`, `Statement`/`text`, `Date`, `Tags`); edges map to `{subject, predicate, object}` relations.\n- Updated the module docstring and `__all__`.\n\n**Verification**:\n- `tests/test_okf_export.py` — 6/6 passed (was a collection ImportError before)\n- `tests/test_v28_completion.py` — 54 passed (existing `core_export` coverage)\n- `tests/test_context_core.py` — 21 passed\n- Module compiles clean; package imports fine.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 6,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/core_export.py"
+            ],
+            "tail": "PASSED tests/test_okf_export.py::TestOkfEnvelope::test_block_maps_to_okf_unit\nPASSED tests/test_okf_export.py::TestOkfEnvelope::test_resource_uri_is_carried\nPASSED tests/test_okf_export.py::TestOkfEnvelope::test_lowercase_resource_also_accepted\nPASSED tests/test_okf_export.py::TestOkfEnvelope::test_edges_become_relations\nPASSED tests/test_okf_export.py::TestOkfEnvelope::test_moat_fields_are_dropped\n6 passed, 2 warnings in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1687,
+            "memory_tokens": 1425,
+            "memory_blocks": [
+              "D-83977E294BA3",
+              "D-3EE2357ED41A",
+              "D-66B03BE1EF24",
+              "D-3D3821C2898F",
+              "D-39EFEB2B5EBD",
+              "D-5D66147A3D1D",
+              "D-2C55EC32DE04",
+              "D-3C622E3D6BC2",
+              "D-94A45620159A",
+              "D-D18282824598",
+              "D-A17E8FF5D62F",
+              "D-95080352B24A",
+              "D-7622EE067D56",
+              "D-0D1A553ECC88",
+              "D-7EA5083302A3"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "feat: OKF-conformant import/export envelope + Resource URI field okf export",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 308,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "\n## Changes\n\n**`src/mind_mem/core_export.py`** — added the OKF envelope export alongside the existing JSON-LD/markdown exporters:\n- `OKF_VERSION = \"1.0\"` and `export_to_okf(core)` producing the envelope: `okf_version`, `source: \"mind-mem\"`, bundle `id` (`urn:mindmem:<ns>:<version>`, same URN scheme as the JSON-LD export), `manifest`, `units`, `relations`.\n- Blocks project to OKF units via an **allow-list** restricted to `{id, type, title, description, resource, timestamp, tags}`, so governance/retrieval/evidence fields (`Status`, `rrf_score`, `evidence_hash`, …) are structurally dropped. Source mapping follows existing field conventions: `_id`→`id`, `Statement`→`description`, `Name`/`Title`→`title`, `Date`/`Created`→`timestamp`, `Tags`→`tags`, and `Resource` **or** lowercase `resource` → the Resource URI field.\n- Edges map to `subject`/`predicate`/`object` relation triples.\n\n**`CHANGELOG.md`** — an `Unreleased` entry documenting the feature (safe for `check_version.py`, whose regex skips non-versioned headers — verified by test).\n\nNo files under `tests/` or `conftest.py` were touched.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 6,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "CHANGELOG.md",
+              "src/mind_mem/core_export.py"
+            ],
+            "tail": "PASSED tests/test_okf_export.py::TestOkfEnvelope::test_block_maps_to_okf_unit\nPASSED tests/test_okf_export.py::TestOkfEnvelope::test_resource_uri_is_carried\nPASSED tests/test_okf_export.py::TestOkfEnvelope::test_lowercase_resource_also_accepted\nPASSED tests/test_okf_export.py::TestOkfEnvelope::test_edges_become_relations\nPASSED tests/test_okf_export.py::TestOkfEnvelope::test_moat_fields_are_dropped\n6 passed, 2 warnings in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        },
+        "memory": {
+          "changed_files": 2,
+          "returncode": 0,
+          "timed_out": false
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 321.76
+        },
+        "memory": {
+          "wall_seconds": 338.0
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "7cf5f48e2b69c5ed87cc4e2c062c7acdacdbe6518a2a2ce5973ce84b497711c5"
+}

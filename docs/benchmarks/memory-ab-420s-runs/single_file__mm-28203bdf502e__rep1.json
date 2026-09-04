@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-28203bdf502e",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, single_file stratum",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 261,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    },
+    "memory": {
+      "prompt_tokens": 1640,
+      "memory_tokens": 1380,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-28203bdf502e",
+      "sha": "28203bdf502e6c546155f58a45c444d4ab4c87c7",
+      "parent_sha": "a6e1072df0f6657e5d1b74da7e6014dd092f2850",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 939,
+        "corpus_bytes": 520828,
+        "cutoff": "2026-05-29T11:23:59Z",
+        "newest_seeded_at": "2026-05-29T11:23:59Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 23,
+          "files": [
+            ".cursorrules",
+            ".gemini/settings.json",
+            ".github/copilot-instructions.md",
+            ".roo/system-prompt.md",
+            ".windsurfrules",
+            "AGENTS.md",
+            "ANATOMY.md",
+            "CLAUDE.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 261,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": false,
+            "reason": "tests_failed",
+            "returncode": 2,
+            "timed_out": false,
+            "n_passed_required": 0,
+            "missing_required": [
+              "tests/test_lifecycle_filter.py::TestApplyLifecycleFilter::test_filter_case_insensitive",
+              "tests/test_lifecycle_filter.py::TestApplyLifecycleFilter::test_filter_durable_includes_no_lifecycle",
+              "tests/test_lifecycle_filter.py::TestApplyLifecycleFilter::test_filter_empty_input",
+              "tests/test_lifecycle_filter.py::TestApplyLifecycleFilter::test_filter_ephemeral",
+              "tests/test_lifecycle_filter.py::TestApplyLifecycleFilter::test_filter_generated",
+              "tests/test_lifecycle_filter.py::TestApplyLifecycleFilter::test_unknown_lifecycle_excluded",
+              "tests/test_lifecycle_filter.py::TestLifecycleFieldParsing::test_durable_parsed",
+              "tests/test_lifecycle_filter.py::TestLifecycleFieldParsing::test_ephemeral_parsed",
+              "tests/test_lifecycle_filter.py::TestLifecycleFieldParsing::test_generated_parsed",
+              "tests/test_lifecycle_filter.py::TestLifecycleFieldParsing::test_lifecycle_coexists_with_status",
+              "tests/test_lifecycle_filter.py::TestLifecycleFieldParsing::test_no_lifecycle_field_absent",
+              "tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_durable_includes_no_lifecycle",
+              "tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_ephemeral",
+              "tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_generated",
+              "tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_none_is_no_op",
+              "tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_unknown_value_returns_empty",
+              "tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_no_filter_returns_all"
+            ],
+            "tampered_paths": [],
+            "changed_paths": [],
+            "tail": "\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nERROR tests/test_lifecycle_filter.py\n!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n2 warnings, 1 error in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1640,
+            "memory_tokens": 1380,
+            "memory_blocks": [
+              "D-7FC5CDD7E467",
+              "D-E79C2B1F94B3",
+              "D-93D7C4308EDA",
+              "D-1782C78A8179",
+              "D-5FFF410F0B9A",
+              "D-8BC2F3F683E5",
+              "D-96A3AE6DFB5B",
+              "D-DCEAF38F833F",
+              "D-C3914FACC793",
+              "D-306FD1A86083",
+              "D-B91A3B7BA47B",
+              "D-2C55EC32DE04",
+              "D-30D8B715C8C3",
+              "D-9979B58A69B9",
+              "D-AA239FE56747",
+              "D-FE86F7020DB1"
+            ],
+            "memory_dropped": 4,
+            "recall_query": "feat: add optional lifecycle field filter to recall lifecycle filter",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 17,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/_recall_constants.py",
+              "src/mind_mem/_recall_context.py",
+              "src/mind_mem/_recall_core.py",
+              "src/mind_mem/recall.py"
+            ],
+            "tail": "PASSED tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_durable_includes_no_lifecycle\nPASSED tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_ephemeral\nPASSED tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_generated\nPASSED tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_none_is_no_op\nPASSED tests/test_lifecycle_filter.py::TestRecallLifecycleFilter::test_filter_unknown_value_returns_empty\n17 passed, 2 warnings in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": false
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 0,
+          "returncode": -1,
+          "timed_out": true
+        },
+        "memory": {
+          "changed_files": 4,
+          "returncode": -1,
+          "timed_out": true
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 420.1
+        },
+        "memory": {
+          "wall_seconds": 420.1
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 0,
+    "delta_successes": 1,
+    "both_passed": 0,
+    "memory_only": 1,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 1,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "underpowered",
+    "note": "1 discordant pair(s): below 6, no split can reach p<=0.05, so this difference cannot be evidence at any effect size. Report it as noise."
+  },
+  "digest": "7d84242c767c2900baa243a3083c80d01f005971c8733527a0dc45745aa795df"
+}
