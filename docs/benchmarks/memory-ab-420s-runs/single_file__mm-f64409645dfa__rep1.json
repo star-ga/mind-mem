@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-f64409645dfa",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 262,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 481,
+      "timeouts": 0
+    },
+    "memory": {
+      "prompt_tokens": 1667,
+      "memory_tokens": 1405,
+      "agent_output_tokens_lower_bound": 4000,
+      "timeouts": 1
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-f64409645dfa",
+      "sha": "f64409645dfae56aaec2a3c0f77264b98eefbb24",
+      "parent_sha": "9956b7aba6cf6600a0006859a1a0c66228dac526",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 658,
+        "corpus_bytes": 284696,
+        "cutoff": "2026-04-20T17:58:41Z",
+        "newest_seeded_at": "2026-04-20T17:58:41Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 17,
+          "files": [
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 262,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 481,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "**New: `src/mind_mem/consensus_vote.py`** — follows project conventions (copyright header, stdlib-only, `get_logger`, `@dataclasses.dataclass(frozen=True)`, `resolve_*_config` pattern modeled on `session_boost.py`):\n\n- **`Vote`** — `agent_id`, `choice`, `trust_weight` (default `1.0`; `0` is a sentinel meaning \"resolve from namespace config\").\n- **`ConsensusDecision`** — `winner`, `reason`, `margin`, `confidence`, `vote_counts`, `total_weight`.\n- **`tally_votes(votes, namespace_config=None)`** — per-choice weight totals; duplicate `(agent, choice)` votes collapse to max weight; `trust_weight=0` defers to `namespace_config[agent][\"trust_weight\"]`, falling back to `1.0`; a namespace weight of `0` excludes the agent entirely (no zero entries).\n- **`reach_consensus(votes, min_votes=2, quorum_threshold=0.66, namespace_config=None)`** — outcome order: `insufficient_votes` (fewer distinct weighted agents than `min_votes`) → `below_threshold` (margin under quorum) → `tie` → `quorum`. Margin = winning share of total weight; confidence scales linearly from `1.0` at the threshold to a `2.0` cap for unanimity.\n- **`resolve_consensus_config(config)`** — reads `config[\"governance\"][\"consensus\"]` with defaults `{\"enabled\": False, \"quorum_threshold\": 0.66, \"min_votes\": 2}`, falling back per-field for invalid values (threshold must be in `(0, 1]`, min_votes an int ≥ 1).\n\n**Edited: `src/mind_mem/__init__.py`** — one docstring line documenting the new module. No test files or `conftest.py` touched.\n\nOne iteration was needed: the threshold check must precede tie detection (a 3-way split below quorum reports `below_threshold`, not `tie`).\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 14,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/__init__.py",
+              "src/mind_mem/consensus_vote.py"
+            ],
+            "tail": "PASSED tests/test_consensus_vote.py::TestReachConsensus::test_unanimous_top_confidence\nPASSED tests/test_consensus_vote.py::TestConfigResolution::test_defaults\nPASSED tests/test_consensus_vote.py::TestConfigResolution::test_custom\nPASSED tests/test_consensus_vote.py::TestConfigResolution::test_invalid_threshold_falls_back\nPASSED tests/test_consensus_vote.py::TestConfigResolution::test_invalid_min_votes_falls_back\n14 passed in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1667,
+            "memory_tokens": 1405,
+            "memory_blocks": [
+              "D-A93338F37452",
+              "D-605384718D16",
+              "D-FFD10233B066",
+              "D-E98C1449BCE7",
+              "D-7C54844439B5",
+              "D-E7BA6AE32DE5",
+              "D-64F53A07DAE4",
+              "D-E28C98090375",
+              "D-B01B56A9FF27",
+              "D-7157AF8659A0",
+              "D-449F3E7093DF",
+              "D-93D7C4308EDA",
+              "D-5602D44C0BE3",
+              "D-F7E9D40197EE",
+              "D-0C69561A16E5"
+            ],
+            "memory_dropped": 5,
+            "recall_query": "feat(governance): v3.3.0 — quorum-based consensus voting consensus vote",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": -1,
+            "timed_out": true,
+            "output_tokens": 4000,
+            "output_tokens_are_lower_bound": true,
+            "steps": 40,
+            "steps_observed": false,
+            "tail": "TIMEOUT"
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 14,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/conflict_resolver.py",
+              "src/mind_mem/consensus_vote.py"
+            ],
+            "tail": "PASSED tests/test_consensus_vote.py::TestReachConsensus::test_unanimous_top_confidence\nPASSED tests/test_consensus_vote.py::TestConfigResolution::test_defaults\nPASSED tests/test_consensus_vote.py::TestConfigResolution::test_custom\nPASSED tests/test_consensus_vote.py::TestConfigResolution::test_invalid_threshold_falls_back\nPASSED tests/test_consensus_vote.py::TestConfigResolution::test_invalid_min_votes_falls_back\n14 passed in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 2,
+          "returncode": 0,
+          "timed_out": false
+        },
+        "memory": {
+          "changed_files": 2,
+          "returncode": -1,
+          "timed_out": true
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 361.94
+        },
+        "memory": {
+          "wall_seconds": 420.1
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "7f73bef77e2fba24cd482678288452ac2c50e0abe52cd0fc1590ccd9309caf5a"
+}

@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "question": "Does the same agent, at the same budget, complete more real repository tasks with mind-mem than without it?",
+    "differs_between_arms": "One thing: a recalled-context prefix on the prompt. Asserted as memory.prompt == memory.memory_section + control.prompt.",
+    "held_constant": "Task, reported-issue statement, instruction footer, agent and argv, work tree (re-extracted from parent_sha between arms), environment (one shared object, not a comparison), token/step/wall ceilings, grading command.",
+    "memory_gate": "Structural, because this package ships no recall kill-switch: no MIND_MEM_* variable in the environment, no mm/mind-mem-* executable on PATH, a sandboxed HOME so no agent config or MCP server loads, and the seeded workspace placed outside the work tree.",
+    "seeding": "The memory arm is seeded only from commits reachable from parent_sha -- a git ancestry property, so the task's own commit and everything after it are unreachable by construction -- re-checked against memory_cutoff and scanned for the task commit id.",
+    "grading": "pytest only. A task passes iff pytest exits 0 and every fail_to_pass node passes. Editing any test voids the attempt.",
+    "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
+    "determinism": "digest covers the scored record with every telemetry section removed, so no wall-clock value can move it."
+  },
+  "budget": {
+    "prompt_tokens": 8000,
+    "memory_tokens": 1500,
+    "output_tokens": 4000,
+    "wall_seconds": 420,
+    "steps": 40
+  },
+  "agent": {
+    "name": "command",
+    "argv": [
+      "/home/n/.npm-global/bin/qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "env_passthrough_keys": [
+      "OPENAI_API_KEY",
+      "OPENAI_BASE_URL",
+      "OPENAI_MODEL"
+    ]
+  },
+  "task_set": {
+    "path": "benchmarks/tasks/real_repo_tasks.json",
+    "sha256": "0fb5a3bb5168cf347c45934d0493ed3d00356da9933e162191ab3815c56d6040",
+    "selection": "task:mm-e94acc7bb86c",
+    "n_selected": 1
+  },
+  "run_label": "external coding agent, 420s/arm, primary stratum (single_file+small)",
+  "counts": {
+    "selected": 1,
+    "scored": 1,
+    "excluded": 0,
+    "agent_inert": 0,
+    "agent_inert_task_ids": []
+  },
+  "spend": {
+    "control": {
+      "prompt_tokens": 260,
+      "memory_tokens": 0,
+      "agent_output_tokens_lower_bound": 423,
+      "timeouts": 0
+    },
+    "memory": {
+      "prompt_tokens": 1671,
+      "memory_tokens": 1412,
+      "agent_output_tokens_lower_bound": 502,
+      "timeouts": 0
+    }
+  },
+  "excluded": [],
+  "results": [
+    {
+      "task_id": "mm-e94acc7bb86c",
+      "sha": "e94acc7bb86c5b21e9e79fe09463be22ff708815",
+      "parent_sha": "acd24045a7922d26f9de60e80b9e8bd9fe106ff7",
+      "tier": "api_construction",
+      "size_bucket": "single_file",
+      "excluded": null,
+      "seed": {
+        "blocks": 663,
+        "corpus_bytes": 288765,
+        "cutoff": "2026-04-20T18:10:47Z",
+        "newest_seeded_at": "2026-04-20T18:10:47Z",
+        "leak_checks_passed": [
+          "task_commit_unreachable",
+          "every_record_at_or_before_cutoff",
+          "task_commit_id_absent_from_text",
+          "written_through_governance_gate"
+        ],
+        "skipped_malformed": 0
+      },
+      "invariants": {
+        "control_isolation": [
+          "no_mind_mem_env",
+          "no_memory_cli_on_path",
+          "sandboxed_home_no_mcp",
+          "workspace_outside_tree",
+          "no_corpus_inside_work_tree"
+        ],
+        "arm_equality": [
+          "control_has_no_memory_section",
+          "prompts_differ_only_by_prefix",
+          "both_arms_within_prompt_ceiling"
+        ],
+        "environment": "single_shared_object",
+        "memory_pointers_in_tree": {
+          "identical_across_arms": true,
+          "count": 17,
+          "files": [
+            "ANATOMY.md",
+            "CHANGELOG.md",
+            "README.md",
+            "ROADMAP.md",
+            "demo.tape",
+            "deploy/docker-compose.yml",
+            "deploy/docker/Dockerfile",
+            "hooks/openclaw/mind-mem/HOOK.md",
+            "hooks/openclaw/mind-mem/handler.js",
+            "hooks/session-end.sh",
+            "hooks/session-start.sh",
+            "install-bootstrap.sh",
+            "install.sh",
+            "pyproject.toml",
+            "skills/apply-proposal/SKILL.md",
+            "skills/integrity-scan/SKILL.md",
+            "skills/memory-recall/SKILL.md"
+          ],
+          "why_this_is_not_a_leak": "Same tree in both arms. mm / mind-mem-* are off PATH and HOME is a sandbox in both, so an agent that follows one of these finds nothing; they are named because an isolation claim should not be approximate."
+        }
+      },
+      "arms": {
+        "control": {
+          "prompt": {
+            "arm": "control",
+            "prompt_tokens": 260,
+            "memory_tokens": 0,
+            "memory_blocks": [],
+            "memory_dropped": 0,
+            "recall_query": "",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 423,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "Done. The issue was that the feature module didn't exist — `tests/test_event_fanout.py` imports `mind_mem.event_fanout`, which was never implemented.\n\n**Fix:** created `src/mind_mem/event_fanout.py` (single new file; nothing under `tests/` or `conftest.py` touched), following the established patterns from `alerting.py` / `change_stream.py`:\n\n- **Event kinds** — `EVENT_BLOCK_PROMOTED`, `EVENT_CONTRADICTION_DETECTED`, plus `EVENT_SNAPSHOT_CREATED` (the three governance events named in the v4.0 roadmap) and a `CANONICAL_KINDS` set.\n- **`Event`** — frozen dataclass (`kind`, `payload`, `workspace`, wall-clock `ts_wall`) with `to_wire()` producing the JSON wire shape.\n- **`EventFanout`** — synchronous fan-out over `_publishers`; a raising publisher is isolated (logged + metered) so it never blocks the others; non-canonical kinds warn but still fan out; `close()` closes all publishers.\n- **`LoggingPublisher`** (`name = \"logging\"`) — default publisher writing events to the structured observability log.\n- **Registry** — `register_publisher(name, factory)` plus config-driven `create_fanout(config)`: reads the `events` section of the config (`enabled`, ordered `publishers` list defaulting to `[\"logging\"]`, per-publisher options under `events.<name>`); unknown names warn and are skipped; returns `None` when disabled, unconfigured, or nothing resolves.\n\n**Verification:** `pytest tests/test_event_fanout.py` → **11 passed, exit 0**. Also smoke-checked that the package import and the neighboring `tests/test_alerting.py` (13 passed) are unaffected. ruff/mypy aren't installed in this environment, but the module mirrors the style of the existing modules those tools already pass on.\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 11,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/event_fanout.py"
+            ],
+            "tail": "PASSED tests/test_event_fanout.py::TestCreateFanout::test_disabled_returns_none\nPASSED tests/test_event_fanout.py::TestCreateFanout::test_default_logging_publisher\nPASSED tests/test_event_fanout.py::TestCreateFanout::test_unknown_publisher_skipped\nPASSED tests/test_event_fanout.py::TestCreateFanout::test_all_unknown_returns_none\nPASSED tests/test_event_fanout.py::TestCreateFanout::test_custom_publisher_via_register\n11 passed in <elapsed>s"
+          }
+        },
+        "memory": {
+          "prompt": {
+            "arm": "memory",
+            "prompt_tokens": 1671,
+            "memory_tokens": 1412,
+            "memory_blocks": [
+              "D-9956B7ABA6CF",
+              "D-F4F8964EAD41",
+              "D-96A3AE6DFB5B",
+              "D-E28C98090375",
+              "D-449F3E7093DF",
+              "D-28FEA9318FA5",
+              "D-E32551B629D5",
+              "D-3EE2357ED41A",
+              "D-7C54844439B5",
+              "D-5602D44C0BE3",
+              "D-481217AE30D6",
+              "D-4BD53C972DC5",
+              "D-F64409645DFA",
+              "D-47BCFC00A824",
+              "D-46794357C08B",
+              "D-F5BCAB5D4BD6"
+            ],
+            "memory_dropped": 4,
+            "recall_query": "feat(events): v4.0 prep — governance event fan-out event fanout",
+            "over_budget": false
+          },
+          "agent": {
+            "returncode": 0,
+            "timed_out": false,
+            "output_tokens": 502,
+            "output_tokens_are_lower_bound": true,
+            "steps": 0,
+            "steps_observed": false,
+            "tail": "- **`EventFanout`** — stores publishers in `_publishers`, delivers every event to all of them with per-publisher isolation (a raising publisher is logged/metered via `observability.metrics` but never blocks the rest); `close()` closes all, likewise isolated.\n- **`register_publisher(name, factory)`** — extension registry (pre-seeded with `logging`) for future Kafka/NATS transports.\n- **`create_fanout(config)`** — returns `None` for missing config / `events.enabled: false` / no resolvable publishers; defaults to `[\"logging\"]`, skips unknown names with a warning, and passes each publisher's sibling config sub-dict (`events.<name>`) to its factory.\n\nStyle follows existing conventions (cf. `alerting.py`, `streaming.py`): copyright header, house docstring with config/usage blocks, `get_logger`/`metrics`, full annotations for the mypy-clean `src/` gate.\n\n**Verification:**\n```\ntests/test_event_fanout.py — 11 passed in 0.19s (exit 0)\n```\nNo files under `tests/` or `conftest.py` were modified. (ruff/mypy aren't installed in this environment so couldn't be run, but the module is fully typed per the repo's mypy config.)\nWarning: running headless with --yolo / approval-mode=yolo and no sandbox. All tool calls (shell, write, edit) auto-execute at this process's privilege level. Enable a sandbox via --sandbox / QWEN_SANDBOX, or set QWEN_CODE_SUPPRESS_YOLO_WARNING=1 to silence this notice."
+          },
+          "verdict": {
+            "success": true,
+            "reason": "all_required_nodes_passing",
+            "returncode": 0,
+            "timed_out": false,
+            "n_passed_required": 11,
+            "missing_required": [],
+            "tampered_paths": [],
+            "changed_paths": [
+              "src/mind_mem/event_fanout.py"
+            ],
+            "tail": "PASSED tests/test_event_fanout.py::TestCreateFanout::test_disabled_returns_none\nPASSED tests/test_event_fanout.py::TestCreateFanout::test_default_logging_publisher\nPASSED tests/test_event_fanout.py::TestCreateFanout::test_unknown_publisher_skipped\nPASSED tests/test_event_fanout.py::TestCreateFanout::test_all_unknown_returns_none\nPASSED tests/test_event_fanout.py::TestCreateFanout::test_custom_publisher_via_register\n11 passed in <elapsed>s"
+          }
+        }
+      },
+      "outcome": {
+        "memory_success": true,
+        "control_success": true
+      },
+      "agent_effect": {
+        "control": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        },
+        "memory": {
+          "changed_files": 1,
+          "returncode": 0,
+          "timed_out": false
+        }
+      },
+      "telemetry": {
+        "control": {
+          "wall_seconds": 294.21
+        },
+        "memory": {
+          "wall_seconds": 275.78
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_tasks": 1,
+    "memory_successes": 1,
+    "control_successes": 1,
+    "delta_successes": 0,
+    "both_passed": 1,
+    "memory_only": 0,
+    "control_only": 0,
+    "neither_passed": 0,
+    "n_discordant": 0,
+    "test": "mcnemar_exact_two_sided",
+    "p_value": 1.0,
+    "alpha": 0.05,
+    "min_discordant_for_significance": 6,
+    "verdict": "no_evidence",
+    "note": "The arms agreed on every task; a paired test has nothing to work with."
+  },
+  "digest": "e42b10d94fda9a73d5d8f3a2f566249313f43e0580493ee20e4ae00befce93a6"
+}
