@@ -7,6 +7,7 @@ Entirely optional — disabled by default. Requires sentence-transformers.
 from __future__ import annotations
 
 import threading
+from collections.abc import Sequence
 from typing import Any
 
 #: Loaded cross-encoders, keyed by ``(model, device)``.  The key is the
@@ -26,6 +27,37 @@ _CE_LOADS = 0
 def ce_load_count() -> int:
     """How many times cross-encoder weights were loaded in this process."""
     return _CE_LOADS
+
+
+def normalize_scores(values: Sequence[Any]) -> list[Any]:
+    """Min-max ``values`` onto [0, 1] within the candidate set.
+
+    This is the reference normaliser for EVERY reranker adapter, and the
+    reason ``blend_weight`` means anything. A blend of the form
+    ``w * mine + (1 - w) * theirs`` is a convex combination only when both
+    columns live on the same scale; blend a raw cross-encoder logit
+    (unbounded, typically -11..+11) or a 0-100 integer against an RRF score
+    (~0.016) and ``w`` is a fiction -- one column decides the order at every
+    weight the operator can set.
+
+    Degenerate input (all values equal) maps to all-zeros rather than
+    all-ones or a divide-by-zero: with no spread there is no information to
+    contribute, and zero is the neutral element of the blend.
+
+    Arithmetic is deliberately left un-cast so a numpy score vector keeps its
+    own dtype through the expression -- this is the exact computation the
+    single-model cross-encoder has always run inline, factored out rather
+    than re-derived, so adopting it cannot move that reranker's output.
+    """
+    # ``len(...) == 0`` and NOT ``not values``: the single-model reranker
+    # hands this a numpy score vector straight out of ``predict``, and
+    # truth-testing an ndarray of more than one element raises.
+    if len(values) == 0:
+        return []
+    lo = min(values)
+    hi = max(values)
+    span = hi - lo if hi > lo else 1.0
+    return [(v - lo) / span for v in values]
 
 
 def _check_available() -> bool:
@@ -100,16 +132,11 @@ class CrossEncoderReranker:
         ce_scores = self._model.predict(pairs, batch_size=batch_size)
 
         # Normalize CE scores to [0, 1]
-        min_s, max_s = min(ce_scores), max(ce_scores)
-        range_s = max_s - min_s if max_s > min_s else 1.0
-        ce_norm = [(s - min_s) / range_s for s in ce_scores]
+        ce_norm = normalize_scores(ce_scores)
 
         # Normalize original scores to [0, 1]
         orig_scores = [c.get("score", 0) for c in candidates]
-        min_o = min(orig_scores) if orig_scores else 0
-        max_o = max(orig_scores) if orig_scores else 1
-        range_o = max_o - min_o if max_o > min_o else 1.0
-        orig_norm = [(s - min_o) / range_o for s in orig_scores]
+        orig_norm = normalize_scores(orig_scores)
 
         # Blend
         results = []

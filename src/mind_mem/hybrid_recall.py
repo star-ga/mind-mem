@@ -14,9 +14,15 @@ Configuration (mind-mem.json):
         "bm25_weight": 1.0,
         "vector_weight": 1.0,
         "vector_model": "all-MiniLM-L6-v2",
-        "vector_enabled": false
+        "vector_enabled": false,
+        "rerank_depth": 50
       }
     }
+
+``rerank_depth`` is how many fused candidates the cross-encoder is allowed
+to see. It defaults to ``min(50, 5 * limit)`` and is capped at
+``MAX_RERANK_CANDIDATES`` (200) -- the same ceiling the scan/sqlite path
+has always used. It costs nothing unless the cross-encoder actually runs.
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from datetime import date
 from typing import Any, Mapping
 
 from . import vector_inertness
+from ._recall_constants import MAX_RERANK_CANDIDATES
 from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
 from .enums import Leg
 from .observability import get_logger, metrics, timed
@@ -64,6 +71,49 @@ def validate_recall_config(cfg: dict[str, Any]) -> list[str]:
         if numeric <= 0:
             errors.append(f"{key} must be positive, got {numeric}")
     return errors
+
+
+#: Ceiling on the default rerank depth. ``min(50, 5 * limit)`` keeps the
+#: cross-encoder's per-query cost bounded (measured: ~1.25 s at depth 50 on
+#: a 12-core i7-5930K) while giving it enough candidates that reranking can
+#: change WHICH blocks are served, not merely their order.
+DEFAULT_RERANK_DEPTH = 50
+
+
+def resolve_rerank_depth(config: dict[str, Any] | None, limit: int) -> int:
+    """How many fused candidates the reranker may see for this request.
+
+    Reranking that runs over exactly the ``limit`` blocks already chosen for
+    the response cannot change recall@k by construction -- every block it
+    could promote is already being served, so the only thing the model's
+    latency buys is a permutation. The hybrid path did exactly that: it
+    sliced ``fused[:limit]`` and handed the slice to the cross-encoder. The
+    scan/sqlite path never had this defect; it reranks over up to
+    ``MAX_RERANK_CANDIDATES``.
+
+    Resolution order: ``recall.rerank_depth`` when set, else
+    ``min(DEFAULT_RERANK_DEPTH, 5 * limit)``. The result is capped at
+    ``MAX_RERANK_CANDIDATES`` and then floored at ``limit`` -- the floor is
+    applied LAST and deliberately outranks the cap, because a depth below
+    the response size would hand the reranker fewer candidates than the
+    caller asked to be served and silently truncate the response. For
+    ``limit > MAX_RERANK_CANDIDATES`` the depth therefore equals ``limit``:
+    no recall gain (the pool is the response), but no narrowing either.
+    """
+    limit = max(1, int(limit))
+    default = min(DEFAULT_RERANK_DEPTH, 5 * limit)
+    raw: Any = default
+    if isinstance(config, dict) and config.get("rerank_depth") is not None:
+        raw = config.get("rerank_depth")
+    try:
+        depth = int(raw)
+    except (TypeError, ValueError):
+        _log.warning("rerank_depth_invalid", value=repr(raw), fallback=default)
+        depth = default
+    if depth <= 0:
+        _log.warning("rerank_depth_non_positive", value=depth, fallback=default)
+        depth = default
+    return max(limit, min(depth, MAX_RERANK_CANDIDATES))
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +191,13 @@ def rrf_fuse(
     block_data: dict[str, dict] = {}
     # Per-arm 1-based ranks per fused id, e.g. {"bm25": 3, "vector": 1}.
     fusion_sources: dict[str, dict[str, int]] = {}
+    # Per-arm RAW score per fused id, e.g. {"bm25": 8.31, "vector": 0.74}.
+    # Captured HERE, inside the per-list loop, because the fused item below
+    # is a copy of exactly ONE leg's dict -- the other leg's raw value is
+    # destroyed by that choice and is unrecoverable afterwards. Recording it
+    # per (id, arm) as the lists are walked is the only point at which both
+    # legs' values are still in scope.
+    leg_raw: dict[str, dict[str, float]] = {}
 
     for list_idx, results in enumerate(ranked_lists):
         w = weights[list_idx] if list_idx < len(weights) else 1.0
@@ -149,6 +206,10 @@ def rrf_fuse(
             bid = _get_block_id(item, id_key)
             scores[bid] = scores.get(bid, 0.0) + w / (k + rank_0 + 1)
             fusion_sources.setdefault(bid, {})[arm] = rank_0 + 1
+            try:
+                leg_raw.setdefault(bid, {})[arm] = float(item.get("score", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                leg_raw.setdefault(bid, {})[arm] = 0.0
             existing = block_data.get(bid)
             if existing is None:
                 block_data[bid] = item
@@ -177,8 +238,19 @@ def rrf_fuse(
     for bid in sorted_ids:
         item = block_data[bid].copy()
         item["rrf_score"] = round(scores[bid], 6)
+        # ONE SCORE CONTRACT: ``score`` is the sort key at every stage exit.
+        # Before this, fusion wrote ``rrf_score`` and left ``score`` holding
+        # whichever leg's raw value happened to survive the dict copy above --
+        # an unbounded BM25F number on some hits and a [0,1] cosine on others,
+        # in the SAME column. Every consumer that reads ``score`` (the
+        # cross-encoder's min-max normalisation, session_boost's re-sort,
+        # dedup's chunk-winner, _explain) was reading a mixed-scale column.
+        # The fusion stage sets the scale it produced, and the raw leg values
+        # survive beside it in ``leg_scores`` rather than inside it.
+        item["score"] = item["rrf_score"]
         item["fusion"] = "rrf"
         item["fusion_sources"] = dict(fusion_sources.get(bid, {}))
+        item["leg_scores"] = dict(leg_raw.get(bid, {}))
         fused.append(item)
 
     return fused
@@ -518,6 +590,21 @@ class HybridBackend:
 
     # -- capability probing ------------------------------------------------
 
+    def _detect_query_type(self, query: str) -> str | None:
+        """Classify *query*, or ``None`` when the detector is unavailable.
+
+        One home for the try/except so ``_search``'s per-request memo and
+        the reranker predicate cannot drift into two different answers for
+        the same string.
+        """
+        try:
+            from ._recall_detection import detect_query_type
+
+            return detect_query_type(query)
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.debug("query_type_detect_skipped", error=str(exc))
+            return None
+
     def _check_vector(self) -> bool:
         """Return True if recall_vector + sentence-transformers are importable."""
         try:
@@ -560,6 +647,7 @@ class HybridBackend:
         graph_boost: bool = False,
         retrieve_wide_k: int = 200,
         rerank: bool = True,
+        rerank_depth: int | None = None,
         _skip_auto_features: bool = False,
         scoring_instant: date | None = None,
         **kwargs: Any,
@@ -596,6 +684,7 @@ class HybridBackend:
                 graph_boost=graph_boost,
                 retrieve_wide_k=retrieve_wide_k,
                 rerank=rerank,
+                rerank_depth=rerank_depth,
                 _skip_auto_features=_skip_auto_features,
                 scoring_instant=scoring_instant,
                 **kwargs,
@@ -609,6 +698,7 @@ class HybridBackend:
                 graph_boost=graph_boost,
                 retrieve_wide_k=retrieve_wide_k,
                 rerank=rerank,
+                rerank_depth=rerank_depth,
                 _skip_auto_features=_skip_auto_features,
                 scoring_instant=scoring_instant,
                 **kwargs,
@@ -628,6 +718,7 @@ class HybridBackend:
         graph_boost: bool = False,
         retrieve_wide_k: int = 200,
         rerank: bool = True,
+        rerank_depth: int | None = None,
         _skip_auto_features: bool = False,
         scoring_instant: date | None = None,
         **kwargs: Any,
@@ -669,12 +760,8 @@ class HybridBackend:
         def _qt() -> str | None:
             if query in _qt_cache:
                 return _qt_cache[query]
-            try:
-                from ._recall_detection import detect_query_type as _detect
-
-                value = _detect(query)
-            except Exception as exc:  # pragma: no cover — defensive
-                _log.debug("query_type_detect_skipped", error=str(exc))
+            value = self._detect_query_type(query)
+            if value is None:
                 return None
             _qt_cache[query] = value
             return value
@@ -795,16 +882,31 @@ class HybridBackend:
         # local path — which is already server-side hybrid — and let the
         # cross-encoder rerank below still apply, instead of fusing twice.
         pg_server_side = isinstance(self._config, dict) and self._config.get("provider") == "postgres"
+
+        # How deep the reranker may look, and whether one will run at all.
+        # Both are resolved HERE, before any leg is dispatched, because the
+        # legs decide how many candidates to fetch and a depth the legs never
+        # filled is a depth that does not exist. Widening is conditional on a
+        # reranker actually running: fetching more candidates changes which
+        # documents RRF sees, so doing it unconditionally would move the
+        # fused order of requests that never asked for a cross-encoder.
+        _depth = rerank_depth if rerank_depth is not None else resolve_rerank_depth(self._config, limit)
+        _ce_active = self._cross_encoder_active(_qt())
+        _leg_k = max(retrieve_wide_k, _depth) if _ce_active else retrieve_wide_k
+
         with timed("hybrid_search"):
             if not self._vector_available or pg_server_side:
                 _log.info("hybrid_bm25_only", query=query, pg_server_side=pg_server_side)
+                # ``max(limit, _depth)`` only when a reranker will run — see
+                # the comment above ``_leg_k``. With no reranker this is
+                # ``limit``, the value it has always been.
                 results = self._bm25_search(
                     query,
                     workspace,
-                    limit=limit,
+                    limit=max(limit, _depth) if _ce_active else limit,
                     active_only=active_only,
                     graph_boost=graph_boost,
-                    retrieve_wide_k=retrieve_wide_k,
+                    retrieve_wide_k=_leg_k,
                     rerank=rerank,
                     scoring_instant=scoring_instant,
                     **kwargs,
@@ -816,7 +918,13 @@ class HybridBackend:
                 results = self._admit(results, workspace, leg=Leg.BM25, overrides=live_statuses(workspace))
                 # v3.3.0 Tier 2: cross-encoder rerank also applies to
                 # BM25-only deployments (previously only post-fusion).
-                results = self._maybe_cross_encoder_rerank(query, results, limit)
+                results = self._maybe_cross_encoder_rerank(
+                    query,
+                    results,
+                    limit,
+                    rerank_depth=_depth,
+                    ce_active=_ce_active,
+                )
                 # Mark degradation ONLY when the operator asked for vector
                 # recall but the backend was unavailable at init — a plain
                 # BM25 config (vector never requested) is not "degraded",
@@ -856,10 +964,10 @@ class HybridBackend:
                     self._bm25_search,
                     query,
                     workspace,
-                    limit=retrieve_wide_k,
+                    limit=_leg_k,
                     active_only=active_only,
                     graph_boost=graph_boost,
-                    retrieve_wide_k=retrieve_wide_k,
+                    retrieve_wide_k=_leg_k,
                     rerank=False,  # defer reranking to post-fusion
                     scoring_instant=scoring_instant,
                     **kwargs,
@@ -868,7 +976,7 @@ class HybridBackend:
                     self._vector_search,
                     query,
                     workspace,
-                    limit=retrieve_wide_k,
+                    limit=_leg_k,
                     active_only=active_only,
                     scoring_instant=scoring_instant,
                 )
@@ -962,12 +1070,24 @@ class HybridBackend:
             )
 
             metrics.inc("hybrid_searches_fused")
-            result = fused[:limit]
 
             # Cross-encoder reranking (post-fusion) — v3.3.0 Tier 2
             # extracted into a helper so the BM25-only early-return path
             # also benefits from auto-enable on multi-hop/temporal queries.
-            result = self._maybe_cross_encoder_rerank(query, result, limit)
+            #
+            # The FULL fused pool goes in, not ``fused[:limit]``. Slicing
+            # first handed the reranker the same blocks that were already
+            # going to be served, so it could only permute them — the model's
+            # latency bought reordering and exactly zero recall. The helper
+            # takes ``rerank_depth`` candidates and returns at most ``limit``,
+            # so with no reranker running this is still ``fused[:limit]``.
+            result = self._maybe_cross_encoder_rerank(
+                query,
+                fused,
+                limit,
+                rerank_depth=_depth,
+                ce_active=_ce_active,
+            )
 
             # v3.3.0 Tier 1 #2 + Tier 3 #8 — multi-hop graph expansion +
             # entity prefetch. Corpus is loaded once and shared across
@@ -1534,13 +1654,100 @@ class HybridBackend:
             _log.warning("kg_expand_failed", error=str(exc))
             return results
 
-    def _maybe_cross_encoder_rerank(self, query: str, result: list[dict], limit: int) -> list[dict]:
-        """Apply cross-encoder rerank when appropriate.
+    def _cross_encoder_config(self) -> dict[str, Any]:
+        """The ``cross_encoder`` config section, or ``{}`` when malformed."""
+        ce_cfg = self._config.get("cross_encoder", {}) if isinstance(self._config, dict) else {}
+        return ce_cfg if isinstance(ce_cfg, dict) else {}
+
+    def _cross_encoder_active(self, query_type: str | None) -> bool:
+        """Will a reranker actually run for this request?
+
+        Extracted from :meth:`_maybe_cross_encoder_rerank` because the answer
+        is needed BEFORE the retrieval legs are dispatched: the legs must
+        fetch at least ``rerank_depth`` candidates for the depth to mean
+        anything, and widening them when no reranker will run would move the
+        fused order of a request that never asked for a cross-encoder.
+
+        ``query_type`` is passed in already computed. ``_search`` memoizes the
+        detector for the whole request, so this predicate adds no second
+        regex pass -- it removes one, since the old inline copy classified the
+        query a second time on every search.
+
+        Order matters. The config questions are dict lookups and are asked
+        first; the availability probe is asked LAST because its first call
+        imports ``sentence_transformers``. A deployment that has not enabled
+        the cross-encoder never reaches it.
+        """
+        ce_cfg = self._cross_encoder_config()
+        auto = bool(ce_cfg.get("auto_enable", True))
+        if bool(ce_cfg.get("enabled", False)):
+            pass
+        elif auto and query_type in ("multi-hop", "temporal"):
+            _log.info(
+                "cross_encoder_auto_enabled",
+                query_type=query_type,
+                reason="v3.3.0_tier2_ambiguous_query",
+            )
+        else:
+            return False
+        # Configured on, but is there a reranker to run? Answering this here
+        # is what keeps a box without ``sentence-transformers`` from widening
+        # its retrieval legs for a reranker that will never run.
+        #
+        # The ensemble is settled by READING its enabled flag, not by calling
+        # ``create_ensemble``: that factory CONSTRUCTS its members and logs on
+        # an unknown name or an all-members-failed build. A probe that decides
+        # "no" must leave no trace and do no work, so it must not be the thing
+        # that builds the feature it is asking about. An ensemble may hold
+        # members needing no local weights, so its flag alone answers yes.
+        if self._reranker_ensemble_enabled():
+            return True
+        try:
+            from .cross_encoder_reranker import CrossEncoderReranker
+
+            return bool(CrossEncoderReranker.is_available())
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.debug("ce_availability_probe_failed", error=str(exc))
+            return False
+
+    def _reranker_ensemble_enabled(self) -> bool:
+        """``retrieval.reranker_ensemble.enabled``, read without building it."""
+        retrieval = self._config.get("retrieval") if isinstance(self._config, dict) else None
+        if not isinstance(retrieval, dict):
+            return False
+        ens = retrieval.get("reranker_ensemble")
+        return bool(ens.get("enabled", False)) if isinstance(ens, dict) else False
+
+    def _maybe_cross_encoder_rerank(
+        self,
+        query: str,
+        result: list[dict],
+        limit: int,
+        *,
+        rerank_depth: int | None = None,
+        ce_active: bool | None = None,
+    ) -> list[dict]:
+        """Rerank the candidate pool, then cut it to ``limit``.
 
         v3.3.0 Tier 2 #6 — auto-enables on multi-hop / temporal queries
         (per detect_query_type) even when ``cross_encoder.enabled`` is
         false, unless operator sets ``cross_encoder.auto_enable: false``.
-        Returns ``result`` unchanged on any failure.
+
+        **This method now owns the ``[:limit]`` cut**, and that is the whole
+        point of the change. Callers hand it the FULL candidate pool instead
+        of a pre-sliced ``pool[:limit]``; it reranks over ``rerank_depth`` of
+        them and returns the reranker's own top-k. Slicing to ``limit``
+        first — which is what the hybrid path did — meant every block the
+        model could promote was already in the response, so reranking could
+        not change recall@k by construction and bought reordering only.
+
+        When no reranker runs, the return is ``result[:limit]``: exactly the
+        list the caller used to compute for itself, unchanged and in the same
+        order. Nothing widened the legs in that case either, so a
+        reranker-off deployment sees the same candidates as before.
+
+        Returns ``result[:limit]`` on any reranker failure, never a wider
+        list than the caller asked for.
 
         deferred: this stage records NO attribution step, unlike the seven
         ``_maybe_*`` hooks above it — it rebinds ``result`` across two
@@ -1552,24 +1759,19 @@ class HybridBackend:
         """
         if not result:
             return result
-        ce_cfg = self._config.get("cross_encoder", {})
-        ce_enabled = bool(ce_cfg.get("enabled", False))
-        if not ce_enabled and ce_cfg.get("auto_enable", True):
-            try:
-                from ._recall_detection import detect_query_type
-
-                qt = detect_query_type(query)
-                if qt in ("multi-hop", "temporal"):
-                    ce_enabled = True
-                    _log.info(
-                        "cross_encoder_auto_enabled",
-                        query_type=qt,
-                        reason="v3.3.0_tier2_ambiguous_query",
-                    )
-            except Exception as exc:  # pragma: no cover — defensive
-                _log.debug("ce_query_type_detect_skipped", error=str(exc))
-        if not ce_enabled:
-            return result
+        ce_cfg = self._cross_encoder_config()
+        if ce_active is None:
+            ce_active = self._cross_encoder_active(self._detect_query_type(query))
+        if not ce_active:
+            return result[:limit]
+        if rerank_depth is None:
+            rerank_depth = resolve_rerank_depth(self._config, limit)
+        candidates = result[:rerank_depth]
+        # ``None`` until a reranker actually produced an ordering. The
+        # distinction is load-bearing: on a failure we must hand back
+        # ``limit`` blocks, not the ``rerank_depth`` candidates we fetched
+        # for a reranker that never ran.
+        reranked: list[dict] | None = None
         # v3.3.0 Tier 4 #9 — prefer reranker_ensemble when configured,
         # fall back to single-model CE. The ensemble's single-member
         # degenerate case is also the same as CE alone, so wiring this
@@ -1579,43 +1781,47 @@ class HybridBackend:
 
             ensemble = create_ensemble(self._config)
             if ensemble is not None:
-                for r in result:
+                for r in candidates:
                     if "content" not in r:
                         r["content"] = r.get("excerpt", "")
-                result = ensemble.rerank(
+                reranked = ensemble.rerank(
                     query,
-                    result,
+                    candidates,
                     top_k=ce_cfg.get("top_k", limit),
                     blend_weight=ce_cfg.get("blend_weight", 0.6),
                 )
-                _log.info("reranker_ensemble_applied", candidates=len(result))
-                return result
+                _log.info("reranker_ensemble_applied", candidates=len(candidates), depth=rerank_depth)
         except Exception as exc:
             _log.warning("reranker_ensemble_failed", error=str(exc))
-        try:
-            from .cross_encoder_reranker import CrossEncoderReranker
+            reranked = None
+        if reranked is None:
+            try:
+                from .cross_encoder_reranker import CrossEncoderReranker
 
-            if CrossEncoderReranker.is_available():
-                ce = CrossEncoderReranker()
-                for r in result:
-                    if "content" not in r:
-                        r["content"] = r.get("excerpt", "")
-                result = ce.rerank(
-                    query,
-                    result,
-                    top_k=ce_cfg.get("top_k", limit),
-                    blend_weight=ce_cfg.get("blend_weight", 0.6),
-                )
-                _log.info(
-                    "cross_encoder_rerank",
-                    candidates=len(result),
-                    blend_weight=ce_cfg.get("blend_weight", 0.6),
-                )
-        except ImportError as ie:
-            _log.warning("cross_encoder_import_failed", error=str(ie))
-        except Exception as e:
-            _log.warning("cross_encoder_unavailable", error=str(e))
-        return result
+                if CrossEncoderReranker.is_available():
+                    ce = CrossEncoderReranker()
+                    for r in candidates:
+                        if "content" not in r:
+                            r["content"] = r.get("excerpt", "")
+                    reranked = ce.rerank(
+                        query,
+                        candidates,
+                        top_k=ce_cfg.get("top_k", limit),
+                        blend_weight=ce_cfg.get("blend_weight", 0.6),
+                    )
+                    _log.info(
+                        "cross_encoder_rerank",
+                        candidates=len(candidates),
+                        depth=rerank_depth,
+                        blend_weight=ce_cfg.get("blend_weight", 0.6),
+                    )
+            except ImportError as ie:
+                _log.warning("cross_encoder_import_failed", error=str(ie))
+            except Exception as e:
+                _log.warning("cross_encoder_unavailable", error=str(e))
+        if reranked is None:
+            return candidates[:limit]
+        return reranked
 
     # -- backend wrappers ---------------------------------------------------
 

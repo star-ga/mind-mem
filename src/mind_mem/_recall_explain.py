@@ -10,8 +10,12 @@ Design constraints:
   returned as ``None`` rather than synthesized values.  A field is only
   non-None when the value is already present in the hit dict — no
   re-computation, no approximation.
-- ``_explain.final`` MUST equal the ``score`` field used to order results.
-  The helper :func:`attach_explain` asserts this invariant at runtime.
+- ``_explain.final`` IS the ``score`` field used to order results — it is
+  read from it, not recomputed, so the two cannot disagree. What
+  :func:`attach_explain` asserts at runtime is the claim that can actually
+  be false: the ranked hits it was handed are non-increasing in ``score``.
+  (Before v5.0.2 the runtime check compared ``rrf_score or score`` against
+  ``rrf_score or score`` — a field against itself — and could not fail.)
 - When ``explain=False`` (the default), this module is never imported by
   hot-path code.  The envelope shape is byte-identical to v3.10.x.
 """
@@ -45,8 +49,9 @@ class ScoreExplain:
         staleness_penalty: Subtractive or multiplicative penalty applied for
             stale blocks.  ``0.0`` when no penalty was applied (reserved for
             block-lineage staleness propagation in v3.11.0 Pattern 3).
-        final: The score value used to sort this hit — must equal the hit's
-            ``score`` field.
+        final: The score value used to sort this hit — read directly from
+            the hit's ``score`` field, which the one-score contract makes
+            the sort key at every stage exit.
     """
 
     bm25: float
@@ -95,17 +100,43 @@ def attach_explain(
 
             penalties = list_staleness_scores(workspace, ids)
 
-    for rank_0, hit in enumerate(results):
-        bm25_raw = float(hit.get("score", 0.0))
-        rrf_rank: int | None = None
-        vector: float | None = None
+    finals: list[tuple[int, float]] = []
 
-        # The hybrid path injects ``rrf_score`` and ``fusion == "rrf"``
+    for rank_0, hit in enumerate(results):
+        # ONE SCORE CONTRACT: ``score`` is the sort key at every stage exit,
+        # so ``final`` reads it and nothing else. It used to read a STALE
+        # ``rrf_score`` -- stale because every stage after fusion (rerank,
+        # boost, decay) rewrites ``score`` and leaves ``rrf_score`` at the
+        # value fusion produced, so a reranked hit reported the pre-rerank
+        # number as its final.
+        final_score = _as_float(hit.get("score"))
+
+        # ``bm25`` is the BM25 leg's RAW retrieval score. On the fused path
+        # that value is ``leg_scores["bm25"]``; reading ``score`` there
+        # reported the FUSED number under a field documented as raw BM25F,
+        # and after this change would report it under a field whose own
+        # docstring says it is the retrieval-stage score.
+        leg_scores = hit.get("leg_scores")
+        if not isinstance(leg_scores, dict):
+            leg_scores = {}
+        if "bm25" in leg_scores:
+            bm25_raw = _as_float(leg_scores.get("bm25"))
+        elif "bm25_score" in hit:
+            bm25_raw = _as_float(hit.get("bm25_score"))
+        else:
+            # BM25-only path: ``score`` IS the BM25F score, unfused.
+            bm25_raw = final_score
+
+        # Honest gate: non-None only when the value is present in the hit.
+        # The fused path now carries it (``leg_scores``); every other path
+        # still reports None rather than a synthesized number.
+        vector: float | None = None
+        if "vector" in leg_scores:
+            vector = _as_float(leg_scores.get("vector"))
+
+        rrf_rank: int | None = None
         if hit.get("fusion") == "rrf" or "rrf_score" in hit:
             rrf_rank = rank_0 + 1
-            final_score = float(hit.get("rrf_score") or hit.get("score", 0.0))
-        else:
-            final_score = bm25_raw
 
         block_id = hit.get("_id", "")
         staleness_penalty = penalties.get(str(block_id), 0.0)
@@ -120,14 +151,60 @@ def attach_explain(
             final=round(final_score, 6),
         )
 
-        # Math-consistency invariant: final must equal the sort key.
-        # We compare against ``rrf_score`` when present (the RRF path uses
-        # that as the sort key), otherwise ``score``. Hard-raise instead
-        # of ``assert`` so the invariant survives ``python -O``.
-        sort_key = float(hit.get("rrf_score") or hit.get("score", 0.0))
-        if abs(explain.final - sort_key) >= 1e-9:
-            raise RuntimeError(f"_explain.final ({explain.final}) != sort key ({sort_key}) for hit {hit.get('_id', '?')}")
+        # Retrieval-ranked hits only. The expansion stages (graph walk, KG
+        # fusion, entity prefetch) APPEND their blocks after the ranked list
+        # by documented design -- an appended 1-hop neighbour of the top hit
+        # can legitimately outscore the last ranked hit -- so they are not
+        # part of the ordering claim and are excluded rather than allowed to
+        # fire a false alarm.
+        if not _is_appended(hit):
+            finals.append((rank_0, explain.final))
 
         hit["_explain"] = explain.to_dict()
 
+    _assert_non_increasing(finals, results)
+
     return results
+
+
+def _as_float(value: Any) -> float:
+    """Coerce a score field to float, treating None/garbage as 0.0."""
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+
+
+#: Fields stamped by the post-ranking expansion stages. A hit carrying one
+#: was APPENDED to the ranked list, not ranked into it.
+_APPENDED_MARKERS = ("_graph_hop", "_kg_hop", "_prefetch")
+
+
+def _is_appended(hit: dict[str, Any]) -> bool:
+    return any(marker in hit for marker in _APPENDED_MARKERS)
+
+
+def _assert_non_increasing(finals: list[tuple[int, float]], results: list[dict[str, Any]]) -> None:
+    """Raise unless the ranked hits are non-increasing in ``score``.
+
+    This is the invariant that replaced a tautology. The old check compared
+    ``float(hit.get("rrf_score") or hit.get("score", 0.0))`` against a value
+    computed by that same expression one line earlier, so it could not fail
+    and never did -- it was a field compared to itself. What is actually
+    worth asserting is the ONE SCORE CONTRACT: whatever stage ran last, the
+    list it handed back is ordered by ``score``. A stage that reorders on
+    one field and leaves another as the sort key trips this here, in the
+    response path, rather than showing up as quietly worse recall.
+
+    Tolerance is 1e-9 -- ``final`` is rounded to 6 places, so equal-scoring
+    neighbours must not read as a violation.
+    """
+    for (prev_rank, prev_final), (rank, final) in zip(finals, finals[1:]):
+        if final - prev_final > 1e-9:
+            prev_id = results[prev_rank].get("_id", "?")
+            this_id = results[rank].get("_id", "?")
+            raise RuntimeError(
+                f"recall results are not non-increasing in score: "
+                f"rank {rank} ({this_id}, {final}) outranks "
+                f"rank {prev_rank} ({prev_id}, {prev_final})"
+            )

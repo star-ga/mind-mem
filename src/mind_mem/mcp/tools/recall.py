@@ -641,7 +641,7 @@ def _recall_impl_uncached(
 
     if backend in ("hybrid", "auto"):
         try:
-            from mind_mem.hybrid_recall import HybridBackend, validate_recall_config
+            from mind_mem.hybrid_recall import HybridBackend, resolve_rerank_depth, validate_recall_config
 
             config = _load_config(ws)
             recall_cfg = config.get("recall", {})
@@ -652,7 +652,21 @@ def _recall_impl_uncached(
                 config_warnings = schema_errors
                 _log.warning("recall_config_errors", errors=schema_errors)
             hb = HybridBackend.from_config(config)
-            results = hb.search(query, ws, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
+            # How many fused candidates the reranker may see. Resolved from
+            # ``recall.rerank_depth`` (default ``min(50, 5 * limit)``) by the
+            # SAME function the backend would call, so the surface and the
+            # engine cannot hold two opinions of the depth. Passing only
+            # ``limit`` meant the reranker's pool WAS the response set, and a
+            # reranker over its own output cannot change what is recalled.
+            # Costs nothing unless a reranker actually runs.
+            results = hb.search(
+                query,
+                ws,
+                limit=limit,
+                active_only=active_only,
+                rerank_depth=resolve_rerank_depth(recall_cfg, limit),
+                scoring_instant=scoring_instant,
+            )
             used_backend = "hybrid"
             # Surface an in-band degradation marker: when the vector leg was
             # unavailable / timed out / failed, ``search`` returns BM25-only

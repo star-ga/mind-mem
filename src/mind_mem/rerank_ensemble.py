@@ -51,6 +51,7 @@ from __future__ import annotations
 import threading
 from typing import Any, Protocol, runtime_checkable
 
+from .cross_encoder_reranker import normalize_scores
 from .observability import get_logger
 
 _log = get_logger("rerank_ensemble")
@@ -271,15 +272,24 @@ def _build_bge() -> Reranker | None:
                 top_k: int = 10,
                 blend_weight: float = 0.6,
             ) -> list[dict]:
+                if not candidates:
+                    return []
                 pairs = [(query, c.get("content", c.get("excerpt", ""))) for c in candidates]
                 scores = model.predict(pairs)
+                # Both columns min-maxed onto [0, 1] within the candidate
+                # set BEFORE blending — the same normalisation the
+                # single-model cross-encoder runs. Blending a raw BGE logit
+                # (unbounded) against an incoming score made ``blend_weight``
+                # a fiction: the logit column dominated at every weight.
+                # The RAW logit is still reported on ``_bge_score``, so
+                # nothing an operator could read before is lost.
+                bge_norm = normalize_scores(scores)
+                orig_norm = normalize_scores([c.get("score", 0.0) or 0.0 for c in candidates])
                 blended = []
-                for c, s in zip(candidates, scores):
+                for i, (c, s) in enumerate(zip(candidates, scores)):
                     item = dict(c)
                     item["_bge_score"] = float(s)
-                    # Blend with original score like CE does.
-                    orig = float(item.get("score", 0.0))
-                    item["score"] = blend_weight * float(s) + (1 - blend_weight) * orig
+                    item["score"] = blend_weight * bge_norm[i] + (1 - blend_weight) * orig_norm[i]
                     blended.append(item)
                 blended.sort(key=lambda x: x["score"], reverse=True)
                 return blended[:top_k]
@@ -373,14 +383,21 @@ def _build_llm(llm_cfg: dict[str, Any]) -> Reranker | None:
                     # Fail-open: return candidates unchanged.
                     return candidates[:top_k]
 
+                # Both columns min-maxed onto [0, 1] within the candidate
+                # set BEFORE blending. The member returns a 0-100 INTEGER;
+                # blending that against an RRF score (~0.016) meant the
+                # judge decided the order outright at every ``blend_weight``
+                # an operator could set, which is not what a convex weight
+                # means. The RAW 0-100 value stays on
+                # ``_llm_rerank_score``.
+                llm_raw = [float(scores_map.get(str(c.get("_id") or ""), 0) or 0) for c in candidates]
+                llm_norm = normalize_scores(llm_raw)
+                orig_norm = normalize_scores([c.get("score", 0.0) or 0.0 for c in candidates])
                 blended = []
-                for c in candidates:
+                for i, c in enumerate(candidates):
                     item = dict(c)
-                    cid = str(item.get("_id") or "")
-                    llm_score = float(scores_map.get(cid, 0) or 0)
-                    item["_llm_rerank_score"] = llm_score
-                    orig = float(item.get("score", 0.0))
-                    item["score"] = blend_weight * llm_score + (1 - blend_weight) * orig
+                    item["_llm_rerank_score"] = llm_raw[i]
+                    item["score"] = blend_weight * llm_norm[i] + (1 - blend_weight) * orig_norm[i]
                     blended.append(item)
                 blended.sort(key=lambda x: x["score"], reverse=True)
                 return blended[:top_k]
@@ -434,4 +451,5 @@ __all__ = [
     "Reranker",
     "EnsembleReranker",
     "create_ensemble",
+    "normalize_scores",
 ]

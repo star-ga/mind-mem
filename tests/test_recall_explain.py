@@ -162,14 +162,23 @@ class TestAttachExplain:
         assert hits[0]["_explain"]["rrf_rank"] == 1
         assert hits[1]["_explain"]["rrf_rank"] == 2
 
-    def test_rrf_path_final_equals_rrf_score(self):
+    def test_rrf_path_final_equals_score_not_the_stale_rrf_score(self):
+        """v5.0.2 one-score contract: ``final`` is ``score``, always.
+
+        ``rrf_score`` is what FUSION produced. Every stage after it
+        (rerank, session boost, decay) rewrites ``score`` and leaves
+        ``rrf_score`` untouched, so reading the latter reported a number
+        that had stopped ordering anything. On the live fused path the two
+        now agree by construction — this hit contradicts them on purpose to
+        pin down which one ``final`` follows.
+        """
         from mind_mem._recall_explain import attach_explain
 
         hits = [
             {"_id": "D-001", "score": 0.9, "rrf_score": 0.0166, "fusion": "rrf"},
         ]
         attach_explain(hits)
-        assert abs(hits[0]["_explain"]["final"] - 0.0166) < 1e-9
+        assert abs(hits[0]["_explain"]["final"] - 0.9) < 1e-9
 
     def test_intent_match_propagated(self):
         from mind_mem._recall_explain import attach_explain
@@ -185,23 +194,25 @@ class TestAttachExplain:
         assert result == []
 
     def test_math_consistency_assertion_fires(self):
-        """attach_explain raises AssertionError when final != sort key."""
+        """The runtime invariant must be able to FAIL.
+
+        This test used to construct two hits it described as "deliberately
+        broken", call ``attach_explain`` on both, and assert neither raised
+        — because the check it was aiming at compared ``rrf_score or score``
+        against ``rrf_score or score``, a field against itself. It could not
+        fail, so the test could not catch anything.
+
+        The invariant it now guards is the one that can be false: the hits
+        handed back are non-increasing in ``score``.
+        """
+        import pytest as _pytest
+
         from mind_mem._recall_explain import attach_explain
 
-        # Manually craft a hit where rrf_score contradicts the expected final.
-        # We force the assertion by patching after-the-fact: instead, we
-        # confirm the normal assertion passes for a consistent hit and that
-        # a deliberately broken one raises.
-        hits_ok = [{"_id": "F-001", "score": 0.5}]
-        attach_explain(hits_ok)  # must not raise
+        attach_explain([{"_id": "F-001", "score": 0.9}, {"_id": "F-002", "score": 0.5}])
 
-        # Simulate inconsistency by passing a hit whose rrf_score would be
-        # used as the sort key but we swap it to a mismatched value right
-        # before calling. We do this by constructing what attach_explain sees.
-        hits_bad = [{"_id": "F-002", "score": 0.9, "rrf_score": 0.9, "fusion": "rrf"}]
-        # This is consistent (rrf_score == final of 0.9) — no assertion.
-        attach_explain(hits_bad)
-        assert abs(hits_bad[0]["_explain"]["final"] - 0.9) < 1e-9
+        with _pytest.raises(RuntimeError, match="non-increasing"):
+            attach_explain([{"_id": "F-003", "score": 0.5}, {"_id": "F-004", "score": 0.9}])
 
 
 # ---------------------------------------------------------------------------
@@ -381,8 +392,12 @@ class TestHybridSearchExplainMCPIntegration:
         envelope = _call_hybrid_search(ws, "BM25 scoring", explain=True)
         for hit in envelope.get("results", []):
             explain = hit["_explain"]
-            # RRF path: sort key is rrf_score; BM25-only fallback: sort key is score.
+            # RRF path: v5.0.2 makes fusion write ``score = rrf_score``, so
+            # assert they AGREE rather than picking whichever one matches.
             if hit.get("fusion") == "rrf" and "rrf_score" in hit:
+                assert abs(float(hit["score"]) - float(hit["rrf_score"])) < 1e-9, (
+                    f"fused hit {hit.get('_id')} has score {hit['score']} != rrf_score {hit['rrf_score']}"
+                )
                 sort_key = float(hit["rrf_score"])
             else:
                 sort_key = float(hit.get("score", 0.0))
