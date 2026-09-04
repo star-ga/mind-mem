@@ -216,6 +216,48 @@ Bound the leg so a cold or absent embedder cannot stall a request —
 `recall.embed_timeout_seconds` and `recall.vector_deadline_seconds`. On
 timeout the result degrades to BM25-only and says so in `results.degraded`.
 
+## Cross-encoder reranking depth
+
+The reranker is the most expensive optional stage in recall, and since 5.0.2
+it runs over `recall.rerank_depth` fused candidates rather than over the
+`limit` blocks already being served. That is what makes reranking able to
+change recall@k at all — before, every block it could promote was in the
+response already — and it is also the knob that decides what the stage costs.
+
+Depth defaults to `min(50, 5 * limit)`, capped at `MAX_RERANK_CANDIDATES` and
+then floored at `limit`, so at the common `limit: 10` the default depth is 50.
+
+Measured on this box — reranker call only, median of 3, `OMP_NUM_THREADS=2`,
+`nice -n 15`:
+
+| `rerank_depth` | reranker latency |
+|---------------:|-----------------:|
+| 10             | 48 ms            |
+| 25             | 111 ms           |
+| 50             | 212 ms           |
+| 100            | 433 ms           |
+| 200            | 839 ms           |
+
+Roughly linear in depth, ~4.2 ms per candidate. At the default depth of 50
+that is about **212 ms** added to a `limit: 10` recall. These are one machine's
+numbers on one model — treat the *shape* as the transferable part and re-measure
+the constant on your own hardware before budgeting against it.
+
+Set it explicitly when the default trade is wrong for you:
+
+```json
+{ "recall": { "rerank_depth": 25 } }
+```
+
+Two operating notes:
+
+- Widening only happens when a reranker will actually run. With the
+  cross-encoder off, the legs are not widened and the depth costs nothing.
+- The value is **not** part of the recall cache key (nor is any other config
+  value), so editing it inside the cache TTL can be served from an entry the
+  old pipeline produced. Clear the cache, or wait out the TTL, before
+  measuring a change.
+
 ## Compaction
 
 Reduce corpus size by archiving old blocks. The real flags are per-category

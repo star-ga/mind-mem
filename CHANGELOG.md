@@ -11,9 +11,15 @@ of exactly one leg's dict, so the `score` it carried was whichever leg won that
 copy: an unbounded BM25F number on some hits and a `[0, 1]` cosine on others,
 in one column. Measured across 45 served lists on the fused path, 24 were not
 non-increasing in the `score` the API returns — the column did not order the
-results it was attached to. Fusion now sets the scale it produced
-(`score = rrf_score`), and both legs' raw values survive beside it under
-`leg_scores` instead of one of them being destroyed by the copy.
+results it was attached to. 27 of those 45 carry two or more hits, so 27 is
+the count that could have failed and 24 of them did; after the fix, none do.
+The count is re-derived from a committed artifact
+(`docs/evidence/5.0.2-f1/score-contract-before-6cd37e5.json`) rather than
+recalled, and a test asserts it against that file.
+
+Fusion now sets the scale it produced (`score = rrf_score`), and both legs' raw
+values survive beside it under `leg_scores` instead of one of them being
+destroyed by the copy.
 
 That column is the one the cross-encoder min-maxes, so a vector-sourced hit's
 original weight collapsed to roughly zero. The ensemble members normalised
@@ -33,6 +39,35 @@ that can be false: the ranked hits are non-increasing in `score`. Hits the
 expansion stages append are excluded, because appending after the ranked list
 is their documented design rather than a violation of it.
 
+The order the product serves by default does not move.
+`benchmarks/f1_score_contract_probe.py` captures the served `(id, score)` list
+of the cross-encoder-off fused path; run against a `6cd37e5` worktree it
+produces the committed before/after pair under `docs/evidence/5.0.2-f1/`, and
+`benchmarks/ranking_identity.py` finds the served ids identical, in rank order,
+across 89 default-path cases and 1,405 hits. Eleven of the 125 cases do move,
+and every one of them is a case where a stage re-sorts on `score`:
+`session_boost` (3 of 3 at the default config, 7 of 9 across the session-shaped
+cases) and the opt-in `temporal_decay_hot_path` (2 of 3 on the plain corpus,
+4 of 6 overall) — both of which were previously re-sorting on the mixed-scale
+value, that is, discarding the fusion ranking they had been handed.
+
+Where the order moves, it does not move down. `benchmarks/paired_scorecard.py`
+over 400 questions of a session-shaped corpus — every block carrying a
+`SessionId`, so the session-boost gate actually opens — returns no metric
+`baseline_better` at any of three leg-correlation settings. `recall_any@5` is
+15-vs-5 discordant in the fix's favour at the independent setting (p=0.0414),
+and MRR is 72-vs-34 (p=0.0003) and 35-vs-4 (p<0.0001) at the two correlated
+ones. Both discordant directions are in the artifact, always, including the one
+reading that is not in the fix's favour: at the independent-legs setting MRR's
+bootstrap interval is entirely negative, [-0.0729, -0.0241], while its sign
+test does not clear alpha. Two rankers that err independently give rank fusion
+nothing to fuse, which is why that setting is reported and not treated as the
+operating point.
+
+The unboosted order stays reachable: `retrieval.session_boost.auto_enable:
+false` shuts that gate on a corpus that would otherwise open it, giving the
+stable no-boost fused order. No capability is lost by shipping this unflagged.
+
 ### Fixed — reranking over the response set could not change what was recalled
 
 The hybrid path sliced `fused[:limit]` before the cross-encoder ran, so every
@@ -51,13 +86,11 @@ each leg was actually called with, because a depth the legs never filled is not
 a depth.
 
 Widening is conditional on a reranker actually running, since more candidates
-change what RRF sees. Measured against the pre-change tree on the reranker-off
-path, the served `(id, score)` list is identical in id order for 18 of 18 fused
-cases and for the default, chunked-dedup and trust-scores corpus shapes. It
-moves only where a stage re-sorts on `score`: `session_boost` (3 of 3) and the
-opt-in `temporal_decay_hot_path` (2 of 3) — both of which were previously
-re-sorting on the mixed-scale value, that is, discarding the fusion ranking
-they had been handed.
+change what RRF sees. On the reranker-off path it therefore contributes
+nothing, and that is checked rather than argued: deleting the one line the
+score-contract fix adds, from this tree, reproduces the pre-change served
+lists byte-for-byte across all 125 probe cases. Every difference measured on
+that path is the score contract, and none of it is this.
 
 The probe that decides whether a reranker will run reads the ensemble's enabled
 flag rather than calling `create_ensemble`, which constructs its members and
@@ -65,6 +98,41 @@ logs: a probe whose answer is "no" must leave no trace. The net effect on the
 off path is one fewer query classification per search (4 to 3, measured), not
 one more. Sixteen mutations of the new guards were each shown to turn a named
 test red.
+
+
+### Known limitations — named here, scheduled for 5.1
+
+Three residuals this release does not close. They are disclosed in the release
+that creates or widens them rather than in the one that fixes them, because a
+product whose thesis is receipted truth cannot let a receipt get less accurate
+quietly.
+
+**No config value is in the recall cache key.** `recall_cache.make_cache_key`
+digests the query, namespace, limit, backend, `active_only`, the scoring
+instant and the governed-ledger anchor — and nothing from `mind-mem.json`. So
+editing `recall.rerank_depth` (or `cross_encoder.enabled`, or the fusion
+weights) inside the cache TTL can be answered from an entry the *old* pipeline
+produced, and the change appears to do nothing until the entry expires. The
+corpus coordinate is handled: a governed write moves the anchor and the key
+stops matching. The config coordinate is not. Until it is, clear the cache or
+wait out the TTL when measuring a config change.
+
+**`legs_ran` always includes `bm25`.** `recall_attestation.derive_legs` seeds
+`ran` with the lexical leg unconditionally, on the reasoning that every recall
+path resolves lexical matches. On a workspace configured with
+`recall.backend: "vector"` — a pure dense `VectorBackend`, where no lexical leg
+executes — that is an over-claim. Correcting it needs per-hit
+`_retrieval_source` provenance that `VectorBackend` does not stamp today. The
+Postgres recall backend is unaffected: it runs server-side BM25 alongside
+pgvector, so the fused claim is accurate there.
+
+**And that over-claim is now reachable more often than before.** The
+attestation fix in this release stops the served surfaces attesting a leg that
+did not run and stops the library entry under-claiming on dense paths; on a
+vector workspace the receipt used to read `legs_ran=['bm25']` and now reads
+`['bm25', 'hybrid', 'vector']`. Two doors that disagreed now agree, which is
+the intended trade — but the residual `bm25` is named in more receipts than it
+used to be, and saying so is what keeps the trade honest.
 
 
 ### Added — a paired scorecard, so a ranking change is measured rather than argued
