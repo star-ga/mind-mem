@@ -69,9 +69,9 @@ class TestInstallConfigForEveryAgent:
 class TestInstallNonDestructive:
     def test_text_block_preserves_user_content(self, tmp_path: Path) -> None:
         path = tmp_path / ".cursorrules"
-        path.write_text("# my existing rules\nsome user content\n")
+        path.write_text("# my existing rules\nsome user content\n", encoding="utf-8")
         install_config("cursor", str(tmp_path), dry_run=False)
-        body = path.read_text()
+        body = path.read_text(encoding="utf-8")
         assert "my existing rules" in body
         assert "some user content" in body
         assert "# mind-mem" in body
@@ -80,7 +80,7 @@ class TestInstallNonDestructive:
         install_config("cursor", str(tmp_path))
         install_config("cursor", str(tmp_path))
         install_config("cursor", str(tmp_path))
-        body = (tmp_path / ".cursorrules").read_text()
+        body = (tmp_path / ".cursorrules").read_text(encoding="utf-8")
         assert body.count("# mind-mem") == 1
 
     def test_json_merge_preserves_user_keys(self, tmp_path: Path) -> None:
@@ -88,7 +88,7 @@ class TestInstallNonDestructive:
         continue_dir.mkdir()
         # pre-existing user config
         path = continue_dir / "config.json"
-        path.write_text(json.dumps({"models": [{"title": "my-llm"}], "theme": "dark"}))
+        path.write_text(json.dumps({"models": [{"title": "my-llm"}], "theme": "dark"}), encoding="utf-8")
         # set HOME so json-continue target resolves into tmp_path
         import mind_mem.hook_installer as hi
 
@@ -106,7 +106,7 @@ class TestInstallNonDestructive:
         )
         try:
             install_config("continue", str(tmp_path), dry_run=False)
-            loaded = json.loads(path.read_text())
+            loaded = json.loads(path.read_text(encoding="utf-8"))
             assert loaded["theme"] == "dark"
             assert loaded["models"][0]["title"] == "my-llm"
             assert "systemMessage" in loaded
@@ -215,20 +215,66 @@ class TestClaudeCodeHookFormat:
 
         result = install_config("claude-code", str(tmp_path), dry_run=False)
         assert result["written"] is True
-        loaded = json.loads(Path(settings_path).read_text())
-        # After migration: exactly ONE entry per event, nested shape.
-        for event in ("SessionStart", "Stop"):
-            assert len(loaded["hooks"][event]) == 1
-            entry = loaded["hooks"][event][0]
-            assert "hooks" in entry
-            assert "command" not in entry  # legacy flat removed
+        loaded = json.loads(Path(settings_path).read_text(encoding="utf-8"))
+        # After migration: the legacy flat entry is upgraded in place (never
+        # duplicated), and 5.0.2's second SessionStart command is appended.
+        # Counted per event rather than assumed uniform -- the installer
+        # wants two commands on SessionStart and one on Stop, and a test
+        # that asserted "one everywhere" would have to be relaxed rather
+        # than corrected every time a hook is added.
+        expected = {"SessionStart": 2, "Stop": 1}
+        for event, count in expected.items():
+            assert len(loaded["hooks"][event]) == count, loaded["hooks"][event]
+            for entry in loaded["hooks"][event]:
+                assert "hooks" in entry
+                assert "command" not in entry  # legacy flat removed
 
         # Running install again should be a no-op (or at least not
         # add a duplicate).
         install_config("claude-code", str(tmp_path), dry_run=False)
-        loaded2 = json.loads(Path(settings_path).read_text())
-        for event in ("SessionStart", "Stop"):
-            assert len(loaded2["hooks"][event]) == 1, f"{event} duplicated on re-install"
+        loaded2 = json.loads(Path(settings_path).read_text(encoding="utf-8"))
+        for event, count in expected.items():
+            assert len(loaded2["hooks"][event]) == count, f"{event} duplicated on re-install"
+
+    def test_session_start_installs_the_query_free_resume_verb(self, tmp_path: Path) -> None:
+        """The hook that puts memory in front of a session, not a status blob.
+
+        ``mm inject`` needs a positional query a SessionStart hook cannot
+        supply, which is why this event pointed at ``mm status`` and carried
+        a note promising a query-free verb. ``mm resume-on-start`` is that
+        verb; if it stops being installed, the SessionStart hook is back to
+        injecting nothing but workspace counters.
+        """
+        result = install_config("claude-code", str(tmp_path), dry_run=True)
+        content = json.loads(result["content"])
+        commands = [inner.get("command") for entry in content["hooks"]["SessionStart"] for inner in entry.get("hooks", [])]
+        assert "mm resume-on-start" in commands, commands
+        assert "mm status" in commands, commands
+
+    def test_every_installed_command_is_a_verb_the_cli_accepts(self, tmp_path: Path) -> None:
+        """The census that would have caught ``mm capture`` and
+        ``mm vault status`` before they shipped into a hook that fired on
+        every tool call. Read off the parser rather than a hardcoded list,
+        so a verb renamed in the CLI fails here instead of at a user's
+        session start."""
+        import argparse
+
+        from mind_mem.mm_cli import build_parser
+
+        parser = build_parser()
+        subparsers = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)][0]
+        verbs = set(subparsers.choices)
+        assert "resume-on-start" in verbs, "positive control: the parser has no such verb"
+
+        result = install_config("claude-code", str(tmp_path), dry_run=True)
+        content = json.loads(result["content"])
+        for event, entries in content["hooks"].items():
+            for entry in entries:
+                for inner in entry.get("hooks", []):
+                    command = inner.get("command", "")
+                    assert command.startswith("mm "), command
+                    verb = command.split()[1]
+                    assert verb in verbs, f"{event} hook runs `{command}`; `mm {verb}` is not a CLI verb"
 
 
 class TestNativeMCPConfig:
@@ -275,7 +321,8 @@ class TestNativeMCPConfig:
                     "mcpServers": {"my-tool": {"command": "node", "args": ["x.js"]}},
                     "schemaVersion": 1,
                 }
-            )
+            ),
+            encoding="utf-8",
         )
 
         # Relocate cursor's mcp_path into tmp.
@@ -296,7 +343,7 @@ class TestNativeMCPConfig:
         AGENT_REGISTRY["cursor"] = relocated
         try:
             install_mcp_config("cursor", str(tmp_path))
-            loaded = json.loads(path.read_text())
+            loaded = json.loads(path.read_text(encoding="utf-8"))
             # User's existing mcpServer survives.
             assert loaded["mcpServers"]["my-tool"]["command"] == "node"
             # mind-mem now alongside it.

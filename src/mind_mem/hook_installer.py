@@ -319,9 +319,12 @@ def _merge_claude_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
     v1.9.2 writes the nested shape AND detects the legacy flat
     shape so re-running install does not produce duplicates.
 
-    Commands installed (v1.9.2):
+    Commands installed (5.0.2):
       SessionStart → ``mm status`` — prints workspace status JSON;
           Claude Code picks it up at session start as context.
+      SessionStart → ``mm resume-on-start`` — the active task frame's
+          resume brief, data-framed (see :mod:`mind_mem.data_marking`)
+          because what it prints goes straight into a system prompt.
       Stop        → ``mm status`` — final-state log on session end.
 
     The prior ``PostToolUse → mm capture --stdin`` hook has been
@@ -331,16 +334,20 @@ def _merge_claude_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
     loop that blocked further edits. Will be re-added as
     ``mm capture --stdin`` once that subcommand ships.
 
-    The prior ``SessionStart → mm inject --workspace X`` hook also
-    had a latent bug: ``mm inject`` requires a positional query
-    argument that SessionStart cannot provide. Swapped to
-    ``mm status``. Will be re-added as a future ``mm inject-on-start``
-    subcommand designed for the SessionStart event.
+    The prior ``SessionStart → mm inject --workspace X`` hook had a
+    latent bug: ``mm inject`` requires a positional query argument
+    that SessionStart cannot provide. It was swapped to ``mm status``
+    with a note promising a future query-free verb. That verb now
+    exists as ``mm resume-on-start`` and is installed here beside
+    ``mm status``, so a session again starts with actual memory in
+    front of it rather than a status blob. It takes no arguments and
+    exits 0 unconditionally, which is what makes it safe on a hook.
     """
     out = json.loads(json.dumps(existing))
     hooks = out.setdefault("hooks", {})
     wanted = [
         ("SessionStart", "mm status"),
+        ("SessionStart", "mm resume-on-start"),
         ("Stop", "mm status"),
     ]
     changed = False

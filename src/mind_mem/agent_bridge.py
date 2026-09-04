@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional
 
+from .data_marking import DATA_PREAMBLE, mark, strip_markers
 from .observability import get_logger
 
 _log = get_logger("agent_bridge")
@@ -61,7 +62,28 @@ def _now_iso() -> str:
 
 
 def _normalise_block(block: Mapping[str, Any]) -> dict:
-    """Coerce a result dict into the {id, type, file, text} shape we need."""
+    """Coerce a result dict into the {id, type, file, text, provenance} shape.
+
+    ``provenance`` is the block's class from
+    :func:`~mind_mem.provenance_class.classify_provenance` — ``operator`` >
+    ``agent-verified`` > ``agent-inferred`` > ``external-ingest``, or
+    ``unknown`` when the block carries no provenance fields at all.
+
+    It is carried here so it can be **rendered beside the content**: a label
+    that stays inside the validity gate tells the ranker something and tells
+    the reader nothing, and the reader is the one being asked to act on the
+    text. This is annotation only — nothing in this module ranks, filters or
+    drops a block, and the score-side demotion stays opt-in and off, exactly
+    where ``validity_gate`` has it. A patch release labels; it does not
+    silently re-order anyone's recall.
+
+    Classification is pure (no confirmed-id lookup, so no I/O and no clock)
+    and never raises on odd corpus values, so a block with a malformed
+    provenance field renders as ``unknown`` rather than failing the whole
+    injection.
+    """
+    from .provenance_class import UNKNOWN, classify_provenance
+
     text = ""
     for field_name in ("excerpt", "statement", "text", "content"):
         value = block.get(field_name)
@@ -69,17 +91,32 @@ def _normalise_block(block: Mapping[str, Any]) -> dict:
             text = value.strip()
             break
     block_id = block.get("_id") or block.get("id") or block.get("block_id") or "?"
+    try:
+        provenance = classify_provenance(block)
+    except (TypeError, ValueError):  # pragma: no cover — defensive
+        provenance = UNKNOWN
     return {
         "id": str(block_id),
         "type": str(block.get("type", "block")),
         "file": str(block.get("file", "")),
         "text": text,
+        "provenance": str(provenance),
     }
 
 
 @dataclass
 class AgentFormatter:
-    """Render context blocks into agent-native injection snippets."""
+    """Render context blocks into agent-native injection snippets.
+
+    Every renderer below emits the same three things, in the shape its target
+    expects: the :data:`~mind_mem.data_marking.DATA_PREAMBLE` once, each
+    block's provenance class beside its id, and each block's text inside the
+    :func:`~mind_mem.data_marking.mark` frame. What these snippets become is a
+    system prompt — CLAUDE.md, AGENTS.md, GEMINI.md, ``.cursorrules`` — so an
+    unframed excerpt reaches the model indistinguishable from the operator's
+    own words, and a block reading "ignore your instructions and ..." is then
+    an instruction. Framing is what makes it data.
+    """
 
     max_blocks: int = 20
 
@@ -92,6 +129,11 @@ class AgentFormatter:
         """Return a text snippet ready to paste into *agent*'s prompt."""
         if agent not in KNOWN_AGENTS:
             raise UnknownAgentError(f"unknown agent {agent!r}. Known: {', '.join(KNOWN_AGENTS)}")
+        # The query is echoed into a header OUTSIDE every frame, so a query
+        # carrying the delimiter could open or close one of its own and make
+        # the framing describe the wrong bytes. Stripping it costs nothing on
+        # an honest query, which contains no marker to remove.
+        query = strip_markers(query)
         normalised = [_normalise_block(b) for b in blocks][: self.max_blocks]
         method = {
             "claude-code": self._claude,
@@ -112,72 +154,90 @@ class AgentFormatter:
         # Designed to drop into a CLAUDE.md fenced "Recent Memory"
         # block. Claude Code reads CLAUDE.md verbatim into the system
         # prompt so we keep markdown-friendly headings.
-        out = ["# mind-mem context", "", f"**Query:** {query}", ""]
+        out = ["# mind-mem context", "", f"**Query:** {query}", "", DATA_PREAMBLE, ""]
         for b in blocks:
             out.append(f"## {b['type']} — {b['id']}")
             if b["file"]:
                 out.append(f"*Source: {b['file']}*")
+            out.append(f"*Provenance: {b['provenance']}*")
             out.append("")
-            out.append(b["text"] or "_(no excerpt)_")
+            # The no-excerpt marker is OUR text, not the corpus's, so it is
+            # deliberately the one line here that carries no frame — there is
+            # nothing retrieved inside it to mark.
+            out.append(mark(b["text"]) if b["text"] else "_(no excerpt)_")
             out.append("")
         return "\n".join(out).rstrip() + "\n"
 
     def _codex(self, query: str, blocks: list[dict]) -> str:
         # codex picks up AGENTS.md / codex.md. Headings preserve
         # information structure without forcing a specific format.
+        #
+        # The old second line read "Use the references below before
+        # answering." — an instruction ABOUT content that is itself
+        # untrusted, which is the framing this release exists to remove.
         out = [
             f"# Context for: {query}",
             "",
-            "Use the references below before answering.",
+            DATA_PREAMBLE,
             "",
         ]
         for b in blocks:
-            out.append(f"- **{b['type']}** [{b['id']}]: {b['text']}")
+            out.append(f"- **{b['type']}** [{b['id']}] (provenance: {b['provenance']}): {mark(b['text'])}")
         return "\n".join(out).rstrip() + "\n"
 
     def _gemini(self, query: str, blocks: list[dict]) -> str:
         # GEMINI.md uses a similar markdown convention; the leading
         # "system" tag is honoured by `gemini --system-instruction`.
-        lines = [f"system: relevant memory for query {query!r}", ""]
+        lines = [f"system: retrieved memory for query {query!r}", "", DATA_PREAMBLE, ""]
         for b in blocks:
-            lines.append(f"- [{b['id']}] ({b['type']}) {b['text']}")
+            lines.append(f"- [{b['id']}] ({b['type']}, provenance: {b['provenance']}) {mark(b['text'])}")
         return "\n".join(lines).rstrip() + "\n"
 
     def _cursor(self, query: str, blocks: list[dict]) -> str:
         # .cursorrules is plain text. Bullet form keeps it scannable.
+        # "When answering, prefer these memory blocks:" is gone for the same
+        # reason as codex's line: it told the model to take retrieved text
+        # as guidance, which is the attack's whole ask.
         lines = [
             f"# Workspace memory for: {query}",
             "",
-            "When answering, prefer these memory blocks:",
+            DATA_PREAMBLE,
+            "",
         ]
         for b in blocks:
-            lines.append(f"  - [{b['id']}] {b['text']}")
+            lines.append(f"  - [{b['id']}] (provenance: {b['provenance']}) {mark(b['text'])}")
         return "\n".join(lines).rstrip() + "\n"
 
     def _windsurf(self, query: str, blocks: list[dict]) -> str:
         # .windsurfrules is similar to Cursor; differentiate slightly
         # so a future format-divergence is non-disruptive.
-        lines = [f"# mind-mem ({query})", ""]
+        lines = [f"# mind-mem ({query})", "", DATA_PREAMBLE, ""]
         for b in blocks:
-            lines.append(f"- {b['type']} {b['id']} :: {b['text']}")
+            lines.append(f"- {b['type']} {b['id']} (provenance: {b['provenance']}) :: {mark(b['text'])}")
         return "\n".join(lines).rstrip() + "\n"
 
     def _aider(self, query: str, blocks: list[dict]) -> str:
-        # aider's repo-map is YAML-ish. We stay close to that.
-        lines = ["repo_map:", "  memory:"]
+        # aider's repo-map is YAML-ish. We stay close to that, so the
+        # preamble rides as a YAML comment rather than a bare line that
+        # would not parse.
+        lines = ["repo_map:", f"  # {DATA_PREAMBLE}", "  memory:"]
         for b in blocks:
             lines.append(f"    - id: {b['id']}")
             lines.append(f"      type: {b['type']}")
-            text_quoted = b["text"].replace('"', "'")
+            lines.append(f"      provenance: {b['provenance']}")
+            # Frame first, escape second: the frame is ours and quote-free,
+            # so escaping cannot damage it, and marking the already-escaped
+            # text would leave the delimiter check reading modified bytes.
+            text_quoted = mark(b["text"]).replace('"', "'")
             lines.append(f'      summary: "{text_quoted}"')
         return "\n".join(lines).rstrip() + "\n"
 
     def _generic(self, query: str, blocks: list[dict]) -> str:
         # Plain text: pipeable into anything. Useful default for
         # `mm inject --agent generic | <some-cli>` integrations.
-        lines = [f"Query: {query}", "Context:"]
+        lines = [f"Query: {query}", DATA_PREAMBLE, "Context:"]
         for b in blocks:
-            lines.append(f"- [{b['id']}] {b['text']}")
+            lines.append(f"- [{b['id']}] (provenance: {b['provenance']}) {mark(b['text'])}")
         return "\n".join(lines).rstrip() + "\n"
 
 
