@@ -417,15 +417,28 @@ class TestEveryWriteDoorStillWithholds:
             unroutable = sorted(p for p in prefixes if p not in _BLOCK_PREFIX_MAP)
             assert not unroutable, f"{tier} may mint {unroutable}, which the block store cannot route"
 
-    def test_the_carry_only_tiers_are_exactly_the_three_documented_ones(self) -> None:
+    def test_the_carry_only_tiers_are_exactly_the_four_documented_ones(self) -> None:
         """A new tier minting None must be argued for, not inherited.
 
         Minting None means "keep whatever status the block already has". That
         is safe ONLY for a tier that moves or re-stamps already-governed
-        content -- RESTAMP and STORE_MIGRATION -- or, since 5.0.2, for a tier
-        that writes no block at all: EDGE_APPROVAL lands a knowledge-graph
-        EDGE, which has no Status field, so there is no honest value for its
-        row and inventing one would put a false claim in the audit record.
+        content -- RESTAMP and STORE_MIGRATION -- or for a tier that writes
+        no block at all:
+
+        * EDGE_APPROVAL (5.0.2) lands a knowledge-graph EDGE, which has no
+          Status field, so there is no honest value for its row and inventing
+          one would put a false claim in the audit record.
+        * DERIVED_ARTIFACT (5.0.2, ROW-7) lands a compiled-truth page or a
+          lineage/causal edge. Same argument, same shape: none of the three
+          is a block, none has a Status field, and none is routable by
+          `write_block` -- `governance_gate.ARTIFACT_ID_PREFIXES` is
+          deliberately disjoint from `_BLOCK_PREFIX_MAP`.
+
+        Both exemptions are bought the same way and the purchase is checked
+        by `test_the_edge_tier_buys_its_carrying_row_with_a_bound_scope`,
+        which is derived rather than hand-listed: a carry-only tier must
+        either re-stamp already-governed content or own a scope in
+        `SCOPE_BOUND_TIERS` that names what it may touch.
 
         A new ingest door that minted None would write blocks with no status
         at all -- and an unstated status is SERVABLE -- so this is the
@@ -434,7 +447,12 @@ class TestEveryWriteDoorStillWithholds:
         from mind_mem.enums import INITIAL_STATUS, IngestTier
 
         carry_only = {t for t, st in INITIAL_STATUS.items() if st is None}
-        assert carry_only == {IngestTier.RESTAMP, IngestTier.STORE_MIGRATION, IngestTier.EDGE_APPROVAL}, (
+        assert carry_only == {
+            IngestTier.RESTAMP,
+            IngestTier.STORE_MIGRATION,
+            IngestTier.EDGE_APPROVAL,
+            IngestTier.DERIVED_ARTIFACT,
+        }, (
             f"carry-only tiers changed: {carry_only}. A tier that mints no status "
             "writes blocks whose status is unstated, and an unstated status is "
             "servable. Justify it here or give it a quarantine status."

@@ -325,6 +325,40 @@ EDGE: Final = "edge"
 #: spellings drift.
 EDGE_ID_PREFIX: Final = "E-"
 
+#: Admission covering exactly one derived artefact — a compiled-truth
+#: page, a typed lineage edge, a causal edge.
+#:
+#: The fifth scope kind, and it exists for the same reason ``EDGE`` did.
+#: These records are content: they enter the product, they are served
+#: back to an agent (``compiled_truth_load``, ``block_lineage``,
+#: ``graph`` at USER scope), and until 5.0.2 they landed with no receipt
+#: and no chain row at all. They are nonetheless not corpus *blocks* —
+#: they have no ``Status`` field, no ``write_block`` route and no place
+#: in ``corpus_registry.CORPUS_TABLE`` — so ``admit_block`` is the wrong
+#: shape for them twice over: it would demand a status they do not have,
+#: and its receipt is spendable on the block store.
+#:
+#: Like ``EDGE`` (and unlike ``BATCH``) an ``ARTIFACT`` receipt covers a
+#: frozen id set, so it cannot be spent on a restore.
+ARTIFACT: Final = "artifact"
+
+#: The id namespaces :meth:`GovernanceGate.admit_artifact` will admit,
+#: and the whole of what confines :attr:`~mind_mem.enums.IngestTier.
+#: DERIVED_ARTIFACT`.
+#:
+#: Every one of them is absent from
+#: ``corpus_registry.BLOCK_PREFIX_MAP`` **on purpose**: an id no block
+#: store can route is an id a ``write_block`` can never be asked about,
+#: so an artefact receipt is structurally unspendable on the corpus —
+#: the same argument ``EDGE_ID_PREFIX`` makes for edges, and
+#: ``tests/test_governed_artifact_writes.py`` fails the build if a
+#: corpus prefix ever appears here.
+#:
+#: * ``CT-`` — a compiled-truth page, ``compiled_truth.compiled_page_id``
+#: * ``LE-`` — a typed lineage edge, ``block_lineage.lineage_edge_id``
+#: * ``CE-`` — a causal edge, ``causal_graph.causal_edge_id``
+ARTIFACT_ID_PREFIXES: Final[tuple[str, ...]] = ("CT-", "LE-", "CE-")
+
 #: Scope kind -> the one ingest tier it mints, for every scope whose tier
 #: is hardcoded rather than passed in.
 #:
@@ -340,6 +374,7 @@ SCOPE_BOUND_TIERS: Mapping[str, IngestTier] = MappingProxyType(
     {
         PROPOSAL: IngestTier.PROPOSAL_APPLY,
         EDGE: IngestTier.EDGE_APPROVAL,
+        ARTIFACT: IngestTier.DERIVED_ARTIFACT,
     }
 )
 
@@ -979,6 +1014,75 @@ class GovernanceGate:
             )
         covers = frozenset({subject}) | frozenset(str(bid) for bid in block_ids)
         receipt = self._mint("WRITE", subject, content, EDGE, covers, IngestTier.EDGE_APPROVAL, actor, target_file, metadata)
+        yield from self._run_write_scope(receipt, "WRITE", subject, target_file)
+
+    @contextmanager
+    def admit_artifact(
+        self,
+        artifact_id: str,
+        content: str,
+        *,
+        actor: str = "",
+        target_file: str = "",
+        metadata: Optional[dict] = None,
+    ) -> Iterator[AdmissionReceipt]:
+        """Admit one derived artefact — a compiled page or a graph edge.
+
+        The scope the three doors of ROW-7 were missing. A compiled-truth
+        page, a typed lineage edge and a causal edge are all *content*:
+        they are minted from a USER-scope tool argument, they are stored,
+        and they are served straight back to an agent. None of them is a
+        corpus block, so none of them went anywhere near ``write_block``
+        and none of them had a receipt or a chain row. Measured on a
+        fresh workspace before this existed: ``save_truth_page`` +
+        ``add_block_edge`` + ``CausalGraph.add_edge`` moved the evidence
+        chain and the hash chain by **+0 each**, and every one of the
+        three was readable back through its tool.
+
+        Narrow the way :meth:`admit_edge` is narrow, and for the same
+        reason — the tier's :data:`~mind_mem.enums.INITIAL_STATUS` row is
+        ``None``, which constrains no status at all, so the constraint
+        has to be the scope:
+
+        * the subject must start with one of
+          :data:`ARTIFACT_ID_PREFIXES`, none of which any block store can
+          route, so the receipt is unspendable on a corpus block;
+        * the covered id set is **frozen when the scope opens** and holds
+          exactly that one subject; and
+        * :data:`SCOPE_BOUND_TIERS` binds the tier to this scope in both
+          directions, so ``admit_block``/``admit_batch`` cannot name it
+          and this scope cannot name another tier.
+
+        What it buys is the receipt and the chain row, not withholding:
+        an artefact is derived from blocks the corpus already admitted,
+        so the quarantine axis — which exists for untrusted *input* — has
+        nothing to say about it. The audit question these records could
+        not answer was never "should this be served" but "who put it
+        there, and over what".
+
+        Args:
+            artifact_id: The artefact being written, in its own id
+                namespace. Computed by the door *before* the scope opens,
+                so an artefact that cannot be named mints no
+                authorisation record.
+            content: The bytes being landed, hashed into the chain entry.
+
+        Raises:
+            GovernanceBypassError: The subject is in no artefact
+                namespace, or the gate is retired / its spec binding has
+                drifted.
+        """
+        subject = str(artifact_id)
+        if not subject.startswith(ARTIFACT_ID_PREFIXES):
+            raise GovernanceBypassError(
+                f"refusing an artefact admission for {subject!r}: the subject of an artefact scope "
+                f"must be in one of the artefact id namespaces {list(ARTIFACT_ID_PREFIXES)} as the "
+                "owning module mints them. A scope named after anything else is a block scope "
+                "wearing an artefact's tier; open admit_block."
+            )
+        receipt = self._mint(
+            "WRITE", subject, content, ARTIFACT, frozenset({subject}), IngestTier.DERIVED_ARTIFACT, actor, target_file, metadata
+        )
         yield from self._run_write_scope(receipt, "WRITE", subject, target_file)
 
     # ------------------------------------------------------------------

@@ -52,9 +52,22 @@ import os
 import re
 from datetime import datetime, timezone
 
+from .admission import OP_WRITE, require_admission
 from .observability import get_logger, metrics
 
 _log = get_logger("compiled_truth")
+
+#: Id namespace a compiled-truth page is admitted under.
+#:
+#: A page is not a corpus block: it has no ``Status`` field, no
+#: ``write_block`` route and no row in ``corpus_registry.CORPUS_TABLE``.
+#: It IS content — minted from a USER-scope tool argument, stored, and
+#: served straight back — so it needs a receipt and a chain row, which is
+#: what this prefix gets it. ``CT`` routes to no corpus file on purpose:
+#: a receipt minted for a page is therefore unspendable on the block
+#: store. Kept in step with ``governance_gate.ARTIFACT_ID_PREFIXES`` by
+#: ``tests/test_governed_artifact_writes.py``.
+PAGE_ID_PREFIX = "CT-"
 
 # ---------------------------------------------------------------------------
 # Valid entity types and confidence levels
@@ -376,10 +389,72 @@ def load_truth_page(workspace: str, entity_id: str) -> CompiledTruthPage | None:
     return page
 
 
+def compiled_page_id(entity_id: str) -> str:
+    """The admission subject for *entity_id*'s page.
+
+    Deterministic and total over the ids ``_compiled_page_path`` accepts,
+    so the chain entry for a page is keyed on the page rather than on
+    whatever the caller felt like naming, and a re-save of the same page
+    is recognisably the same subject.
+
+    The prefix is what makes the receipt safe: ``CT`` routes to no corpus
+    file, so a receipt minted here cannot be spent on a block.
+    """
+    return f"{PAGE_ID_PREFIX}{entity_id}"
+
+
+def _write_compiled_page(file_path: str, page_id: str, content: str) -> None:
+    """Write one compiled page — the seam, and the only place bytes land.
+
+    Calls :func:`~mind_mem.admission.require_admission` **before** the
+    file is opened, so a caller with no open scope fails closed rather
+    than landing content and being noticed later by a scan. This is the
+    same shape ``BlockStore.write_block`` has, and it is deliberately not
+    a check the caller performs: a rule enforced at the door is a rule
+    the next door forgets, while a rule enforced at the seam is one the
+    next door cannot get past.
+
+    ``status`` is ``None`` and that is honest rather than lax — a page
+    has no ``Status`` field, the tier's ``INITIAL_STATUS`` row is
+    ``None`` for exactly that reason, and the confinement it trades that
+    row for is the frozen id set on the receipt.
+
+    Raises:
+        UngatedWriteError: no artefact admission covering *page_id* is
+            open. Nothing is written.
+    """
+    require_admission(page_id, status=None, operation=OP_WRITE)
+    with open(file_path, "w", encoding="utf-8") as fh:
+        fh.write(content)
+
+
 def save_truth_page(workspace: str, page: CompiledTruthPage) -> str:
-    """Save a compiled truth page to disk.
+    """Save a compiled truth page to disk, under a governance admission.
 
     Writes to ``{workspace}/entities/compiled/{entity_id}.md``.
+
+    **Governed since 5.0.2 (ROW-7).** This was the last write door in the
+    product that minted served content with no receipt and no chain row.
+    Measured on a fresh workspace before the change: one
+    ``save_truth_page`` moved the evidence chain +0 and the hash chain
+    +0, and ``load_truth_page`` — reachable at USER scope through
+    ``compiled_truth_load`` — handed the page's text straight back to an
+    agent. A page is synthesised prose that an agent reads as memory;
+    "who wrote this, and over what bytes" had no answer at all.
+
+    One :meth:`~mind_mem.governance_gate.GovernanceGate.admit_artifact`
+    scope per save, keyed on :func:`compiled_page_id` and hashing the
+    rendered page, opened here rather than at each caller because this
+    function is the only writer and a door count of one is the only door
+    count that cannot drift. A refused authorisation writes nothing:
+    the scope is opened *before* the seam, and the seam refuses without a
+    receipt regardless.
+
+    What the change does NOT do is register ``entities/compiled/`` in
+    :mod:`~mind_mem.corpus_registry`. That is a retrieval decision, not a
+    governance one, and taking it here would change recall results and
+    turn every page already on disk into an unanchored block; see the
+    module docstring of ``tests/test_governed_artifact_writes.py``.
 
     Args:
         workspace: Root workspace directory.
@@ -387,17 +462,37 @@ def save_truth_page(workspace: str, page: CompiledTruthPage) -> str:
 
     Returns:
         The absolute path of the written file.
+
+    Raises:
+        GovernanceBypassError: the gate refused the admission. No bytes
+            are written.
     """
+    from .governance_gate import get_gate  # noqa: PLC0415 — the gate imports half the package
+
     dir_path = os.path.join(workspace, _COMPILED_DIR)
     os.makedirs(dir_path, exist_ok=True)
 
     # Same guard on the WRITE side: an unchecked entity_id here meant an
     # arbitrary `.md` file anywhere on the host could be overwritten.
+    # Resolved BEFORE the scope opens, so a rejected id mints no
+    # authorisation record — the rule graph_add_edge follows for an edge
+    # it cannot name.
     file_path = _compiled_page_path(workspace, page.entity_id)
     content = format_truth_page(page)
+    page_id = compiled_page_id(page.entity_id)
 
-    with open(file_path, "w", encoding="utf-8") as fh:
-        fh.write(content)
+    with get_gate(workspace).admit_artifact(
+        page_id,
+        content,
+        target_file=f"{_COMPILED_DIR}/{page.entity_id}.md".replace(os.sep, "/"),
+        metadata={
+            "door": "compiled_truth.save_truth_page",
+            "entity_type": page.entity_type,
+            "version": page.version,
+            "evidence_count": len(page.evidence_entries),
+        },
+    ):
+        _write_compiled_page(file_path, page_id, content)
 
     _log.info(
         "truth_page_saved",

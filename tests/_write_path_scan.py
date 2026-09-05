@@ -821,3 +821,169 @@ def scan_corpus_writes(files: tuple[str, ...]) -> tuple[tuple[str, str, int, str
             if matched:
                 out.append((rel, names.get(node, "") or "<module>", node.lineno, ",".join(matched)))
     return tuple(sorted(out))
+
+
+# ---------------------------------------------------------------------------
+# Scan E — the ARTEFACT stores (ROW-7)
+#
+# Scans A-D are all anchored on the corpus: on ``write_block``, or on a path
+# the block store reads. That is the whole reason they could not see
+# ``compiled_truth.save_truth_page``. A compiled page is served content —
+# ``compiled_truth_load`` hands it to an agent at USER scope — and it lives in
+# ``entities/compiled/``, a SUBDIRECTORY, which ``corpus_dir_hit`` correctly
+# refuses to match because the store's walk never descends into it.
+#
+# So the store was outside every scan by construction, not by oversight, and
+# the fix is a scan anchored on the artefact stores rather than on the corpus.
+# ---------------------------------------------------------------------------
+
+#: Workspace-relative directories holding governed DERIVED artefacts.
+#:
+#: Not corpus: nothing here is a block, nothing routes to it through
+#: ``write_block``, and ``corpus_registry`` names none of it. It is
+#: nonetheless *content* — minted from a USER-scope tool argument, stored,
+#: and served straight back — so every writer into it must hold an
+#: ``admit_artifact`` receipt.
+#:
+#: Hand-copied for the same reason :data:`CORPUS_DIRS` is (this module
+#: imports no ``mind_mem``), and pinned against the owning modules by
+#: :func:`artifact_stores_from_source`.
+ARTIFACT_DIRS: frozenset[str] = frozenset({"entities/compiled"})
+
+#: ``module basename -> the module constant naming its store``. The
+#: derivation map behind :func:`artifact_stores_from_source`; a second
+#: artefact store is one row here plus one in :data:`ARTIFACT_DIRS`.
+ARTIFACT_STORES: dict[str, str] = {"compiled_truth.py": "_COMPILED_DIR"}
+
+
+def artifact_stores_from_source() -> frozenset[str]:
+    """Re-derive :data:`ARTIFACT_DIRS` from the modules that own the stores.
+
+    By AST, never by import, exactly as the two corpus derivations are.
+    Each store is declared as ``os.path.join("a", "b")`` at module scope,
+    so a rename of the directory (or of the constant) fails the drift
+    guard in the same commit instead of silently taking the scan blind.
+    """
+    out: set[str] = set()
+    for module, const in sorted(ARTIFACT_STORES.items()):
+        path = os.path.join(SRC_ROOT, module)
+        tree = parse(path)
+        found = False
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
+                continue
+            if not any(isinstance(t, ast.Name) and t.id == const for t in node.targets):
+                continue
+            templates = _path_templates(node.value, _module_constants(tree), {})
+            resolved = sorted(t.replace("\\", "/") for t in templates if UNRESOLVED not in t)
+            if not resolved:
+                break
+            out.add(resolved[0])
+            found = True
+            break
+        if not found:
+            raise AssertionError(f"{module} no longer declares {const} as a literal path; the artefact drift guard cannot read it")
+    return frozenset(out)
+
+
+def artifact_store_hit(template: str, artifact_dirs: frozenset[str]) -> str | None:
+    """The artefact store *template* writes a file DIRECTLY into, if any.
+
+    Multi-segment twin of :func:`corpus_dir_hit`, and it has to be a
+    separate function rather than a wider ``corpus_dirs`` argument: a
+    corpus directory is ONE segment (``entities``) because that is what
+    ``os.listdir`` is called on, while an artefact store is a *path*
+    (``entities/compiled``) whose parent is itself a corpus directory.
+    Folding them together would make ``entities/compiled/x.md`` look like
+    a corpus write, which it is not — the store's walk never descends.
+
+    Same anchoring rule as the corpus version, and for the same reason:
+    the store must sit at the path root or directly under an
+    :data:`UNRESOLVED` segment (the workspace root is always unresolved
+    at scan time), so a *different* tree that happens to end in the same
+    two names — ``shared/entities/compiled/`` — is not reported. A
+    scanner that cries wolf is one an allowlist grows to silence.
+
+    Extension-agnostic on purpose: the corpus scans may look only for
+    ``.md`` because that is what the block store reads, but the question
+    here is "did content enter this store", and a future page format is
+    still content.
+    """
+    segments = [seg for seg in template.replace("\\", "/").split("/") if seg not in ("", ".")]
+    for store in sorted(artifact_dirs):
+        parts = store.split("/")
+        if len(segments) < len(parts) + 1:
+            continue
+        if segments[-len(parts) - 1 : -1] != parts:
+            continue
+        head = segments[-len(parts) - 2] if len(segments) >= len(parts) + 2 else None
+        if head is not None and UNRESOLVED not in head:
+            continue
+        return store
+    return None
+
+
+def find_artifact_writes(tree: ast.AST, rel: str, artifact_dirs: frozenset[str], *, owns_store: bool = False) -> list[tuple[str, str, int]]:
+    """``(file, qualname, lineno)`` for every write into an artefact store.
+
+    Two rules, unioned, because the resolver has a blind spot that this
+    particular store sits squarely inside:
+
+    * **by path** — the write's path expression resolves to a file
+      directly inside a store (:func:`artifact_store_hit`). This is the
+      rule that catches a rogue writer in some *other* module.
+    * **by ownership** — *owns_store* is set for the module that declares
+      the store (:data:`ARTIFACT_STORES`), and then EVERY write-mode
+      ``open`` in it counts. The path a compiled page is written to is
+      minted by ``_compiled_page_path`` — two nested ``realpath`` calls
+      around the join, which no constant-folder resolves, and which must
+      stay that way because ``realpath`` is the containment check that
+      survives a symlink. So the store's own module is exactly where rule
+      one cannot see, and asking "does this module write files at all" is
+      both answerable and sufficient: the module has one write-mode
+      ``open``, and its reads are ``"r"``.
+
+    The ownership rule is why the seam may take a resolved path as a
+    parameter without going invisible.
+    """
+    out: list[tuple[str, str, int]] = []
+    names = qualnames(tree)
+    module_env = _module_constants(tree) if isinstance(tree, ast.Module) else {}
+    enclosing = _enclosing_function(tree)
+    helpers = {n.name: n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    local_envs: dict[ast.AST, dict[str, list[ast.expr]]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        target = _write_target(node)
+        if target is None:
+            continue
+        scope = enclosing.get(node)
+        if scope is None:
+            env = module_env
+        else:
+            if scope not in local_envs:
+                merged = {k: list(v) for k, v in module_env.items()}
+                for key, values in _assignments(scope).items():
+                    merged.setdefault(key, []).extend(values)
+                local_envs[scope] = merged
+            env = local_envs[scope]
+        if owns_store or any(artifact_store_hit(tpl, artifact_dirs) for tpl in _path_templates(target, env, helpers)):
+            out.append((rel, names.get(node, "") or "<module>", node.lineno))
+    return sorted(out)
+
+
+def scan_artifact_writes(files: tuple[str, ...]) -> tuple[tuple[str, str, int], ...]:
+    """``(file, qualname, lineno)`` for every writer into an artefact store.
+
+    Same resolution machinery — and therefore the same documented blind
+    spots — as :func:`scan_corpus_writes` for every module that does not
+    OWN a store. For the modules that do (:data:`ARTIFACT_STORES`) the
+    ownership rule in :func:`find_artifact_writes` takes over, because
+    that is precisely where the resolver goes blind.
+    """
+    out: list[tuple[str, str, int]] = []
+    for path in files:
+        owns = os.path.basename(path) in ARTIFACT_STORES and os.path.dirname(path) == SRC_ROOT
+        out.extend(find_artifact_writes(parse(path), relpath(path), ARTIFACT_DIRS, owns_store=owns))
+    return tuple(sorted(out))

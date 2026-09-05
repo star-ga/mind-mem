@@ -61,11 +61,13 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from .admission import OP_WRITE, require_admission
 from .project_key import resolve_project_key
 from .retrieval_graph import _connect, ensure_graph_tables
 
 __all__ = [
     "ALLOWED_KINDS",
+    "EDGE_ID_PREFIX",
     "KIND_DECAY",
     "LINEAGE_DEPTH_CAP",
     "LINEAGE_NODE_CAP",
@@ -79,7 +81,18 @@ __all__ = [
     "edge_aware_boost",
     "ensure_lineage_schema",
     "lineage_adjacency",
+    "lineage_edge_id",
 ]
+
+#: Id namespace a typed lineage edge is admitted under.
+#:
+#: Distinct from ``governance_gate.EDGE_ID_PREFIX`` (``E-``), which names
+#: a *knowledge-graph* edge in the ``edges`` table. These are different
+#: tables with different doors, which is exactly why the 5.0.2 fix to the
+#: knowledge-graph doors did not reach this one. ``LE`` routes to no
+#: corpus file, so a receipt minted for a lineage edge is unspendable on
+#: the block store.
+EDGE_ID_PREFIX = "LE-"
 
 ALLOWED_KINDS: frozenset[str] = frozenset({"cites", "implements", "refines", "contradicts", "cooccurrence", "supports", "derived_from"})
 
@@ -166,6 +179,78 @@ def ensure_lineage_schema(workspace: str) -> None:
         conn.close()
 
 
+def lineage_edge_id(src: str, dst: str, kind: str) -> str:
+    """The admission subject for the ``(src, dst, kind)`` lineage edge.
+
+    Deterministic, so re-asserting an edge is recognisably the same
+    subject in the chain, and short enough to read in an audit. The
+    triple is joined on a separator none of the three may contain, so
+    two different triples cannot collide on one id.
+    """
+    import hashlib  # noqa: PLC0415 — stdlib, kept off the module import path
+
+    digest = hashlib.sha256("\x00".join((str(src), str(kind), str(dst))).encode("utf-8")).hexdigest()[:16]
+    return f"{EDGE_ID_PREFIX}{digest}"
+
+
+def _write_lineage_edge(
+    conn: object,
+    edge_id: str,
+    src: str,
+    dst: str,
+    kind: str,
+    weight: float,
+    project: str,
+    now: str,
+) -> None:
+    """Upsert one typed lineage edge — the seam, and the only writer.
+
+    Calls :func:`~mind_mem.admission.require_admission` before the SQL
+    runs, so a caller with no open scope fails closed. The check is here
+    rather than in :func:`add_block_edge` for the reason every other
+    seam in this product puts it at the store: a door can forget, a seam
+    cannot be got past.
+
+    ``status`` is ``None`` — an edge has no ``Status`` field, which is
+    why :attr:`~mind_mem.enums.IngestTier.DERIVED_ARTIFACT` carries
+    rather than mints, and why its confinement is the frozen id set on
+    the receipt instead.
+    """
+    # `origin_project` follows the same first-writer-wins rule as `kind`:
+    # a row that has no provenance yet (pre-migration rows, and rows
+    # written by the co-occurrence logger) adopts the incoming key, and a
+    # row that already names a project keeps it.
+    #
+    # deferred: an edge re-asserted from a *second* project keeps only the
+    # first key, so breadth under-counts that case — the conservative
+    # direction. It is not the ONLY direction available -- see the resolution
+    # ladder in project_key: an unmarked non-repository tree can still read
+    # two sibling directories as two projects -- but it is the one this path
+    # takes. Upgrade
+    # path: carry the set in a side table keyed (mem1_id, mem2_id, project)
+    # rather than widening this row, which would change the primary key.
+    require_admission(edge_id, status=None, operation=OP_WRITE)
+    conn.execute(  # type: ignore[attr-defined]
+        """
+        INSERT INTO co_retrieval (mem1_id, mem2_id, weight, hit_count, updated_at, kind, origin_project)
+        VALUES (?, ?, ?, 1, ?, ?, ?)
+        ON CONFLICT(mem1_id, mem2_id) DO UPDATE SET
+            hit_count = hit_count + 1,
+            updated_at = excluded.updated_at,
+            weight = MAX(weight, excluded.weight),
+            kind = CASE
+                WHEN co_retrieval.kind = 'cooccurrence' THEN excluded.kind
+                ELSE co_retrieval.kind
+            END,
+            origin_project = CASE
+                WHEN co_retrieval.origin_project = '' THEN excluded.origin_project
+                ELSE co_retrieval.origin_project
+            END
+        """,
+        (src, dst, float(weight), now, kind, project),
+    )
+
+
 def add_block_edge(
     workspace: str,
     src: str,
@@ -179,6 +264,22 @@ def add_block_edge(
 
     Edges are deduplicated by ``(mem1_id, mem2_id, kind)``: re-adding
     the same edge bumps ``hit_count`` and refreshes ``updated_at``.
+
+    **Governed since 5.0.2 (ROW-7).** This door is exposed at USER scope
+    (``mcp.tools.lineage.add_block_edge``) and takes the whole triple
+    from the caller, ``contradicts`` included — the kind that propagates
+    with full hop-decay through
+    :func:`mind_mem.staleness.propagate_staleness` and can therefore mark
+    another agent's blocks stale. Measured on a fresh workspace before
+    this change: one call moved the evidence chain +0 and the hash chain
+    +0, and the edge came straight back out of the USER-scope
+    ``block_lineage`` traversal. The 5.0.2 edge governance covered
+    ``mcp.graph_add_edge`` / ``approve_edge`` — the ``edges`` table, a
+    different table with different doors — so it never reached here.
+
+    One :meth:`~mind_mem.governance_gate.GovernanceGate.admit_artifact`
+    scope per edge, keyed on :func:`lineage_edge_id`. A refused
+    authorisation writes nothing.
 
     Args:
         origin_project: Which project this assertion originates from —
@@ -201,44 +302,28 @@ def add_block_edge(
         raise ValueError("src and dst must differ (no self-loops)")
 
     project = resolve_project_key() if origin_project is None else str(origin_project)
+    edge_id = lineage_edge_id(src, dst, kind)
+
+    from .governance_gate import get_gate  # noqa: PLC0415 — the gate imports half the package
 
     ensure_lineage_schema(workspace)
     conn = _connect(workspace)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
     try:
-        # `origin_project` follows the same first-writer-wins rule as `kind`:
-        # a row that has no provenance yet (pre-migration rows, and rows
-        # written by the co-occurrence logger) adopts the incoming key, and a
-        # row that already names a project keeps it.
-        #
-        # deferred: an edge re-asserted from a *second* project keeps only the
-        # first key, so breadth under-counts that case — the conservative
-        # direction. It is not the ONLY direction available -- see the resolution
-        # ladder in project_key: an unmarked non-repository tree can still read
-        # two sibling directories as two projects -- but it is the one this path
-        # takes. Upgrade
-        # path: carry the set in a side table keyed (mem1_id, mem2_id, project)
-        # rather than widening this row, which would change the primary key.
-        conn.execute(
-            """
-            INSERT INTO co_retrieval (mem1_id, mem2_id, weight, hit_count, updated_at, kind, origin_project)
-            VALUES (?, ?, ?, 1, ?, ?, ?)
-            ON CONFLICT(mem1_id, mem2_id) DO UPDATE SET
-                hit_count = hit_count + 1,
-                updated_at = excluded.updated_at,
-                weight = MAX(weight, excluded.weight),
-                kind = CASE
-                    WHEN co_retrieval.kind = 'cooccurrence' THEN excluded.kind
-                    ELSE co_retrieval.kind
-                END,
-                origin_project = CASE
-                    WHEN co_retrieval.origin_project = '' THEN excluded.origin_project
-                    ELSE co_retrieval.origin_project
-                END
-            """,
-            (src, dst, float(weight), now, kind, project),
-        )
-        conn.commit()
+        with get_gate(workspace).admit_artifact(
+            edge_id,
+            f"{src}\t{kind}\t{dst}\t{weight}",
+            target_file=".mind-mem-index/graph.db",
+            metadata={
+                "door": "block_lineage.add_block_edge",
+                "kind": kind,
+                "src": str(src),
+                "dst": str(dst),
+                "origin_project": project,
+            },
+        ):
+            _write_lineage_edge(conn, edge_id, src, dst, kind, weight, project, now)
+            conn.commit()
     finally:
         conn.close()
 

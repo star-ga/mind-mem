@@ -25,9 +25,32 @@ import os
 import sqlite3
 from collections import deque
 
+from .admission import OP_WRITE, require_admission
 from .observability import get_logger, metrics
 
 _log = get_logger("causal_graph")
+
+#: Id namespace a causal edge is admitted under.
+#:
+#: ``CE`` routes to no corpus file, so a receipt minted for a causal edge
+#: cannot be spent on a block. Kept in step with
+#: ``governance_gate.ARTIFACT_ID_PREFIXES`` by
+#: ``tests/test_governed_artifact_writes.py``.
+EDGE_ID_PREFIX = "CE-"
+
+
+def causal_edge_id(source_id: str, target_id: str, edge_type: str) -> str:
+    """The admission subject for the ``(source, type, target)`` edge.
+
+    Deterministic, so re-asserting an edge is recognisably the same
+    subject in the chain. The triple is joined on a separator none of
+    the three may contain, so two triples cannot collide on one id.
+    """
+    import hashlib  # noqa: PLC0415 — stdlib, kept off the module import path
+
+    digest = hashlib.sha256("\x00".join((str(source_id), str(edge_type), str(target_id))).encode("utf-8")).hexdigest()[:16]
+    return f"{EDGE_ID_PREFIX}{digest}"
+
 
 # Edge types
 EDGE_DEPENDS_ON = "depends_on"
@@ -85,6 +108,39 @@ CREATE TABLE IF NOT EXISTS staleness_flags (
     source_id   TEXT DEFAULT ''
 );
 """
+
+
+def _write_causal_edge(
+    conn: sqlite3.Connection,
+    edge_id: str,
+    source_id: str,
+    target_id: str,
+    edge_type: str,
+    weight: float,
+    metadata: dict | None,
+) -> None:
+    """Upsert one causal edge — the seam, and the only writer.
+
+    Calls :func:`~mind_mem.admission.require_admission` before the SQL
+    runs, so a caller with no open scope fails closed rather than
+    landing the edge and being caught later by a scan.
+    """
+    require_admission(edge_id, status=None, operation=OP_WRITE)
+    conn.execute(
+        "INSERT INTO causal_edges (source_id, target_id, edge_type, weight, metadata) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(source_id, target_id, edge_type) DO UPDATE SET "
+        "weight = ?, updated_at = datetime('now'), metadata = ?",
+        (
+            source_id,
+            target_id,
+            edge_type,
+            weight,
+            json.dumps(metadata or {}),
+            weight,
+            json.dumps(metadata or {}),
+        ),
+    )
 
 
 class CausalEdge:
@@ -155,14 +211,29 @@ class CausalGraph:
         Returns:
             The created CausalEdge.
 
+        **Governed since 5.0.2 (ROW-7).** A causal edge is content: it
+        is asserted from outside, stored, and served back through
+        ``causal_chain`` / ``dependencies`` / ``stale_blocks``, and a
+        ``supersedes`` or ``contradicts`` edge changes how downstream
+        blocks are treated. Measured before this change: one call moved
+        the evidence chain +0 and the hash chain +0. One
+        :meth:`~mind_mem.governance_gate.GovernanceGate.admit_artifact`
+        scope per edge, keyed on :func:`causal_edge_id`; a refused
+        authorisation writes nothing and the transaction rolls back.
+
         Raises:
             ValueError: If edge_type is invalid or would create a cycle.
+            GovernanceBypassError: The gate refused the admission.
         """
+        from .governance_gate import get_gate  # noqa: PLC0415 — the gate imports half the package
+
         if edge_type not in VALID_EDGE_TYPES:
             raise ValueError(f"Invalid edge type '{edge_type}'. Must be one of: {sorted(VALID_EDGE_TYPES)}")
 
         if source_id == target_id:
             raise ValueError("Self-loops are not allowed")
+
+        edge_id = causal_edge_id(source_id, target_id, edge_type)
 
         # Cycle-check and insert share a single BEGIN IMMEDIATE
         # transaction so concurrent callers cannot both pass the
@@ -173,22 +244,21 @@ class CausalGraph:
             if self._would_create_cycle_on_conn(conn, source_id, target_id):
                 conn.rollback()
                 raise ValueError(f"Adding edge {source_id} → {target_id} would create a cycle")
-            conn.execute(
-                "INSERT INTO causal_edges (source_id, target_id, edge_type, weight, metadata) "
-                "VALUES (?, ?, ?, ?, ?) "
-                "ON CONFLICT(source_id, target_id, edge_type) DO UPDATE SET "
-                "weight = ?, updated_at = datetime('now'), metadata = ?",
-                (
-                    source_id,
-                    target_id,
-                    edge_type,
-                    weight,
-                    json.dumps(metadata or {}),
-                    weight,
-                    json.dumps(metadata or {}),
-                ),
-            )
-            conn.commit()
+            # The scope opens INSIDE the transaction, so a refusal leaves
+            # the BEGIN IMMEDIATE unc­ommitted and the edge is not there.
+            with get_gate(self.workspace).admit_artifact(
+                edge_id,
+                f"{source_id}\t{edge_type}\t{target_id}\t{weight}",
+                target_file=".mind-mem-index/causal.db",
+                metadata={
+                    "door": "causal_graph.CausalGraph.add_edge",
+                    "edge_type": edge_type,
+                    "source_id": str(source_id),
+                    "target_id": str(target_id),
+                },
+            ):
+                _write_causal_edge(conn, edge_id, source_id, target_id, edge_type, weight, metadata)
+                conn.commit()
         finally:
             conn.close()
 

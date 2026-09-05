@@ -157,6 +157,36 @@ def log_retrieval(
 
     Called after every recall() — best-effort (never raises).
 
+    **Deliberately NOT admitted, and this is the argument (ROW-7).** The
+    other two writers into this graph — ``block_lineage.add_block_edge``
+    and ``causal_graph.CausalGraph.add_edge`` — are *assertion* doors:
+    they take a whole ``(src, kind, dst)`` triple from a USER-scope tool
+    argument, so they can name any two blocks and any relation, and they
+    open one ``admit_artifact`` scope each. This is not that door.
+
+    Three properties, and the third is the one that matters:
+
+    * it is **telemetry over content already served** — every id it can
+      write is one the ``recall()`` it is logging just returned;
+    * it **cannot choose a kind**. The ``INSERT`` above names no ``kind``
+      column, so a new row takes the schema default ``'cooccurrence'``,
+      and the ``ON CONFLICT`` arm does not update ``kind`` — a typed
+      edge another door asserted keeps its type. A co-occurrence row
+      therefore cannot become a ``contradicts`` edge here, which is the
+      only kind that fires staleness propagation; and
+    * it runs on **every recall**, writing O(k²) upserts. Admitting it
+      would put one evidence-chain row per query into the ledger that
+      exists to record decisions ABOUT content — drowning real
+      governance events in retrieval noise and growing the audit file
+      without bound. That is a real cost for no gain against a door that
+      can neither name a block nor choose a relation.
+
+    The claim is bounded, not waived: the confinement is asserted by
+    ``tests/test_governed_artifact_writes.py``
+    (``TestTheTelemetrySinkIsNotAnAssertionDoor``), so an edit that lets
+    this function write a typed kind fails the build and this argument
+    stops being available.
+
     Args:
         workspace: Workspace root path.
         query: Original query text.

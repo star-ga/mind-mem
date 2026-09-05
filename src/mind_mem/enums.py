@@ -213,6 +213,23 @@ class IngestTier(str, Enum):
     #: doors opened ``admit_proposal`` — a scope that authorises *every*
     #: id it is asked about, at the one tier that reaches ``ACTIVE``.
     EDGE_APPROVAL = "edge-approval"
+    #: A derived artefact that lives BESIDE the corpus rather than in it:
+    #: a compiled-truth page, a typed lineage edge, a causal edge.
+    #:
+    #: Carrying (``INITIAL_STATUS`` row ``None``) for the same reason
+    #: :attr:`EDGE_APPROVAL` is: none of these records has a ``Status``
+    #: field, so there is no honest status to mint and inventing one
+    #: would put a false claim in the audit record. And, exactly as for
+    #: the edge tier, that means its narrowness cannot come from the
+    #: status table — it comes from the scope. This tier is minted by
+    #: :meth:`~mind_mem.governance_gate.GovernanceGate.admit_artifact`
+    #: alone, which refuses a subject outside
+    #: :data:`~mind_mem.governance_gate.ARTIFACT_ID_PREFIXES` and freezes
+    #: the ids the receipt covers when the scope opens. No block-id
+    #: prefix routes to those namespaces, so an artefact receipt cannot
+    #: be spent on a corpus block.
+    DERIVED_ARTIFACT = "derived-artifact"
+
     #: The integrity scanner's own findings — contradictions and drift.
     #:
     #: Derived content: every input is a block already admitted to the
@@ -251,6 +268,7 @@ INITIAL_STATUS: Mapping[IngestTier, Optional[Status]] = MappingProxyType(
         IngestTier.PROPOSAL_APPLY: Status.ACTIVE,
         IngestTier.EDGE_APPROVAL: None,
         IngestTier.DETECTOR_FINDING: Status.OPEN,
+        IngestTier.DERIVED_ARTIFACT: None,
     }
 )
 
