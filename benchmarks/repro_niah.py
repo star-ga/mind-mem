@@ -243,6 +243,23 @@ def main(argv: list[str] | None = None) -> int:
     rows: list[dict[str, Any]] = []
     for i, (size, depth, needle_idx) in enumerate(params, 1):
         outcome = run_with_hard_timeout(run_case, a.case_timeout, size, depth, needle_idx)
+        if i == 1 and not outcome.ok:
+            # A parent-side import probe cannot catch this: what disqualifies an
+            # interpreter (sqlite_vec, say) is imported lazily deep inside the
+            # child. Running one real case is the only check that exercises the
+            # same path the other 249 would. Refuse here rather than spend an
+            # hour producing a package whose every cell is a crash -- complete
+            # to look at, and measuring nothing.
+            print(
+                f"\nrefusing to continue: the first case crashed, so all {len(params)} would.\n"
+                f"  {outcome.error or outcome.status}\n"
+                f"  interpreter: {sys.executable} (Python "
+                f"{sys.version_info[0]}.{sys.version_info[1]})\n"
+                "  No package written. Install the benchmark extra for THIS interpreter: "
+                "pip install -e '.[benchmark]'",
+                file=sys.stderr,
+            )
+            return 2
         rows.append(_row(niah, size, depth, needle_idx, outcome))
         if i % 25 == 0 or i == len(params):
             hits = sum(1 for r in rows if r["found"])
