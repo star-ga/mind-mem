@@ -53,6 +53,7 @@ STAGES: frozenset[str] = frozenset(
         "calibration",
         "rerank",
         "expansion",
+        "facts",
     }
 )
 
@@ -83,6 +84,26 @@ MASKS: dict[str, tuple[str, ...]] = {
     "plain_bm25": ("recency", "date_boost", "status", "priority", "calibration", "rerank", "columns", "expansion"),
 }
 
+#: Masks added AFTER the battery above was committed and BEFORE any of its
+#: results were read, from a direct probe of the eval workspace rather than
+#: from a result. They are kept in a separate dict, and reported in a separate
+#: section, so the pre-registered list stays exactly what was pre-registered.
+#:
+#: What the probe measured: the FTS corpus a 53-session haystack produces holds
+#: **373** documents, not 53. ``index_block`` mints a FACT sub-block per
+#: extracted card, so 320 short cards (median 65 characters) share the
+#: ``bm25()`` statistics surface with 53 long session parents (mean 1355
+#: characters of ``statement``). IDF and the average document length -- both
+#: corpus-wide, neither narrowed by any WHERE clause -- are therefore computed
+#: over a population the zero-dep floor never sees, and BM25's length
+#: normalisation scores the parents against an average dragged down by the
+#: cards. This is an INGEST-time difference, so it sits outside the modifier
+#: stack F5 was ruled to ablate; it is measured here rather than asserted.
+POST_HOC_MASKS: dict[str, tuple[str, ...]] = {
+    "no_facts": ("facts",),
+    "no_facts_plain": ("facts", "recency", "date_boost", "status", "priority", "calibration", "rerank", "columns", "expansion"),
+}
+
 
 def parse_mask(spec: str) -> frozenset[str]:
     """``"no_rerank"`` or ``"rerank+recency"`` -> the stage set to disable.
@@ -97,6 +118,8 @@ def parse_mask(spec: str) -> frozenset[str]:
         return frozenset()
     if spec in MASKS:
         return frozenset(MASKS[spec])
+    if spec in POST_HOC_MASKS:
+        return frozenset(POST_HOC_MASKS[spec])
     stages = frozenset(part.strip() for part in spec.split("+") if part.strip())
     unknown = stages - STAGES
     if unknown:
@@ -145,6 +168,22 @@ def _patch_rerank() -> None:
     from mind_mem import sqlite_index
 
     sqlite_index.rerank_hits = lambda query, hits, debug=False: hits
+
+
+def _patch_facts() -> None:
+    """Stop the indexer minting FACT sub-blocks.
+
+    ``index_block`` imports ``extract_facts`` at module scope and calls it on
+    every statement longer than 15 characters, so rebinding the module
+    attribute empties the fact layer at INGEST time -- which is the only place
+    it can be emptied, because the cards are rows in ``blocks_fts`` and it is
+    their presence in that table, not their score, that moves ``bm25()``'s IDF
+    and length average. With no cards minted, ``_aggregate_facts_to_parents``
+    has nothing to fold and is inert on its own.
+    """
+    from mind_mem import sqlite_index
+
+    sqlite_index.extract_facts = lambda *args, **kwargs: []
 
 
 def _row_corrections(workspace: str, block_ids: list[str], stages: frozenset[str]) -> dict[str, float]:
@@ -233,6 +272,8 @@ def apply_mask(stages: frozenset[str]) -> frozenset[str]:
         _patch_columns()
     if "rerank" in stages:
         _patch_rerank()
+    if "facts" in stages:
+        _patch_facts()
     if {"calibration", "status", "priority"} & stages:
         _patch_calibration(stages)
     return stages
