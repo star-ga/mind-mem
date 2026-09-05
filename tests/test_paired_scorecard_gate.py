@@ -28,6 +28,7 @@ from typing import Any
 
 import pytest
 
+from benchmarks.compare_runs import _unreadable_artifact_message
 from benchmarks.compare_runs import main as compare_runs_main
 from benchmarks.paired_scorecard import (
     BOOTSTRAP_RESAMPLES,
@@ -394,6 +395,28 @@ def test_the_cli_names_the_artifact_it_could_not_read(tmp_path: Path, capsys: An
     missing = tmp_path / "not-there.ndjson"
     assert compare_runs_main(["paired", str(missing), "--resamples", "8"]) == 2
     assert str(missing) in capsys.readouterr().err
+
+
+def test_the_named_artifact_survives_a_windows_path() -> None:
+    """The same assertion, on the platform this suite cannot run.
+
+    ``str(OSError)`` renders ``filename`` through ``repr``, so on Windows
+    the message quoted ``'C:\\Users\\...'`` and the path the caller typed
+    was not in it -- which is how the test above failed on windows-latest
+    3.12 (CI run 33915724655) while passing everywhere else. A separator is
+    only half of it: normalising to ``as_posix()`` would not have helped,
+    because the doubling, not the slash, is what removed the path.
+
+    The second assertion is the positive control. It is the OLD formatting,
+    kept here so this test cannot pass vacuously: if ``str(exc)`` ever did
+    contain the raw path, there would be nothing here to fix.
+    """
+    windows_path = r"C:\Users\runneradmin\AppData\Local\Temp\pytest-of-runneradmin\not-there.ndjson"
+    exc = FileNotFoundError(2, "No such file or directory")
+    exc.filename = windows_path
+
+    assert windows_path in _unreadable_artifact_message(exc)
+    assert windows_path not in f"cannot read an artifact: {exc}"
 
 
 def test_the_cli_reports_an_unpairable_comparison_instead_of_a_number(tmp_path: Path) -> None:

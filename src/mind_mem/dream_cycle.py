@@ -1208,6 +1208,17 @@ def _online_training_enabled() -> bool:
         return False
 
 
+def _read_report_instant() -> datetime:
+    """THE clock read for a cycle report.
+
+    A named module-level accessor rather than an inline ``datetime.now()``,
+    for the reason :func:`mind_mem.scoring_instant._read_utc_today` gives:
+    a test can break it and prove nothing else stamps a report behind its
+    back.
+    """
+    return datetime.now()
+
+
 def run_dream_cycle(
     workspace: str,
     dry_run: bool = False,
@@ -1216,10 +1227,20 @@ def run_dream_cycle(
     stale_days: int = 30,
     consolidation_lookback: int = 30,
     min_occurrences: int = 3,
+    instant: datetime | None = None,
 ) -> DreamCycleReport:
-    """Run all 5 enrichment passes. Errors in one pass do not block others."""
+    """Run all 5 enrichment passes. Errors in one pass do not block others.
+
+    *instant* is the report's wall-clock stamp, the seam this module shares
+    with :mod:`mind_mem.scoring_instant`: one instant resolved at the
+    boundary and threaded through, never read again inside. Omit it and
+    exactly one clock read happens, here, before any pass runs. Supply it
+    and the summary is a pure function of (workspace, instant) — which is
+    what lets two runs be compared byte for byte instead of only outside
+    the two lines that carry the stamp.
+    """
     ws = os.path.abspath(workspace)
-    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    timestamp = (instant if instant is not None else _read_report_instant()).strftime("%Y-%m-%dT%H:%M:%S")
     errors: list[str] = []
 
     _log.info("dream_cycle_start", workspace=ws, dry_run=dry_run)

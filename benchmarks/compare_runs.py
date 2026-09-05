@@ -206,6 +206,28 @@ def render_scorecard(card: Scorecard) -> str:
     return "\n".join(header) + "\n\n" + "\n\n".join(body) + "\n\n" + tail
 
 
+def _unreadable_artifact_message(exc: OSError) -> str:
+    """Name the artifact verbatim, in the spelling the caller typed.
+
+    A mistyped path is the likeliest way to invoke this wrongly, and a
+    traceback buries which of the two artifacts was not there -- so the
+    message exists to quote the path back. It cannot do that through
+    ``str(exc)``: ``OSError.__str__`` renders ``filename`` through ``repr``,
+    which doubles every backslash. On Windows that printed
+    ``'C:\\Users\\...\\run.ndjson'`` -- a path no reader can paste back
+    into a shell, and one that does not contain the path they gave. Measured
+    on windows-latest 3.12, CI run 33915724655: the gate asserting the CLI
+    names the artifact failed on exactly that doubling.
+
+    ``filename`` and ``strerror`` are the unrendered halves, so they are
+    what this uses. Both are optional on ``OSError`` -- a raise with neither
+    still has to say something -- hence the fallbacks.
+    """
+    named = exc.filename or "an artifact"
+    detail = exc.strerror or str(exc)
+    return f"cannot read {named}: {detail}"
+
+
 def run_paired(args: argparse.Namespace) -> int:
     try:
         card = build_scorecard(
@@ -220,9 +242,7 @@ def run_paired(args: argparse.Namespace) -> int:
         print(f"cannot pair the runs: {exc}", file=sys.stderr)
         return 2
     except OSError as exc:
-        # A mistyped path is the likeliest way to invoke this wrongly, and a
-        # traceback buries which of the two artifacts was not there.
-        print(f"cannot read an artifact: {exc}", file=sys.stderr)
+        print(_unreadable_artifact_message(exc), file=sys.stderr)
         return 2
     print(render_scorecard(card))
     if args.json:

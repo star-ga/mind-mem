@@ -441,6 +441,19 @@ class TestTheWindowsSharingViolationOnCreate(unittest.TestCase):
         A fix that merely stopped raising would satisfy the test above by
         sleeping to the deadline forever. This one only passes if the retry
         actually reaches the create again.
+
+        The departing holder is simulated by unlinking the lockfile and
+        NOTHING else. An earlier version opened it first and unlinked it
+        under its own descriptor, which is a POSIX-only move: CPython's
+        ``os.open`` never requests ``FILE_SHARE_DELETE``, so on Windows that
+        unlink is refused, the lockfile naming this live pid survives every
+        retry, ``_break_stale`` correctly declines to break a living owner,
+        and the poll runs to the deadline. That is what CI run 33915724655
+        measured -- a defect in this simulation of a holder leaving, not in
+        the retry it was written to prove. Reproduced on Linux by refusing
+        ``os.unlink`` for any path this process holds open: identical
+        ``LockTimeout (5.0s)``. A refusal is no longer swallowed either;
+        one now surfaces by name instead of as a timeout five seconds later.
         """
         with open(self.lockfile, "w", encoding="utf-8") as fh:
             fh.write(f"{os.getpid()}\n")
@@ -454,10 +467,9 @@ class TestTheWindowsSharingViolationOnCreate(unittest.TestCase):
                     refusals[0] -= 1
                     raise PermissionError(errno.EACCES, "Permission denied", lockfile)
                 try:
-                    real(lockfile, os.O_WRONLY)  # holder gone; clear its file
-                    os.unlink(lockfile)
-                except OSError:
-                    pass
+                    os.unlink(lockfile)  # the holder is gone and took its lockfile
+                except FileNotFoundError:
+                    pass  # already gone: an earlier retry saw it off
             return real(path, flags, *a, **k)
 
         os.open = _briefly_contended
