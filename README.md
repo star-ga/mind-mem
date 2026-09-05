@@ -143,8 +143,8 @@ MIND-Mem introduces several techniques not found in existing memory systems:
 
 | Technique | What's new | Why it matters |
 |-----------|-----------|----------------|
-| **Co-retrieval graph** | PageRank-like score propagation across blocks frequently retrieved together | Surfaces structurally relevant blocks with zero lexical overlap |
-| **Fact card sub-block indexing** | Atomic fact extraction → small-to-big retrieval with parent score blending | Catches fine-grained facts that full-block BM25 misses |
+| **Co-retrieval graph** | PageRank-like score propagation across blocks frequently retrieved together | Surfaces structurally relevant blocks with zero lexical overlap (+2.0pp accuracy) |
+| **Fact card sub-block indexing** | Atomic fact extraction → small-to-big retrieval with parent score blending | Catches fine-grained facts that full-block BM25 misses (+2.6pp accuracy) |
 | **Adaptive knee cutoff** | Score-drop-based truncation instead of fixed top-K | Eliminates noise that hurts LLM judges — returns 3-15 results adaptively |
 | **Hard negative mining** | Logs BM25-high / cross-encoder-low blocks as misleading, penalizes in future queries | Self-improving retrieval: precision increases over time without retraining |
 | **Deterministic abstention** | Pre-LLM confidence gate using 5-signal scoring (entity, BM25, speaker, evidence, negation) | Prevents hallucinated answers to unanswerable questions — no ML required |

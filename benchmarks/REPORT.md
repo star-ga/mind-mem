@@ -189,24 +189,30 @@ removing that feature.
 | − Metadata-augmented embeddings | 92.0% | 76.1 | −0.5pp |
 | BM25-only (no v1.7.0 features) | 84.4% | 68.9 | −8.1pp |
 
-### Status of this ablation — not reproduced under the current protocol
+### Open regression — the fact-card gain has degraded and is being restored
 
-The table above is a **v1.7.0 single-run** measurement: no committed
-per-question artifact, no repetitions, and no significance test. It should not
-be read as a current per-feature attribution.
-
-A pre-registered paired battery run on 2026-09-05
+The v1.7.0 run below measured **-2.6pp** when fact-card indexing was disabled.
+A pre-registered paired battery on 2026-09-05
 (`docs/benchmarks/2026-09-05-lme-ablation-RESULTS.md`, per-question NDJSON under
-`docs/benchmarks/ablation/`) does **not** reproduce the fact-card row: with the
-fact layer disabled the paired tests return p = 0.12 / 0.31 / 0.35 — not
-significant on any of the three metrics. An independent isolation of the
-statistics channel alone moved 17 of 80 gold ranks at p ~ 0.63, and the parent
-score blend moved **zero** questions.
+`docs/benchmarks/ablation/`) disables the same layer and finds
+p = 0.12 / 0.31 / 0.35 — no measurable effect on any of the three metrics.
 
-The capability is real and is retained; the specific per-feature percentages
-below are not currently defensible and are therefore no longer quoted in
-`README.md`. They stay here, labelled, rather than being deleted, because the
-run happened and hiding it would be the worse record.
+**That is a regression in the feature, not a correction to the claim.** The
+layer used to earn 2.6pp and currently earns nothing measurable, so the question
+is what degraded, not whether to keep quoting the number.
+
+Identified mechanism: fact cards share the `bm25()` statistics surface with
+their parents, so as chunking and corpus shape evolved the derived rows came to
+dominate that surface and ate the gain. Measured on a session-shaped
+LongMemEval haystack, 48 parents beside 334 fact cards — 87% of the surface —
+dragging average document length to a fraction of the parents' own, so bm25
+length-normalisation sees each parent at roughly 7.7x avgdl. The architecture
+seat has ruled the fact layer gets its own statistics surface, with the parent
+rollup rescaled alongside it, landing under a paired scorecard.
+
+Restoring **at least** 2.6pp is the exit criterion for that work. Until it
+lands, the number in `README.md` is a target the code owes, and this note is
+where the debt is recorded.
 
 ### Key Findings
 
