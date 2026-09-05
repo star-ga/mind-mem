@@ -45,7 +45,7 @@ import os
 from typing import Iterator
 
 import pytest
-from _write_path_scan import SRC_ROOT, iter_source_files, parse, relpath
+from _write_path_scan import REPO_ROOT, SRC_ROOT, iter_source_files, parse, relpath
 
 from mind_mem import audit_context as ac
 from mind_mem import governance_gate as gg
@@ -425,3 +425,67 @@ class TestCoreDoesNotDependOnRestForIdentity:
         planted = 'def current_agent() -> str:\n    try:\n        return _lookup()\n    except Exception:\n        return "system"\n'
         rows = scan_reader_exception_handlers(_plant(tmp_path, planted))
         assert [r[1:] for r in rows] == [("current_agent", True)]
+
+
+# ---------------------------------------------------------------------------
+# The identifier the four controls above are built on
+#
+# Those controls plant a synthetic violation in ``tmp_path`` and require the
+# scanner to find it -- so they hand ``relpath`` a file OUTSIDE the repo. On
+# the Windows runners ``tmp_path`` is on ``C:`` while the checkout is on
+# ``D:``, and ``os.path.relpath`` raises ``ValueError`` across drives: the
+# tests whose whole job is proving the scanner still looks were the only ones
+# that broke, and they broke on the identifier rather than on the scan.
+#
+# These run on EVERY platform. The out-of-root branch is reached on POSIX by
+# construction (a path under the temp dir is not under the repo root), and the
+# cross-drive raise is reached by making ``os.path.relpath`` raise -- the raise
+# IS the platform behaviour, so simulating it is simulating Windows exactly
+# where Windows differs.
+# ---------------------------------------------------------------------------
+
+
+class TestRelpathIdentifiesFilesOutsideTheRepoToo:
+    def test_a_file_inside_the_repo_keeps_its_repo_relative_name(self) -> None:
+        """The form the six real scans and their allowlists are keyed on."""
+        inside = os.path.join(SRC_ROOT, "audit_context.py")
+        assert os.path.exists(inside), "the sample file moved; this test is not measuring anything"
+        assert relpath(inside) == "src/mind_mem/audit_context.py"
+
+    def test_a_file_outside_the_repo_is_named_by_its_absolute_path(self, tmp_path) -> None:
+        """POSITIVE CONTROL for the out-of-root branch, on every platform."""
+        planted = tmp_path / "planted_violation.py"
+        planted.write_text("x = 1\n", encoding="utf-8")
+        assert not str(planted).startswith(REPO_ROOT + os.sep), "tmp_path landed inside the repo; the branch was not exercised"
+
+        named = relpath(str(planted))
+
+        assert named == os.path.abspath(str(planted)).replace(os.sep, "/")
+        assert ".." not in named.split("/"), f"a walk-up is not an identifier: {named}"
+        assert os.path.exists(named), f"the name no longer resolves to the file: {named}"
+
+    def test_a_cross_drive_path_is_named_rather_than_raising(self, tmp_path, monkeypatch) -> None:
+        """POSITIVE CONTROL for the Windows behaviour, reproduced by construction.
+
+        ``os.path.relpath`` is made to raise the way it does across two
+        Windows drives. Undone before the assertions so a failure report
+        is not written through the broken function.
+        """
+        planted = tmp_path / "planted_violation.py"
+        planted.write_text("x = 1\n", encoding="utf-8")
+        expected = os.path.abspath(str(planted)).replace(os.sep, "/")
+
+        def cross_drive(path: str, start: str) -> str:
+            raise ValueError("path is on mount 'C:', start on mount 'D:'")
+
+        monkeypatch.setattr(os.path, "relpath", cross_drive)
+        named = relpath(str(planted))
+        monkeypatch.undo()
+
+        assert named == expected
+
+    def test_the_planted_violation_controls_can_name_their_own_file(self, tmp_path) -> None:
+        """The four controls above go through ``_plant``; this is that path."""
+        (planted,) = _plant(tmp_path, "from mind_mem.api.rest import current_agent_id\n")
+        assert relpath(planted) == os.path.abspath(planted).replace(os.sep, "/")
+        assert scan_identity_imports_from_rest((planted,))[0][0] == relpath(planted)

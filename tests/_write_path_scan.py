@@ -255,7 +255,39 @@ def parse(path: str) -> ast.Module:
 
 
 def relpath(path: str) -> str:
-    return os.path.relpath(path, REPO_ROOT).replace(os.sep, "/")
+    """Stable ``/``-separated identifier for *path*.
+
+    Under :data:`REPO_ROOT` — which is every file the six real scans walk —
+    this is the repo-relative name (``src/mind_mem/block_store.py``) that
+    the allowlists are keyed on and that operators read out of a failure
+    message. That form is load-bearing and unchanged.
+
+    OUTSIDE the repo root it is the ABSOLUTE path instead, separators
+    normalised the same way. Two reasons, one of them measured:
+
+    * a file that is not in the repo has no meaningful repo-relative
+      name, and ``../../tmp/pytest-of-x/planted_violation.py`` is a worse
+      identifier than the absolute path it is a detour to; and
+    * ``os.path.relpath`` RAISES ``ValueError: path is on mount 'C:',
+      start on mount 'D:'`` when the two paths sit on different Windows
+      drives. On the GitHub Windows runners ``tmp_path`` is on ``C:`` and
+      the checkout is on ``D:``, so every planted-violation positive
+      control — the tests that exist to prove a scanner can still SEE a
+      violation — died on the identifier rather than on the scan. POSIX
+      has one root, so nothing there could ever reach that raise.
+
+    Both out-of-root shapes (a ``..`` walk-up on one drive, and the
+    cross-drive raise) resolve to the same absolute form, so the answer
+    does not depend on which platform is asking.
+    """
+    try:
+        rel = os.path.relpath(path, REPO_ROOT)
+    except ValueError:
+        # Different Windows drives: no relative path exists, by construction.
+        rel = os.pardir
+    if rel == os.pardir or rel.startswith(os.pardir + os.sep):
+        return os.path.abspath(path).replace(os.sep, "/")
+    return rel.replace(os.sep, "/")
 
 
 def qualnames(tree: ast.AST) -> dict[ast.AST, str]:
