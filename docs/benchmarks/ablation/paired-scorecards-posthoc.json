@@ -1,0 +1,230 @@
+{
+  "no_facts": {
+    "by_type": {
+      "single-session-preference": {
+        "mrr": 0.5128571333333334,
+        "n": 30,
+        "recall_all@k": 0.6666666666666666,
+        "recall_any@k": 0.6666666666666666
+      },
+      "temporal-reasoning": {
+        "mrr": 0.842857125984252,
+        "n": 127,
+        "recall_all@k": 0.7795275590551181,
+        "recall_any@k": 0.952755905511811
+      }
+    },
+    "headline": {
+      "mrr": 0.8833586531914893,
+      "n": 470,
+      "recall_all@k": 0.8319148936170213,
+      "recall_any@k": 0.9553191489361702
+    },
+    "vs_control": {
+      "identical": false,
+      "n_pairs": 470,
+      "recall_all_at_k": {
+        "baseline_mean": 0.817021,
+        "baseline_only": 14,
+        "candidate_mean": 0.831915,
+        "candidate_only": 21,
+        "ci": [
+          -0.010638,
+          0.040426
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 35,
+        "p_value": 0.31050465907901525,
+        "verdict": "not_significant"
+      },
+      "recall_any_at_k": {
+        "baseline_mean": 0.940426,
+        "baseline_only": 4,
+        "candidate_mean": 0.955319,
+        "candidate_only": 11,
+        "ci": [
+          0.0,
+          0.031915
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 15,
+        "p_value": 0.11846923828125,
+        "verdict": "not_significant"
+      },
+      "reciprocal_rank": {
+        "baseline_mean": 0.877622,
+        "baseline_only": 32,
+        "candidate_mean": 0.883359,
+        "candidate_only": 41,
+        "ci": [
+          -0.01163,
+          0.02336
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 73,
+        "p_value": 0.3491818381705883,
+        "verdict": "not_significant"
+      }
+    },
+    "vs_floor": {
+      "identical": false,
+      "n_pairs": 470,
+      "recall_all_at_k": {
+        "baseline_mean": 0.829787,
+        "baseline_only": 23,
+        "candidate_mean": 0.831915,
+        "candidate_only": 24,
+        "ci": [
+          -0.025532,
+          0.031915
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 47,
+        "p_value": 1.0,
+        "verdict": "not_significant"
+      },
+      "recall_any_at_k": {
+        "baseline_mean": 0.970213,
+        "baseline_only": 14,
+        "candidate_mean": 0.955319,
+        "candidate_only": 7,
+        "ci": [
+          -0.034043,
+          0.004255
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 21,
+        "p_value": 0.18924713134765625,
+        "verdict": "not_significant"
+      },
+      "reciprocal_rank": {
+        "baseline_mean": 0.908121,
+        "baseline_only": 55,
+        "candidate_mean": 0.883359,
+        "candidate_only": 34,
+        "ci": [
+          -0.045469,
+          -0.004526
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 89,
+        "p_value": 0.0334167216020976,
+        "verdict": "baseline_better"
+      }
+    }
+  },
+  "no_facts_plain": {
+    "by_type": {
+      "single-session-preference": {
+        "mrr": 0.5888889,
+        "n": 30,
+        "recall_all@k": 0.7666666666666667,
+        "recall_any@k": 0.7666666666666667
+      },
+      "temporal-reasoning": {
+        "mrr": 0.8575115433070866,
+        "n": 127,
+        "recall_all@k": 0.7716535433070866,
+        "recall_any@k": 0.952755905511811
+      }
+    },
+    "headline": {
+      "mrr": 0.906923329787234,
+      "n": 470,
+      "recall_all@k": 0.8468085106382979,
+      "recall_any@k": 0.9680851063829787
+    },
+    "vs_control": {
+      "identical": false,
+      "n_pairs": 470,
+      "recall_all_at_k": {
+        "baseline_mean": 0.817021,
+        "baseline_only": 14,
+        "candidate_mean": 0.846809,
+        "candidate_only": 28,
+        "ci": [
+          0.002128,
+          0.055319
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 42,
+        "p_value": 0.04355852192384191,
+        "verdict": "candidate_better"
+      },
+      "recall_any_at_k": {
+        "baseline_mean": 0.940426,
+        "baseline_only": 1,
+        "candidate_mean": 0.968085,
+        "candidate_only": 14,
+        "ci": [
+          0.012766,
+          0.044681
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 15,
+        "p_value": 0.0009765625,
+        "verdict": "candidate_better"
+      },
+      "reciprocal_rank": {
+        "baseline_mean": 0.877622,
+        "baseline_only": 22,
+        "candidate_mean": 0.906923,
+        "candidate_only": 55,
+        "ci": [
+          0.010296,
+          0.048352
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 77,
+        "p_value": 0.00021680385841747665,
+        "verdict": "candidate_better"
+      }
+    },
+    "vs_floor": {
+      "identical": false,
+      "n_pairs": 470,
+      "recall_all_at_k": {
+        "baseline_mean": 0.829787,
+        "baseline_only": 14,
+        "candidate_mean": 0.846809,
+        "candidate_only": 22,
+        "ci": [
+          -0.008511,
+          0.042553
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 36,
+        "p_value": 0.2429849540349096,
+        "verdict": "not_significant"
+      },
+      "recall_any_at_k": {
+        "baseline_mean": 0.970213,
+        "baseline_only": 7,
+        "candidate_mean": 0.968085,
+        "candidate_only": 6,
+        "ci": [
+          -0.017021,
+          0.012766
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 13,
+        "p_value": 1.0,
+        "verdict": "not_significant"
+      },
+      "reciprocal_rank": {
+        "baseline_mean": 0.908121,
+        "baseline_only": 33,
+        "candidate_mean": 0.906923,
+        "candidate_only": 38,
+        "ci": [
+          -0.018806,
+          0.01659
+        ],
+        "min_discordant_for_significance": 6,
+        "n_discordant": 71,
+        "p_value": 0.6353076420876662,
+        "verdict": "not_significant"
+      }
+    }
+  }
+}
