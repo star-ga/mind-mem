@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
 import sys
 from typing import Any
 
@@ -147,35 +148,45 @@ def test_declared_sqlite_does_not_enter_hybrid_backend(monkeypatch: Any) -> None
     assert [h["doc_id"] for h in hits][:1] == ["s_gold_1"], "the query did not actually run"
 
 
-def test_the_hybrid_bm25_arm_is_the_same_fts_arm_as_sqlite() -> None:
-    """The like-for-like claim, measured rather than argued.
+#: Battery queries the hybrid path answers with ONE lexical query, so its
+#: ranking must equal the sqlite arm's byte for byte. Measured, not assumed --
+#: ``_QUERY_EXPANDING`` below is the query that does not belong here and why.
+_BATTERY_SINGLE_QUERY = (_QUERY, "kitchen tiles and dishwasher")
+
+#: A temporal query. ``HybridBackend`` decomposes it into 3 variants and fuses
+#: them with RRF, so the hybrid lexical arm does NOT serve the sqlite arm's
+#: ranking for it -- see the test below, which pins that difference rather
+#: than letting it pass as noise.
+_QUERY_EXPANDING = "when does my flight leave"
+
+
+def test_the_hybrid_lexical_arm_matches_sqlite_when_it_runs_one_query() -> None:
+    """Same FTS5 index, same ranking -- for the queries that stay single.
 
     A hybrid run and a sqlite run are only comparable if they differ in the
-    dense leg and nothing else. That holds because the harness builds the FTS
-    index BEFORE constructing the backend, and ``_bm25_search_raw`` branches
-    on ``recall.db`` existing: with it present the hybrid lexical arm is
-    ``query_index`` -- the same FTS5 arm ``sqlite`` measures -- and without it
-    the arm silently becomes the Markdown scan, which ranks differently.
+    dense leg. The lexical half of that holds because the harness builds the
+    FTS index BEFORE constructing the backend, and ``_bm25_search_raw``
+    branches on ``recall.db`` existing: with it present the hybrid lexical arm
+    is ``query_index`` -- the same FTS5 arm ``sqlite`` measures -- and without
+    it the arm silently becomes the Markdown scan, which ranks differently.
 
-    So with the dense leg off, the two configurations must serve a
-    byte-identical ranking. Delete the index build in ``_probe_hybrid`` and
-    this goes red, which is what makes it a gate on the build order rather
-    than a restatement of it.
+    Delete the index build in ``_probe_hybrid`` and this goes red, which is
+    what makes it a gate on the build order rather than a restatement of it.
     """
     adapter_a, state_a = _adapter_state(_SQLITE_CFG)
     try:
-        sqlite_fps = {q: ranking_fingerprint(adapter_a.query(q, state_a, 5), id_field="doc_id") for q in _BATTERY}
+        sqlite_fps = {q: ranking_fingerprint(adapter_a.query(q, state_a, 5), id_field="doc_id") for q in _BATTERY_SINGLE_QUERY}
     finally:
         adapter_a.teardown(state_a)
 
     adapter_b, state_b = _adapter_state(_HYBRID_CFG)
     try:
-        hybrid_fps = {q: ranking_fingerprint(adapter_b.query(q, state_b, 5), id_field="doc_id") for q in _BATTERY}
+        hybrid_fps = {q: ranking_fingerprint(adapter_b.query(q, state_b, 5), id_field="doc_id") for q in _BATTERY_SINGLE_QUERY}
     finally:
         adapter_b.teardown(state_b)
 
     compared = 0
-    for query in _BATTERY:
+    for query in _BATTERY_SINGLE_QUERY:
         if not sqlite_fps[query] and not hybrid_fps[query]:
             continue
         assert_ranking_unchanged(sqlite_fps[query], hybrid_fps[query], label=f"{query!r} sqlite vs hybrid-bm25", min_results=1)
@@ -183,31 +194,83 @@ def test_the_hybrid_bm25_arm_is_the_same_fts_arm_as_sqlite() -> None:
     assert compared, "no query retrieved anything; the comparison was vacuous"
 
 
-@pytest.mark.skipif(not _HAS_EMBEDDER, reason="dense leg needs the embedding extra")
-def test_a_servable_dense_leg_moves_the_ranking() -> None:
-    """The dense leg has to change the answer, or measuring it is pointless.
+def test_query_expansion_makes_the_lexical_arms_diverge_and_that_is_recorded() -> None:
+    """The qualification on "same lexical arm", measured rather than assumed.
 
-    This is the assertion the whole exercise is for. If a vector-on hybrid
-    served exactly what sqlite serves, the fusion contributed nothing and any
-    "hybrid beats BM25" claim would be measuring noise. Paired with the
-    identity test above -- same lexical arm, different dense leg -- a
-    difference here is attributable to the dense leg and to nothing else.
+    ``HybridBackend`` decomposes a temporal query into variants and fuses them
+    with RRF. The index is still the same FTS5 index, but the *ranking* is not
+    the sqlite arm's: measured on this workspace, sqlite serves ``s_3`` at its
+    BM25 score and the hybrid arm serves the same block at its RRF score
+    (``0x1.5585f06f69446p+2`` -> ``0x1.92e1ef73c0c20p-5``), because three
+    query variants were fused instead of one being run.
+
+    This matters to the C2-vs-C1 comparison and is the reason it is asserted
+    instead of quietly excluded: on expansion-triggering questions the delta
+    between a hybrid run and a sqlite run is NOT attributable to the dense leg
+    alone -- the lexical side moved too. A reader of the scorecard has to know
+    which questions those are. LongMemEval-S is full of temporal questions, so
+    this is not a corner case.
+
+    The assertion is on the score space, not merely "something differed": the
+    ids can and here do coincide, so a set-level check would have reported
+    agreement and hidden the fusion entirely.
     """
     adapter_a, state_a = _adapter_state(_SQLITE_CFG)
     try:
-        sqlite_fp = ranking_fingerprint(adapter_a.query(_QUERY, state_a, 5), id_field="doc_id")
+        sqlite_fp = ranking_fingerprint(adapter_a.query(_QUERY_EXPANDING, state_a, 5), id_field="doc_id")
     finally:
         adapter_a.teardown(state_a)
 
-    adapter_b, state_b = _adapter_state(_HYBRID_VEC_CFG)
+    adapter_b, state_b = _adapter_state(_HYBRID_CFG)
     try:
-        fused_fp = ranking_fingerprint(adapter_b.query(_QUERY, state_b, 5), id_field="doc_id")
+        hybrid_fp = ranking_fingerprint(adapter_b.query(_QUERY_EXPANDING, state_b, 5), id_field="doc_id")
     finally:
         adapter_b.teardown(state_b)
 
     assert sqlite_fp, "sqlite arm served nothing; the comparison would be vacuous"
-    assert fused_fp, "fused arm served nothing; the comparison would be vacuous"
-    assert compare_rankings(sqlite_fp, fused_fp).moved is True
+    assert hybrid_fp, "hybrid arm served nothing; the comparison would be vacuous"
+    assert compare_rankings(sqlite_fp, hybrid_fp).moved is True
+    # Same block, different score space -- the fusion, not a different answer.
+    assert [block_id for block_id, _score in sqlite_fp] == [block_id for block_id, _score in hybrid_fp]
+
+
+@pytest.mark.skipif(not _HAS_EMBEDDER, reason="dense leg needs the embedding extra")
+def test_a_servable_dense_leg_moves_the_ranking() -> None:
+    """The dense leg must change the answer, or measuring it is pointless.
+
+    Getting the baseline right took three attempts and each wrong one was a
+    control that could not fail -- the exact trap this file was written
+    against, met twice from the inside:
+
+    * against the ``sqlite`` arm: the hybrid path serves RRF scores where
+      sqlite serves BM25 scores, so the fingerprints differ whatever the dense
+      leg did;
+    * against the BM25-only ``hybrid`` config: ``vector_enabled`` selects the
+      parallel two-leg branch instead of the single-arm branch, which scores
+      differently on its own.
+
+    Both stayed green with the dense leg deliberately broken (an index written
+    in a shape the search leg cannot parse). The only baseline that isolates
+    the leg is the SAME config and the SAME code path with the embedding store
+    removed -- which is just an un-indexed workspace, a state any install
+    reaches. Then the single remaining variable is whether the dense arm had
+    vectors to contribute, and a leg that contributes nothing turns this red.
+    """
+    adapter, state = _adapter_state(_HYBRID_VEC_CFG)
+    try:
+        assert state.probe.extra["vector_index_blocks"] == len(_DOCS)
+        with_vectors = ranking_fingerprint(adapter.query(_QUERY, state, 5), id_field="doc_id")
+
+        # Remove the embedding store the dense arm reads. Same backend object,
+        # same config, same branch -- only the vectors are gone.
+        shutil.rmtree(os.path.join(state.workspace, ".mind-mem-vectors"), ignore_errors=True)
+        without_vectors = ranking_fingerprint(adapter.query(_QUERY, state, 5), id_field="doc_id")
+    finally:
+        adapter.teardown(state)
+
+    assert with_vectors, "indexed run served nothing; the comparison would be vacuous"
+    assert without_vectors, "un-indexed run served nothing; the comparison would be vacuous"
+    assert compare_rankings(with_vectors, without_vectors).moved is True
 
 
 # ---------------------------------------------------------------------------
