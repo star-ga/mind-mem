@@ -2,7 +2,15 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
-## [Unreleased]
+## [5.0.2] - 2026-09-05
+
+### Note on the version line — 5.1.0 exists on PyPI and is yanked
+
+`5.1.0` was published on 2026-09-01 and yanked the same day with no reason
+recorded, and the tree was renumbered back to 5.0.1. Anyone who pinned it saw a
+yank warning and no explanation, so it is stated here: 5.1.0 is withdrawn, 5.0.2
+supersedes 5.0.1, and the 5.1 line will be reused only when the work the
+"Known limitations" section schedules for it actually lands.
 
 ### Added — a snapshot has an identity, not just a directory
 

@@ -231,7 +231,7 @@
   "info": {
     "description": "REST API that mirrors the mind-mem MCP tool surface.",
     "title": "mind-mem REST API",
-    "version": "5.0.1"
+    "version": "5.0.2"
   },
   "openapi": "3.1.0",
   "paths": {
