@@ -67,3 +67,6 @@ scratchpad_roadmap/
 
 # Local fleet/infra topology notes — private, never public (see mind-internal)
 docs/FLEET_MCP_WIRING.md
+
+# Written by the test suite's thread-ceiling watchdog when it stops a run.
+.pytest-thread-ceiling.log

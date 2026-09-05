@@ -17,9 +17,13 @@ checks that reported success over work they never inspected.
 from __future__ import annotations
 
 import contextlib
+import os
 import pathlib
+import subprocess
 import sys
 import tempfile
+import threading
+import time
 from typing import Iterator
 
 import pytest
@@ -91,6 +95,186 @@ def admit_delete():
             yield
 
     return _scope
+
+
+#: Hard ceiling that aborts the session mid-test.
+#:
+#: The per-test check below cannot help while a SINGLE test is leaking: it
+#: only runs at teardown, and the test that took this box down never got
+#: there. Measured 2026-09-04: one test reached 30,935 threads inside its own
+#: body, and both full runs that hit it deadlocked -- unable to create the
+#: threads they needed to finish, so teardown never ran and no failure was
+#: ever reported. Eight times the per-test budget, and still two orders of
+#: magnitude below the point where the machine stops being able to fork.
+_THREAD_CEILING = int(os.environ.get("MIND_MEM_TEST_THREAD_CEILING", "1024"))
+
+#: Where the watchdog records why it stopped a run. A SIGKILLed pytest flushes
+#: nothing, so without this the only evidence is the exit code.
+_CEILING_LOG = pathlib.Path(__file__).resolve().parents[1] / ".pytest-thread-ceiling.log"
+
+
+#: Polled by the out-of-process watchdog below.
+_WATCHDOG_SOURCE = """
+import os, signal, sys, time
+pid, ceiling, log = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
+status = "/proc/%d/status" % pid
+while True:
+    time.sleep(0.25)
+    try:
+        with open(status) as fh:
+            live = next(int(l.split()[1]) for l in fh if l.startswith("Threads:"))
+    except (OSError, StopIteration, ValueError):
+        break                      # the run ended; nothing to guard
+    if live <= ceiling:
+        continue
+    msg = (
+        "\\n*** thread ceiling exceeded: %d OS threads (ceiling %d). A test is "
+        "creating threads faster than it retires them; stopping the run so this "
+        "ends in a failure rather than a machine that cannot fork. Raise "
+        "MIND_MEM_TEST_THREAD_CEILING to change the bound. ***\\n" % (live, ceiling)
+    )
+    # fd 2 is pytest's capture file by the time this runs, and a SIGKILLed
+    # run never flushes it -- so the reason goes to a real file as well, or
+    # the only thing anyone sees is exit code 137.
+    try:
+        with open(log, "w", encoding="utf-8") as fh:
+            fh.write(msg)
+    except OSError:
+        pass
+    os.write(2, msg.encode())
+    try:
+        os.kill(pid, signal.SIGINT)   # pytest reports this, naming the test
+    except OSError:
+        break
+    time.sleep(10.0)
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        break                      # it took the interrupt; a report is coming
+    os.write(2, b"*** still running 10s after SIGINT; killing ***\\n")
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+    break
+"""
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _abort_session_on_runaway_threads() -> Iterator[None]:
+    """Stop a runaway test before it takes the machine, not after.
+
+    ``_fail_on_leaked_threads`` names the culprit, but only once the test
+    returns. A test that fans out threads faster than it finishes never gets
+    there, so the protection has to be able to fire from outside it.
+
+    It also has to fire from outside the *process*. An in-process watchdog
+    thread was tried first and is not reliable under exactly the conditions it
+    exists for: measured 2026-09-04, a watchdog sampling every 0.25s never ran
+    while one test took the interpreter from 1,845 to 7,505 threads in twelve
+    seconds, because a thread waiting on a condition does not get scheduled
+    against thousands of others contending for the GIL. Signals have the same
+    problem -- CPython runs the handler in the main thread, which is equally
+    starved -- so SIGINT is only the first ask, and SIGKILL is what makes the
+    guarantee real. Either way the run exits non-zero and the reason is on
+    stderr.
+
+    Linux-only, because it reads ``/proc/<pid>/status``. Elsewhere the per-test
+    check is the whole protection: it still turns a silent leak into a red
+    run, it just cannot cut one short mid-test.
+    """
+    if not os.path.exists("/proc/self/status"):
+        yield
+        return
+
+    watchdog = subprocess.Popen(
+        [sys.executable, "-c", _WATCHDOG_SOURCE, str(os.getpid()), str(_THREAD_CEILING), str(_CEILING_LOG)],
+        stdout=subprocess.DEVNULL,
+    )
+    try:
+        yield
+    finally:
+        watchdog.terminate()
+        try:
+            watchdog.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            watchdog.kill()
+            watchdog.wait()
+
+
+#: How far above the session's own starting thread count the suite may drift
+#: before a test is held responsible.
+#:
+#: Deliberately an ABSOLUTE bound against a session baseline rather than a
+#: per-test delta. A per-test delta only catches a test that leaks a lot at
+#: once; it is blind to the shape that actually took this machine down, which
+#: is a small leak repeated thousands of times. Measured 2026-09-04: one
+#: pytest process running a single file reached **34,024 live threads**, and a
+#: second reached 40,222, between them consuming every thread the box could
+#: create -- ``RuntimeError: can't start new thread`` from an unrelated
+#: two-thread script, swap fully exhausted, and both runs deadlocked because
+#: they could no longer create the threads they needed to finish. Neither run
+#: reported a failure while doing it.
+#:
+#: 128 is generous: the suite legitimately starts watcher, inbox and HTTP
+#: daemon threads and several concurrency tests hold workers across an
+#: assertion. It is also two orders of magnitude below the numbers above, so
+#: an accumulating leak trips inside the run that introduces it.
+_THREAD_BUDGET = int(os.environ.get("MIND_MEM_TEST_THREAD_BUDGET", "128"))
+
+#: A thread still winding down when its test returned is not a leak. Bounded
+#: so a genuine leak still fails promptly rather than costing 2s per test:
+#: the wait is only ever paid on the way to a failure.
+_THREAD_SETTLE_SECONDS = 2.0
+
+
+@pytest.fixture(scope="session")
+def _thread_baseline() -> int:
+    """Live threads before this session ran anything of its own."""
+    return threading.active_count()
+
+
+@pytest.fixture(autouse=True)
+def _fail_on_leaked_threads(_thread_baseline: int, request) -> Iterator[None]:
+    """Fail the test that leaks threads, instead of the machine that runs it.
+
+    A test that leaks threads reports PASS. That is the whole problem: the
+    cost lands on whoever runs the suite next, as an unrelated-looking
+    ``can't start new thread``, a wedged Bash tool, or a box that has to be
+    torn down -- never as a red test naming the file that did it.
+
+    The bound is checked against a session baseline rather than against the
+    count at this test's own entry, because the leak that matters accumulates:
+    one abandoned worker per operation is under any sane per-test delta and
+    still reaches five figures over a full run. Charging the drift to the
+    first test that crosses the line names a culprit early instead of blaming
+    whichever test happened to run last.
+
+    Not a substitute for a leak-specific test. This is the backstop that makes
+    *silent* leaking impossible -- the property that a passing suite must not
+    hand the next run a process it cannot fork in.
+    """
+    yield
+
+    leaked = threading.active_count() - _thread_baseline
+    if leaked <= _THREAD_BUDGET:
+        return
+    deadline = time.monotonic() + _THREAD_SETTLE_SECONDS
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        leaked = threading.active_count() - _thread_baseline
+        if leaked <= _THREAD_BUDGET:
+            return
+
+    alive = [t for t in threading.enumerate() if t.is_alive()]
+    sample = ", ".join(sorted({t.name for t in alive})[:8])
+    pytest.fail(
+        f"thread leak: {leaked} threads above the session baseline "
+        f"({threading.active_count()} live, budget {_THREAD_BUDGET}) after "
+        f"{request.node.nodeid}. Leaking threads while passing is how a green "
+        f"suite exhausts the machine's fork capacity. Live thread names: {sample}",
+        pytrace=False,
+    )
 
 
 @pytest.fixture(autouse=True, scope="session")
