@@ -171,13 +171,29 @@ def _as_utc(moment: _datetime | None) -> _datetime:
     return moment.astimezone(_timezone.utc)
 
 
+# A leading calendar day, accepting either separator: ``2023-05-20`` and
+# ``2023/05/20`` are the same day. Slash-dated corpora are common enough that
+# rejecting them silently costs the whole temporal signal: an unparseable date
+# scores 0.5, which is exactly the score for having no date at all, so the
+# failure is invisible at every layer above this one.
+_DAY_SEPARATORS = ("%Y-%m-%d", "%Y/%m/%d")
+
+
 def _parse_utc_day(raw: object) -> _datetime | None:
-    """Parse a leading ``YYYY-MM-DD`` into UTC midnight, or ``None`` if unparseable."""
-    try:
-        parsed = _datetime.strptime(raw[:10], "%Y-%m-%d")  # type: ignore[index]
-    except (ValueError, TypeError):
+    """Parse a leading calendar day into UTC midnight, or ``None`` if unparseable.
+
+    Accepts ``YYYY-MM-DD`` and ``YYYY/MM/DD``. Anything trailing the day is
+    ignored, so ``2023/05/20 (Sat) 02:21`` parses to 2023-05-20.
+    """
+    if not isinstance(raw, str):
         return None
-    return parsed.replace(tzinfo=_timezone.utc)
+    head = raw[:10]
+    for fmt in _DAY_SEPARATORS:
+        try:
+            return _datetime.strptime(head, fmt).replace(tzinfo=_timezone.utc)
+        except ValueError:
+            continue
+    return None
 
 
 def date_score(block: dict, *, now: _datetime | None = None) -> float:
