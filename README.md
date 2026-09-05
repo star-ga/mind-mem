@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/test_functions-11%2C214-brightgreen?style=flat-square" alt="Test functions: 11,214">
+  <img src="https://img.shields.io/badge/test_functions-11%2C219-brightgreen?style=flat-square" alt="Test functions: 11,219">
   <img src="https://img.shields.io/badge/MCP_tools-102-blue?style=flat-square" alt="MCP Tools: 102">
   <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
@@ -143,8 +143,8 @@ MIND-Mem introduces several techniques not found in existing memory systems:
 
 | Technique | What's new | Why it matters |
 |-----------|-----------|----------------|
-| **Co-retrieval graph** | PageRank-like score propagation across blocks frequently retrieved together | Surfaces structurally relevant blocks with zero lexical overlap (+2.0pp accuracy) |
-| **Fact card sub-block indexing** | Atomic fact extraction → small-to-big retrieval with parent score blending | Catches fine-grained facts that full-block BM25 misses (+2.6pp accuracy) |
+| **Co-retrieval graph** | PageRank-like score propagation across blocks frequently retrieved together | Surfaces structurally relevant blocks with zero lexical overlap |
+| **Fact card sub-block indexing** | Atomic fact extraction → small-to-big retrieval with parent score blending | Catches fine-grained facts that full-block BM25 misses |
 | **Adaptive knee cutoff** | Score-drop-based truncation instead of fixed top-K | Eliminates noise that hurts LLM judges — returns 3-15 results adaptively |
 | **Hard negative mining** | Logs BM25-high / cross-encoder-low blocks as misleading, penalizes in future queries | Self-improving retrieval: precision increases over time without retraining |
 | **Deterministic abstention** | Pre-LLM confidence gate using 5-signal scoring (entity, BM25, speaker, evidence, negation) | Prevents hallucinated answers to unanswerable questions — no ML required |

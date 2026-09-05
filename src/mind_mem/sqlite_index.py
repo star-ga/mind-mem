@@ -1524,8 +1524,20 @@ def query_index(
         # BM25 statistics come from the PREBUILT FTS5 index, and no WHERE
         # clause narrows what bm25() averages over — so index membership IS
         # the statistics decision. ``blocks_fts`` therefore carries the
-        # admitted set only, which puts this leg's IDF and length-average on
-        # the same corpus the in-memory scan leg computes over.
+        # admitted set only.
+        #
+        # It does NOT yet put this leg's IDF and length-average on the same
+        # corpus the in-memory scan leg computes over, and an earlier version
+        # of this comment claimed that it did. FACT sub-blocks are inserted
+        # into this same table (see ``_insert_block`` above), while the
+        # in-memory leg holds no reference to them at all — so the two legs
+        # score against different corpora. Measured on a session-shaped
+        # LongMemEval haystack: 48 parents alongside 334 fact cards, which
+        # drags the table's average document length far below the parents'
+        # own, so bm25 length-normalisation sees each parent as several times
+        # avgdl. Whether the fact layer should get its own statistics surface
+        # is settled for 5.1 under a paired scorecard; it is recorded here so
+        # the comment stops asserting a property the code does not have.
         #
         # Residual, stated honestly: membership is decided at index time, so
         # a block quarantined AFTER the last pass still contributes until the
