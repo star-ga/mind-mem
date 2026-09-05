@@ -130,19 +130,79 @@ def test_mindmem_adapter_hits_gold_via_real_recall():
 
 
 def test_mindmem_adapter_flags_declared_vs_effective_mismatch():
-    """Declaring a backend recall() has no dispatch for (``hybrid``) must be
-    caught as a pipeline mismatch — this is the false-green tripwire."""
+    """A ``hybrid`` that cannot run its dense leg must not be published as one.
+
+    This is the false-green tripwire, and what it guards has moved one step
+    closer to the truth. It used to assert ``effective_backend == "scan"``:
+    ``recall()`` had no ``hybrid`` dispatch at all, ``_load_backend`` returned
+    ``None`` for the unrecognised value, and the Markdown scan answered every
+    query while the scorecard read "hybrid" off the config string. The
+    mismatch fired, which was right, but for the wrong reason — the backend
+    was not degraded, it was *absent*.
+
+    The adapter now dispatches ``hybrid`` through ``HybridBackend``. With
+    ``vector_enabled`` off (as here) the dense leg is not requested, so the
+    run is BM25-only and is labelled ``hybrid_bm25_only`` — still not the
+    declared ``hybrid``, so the tripwire still fires. That is the assertion
+    that matters: a hybrid which silently degrades to one arm must be
+    visible, whether it degraded because the operator never asked for the
+    dense leg or because the embedder was unavailable.
+    """
     q = _synthetic_dataset()[0]
     docs = build_session_docs(q, turns="all")
     adapter = MindMemAdapter()
     state = adapter.init(docs, {"recall": {"backend": "hybrid"}})
     try:
         assert state.probe.declared_backend == "hybrid"
-        # mind-mem's recall() facade has no "hybrid" dispatch → falls to scan
-        assert state.probe.effective_backend == "scan"
+        # Dispatched to HybridBackend, but with no dense leg requested it is a
+        # BM25 run and says so. "hybrid" is reserved for a two-arm fusion.
+        assert state.probe.effective_backend == "hybrid_bm25_only"
         assert state.probe.mismatch is True
+        assert state.probe.vector_available is False
     finally:
         adapter.teardown(state)
+
+
+def test_an_unrecognised_backend_value_is_no_longer_silent(tmp_path):
+    """The case the old assertion was really protecting.
+
+    ``_load_backend`` logged unknown config KEYS and nothing at all for an
+    unknown VALUE, so ``backend: "hybrid"`` fell through to the Markdown scan
+    without a word. The adapter dispatch above covers ``hybrid`` specifically;
+    this covers the general case, which is the one that will bite next — any
+    future value the loader does not know still resolves to the scan, and now
+    it says so.
+    """
+    import json
+
+    import mind_mem._recall_core as core
+
+    ws = tmp_path / "unknown_backend_ws"
+    ws.mkdir()
+    (ws / "mind-mem.json").write_text(json.dumps({"recall": {"backend": "quantum"}}), encoding="utf-8")
+
+    seen = []
+
+    class _Spy:
+        def __getattr__(self, name):
+            def _record(event, **kw):
+                if name == "warning":
+                    seen.append((event, kw))
+
+            return _record
+
+    original = core._log
+    core._log = _Spy()
+    try:
+        resolved = core._load_backend(str(ws))
+    finally:
+        core._log = original
+
+    # Resolution is unchanged -- a log line is not a dispatch.
+    assert resolved is None
+    named = [kw for event, kw in seen if event == "unknown_recall_backend"]
+    assert len(named) == 1
+    assert named[0]["backend"] == "quantum"
 
 
 def test_config_sha256_stable_and_order_independent():
