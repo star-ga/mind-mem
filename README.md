@@ -459,8 +459,15 @@ is not measured by this benchmark at all.
 | Full-context¹ | 72.9% | N/A | LLM context window |
 | Mem0 (own LoCoMo paper)² | 66.9% | Cloud (managed) | graph DB + embeddings |
 
-¹ Third-party self-reported numbers (Letta's August 2025 analysis — see
-"Why Plain Files Outperform Fancy Retrieval" below). Not re-run by MIND-Mem.
+¹ Third-party **self-reported** numbers (Letta's August 2025 analysis — see
+"Why Plain Files Outperform Fancy Retrieval" below). **Not re-run by MIND-Mem, and
+not measured under a shared contract:** different hardware, different judge
+configuration, and each system's own harness. Rows in this table are therefore
+*indicative of scope*, not a head-to-head result, and none of them — including
+ours — has been reproduced by the others. A genuine comparison requires every
+system run under one adapter contract on one box with a pinned judge and >=2
+reps; that run does not exist yet, and until it does no ordering in this table
+should be read as a ranking.
 
 ² `66.88` is Mem0's own published LoCoMo-paper number. Mem0's separate 2026
 managed platform self-reports **91.6** on LoCoMo — a different setup/judge
@@ -468,17 +475,33 @@ managed platform self-reports **91.6** on LoCoMo — a different setup/judge
 table. Surfaced rather than omitted, per policy: never publish a comparison
 a skeptic could catch as cherry-picked.
 
-### LongMemEval (held pending reconciliation)
+### LongMemEval-S
 
-> **Provenance hold active.** The LongMemEval R@5 numbers below are pending reconciliation against a higher-iteration run. They are not part of the MIND-Mem positioning until the hold is resolved. See [`benchmarks/STATUS.md`](benchmarks/STATUS.md) for the current status and methodology.
+> The previous headline (`R@5 = 85.3`) is **retracted**, not held — it had no committed
+> artifact, was not reproducible after two attempts, and its own per-category rows summed
+> to 376 under a stated N=470. It is replaced by the measurement below, which ships with
+> per-question NDJSON so anyone can recompute it. See
+> [`benchmarks/STATUS.md`](benchmarks/STATUS.md) and
+> [`benchmarks/REPORT.md`](benchmarks/REPORT.md).
 
-| Category         |       N |      R@1 |      R@5 |     R@10 |      MRR |
-| ---------------- | ------: | -------: | -------: | -------: | -------: |
-| **Overall**      | **470** | **73.2** | **(held)** | **88.1** | **.784** |
-| Multi-session    |     121 |     83.5 |     (held) |     95.9 |     .885 |
-| Temporal         |     127 |     76.4 |     (held) |     92.9 |     .826 |
-| Knowledge update |      72 |     80.6 |     (held) |     91.7 |     .844 |
-| Single-session   |      56 |     82.1 |     (held) |     89.3 |     .847 |
+Full eligible set (470 of 500; 30 abstention questions excluded), two reps identical per
+question, artifacts under `docs/benchmarks/2026-09-03-longmemeval-s-full-*`.
+**Configuration: BM25F/SQLite with the vector leg OFF** — one leg of the product, not the
+shipped hybrid. The hybrid number does not exist yet and nothing here may be read as one.
+
+| adapter | recall_any@5 | recall_all@5 (official) | MRR |
+| --- | ---: | ---: | ---: |
+| `mind_mem` (BM25F/SQLite, vector off) | 0.9404 | 0.8170 | 0.8776 |
+| `bm25_baseline` (zero-dependency, in-memory) | 0.9702 | 0.8298 | 0.9081 |
+
+Paired over the same 470 question ids: on the **official strict protocol
+(`recall_all@5`) the two are statistically indistinguishable** (McNemar exact, p=0.4799);
+the zero-dependency baseline is better on the lenient protocol (`recall_any@5`, p=0.0043)
+and on MRR (p=0.0013). An independent audit refuted every artefact explanation — the
+recall caps are genuinely off in the pinned config, there is no ingest truncation, and
+index fragment ids never reach recall — so the deficit is **ordering quality, not
+candidate recall**. That is the work in flight; we publish the number that exists rather
+than the one we want.
 
 ### Performance (Latency & Throughput)
 
