@@ -33,4 +33,12 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # 2. Anatomy refresh — regenerates and stages ANATOMY.md if stale.
 [ -x "$SCRIPT_DIR/anatomy-hook.sh" ] && "$SCRIPT_DIR/anatomy-hook.sh"
 
+# 3. Docs-alignment refresh — regenerates and stages the derived claim counts
+#    (test functions, MCP tools, CI matrix) if a staged change made them stale.
+#    Same shape as step 2 and advisory for the same reason: these numbers are a
+#    cache of what the tree already knows, so the commit that invalidates them
+#    should be the commit that refreshes them. Measured: the check_docs_alignment
+#    CI job went red twice in one hour from three seats, none of whom edited a doc.
+[ -x "$SCRIPT_DIR/docs-alignment-hook.sh" ] && "$SCRIPT_DIR/docs-alignment-hook.sh"
+
 exit 0
