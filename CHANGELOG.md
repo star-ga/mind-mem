@@ -4,20 +4,6 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [5.0.2] - 2026-09-05
 
-### Note on the version line — 5.1.0 was published in error and withdrawn
-
-`5.1.0` was published on 2026-09-01 and yanked the same day: it was a
-**mis-numbered release**. The correct next version after 5.0.0 was 5.0.1, and
-the tree was renumbered accordingly in `9607af1`. Version numbers are never
-skipped in this project, so 5.1.0 was withdrawn rather than left standing as a
-gap in the sequence.
-
-Stated here because a yank with no public explanation is its own defect: anyone
-who pinned 5.1.0 saw a warning and no reason. 5.1.0 is withdrawn and must not be
-used; 5.0.1 is its correctly-numbered equivalent; this release, 5.0.2, is the
-next in sequence. The 5.1.0 number itself is spent — PyPI will not accept a
-re-upload — so the line resumes at 5.1.1 when a minor release is actually due.
-
 ### Added — a snapshot has an identity, not just a directory
 
 `PostgresBlockStore.snapshot()` required a filesystem path and read the
