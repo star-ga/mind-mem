@@ -44,6 +44,24 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUN_TO_RUN_STABLE = ("dataset.json",)
 
 
+def display_path(path: str, start: str) -> str:
+    """Repo-relative name for *path*, or its absolute form when that is impossible.
+
+    ``os.path.relpath`` RAISES on Windows when the two paths sit on different
+    drives -- "path is on mount 'C:', start on mount 'D:'". That is not exotic:
+    a CI runner checks the repo out on D: while pytest's tmp_path lives on C:,
+    so every package written to a temporary directory took the exception. The
+    call sites are all building a human-readable label for a command hint or a
+    report header, so a failure there should never be able to take down the run
+    that produced the artifact.
+    """
+    try:
+        rel = os.path.relpath(path, start)
+    except ValueError:
+        return os.path.abspath(path).replace(os.sep, "/")
+    return rel.replace(os.sep, "/")
+
+
 def canonical_json(obj: Any) -> bytes:
     """Sorted-key, separator-pinned, newline-terminated JSON. Hashable, diffable."""
     return (json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")

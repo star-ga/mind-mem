@@ -62,6 +62,7 @@ from benchmarks.hard_timeout import OK, run_with_hard_timeout  # noqa: E402
 from benchmarks.repro_manifest import (  # noqa: E402
     build_manifest,
     content_hash,
+    display_path,  # noqa: E402
     environment_facts,
     sha256_bytes,
     write_package,
@@ -320,9 +321,9 @@ def main(argv: list[str] | None = None) -> int:
         },
         headline=metrics["headline"],
         commands={
-            "regenerate": f"python3 benchmarks/repro_niah.py --out {os.path.relpath(a.out, _REPO_ROOT)}"
+            "regenerate": f"python3 benchmarks/repro_niah.py --out {display_path(a.out, _REPO_ROOT)}"
             + ("" if full_matrix else f" --every {max(1, a.every)}" + (f" --limit {a.limit}" if a.limit else "")),
-            "recompute_metrics_from_raw_rows": f"python3 benchmarks/repro_verify.py package {os.path.relpath(a.out, _REPO_ROOT)}",
+            "recompute_metrics_from_raw_rows": f"python3 benchmarks/repro_verify.py package {display_path(a.out, _REPO_ROOT)}",
             "verify_everything": "make repro-verify",
         },
         notes="Retrieval is fully local (BM25 + vector + RRF): no API key, no network, no judge model.",
@@ -347,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"package -> {a.out}")
     for name, meta in manifest["artifacts"].items():
         print(f"  {name}: {meta['sha256']}")
-    print(f"\nverify: python3 benchmarks/repro_verify.py package {os.path.relpath(a.out, _REPO_ROOT)}")
+    print(f"\nverify: python3 benchmarks/repro_verify.py package {display_path(a.out, _REPO_ROOT)}")
     return 0 if killed == 0 else 1
 
 

@@ -48,7 +48,7 @@ for _p in (_REPO_ROOT, os.path.join(_REPO_ROOT, "src")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from benchmarks.repro_manifest import canonical_json, read_rows, sha256_bytes  # noqa: E402
+from benchmarks.repro_manifest import canonical_json, display_path, read_rows, sha256_bytes  # noqa: E402
 from benchmarks.repro_metrics import METRIC_FNS, SCHEMA, STATUS_OK  # noqa: E402
 
 
@@ -86,7 +86,7 @@ class Report:
 
 
 def verify_package(pkg_dir: str) -> Report:
-    rep = Report(os.path.relpath(pkg_dir, _REPO_ROOT))
+    rep = Report(display_path(pkg_dir, _REPO_ROOT))
     manifest_path = os.path.join(pkg_dir, "manifest.json")
     if not rep.check(os.path.isfile(manifest_path), f"missing manifest.json in {pkg_dir}"):
         return rep
@@ -193,7 +193,7 @@ def parse_scorecard(path: str) -> dict[str, Any]:
 
 
 def verify_scorecard(ndjson_path: str, scorecard_path: str) -> Report:
-    rep = Report(f"{os.path.relpath(ndjson_path, _REPO_ROOT)} -> {os.path.basename(scorecard_path)}")
+    rep = Report(f"{display_path(ndjson_path, _REPO_ROOT)} -> {os.path.basename(scorecard_path)}")
     if not rep.check(os.path.isfile(ndjson_path), f"missing rows: {ndjson_path}"):
         return rep
     if not rep.check(os.path.isfile(scorecard_path), f"missing scorecard: {scorecard_path}"):
@@ -279,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
         if unverifiable:
             print("\nUNVERIFIABLE (published scorecard, no raw rows committed beside it):")
             for md in unverifiable:
-                print(f"    - {os.path.relpath(md, _REPO_ROOT)}")
+                print(f"    - {display_path(md, _REPO_ROOT)}")
             print("    These are not failures and not verifications. Nothing here recomputed them.")
     failed = [r for r in reports if not r.passed]
     total_checks = sum(r.checks for r in reports)

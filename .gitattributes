@@ -26,3 +26,13 @@
 # Generated files
 coverage.xml -diff
 benchmark-results.json -diff
+
+# Reproducibility packages are hash-pinned evidence: the manifest records the
+# sha256 of each file's RAW BYTES and the verifier re-hashes them with open(...,
+# "rb"). Under `* text=auto` these were checked out CRLF on Windows, so every
+# hash mismatched and verification failed there while passing on Linux -- the
+# artifact and its own manifest disagreeing purely because of the platform that
+# cloned them. Byte-identical on every platform is the whole point of a repro
+# package, so no line-ending translation may touch them.
+benchmarks/repro/** -text
+docs/benchmarks/**.ndjson -text
