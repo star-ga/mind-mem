@@ -78,7 +78,7 @@ Output:
 | **Local-first**         | All data stays on disk. No cloud calls, no telemetry, no phoning home.            |
 | **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
 | **Zero infrastructure** | Core requires only Python 3.10+ stdlib. Postgres, Redis, Docker, and GPU are opt-in extras. |
-| **100% NIAH**           | 250/250 Needle In A Haystack retrieval. Every needle, every depth, every size.     |
+| **100% NIAH**           | 250/250 Needle In A Haystack retrieval, every needle/depth/size — a test-suite result; no full-matrix artifact is committed yet ([EVIDENCE.md](EVIDENCE.md) row 1). |
 
 ---
 
@@ -375,6 +375,15 @@ MIND-Mem's recall engine evaluated on standard long-term memory benchmarks using
 ### Needle In A Haystack (NIAH)
 
 **250/250 — 100% retrieval** across all haystack sizes, burial depths, and needle types.
+
+> **Provenance.** This is a **test-suite result**, not an artifact-backed one. No
+> full-matrix repro package has ever been committed to this repository, and
+> earlier revisions of `EVIDENCE.md` cited `benchmarks/repro/niah/` files that did
+> not exist. The harness and its verifier are committed, and a 7-cell subset
+> package spanning every size and depth is committed at
+> `benchmarks/repro/niah-smoke/`, but the 250-cell package that would make this
+> number checkable end-to-end has not been produced. Until it is, read this as
+> "our tests pass 250/250", not as "here is the evidence".
 
 A single fact is planted at a controlled depth within a haystack of semantically diverse filler blocks. The system must retrieve the needle in its top-5 results using only a natural-language query.
 
