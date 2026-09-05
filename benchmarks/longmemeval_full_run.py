@@ -95,14 +95,35 @@ def eligible_questions(dataset: list[dict[str, Any]]) -> tuple[list[dict[str, An
     return pool, excluded_abstention, excluded_no_gold
 
 
-def score_one_question(question: dict[str, Any], adapter_name: str, turns: str, k: int, config: dict[str, Any] | None) -> dict[str, Any]:
+def score_one_question(
+    question: dict[str, Any],
+    adapter_name: str,
+    turns: str,
+    k: int,
+    config: dict[str, Any] | None,
+    mask: str = "",
+) -> dict[str, Any]:
     """Retrieve for one question. Runs in the CHILD process.
 
     Returns a plain dict so the result crosses the process boundary without
     dragging adapter state with it. Module-level, because ``spawn`` imports
     the target by name.
+
+    ``mask`` names an ablation from :mod:`benchmarks.ablation_mask` — a set of
+    ranking stages to switch off for this question, in this child, after
+    import and before the first query. It is empty on every ordinary run, and
+    the empty case is the load-bearing one: the mask module is not imported,
+    not one product symbol is rebound, and the retrieval this function
+    measures is character-for-character the shipped default. The unmasked
+    control run in the ablation battery is what proves that rather than
+    asserting it.
     """
     from mind_mem.bench.eval_adapters import get_adapter
+
+    if mask:
+        from benchmarks.ablation_mask import apply_mask, parse_mask
+
+        apply_mask(parse_mask(mask))
 
     adapter = get_adapter(adapter_name)
     docs = build_session_docs(question, turns)
@@ -187,6 +208,7 @@ def run(
     qtimeout_s: float = DEFAULT_QTIMEOUT_S,
     limit: int = 0,
     progress_every: int = 10,
+    mask: str = "",
 ) -> dict[str, Any]:
     """Score the eligible pool, one hard-killed child process per question."""
     pool, excl_abs, excl_no_gold = eligible_questions(dataset)
@@ -206,7 +228,7 @@ def run(
             if not query:
                 continue
             attempted += 1
-            outcome = run_with_hard_timeout(score_one_question, qtimeout_s, q, adapter_name, turns, k, config)
+            outcome = run_with_hard_timeout(score_one_question, qtimeout_s, q, adapter_name, turns, k, config, mask)
             if outcome.status == OK and isinstance(outcome.value, dict):
                 retrieved = list(outcome.value["retrieved"])
                 latency_ms = float(outcome.value["latency_ms"])
@@ -228,6 +250,13 @@ def run(
             row = score.to_ndjson_row()
             row["adapter"] = adapter_name
             row["turns"] = turns
+            # The served ranking itself. The scored metrics are derived from
+            # it, so an artifact that carries only the metrics cannot answer
+            # "where did the gold document go" after the fact -- which is the
+            # question an ablation is run to answer. Additive: no metric is
+            # computed from this field.
+            row["retrieved"] = retrieved
+            row["mask"] = mask
             row["pipeline"] = probe
             row["unit_status"] = outcome.status
             row["unit_elapsed_s"] = round(outcome.elapsed_s, 3)
@@ -238,6 +267,7 @@ def run(
                 print(f"  [{attempted}] last={outcome.status} {time.time() - t0:.0f}s", flush=True)
 
     return {
+        "mask": mask,
         "eligible": len(pool),
         "attempted_this_pass": attempted,
         "dataset_size": len(dataset),
@@ -337,6 +367,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scorecard", default=None)
     ap.add_argument("--embedder", default="none (BM25-only)")
     ap.add_argument("--config", default=None, help="JSON file with the adapter config to run under")
+    ap.add_argument(
+        "--mask",
+        default="",
+        help="ablation mask name (benchmarks/ablation_mask.MASKS) or 'stage+stage'; empty = shipped default, untouched",
+    )
     a = ap.parse_args(argv)
 
     data_path = resolve_data_path(a.data_path)
@@ -347,7 +382,8 @@ def main(argv: list[str] | None = None) -> int:
             config = json.load(handle)
 
     stamp = date.today().isoformat()
-    ndjson_path = a.ndjson or f"benchmarks/.cache/{stamp}-longmemeval-s-full-{a.adapter}-rep{a.rep}.ndjson"
+    tag = f"{a.adapter}-{a.mask}" if a.mask else a.adapter
+    ndjson_path = a.ndjson or f"benchmarks/.cache/{stamp}-longmemeval-s-full-{tag}-rep{a.rep}.ndjson"
     stats = run(
         a.adapter,
         dataset,
@@ -357,6 +393,7 @@ def main(argv: list[str] | None = None) -> int:
         config=config,
         qtimeout_s=a.qtimeout,
         limit=a.limit,
+        mask=a.mask,
     )
 
     scores, probe_rows, timed_out = _replay(ndjson_path)
@@ -394,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
     scorecard = render_scorecard(result, dataset_path=data_path, k=a.k, embedder=a.embedder, sampling=sampling)
     scorecard += embedder_disclosure(config, probe_rows)
     scorecard += timeout_disclosure(timed_out, len(scores), a.qtimeout)
-    scorecard_path = a.scorecard or f"docs/benchmarks/{stamp}-longmemeval-s-full-{a.adapter}-rep{a.rep}.md"
+    scorecard_path = a.scorecard or f"docs/benchmarks/{stamp}-longmemeval-s-full-{tag}-rep{a.rep}.md"
     os.makedirs(os.path.dirname(os.path.abspath(scorecard_path)), exist_ok=True)
     with open(scorecard_path, "w", encoding="utf-8") as handle:
         handle.write(scorecard)
