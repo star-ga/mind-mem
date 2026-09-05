@@ -182,13 +182,16 @@ class _FakeShard:
     def list_blocks(self) -> list[str]:
         return [f"{self.name}.md"]
 
-    def snapshot(self, snap_dir: str, *, files_touched: list[str] | None = None) -> dict:
-        return {"shard": self.name, "files": len(self.blocks)}
+    # The snapshot surface is addressed by directory, by ``snap_id``, or by
+    # both (see ``BlockStore.snapshot``); a double that accepts only the
+    # directory would make the id-addressed fan-out untestable here.
+    def snapshot(self, snap_dir: str | None = None, *, snap_id: str | None = None, files_touched: list[str] | None = None) -> dict:
+        return {"shard": self.name, "files": len(self.blocks), "snap_id": snap_id}
 
-    def restore(self, snap_dir: str) -> None:
-        self.restored_from.append(snap_dir)
+    def restore(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> None:
+        self.restored_from.append(snap_dir if snap_dir is not None else f"snap_id:{snap_id}")
 
-    def diff(self, snap_dir: str) -> list[str]:
+    def diff(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> list[str]:
         return []
 
 

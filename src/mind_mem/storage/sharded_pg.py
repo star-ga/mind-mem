@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from ..admission import require_admission, require_delete_admission, require_restore_admission
-from ..block_store import BlockStoreError
+from ..block_store import BlockStoreError, resolve_snapshot_target, validate_snap_id
 
 _log = logging.getLogger("mind_mem.storage.sharded_pg")
 
@@ -345,26 +345,49 @@ class ShardedPostgresBlockStore:
 
     # ---- BlockStore snapshot surface — per-shard ---------------------------
 
+    def _shard_snap_id(self, snap_id: str, idx: int) -> str:
+        """This cluster's snapshot id, narrowed to one shard.
+
+        Only used on the id-addressed path. The directory-addressed path
+        keeps its own naming (``<snap_dir>/shard-NN``) untouched, because
+        :meth:`restore` locates shards by that exact layout.
+        """
+        return validate_snap_id(f"{snap_id}-shard-{idx:02d}")
+
     def snapshot(
         self,
-        snap_dir: str,
+        snap_dir: str | None = None,
         *,
+        snap_id: str | None = None,
         files_touched: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Snapshot every shard to its own sub-directory.
+        """Snapshot every shard.
+
+        With ``snap_dir`` each shard is written to its own sub-directory,
+        exactly as before. With ``snap_id`` alone no directory is created
+        and each shard is filed under ``<snap_id>-shard-NN`` in its own
+        database — the shard index has to be part of the id, because the
+        shards do not share a ``snapshots`` table and a bare ``snap_id``
+        would name a different set of rows in each of them.
 
         Returns a composite manifest. ``ok`` is False and
         ``failed_shards`` lists the shards whose snapshot raised, so a
         partial backup cannot be recorded as a backup taken — the
         per-shard ``error`` key alone is too easy to miss.
         """
+        snap_dir, snap_id = resolve_snapshot_target(snap_dir, snap_id)
         manifests: dict[str, Any] = {}
         failed: list[str] = []
         for idx, store in self._stores.items():
-            shard_dir = os.path.join(snap_dir, f"shard-{idx:02d}")
-            os.makedirs(shard_dir, exist_ok=True)
+            if snap_dir is None:
+                shard_dir: str | None = None
+                shard_id: str | None = self._shard_snap_id(snap_id, idx)
+            else:
+                shard_dir = os.path.join(snap_dir, f"shard-{idx:02d}")
+                shard_id = None
+                os.makedirs(shard_dir, exist_ok=True)
             try:
-                manifests[str(idx)] = store.snapshot(shard_dir, files_touched=files_touched)
+                manifests[str(idx)] = store.snapshot(shard_dir, snap_id=shard_id, files_touched=files_touched)
             except Exception as exc:
                 _log.warning("shard_snapshot_failed shard=%s: %s", idx, exc)
                 manifests[str(idx)] = {"error": str(exc)}
@@ -373,11 +396,12 @@ class ShardedPostgresBlockStore:
             "sharded": True,
             "ok": not failed,
             "failed_shards": failed,
+            "snap_id": snap_id,
             "shards": manifests,
         }
 
-    def restore(self, snap_dir: str) -> None:
-        """Restore every shard from ``snap_dir/shard-NN``.
+    def restore(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> None:
+        """Restore every shard — from ``snap_dir/shard-NN``, or by id from ``<snap_id>-shard-NN``.
 
         Admission is required here, before the fan-out, for the two
         reasons :meth:`delete_block` states and one more that is specific
@@ -418,26 +442,37 @@ class ShardedPostgresBlockStore:
                 happen to be present and returning ``None`` is
                 indistinguishable from a full restore.
         """
-        require_restore_admission(snap_dir)
+        require_restore_admission(snap_dir if snap_dir is not None else str(snap_id))
+        snap_dir, snap_id = resolve_snapshot_target(snap_dir, snap_id)
+        if snap_dir is None:
+            # No directories to check: each shard's own restore raises if it
+            # does not hold that snap_id, and it raises BEFORE clearing its
+            # live table, so a shard that never took part cannot leave the
+            # cluster half-restored.
+            for idx, store in self._stores.items():
+                store.restore(snap_id=self._shard_snap_id(snap_id, idx))
+            return
         missing = [f"shard-{idx:02d}" for idx in self._stores if not os.path.isdir(os.path.join(snap_dir, f"shard-{idx:02d}"))]
         if missing:
             raise BlockStoreError(f"snapshot {snap_dir} has no directory for {', '.join(missing)} — refusing a partial restore")
         for idx, store in self._stores.items():
             store.restore(os.path.join(snap_dir, f"shard-{idx:02d}"))
 
-    def diff(self, snap_dir: str) -> list[str]:
-        """Per-shard diff against a snapshot.
+    def diff(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> list[str]:
+        """Per-shard diff against a snapshot (addressed as in :meth:`snapshot`).
 
         Raises:
             BlockStoreError: if any shard failed — a swallowed shard
                 error reads as "this shard matches the snapshot".
         """
+        snap_dir, snap_id = resolve_snapshot_target(snap_dir, snap_id)
         out: list[str] = []
         failures: list[str] = []
         for idx, store in self._stores.items():
-            shard_dir = os.path.join(snap_dir, f"shard-{idx:02d}")
+            shard_dir = None if snap_dir is None else os.path.join(snap_dir, f"shard-{idx:02d}")
+            shard_id = self._shard_snap_id(snap_id, idx) if snap_dir is None else None
             try:
-                out.extend(store.diff(shard_dir))
+                out.extend(store.diff(shard_dir, snap_id=shard_id))
             except Exception as exc:
                 failures.append(f"shard {idx}: {exc}")
                 _log.warning("shard_diff_failed shard=%s: %s", idx, exc)

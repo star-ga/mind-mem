@@ -52,6 +52,113 @@ def _safe_child_path(root: str, relative: str) -> str:
     return resolved
 
 
+# ─── Snapshot identity (v5.0.2 — roadmap "PostgresBlockStore.snapshot(snap_id=…)") ──
+#
+# A snapshot has an *identity* (``snap_id``) and, for stores that keep the
+# bytes on disk, a *location* (``snap_dir``). Until 5.0.2 the two were the
+# same thing everywhere: every backend took a directory and read the id off
+# its basename. That is right for the Markdown backend, whose blocks of
+# record ARE files, and wrong for the Postgres backend, whose blocks of
+# record are rows — it made a snapshot impossible on any deployment where
+# the API host shares no filesystem with the operator. The pair is resolved
+# in one place so the two backends cannot drift on what "the same snapshot"
+# means.
+
+#: Snapshot root, relative to the workspace, that a filesystem-backed store
+#: resolves a bare ``snap_id`` into — the directory ``apply_engine`` already
+#: writes its rollback snapshots to, so an id-addressed Markdown snapshot
+#: lands where every existing reader looks for one.
+SNAPSHOT_ROOT_REL = "intelligence/applied"
+
+#: The security floor for a snapshot id, applied to an id however it was
+#: obtained — including one derived from a caller-supplied directory name.
+#: These are the traversal primitives; an id carrying one could address a
+#: row (or a directory) other than the one named.
+_SNAP_ID_UNSAFE = frozenset({"/", "\\", "\x00"})
+
+#: Additionally refused for an *explicit* ``snap_id``. Illegal in a Windows
+#: path component, so an id minted on a database-only host stays a legal
+#: directory name when the same snapshot is later exported or restored
+#: through a filesystem-backed store. Not applied to a derived id: a
+#: directory named ``2026-09-04T12:00:00`` is a snapshot that already
+#: exists, and refusing it here would break a caller that worked.
+_SNAP_ID_NONPORTABLE = frozenset(':*?"<>|')
+
+#: Bound on an explicit id. The column is TEXT; this keeps an id legible in
+#: a log line and inside every filesystem's component limit.
+_SNAP_ID_MAX_LEN = 200
+
+
+def reject_unsafe_snap_id(snap_id: str, *, origin: str = "snap_id") -> str:
+    """Return *snap_id* unchanged, or raise ``ValueError`` if it can traverse.
+
+    The floor every snapshot id passes, whether the caller named it or a
+    backend derived it from a directory basename — and, deliberately, also
+    on the way back OUT of a store. Ids only ever enter through this door,
+    so re-checking a stored id is redundant *today*; it is what keeps
+    "an id read from the database is never trusted as a path component"
+    a property of the code rather than of its history.
+    """
+    if not snap_id:
+        raise ValueError(f"{origin} is empty")
+    if snap_id in (".", ".."):
+        raise ValueError(f"{origin} {snap_id!r} is a relative-path element, not an identity")
+    for ch in snap_id:
+        if ch in _SNAP_ID_UNSAFE or ord(ch) < 32:
+            raise ValueError(f"{origin} {snap_id!r} contains an unsafe character {ch!r}")
+    return snap_id
+
+
+def validate_snap_id(snap_id: str) -> str:
+    """Return an explicit *snap_id*, or raise ``ValueError``.
+
+    :func:`reject_unsafe_snap_id` plus the portability rules that only an
+    id the caller chose has to satisfy (see :data:`_SNAP_ID_NONPORTABLE`).
+    """
+    reject_unsafe_snap_id(snap_id)
+    if len(snap_id) > _SNAP_ID_MAX_LEN:
+        raise ValueError(f"snap_id is {len(snap_id)} characters; the limit is {_SNAP_ID_MAX_LEN}")
+    bad = sorted(set(snap_id) & _SNAP_ID_NONPORTABLE)
+    if bad:
+        raise ValueError(f"snap_id {snap_id!r} contains characters that are not portable to a path component: {''.join(bad)!r}")
+    return snap_id
+
+
+def snap_id_from_dir(snap_dir: str) -> str:
+    """The identity a directory-addressed snapshot carries: its basename."""
+    derived = os.path.basename(str(snap_dir).rstrip("/" + os.sep))
+    if not derived:
+        raise ValueError(f"Cannot derive snap_id from snap_dir={snap_dir!r}")
+    return reject_unsafe_snap_id(derived, origin="snap_id derived from snap_dir")
+
+
+def resolve_snapshot_target(snap_dir: str | None, snap_id: str | None) -> tuple[str | None, str]:
+    """Normalise the ``(snap_dir, snap_id)`` pair into ``(location, identity)``.
+
+    * ``snap_dir`` only — the identity is its basename, exactly as before.
+    * ``snap_id`` only — no filesystem location at all.
+    * both — the location is ``snap_dir`` and the two must *agree*. A
+      Postgres snapshot filed under one id while its exported
+      ``MANIFEST.json`` sits in a directory named another is precisely the
+      trap the cross-backend export exists to avoid: the manifest is there
+      so a Markdown store can restore the same snapshot, and it can only
+      do that by name.
+
+    Raises:
+        ValueError: neither was given, an id is unsafe or non-portable, or
+            the two disagree.
+    """
+    if snap_dir is None and snap_id is None:
+        raise ValueError("a snapshot needs snap_dir, snap_id, or both — neither was given")
+    if snap_dir is None:
+        return None, validate_snap_id(str(snap_id))
+    derived = snap_id_from_dir(snap_dir)
+    if snap_id is not None and validate_snap_id(snap_id) != derived:
+        msg = f"snap_id={snap_id!r} disagrees with snap_dir={snap_dir!r} (basename {derived!r})"
+        raise ValueError(msg + "; they name the same snapshot or neither")
+    return snap_dir, derived
+
+
 _log = get_logger("block_store")
 
 # ─── Snapshot constants (v3.2.0 §1.4 PR-3) ───────────────────────────────────
@@ -662,15 +769,30 @@ class BlockStore(Protocol):
     # ─── snapshot surface (v3.2.0 §1.4 PR-3) ─────────────────────────
     def snapshot(
         self,
-        snap_dir: str,
+        snap_dir: str | None = None,
         *,
+        snap_id: str | None = None,
         files_touched: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create a point-in-time snapshot. Returns the manifest dict."""
+        """Create a point-in-time snapshot. Returns the manifest dict.
+
+        A snapshot has an identity and, for a store that keeps bytes on
+        disk, a location. Pass ``snap_dir`` (the identity is its
+        basename, as before), ``snap_id`` alone, or both — in which case
+        they must agree; :func:`resolve_snapshot_target` is the one
+        definition of that rule.
+
+        ``snap_id`` alone is what makes a snapshot possible on a
+        deployment whose store needs no local filesystem. Each backend
+        decides where such a snapshot lives: the Postgres backend keeps
+        the manifest in ``<schema>.snapshots`` beside the rows it
+        describes, and a filesystem-backed store resolves the id under
+        :data:`SNAPSHOT_ROOT_REL` in its workspace.
+        """
         ...
 
-    def restore(self, snap_dir: str) -> None:
-        """Restore the workspace from a snapshot directory.
+    def restore(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> None:
+        """Restore the workspace from a snapshot (see :meth:`snapshot` for addressing).
 
         Implementations must call
         :func:`~mind_mem.admission.require_restore_admission` as their
@@ -686,10 +808,11 @@ class BlockStore(Protocol):
         """
         ...
 
-    def diff(self, snap_dir: str) -> list[str]:
+    def diff(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> list[str]:
         """Per-file diff (added / modified / deleted) vs. a snapshot.
 
-        Returns relative POSIX paths of files that differ.
+        Addressed exactly as :meth:`snapshot` — by directory, by id, or
+        by both. Returns relative POSIX paths of files that differ.
         """
         ...
 
@@ -1062,13 +1185,38 @@ class MarkdownBlockStore:
 
     # ─── snapshot surface (v3.2.0 §1.4 PR-3) ────────────────────────────
 
+    def _snapshot_dir(self, snap_dir: str | None, snap_id: str | None) -> str:
+        """The directory this snapshot's bytes live in.
+
+        A Markdown store's blocks of record ARE files, so it always needs
+        a location. An id-only call is not refused — it is resolved to
+        ``<workspace>/intelligence/applied/<snap_id>``, the directory
+        ``apply_engine`` already writes rollback snapshots to — so
+        ``snapshot(snap_id=...)`` means the same thing on both backends
+        and a caller need not know which one it holds.
+
+        A ``snap_dir`` given by the caller is returned untouched: it is
+        the existing path-based surface, and the identity rules exist to
+        constrain a NEW id, never to start refusing a directory that
+        already worked.
+        """
+        if snap_dir is not None:
+            if snap_id is not None:
+                resolve_snapshot_target(snap_dir, snap_id)  # raises if the two disagree
+            return snap_dir
+        return os.path.join(self._workspace, SNAPSHOT_ROOT_REL, validate_snap_id(str(snap_id)))
+
     def snapshot(
         self,
-        snap_dir: str,
+        snap_dir: str | None = None,
         *,
+        snap_id: str | None = None,
         files_touched: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a point-in-time snapshot in ``snap_dir``. Returns manifest dict.
+
+        Addressed by directory, by ``snap_id`` (resolved through
+        :meth:`_snapshot_dir`), or by both.
 
         When ``files_touched`` is provided only those files are captured —
         O(touched) instead of O(workspace). Falls back to a full snapshot when
@@ -1078,6 +1226,7 @@ class MarkdownBlockStore:
         nesting (snapshots containing snapshots).
         """
         ws = self._workspace
+        snap_dir = self._snapshot_dir(snap_dir, snap_id)
         os.makedirs(snap_dir, exist_ok=True)
 
         manifest_files: list[str] = []
@@ -1148,8 +1297,8 @@ class MarkdownBlockStore:
         _log.info("block_store_snapshot", snap_dir=snap_dir, file_count=len(manifest_files))
         return manifest_data
 
-    def restore(self, snap_dir: str) -> None:
-        """Restore workspace from snapshot.
+    def restore(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> None:
+        """Restore workspace from snapshot (addressed as in :meth:`snapshot`).
 
         Uses the MANIFEST.json fast-path (O(manifest)) when available;
         falls back to the legacy copytree approach for pre-manifest snapshots.
@@ -1170,8 +1319,12 @@ class MarkdownBlockStore:
                 before the manifest is read, so an ungated caller and a
                 caller naming a damaged snapshot fail differently.
         """
-        receipt = require_restore_admission(snap_dir)
+        # Admission first, before snap_dir/snap_id are resolved: an ungated
+        # caller and a caller naming an unusable snapshot must fail
+        # differently, and resolution can raise ValueError.
+        receipt = require_restore_admission(snap_dir if snap_dir is not None else str(snap_id))
         ws = self._workspace
+        snap_dir = self._snapshot_dir(snap_dir, snap_id)
         manifest_data = _read_manifest(snap_dir)
         if manifest_data is not None:
             manifest = manifest_data.get("files", [])
@@ -1305,13 +1458,15 @@ class MarkdownBlockStore:
 
         _log.info("block_store_restore_legacy", snap_dir=snap_dir, admission=receipt.entry_id)
 
-    def diff(self, snap_dir: str) -> list[str]:
+    def diff(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> list[str]:
         """Return sorted list of relative POSIX paths that differ vs. snapshot.
 
-        Uses the manifest fast-path when available; walks the snapshot tree
-        for legacy (pre-manifest) snapshots. Compares files by SHA-256 hash.
+        Addressed as in :meth:`snapshot`. Uses the manifest fast-path when
+        available; walks the snapshot tree for legacy (pre-manifest)
+        snapshots. Compares files by SHA-256 hash.
         """
         ws = self._workspace
+        snap_dir = self._snapshot_dir(snap_dir, snap_id)
         diffs: list[str] = []
         manifest_data = _read_manifest(snap_dir)
 

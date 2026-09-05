@@ -116,11 +116,38 @@ CREATE INDEX blocks_fts ON mind_mem.blocks
 
 ### Snapshots and cross-backend compatibility
 
-`snapshot()` writes to both the `snapshot_blocks` table and a
-`MANIFEST.json` file on disk in the given `snap_dir`. This means a
-snapshot taken with the Postgres backend can be restored by the Markdown
-backend and vice versa (the MANIFEST.json describes which files were
-in scope).
+A snapshot has an *identity* (`snap_id`) and, for a store that keeps bytes
+on disk, a *location* (`snap_dir`). `snapshot()`, `restore()` and `diff()`
+accept either, or both:
+
+```python
+store.snapshot(snap_id="nightly-20260904")        # no filesystem at all
+store.snapshot("/srv/snaps/nightly-20260904")     # identity from the basename
+store.snapshot("/srv/snaps/nightly-20260904",     # both — they must agree
+               snap_id="nightly-20260904")
+store.restore(snap_id="nightly-20260904")
+```
+
+On the Postgres backend the manifest of record lives in
+`mind_mem.snapshots.manifest`, written in the same transaction as the
+`snapshot_blocks` rows it describes — so a snapshot is complete in the
+database, travels with a dump or a replica, and can be restored from any
+host that can reach the DSN. This is what makes a snapshot possible on a
+deployment whose API host shares no filesystem with the operator.
+
+Passing `snap_dir` additionally *exports* `MANIFEST.json` to that
+directory, which is what lets a snapshot taken with the Postgres backend be
+restored by the Markdown backend and vice versa (the MANIFEST.json
+describes which files were in scope). The export is a copy of the record,
+never the record itself; an id-addressed snapshot writes no file.
+
+A `snap_id` may not contain a path separator, `.`, `..` or a control
+character, and an explicit one must also be a legal path component on
+Windows — it becomes a directory name the moment the snapshot is exported
+or taken through a filesystem-backed store, which resolves a bare
+`snap_id` under `intelligence/applied/`. A sharded cluster files each
+shard under `<snap_id>-shard-NN`, because the shards do not share a
+`snapshots` table.
 
 ### Connection pool
 

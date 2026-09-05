@@ -137,7 +137,7 @@ class TestWriteRouting:
         """
         with restoring(str(tmp_path)):
             rep_store.restore("/tmp/snap")
-        rep_store._primary.restore.assert_called_once_with("/tmp/snap")
+        rep_store._primary.restore.assert_called_once_with("/tmp/snap", snap_id=None)
 
 
 class TestCircuitBreaker:

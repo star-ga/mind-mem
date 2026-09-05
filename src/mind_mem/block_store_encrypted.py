@@ -219,8 +219,9 @@ class EncryptedBlockStore:
 
     def snapshot(
         self,
-        snap_dir: str,
+        snap_dir: str | None = None,
         *,
+        snap_id: str | None = None,
         files_touched: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a point-in-time snapshot. Returns the manifest dict.
@@ -230,9 +231,9 @@ class EncryptedBlockStore:
         and restored byte-identically. The snapshot needs no separate
         protection because it never holds plaintext the corpus did not.
         """
-        return self._inner.snapshot(snap_dir, files_touched=files_touched)
+        return self._inner.snapshot(snap_dir, snap_id=snap_id, files_touched=files_touched)
 
-    def restore(self, snap_dir: str) -> None:
+    def restore(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> None:
         """Restore the workspace from a snapshot directory (see :meth:`snapshot`).
 
         Enforced here as well as on the inner store, for the same reason
@@ -247,10 +248,10 @@ class EncryptedBlockStore:
         Raises:
             UngatedRestoreError: No RESTORE admission is open.
         """
-        require_restore_admission(snap_dir)
-        self._inner.restore(snap_dir)
+        require_restore_admission(snap_dir if snap_dir is not None else str(snap_id))
+        self._inner.restore(snap_dir, snap_id=snap_id)
 
-    def diff(self, snap_dir: str) -> list[str]:
+    def diff(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> list[str]:
         """Per-file diff vs. a snapshot — a SHA-256 compare of raw bytes.
 
         Ciphertext against ciphertext, which is sound but conservative:
@@ -259,7 +260,7 @@ class EncryptedBlockStore:
         error is one-sided — a real change is never reported as
         unchanged — which is the direction a rollback needs.
         """
-        return self._inner.diff(snap_dir)
+        return self._inner.diff(snap_dir, snap_id=snap_id)
 
     # ------------------------------------------------------------------
     # Lock / cache surface

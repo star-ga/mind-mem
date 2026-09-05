@@ -25,7 +25,10 @@ if TYPE_CHECKING:
 
 from .admissibility import is_admissible_status
 from .admission import require_admission, require_delete_admission, require_restore_admission
-from .block_store import BlockStoreError  # noqa: F401  (re-exported for convenience)
+from .block_store import (  # noqa: F401  (BlockStoreError re-exported for convenience)
+    BlockStoreError,
+    resolve_snapshot_target,
+)
 
 _log = logging.getLogger("mind_mem.block_store_postgres")
 
@@ -1409,26 +1412,39 @@ class PostgresBlockStore:
 
     def snapshot(
         self,
-        snap_dir: str,
+        snap_dir: str | None = None,
         *,
+        snap_id: str | None = None,
         files_touched: list[str] | None = None,
     ) -> dict[str, Any]:
         """Capture a point-in-time snapshot.
 
-        ``snap_id`` is derived from the basename of ``snap_dir``.
-        All live blocks are copied into ``<schema>.snapshot_blocks``
-        and the manifest is also written to ``snap_dir/MANIFEST.json``
-        for cross-backend compatibility (restore via MarkdownBlockStore
-        can read the same manifest).
+        **Addressing.** Pass ``snap_id`` — a snapshot on this backend
+        needs no filesystem at all. ``snap_dir`` keeps working unchanged
+        (the identity is its basename); pass both and they must agree.
 
-        Returns the manifest dict (``{"files": [...], "version": 2}``).
+        **Where the manifest lives.** In ``<schema>.snapshots.manifest``,
+        beside the rows it describes, written in the *same transaction*
+        as ``<schema>.snapshot_blocks``. That is the only place it can
+        live for this backend and still be true: the blocks of record are
+        rows, so a manifest on one host's disk is a second, unsynchronised
+        copy that no other host can read — which is the whole defect this
+        signature closes. A snapshot taken with ``snap_id`` alone is
+        complete in the database, travels with a dump or a replica, and
+        can be restored from any host that can reach the DSN.
+
+        ``snap_dir``, when given, additionally *exports* the manifest to
+        ``snap_dir/MANIFEST.json`` — unchanged behaviour, kept because a
+        ``MarkdownBlockStore`` can restore from that file. The export is a
+        copy, never the record.
+
+        Returns the manifest dict
+        (``{"files": [...], "version": 2, "snap_id": ...}``).
         """
         self._ensure_schema()
         pool = self._get_pool()
         psycopg, _ = _require_psycopg()
-        snap_id = os.path.basename(snap_dir.rstrip("/"))
-        if not snap_id:
-            raise ValueError(f"Cannot derive snap_id from snap_dir={snap_dir!r}")
+        snap_dir, snap_id = resolve_snapshot_target(snap_dir, snap_id)
 
         # Collect all live blocks.
         all_blocks = self.get_all(active_only=False)
@@ -1441,7 +1457,11 @@ class PostgresBlockStore:
 
         # Build the manifest file list.
         files_in_snap: list[str] = sorted({b.get("_source_file", "") for b in blocks_to_snap if b.get("_source_file")})
-        manifest: dict[str, Any] = {"files": files_in_snap, "version": 2}
+        # ``snap_id`` is carried in the manifest so a snapshot that exists
+        # only as rows still names itself: the manifest is the record, and a
+        # record that does not say which snapshot it describes is only
+        # identifiable by the row it happens to sit in.
+        manifest: dict[str, Any] = {"files": files_in_snap, "version": 2, "snap_id": snap_id}
         manifest_json = json.dumps(manifest, default=str)
 
         sql_snap = _sql(
@@ -1481,21 +1501,37 @@ class PostgresBlockStore:
         except Exception as exc:
             raise BlockStoreError(f"snapshot failed for snap_id={snap_id!r}: {exc}") from exc
 
-        # Write MANIFEST.json to disk for cross-backend compatibility.
-        os.makedirs(snap_dir, exist_ok=True)
-        manifest_path = os.path.join(snap_dir, "MANIFEST.json")
-        with open(manifest_path, "w", encoding="utf-8") as fh:
-            json.dump(manifest, fh)
+        # Export MANIFEST.json for cross-backend compatibility — only when the
+        # caller named a directory. An id-addressed snapshot touches no
+        # filesystem: that is the point, and creating a directory anyway
+        # would put the cross-host deployment back where it started.
+        if snap_dir is not None:
+            os.makedirs(snap_dir, exist_ok=True)
+            manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+            with open(manifest_path, "w", encoding="utf-8") as fh:
+                json.dump(manifest, fh)
 
         _log.info("postgres_block_store_snapshot", extra={"snap_id": snap_id, "block_count": len(blocks_to_snap)})
         return manifest
 
-    def restore(self, snap_dir: str) -> None:
+    def restore(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> None:
         """Restore live blocks from a snapshot in a single transaction.
 
-        Clears all current rows in ``<schema>.blocks`` and re-inserts from
-        ``<schema>.snapshot_blocks[snap_id]``.  The operation is fully
+        Addressed exactly as :meth:`snapshot` — by directory, by
+        ``snap_id``, or by both — so a snapshot taken without a
+        filesystem can be put back without one. Clears all current rows
+        in ``<schema>.blocks`` and re-inserts from
+        ``<schema>.snapshot_blocks[snap_id]``. The operation is fully
         atomic: if the transaction fails the live table is unchanged.
+
+        Nothing read out of the database is used as a path. The ids that
+        come back out are ``snapshot_blocks.block_id`` (bound as SQL
+        parameters, written into ``blocks.id``) and ``file_path`` (a
+        stored column, copied to ``blocks.file_path`` verbatim) — neither
+        is joined to a directory here, and the manifest is never read
+        back to decide what to reinstate. The set restored is the set of
+        ROWS carrying this ``snap_id``, so a manifest cannot name a block
+        the snapshot does not contain, nor hide one it does.
 
         Raises:
             UngatedRestoreError: No RESTORE admission is open. Checked
@@ -1503,12 +1539,10 @@ class PostgresBlockStore:
                 an ungated caller cannot learn from the failure whether a
                 snapshot exists, and cannot open a connection by asking.
         """
-        receipt = require_restore_admission(snap_dir)
+        receipt = require_restore_admission(snap_dir if snap_dir is not None else str(snap_id))
         self._ensure_schema()
         pool = self._get_pool()
-        snap_id = os.path.basename(snap_dir.rstrip("/"))
-        if not snap_id:
-            raise ValueError(f"Cannot derive snap_id from snap_dir={snap_dir!r}")
+        snap_dir, snap_id = resolve_snapshot_target(snap_dir, snap_id)
 
         sql_check = _sql(
             self._schema,
@@ -1549,8 +1583,10 @@ class PostgresBlockStore:
 
         _log.info("postgres_block_store_restore", extra={"snap_id": snap_id, "admission": receipt.entry_id})
 
-    def diff(self, snap_dir: str) -> list[str]:
+    def diff(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> list[str]:
         """Return paths of blocks that differ between current state and snapshot.
+
+        Addressed exactly as :meth:`snapshot`.
 
         Uses a FULL OUTER JOIN between ``blocks`` and ``snapshot_blocks`` to
         detect: added (in live but not in snapshot), removed (in snapshot but
@@ -1560,9 +1596,7 @@ class PostgresBlockStore:
         """
         self._ensure_schema()
         pool = self._get_pool()
-        snap_id = os.path.basename(snap_dir.rstrip("/"))
-        if not snap_id:
-            raise ValueError(f"Cannot derive snap_id from snap_dir={snap_dir!r}")
+        snap_dir, snap_id = resolve_snapshot_target(snap_dir, snap_id)
 
         sql = _sql(
             self._schema,

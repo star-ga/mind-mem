@@ -4,6 +4,46 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Added — a snapshot has an identity, not just a directory
+
+`PostgresBlockStore.snapshot()` required a filesystem path and read the
+snapshot's identity off that path's basename. The whole point of the Postgres
+backend is that the blocks of record are rows rather than files, so a
+deployment whose API host shares no filesystem with the operator could not
+snapshot at all — the one thing the backend exists to make possible.
+
+`snap_id` is now a first-class parameter on `snapshot` / `restore` / `diff`
+across every backend (`BlockStore` protocol, Markdown, Postgres, encrypted,
+replicated, sharded). A snapshot is addressed by directory (the identity is
+its basename, exactly as before), by `snap_id` alone, or by both — in which
+case they must agree, because a row filed under one id while its exported
+`MANIFEST.json` sits in a directory named another is unresolvable by the
+cross-backend restore that export exists for. One definition of that rule,
+`block_store.resolve_snapshot_target`, so the backends cannot drift on what
+"the same snapshot" means.
+
+For the Postgres backend the manifest lives in `<schema>.snapshots.manifest`,
+written in the same transaction as `<schema>.snapshot_blocks` — beside the
+rows it describes, so it travels with a dump or a replica and is readable from
+any host that can reach the DSN. `snap_dir`, when given, still *exports*
+`MANIFEST.json` to disk for a `MarkdownBlockStore` restore; the export is a
+copy, never the record. An id-addressed snapshot touches no filesystem at all.
+A filesystem-backed store resolves a bare `snap_id` under
+`intelligence/applied/`, the directory the apply engine already writes
+rollback snapshots to, so the call means the same thing on both backends. A
+sharded cluster files each shard under `<snap_id>-shard-NN`: the shards do not
+share a `snapshots` table, so the index has to be part of the id.
+
+Every id passes `reject_unsafe_snap_id` — no separators, no `.`/`..`, no
+control characters — the same containment the manifest-entry hardening in
+`apply_engine._block_ids_in_snapshot` established, applied to the other half
+of the surface. Nothing read back out of the database is used as a path: a
+Postgres restore reinstates the set of ROWS carrying the `snap_id`, never a
+list of names a manifest supplied.
+
+Purely additive: every existing path-based caller keeps its exact behaviour,
+and `apply_engine` is unchanged.
+
 ### Fixed — auto-enabled expansion re-entered its own fan-out, without bound
 
 `HybridBackend._search_expanded` fans a query's variants out and calls

@@ -149,8 +149,12 @@ class PermissiveInnerStore:
     def __init__(self) -> None:
         self.restored: list[str] = []
 
-    def restore(self, snap_dir: str) -> None:
-        self.restored.append(snap_dir)
+    # Addressed by directory, by ``snap_id``, or by both, like every real
+    # ``BlockStore.restore``: an instrument that accepts only the directory
+    # would raise a ``TypeError`` on the id-addressed path and read as a
+    # refusal the adapter never made.
+    def restore(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> None:
+        self.restored.append(snap_dir if snap_dir is not None else f"snap_id:{snap_id}")
 
 
 def sharded_module() -> Any:

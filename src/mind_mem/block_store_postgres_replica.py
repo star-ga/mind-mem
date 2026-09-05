@@ -150,8 +150,8 @@ class ReplicatedPostgresBlockStore:
     def list_blocks(self) -> list[str]:
         return cast(list[str], self._run_on_replica("list_blocks"))
 
-    def diff(self, snap_dir: str) -> list[str]:
-        return cast(list[str], self._run_on_replica("diff", snap_dir))
+    def diff(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> list[str]:
+        return cast(list[str], self._run_on_replica("diff", snap_dir, snap_id=snap_id))
 
     def hybrid_search(
         self,
@@ -219,13 +219,14 @@ class ReplicatedPostgresBlockStore:
 
     def snapshot(
         self,
-        snap_dir: str,
+        snap_dir: str | None = None,
         *,
+        snap_id: str | None = None,
         files_touched: list[str] | None = None,
     ) -> dict[str, Any]:
-        return self._primary.snapshot(snap_dir, files_touched=files_touched)
+        return self._primary.snapshot(snap_dir, snap_id=snap_id, files_touched=files_touched)
 
-    def restore(self, snap_dir: str) -> None:
+    def restore(self, snap_dir: str | None = None, *, snap_id: str | None = None) -> None:
         """Route a restore to the primary, refusing an ungated one here.
 
         Enforced here as well as on the primary, for the same reason
@@ -248,8 +249,8 @@ class ReplicatedPostgresBlockStore:
                 before the call is forwarded, so an ungated caller cannot
                 reach the primary at all.
         """
-        require_restore_admission(snap_dir)
-        self._primary.restore(snap_dir)
+        require_restore_admission(snap_dir if snap_dir is not None else str(snap_id))
+        self._primary.restore(snap_dir, snap_id=snap_id)
 
     def lock(self, *, blocking: bool = True, timeout: float = 30.0) -> Any:
         return self._primary.lock(blocking=blocking, timeout=timeout)

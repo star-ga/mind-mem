@@ -620,7 +620,7 @@ HITL gate deliberately refuses.
 - [x] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` now commit through the same `FileLock` + `_atomic_write` (temp file + `os.replace`) path as every other op; a failure partway through the write can no longer truncate the corpus file
 - [x] **FastAPI audit attribution** — two halves, both closed. Propagation: `_require_auth` stashes the identity on `request.state` (ContextVar writes in an anyio threadpool worker never reach the endpoint) and `_acting_as` re-establishes the ContextVar in the frame that performs the write. Ownership: `current_agent_id` moved to `mind_mem.audit_context` at the package root, so the core governance layer no longer resolves identity through a `try: from mind_mem.api.rest import ... except Exception` — a swallow that stamped every audit record `"system"`/`"anonymous"` whenever the import did not resolve, and had already shipped that defect once. `mind_mem.api.rest.current_agent_id` stays as a re-export of the same object; REST sets the identity, it no longer owns it
 - *(same defect as “Audit attribution through FastAPI sync deps” in the v4.0.x status section below; listed twice, counted once)*
-- *(tracked below — see “`PostgresBlockStore.snapshot(snap_id=…)`” in the status section; listed twice, counted once)*
+- [x] **`PostgresBlockStore.snapshot(snap_id=…)`** — *(same item as “`PostgresBlockStore.snapshot(snap_id=…)`” in the status section below; listed twice, counted once)*
 - [x] **T-004 webhook allowlist + T-001 content-provenance tags + N-08/N-12/N-13/T-007** — minor security-hardening items (see v3.2.0 section)
 
 ### v4.0.x federation transport hardening (3 items; +1 shipped in v4.0.14)
@@ -689,7 +689,7 @@ pin a state the toolchain cannot yet satisfy.
 **Sizing summary** (genuine remaining work):
 
 - **Small (1–3 day items, ship-this-month):** audit headers, public/private workspaces, peer allowlist, token rotation, time-bounded recall, time-travel/as_of, OpenAPI specs, vocabulary-bound fields, Group J `mind-mem connect`
-- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, audit attribution ContextVar fix, FastAPI request.state, PostgresBlockStore snapshot snap_id, migration importers, plugin SDK, cost metering, Group I per-hit feedback-quality credit + recall-sufficiency score, Group J tool-output offload store + anticipation-cache consumer
+- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, audit attribution ContextVar fix, FastAPI request.state, migration importers, plugin SDK, cost metering, Group I per-hit feedback-quality credit + recall-sufficiency score, Group J tool-output offload store + anticipation-cache consumer
 - **Large (multi-month):** local visual viewer (`mm view` web UI), conversational chat layer, Kubernetes operator, managed-service console, Byzantine consensus, Pure-MIND port (gated on `mindc` C-ABI maturity)
 - **Long-horizon / research (post-v4):** Pure-MIND port completion, [CAUSAL]/[SKILL]/[VISUAL] block types, ActivityPub interop, edge deployment, Group I validity-gated fusion + feedback-quality→success bench
 
@@ -1760,12 +1760,23 @@ file.
   count. Admin gate is enforced when OIDC is configured even
   without static tokens. Invalid JWTs reject with 401 instead of
   falling through to the permissive static-token path.
-- [ ] **`PostgresBlockStore.snapshot(snap_id=…)`** — current
-  signature requires a filesystem path for the MANIFEST.json
-  write, breaking cross-host Postgres snapshots. Accept a plain
-  `snap_id: str` and make the on-disk manifest optional. ~0.5
-  day. (Deferred to v3.2.2 — cross-backend snapshot API design
-  needs alignment with Markdown backend.)
+- [x] **`PostgresBlockStore.snapshot(snap_id=…)`** — closed.
+  `snap_id` is a first-class keyword on `snapshot` / `restore` /
+  `diff` across the `BlockStore` protocol and every implementation
+  (Markdown, Postgres, encrypted, replicated, sharded). A snapshot
+  is addressed by directory (identity from the basename, exactly
+  as before), by `snap_id` alone, or by both — which must agree.
+  The alignment the deferral was waiting on is
+  `block_store.resolve_snapshot_target`, one definition of the
+  pair, so the backends cannot drift on what "the same snapshot"
+  means. The Postgres manifest of record lives in
+  `<schema>.snapshots.manifest`, written in the same transaction
+  as the snapshot rows; `MANIFEST.json` is now an optional
+  *export* for a cross-backend restore, and an id-addressed
+  snapshot touches no filesystem. Ids are containment-checked on
+  the way in (`reject_unsafe_snap_id`) and nothing read back out
+  of the database is used as a path. Additive: no existing caller
+  changes.
 - [x] **Wire `cached_recall` into `_recall_impl`** — done in
   v3.2.0 commit `7c54844`.
 - [x] **Two config keys documented in `docs/configuration.md`** —
