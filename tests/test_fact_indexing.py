@@ -85,14 +85,10 @@ class TestFactSubBlockIndexing(_WorkspaceMixin, unittest.TestCase):
         # statistics decision.
         fact_ids = [r["id"] for r in fact_rows]
         for fid in fact_ids:
-            fts_row = conn.execute(
-                "SELECT * FROM blocks_fts_facts WHERE block_id = ?", (fid,)
-            ).fetchone()
+            fts_row = conn.execute("SELECT * FROM blocks_fts_facts WHERE block_id = ?", (fid,)).fetchone()
             self.assertIsNotNone(fts_row, f"No fact-surface FTS entry for {fid}")
 
-            parent_row = conn.execute(
-                "SELECT * FROM blocks_fts WHERE block_id = ?", (fid,)
-            ).fetchone()
+            parent_row = conn.execute("SELECT * FROM blocks_fts WHERE block_id = ?", (fid,)).fetchone()
             self.assertIsNone(
                 parent_row,
                 f"{fid} is a derived fact card and must not sit in the parent "

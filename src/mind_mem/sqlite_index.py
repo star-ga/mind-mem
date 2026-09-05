@@ -1691,8 +1691,10 @@ def query_index(
                 LIMIT ?""",  # nosec B608 -- same provenance as the parent query above
             (fts_query, *date_params, fetch_k),
         ).fetchall()
-        rows = list(rows) + list(fact_rows) + _released_withheld_rows(
-            conn, workspace, fts_query, weights, fetch_k, date_sql=date_sql, date_params=date_params
+        rows = (
+            list(rows)
+            + list(fact_rows)
+            + _released_withheld_rows(conn, workspace, fts_query, weights, fetch_k, date_sql=date_sql, date_params=date_params)
         )
     except sqlite3.OperationalError as e:
         _log.warning(

@@ -25,8 +25,7 @@ class TestSlashDatesParse:
     def test_it_scores_as_a_date_not_as_a_missing_one(self) -> None:
         scored = date_score({"Date": "2023/05/20 (Sat) 02:21"}, now=NOW)
         assert scored != date_score({}, now=NOW), (
-            "a parseable date must not score the same as no date at all -- "
-            "that equality is what made this failure invisible"
+            "a parseable date must not score the same as no date at all -- that equality is what made this failure invisible"
         )
         assert scored == date_score({"Date": "2023-05-20"}, now=NOW)
 
@@ -68,9 +67,7 @@ class TestDateProximityReadsSlashDates:
     def test_matching_slash_date_boosts_like_iso(self) -> None:
         from mind_mem._recall_scoring import _date_proximity_score
 
-        assert _date_proximity_score(self.QUERY, self.SLASH) == _date_proximity_score(
-            self.QUERY, self.ISO
-        )
+        assert _date_proximity_score(self.QUERY, self.SLASH) == _date_proximity_score(self.QUERY, self.ISO)
 
     def test_a_distant_date_still_does_not_boost(self) -> None:
         from mind_mem._recall_scoring import _date_proximity_score
