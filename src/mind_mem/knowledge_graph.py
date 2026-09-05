@@ -16,6 +16,9 @@ Design highlights:
 - Each edge carries provenance: the `source_block_id`, a
   `confidence` in [0, 1], and optional `valid_from` / `valid_until`
   timestamps so downstream retrieval can weight or filter by freshness.
+  Both bounds are *read* on every default query (:func:`_is_live`), so an
+  edge dated in the future is not served until its window opens; a NULL
+  bound means unbounded on that side.
 
 **An edge is content, so it is admitted like content (5.0.2).** Edges are
 served — ``graph_query`` and ``traverse_graph`` return them and
@@ -255,6 +258,41 @@ def _parse_iso8601(value: str) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _is_live(valid_from: Optional[str], valid_until: Optional[str], moment: datetime) -> bool:
+    """Whether a validity window contains *moment*.
+
+    Both bounds are inclusive and both are optional. ``valid_from=None``
+    means "no lower bound" — the claim has always held — and
+    ``valid_until=None`` means "no upper bound": it has not been retired.
+    A wholly NULL interval, the shape of every edge written while these
+    columns had a writer but no reader, is therefore live at every
+    instant, which is what keeps reading ``valid_from`` a patch-level
+    change on an existing store rather than a silent mass withdrawal.
+
+    A malformed bound is not live, in either direction. Corrupt data must
+    not be able to keep a retired claim alive; by symmetry it must not be
+    able to admit a claim whose start instant cannot be read either.
+
+    This is the single place the window is interpreted. ``_query_edges``
+    and the edge-grounded answer path both come through here so a
+    point-in-time answer and a live read can never disagree about what
+    "live" means.
+    """
+    if valid_from is not None:
+        try:
+            if _parse_iso8601(valid_from) > moment:
+                return False
+        except ValueError:
+            return False
+    if valid_until is not None:
+        try:
+            if _parse_iso8601(valid_until) < moment:
+                return False
+        except ValueError:
+            return False
+    return True
 
 
 class EntityRegistry:
@@ -1205,7 +1243,8 @@ class KnowledgeGraph:
         # We load the raw rows and apply the temporal filter in Python
         # because SQLite's text comparison on ISO 8601 strings breaks
         # on fractional seconds (`12:34:56.999Z` < `12:34:56Z` by ASCII
-        # ordering). Parsing to datetime keeps the comparison correct.
+        # ordering). Parsing to datetime keeps the comparison correct
+        # for both ends of the window.
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         sql = (
             "SELECT subject, predicate, object, source_block_id, confidence, "
@@ -1215,22 +1254,13 @@ class KnowledgeGraph:
         with self._lock:
             rows = self._conn.execute(sql, tuple(params)).fetchall()
         if not include_expired:
+            # BOTH bounds, against one clock read. Testing only
+            # ``valid_until`` left ``valid_from`` write-validated and
+            # never read, which made an edge dated in the future live
+            # today. :func:`_is_live` owns the semantics (inclusive
+            # bounds, NULL = unbounded, malformed = not live).
             now_dt = datetime.now(timezone.utc)
-            filtered: list[Any] = []
-            for row in rows:
-                vu = row["valid_until"]
-                if vu is None:
-                    filtered.append(row)
-                    continue
-                try:
-                    if _parse_iso8601(vu) >= now_dt:
-                        filtered.append(row)
-                except ValueError:
-                    # Edge with a malformed valid_until is treated as
-                    # expired so corrupt data cannot mask stale
-                    # information.
-                    continue
-            rows = filtered
+            rows = [row for row in rows if _is_live(row["valid_from"], row["valid_until"], now_dt)]
         out: list[Edge] = []
         for row in rows:
             try:
@@ -1274,7 +1304,9 @@ class KnowledgeGraph:
             predicate: Optional predicate filter. `None` traverses all.
             direction: ``"outgoing"`` follows subject→object, ``"incoming"``
                 follows object→subject, ``"both"`` does both.
-            include_expired: Include edges past their ``valid_until``.
+            include_expired: Bypass the validity window entirely —
+                include edges past their ``valid_until`` **and** edges
+                whose ``valid_from`` has not been reached.
             max_results: Cap on returned neighbours (stops the traversal
                 once reached).
 

@@ -4350,12 +4350,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Edge direction to follow (default: both).",
     )
     p_gans.add_argument("--max-triples", type=int, default=128, help="Cap on served triples (default: 128).")
-    p_gans.add_argument("--include-expired", action="store_true", help="Also serve edges past their valid_until.")
+    p_gans.add_argument(
+        "--include-expired",
+        action="store_true",
+        help="Ignore the validity window: also serve edges past their valid_until or not yet at their valid_from.",
+    )
     p_gans.add_argument(
         "--as-of",
         default="",
         metavar="ISO8601",
-        help="Evaluate edge validity at this instant instead of now, so the answer replays exactly.",
+        help="Evaluate both validity bounds at this instant instead of now (valid-time replay; edges written since still appear).",
     )
     p_gans.add_argument("--context", action="store_true", help="Print the serialised triple context instead of the answer.")
     p_gans.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")

@@ -1253,6 +1253,53 @@ def _op_replace_range(filepath, op):
     return True, f"replace_range: replaced {end_line - start_line} lines in {target}"
 
 
+#: Header line of a block in a corpus file, e.g. ``[D-20260904-001]``.
+#: The capture group is the block id.
+_BLOCK_HEADER_RE = re.compile(r"^\[([A-Z]+-[^\]]+)\]\s*$")
+
+
+def _first_block_id(block_text: str) -> str:
+    """The id on the first block header in *block_text*, or ``""``.
+
+    Used by the legacy filesystem supersede path, which has the successor
+    only as raw text. Returns the empty string rather than raising so a
+    malformed payload degrades to "no pointer written" instead of
+    aborting a supersession that would otherwise succeed.
+    """
+    for line in block_text.split("\n"):
+        m = _BLOCK_HEADER_RE.match(line)
+        if m:
+            return m.group(1)
+    return ""
+
+
+def _with_supersedes_field(block_text: str, target: str) -> str:
+    """Return *block_text* carrying ``Supersedes: <target>``.
+
+    Replaces an existing ``Supersedes:`` line inside the first block, or
+    inserts one directly after its header. The op's ``target`` is
+    authoritative: it is the predecessor this write is retiring, so a
+    stale value the proposer supplied is corrected rather than kept.
+    Text with no recognisable header is returned unchanged.
+    """
+    lines = block_text.split("\n")
+    header = None
+    for i, line in enumerate(lines):
+        if _BLOCK_HEADER_RE.match(line):
+            header = i
+            break
+    if header is None:
+        return block_text
+    for i in range(header + 1, len(lines)):
+        if _BLOCK_HEADER_RE.match(lines[i]):
+            break
+        if re.match(r"^Supersedes:\s*", lines[i]):
+            lines[i] = f"Supersedes: {target}"
+            return "\n".join(lines)
+    lines.insert(header + 1, f"Supersedes: {target}")
+    return "\n".join(lines)
+
+
 def _op_supersede_decision(filepath, op, store=None):
     """Atomic supersede: append new block + mark old as superseded.
 
@@ -1261,6 +1308,15 @@ def _op_supersede_decision(filepath, op, store=None):
     written, then the new block (parsed from ``new_block``/``patch``
     text) is written. Legacy filesystem path is preserved for
     callers that don't pass a store.
+
+    5.0.2: both directions of the supersession pointer are written here —
+    ``SupersededBy`` onto the retired block and ``Supersedes`` onto its
+    successor. This is the one place in the product where both ids are in
+    hand; flipping ``Status`` alone dropped the successor pointer on the
+    floor, and five readers (``sqlite_index`` xrefs, ``_recall_scoring``'s
+    cross-reference graph, ``evidence_bundle`` relations, the ADR schema,
+    the conflict resolver's report) were left reading a field nothing
+    wrote. Both paths write it.
     """
     target = op.get("target")
     new_block = op.get("new_block") or op.get("patch", "")
@@ -1295,21 +1351,29 @@ def _op_supersede_decision(filepath, op, store=None):
         if not new_blocks or not all(b.get("_id") for b in new_blocks):
             return False, "supersede_decision: new_block missing or has no '_id'"
 
+        successor_id = str(new_blocks[0].get("_id"))
         old["Status"] = "superseded"
+        old["SupersededBy"] = successor_id
+        new_blocks[0]["Supersedes"] = target
         store.write_block(old)
         for b in new_blocks:
             store.write_block(b)
-        return True, f"supersede_decision: superseded {target} → {new_blocks[0].get('_id')}"
+        return True, f"supersede_decision: superseded {target} → {successor_id}"
 
     # Build the complete new file content in memory, then write atomically.
     # Reading the file once here avoids two separate read-modify-write cycles.
     with open(filepath, "r", encoding="utf-8") as fh:
         lines = fh.readlines()
 
-    # Mark the old block's Status field as superseded
+    # Mark the old block's Status field as superseded and point it at its
+    # successor. The whole target block is scanned (not stopped at Status)
+    # so an existing SupersededBy is updated in place rather than
+    # duplicated.
+    successor_id = _first_block_id(new_block)
     target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
     in_target = False
-    updated = False
+    status_line = None
+    superseded_by_line = None
     for i, line in enumerate(lines):
         if target_pattern.match(line):
             in_target = True
@@ -1317,13 +1381,21 @@ def _op_supersede_decision(filepath, op, store=None):
         if in_target and re.match(r"^\[[A-Z]+-[^\]]+\]\s*$", line):
             break
         if in_target:
-            if re.match(r"^Status:\s+", line):
-                lines[i] = "Status: superseded\n"
-                updated = True
-                break
+            if status_line is None and re.match(r"^Status:\s+", line):
+                status_line = i
+            elif superseded_by_line is None and re.match(r"^SupersededBy:\s*", line):
+                superseded_by_line = i
 
-    if not updated:
+    if status_line is None:
         return False, f"supersede_decision step 1: 'Status' field not found in block {target}"
+
+    lines[status_line] = "Status: superseded\n"
+    if successor_id:
+        if superseded_by_line is not None:
+            lines[superseded_by_line] = f"SupersededBy: {successor_id}\n"
+        else:
+            lines.insert(status_line + 1, f"SupersededBy: {successor_id}\n")
+        new_block = _with_supersedes_field(new_block, target)
 
     # Append new block at the end
     new_content = "".join(lines).rstrip("\n") + f"\n\n{new_block}\n"

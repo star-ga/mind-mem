@@ -35,10 +35,17 @@ This module is the missing half, in three pieces:
    triple list, which is the honest thing to return rather than prose
    nobody produced.
 
-Replay: pass ``as_of`` and the validity filter is evaluated against that
-timestamp instead of the wall clock, so an answer can be reproduced
-exactly. Ordering is deterministic everywhere (confidence desc, then
-lexicographic), so two runs over one graph serialise byte-identically.
+Replay is **valid-time only**, and only that. Pass ``as_of`` and both
+validity bounds — ``valid_from`` as well as ``valid_until`` — are tested
+against that instant instead of the wall clock, so a window that had not
+opened yet, or had already closed, at that instant is withheld and
+counted. It is *not* a bitemporal replay: the store has no
+transaction-time axis, so an edge written after the fact still appears in
+an ``as_of`` answer, and an edge deleted since cannot be brought back.
+Two runs of one ``as_of`` over an unchanged graph reproduce each other;
+over a graph that has been written to since, they do not. Ordering is
+deterministic everywhere (confidence desc, then lexicographic), so two
+runs over one graph serialise byte-identically.
 
 Stdlib only.
 """
@@ -52,6 +59,7 @@ from typing import Any, Callable, Iterable, Optional, Sequence
 
 from .graph_schema import version_of as schema_version_of
 from .knowledge_graph import Corroboration, Edge, KnowledgeGraph, Predicate, _parse_iso8601, edge_id
+from .knowledge_graph import _is_live as _window_contains
 
 #: How a claim cites its supporting edge. Matches :func:`edge_id`'s output
 #: (``E-`` + 16 hex) so a citation cannot name anything the graph could
@@ -241,17 +249,16 @@ def _edge_identity(edge: Edge) -> str:
 def _is_live(edge: Edge, *, as_of: Optional[datetime]) -> bool:
     """Whether *edge* is inside its validity window at *as_of*.
 
-    ``as_of=None`` means "now". A malformed ``valid_until`` counts as
-    expired, matching ``_query_edges``: corrupt data must not be able to
-    keep a stale claim alive.
+    ``as_of=None`` means "now". Delegates to the graph layer's
+    :func:`~mind_mem.knowledge_graph._is_live` so this path and
+    ``_query_edges`` cannot drift apart on what "live" means: both bounds
+    inclusive, a NULL bound unbounded on that side, a malformed bound not
+    live. Testing only ``valid_until`` here made an ``as_of`` in the past
+    serve edges whose window had not opened at that instant — half a
+    replay, described as a whole one.
     """
-    if edge.valid_until is None:
-        return True
     moment = as_of if as_of is not None else datetime.now(timezone.utc)
-    try:
-        return _parse_iso8601(edge.valid_until) >= moment
-    except ValueError:
-        return False
+    return _window_contains(edge.valid_from, edge.valid_until, moment)
 
 
 def build_context(
@@ -280,9 +287,11 @@ def build_context(
         direction: ``"outgoing"`` / ``"incoming"`` / ``"both"``.
         max_triples: Cap on served triples; hitting it is reported.
         include_expired: Serve edges past ``valid_until`` too.
-        as_of: ISO-8601 instant the validity filter is evaluated against.
-            Supplying it makes the answer replayable; omitting it reads
-            the wall clock, exactly as every other graph read does.
+        as_of: ISO-8601 instant **both** validity bounds are evaluated
+            against. Supplying it replays the valid-time dimension only —
+            the store keeps no transaction time, so edges written since
+            still appear. Omitting it reads the wall clock, exactly as
+            every other graph read does.
         known_block_ids: When given, any cited ``source_block_id`` outside
             this set is reported as :data:`GAP_PROVENANCE_MISSING` — a
             citation whose document is gone is not a citation.
