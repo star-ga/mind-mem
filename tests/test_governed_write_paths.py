@@ -12,13 +12,20 @@ This file is the invariant. It is static — it reads the source on disk, so
 a monkeypatch cannot satisfy it — and it fails the build on a NEW raw
 writer rather than leaving the rule to a reviewer's memory.
 
-Five scans:
+Six scans:
 
 A   every ``write_block`` CALL is in :data:`SANCTIONED_WRITE_BLOCK_CALLERS`
 A2  every sanctioned caller actually runs inside an admission scope
 B   every ``write_block`` IMPLEMENTATION calls ``require_admission``
 C   the admission contextvar is unreachable outside ``governance_gate``
 D   direct corpus-file appends (block minting that skips ``write_block``)
+E   writers into a DERIVED ARTEFACT store (ROW-7) — the compiled-truth
+    pages and graph edges that are served content but are not corpus
+    blocks, so scans A-D are anchored on the wrong thing to see them.
+    Scan E lives in the same machinery (``_write_path_scan``) and its
+    allowlist lives in ``tests/test_governed_artifact_writes.py``;
+    :func:`test_scan_e_exists_and_is_enforced` here is what stops that
+    file being deleted and the scan going quiet.
 
 Three guards keep the scans honest, because a checker that silently
 matches nothing reports a clean PASS over work it never inspected:
@@ -29,6 +36,7 @@ negative control that runs the matcher against synthetic rogue source.
 from __future__ import annotations
 
 import ast
+import os
 
 import _write_path_scan
 import pytest
@@ -749,3 +757,33 @@ def test_unwired_write_paths_stay_unwired(files: tuple[str, ...]) -> None:
         leaf = symbol.rsplit(".", 1)[-1]
         callers = [(other, line) for other, line in scan_contextvar_references(files, leaf) if other != rel]
         assert not callers, f"{rel}:{symbol} is documented as having no production importer, but is referenced from {callers}"
+
+
+# ---------------------------------------------------------------------------
+# Scan E lives next door — this is the tie so it cannot go quiet
+# ---------------------------------------------------------------------------
+
+
+def test_scan_e_exists_and_is_enforced(files: tuple[str, ...]) -> None:
+    """The artefact scan is part of this invariant, not an optional extra.
+
+    Scan E (ROW-7) covers the DERIVED ARTEFACT stores — the compiled-truth
+    pages and the lineage/causal edges, which are served straight back to
+    an agent at USER scope and are governed by ``admit_artifact`` rather
+    than by ``write_block``. Its allowlist and its honesty guards live in
+    ``tests/test_governed_artifact_writes.py``, because that is where the
+    justification for each entry belongs.
+
+    Splitting a scan across two files creates exactly one new failure
+    mode: delete the other file and the scan stops running while this one
+    still reports a clean tree — the vacuous pass this module exists to
+    prevent. So the tie is asserted here: the scanner must exist, it must
+    still find the known seam, and the file holding its allowlist must
+    still be present.
+    """
+    assert hasattr(_write_path_scan, "scan_artifact_writes"), "scan E has been removed from the shared scanner"
+    found = {(rel, qual) for rel, qual, _line in _write_path_scan.scan_artifact_writes(files)}
+    assert found, "scan E now matches nothing at all; it is inspecting an empty set, not a clean tree"
+    assert ("src/mind_mem/compiled_truth.py", "_write_compiled_page") in found, "scan E stopped recognising the compiled-page seam"
+    allowlist_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_governed_artifact_writes.py")
+    assert os.path.isfile(allowlist_file), "scan E's allowlist file is gone, so nothing checks its findings against one"

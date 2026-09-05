@@ -47,6 +47,20 @@ taken, and the reason is measurable rather than aesthetic:
   real workspace until an ``mm anchor`` RESTAMP pass runs. None of that
   buys a single receipt.
 
+**What the route actually taken costs H1: nothing, measured rather than
+argued.** ``anchoring.unanchored_report`` over a fresh workspace, before
+and after three governed ``save_truth_page`` calls::
+
+    fresh init      unanchored=()  corpus_blocks=0  landed_blocks=0  close_records=0
+    3 pages saved   unanchored=()  corpus_blocks=0  landed_blocks=3  close_records=3
+
+Zero unanchored blocks either way, and ``verify(strict=True)``'s
+``unanchored_blocks`` row is ``True`` in both. So no ``mm anchor``
+migration is required by this change, and no existing workspace goes red.
+The only rows that moved at all moved False -> True (``evidence_chain``,
+``chain_head_seal``, ``cross_ledger``, ``open_scopes``), because the pages
+now put records in the ledgers those rows walk.
+
 Admission and corpus membership are orthogonal, and the product already
 says so: a knowledge-graph edge is governed by ``admit_edge`` and is in
 no corpus file, and ``session_summarizer.write_summary`` is admitted
