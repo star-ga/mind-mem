@@ -575,6 +575,8 @@ class MindMemAdapter:
         from ..recall_attestation import derive_legs
 
         backend = state.hybrid
+        if backend is None:  # pragma: no cover - the caller dispatches on this
+            raise RuntimeError("hybrid dispatch entered with no hybrid backend on the state")
         with serving_scope():
             results = backend.search(
                 q,
