@@ -618,7 +618,8 @@ HITL gate deliberately refuses.
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
 - [x] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` now commit through the same `FileLock` + `_atomic_write` (temp file + `os.replace`) path as every other op; a failure partway through the write can no longer truncate the corpus file
-- [ ] **FastAPI audit attribution** — `current_agent_id` doesn't propagate through anyio threadpool worker; fix via `request.state.agent_id`
+- [x] **FastAPI audit attribution** — two halves, both closed. Propagation: `_require_auth` stashes the identity on `request.state` (ContextVar writes in an anyio threadpool worker never reach the endpoint) and `_acting_as` re-establishes the ContextVar in the frame that performs the write. Ownership: `current_agent_id` moved to `mind_mem.audit_context` at the package root, so the core governance layer no longer resolves identity through a `try: from mind_mem.api.rest import ... except Exception` — a swallow that stamped every audit record `"system"`/`"anonymous"` whenever the import did not resolve, and had already shipped that defect once. `mind_mem.api.rest.current_agent_id` stays as a re-export of the same object; REST sets the identity, it no longer owns it
+- *(same defect as “Audit attribution through FastAPI sync deps” in the v4.0.x status section below; listed twice, counted once)*
 - *(tracked below — see “`PostgresBlockStore.snapshot(snap_id=…)`” in the status section; listed twice, counted once)*
 - [x] **T-004 webhook allowlist + T-001 content-provenance tags + N-08/N-12/N-13/T-007** — minor security-hardening items (see v3.2.0 section)
 
@@ -1726,15 +1727,28 @@ file.
   between the truncate and the final flush left the corpus file
   short with no rollback source. Reads also pin ``encoding="utf-8"``,
   matching the rest of the write path.
-- [ ] **Audit attribution through FastAPI sync deps** — the
-  ``current_agent_id`` ContextVar is set inside ``_require_auth``
-  (a sync FastAPI dependency), which runs in an anyio threadpool
-  worker. ContextVar writes in worker threads don't propagate back
-  to the calling request context, so downstream MCP tool functions
-  read ``'anonymous'`` even on authenticated requests. Fix by
-  stashing ``agent_id`` on ``request.state`` (same pattern as
-  ``oidc_scopes`` in v3.2.1) and reading it from a dependency
-  attached to each handler. ~0.5 day.
+- [x] **Audit attribution through FastAPI sync deps** — the same
+  defect as “FastAPI audit attribution” in the v3.2.x section above;
+  listed twice, counted once. ``current_agent_id`` was set inside
+  ``_require_auth`` (a sync FastAPI dependency) running in an anyio
+  threadpool worker, so the write never reached the request context
+  and downstream tools read the unattributed sentinel even on
+  authenticated requests. Fixed in two parts: ``agent_id`` is stashed
+  on ``request.state`` (same pattern as ``oidc_scopes`` in v3.2.1) and
+  ``_acting_as`` re-establishes the ContextVar inside the endpoint's
+  own frame; and the ContextVar itself moved out of the OPTIONAL REST
+  module to ``mind_mem.audit_context`` at the package root, so
+  ``governance_gate`` and ``mcp.tools.encryption`` read it directly
+  instead of through a lazy import inside a bare ``except Exception``.
+  That swallow was the load-bearing bug: it silently attributed every
+  audit record to a fallback whenever the import failed for any reason,
+  and it had already shipped once (the import named a module that does
+  not define the symbol, and every decrypt audit record was written
+  unattributed). The two fallbacks — ``"system"`` in the governance
+  layer and ``"anonymous"`` in the encryption tool — are now one
+  documented constant, ``audit_context.UNATTRIBUTED``, and an
+  unattributed call logs a warning instead of passing silently.
+  Guarded by ``tests/test_identity_seam_is_transport_neutral.py``.
 - [x] **REST request-scoping** — swapped env-var mutation for a
   per-request ``ContextVar`` override in
   ``mind_mem.mcp.infra.workspace`` + a FastAPI HTTP middleware.

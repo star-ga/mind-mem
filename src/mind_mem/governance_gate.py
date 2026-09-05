@@ -127,6 +127,7 @@ from .admission import (
     UngatedWriteError,
     _open_admission,
 )
+from .audit_context import current_agent
 from .enums import INITIAL_STATUS, IngestTier, mints_servable
 from .evidence_objects import EvidenceAction, EvidenceChain, EvidenceObject
 from .hash_chain_v2 import HashChainV2, HashEntry
@@ -384,16 +385,24 @@ SCOPE_BOUND_TIERS: Mapping[str, IngestTier] = MappingProxyType(
 OPEN_SCOPE_TIERS: frozenset[IngestTier] = MINTABLE_TIERS - frozenset(SCOPE_BOUND_TIERS.values())
 
 
-# Resolve the current_agent_id contextvar lazily so the API layer is not a
-# hard dependency of the governance layer (the REST API is optional).
-def _current_agent() -> str:
-    """Return the authenticated agent ID from the REST context, or 'system'."""
-    try:
-        from mind_mem.api.rest import current_agent_id  # noqa: PLC0415
-
-        return current_agent_id.get()
-    except Exception:
-        return "system"
+#: Caller identity for an admission whose caller named no explicit actor.
+#:
+#: A direct alias of the package-root reader, not a wrapper: there is no
+#: import to guard and therefore no local logic left to hold. This used to
+#: be a lazy ``from mind_mem.api.rest import current_agent_id`` inside a
+#: bare ``except Exception`` — core reaching into the OPTIONAL REST extra
+#: — and the swallow meant that any failure of that import attributed the
+#: write to ``"system"`` with no error and no warning. The identical
+#: pattern in ``mcp.tools.encryption`` had already shipped a live defect:
+#: it named a module that defines no such symbol, so every decrypt audit
+#: record was written unattributed regardless of who called.
+#:
+#: The identity now lives in :mod:`mind_mem.audit_context`, which is core
+#: and imports nothing optional, so this import cannot fail and no
+#: ``except`` arm is needed to hide it if it did. The fallback when
+#: genuinely nobody is identified is :data:`~mind_mem.audit_context.UNATTRIBUTED`,
+#: which is also logged — see :func:`~mind_mem.audit_context.current_agent`.
+_current_agent = current_agent
 
 
 _log = get_logger("governance_gate")

@@ -45,7 +45,7 @@ import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
-from typing import Callable, Iterator, Optional
+from typing import Callable, Final, Iterator, Optional
 
 __all__ = [
     "HEADER_ACTOR",
@@ -53,9 +53,13 @@ __all__ = [
     "HEADER_REQUEST_ID",
     "MAX_FIELD_LEN",
     "MAX_REQUEST_ID_LEN",
+    "UNATTRIBUTED",
     "AuditContext",
     "bind_audit_context",
+    "bind_current_agent",
     "context_from_headers",
+    "current_agent",
+    "current_agent_id",
     "current_audit_context",
     "log_scope",
     "outbound_audit_headers",
@@ -261,3 +265,128 @@ def outbound_audit_headers() -> dict[str, str]:
     if ctx is None:
         return {}
     return ctx.outbound_headers()
+
+
+# ---------------------------------------------------------------------------
+# Transport-neutral caller identity
+# ---------------------------------------------------------------------------
+
+#: What an audit record carries when nothing identified the caller.
+#:
+#: ONE value, at the package root, for the whole product. It used to be
+#: two answers to the same question: ``governance_gate`` said ``"system"``
+#: and ``mcp.tools.encryption`` said ``"anonymous"``. Neither was reached
+#: by a decision — both were the ``except`` arm of a swallowed import.
+#: ``"anonymous"`` is kept because it is what the *working* path already
+#: produced (it was the ContextVar's own default, so any deployment with
+#: the REST extra installed already recorded it); ``"system"`` was emitted
+#: only when the import failed, which makes it the defect's output rather
+#: than a design.
+#:
+#: It denotes the ABSENCE of an identity, not a principal named
+#: "anonymous". Nothing authenticates as it, and
+#: :func:`bind_current_agent` refuses to bind it.
+UNATTRIBUTED: Final[str] = "anonymous"
+
+#: The identity a transport resolved for the work running right now.
+#:
+#: Defined HERE, and not in ``mind_mem.api.rest``, because the governance
+#: layer is core and the REST API is an optional extra
+#: (``pip install 'mind-mem[api]'``). While core read a REST-owned symbol
+#: it had to wrap the import in ``try: ... except Exception``, and that
+#: swallow silently mis-attributed every audit record whenever the import
+#: did not resolve — for any reason, including a renamed module. That
+#: shipped once already: the import used to name ``mcp.infra.observability``,
+#: which defines no such symbol, and every decrypt audit record was written
+#: as unattributed regardless of who called. Owning the variable at the
+#: package root leaves nothing optional to fail, so the readers need no
+#: ``except`` arm at all.
+#:
+#: Any transport that knows who is calling sets it — see
+#: :func:`bind_current_agent`.
+current_agent_id: ContextVar[str] = ContextVar("current_agent_id", default=UNATTRIBUTED)
+
+#: One WARNING per process for unattributed work, DEBUG thereafter.
+#:
+#: An unattributed governed write is a defect worth seeing, but mind-mem
+#: is also used as a plain library and CLI where there is no transport and
+#: no authentication at all — warning on every admission there would be a
+#: log flood that teaches operators to filter the line out, which is worse
+#: than not emitting it. One warning names the condition; the DEBUG line
+#: keeps every later occurrence recoverable at will.
+#:
+#: Module-level and resettable on purpose: a test that wants to observe
+#: the first-call warning clears it. A race between two threads costs a
+#: duplicate line and nothing else.
+_unattributed_warned = False
+
+#: Spelled out once, next to the latch, so the warning says what to DO
+#: about it rather than only that it happened.
+_UNATTRIBUTED_DETAIL: Final[str] = (
+    "no transport set an identity for this call, so the audit record names the "
+    "actor shown; bind one with audit_context.bind_current_agent at the "
+    "transport entry point. Later occurrences log at DEBUG."
+)
+
+
+def _report_unattributed() -> None:
+    """Emit the diagnostic for work that no transport attributed."""
+    global _unattributed_warned
+    from mind_mem.observability import get_logger  # noqa: PLC0415
+
+    log = get_logger("audit_context")
+    if _unattributed_warned:
+        log.debug("audit_attribution_absent", actor=UNATTRIBUTED)
+        return
+    _unattributed_warned = True
+    log.warning("audit_attribution_absent", actor=UNATTRIBUTED, detail=_UNATTRIBUTED_DETAIL)
+
+
+def current_agent() -> str:
+    """Identity to attribute this call to, or :data:`UNATTRIBUTED`.
+
+    Reads the ContextVar a transport bound. Falls back to the
+    authenticated identity on the bound :class:`AuditContext`, so a
+    transport that ran :func:`record_authenticated_agent` but never
+    entered a :func:`bind_current_agent` scope still attributes its work
+    instead of silently anonymising it.
+
+    There is deliberately no ``try``/``except`` here. Everything this
+    touches is core and non-optional; if this function ever needs an
+    exception arm again, the dependency has moved back the wrong way and
+    the guard in ``tests/test_identity_seam_is_transport_neutral.py``
+    should have said so first.
+    """
+    agent = current_agent_id.get()
+    if agent and agent != UNATTRIBUTED:
+        return agent
+    ctx = _AUDIT_CONTEXT.get()
+    if ctx is not None and ctx.agent_authenticated:
+        return ctx.agent_authenticated
+    _report_unattributed()
+    return UNATTRIBUTED
+
+
+@contextmanager
+def bind_current_agent(agent_id: str) -> Iterator[str]:
+    """Attribute everything in the block to *agent_id*.
+
+    The one seam every transport uses: an MCP tool entry point, a gRPC
+    servicer, a CLI command that knows its operator. REST's
+    ``rest._acting_as`` is this same move with the identity dug out of
+    ``request.state`` first, because a FastAPI sync dependency cannot set
+    a ContextVar the endpoint will see.
+
+    An empty or :data:`UNATTRIBUTED` *agent_id* binds nothing and yields
+    :data:`UNATTRIBUTED`: a transport that could not identify its caller
+    must not overwrite an identity an outer frame already established.
+    """
+    if not agent_id or agent_id == UNATTRIBUTED:
+        yield UNATTRIBUTED
+        return
+    token: Token[str] = current_agent_id.set(agent_id)
+    try:
+        with log_scope(agent=agent_id):
+            yield agent_id
+    finally:
+        current_agent_id.reset(token)

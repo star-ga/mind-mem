@@ -21,32 +21,31 @@ import base64
 import json
 import os
 
+from ...audit_context import current_agent
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _workspace
 
-
-def _current_actor() -> str:
-    """Authenticated agent id for the calling context, or ``"anonymous"``.
-
-    ``current_agent_id`` lives in :mod:`mind_mem.api.rest` — the same
-    module ``governance_gate`` resolves it from. It was previously
-    imported from ``mcp.infra.observability``, which defines no such
-    name, so the ImportError was swallowed and every audit record was
-    written as ``"anonymous"`` regardless of who called.
-
-    Resolved lazily and defensively: the REST layer is an optional extra
-    (``pip install 'mind-mem[api]'``), and direct callers (CLI, tests,
-    library use) legitimately have no identity set. Attribution is
-    best-effort by design — it must never block the decrypt audit append.
-    """
-    try:
-        from mind_mem.api.rest import current_agent_id  # noqa: PLC0415
-
-        return current_agent_id.get("anonymous") or "anonymous"
-    except Exception:
-        # No REST layer loaded, or no identity in this context.
-        return "anonymous"
+#: Actor recorded on a decrypt audit record.
+#:
+#: A direct alias of the package-root reader. This was a lazy
+#: ``from mind_mem.api.rest import current_agent_id`` inside a bare
+#: ``except Exception`` — this MCP tool, which is core, reaching into the
+#: OPTIONAL REST extra for identity. That swallow is the whole reason this
+#: function has a history: the import used to name
+#: ``mcp.infra.observability``, which defines no such symbol, so the
+#: ImportError was eaten and every decrypt audit record was written
+#: unattributed regardless of who called. Only the module named in the
+#: import was ever fixed; the swallow that hid the failure stayed, which
+#: left the same defect one rename away from shipping again.
+#:
+#: The identity now lives in :mod:`mind_mem.audit_context` — core, no
+#: optional dependency — so there is no import left to fail and no
+#: ``except`` arm to hide it. When nobody is identified the value is
+#: :data:`~mind_mem.audit_context.UNATTRIBUTED`, unchanged from what this
+#: returned before, and it is now logged rather than silent. Attribution
+#: still never blocks the audit append.
+_current_actor = current_agent
 
 
 def _append_decrypt_audit(ws: str, path: str, *, mode: str) -> None:

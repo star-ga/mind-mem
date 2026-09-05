@@ -155,7 +155,7 @@ All admin endpoints require the `MIND_MEM_ADMIN_TOKEN` credential.
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `observability.audit_agent_attribution` | bool | `true` | When true, every governance audit record carries the authenticated `agent_id` in its metadata and `actor` field. Set via the `current_agent_id` contextvar in `mind_mem.api.rest`. The MCP layer can set the same contextvar at tool entry to propagate identity end-to-end. |
+| `observability.audit_agent_attribution` | bool | `true` | When true, every governance audit record carries the authenticated `agent_id` in its metadata and `actor` field. Set via the `current_agent_id` contextvar in `mind_mem.audit_context` (re-exported from `mind_mem.api.rest`, which sets it but no longer owns it). Any transport can bind the same identity with `audit_context.bind_current_agent()` at its entry point. |
 
 ---
 

@@ -47,8 +47,21 @@ from mind_mem.schema_version import CURRENT_SCHEMA_VERSION
 # Agent-ID context variable (set by auth dependencies, read by audit chain)
 # ---------------------------------------------------------------------------
 
-#: The current request's authenticated agent ID.  Defaults to "anonymous".
-#: Set this from MCP tool entry points to propagate identity through the stack.
+#: The current request's authenticated agent ID.
+#:
+#: RE-EXPORT, not a definition. The variable is OWNED by
+#: :mod:`mind_mem.audit_context`, at the package root, because the
+#: governance layer and the MCP encryption tool read it and both are core
+#: while this module is an optional extra (``pip install 'mind-mem[api]'``).
+#: While the definition lived here those core readers had to reach for it
+#: through a guarded lazy import, and the guard silently mis-attributed
+#: every audit record whenever the import did not resolve. REST is one
+#: transport among several (gRPC, MCP, CLI); it SETS the identity, it does
+#: not own it.
+#:
+#: The alias is the same object, so ``mind_mem.api.rest.current_agent_id``
+#: keeps working for anything importing it from here, and a ``.set`` on
+#: either name is visible through the other.
 #:
 #: NOTE: ContextVar writes inside sync FastAPI dependencies run in
 #: threadpool workers and do not propagate back to the calling request
@@ -56,12 +69,14 @@ from mind_mem.schema_version import CURRENT_SCHEMA_VERSION
 #: state is required (see ``_require_auth``'s ``request.state.oidc_scopes``
 #: handoff). ``current_agent_id`` is kept for audit-chain callers that
 #: read it within the same sync dependency frame.
+current_agent_id: ContextVar[str] = _audit_ctx.current_agent_id
+
 #: The value ``_verify_bearer`` answers when nothing identified the caller.
 #: It is the *absence* of an identity, not an identity named "anonymous",
-#: and provenance fields treat it that way.
-_UNIDENTIFIED = "anonymous"
-
-current_agent_id: ContextVar[str] = ContextVar("current_agent_id", default=_UNIDENTIFIED)
+#: and provenance fields treat it that way. One value for the whole
+#: product now — the governance layer used to answer ``"system"`` to the
+#: same question from its own ``except`` arm.
+_UNIDENTIFIED = _audit_ctx.UNATTRIBUTED
 
 
 def _oidc_admin_scope_names() -> tuple[str, ...]:
@@ -492,7 +507,9 @@ def _require_admin(
 def _acting_as(request: Request):  # type: ignore[no-untyped-def]
     """Run the block with the request's authenticated identity in scope.
 
-    ``governance_gate._current_agent()`` reads :data:`current_agent_id`;
+    ``governance_gate._current_agent()`` is
+    :func:`mind_mem.audit_context.current_agent`, which reads
+    :data:`current_agent_id`;
     it is the fallback an admission takes when its caller passes no
     explicit ``actor``. :func:`_require_auth` cannot set that ContextVar
     usefully — it runs in its own threadpool frame, so the assignment
