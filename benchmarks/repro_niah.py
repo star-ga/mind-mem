@@ -320,6 +320,13 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     print(f"\nRESULT: {metrics['headline']['as_text']}  (killed/crashed {killed})")
+    if rows and killed == len(rows):
+        print(
+            "every unit crashed, so this package measures nothing -- the verifier will "
+            "reject it as VACUOUS. Check that the interpreter running this has the "
+            "benchmark extra installed: pip install -e '.[benchmark]'",
+            file=sys.stderr,
+        )
     print(f"package -> {a.out}")
     for name, meta in manifest["artifacts"].items():
         print(f"  {name}: {meta['sha256']}")

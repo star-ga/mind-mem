@@ -210,6 +210,17 @@ def test_manifest_headline_that_outruns_the_rows_fails(tmp_path, rows):
     assert any("headline" in f for f in rep.failures)
 
 
+def test_a_package_in_which_nothing_ran_is_vacuous_not_passing(tmp_path):
+    dead = [
+        _row("a", "NEEDLE-001", [], ["alpha"], unit_status="error", unit_error="boom", found=False),
+        _row("b", "NEEDLE-002", [], ["beta"], unit_status="timeout", unit_error="killed", found=False),
+    ]
+    out = _package(tmp_path, dead)
+    rep = repro_verify.verify_package(out)
+    assert not rep.passed
+    assert any("VACUOUS" in f for f in rep.failures)
+
+
 def test_unknown_benchmark_is_a_failure_not_a_skip(tmp_path, rows):
     out = _package(tmp_path, rows)
     path = os.path.join(out, "manifest.json")

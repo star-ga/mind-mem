@@ -12,7 +12,10 @@ Given a repro package (``benchmarks/repro/<name>/``) it:
    whose stored verdict disagrees with what its retrieved results actually say;
 4. cross-checks the manifest's unit counters (attempted / killed-or-crashed)
    against the rows;
-5. confirms the manifest's headline is the recomputed headline.
+5. rejects a package in which every unit was killed or crashed -- those metrics
+   recompute perfectly and measure nothing, so it is reported as VACUOUS rather
+   than as verified;
+6. confirms the manifest's headline is the recomputed headline.
 
 Given a scorecard pair (a committed ``*.ndjson`` and the ``*.md`` published
 beside it) it recomputes every number in the scorecard's results table from the
@@ -138,7 +141,17 @@ def verify_package(pkg_dir: str) -> Report:
         run.get("units_killed_or_crashed") == killed, "run.units_killed_or_crashed vs rows", run.get("units_killed_or_crashed"), killed
     )
 
-    # 5. The headline is the recomputed headline, not a remembered one.
+    # 5. A package in which nothing ran is not a passing package. Every metric
+    #    below would recompute perfectly from rows that record only crashes, and
+    #    the result would read like a clean bill of health. An empty run is
+    #    reported as vacuous, never as verified.
+    if rows:
+        rep.check(
+            killed < len(rows),
+            f"VACUOUS: every one of the {len(rows)} unit(s) was killed or crashed -- this package measures nothing",
+        )
+
+    # 6. The headline is the recomputed headline, not a remembered one.
     rep.check(
         manifest.get("headline") == recomputed.get("headline"),
         "manifest headline vs recomputed headline",
@@ -220,6 +233,19 @@ def discover_scorecards() -> list[tuple[str, str]]:
     return pairs
 
 
+def discover_unverifiable_scorecards() -> list[str]:
+    """Published scorecards with no raw rows beside them.
+
+    Not a failure -- a scorecard can predate the package format, and one whose
+    metric needs an external judge cannot be recomputed offline at all. It is
+    listed anyway, because a number nobody can recompute should be visible as
+    such rather than blend in with the ones that verified.
+    """
+    return sorted(
+        md for md in glob.glob(os.path.join(_REPO_ROOT, "docs", "benchmarks", "*.md")) if not os.path.isfile(md[: -len(".md")] + ".ndjson")
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Recompute published numbers from committed raw evidence")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -248,6 +274,13 @@ def main(argv: list[str] | None = None) -> int:
 
     for rep in reports:
         print(rep.render())
+    if a.cmd == "all":
+        unverifiable = discover_unverifiable_scorecards()
+        if unverifiable:
+            print("\nUNVERIFIABLE (published scorecard, no raw rows committed beside it):")
+            for md in unverifiable:
+                print(f"    - {os.path.relpath(md, _REPO_ROOT)}")
+            print("    These are not failures and not verifications. Nothing here recomputed them.")
     failed = [r for r in reports if not r.passed]
     total_checks = sum(r.checks for r in reports)
     print(f"\n{len(reports) - len(failed)}/{len(reports)} target(s) verified, {total_checks} checks.")
