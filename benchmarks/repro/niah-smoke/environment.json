@@ -1,0 +1,1 @@
+{"captured_utc":"2026-09-05T07:15:51.954594+00:00","cpu_count":12,"machine":"x86_64","mind_mem_version":"4.9.0","packages":{"numpy":"2.4.3","onnxruntime":"1.24.1","sentence-transformers":"5.2.3","sqlite-vec":"0.1.6","tokenizers":"0.22.2"},"platform":"Linux-7.0.0-30-generic-x86_64-with-glibc2.43","processor":"unknown","python_implementation":"CPython","python_version":"3.12.3"}
