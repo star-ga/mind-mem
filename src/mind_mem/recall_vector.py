@@ -219,6 +219,73 @@ def migrate_legacy_list_index(records: list[Any]) -> dict[str, Any]:
     return index
 
 
+def load_local_index(workspace: str, index_path: str) -> tuple[dict[str, Any] | None, str]:
+    """Read the local vector index — THE single reader of ``index.json``.
+
+    The canonical file is the dict :func:`save_local_index` writes —
+    ``{schema, model, dimension, blocks, embeddings}``. A bare LIST of
+    ``{_id, embedding, text}`` records is the LEGACY shape a pre-convergence
+    ``rebuild_index`` left behind; it is adapted by
+    :func:`migrate_legacy_list_index` so an already-reindexed workspace keeps a
+    working dense leg, and it warns on every load until reindexed.
+
+    Anything else is refused with a named error rather than a stack trace three
+    frames up: reading ``.get`` off a list raised ``AttributeError`` out of the
+    old method, which the serving path swallowed to ``[]``.
+
+    This is a module-level function rather than only a method for the same
+    reason the writer is: every consumer reads the file through one place. The
+    health dashboard's embedding-coverage probe is a consumer that holds no
+    backend instance, and when it read the file its own way it read a JSON file
+    as a binary struct.
+
+    Returns:
+        ``(index, diagnostic)`` where ``diagnostic`` is one of ``ok``,
+        ``missing``, ``unreadable``, ``legacy_list_shape`` or ``invalid_shape``.
+        ``index`` is None for every diagnostic but ``ok`` and
+        ``legacy_list_shape``.
+    """
+    index_file = local_index_file(workspace, index_path)
+    if not os.path.isfile(index_file):
+        _log.warning("index_not_found", path=index_file)
+        return None, "missing"
+
+    try:
+        with open(index_file, encoding="utf-8") as f:
+            payload: Any = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        metrics.inc("vector_index_load_errors")
+        _log.error("index_load_failed", path=index_file, error=str(e))
+        return None, "unreadable"
+
+    if is_canonical_local_index(payload):
+        _log.info("index_loaded", path=index_file, blocks=len(payload["blocks"]))
+        return cast("dict[str, Any]", payload), "ok"
+
+    if isinstance(payload, list):
+        index = migrate_legacy_list_index(payload)
+        metrics.inc("vector_index_legacy_shape")
+        _log.warning(
+            "index_legacy_list_shape",
+            path=index_file,
+            records=len(payload),
+            usable=len(index["blocks"]),
+            remediation="adapted in memory; reindex to write the canonical index shape",
+            note="legacy records carry no status, so an active_only search stays empty until reindexed",
+        )
+        return index, "legacy_list_shape"
+
+    metrics.inc("vector_index_load_errors")
+    _log.error(
+        "index_shape_invalid",
+        path=index_file,
+        found=type(payload).__name__,
+        expected="dict with 'blocks' and 'embeddings'",
+        remediation="reindex to rewrite the vector index",
+    )
+    return None, "invalid_shape"
+
+
 # ---------------------------------------------------------------------------
 # Vector Backend Implementation
 # ---------------------------------------------------------------------------
@@ -983,69 +1050,25 @@ class VectorBackend(RecallBackend):
         return local_index_file(workspace, self.index_path)
 
     def _load_local_index(self, workspace: str) -> dict[str, Any] | None:
-        """Load the local JSON index from disk, in whatever shape it is on disk.
+        """Load the local JSON index from disk via :func:`load_local_index`.
 
-        The canonical file is the dict :meth:`_save_local_index` writes —
-        ``{schema, model, dimension, blocks, embeddings}``. A bare LIST of
-        ``{_id, embedding, text}`` records is the LEGACY shape a pre-convergence
-        ``rebuild_index`` (the MCP reindex path) left behind; it is adapted by
-        :func:`migrate_legacy_list_index` so an already-reindexed workspace
-        keeps a working dense leg, and it warns on every load until reindexed.
+        Thin delegate, deliberately, mirroring :meth:`_save_local_index`: the
+        reader is a module-level function so a consumer that holds no
+        ``VectorBackend`` — the ``memory_health`` embedding-coverage probe, for
+        one — cannot become a second reader with its own idea of the format.
+        The probe previously unpacked a binary ``<I`` header from this JSON
+        file, and no writer has ever produced one.
 
-        Anything else is refused with a named error rather than a stack trace
-        three frames up: reading ``.get`` off a list raised ``AttributeError``
-        out of this method, which the serving path swallowed to ``[]``.
-
-        Sets :attr:`last_index_diagnostic` on every path so a caller can tell
-        "no match" from "could not read the index" without scraping logs.
+        Sets :attr:`last_index_diagnostic` from the reader's diagnostic so a
+        caller can tell "no match" from "could not read the index" without
+        scraping logs.
 
         Returns:
             Canonical index dict with 'blocks' and 'embeddings', or None.
         """
-        index_file = self._get_index_path(workspace)
-        if not os.path.isfile(index_file):
-            self.last_index_diagnostic = "missing"
-            _log.warning("index_not_found", path=index_file)
-            return None
-
-        try:
-            with open(index_file, encoding="utf-8") as f:
-                payload: Any = json.load(f)
-        except (OSError, json.JSONDecodeError) as e:
-            self.last_index_diagnostic = "unreadable"
-            metrics.inc("vector_index_load_errors")
-            _log.error("index_load_failed", path=index_file, error=str(e))
-            return None
-
-        if is_canonical_local_index(payload):
-            self.last_index_diagnostic = "ok"
-            _log.info("index_loaded", path=index_file, blocks=len(payload["blocks"]))
-            return cast("dict[str, Any]", payload)
-
-        if isinstance(payload, list):
-            index = migrate_legacy_list_index(payload)
-            self.last_index_diagnostic = "legacy_list_shape"
-            metrics.inc("vector_index_legacy_shape")
-            _log.warning(
-                "index_legacy_list_shape",
-                path=index_file,
-                records=len(payload),
-                usable=len(index["blocks"]),
-                remediation="adapted in memory; reindex to write the canonical index shape",
-                note="legacy records carry no status, so an active_only search stays empty until reindexed",
-            )
-            return index
-
-        self.last_index_diagnostic = "invalid_shape"
-        metrics.inc("vector_index_load_errors")
-        _log.error(
-            "index_shape_invalid",
-            path=index_file,
-            found=type(payload).__name__,
-            expected="dict with 'blocks' and 'embeddings'",
-            remediation="reindex to rewrite the vector index",
-        )
-        return None
+        index, diagnostic = load_local_index(workspace, self.index_path)
+        self.last_index_diagnostic = diagnostic
+        return index
 
     def _save_local_index(self, workspace: str, index: dict[str, Any]):
         """Save local JSON index to disk via :func:`save_local_index`.

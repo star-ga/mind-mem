@@ -1225,37 +1225,59 @@ def memory_health() -> str:
     if drift_count > 0:
         recommendations.append(f"{drift_count} drift item(s) detected. Review intelligence/DRIFT.md for belief shifts.")
 
-    import struct as _struct_mod
-
+    # Embedding coverage. This probe used to call a ``recall_vector`` function
+    # that has never existed and then unpack a binary ``<I`` header out of
+    # ``index.json``, so it landed in its except branch on every workspace and
+    # reported coverage as "unknown" forever. It now reads the file through
+    # ``recall_vector.load_local_index`` — the same reader the search path
+    # uses — so the probe and the product cannot disagree about the format.
     try:
-        from mind_mem import recall_vector as _rv
+        from mind_mem.recall_vector import load_local_index
 
-        vec_path = _rv._index_path(ws)  # type: ignore[attr-defined]
-        if os.path.isfile(vec_path):
-            with open(vec_path, "rb") as f:
-                header = f.read(8)
-                if len(header) >= 4:
-                    embedded_count = _struct_mod.unpack("<I", header[:4])[0]
-                    health["embedded_blocks"] = embedded_count
-                    if total_blocks > 0:
-                        coverage = round(embedded_count / total_blocks * 100, 1)
-                        health["embedding_coverage_pct"] = coverage
-                        if coverage < 80:
-                            recommendations.append(f"Embedding coverage is {coverage}%. Run reindex(include_vectors=True).")
-                else:
-                    health["embedded_blocks"] = 0
-                    health["embedding_coverage_pct"] = 0.0
-        else:
+        _recall_cfg = _load_config(ws).get("recall") or {}
+        _index_dir = str(_recall_cfg.get("index_path") or ".mind-mem-vectors")
+        vec_index, vec_state = load_local_index(ws, _index_dir)
+        health["embedding_index_state"] = vec_state
+
+        if vec_state == "missing":
             health["embedded_blocks"] = 0
             health["embedding_coverage_pct"] = 0.0
             if total_blocks > 10:
                 recommendations.append("No vector index found. Run reindex(include_vectors=True) for hybrid search.")
-    except (ImportError, AttributeError, OSError, _struct_mod.error) as exc:
-        # AttributeError: the vector-index path accessor is optional and
-        # version-dependent; degrade the embedding-coverage probe to
-        # "unknown" rather than crashing the whole health dashboard.
+        elif vec_index is not None:
+            # "ok" and "legacy_list_shape" both yield a countable index; they
+            # are reported as distinct states because a legacy file carries no
+            # status/date/file metadata, so its coverage number is real but its
+            # records are incomplete until reindexed.
+            embedded_count = len(vec_index.get("blocks") or [])
+            health["embedded_blocks"] = embedded_count
+            coverage = round(embedded_count / total_blocks * 100, 1) if total_blocks > 0 else 0.0
+            health["embedding_coverage_pct"] = coverage
+            if vec_state == "legacy_list_shape":
+                recommendations.append(
+                    "Vector index is in the legacy list shape (metadata incomplete). Run reindex(include_vectors=True) to rewrite it."
+                )
+            if total_blocks > 0 and coverage < 80:
+                recommendations.append(f"Embedding coverage is {coverage}%. Run reindex(include_vectors=True).")
+        else:
+            # Present but unreadable ("unreadable") or a shape no reader
+            # accepts ("invalid_shape"). Unknown WITH a stated reason, never a
+            # bare "unknown", and never a 0 that would read as "no index".
+            health["embedded_blocks"] = "unknown"
+            health["embedding_coverage_pct"] = "unknown"
+            health["embedding_index_error"] = (
+                "vector index file could not be read (invalid JSON or truncated)"
+                if vec_state == "unreadable"
+                else "vector index file has a shape no reader accepts (expected the canonical dict or the legacy list)"
+            )
+            recommendations.append("Vector index is unreadable. Run reindex(include_vectors=True) to rewrite it.")
+    except (ImportError, OSError, ValueError) as exc:
+        # The vector extra may be absent, or the workspace config unreadable.
+        # Genuinely unknown -- and it says which.
         health["embedded_blocks"] = "unknown"
         health["embedding_coverage_pct"] = "unknown"
+        health["embedding_index_state"] = "probe_unavailable"
+        health["embedding_index_error"] = f"{type(exc).__name__}: {exc}"
         _log.debug("health_embedding_probe_skipped", error=str(exc))
 
     signals_path = os.path.join(ws, "intelligence", "SIGNALS.md")
