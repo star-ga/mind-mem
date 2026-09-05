@@ -304,15 +304,35 @@ below, no code, no attribution in public artifacts.)
       typed-predicate neighbor hits into the RRF-scored result set so a
       single `recall()` benefits from typed hops, deterministically and
       logged (no learned re-ranker).
-- [ ] **Independently reproducible benchmarks** — the headline numbers
-      (NIAH 250/250, LoCoMo vs Memobase/Letta/Mem0) are self-published
-      today. Ship a one-command repro harness that pins the exact dataset
-      version + commit + config + seeds and writes RAW per-query outputs
-      (not just the aggregate) to a checked-in artifact, so a third party
-      can rerun and diff byte-for-byte. This is the single biggest lever
-      on external credibility — claims should be reproducible, not trusted.
-      (Aligns with the determinism wedge: a benchmark that replays
-      bit-identically is itself evidence.)
+- [x] **Repro-package machinery + verifier** (shipped 2026-09-05) — one command
+      per benchmark writes a package that pins dataset identity *and* a content
+      hash, the repo commit, the effective config + its sha256, every seed, the
+      adapter, the embedder (name/dims/device, read from the backend that ran,
+      not from a label), k, and the exclusion rule with counts; RAW per-unit
+      NDJSON sufficient to recompute every headline metric; the metrics computed
+      *from* those rows; and the environment facts (hardware, OS, python, wall
+      clock, killed/crashed count, latency percentiles).
+      `benchmarks/repro_verify.py` (`make repro-verify`) recomputes every
+      committed number from its committed raw rows and exits non-zero when one
+      does not follow — re-deriving each unit's verdict from its retrieved
+      results rather than reading the row's own summary field.
+      `tests/test_repro_package.py` proves the verifier FAILS on a tampered raw
+      row, metric, manifest counter and scorecard cell; a verifier that cannot
+      fail is not evidence. Covers NIAH (`benchmarks/repro_niah.py`, now
+      subprocess-isolated per case) and the LongMemEval scorecard/NDJSON pairs.
+      Observation, not a new claim: all six committed LongMemEval scorecards
+      recompute exactly from their own rows.
+- [ ] **Publish artifact-backed headline numbers** — the machinery above is
+      landed; the runs are not. Outstanding: (a) a full 250-cell NIAH package
+      committed and verifying, so `250/250` stops being a test-suite result and
+      becomes an artifact-backed one (`benchmarks/STATUS.md` records that gap;
+      `EVIDENCE.md` rows 1-3 no longer cite artifacts that never existed);
+      (b) a LoCoMo repro package — **not covered**: LoCoMo scores through an
+      external judge LLM, so it needs a judge-response artifact and a
+      judge-pinning story of its own before its rows can be recomputed offline;
+      (c) an independent third-party rerun reporting the same
+      `metrics.determinism.decision_fingerprint`. Publishing any of these is a
+      separate gated decision, not a side effect of running the harness.
 
 ### Group I — Feedback-quality recall scoring (prior-art-informed, 2026-06-20)
 

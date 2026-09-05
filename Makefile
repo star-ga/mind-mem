@@ -40,7 +40,7 @@ reindex: ## Rebuild FTS5 index
 scan: ## Run integrity scan (contradictions, drift, dead decisions)
 	python3 -m mind_mem.intel_scan .
 
-.PHONY: coverage benchmark repro-niah repro-benchmarks docs format typecheck
+.PHONY: coverage benchmark repro-niah repro-niah-smoke repro-verify repro-benchmarks docs format typecheck
 
 coverage: ## Run tests with coverage report
 	python3 -m pytest tests/ --cov=src/mind_mem --cov-report=term-missing --cov-report=html -q
@@ -48,11 +48,17 @@ coverage: ## Run tests with coverage report
 benchmark: ## Run recall performance benchmark
 	python3 -m pytest tests/ -k "benchmark or perf" -v --timeout=60
 
-repro-niah: ## Reproducible NIAH benchmark -> raw JSONL + dataset/env metadata + sha256 manifest (local, no API key)
+repro-niah: ## FULL NIAH matrix (250 cells, ~1h) -> repro package: raw NDJSON + metrics + pinned manifest (local, no API key)
 	python3 benchmarks/repro_niah.py --out benchmarks/repro/niah
 
-repro-benchmarks: repro-niah ## Run all reproducible, third-party-verifiable benchmark packages
-	@echo "Repro artifacts under benchmarks/repro/ -- rerun this target and diff manifest.json hashes."
+repro-niah-smoke: ## Same machinery over a 7-cell subset spanning every size/depth -- proves the harness, NOT the 250/250 figure
+	python3 benchmarks/repro_niah.py --every 37 --out benchmarks/repro/niah-smoke
+
+repro-verify: ## Recompute every committed number from its committed raw rows. Non-zero exit = a published figure does not follow.
+	python3 benchmarks/repro_verify.py all
+
+repro-benchmarks: repro-niah repro-verify ## Run all reproducible, third-party-verifiable benchmark packages, then verify them
+	@echo "Repro artifacts under benchmarks/repro/ -- rerun this target and diff the manifest.json hashes."
 
 docs: ## Validate documentation links
 	@echo "Checking markdown links..."

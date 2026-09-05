@@ -10,6 +10,33 @@ the v3.2.0 backend-protocol refactor and v3.2.1 apply-engine
 BlockStore routing. Result persists at the same matrix (5 sizes × 5
 depths × 10 needles) using the same hybrid BM25 + vector + RRF stack.
 
+## Reproducing it, and checking the reproduction
+
+Both numbers above come from running the parametrized suite. **No full-matrix
+repro package is committed**, so the figure is a test-suite result rather than
+an artifact-backed one; `benchmarks/STATUS.md` records that plainly.
+
+```bash
+make repro-niah        # FULL matrix -> benchmarks/repro/niah/ (~1 h, local, no API key)
+make repro-niah-smoke  # 7 cells spanning every size and depth (~2 min) -- NOT the 250/250 figure
+make repro-verify      # recompute every committed number from its committed raw rows
+```
+
+`make repro-niah` writes `raw.ndjson` (one row per case, with the retrieved ids
+and full excerpts), `metrics.json` (computed *from* those rows, never authored),
+`dataset.json`, `environment.json`, and a `manifest.json` pinning the commit, the
+effective config + sha256, the seeds, the adapter, the embedder (name / dims /
+device, read from the backend that indexed each case rather than from a label),
+k, the exclusion rule, the killed-or-crashed count, hardware and wall clock, plus
+the sha256 of every file.
+
+`make repro-verify` re-derives each case's hit from its own retrieved results —
+not from the row's `found` field — recomputes the metrics, and exits non-zero if
+a published number does not follow. Compare runs on
+`metrics.determinism.decision_fingerprint`, which covers the retrieval decisions
+and deliberately excludes latency; latency does not reproduce across boxes and a
+whole-file diff would fail for the wrong reason.
+
 ## Methodology
 
 A single "needle" fact is planted at a controlled depth within a haystack of semantically diverse filler memory blocks. The system must retrieve the needle in its **top-5 results** using only a natural-language query — no exact-match hints, no metadata filters.
@@ -18,7 +45,7 @@ A single "needle" fact is planted at a controlled depth within a haystack of sem
 
 | Parameter | Values | Count |
 |-----------|--------|-------|
-| Haystack size | 10, 50, 100, 250, 500 blocks | 5 |
+| Haystack size | 10, 50, 100, 200, 500 blocks | 5 |
 | Burial depth | 0%, 25%, 50%, 75%, 100% | 5 |
 | Needle type | 10 diverse domain facts | 10 |
 | **Total test cases** | | **250** |

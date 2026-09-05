@@ -197,7 +197,30 @@ Full-set numbers stand (see `benchmarks/REPORT.md`, `EVIDENCE.md` row 7):
 self-published, harness + raw outputs checked in, independent rerun wanted.
 Latest full-corpus scorecard: [`docs/benchmarks/2026-07-31-locomo-baseline-mind_mem.md`](../docs/benchmarks/2026-07-31-locomo-baseline-mind_mem.md).
 
-## NIAH — not held
+## NIAH — not held, but the 250/250 has no committed artifact
 
-250/250, reproducible via `make repro-niah`. See `benchmarks/NIAH.md` and
-`EVIDENCE.md` row 1.
+The claim is `250/250` (5 sizes x 5 depths x 10 needles, top-5). What backs it
+today is the parametrized test suite, not a checked-in run: no full-matrix repro
+package has ever been committed, and `EVIDENCE.md` rows 1-3 used to cite
+`benchmarks/repro/niah/` files that did not exist. Those rows now say so.
+
+What *is* committed is the machinery and the check:
+
+- `make repro-niah` writes a repro package -- raw per-case NDJSON, metrics
+  recomputed from those rows, and a manifest pinning the commit, the effective
+  config + its sha256, the seeds, the adapter, the embedder (name/dims/device),
+  k, the exclusion rule, the killed-or-crashed count, hardware and wall clock,
+  plus the sha256 of every file. Each case runs in its own hard-killed child
+  process, so a hang is counted rather than ending the run.
+- `make repro-verify` recomputes every committed number from its committed raw
+  rows and exits non-zero when one does not follow. It re-derives each case's
+  hit from the retrieved ids and excerpts rather than reading the row's own
+  `found` field, so editing a result list changes the metric.
+- `benchmarks/repro/niah-smoke/` is a 7-cell fixture spanning every size and
+  depth, marked `headline_claim: false`. It exercises the package end to end.
+  **It is not the 250/250 figure and may not be cited as one.**
+
+Publishing the full matrix is a separate, deliberate run. Until it lands and
+verifies, `250/250` is a test-suite result, not an artifact-backed one.
+
+See `benchmarks/NIAH.md` and `EVIDENCE.md` rows 1-3, 9.
