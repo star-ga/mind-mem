@@ -79,6 +79,13 @@ FTS5_COLUMNS = [
 _BLOCK_ID_WEIGHT = 1.0
 
 
+#: Bumped when the FTS table layout changes in a way a legacy database cannot
+#: be migrated into incrementally. Stored in ``meta``; a mismatch forces one
+#: full rebuild. v2 moved FACT sub-blocks out of ``blocks_fts`` into their own
+#: ``blocks_fts_facts`` surface so a derived row stops reweighting its parent.
+_FTS_SCHEMA_VERSION = "2"
+
+
 def _bm25_weights() -> str:
     """Return the comma-separated bm25() weights aligned to blocks_fts.
 
@@ -400,7 +407,21 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     # a single document to the statistics of the corpus it was withheld from.
     # A block is in exactly one of the two, never both.
     cols = ", ".join(col for col, _ in FTS5_COLUMNS)
-    for _fts_table in ("blocks_fts", "blocks_fts_withheld"):
+    # ``blocks_fts_facts`` / ``_withheld`` mirror the pair above for FACT
+    # sub-blocks. They are a SEPARATE statistics surface, not a filing
+    # convenience: bm25() draws N and the per-column length averages from the
+    # table's own structure record, and no WHERE clause narrows that, so a
+    # derived fact row sharing a table with its parent silently reweights every
+    # parent in it. Measured on a session-shaped haystack, 334 fact cards beside
+    # 48 parents -- 87% of the surface -- pulled the average document length far
+    # under the parents' own, normalising each parent at roughly 7.7x avgdl.
+    # A fact card is a derived VIEW of a document, not a document of the corpus.
+    for _fts_table in (
+        "blocks_fts",
+        "blocks_fts_withheld",
+        "blocks_fts_facts",
+        "blocks_fts_facts_withheld",
+    ):
         conn.execute(f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS {_fts_table}
             USING fts5(block_id, {cols}, tokenize='porter unicode61')
@@ -931,8 +952,12 @@ def _insert_block(
                 ),
             )
             fact_fts = _extract_fts_fields(fact_block)
+            # The FACT surface, never the parent one -- see the table creation
+            # comment: sharing it would put this derived row into the length
+            # average and document count that score its own parent.
+            fact_fts_table = f"{fts_table}_facts" if fts_table == "blocks_fts" else "blocks_fts_facts_withheld"
             conn.execute(
-                f"""INSERT INTO {fts_table} (block_id, statement, title, name,
+                f"""INSERT INTO {fact_fts_table} (block_id, statement, title, name,
                    description, tags, context, all_text)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",  # nosec B608 — see above: two literals, chosen by the admission verdict
                 (
@@ -976,6 +1001,8 @@ def _delete_blocks(
     # flips, and a delete that only cleared one would leave the stale twin.
     conn.execute(f"DELETE FROM blocks_fts WHERE block_id IN ({all_ph})", all_ids)  # nosec B608 — same as above
     conn.execute(f"DELETE FROM blocks_fts_withheld WHERE block_id IN ({all_ph})", all_ids)  # nosec B608 — same as above
+    conn.execute(f"DELETE FROM blocks_fts_facts WHERE block_id IN ({all_ph})", all_ids)  # nosec B608 — same as above
+    conn.execute(f"DELETE FROM blocks_fts_facts_withheld WHERE block_id IN ({all_ph})", all_ids)  # nosec B608 — same as above
     conn.execute(
         f"DELETE FROM xref_edges WHERE src IN ({all_ph}) OR dst IN ({all_ph})",  # nosec B608 — same as above
         all_ids + all_ids,
@@ -1027,6 +1054,8 @@ def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: dat
     conn.execute("DELETE FROM blocks")
     conn.execute("DELETE FROM blocks_fts")
     conn.execute("DELETE FROM blocks_fts_withheld")
+    conn.execute("DELETE FROM blocks_fts_facts")
+    conn.execute("DELETE FROM blocks_fts_facts_withheld")
     conn.execute("DELETE FROM xref_edges")
     conn.execute("DELETE FROM index_meta")
     conn.execute("DELETE FROM file_state")
@@ -1153,6 +1182,24 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
             release_hash = _release_set_hash(releases)
 
             force = not incremental
+            # A database built before the fact surface was split still holds
+            # FACT rows inside ``blocks_fts``, where they go on distorting the
+            # statistics of every parent scored against it. Nothing about a
+            # file's bytes changes when the schema does, so incremental change
+            # detection would never revisit them and the old layout would
+            # survive indefinitely. One forced full rebuild moves them.
+            _fts_ver = conn.execute("SELECT value FROM meta WHERE key = 'fts_schema_version'").fetchone()
+            if (_fts_ver["value"] if _fts_ver else None) != _FTS_SCHEMA_VERSION:
+                if incremental:
+                    _log.info(
+                        "fts_schema_migration",
+                        workspace=ws,
+                        from_version=(_fts_ver["value"] if _fts_ver else None),
+                        to_version=_FTS_SCHEMA_VERSION,
+                        msg="fact rows move to their own statistics surface; forcing one full rebuild",
+                    )
+                incremental = False
+
             if incremental:
                 changed = _get_changed_files(conn, workspace)
                 # A release names ids in decisions/DECISIONS.md but ADMITS
@@ -1186,6 +1233,8 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
                 conn.execute("DELETE FROM blocks")
                 conn.execute("DELETE FROM blocks_fts")
                 conn.execute("DELETE FROM blocks_fts_withheld")
+                conn.execute("DELETE FROM blocks_fts_facts")
+                conn.execute("DELETE FROM blocks_fts_facts_withheld")
                 conn.execute("DELETE FROM xref_edges")
 
             total_blocks = 0
@@ -1223,6 +1272,12 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                 ("release_set_hash", release_hash),
+            )
+            # Stamped only after a successful build, so a run that dies partway
+            # is retried rather than recorded as migrated.
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                ("fts_schema_version", _FTS_SCHEMA_VERSION),
             )
 
             conn.commit()
@@ -1277,10 +1332,23 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
 # ---------------------------------------------------------------------------
 
 
+#: Bounded tie-break applied to a parent that a fact card also matched.
+#: Deliberately multiplicative-and-tiny rather than the old ``0.8f + 0.2p``
+#: blend: once facts are scored on their own surface their numbers are on a
+#: different scale entirely (a fact card is tens of characters, a session parent
+#: thousands), so blending them re-imports the cross-scale error the split
+#: exists to remove. This can reorder parents that are already near-tied on
+#: their own surface and cannot move one past a materially better parent.
+_FACT_TIEBREAK = 1.02
+
+
 def _aggregate_facts_to_parents(
     conn: sqlite3.Connection,
     results: list[dict],
     workspace: str | None = None,
+    *,
+    fts_query: str | None = None,
+    weights: str | None = None,
 ) -> list[dict]:
     """Merge fact sub-block scores into their parent blocks.
 
@@ -1326,9 +1394,12 @@ def _aggregate_facts_to_parents(
     for r in regular:
         rid = r.get("_id", "")
         if rid in fact_scores:
-            fact_sc = fact_scores[rid]
             parent_sc = r.get("score", 0)
-            r["score"] = round(max(parent_sc, fact_sc * 0.8 + parent_sc * 0.2), 4)
+            # A bounded tie-break on the parent's OWN score. The fact score is
+            # deliberately not mixed in: it is measured against a different
+            # corpus and comparing the two numerically is the error this split
+            # removes.
+            r["score"] = round(parent_sc * _FACT_TIEBREAK, 4)
             r["_fact_boost"] = True
             boosted.add(rid)
 
@@ -1341,6 +1412,34 @@ def _aggregate_facts_to_parents(
             list(missing),
         ).fetchall()
         admitted = _admit_ids([(r["id"], r["status"]) for r in rows], workspace=workspace)
+
+        # Score the injected parents on the PARENT surface, not by rescaling a
+        # fact score. Every term of a fact card is present in the parent it was
+        # extracted from, so a parent reached this way always matches the same
+        # query -- it simply fell outside the fetch window. Asking the parent
+        # surface for its real bm25 keeps every score in this result set
+        # commensurable; the old ``fact_score * 0.8`` inserted a number drawn
+        # from a different corpus and ordered it against parent scores.
+        parent_bm25: dict[str, float] = {}
+        if fts_query and weights and admitted:
+            ph = ",".join("?" for _ in admitted)
+            try:
+                for prow in conn.execute(
+                    f"""SELECT block_id, -bm25(blocks_fts, {weights}) AS s
+                        FROM blocks_fts
+                        WHERE blocks_fts MATCH ? AND block_id IN ({ph})""",  # nosec B608 — `weights` derives from the static FTS5_COLUMNS; ids are bind params
+                    (fts_query, *admitted),
+                ).fetchall():
+                    parent_bm25[prow["block_id"]] = float(prow["s"])
+            except sqlite3.OperationalError:
+                # A malformed MATCH here must not lose the injection; fall back
+                # to the floor below rather than dropping the parent entirely.
+                parent_bm25 = {}
+
+        # Floor for a parent the surface could not score: rank it below every
+        # parent that WAS scored, so an injection can never outrank a real hit.
+        _floor = min(parent_bm25.values(), default=0.0) - 1e-6
+
         for row in rows:
             if row["id"] not in admitted:
                 continue
@@ -1349,7 +1448,7 @@ def _aggregate_facts_to_parents(
                 {
                     "_id": row["id"],
                     "type": row["type"],
-                    "score": round(fact_scores[row["id"]] * 0.8, 4),
+                    "score": round(parent_bm25.get(row["id"], _floor), 4),
                     "excerpt": get_excerpt(block_data),
                     "speaker": row["speaker"],
                     "tags": row["tags"],
@@ -1576,7 +1675,23 @@ def query_index(
                 LIMIT ?""",  # nosec B608 — `weights` is a comma-separated list of floats derived from FTS5_COLUMNS (a static constant), never from user input; `date_sql` is a fixed fragment whose bounds are bound parameters
             (fts_query, *date_params, fetch_k),
         ).fetchall()
-        rows = list(rows) + _released_withheld_rows(
+        # The FACT surface is queried SEPARATELY so each side's bm25 is computed
+        # over its own corpus. Fact scores are on a different scale from parent
+        # scores by construction -- a fact card is tens of characters where a
+        # session parent is thousands -- so they are never compared numerically
+        # against parents. They identify WHICH parents matched; those parents are
+        # then scored on the PARENT surface in _aggregate_facts_to_parents.
+        fact_rows = conn.execute(
+            f"""SELECT b.*, f.rank as fts_rank,
+                       -bm25(blocks_fts_facts, {weights}) as bm25_score
+                FROM blocks_fts_facts f
+                JOIN blocks b ON b.id = f.block_id
+                WHERE blocks_fts_facts MATCH ?{date_sql}
+                ORDER BY bm25_score DESC
+                LIMIT ?""",  # nosec B608 -- same provenance as the parent query above
+            (fts_query, *date_params, fetch_k),
+        ).fetchall()
+        rows = list(rows) + list(fact_rows) + _released_withheld_rows(
             conn, workspace, fts_query, weights, fetch_k, date_sql=date_sql, date_params=date_params
         )
     except sqlite3.OperationalError as e:
@@ -1682,7 +1797,7 @@ def query_index(
         results.append(result)
 
     # --- Feature 2: Aggregate fact sub-blocks to parents (small-to-big) ---
-    results = _aggregate_facts_to_parents(conn, results, workspace)
+    results = _aggregate_facts_to_parents(conn, results, workspace, fts_query=fts_query, weights=weights)
 
     # Graph boost
     if graph_boost and results:

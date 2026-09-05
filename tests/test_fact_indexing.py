@@ -76,11 +76,28 @@ class TestFactSubBlockIndexing(_WorkspaceMixin, unittest.TestCase):
             self.assertIn("::F", row["id"])
             self.assertTrue(row["id"].startswith("DIA-D1-3::F"))
 
-        # Verify FTS entries exist for fact sub-blocks
+        # Fact sub-blocks are searchable, on their OWN statistics surface.
+        # Both halves matter: present in blocks_fts_facts so small-to-big
+        # retrieval still finds them, and ABSENT from blocks_fts so a derived
+        # row cannot enter the document count and length average that score its
+        # own parent. bm25() takes those from the table's structure record and
+        # no WHERE clause narrows them, so which table a row sits in IS the
+        # statistics decision.
         fact_ids = [r["id"] for r in fact_rows]
         for fid in fact_ids:
-            fts_row = conn.execute("SELECT * FROM blocks_fts WHERE block_id = ?", (fid,)).fetchone()
-            self.assertIsNotNone(fts_row, f"No FTS entry for {fid}")
+            fts_row = conn.execute(
+                "SELECT * FROM blocks_fts_facts WHERE block_id = ?", (fid,)
+            ).fetchone()
+            self.assertIsNotNone(fts_row, f"No fact-surface FTS entry for {fid}")
+
+            parent_row = conn.execute(
+                "SELECT * FROM blocks_fts WHERE block_id = ?", (fid,)
+            ).fetchone()
+            self.assertIsNone(
+                parent_row,
+                f"{fid} is a derived fact card and must not sit in the parent "
+                "statistics surface — that is what reweights every parent in it",
+            )
 
         conn.close()
 
