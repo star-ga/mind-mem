@@ -499,6 +499,42 @@ def _top_score(items: list[dict]) -> float:
     return 0.0
 
 
+def _fanout_failure_kind(exc: BaseException) -> str:
+    """Name the cause of a failed expansion / decomposition fan-out.
+
+    ``RuntimeError: can't start new thread`` is the OS refusing to give the
+    fan-out a worker -- the process is out of threads -- and it is a wholly
+    different event from a query that simply did not expand. Both used to log
+    the same ``query_expansion_failed / fallback=single_query`` warning, which
+    is how the re-entrant fan-out ran unnoticed from v3.3.0 to 5.0.1: the
+    request still answered, so nothing crashed and nothing said why.
+
+    Serving behaviour is deliberately unchanged -- a recall must still answer,
+    so exhaustion still degrades to the single-query path rather than raising
+    at the caller. What changes is that the record can be told apart.
+    """
+    if isinstance(exc, RuntimeError) and "can't start new thread" in str(exc):
+        return "thread_exhaustion"
+    return "expansion_error"
+
+
+def _log_fanout_failure(event: str, exc: BaseException) -> str:
+    """Log a fan-out failure at a level proportional to its cause.
+
+    Returns the classified kind so a caller can assert on it.
+    """
+    kind = _fanout_failure_kind(exc)
+    emit = _log.error if kind == "thread_exhaustion" else _log.warning
+    emit(
+        event,
+        error=str(exc),
+        failure_kind=kind,
+        fallback="single_query",
+    )
+    metrics.inc(f"{event}_{kind}")
+    return kind
+
+
 class HybridBackend:
     """Orchestrates BM25 and vector search with RRF fusion.
 
@@ -782,7 +818,16 @@ class HybridBackend:
             expansion_active = False
         else:
             expansion_active = self._query_expansion_enabled
-        if not expansion_active and self._query_expansion_config.get("auto_enable", True):
+        # ``_skip_auto_features`` gates the auto-enable branch too, not only
+        # the operator flag above it. Without the first clause the branch
+        # re-enabled expansion on exactly the query types that reach it --
+        # and since variant 0 of every expansion IS the original query, a
+        # temporal/multi-hop query re-expanded into an identical list at
+        # every level, each level holding a pool blocked in ``Future.result``
+        # on the next. That is the depth guard: expansion is a depth-1
+        # decision, taken at the top-level search and never re-taken inside
+        # the fan-out it starts. Shipped v4.0.2 (c9cd8f22), fixed 5.0.2.
+        if not _skip_auto_features and not expansion_active and self._query_expansion_config.get("auto_enable", True):
             qt = _qt()
             if qt in ("multi-hop", "temporal"):
                 expansion_active = True
@@ -817,11 +862,7 @@ class HybridBackend:
                         **kwargs,
                     )
             except Exception as exc:
-                _log.warning(
-                    "query_expansion_failed",
-                    error=str(exc),
-                    fallback="single_query",
-                )
+                _log_fanout_failure("query_expansion_failed", exc)
 
         # v3.3.0 Tier 1 #1 — query decomposition for multi-hop queries.
         # Split compound questions ("A after B") into independent
@@ -832,7 +873,11 @@ class HybridBackend:
         if not isinstance(decomp_cfg, dict):
             decomp_cfg = {}
         decomp_active = False if _skip_auto_features else bool(decomp_cfg.get("enabled", False))
-        if not decomp_active and decomp_cfg.get("auto_enable", True):
+        # Same depth guard as expansion, same reason: decomposition also
+        # keeps the original query as sub-query 0, so a multi-hop query
+        # re-decomposed at every level of its own fan-out. Shipped v3.3.0
+        # (0c69561a), fixed 5.0.2.
+        if not _skip_auto_features and not decomp_active and decomp_cfg.get("auto_enable", True):
             if _qt() == "multi-hop":
                 decomp_active = True
                 _log.info(
@@ -866,11 +911,7 @@ class HybridBackend:
                         **kwargs,
                     )
             except Exception as exc:
-                _log.warning(
-                    "query_decomposition_failed",
-                    error=str(exc),
-                    fallback="single_query",
-                )
+                _log_fanout_failure("query_decomposition_failed", exc)
 
         # Postgres workspaces fuse BM25 + pgvector SERVER-SIDE: the local
         # "BM25" leg here (recall -> PostgresRecallBackend.search) is itself

@@ -4,6 +4,81 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Fixed — auto-enabled expansion re-entered its own fan-out, without bound
+
+`HybridBackend._search_expanded` fans a query's variants out and calls
+`search(..., _skip_auto_features=True)` for each one. That flag exists for
+exactly one purpose — stop the nested call re-entering the feature that
+started the fan-out — and its docstring says so. The *auto-enable* branches
+beneath it read only `expansion_active` / `decomp_active` and never the flag,
+so they switched the feature back on inside the nested call, on exactly the
+query types that reach them.
+
+Variant 0 of every expansion is the original query. So a `temporal` or
+`multi-hop` query expanded into a list containing itself, expanded that into
+the same list again, and did so at every level — each level holding a pool
+blocked in `Future.result` on the next. One process reached 30,935 OS threads
+at roughly 600 threads/second, which is what the suite's thread ceiling was
+added to stop (`tests/conftest.py`).
+
+`auto_enable` defaults to `true` and a `mind-mem.json` with no
+`query_expansion` section gets that default, so this was on by default. The
+fix is one clause on each branch: `if not _skip_auto_features and not
+expansion_active and ...`. That is the depth guard — expansion and
+decomposition are depth-1 decisions, taken at the top-level search and never
+re-taken inside the fan-out they start. Every pool is kept; nothing is
+serialized; well-behaved queries pay nothing, and `temporal` / `multi-hop`
+queries get faster because they stop touring the thread limit.
+
+Shipped in **v3.3.0** (`0c69561a`, decomposition) and **v4.0.2** (`c9cd8f22`,
+expansion) and live through 5.0.1. The engine is what
+`mcp/tools/recall.py::_recall_impl_uncached` reaches on its default
+`backend="auto"`, so the affected surfaces are the MCP `recall` tool,
+`api/rest.py:1038`, `api/grpc_server.py:190`, `mcp/tools/public.py:132`,
+`mcp/tools/agent.py:160`, `mcp/tools/walkthrough_persona.py:164`, and
+`mm explain --backend hybrid`. On REST and gRPC it was remotely triggerable by
+one ordinary question.
+
+**Off the two auto-enabled query types, nothing moves.**
+`benchmarks/expansion_reentrancy_identity.py --battery off-path` fingerprints
+the served `(id, score)` list — scores as `float.hex()`, so a one-ULP drift is
+a difference — over four single-hop queries and 27 hits against a pinned
+scoring instant. Pre-fix and post-fix digests are identical, all four.
+
+**On those two types the ranking does move, and that is a correction.** What
+the pre-fix code served depended on *where the box ran out of threads*: the
+terminating `RuntimeError` was swallowed into a single-query fallback, so the
+answer was a function of the machine rather than of the corpus — which the
+documented contract (a pure function of corpus, config and scoring instant)
+does not allow. Measured without exhausting anything, by serializing the
+fan-out and raising the OS's own error at a chosen depth: on the pre-fix tree
+the same four-query battery over the same corpus returns a **different digest
+at every depth** (fan-out entries 29 / 54 / 92 / 146, max depth 3 / 4 / 5 / 6,
+for abort depths 2 / 3 / 4 / 5). On the fixed tree it returns **one digest per
+query at every depth and un-instrumented** — 4 entries, max depth 1. The
+served order is now the documented depth-1 RRF fusion.
+
+**And the thread-exhaustion failure is no longer indistinguishable from a
+query that simply did not expand.** `RuntimeError: can't start new thread` and
+an ordinary expansion miss both logged `query_expansion_failed /
+fallback=single_query` at warning level, and the request still answered — which
+is precisely why three releases shipped this with nothing in any log to find.
+The record now carries `failure_kind`, `thread_exhaustion` is logged at error
+level, and each kind increments its own counter. Serving is deliberately
+unchanged: a recall still answers.
+
+The regression test (`tests/test_hybrid_expansion_reentrancy.py`) reproduces
+the defect **without leaking a thread** — a serial executor, a depth counter,
+and the assertion that the fan-out is entered exactly once — because a test
+that reproduces this by exhausting the machine does not report a failure, it
+reports a SIGKILL. Measured peak for the whole file: 2 live threads. Four
+mutations (each guard, and the failure classifier in both directions) were
+each shown to turn a named test red. `tests/test_bench_hybrid_dispatch.py`
+runs green at a peak of 10 live threads against a session baseline of 1 —
+inside the fixed path's whole budget of 12 (a 4-worker fan-out plus one
+2-worker leg pool per variant).
+
+
 ### Fixed — the score column now orders the results it is attached to
 
 `rrf_fuse` wrote `rrf_score` and never wrote `score`. The fused item is a copy
