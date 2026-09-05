@@ -65,7 +65,8 @@ _ENTITY_ID_RE = re.compile(
 )
 
 # Date pattern: YYYY-MM-DD
-_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+# Both separators: a slash-dated corpus otherwise records no ``_dates`` at all.
+_DATE_RE = re.compile(r"\b(\d{4}[-/]\d{2}[-/]\d{2})\b")
 
 # Negation patterns for detecting negated blocks
 _NEGATION_RE = re.compile(

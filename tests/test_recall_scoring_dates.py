@@ -44,3 +44,85 @@ class TestNoRegression:
     def test_non_string_is_rejected_not_raised(self) -> None:
         for bad in (None, 12345, [], {}):
             assert _parse_utc_day(bad) is None
+
+
+class TestDateProximityReadsSlashDates:
+    """The penalty branch made this failure worse than neutral.
+
+    ``_date_proximity_score`` answers an empty block-date list with 0.8 -- a
+    penalty for "no date when the query has one". A block stamped
+    ``2023/05/20`` extracted to [], so the block whose date EXACTLY matched the
+    query scored 0.8 while an ISO-stamped twin scored 1.5: a 1.875x swing
+    against the correct answer, not a miss.
+    """
+
+    QUERY = "What did I say on 2023-05-20?"
+    SLASH = "Statement: I moved house.\nDate: 2023/05/20 (Sat) 02:21\n"
+    ISO = "Statement: I moved house.\nDate: 2023-05-20\n"
+
+    def test_slash_dates_are_extracted(self) -> None:
+        from mind_mem._recall_scoring import _extract_dates
+
+        assert _extract_dates(self.SLASH) == _extract_dates(self.ISO) != []
+
+    def test_matching_slash_date_boosts_like_iso(self) -> None:
+        from mind_mem._recall_scoring import _date_proximity_score
+
+        assert _date_proximity_score(self.QUERY, self.SLASH) == _date_proximity_score(
+            self.QUERY, self.ISO
+        )
+
+    def test_a_distant_date_still_does_not_boost(self) -> None:
+        from mind_mem._recall_scoring import _date_proximity_score
+
+        far = self.SLASH.replace("2023/05/20", "2023/01/02")
+        assert _date_proximity_score(self.QUERY, far) < 1.0
+
+    def test_a_genuinely_undated_block_keeps_its_penalty(self) -> None:
+        from mind_mem._recall_scoring import _date_proximity_score
+
+        assert _date_proximity_score(self.QUERY, "Statement: no date here") == 0.8
+
+
+class TestDateRangeFilterKeepsDatedBlocks:
+    """The severe one: a hard filter, not a ranking nudge.
+
+    ``_recall_core`` filters recall hits with
+    ``_in_date_range(_block_date(h), since, until)``, and ``_in_date_range``
+    rejects an empty date because "block has no date -> cannot satisfy a
+    date-bound query" -- correct logic fed by a reader that could not see the
+    date. A slash-dated block was therefore DROPPED from every date-bounded
+    recall, not merely ranked lower.
+    """
+
+    SINCE, UNTIL = "2023-05-01", "2023-06-01"
+
+    def _kept(self, date_value: str) -> bool:
+        from mind_mem._recall_core import _in_date_range
+        from mind_mem.memory_index import _block_date
+
+        return _in_date_range(_block_date({"Date": date_value, "_id": "S-1"}), self.SINCE, self.UNTIL)
+
+    def test_a_slash_dated_block_is_not_dropped(self) -> None:
+        assert self._kept("2023/05/20 (Sat) 02:21") is True
+
+    def test_slash_and_iso_agree(self) -> None:
+        assert self._kept("2023/05/20") == self._kept("2023-05-20") is True
+
+    def test_normalised_to_iso_because_comparison_is_lexicographic(self) -> None:
+        from mind_mem.memory_index import _block_date
+
+        got = _block_date({"Date": "2023/05/20 (Sat) 02:21", "_id": "S-1"})
+        assert got == "2023-05-20", f"a surviving '/' inverts every bound: {got!r}"
+
+    def test_out_of_range_is_still_excluded(self) -> None:
+        assert self._kept("2023/01/02") is False
+
+    def test_genuinely_undated_is_still_excluded(self) -> None:
+        assert self._kept("") is False
+
+    def test_block_kind_is_unaffected(self) -> None:
+        from mind_mem.memory_index import _block_kind
+
+        assert _block_kind({"_id": "D-20230520-001"}) == "D"
+        assert _block_kind({"_id": "nope"}) == "OTHER"

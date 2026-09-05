@@ -63,7 +63,12 @@ _ID_PREFIX_RE = re.compile(r"^([A-Za-z]+)-")
 _ID_DATE_RE = re.compile(r"^[A-Za-z]+-(\d{8})(?:-|$)")
 
 # ISO date (YYYY-MM-DD) anywhere in a Date-ish field value.
-_ISO_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+# Either separator, ONE capture group so callers keep their arity. A corpus
+# stamped ``2023/05/20`` previously yielded "" here, and "" means "undated"
+# to _in_date_range in _recall_core -- so a dated block was silently DROPPED
+# from every date-bounded recall. The match is normalised to "-" on return
+# because that comparison is lexicographic and "/" (0x2F) sorts above "-".
+_ISO_DATE_RE = re.compile(r"\b(\d{4}[-/]\d{2}[-/]\d{2})\b")
 
 # Fields tried, in order, for a one-line block summary.
 _SUMMARY_FIELDS = ("Statement", "Title", "Name", "Subject", "content")
@@ -127,7 +132,7 @@ def _block_date(block: dict[str, Any]) -> str:
         if isinstance(v, str):
             m = _ISO_DATE_RE.search(v)
             if m:
-                return m.group(1)
+                return m.group(1).replace("/", "-")
     m2 = _ID_DATE_RE.match(str(block.get("_id", "")))
     if m2:
         raw = m2.group(1)

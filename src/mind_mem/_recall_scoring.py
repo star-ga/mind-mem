@@ -398,7 +398,12 @@ def _negation_penalty(block_text: str, negated_terms: list[str], penalty: float 
 # Date proximity scoring
 # ---------------------------------------------------------------------------
 
-_DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+# Accepts either separator. A corpus stamped ``2023/05/20`` previously yielded
+# NO dates here, and _date_proximity_score answers an empty block-date list
+# with a 0.8 PENALTY -- so the block whose date exactly matched the query was
+# scored 0.8 where an ISO-stamped twin scored 1.5, a 1.875x swing against the
+# correct answer rather than a merely neutral miss.
+_DATE_PATTERN = re.compile(r"(\d{4})[-/](\d{2})[-/](\d{2})")
 
 
 def _extract_dates(text: str) -> list:
