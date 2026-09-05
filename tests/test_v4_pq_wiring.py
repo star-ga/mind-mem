@@ -184,7 +184,11 @@ class TestQuarantinedBlocksGetNoCode:
 
         rebuild_index(str(armed))
         index = json.loads((armed / ".mind-mem-vectors" / "index.json").read_text(encoding="utf-8"))
-        ids = {rec["_id"] for rec in index}
+        # ``index.json`` is the canonical dict ``{schema, model, dimension,
+        # blocks, embeddings}``. It used to be a bare list here, because
+        # ``rebuild_index`` hand-rolled its own writer and disagreed with the
+        # reader about the shape of the one file they share.
+        ids = {rec["_id"] for rec in index["blocks"]}
         assert "D-20260102-009" not in ids, "quarantined block reached the vector index"
         # Positive control: the admitted blocks DID make it in, so the
         # assertion above is not passing because the index is empty.

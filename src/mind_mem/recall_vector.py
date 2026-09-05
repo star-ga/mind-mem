@@ -97,6 +97,129 @@ def _embed_timeout_seconds(config: dict | None) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Local vector index — ONE canonical on-disk shape, ONE writer
+# ---------------------------------------------------------------------------
+
+#: Tag stamped into every index written by :func:`save_local_index`, the single
+#: writer of ``<workspace>/<index_path>/index.json``. It exists so a future
+#: shape change is a version bump rather than another guess-from-keys.
+LOCAL_INDEX_SCHEMA = "mind-mem/local-vector-index@1"
+
+#: Excerpt width used when adapting a LEGACY record, which carries full text
+#: and no excerpt. Matches nothing else on purpose: it is a display bound, not
+#: a scoring input.
+_LEGACY_EXCERPT_CHARS = 200
+
+
+def canonical_local_index(
+    model: str | None,
+    dimension: int | None,
+    blocks: list[dict[str, Any]],
+    embeddings: list[list[float]],
+) -> dict[str, Any]:
+    """Build the canonical local-index payload.
+
+    ``model`` and ``dimension`` are carried because the reader needs them to
+    tell a stale index (embedded under a different model / width) from a
+    current one; ``blocks`` and ``embeddings`` are positionally paired and the
+    reader rejects the pair when the lengths disagree.
+    """
+    return {
+        "schema": LOCAL_INDEX_SCHEMA,
+        "model": model,
+        "dimension": dimension,
+        "blocks": blocks,
+        "embeddings": embeddings,
+    }
+
+
+def local_index_file(workspace: str, index_path: str) -> str:
+    """Absolute path of the one local vector index file."""
+    return os.path.join(workspace, index_path, "index.json")
+
+
+def save_local_index(workspace: str, index_path: str, index: dict[str, Any]) -> None:
+    """Serialize the local vector index — THE single writer of ``index.json``.
+
+    Every producer routes through here so the file has one shape.
+    ``rebuild_index`` used to hand-roll its own ``json.dump`` of a bare list to
+    this same path while ``_load_local_index`` read the dict, so a workspace
+    reindexed that way answered every dense query with an empty list. This is a
+    module-level function rather than only a method so a producer that holds no
+    ``VectorBackend`` still cannot become a second writer.
+    """
+    index_file = local_index_file(workspace, index_path)
+    os.makedirs(os.path.dirname(index_file), exist_ok=True)
+    try:
+        with open(index_file, "w", encoding="utf-8") as f:
+            json.dump(index, f, indent=2)
+        _log.info("index_saved", path=index_file, blocks=len(index.get("blocks", [])))
+    except OSError as e:
+        _log.error("index_save_failed", path=index_file, error=str(e))
+        raise
+
+
+def is_canonical_local_index(payload: Any) -> bool:
+    """True when ``payload`` is a dict the local search path can read."""
+    return isinstance(payload, dict) and isinstance(payload.get("blocks"), list) and isinstance(payload.get("embeddings"), list)
+
+
+def migrate_legacy_list_index(records: list[Any]) -> dict[str, Any]:
+    """Adapt the LEGACY bare-list index onto the canonical dict shape.
+
+    Before the writers were converged, ``rebuild_index`` — the vector rebuild
+    the MCP ``reindex(include_vectors=True)`` tool calls — wrote a bare list of
+    ``{_id, embedding, text}`` records to the same path
+    :meth:`VectorBackend._save_local_index` writes the dict to. Any workspace
+    reindexed through that path still has such a file on disk, and its vectors
+    are perfectly good, so it is adapted rather than discarded: the alternative
+    is telling a user their dense leg is dead until they reindex.
+
+    What a legacy file cannot supply is recovered honestly, not invented:
+    ``status``/``date``/``file``/``line`` are absent from the records, so they
+    come back empty. That has one visible consequence — an ``active_only``
+    search over a legacy index matches nothing, because no record can prove it
+    is active — and it is why every legacy load warns to reindex.
+
+    deferred: this adapter is transitional and exists only for indexes written
+    before the writers converged — upgrade path: delete it once a released
+    version has shipped the canonical writer long enough that a re-index is a
+    fair thing to require, at which point a list payload becomes ``invalid_shape``.
+    """
+    blocks: list[dict[str, Any]] = []
+    embeddings: list[list[float]] = []
+    for i, rec in enumerate(records):
+        if not isinstance(rec, dict):
+            continue
+        raw = rec.get("embedding")
+        if not isinstance(raw, list) or not raw:
+            continue
+        try:
+            vec = [float(v) for v in raw]
+        except (TypeError, ValueError):
+            continue
+        bid = str(rec.get("_id") or f"block_{i}")
+        text = str(rec.get("text", ""))
+        blocks.append(
+            {
+                "_id": bid,
+                "type": get_block_type(bid),
+                "excerpt": text[:_LEGACY_EXCERPT_CHARS],
+                "file": "?",
+                "line": 0,
+                "status": "",
+                "date": "",
+                "text": text,
+            }
+        )
+        embeddings.append(vec)
+
+    index = canonical_local_index(None, len(embeddings[0]) if embeddings else None, blocks, embeddings)
+    index["migrated_from"] = "legacy_list"
+    return index
+
+
+# ---------------------------------------------------------------------------
 # Vector Backend Implementation
 # ---------------------------------------------------------------------------
 
@@ -181,6 +304,14 @@ class VectorBackend(RecallBackend):
         # previous ad-hoc windowed breaker (``_provider_failures`` dict).
         self._provider_breakers: dict[str, CircuitBreaker] = {}
         self._provider_breakers_lock = threading.Lock()
+
+        # Why the last local-index load produced what it did: "ok" / "missing"
+        # / "unreadable" / "legacy_list_shape" / "invalid_shape" / "empty".
+        # A dense leg that returns nothing because it could not READ its index
+        # must be distinguishable from one that read it and found no match —
+        # that indistinguishability is exactly how the two-writer shape defect
+        # shipped. Read-only for callers; set only by _load_local_index.
+        self.last_index_diagnostic: str | None = None
         _log.info("vector_backend_init", provider=self.provider, model=self.model_name)
 
     # ------------------------------------------------------------------
@@ -849,47 +980,88 @@ class VectorBackend(RecallBackend):
 
     def _get_index_path(self, workspace: str) -> str:
         """Get full path to local index file."""
-        index_dir = os.path.join(workspace, self.index_path)
-        return os.path.join(index_dir, "index.json")
+        return local_index_file(workspace, self.index_path)
 
     def _load_local_index(self, workspace: str) -> dict[str, Any] | None:
-        """Load local JSON index from disk.
+        """Load the local JSON index from disk, in whatever shape it is on disk.
+
+        The canonical file is the dict :meth:`_save_local_index` writes —
+        ``{schema, model, dimension, blocks, embeddings}``. A bare LIST of
+        ``{_id, embedding, text}`` records is the LEGACY shape a pre-convergence
+        ``rebuild_index`` (the MCP reindex path) left behind; it is adapted by
+        :func:`migrate_legacy_list_index` so an already-reindexed workspace
+        keeps a working dense leg, and it warns on every load until reindexed.
+
+        Anything else is refused with a named error rather than a stack trace
+        three frames up: reading ``.get`` off a list raised ``AttributeError``
+        out of this method, which the serving path swallowed to ``[]``.
+
+        Sets :attr:`last_index_diagnostic` on every path so a caller can tell
+        "no match" from "could not read the index" without scraping logs.
 
         Returns:
-            Index dict with 'blocks' and 'embeddings', or None if not found
+            Canonical index dict with 'blocks' and 'embeddings', or None.
         """
         index_file = self._get_index_path(workspace)
         if not os.path.isfile(index_file):
+            self.last_index_diagnostic = "missing"
             _log.warning("index_not_found", path=index_file)
             return None
 
         try:
             with open(index_file, encoding="utf-8") as f:
-                index: dict[str, Any] = json.load(f)
-            _log.info("index_loaded", path=index_file, blocks=len(index.get("blocks", [])))
-            return index
+                payload: Any = json.load(f)
         except (OSError, json.JSONDecodeError) as e:
+            self.last_index_diagnostic = "unreadable"
+            metrics.inc("vector_index_load_errors")
             _log.error("index_load_failed", path=index_file, error=str(e))
             return None
 
+        if is_canonical_local_index(payload):
+            self.last_index_diagnostic = "ok"
+            _log.info("index_loaded", path=index_file, blocks=len(payload["blocks"]))
+            return cast("dict[str, Any]", payload)
+
+        if isinstance(payload, list):
+            index = migrate_legacy_list_index(payload)
+            self.last_index_diagnostic = "legacy_list_shape"
+            metrics.inc("vector_index_legacy_shape")
+            _log.warning(
+                "index_legacy_list_shape",
+                path=index_file,
+                records=len(payload),
+                usable=len(index["blocks"]),
+                remediation="adapted in memory; reindex to write the canonical index shape",
+                note="legacy records carry no status, so an active_only search stays empty until reindexed",
+            )
+            return index
+
+        self.last_index_diagnostic = "invalid_shape"
+        metrics.inc("vector_index_load_errors")
+        _log.error(
+            "index_shape_invalid",
+            path=index_file,
+            found=type(payload).__name__,
+            expected="dict with 'blocks' and 'embeddings'",
+            remediation="reindex to rewrite the vector index",
+        )
+        return None
+
     def _save_local_index(self, workspace: str, index: dict[str, Any]):
-        """Save local JSON index to disk.
+        """Save local JSON index to disk via :func:`save_local_index`.
+
+        Thin delegate, deliberately: the serializer is a module-level function
+        so a producer that holds no ``VectorBackend`` cannot become a second
+        writer. ``rebuild_index`` used to hand-roll its own ``json.dump`` of a
+        bare list to this same path; the reader expected the dict, so a
+        workspace reindexed that way answered every dense query with an empty
+        list. Build the payload with :func:`canonical_local_index`.
 
         Args:
             workspace: Workspace path
             index: Index dict with 'blocks' and 'embeddings'
         """
-        index_dir = os.path.join(workspace, self.index_path)
-        os.makedirs(index_dir, exist_ok=True)
-
-        index_file = self._get_index_path(workspace)
-        try:
-            with open(index_file, "w", encoding="utf-8") as f:
-                json.dump(index, f, indent=2)
-            _log.info("index_saved", path=index_file, blocks=len(index.get("blocks", [])))
-        except OSError as e:
-            _log.error("index_save_failed", path=index_file, error=str(e))
-            raise
+        save_local_index(workspace, self.index_path, index)
 
     def index(self, workspace: str):
         """Build or rebuild vector index from workspace files.
@@ -1010,13 +1182,7 @@ class VectorBackend(RecallBackend):
             blocks: List of block metadata dicts
             embeddings: List of embedding vectors
         """
-        index = {
-            "model": self.model_name,
-            "dimension": self.dimension,
-            "blocks": blocks,
-            "embeddings": embeddings,
-        }
-        self._save_local_index(workspace, index)
+        self._save_local_index(workspace, canonical_local_index(self.model_name, self.dimension, blocks, embeddings))
 
     def _index_qdrant(self, workspace: str, blocks: list[dict], embeddings: list[list[float]]):
         """Build Qdrant vector index.
@@ -1237,16 +1403,25 @@ class VectorBackend(RecallBackend):
         # Load index
         index = self._load_local_index(workspace)
         if not index:
-            _log.warning("no_index_available", workspace=workspace)
+            # ``last_index_diagnostic`` carries WHICH failure this was —
+            # missing / unreadable / invalid_shape. Logging one flat
+            # "no index" for all three is what let a wrong-shaped index look
+            # like an empty corpus.
+            _log.warning("no_index_available", workspace=workspace, reason=self.last_index_diagnostic)
             return []
 
         blocks = index.get("blocks", [])
         embeddings = index.get("embeddings", [])
 
         if not blocks or not embeddings:
+            if self.last_index_diagnostic == "ok":
+                self.last_index_diagnostic = "empty"
+            _log.warning("index_empty", workspace=workspace, reason=self.last_index_diagnostic)
             return []
 
         if len(blocks) != len(embeddings):
+            self.last_index_diagnostic = "length_mismatch"
+            metrics.inc("vector_index_load_errors")
             _log.error("index_mismatch", blocks=len(blocks), embeddings=len(embeddings))
             return []
 
@@ -1478,15 +1653,31 @@ def search_batch(
             except (OSError, json.JSONDecodeError):
                 pass
 
+    # The serving path must answer even when the dense leg cannot: a raise
+    # here takes down a recall that BM25 could still have served. But an
+    # empty list from a swallowed exception and an empty list from an honest
+    # miss used to be the same observation, which is why a wrong-shaped index
+    # degraded recall to lexical-only in silence. Both still return [] — they
+    # no longer LOOK the same.
+    backend: VectorBackend | None = None
     try:
         backend = VectorBackend(config)
-        return backend.search(workspace, query, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
+        results = backend.search(workspace, query, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
     except ImportError:
         _log.info("search_batch_unavailable", reason="sentence-transformers not installed")
         return []
     except Exception as e:
-        _log.error("search_batch_failed", error=str(e))
+        metrics.inc("vector_search_errors")
+        _log.error("search_batch_failed", error=str(e), error_type=type(e).__name__)
         return []
+
+    if not results:
+        _log.info(
+            "search_batch_empty",
+            workspace=workspace,
+            reason=getattr(backend, "last_index_diagnostic", None) or "no_matches",
+        )
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -1645,9 +1836,15 @@ def rebuild_index(workspace: str) -> int:
         for fn in sorted(os.listdir(d)):
             if fn.endswith(".md"):
                 try:
-                    parsed.extend(_parse(os.path.join(d, fn)))
+                    in_file = _parse(os.path.join(d, fn))
                 except Exception as exc:
                     _log.debug("corpus_file_parse_skipped", error=str(exc))
+                    continue
+                for b in in_file:
+                    # The canonical index carries the block's origin; without
+                    # it every hit from this path reported file "?".
+                    b["_source_file"] = os.path.join(subdir, fn)
+                parsed.extend(in_file)
 
     # ADMISSION. This loop parsed the corpus off disk with no status filter at
     # all, so a quarantined or pending block went straight into the vector
@@ -1685,27 +1882,56 @@ def rebuild_index(workspace: str) -> int:
     # ``embedder`` config and ignored circuit-broken providers.
     raw_embeddings = backend._embed_for_provider(texts)
 
-    # Write to local index
-    index_dir = os.path.join(workspace, backend.index_path)
-    os.makedirs(index_dir, exist_ok=True)
-    index_data = []
+    # Write to local index THROUGH THE SINGLE WRITER.
+    #
+    # This function used to hand-roll ``json.dump`` of a bare list of
+    # ``{_id, embedding, text}`` to the same path ``_save_local_index`` writes
+    # the ``{schema, model, dimension, blocks, embeddings}`` dict to. One file,
+    # two writers, two shapes — and ``_load_local_index`` reads the dict, so
+    # every workspace reindexed through the MCP ``reindex(include_vectors=True)``
+    # tool answered the NEXT dense query with an ``AttributeError`` that the
+    # serving path swallowed to ``[]``. There is now one shape and one writer,
+    # and the per-block metadata the scoring path reads (type / excerpt / file /
+    # line / status / date) is populated instead of absent — a list record
+    # carried ``_id`` alone, so even a correctly-shaped file would have scored
+    # every hit without a status, date or excerpt.
+    block_meta: list[dict[str, Any]] = []
+    embeddings: list[list[float]] = []
     for i, b in enumerate(blocks):
         emb = raw_embeddings[i]
         # _embed_for_provider returns list[list[float]]; some backends
         # may produce numpy arrays so we coerce defensively.
         if hasattr(emb, "tolist"):
             emb = emb.tolist()
-        index_data.append(
+        bid = str(b.get("_id", f"block_{i}"))
+        block_meta.append(
             {
-                "_id": b.get("_id", f"block_{i}"),
-                "embedding": list(emb),
+                "_id": bid,
+                "type": get_block_type(bid),
+                "excerpt": get_excerpt(b),
+                "file": b.get("_source_file", "?"),
+                "line": b.get("_line", 0),
+                "status": b.get("Status", ""),
+                "date": b.get("Date", ""),
+                # The embedded text, kept because the legacy record carried it
+                # and dropping it would lose a field the file already had.
                 "text": texts[i],
             }
         )
+        embeddings.append(list(emb))
 
-    index_file = os.path.join(index_dir, "index.json")
-    with open(index_file, "w", encoding="utf-8") as f:
-        json.dump(index_data, f)
+    # ``getattr``: the writer must not require anything of the producer beyond
+    # the index location, or a producer that cannot satisfy it becomes the
+    # second writer all over again.
+    dimension = getattr(backend, "dimension", None)
+    if dimension is None and embeddings:
+        dimension = len(embeddings[0])
+
+    save_local_index(
+        workspace,
+        getattr(backend, "index_path", ".mind-mem-vectors"),
+        canonical_local_index(getattr(backend, "model_name", None), dimension, block_meta, embeddings),
+    )
 
     # v4.pq (default OFF): compress the same vectors into 1 byte per
     # subvector position in the v4 side store. One flag read, here, after
@@ -1723,12 +1949,12 @@ def rebuild_index(workspace: str) -> int:
     from .admissibility import admissible as _admissible
 
     _servable = _admissible(blocks)
-    _pq_records = [rec for rec in index_data if rec["_id"] in _servable]
+    _pq_pairs = [(meta["_id"], vec) for meta, vec in zip(block_meta, embeddings) if meta["_id"] in _servable]
     _pq_compress(
         workspace,
         backend.model_name,
-        [rec["_id"] for rec in _pq_records],
-        [rec["embedding"] for rec in _pq_records],
+        [bid for bid, _vec in _pq_pairs],
+        [vec for _bid, vec in _pq_pairs],
     )
 
     _log.info("rebuild_index_complete", blocks=len(blocks), workspace=workspace)
