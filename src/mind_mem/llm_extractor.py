@@ -35,9 +35,16 @@ import logging
 import os
 import re
 import time
-from typing import Any
+from typing import Any, NamedTuple
 
 _log = logging.getLogger("mind_mem.llm_extractor")
+
+#: Ledger tag for calls made through this module. Mirrors
+#: :data:`mind_mem.usage_meter.OP_EXTRACTION`, spelled out rather than
+#: imported so this module keeps its "zero imports until a backend is
+#: actually used" property; ``tests/test_usage_meter_wiring.py`` asserts the
+#: two stay equal by reading the ledger a real call writes.
+_USAGE_OPERATION = "extraction"
 
 # ---------------------------------------------------------------------------
 # Config loading
@@ -227,8 +234,29 @@ def _transformers_available() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _query_ollama(prompt: str, model: str, base_url: str | None = None) -> str:
-    """Send a prompt to ollama and return the response text.
+class _ModelResponse(NamedTuple):
+    """One backend answer plus whatever the provider said it cost.
+
+    ``prompt_tokens`` / ``completion_tokens`` are ``None`` when the backend
+    reports no usage of its own; :func:`mind_mem.usage_meter.record_model_call`
+    then falls back to the char estimator. Reported counts are always
+    preferred — they are what the provider actually billed.
+    """
+
+    text: str
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+
+def _reported(value: Any) -> int | None:
+    """Coerce a provider-reported token count, or ``None`` if it isn't one."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return int(value)
+
+
+def _ollama_call(prompt: str, model: str, base_url: str | None = None) -> _ModelResponse:
+    """Send a prompt to ollama; return the text and ollama's own token counts.
 
     ``base_url`` defaults through :func:`~mind_mem.ollama_host.ollama_base_url`
     (``OLLAMA_HOST`` env, else ``http://localhost:11434``); callers with an
@@ -255,32 +283,49 @@ def _query_ollama(prompt: str, model: str, base_url: str | None = None) -> str:
     )
     with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 — base URL from operator-controlled config/env only (ollama_base_url enforces http/https), never user input
         body = json.loads(resp.read().decode())
-    return str(body.get("response", ""))
+    return _ModelResponse(
+        str(body.get("response", "")),
+        _reported(body.get("prompt_eval_count")),
+        _reported(body.get("eval_count")),
+    )
 
 
-def _query_llama_cpp(prompt: str, model: str) -> str:
-    """Send a prompt via llama-cpp-python and return the response text."""
+def _query_ollama(prompt: str, model: str, base_url: str | None = None) -> str:
+    """Text-only view of :func:`_ollama_call` (unchanged legacy signature)."""
+    return _ollama_call(prompt, model, base_url).text
+
+
+def _llama_cpp_call(prompt: str, model: str) -> _ModelResponse:
+    """Send a prompt via llama-cpp-python; return text + its usage block."""
     import llama_cpp
 
     # Use a cached model instance per model name
-    if not hasattr(_query_llama_cpp, "_models"):
-        _query_llama_cpp._models = {}  # type: ignore[attr-defined]
-    if model not in _query_llama_cpp._models:  # type: ignore[attr-defined]
-        _query_llama_cpp._models[model] = llama_cpp.Llama(model_path=model, n_ctx=2048)  # type: ignore[attr-defined]
-    llm = _query_llama_cpp._models[model]  # type: ignore[attr-defined]
+    if not hasattr(_llama_cpp_call, "_models"):
+        _llama_cpp_call._models = {}  # type: ignore[attr-defined]
+    if model not in _llama_cpp_call._models:  # type: ignore[attr-defined]
+        _llama_cpp_call._models[model] = llama_cpp.Llama(model_path=model, n_ctx=2048)  # type: ignore[attr-defined]
+    llm = _llama_cpp_call._models[model]  # type: ignore[attr-defined]
     output = llm(prompt, max_tokens=512, temperature=0.1)
+    usage = output.get("usage") or {}
+    prompt_tokens = _reported(usage.get("prompt_tokens")) if isinstance(usage, dict) else None
+    completion_tokens = _reported(usage.get("completion_tokens")) if isinstance(usage, dict) else None
     choices = output.get("choices", [])
-    if choices:
-        return str(choices[0].get("text", ""))
-    return ""
+    text = str(choices[0].get("text", "")) if choices else ""
+    return _ModelResponse(text, prompt_tokens, completion_tokens)
 
 
-def _query_openai_compatible(prompt: str, model: str, base_url: str) -> str:
+def _query_llama_cpp(prompt: str, model: str) -> str:
+    """Text-only view of :func:`_llama_cpp_call` (unchanged legacy signature)."""
+    return _llama_cpp_call(prompt, model).text
+
+
+def _openai_compatible_call(prompt: str, model: str, base_url: str) -> _ModelResponse:
     """POST ``{base_url}/chat/completions`` with a single user turn.
 
     Works against vLLM, LM Studio, llama.cpp's ``llama-server --api``,
     text-generation-inference's OpenAI shim, OpenAI itself if
-    ``MIND_MEM_LLM_API_KEY`` is set, etc.
+    ``MIND_MEM_LLM_API_KEY`` is set, etc. The response's ``usage`` block is
+    returned alongside the text when the server sends one.
     """
     import urllib.request
 
@@ -308,11 +353,20 @@ def _query_openai_compatible(prompt: str, model: str, base_url: str) -> str:
     )
     with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310 — base_url from env/config, validated by _validate_base_url (http/https only)
         body = json.loads(resp.read().decode())
+    usage = body.get("usage") or {}
+    prompt_tokens = _reported(usage.get("prompt_tokens")) if isinstance(usage, dict) else None
+    completion_tokens = _reported(usage.get("completion_tokens")) if isinstance(usage, dict) else None
     choices = body.get("choices") or []
+    text = ""
     if choices:
         msg = choices[0].get("message") or {}
-        return str(msg.get("content", ""))
-    return ""
+        text = str(msg.get("content", ""))
+    return _ModelResponse(text, prompt_tokens, completion_tokens)
+
+
+def _query_openai_compatible(prompt: str, model: str, base_url: str) -> str:
+    """Text-only view of :func:`_openai_compatible_call` (legacy signature)."""
+    return _openai_compatible_call(prompt, model, base_url).text
 
 
 def _gate_check_local(model: str, *, label: str = "transformers") -> None:
@@ -370,7 +424,7 @@ def _gate_check_local(model: str, *, label: str = "transformers") -> None:
     )
 
 
-def _query_transformers(prompt: str, model: str) -> str:
+def _transformers_call(prompt: str, model: str) -> _ModelResponse:
     """Load the model in-process and run a single generate call.
 
     Caches the loaded model + tokenizer per *model* path so subsequent
@@ -380,14 +434,17 @@ def _query_transformers(prompt: str, model: str) -> str:
     Local directory checkpoints clear ``mind_mem.model_gate.gate_check``
     before the first load (per cached entry). HF hub IDs and single-file
     binaries pass through unchanged — see :func:`_gate_check_local`.
+
+    Token counts come straight off the tensors, so this backend never needs
+    the char estimator.
     """
     import torch  # type: ignore[import-not-found]
     from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
 
-    cache = getattr(_query_transformers, "_cache", None)
+    cache = getattr(_transformers_call, "_cache", None)
     if cache is None:
         cache = {}
-        _query_transformers._cache = cache  # type: ignore[attr-defined]
+        _transformers_call._cache = cache  # type: ignore[attr-defined]
     if model not in cache:
         _gate_check_local(model, label="transformers")
         tok = AutoTokenizer.from_pretrained(model, trust_remote_code=True)  # nosec B615 — model path is from operator-controlled mind-mem.json config, not user input; revision pinning is the operator's responsibility
@@ -408,11 +465,29 @@ def _query_transformers(prompt: str, model: str) -> str:
         enc = enc.to(m.device)
     with torch.no_grad():
         out = m.generate(**enc, max_new_tokens=512, do_sample=False)
-    new_tokens = out[0][enc["input_ids"].shape[1] :]
-    return str(tok.decode(new_tokens, skip_special_tokens=True))
+    prompt_len = int(enc["input_ids"].shape[1])
+    new_tokens = out[0][prompt_len:]
+    return _ModelResponse(
+        str(tok.decode(new_tokens, skip_special_tokens=True)),
+        prompt_len,
+        int(new_tokens.shape[0]),
+    )
 
 
-def _query_llm(prompt: str, model: str, backend: str = "auto", *, ollama_url: str | None = None) -> str:
+def _query_transformers(prompt: str, model: str) -> str:
+    """Text-only view of :func:`_transformers_call` (legacy signature)."""
+    return _transformers_call(prompt, model).text
+
+
+def _query_llm(
+    prompt: str,
+    model: str,
+    backend: str = "auto",
+    *,
+    ollama_url: str | None = None,
+    workspace: str | None = None,
+    operation: str = _USAGE_OPERATION,
+) -> str:
     """Dispatch to the named backend. Returns empty string on failure.
 
     Order for ``auto`` mode: ollama → vllm → openai-compat → llama-cpp →
@@ -420,35 +495,76 @@ def _query_llm(prompt: str, model: str, backend: str = "auto", *, ollama_url: st
     ``ollama_url`` pins the ollama endpoint (``extraction.ollama_url``);
     when ``None`` it resolves via ``OLLAMA_HOST`` env → ``localhost:11434``.
 
-    # deferred: this path is NOT counted by mind_mem.usage_meter - the backend
-    # here is selected internally rather than injected, and this function does
-    # not know the workspace, so it has nowhere to post the count. Upgrade
-    # path: thread the workspace through the extraction config and call
-    # usage_meter.record_call(ws, operation="extraction", ...) with the
-    # prompt/response token estimates once a call returns.
+    This is the single chokepoint through which every extraction-side model
+    call passes, so it is where token metering lives. Pass ``workspace`` and
+    the call is counted into that workspace's ledger under ``operation``
+    (see :mod:`mind_mem.usage_meter`); with ``workspace=None`` — the default,
+    and what a caller that has no workspace gets — nothing is read, nothing
+    is written, and the answer is byte-identical.
+
+    An optional daily token cap (``mind-mem.json`` ->
+    ``{"usage": {"daily_token_cap": N}}``) is checked **once, before any
+    backend is touched**, and its
+    :class:`~mind_mem.usage_meter.DailyTokenCapExceeded` is deliberately
+    raised outside the per-backend ``except`` below: the cap is a refusal,
+    not a backend failure, and must never decay into "try the next provider"
+    or into an empty answer the caller reads as "the model had nothing".
+
+    Every completed backend call is counted, including one that answered with
+    an empty string and sent the loop on to the next provider — the provider
+    charged for it either way.
     """
+    if workspace is not None:
+        from . import usage_meter
+
+        usage_meter.check_cap(workspace)
+
     backends = [backend] if backend != "auto" else ["ollama", "mindllm", "vllm", "openai-compatible", "llama-cpp", "transformers"]
     for b in backends:
         try:
             if b == "ollama":
-                out = _query_ollama(prompt, model, base_url=ollama_url)
+                res = _ollama_call(prompt, model, base_url=ollama_url)
             elif b in ("llama-cpp", "llama_cpp"):
-                out = _query_llama_cpp(prompt, model)
+                res = _llama_cpp_call(prompt, model)
             elif b == "vllm":
-                out = _query_openai_compatible(prompt, model, _vllm_url())
+                res = _openai_compatible_call(prompt, model, _vllm_url())
             elif b in ("mindllm", "mind-llm", "mind_llm"):
-                out = _query_openai_compatible(prompt, model, _mindllm_url())
+                res = _openai_compatible_call(prompt, model, _mindllm_url())
             elif b in ("openai-compatible", "openai_compatible"):
-                out = _query_openai_compatible(prompt, model, _oai_url())
+                res = _openai_compatible_call(prompt, model, _oai_url())
             elif b == "transformers":
-                out = _query_transformers(prompt, model)
+                res = _transformers_call(prompt, model)
             else:
                 continue
-            if out:
-                return out
         except (OSError, ValueError, RuntimeError, ImportError):
             continue
+        if workspace is not None:
+            _record_model_call(workspace, operation, prompt, res)
+        if res.text:
+            return res.text
     return ""
+
+
+def _record_model_call(workspace: str, operation: str, prompt: str, res: _ModelResponse) -> None:
+    """Post one completed backend call to the workspace token ledger.
+
+    Metering is bookkeeping about a call that already happened — it must not
+    be able to turn a good answer into an exception. A ledger that cannot be
+    written is logged and dropped, exactly as the read path degrades.
+    """
+    from . import usage_meter
+
+    try:
+        usage_meter.record_model_call(
+            workspace,
+            operation=operation,
+            prompt=prompt,
+            response=res.text,
+            prompt_tokens=res.prompt_tokens,
+            completion_tokens=res.completion_tokens,
+        )
+    except (OSError, ValueError) as exc:
+        _log.warning("usage_meter_record_failed: %s", type(exc).__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +635,7 @@ def extract_entities(
         return []
     prompt = _ENTITY_PROMPT.format(text=text[:2000])
     _start = time.monotonic()
-    response = _query_llm(prompt, model, backend, ollama_url=ollama_url)
+    response = _query_llm(prompt, model, backend, ollama_url=ollama_url, workspace=workspace)
     _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
         _record_extraction_feedback(model, "entities", len(text), 0, _latency_ms, workspace=workspace)
@@ -585,7 +701,7 @@ def extract_facts(
         return []
     prompt = _FACT_PROMPT.format(text=text[:2000])
     _start = time.monotonic()
-    response = _query_llm(prompt, model, backend, ollama_url=ollama_url)
+    response = _query_llm(prompt, model, backend, ollama_url=ollama_url, workspace=workspace)
     _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
         _record_extraction_feedback(model, "facts", len(text), 0, _latency_ms, workspace=workspace)
@@ -684,7 +800,7 @@ def extract_relations(
     vocabulary = ", ".join(p.value for p in Predicate)
     prompt = _RELATION_PROMPT.format(predicates=vocabulary, text=text[:2000])
     _start = time.monotonic()
-    response = _query_llm(prompt, model, backend, ollama_url=ollama_url)
+    response = _query_llm(prompt, model, backend, ollama_url=ollama_url, workspace=workspace)
     _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
         _record_extraction_feedback(model, "relations", len(text), 0, _latency_ms, workspace=workspace)

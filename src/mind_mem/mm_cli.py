@@ -1792,6 +1792,7 @@ def _cmd_graph_backfill(args: argparse.Namespace) -> int:
         schema_report,
         stale_schema_blocks,
     )
+    from mind_mem.usage_meter import CAP_EXIT_CODE, DailyTokenCapExceeded
 
     ws = _workspace()
 
@@ -1849,13 +1850,22 @@ def _cmd_graph_backfill(args: argparse.Namespace) -> int:
     # zero blocks under --reextract-stale, not silently fall back to the
     # whole corpus.
     restrict = stale_schema_blocks(ws) if args.reextract_stale else None
-    report = backfill(
-        ws,
-        limit=args.limit,
-        offset=args.offset,
-        dry_run=dry_run,
-        restrict_to_blocks=restrict,
-    )
+    try:
+        report = backfill(
+            ws,
+            limit=args.limit,
+            offset=args.offset,
+            dry_run=dry_run,
+            restrict_to_blocks=restrict,
+        )
+    except DailyTokenCapExceeded as exc:
+        # Fail closed: the extraction model calls this run needs are refused
+        # because the workspace's daily token cap is spent. Nothing is
+        # written and no partial report is printed -- a truncated backfill
+        # reported as a backfill is exactly the silent degradation the cap
+        # exists to prevent.
+        print(f"mm graph-backfill: refused — {exc}", file=sys.stderr)
+        return CAP_EXIT_CODE
     if args.json:
         import json as _json
 

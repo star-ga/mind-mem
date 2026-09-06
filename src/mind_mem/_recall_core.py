@@ -78,6 +78,7 @@ from .retrieval_graph import (
 )
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 from .telemetry import traced as _traced
+from .usage_meter import DailyTokenCapExceeded
 from .validity_gate import apply_validity_gate
 
 # A-MEM block metadata (optional — graceful degradation if unavailable)
@@ -2055,13 +2056,23 @@ def recall(
         llm_model = recall_cfg.get("llm_rerank_model", "qwen3-coder:30b")
         llm_weight = float(recall_cfg.get("llm_rerank_weight", 0.3))
         llm_cap = min(len(deduped), limit * 2)
-        deduped[:llm_cap] = llm_rerank(
-            query,
-            deduped[:llm_cap],
-            url=llm_url,
-            model=llm_model,
-            weight=llm_weight,
-        )
+        try:
+            deduped[:llm_cap] = llm_rerank(
+                query,
+                deduped[:llm_cap],
+                url=llm_url,
+                model=llm_model,
+                weight=llm_weight,
+                workspace=workspace,
+            )
+        except DailyTokenCapExceeded as exc:
+            # The day's model-call token cap is spent, so this rerank is
+            # refused rather than made. Recall itself does not depend on it:
+            # the deterministic order stands, unmodified. Logged at ERROR
+            # (not the usual warning) because a refused paid call is an
+            # operator decision taking effect, not a transient failure --
+            # `mm usage` shows the same ceiling.
+            _log.error("llm_rerank_refused_daily_token_cap", detail=str(exc))
 
     # Stage 2.8: Co-retrieval graph propagation — boost co-occurring blocks
     if deduped:
@@ -2144,6 +2155,12 @@ def recall(
     if _HAS_LLM_EXTRACTOR and top:
         try:
             top = _llm_enrich_results(top, workspace=workspace)
+        except DailyTokenCapExceeded as exc:
+            # Same contract as the rerank stage above: refused, not failed,
+            # and said so at ERROR. Enrichment only adds metadata, so the
+            # results returned here are the same ones an operator who never
+            # enabled extraction would get -- nothing is truncated.
+            _log.error("llm_enrichment_refused_daily_token_cap", detail=str(exc))
         except Exception as e:
             _log.warning("llm_enrichment_failed", error=str(e))
 

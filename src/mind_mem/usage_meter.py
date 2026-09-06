@@ -4,9 +4,27 @@
 mind-mem is self-hosted and single-operator. Retrieval, indexing and the
 governance gate run on the operator's own machine, so counting and pricing
 them is theatre. The one thing that actually costs money is a call out to a
-model — today that is the injected compressor behind recompaction, and the
-optional extraction backend. This module counts **tokens** for those calls,
-per UTC day, and offers one optional **daily token cap**.
+model. This module counts **tokens** for those calls, per UTC day, and offers
+one optional **daily token cap**.
+
+Wired call sites (each passes a workspace; each is itself config-gated and
+off by default, so an operator who never enables a model backend never writes
+a ledger):
+
+===============================  ===================================
+:data:`OP_EXTRACTION`            ``llm_extractor._query_llm`` — the shared
+                                 ollama / OpenAI-compatible / llama-cpp /
+                                 transformers dispatch behind entity, fact
+                                 and relation extraction (``mm
+                                 graph-backfill``, recall enrichment) and
+                                 smart-chunk boundary refinement
+:data:`OP_RERANK`                ``_recall_reranking.llm_rerank`` — recall
+                                 stage 2.7, ``recall.llm_rerank``
+:data:`OP_QUERY_EXPANSION`       ``query_expansion.LLMQueryExpander`` — the
+                                 one path that can reach a paid provider
+:data:`OP_RECOMPACTION`          the injected compressor behind recompaction
+                                 (:func:`metered_compressor`)
+===============================  ===================================
 
 What it deliberately is not: no currency, no rate card, no spending alerts,
 no quota subsystem. A token count and a ceiling.
@@ -60,6 +78,17 @@ RETENTION_DAYS = 90
 
 #: Operation tag for the recompaction compressor path.
 OP_RECOMPACTION = "recompaction"
+
+#: Operation tag for the extraction backend (``llm_extractor._query_llm`` —
+#: entity / fact / relation extraction and smart-chunk boundary refinement).
+OP_EXTRACTION = "extraction"
+
+#: Operation tag for the optional LLM reranker on the recall path.
+OP_RERANK = "rerank"
+
+#: Operation tag for LLM-backed query expansion (the one call site that can
+#: reach a paid provider, so the one the cap matters most for).
+OP_QUERY_EXPANSION = "query-expansion"
 
 _DAY_FORMAT = "%Y-%m-%d"
 _MAX_OPERATION_LEN = 64
@@ -362,6 +391,57 @@ def report(workspace: str, *, daily_cap: Optional[int] = None, day: Optional[str
     return _build_report(ws, days, day=key, daily_cap=cap, ledger_error=err)
 
 
+def check_cap(workspace: str, *, daily_cap: Optional[int] = None, day: Optional[str] = None) -> TokenReport:
+    """Refuse a model call whose day has already spent its token cap.
+
+    This is the fail-closed half of the meter and the only thing a call site
+    has to run *before* it reaches for a model. With no cap configured
+    (``mind-mem.json`` -> ``{"usage": {"daily_token_cap": N}}`` absent, the
+    default) it is a plain read that always returns; nothing is truncated and
+    nothing is silently allowed through.
+
+    Raises:
+        DailyTokenCapExceeded: the day's counted tokens have reached the cap.
+    """
+    r = report(workspace, daily_cap=daily_cap, day=day)
+    if r.cap_exceeded:
+        raise DailyTokenCapExceeded(cap_line(r))
+    return r
+
+
+def record_model_call(
+    workspace: str,
+    *,
+    operation: str,
+    prompt: str = "",
+    response: str = "",
+    prompt_tokens: Optional[int] = None,
+    completion_tokens: Optional[int] = None,
+    day: Optional[str] = None,
+) -> TokenReport:
+    """Count one *completed* model call, preferring provider-reported tokens.
+
+    Backends that report their own usage (ollama's ``prompt_eval_count`` /
+    ``eval_count``, an OpenAI-compatible ``usage`` block, a local tokenizer's
+    tensor shapes) pass those counts in and the ledger records exactly what
+    the provider billed. When a backend reports nothing, the ~4 chars/token
+    estimator used by the context packer stands in for the missing number,
+    computed from the text actually sent and received.
+
+    Keeping that fallback in one place is the point: a call site never decides
+    how to count, it only says what it knows.
+    """
+    prompt_count = estimate_tokens(prompt) if prompt_tokens is None else _require_tokens(prompt_tokens, "prompt_tokens")
+    completion_count = estimate_tokens(response) if completion_tokens is None else _require_tokens(completion_tokens, "completion_tokens")
+    return record_call(
+        workspace,
+        operation=operation,
+        prompt_tokens=prompt_count,
+        completion_tokens=completion_count,
+        day=day,
+    )
+
+
 def reset(workspace: str, *, day: Optional[str] = None) -> TokenReport:
     """Clear the ledger; returns the report as it stood before clearing."""
     ws = _require_workspace(workspace)
@@ -393,6 +473,11 @@ def format_report(r: TokenReport) -> str:
     lines.append(f"  {'TOTAL':<14}{'':>8}{'':>12}{'':>14}{r.total_tokens:>12}")
     cap_text = "none" if r.daily_cap is None else str(r.daily_cap)
     lines.append(f"  today ({r.day}) : {r.today_tokens} tokens in {r.today_calls} calls    cap: {cap_text}")
+    today = r.days.get(r.day)
+    if today and today.operations:
+        lines.append("  by operation :")
+        for name, tokens in sorted(today.operations.items()):
+            lines.append(f"    {name:<20}{tokens:>12}")
     if r.cap_exceeded:
         lines.append("  daily token cap reached — metered model calls are refused for the rest of the day")
     if r.ledger_error:
@@ -442,9 +527,7 @@ def metered_compressor(
     def _metered(current_text: str, blocks: list[dict[str, Any]]) -> str:
         key = _require_day(pinned_day)
         effective_cap = load_daily_cap(ws) if cap is None else cap
-        before = report(ws, daily_cap=effective_cap, day=key)
-        if before.cap_exceeded:
-            raise DailyTokenCapExceeded(cap_line(before))
+        check_cap(ws, daily_cap=effective_cap, day=key)
 
         result = compressor(current_text, blocks)
 
@@ -458,16 +541,22 @@ def metered_compressor(
 
 __all__ = [
     "CAP_EXIT_CODE",
+    "OP_EXTRACTION",
+    "OP_QUERY_EXPANSION",
+    "OP_RECOMPACTION",
+    "OP_RERANK",
     "DailyTokenCapExceeded",
     "DayUsage",
     "TokenReport",
     "cap_line",
+    "check_cap",
     "format_report",
     "ledger_path",
     "load_daily_cap",
     "load_ledger",
     "metered_compressor",
     "record_call",
+    "record_model_call",
     "report",
     "reset",
 ]

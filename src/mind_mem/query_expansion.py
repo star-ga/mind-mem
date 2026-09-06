@@ -337,12 +337,13 @@ class LLMQueryExpander:
     Falls back to NLP expansion on any failure.
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None, *, workspace: str | None = None):
         cfg = config or {}
         self.provider: str = cfg.get("provider", "anthropic")
         self.model: str = cfg.get("model", "claude-haiku")
         self.api_key_env: str = cfg.get("api_key_env", "ANTHROPIC_API_KEY")
         self.base_url: str = cfg.get("base_url", "https://api.openai.com/v1")
+        self._workspace: str | None = workspace
         self._fallback = NLPQueryExpander()
 
     def expand(self, query: str, max_expansions: int = 3) -> list[str]:
@@ -354,11 +355,23 @@ class LLMQueryExpander:
 
         Returns:
             List of query strings starting with the original.
+
+        Raises:
+            DailyTokenCapExceeded: the workspace's daily token cap is spent.
+                Checked outside the fallback below on purpose: this is the
+                one expander that can bill a paid provider, so a spent cap
+                has to surface as a refusal rather than blend into the
+                indistinguishable "LLM failed, used NLP instead" path.
         """
         if not query or not query.strip():
             return [query] if query else [""]
 
         query = query.strip()
+
+        if self._workspace is not None:
+            from .usage_meter import check_cap
+
+            check_cap(self._workspace)
 
         try:
             alternatives = self._call_llm(query, max_expansions - 1)
@@ -406,10 +419,43 @@ class LLMQueryExpander:
         )
 
         if self.provider == "anthropic":
-            return self._call_anthropic(api_key, prompt)
+            lines = self._call_anthropic(api_key, prompt)
         else:
             # All other providers use OpenAI-compatible chat completions API
-            return self._call_openai_compatible(api_key, prompt)
+            lines = self._call_openai_compatible(api_key, prompt)
+        if self._workspace is not None:
+            self._record_tokens(prompt, lines)
+        return lines
+
+    def _record_tokens(self, prompt: str, lines: list[str]) -> None:
+        """Count one completed expansion call into the workspace ledger.
+
+        Estimated from the prompt sent and the alternatives returned.
+        # deferred: both providers DO report exact usage
+        # (``usage.input_tokens`` / ``usage.prompt_tokens``), but
+        # ``_call_anthropic`` / ``_call_openai_compatible`` parse the text out
+        # and drop the rest of the body, and their return type is part of the
+        # tested surface. Upgrade path: widen those two to return the usage
+        # block alongside the lines and pass the exact counts through here,
+        # the way llm_extractor._ModelResponse already does.
+        A ledger that cannot be written is logged and dropped: metering
+        describes a call that already happened and must not turn a good
+        expansion into the NLP fallback.
+        """
+        from .usage_meter import OP_QUERY_EXPANSION, record_model_call
+
+        workspace = self._workspace
+        if workspace is None:  # pragma: no cover - guarded by the caller
+            return
+        try:
+            record_model_call(
+                workspace,
+                operation=OP_QUERY_EXPANSION,
+                prompt=prompt,
+                response="\n".join(lines),
+            )
+        except (OSError, ValueError) as exc:
+            _log.warning("query_expansion_usage_record_failed", error=type(exc).__name__)
 
     def _call_anthropic(self, api_key: str, prompt: str) -> list[str]:
         """Call Anthropic API for query expansion."""
@@ -505,13 +551,16 @@ def _normalize_for_dedup(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def create_expander(config: dict[str, Any] | None = None) -> QueryExpander:
+def create_expander(config: dict[str, Any] | None = None, *, workspace: str | None = None) -> QueryExpander:
     """Create a QueryExpander from configuration.
 
     Args:
         config: The ``query_expansion`` section of the recall config.
             When None or when ``llm.enabled`` is False, returns an
             NLP-based expander.
+        workspace: Workspace root, forwarded to the LLM expander so its
+            model calls are counted and capped. Ignored by the NLP
+            expander, which makes no model call to count.
 
     Returns:
         A QueryExpander instance.
@@ -522,7 +571,7 @@ def create_expander(config: dict[str, Any] | None = None) -> QueryExpander:
     llm_cfg = config.get("llm", {})
     if isinstance(llm_cfg, dict) and llm_cfg.get("enabled", False):
         _log.info("using_llm_expander", provider=llm_cfg.get("provider", "anthropic"))
-        return LLMQueryExpander(config=llm_cfg)
+        return LLMQueryExpander(config=llm_cfg, workspace=workspace)
 
     return NLPQueryExpander()
 
@@ -531,6 +580,8 @@ def expand_queries(
     query: str,
     config: dict[str, Any] | None = None,
     max_expansions: int = 3,
+    *,
+    workspace: str | None = None,
 ) -> list[str]:
     """Expand a query into multiple alternative phrasings.
 
@@ -541,11 +592,14 @@ def expand_queries(
         config: The ``query_expansion`` section of the recall config.
         max_expansions: Maximum number of query variants to generate
             (including the original).
+        workspace: Workspace root. When given and the LLM expander is
+            configured, its model call is counted into that workspace's
+            per-day token ledger and subject to the optional daily cap.
 
     Returns:
         List of query strings, starting with the original.
     """
     cfg = config or {}
     max_exp = int(cfg.get("max_expansions", max_expansions))
-    expander = create_expander(cfg)
+    expander = create_expander(cfg, workspace=workspace)
     return expander.expand(query, max_expansions=max_exp)

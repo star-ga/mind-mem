@@ -67,6 +67,11 @@ class SmartChunkerConfig:
             Default "auto".
         source: Optional source identifier attached to every chunk's metadata.
             Default "".
+        workspace: Workspace root. Non-empty only when the caller wants the
+            ``llm_refine`` model calls counted into that workspace's per-day
+            token ledger (and subject to its optional daily cap). Default ""
+            — no workspace, no metering, which is also what ``llm_refine``
+            being off by default already guarantees.
     """
 
     max_chunk_size: int = 1500
@@ -79,6 +84,7 @@ class SmartChunkerConfig:
     llm_model: str = "qwen3.5:9b"
     llm_backend: str = "auto"
     source: str = ""
+    workspace: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -557,6 +563,7 @@ def _refine_boundaries_with_llm(
 
     try:
         from .llm_extractor import _query_llm, is_available
+        from .usage_meter import DailyTokenCapExceeded
 
         if not is_available(backend=config.llm_backend):
             _log.info("llm_refine_skip", reason="no_backend_available")
@@ -586,7 +593,12 @@ def _refine_boundaries_with_llm(
         )
 
         try:
-            response = _query_llm(prompt, config.llm_model, config.llm_backend)
+            response = _query_llm(
+                prompt,
+                config.llm_model,
+                config.llm_backend,
+                workspace=config.workspace or None,
+            )
             # Parse the score from LLM response
             llm_score = _parse_llm_score(response)
             if llm_score is not None:
@@ -601,6 +613,12 @@ def _refine_boundaries_with_llm(
                     blended=round(blended, 3),
                 )
                 continue
+        except DailyTokenCapExceeded:
+            # DailyTokenCapExceeded is a RuntimeError, and the handler below
+            # would quietly downgrade every remaining boundary to its
+            # heuristic score while re-checking the spent cap once per
+            # boundary. A refusal is not a backend failure: propagate it.
+            raise
         except (OSError, ValueError, RuntimeError):
             pass
 

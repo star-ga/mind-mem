@@ -43,6 +43,7 @@ from .retrieval_trace import current_trace, is_trace_enabled
 from .retrieval_trace import step as _record_step
 from .retrieval_trace import trace as _open_trace
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
+from .usage_meter import DailyTokenCapExceeded
 
 _log = get_logger("hybrid_recall")
 
@@ -843,6 +844,7 @@ class HybridBackend:
                 expanded = expand_queries(
                     query,
                     config=self._query_expansion_config,
+                    workspace=workspace,
                 )
                 if len(expanded) > 1:
                     _log.info(
@@ -861,6 +863,13 @@ class HybridBackend:
                         rerank=rerank,
                         **kwargs,
                     )
+            except DailyTokenCapExceeded as exc:
+                # The day's model-call token cap is spent, so the paid
+                # expansion is refused. Search continues on the original
+                # query -- the same path an operator who never enabled LLM
+                # expansion takes. ERROR, not the generic fan-out warning:
+                # this is a configured ceiling taking effect, not a fault.
+                _log.error("query_expansion_refused_daily_token_cap", detail=str(exc))
             except Exception as exc:
                 _log_fanout_failure("query_expansion_failed", exc)
 

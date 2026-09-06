@@ -270,6 +270,35 @@ def rerank_hits(
 # ---------------------------------------------------------------------------
 
 
+def _record_rerank_tokens(workspace: str, prompt: str, body: dict, response_text: str) -> None:
+    """Post one completed rerank call to the workspace token ledger.
+
+    ollama reports ``prompt_eval_count`` / ``eval_count``; when it doesn't,
+    :func:`~mind_mem.usage_meter.record_model_call` estimates from the text.
+    A ledger that cannot be written is logged and dropped — metering is
+    bookkeeping about a call that already happened, so it must never turn a
+    good rerank into the silent no-op fallback.
+    """
+    from .usage_meter import OP_RERANK, record_model_call
+
+    def _count(value: object) -> int | None:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None
+        return value
+
+    try:
+        record_model_call(
+            workspace,
+            operation=OP_RERANK,
+            prompt=prompt,
+            response=response_text if isinstance(response_text, str) else "",
+            prompt_tokens=_count(body.get("prompt_eval_count")),
+            completion_tokens=_count(body.get("eval_count")),
+        )
+    except (OSError, ValueError) as exc:
+        _log.warning("llm_rerank_usage_record_failed", error=type(exc).__name__)
+
+
 def llm_rerank(
     query: str,
     hits: list[dict],
@@ -278,6 +307,7 @@ def llm_rerank(
     model: str = "qwen3.5:9b",
     weight: float = 0.3,
     timeout: float = 10.0,
+    workspace: str | None = None,
 ) -> list[dict]:
     """Optional LLM-based reranking via local Ollama (or compatible API).
 
@@ -317,12 +347,28 @@ def llm_rerank(
             above about ``mind-mem-4b``.
         weight: Blend weight for LLM scores (0=ignore, 1=replace).
         timeout: HTTP request timeout in seconds.
+        workspace: Workspace root. When given, this model call is counted
+            into that workspace's per-day token ledger under
+            :data:`~mind_mem.usage_meter.OP_RERANK`, and an optional daily
+            token cap is enforced. ``None`` (the default) meters nothing.
 
     Returns:
         Hits with blended scores, sorted descending.
+
+    Raises:
+        DailyTokenCapExceeded: the workspace's daily token cap is spent.
+            Raised before the request is built — a spent cap is a refusal,
+            not one more network failure to swallow into the silent
+            deterministic-order fallback below. The recall pipeline catches
+            it at the stage boundary so a query still answers.
     """
     if not hits:
         return hits
+
+    if workspace is not None:
+        from .usage_meter import check_cap
+
+        check_cap(workspace)
 
     if url is None:
         from .ollama_host import ollama_base_url
@@ -368,6 +414,8 @@ def llm_rerank(
             body = json.loads(resp.read().decode())
 
         response_text = body.get("response", "")
+        if workspace is not None:
+            _record_rerank_tokens(workspace, prompt, body, response_text)
         # Extract JSON array from response (may have surrounding text)
         match = re.search(r"\[[\d.,\s]+\]", response_text)
         if not match:
