@@ -15,21 +15,22 @@ class TestFileWatcher(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
         self.changes: list[set[str]] = []
+        self.callback_done = threading.Event()
 
     def tearDown(self):
         shutil.rmtree(self.td, ignore_errors=True)
 
     def _callback(self, changed: set[str]) -> None:
         self.changes.append(changed)
+        self.callback_done.set()
 
     def test_detects_new_file(self):
         watcher = FileWatcher(self.td, callback=self._callback, interval=0.1)
         watcher.start()
         try:
-            time.sleep(0.2)  # let initial scan happen
             with open(os.path.join(self.td, "test.md"), "w", encoding="utf-8") as f:
                 f.write("# New file\n")
-            time.sleep(0.3)
+            self.assertTrue(self.callback_done.wait(5), "watcher callback did not complete")
             self.assertGreater(len(self.changes), 0)
             found = any("test.md" in str(c) for c in self.changes)
             self.assertTrue(found, f"test.md not found in changes: {self.changes}")
@@ -44,10 +45,9 @@ class TestFileWatcher(unittest.TestCase):
         watcher = FileWatcher(self.td, callback=self._callback, interval=0.1)
         watcher.start()
         try:
-            time.sleep(0.2)
             with open(path, "a", encoding="utf-8") as f:
                 f.write("## Modified\n")
-            time.sleep(0.3)
+            self.assertTrue(self.callback_done.wait(5), "watcher callback did not complete")
             self.assertGreater(len(self.changes), 0)
         finally:
             watcher.stop()
@@ -60,9 +60,8 @@ class TestFileWatcher(unittest.TestCase):
         watcher = FileWatcher(self.td, callback=self._callback, interval=0.1)
         watcher.start()
         try:
-            time.sleep(0.2)
             os.unlink(path)
-            time.sleep(0.3)
+            self.assertTrue(self.callback_done.wait(5), "watcher callback did not complete")
             self.assertGreater(len(self.changes), 0)
             found = any("delete-me.md" in str(c) for c in self.changes)
             self.assertTrue(found)
@@ -127,10 +126,9 @@ class TestFileWatcher(unittest.TestCase):
         watcher = FileWatcher(self.td, callback=self._callback, interval=0.1)
         watcher.start()
         try:
-            time.sleep(0.2)
             with open(os.path.join(subdir, "DECISIONS.md"), "w", encoding="utf-8") as f:
                 f.write("# Decisions\n")
-            time.sleep(0.3)
+            self.assertTrue(self.callback_done.wait(5), "watcher callback did not complete")
             self.assertGreater(len(self.changes), 0)
         finally:
             watcher.stop()

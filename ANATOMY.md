@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1489 | **Est. tokens:** ~4452756
-**Generated:** 2026-09-06 18:23 UTC
+**Files:** 1489 | **Est. tokens:** ~4452806
+**Generated:** 2026-09-06 18:50 UTC
 
 ## Token Budget Guide
 
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 634 | ~1939920 |
+| `tests/` | 634 | ~1939970 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1749,7 +1749,7 @@
 - `test_verify_cli.py` (~4647 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vocabulary_wiring.py` (~2980 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_walkthrough.py` (~2441 tok, huge) — Tests for the v3.9 dependency-ordered walkthrough."""
-- `test_watcher.py` (~1832 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""
+- `test_watcher.py` (~1882 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""
 - `test_withheld_not_in_stats.py` (~8119 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_witness_pin_race.py` (~2540 tok, huge) — # Copyright 2026 STARGA, Inc.
