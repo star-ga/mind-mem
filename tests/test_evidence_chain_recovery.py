@@ -652,7 +652,7 @@ def _recovered(tmp_path) -> tuple[str, str]:
 
 def _rewrite_archive(path: str, data: bytes) -> None:
     """Archives are chmod 0444 by recovery, so a test edit must re-open them."""
-    os.chmod(path, 0o644)
+    os.chmod(path, 0o600)
     with open(path, "wb") as handle:
         handle.write(data)
 
@@ -669,7 +669,7 @@ def test_a_deleted_archive_is_reported_missing(tmp_path):
     """The exact case that previously reported 'intact'."""
     store, archive = _recovered(tmp_path)
     assert verify_archives(store)[0].status == ARCHIVE_OK, "positive control"
-    os.chmod(archive, 0o644)
+    os.chmod(archive, 0o600)
     os.remove(archive)
     check = verify_archives(store)[0]
     assert check.status == ARCHIVE_MISSING, check
@@ -741,7 +741,7 @@ def test_workspace_verifier_checks_an_attested_archive(tmp_path):
 @pytest.mark.parametrize("damage", ["missing", "mismatch"])
 def test_workspace_verifier_fails_on_a_missing_or_mismatched_archive(tmp_path, damage):
     _store, archive = _recovered(tmp_path)
-    os.chmod(archive, 0o644)
+    os.chmod(archive, 0o600)
     if damage == "missing":
         os.remove(archive)
         expected_status = ARCHIVE_MISSING
@@ -814,7 +814,7 @@ def test_the_check_resolves_by_basename_only(tmp_path):
     with open(store, "w", encoding="utf-8") as handle:
         for record in rows:
             handle.write(json.dumps(record) + "\n")
-    os.chmod(archive, 0o644)
+    os.chmod(archive, 0o600)
     os.remove(archive)
     check = verify_archives(store)[0]
     assert check.status == ARCHIVE_MISSING, f"the check followed a path out of the record instead of the store's own directory: {check}"
