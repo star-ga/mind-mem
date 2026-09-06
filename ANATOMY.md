@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1478 | **Est. tokens:** ~4415256
-**Generated:** 2026-09-06 12:18 UTC
+**Files:** 1478 | **Est. tokens:** ~4415473
+**Generated:** 2026-09-06 12:49 UTC
 
 ## Token Budget Guide
 
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 229 | ~1054892 |
+| `src/mind_mem/` | 229 | ~1055109 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~47468 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -652,7 +652,7 @@
 - `_recall_detection.py` (~6268 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `_recall_expansion.py` (~3249 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `_recall_explain.py` (~2233 tok, huge) — Score decomposition record for explainable recall (v3.11.0, Pattern 1).
-- `_recall_reranking.py` (~4146 tok, huge) — Recall engine reranking — deterministic feature-based re-scoring of BM25 hits."""
+- `_recall_reranking.py` (~4277 tok, huge) — Recall engine reranking — deterministic feature-based re-scoring of BM25 hits."""
 - `_recall_scoring.py` (~4992 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories.
 - `_recall_temporal.py` (~2214 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
@@ -793,7 +793,7 @@
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10904 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~23483 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
-- `hybrid_recall.py` (~24053 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~24139 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 ### `src/mind_mem/importers/`
 
 - `__init__.py` (~1793 tok, huge) — # Copyright 2026 STARGA, Inc.

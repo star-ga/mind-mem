@@ -43,7 +43,6 @@ from .retrieval_trace import current_trace, is_trace_enabled
 from .retrieval_trace import step as _record_step
 from .retrieval_trace import trace as _open_trace
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
-from .usage_meter import DailyTokenCapExceeded
 
 _log = get_logger("hybrid_recall")
 
@@ -841,11 +840,14 @@ class HybridBackend:
             try:
                 from .query_expansion import expand_queries
 
-                expanded = expand_queries(
-                    query,
-                    config=self._query_expansion_config,
-                    workspace=workspace,
-                )
+                expansion_kwargs: dict[str, Any] = {"config": self._query_expansion_config}
+                llm_cfg = self._query_expansion_config.get("llm", {})
+                if isinstance(llm_cfg, dict) and llm_cfg.get("enabled", False):
+                    # Only the LLM expander makes a model call. Preserve the
+                    # established NLP hook signature when there is no call to
+                    # meter, while still binding paid expansion to a workspace.
+                    expansion_kwargs["workspace"] = workspace
+                expanded = expand_queries(query, **expansion_kwargs)
                 if len(expanded) > 1:
                     _log.info(
                         "multi_query_expansion",
@@ -863,15 +865,16 @@ class HybridBackend:
                         rerank=rerank,
                         **kwargs,
                     )
-            except DailyTokenCapExceeded as exc:
-                # The day's model-call token cap is spent, so the paid
-                # expansion is refused. Search continues on the original
-                # query -- the same path an operator who never enabled LLM
-                # expansion takes. ERROR, not the generic fan-out warning:
-                # this is a configured ceiling taking effect, not a fault.
-                _log.error("query_expansion_refused_daily_token_cap", detail=str(exc))
             except Exception as exc:
-                _log_fanout_failure("query_expansion_failed", exc)
+                from ._recall_reranking import is_daily_token_cap_exceeded
+
+                if is_daily_token_cap_exceeded(exc):
+                    # The day's model-call token cap is spent, so the paid
+                    # expansion is refused. Search continues on the original
+                    # query, and the configured ceiling is explicit at ERROR.
+                    _log.error("query_expansion_refused_daily_token_cap", detail=str(exc))
+                else:
+                    _log_fanout_failure("query_expansion_failed", exc)
 
         # v3.3.0 Tier 1 #1 — query decomposition for multi-hop queries.
         # Split compound questions ("A after B") into independent

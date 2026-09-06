@@ -54,7 +54,7 @@ from ._recall_detection import (
     normalise_tags,
 )
 from ._recall_expansion import expand_months, expand_query, rm3_expand
-from ._recall_reranking import llm_rerank, rerank_hits
+from ._recall_reranking import is_daily_token_cap_exceeded, llm_rerank, rerank_hits
 from ._recall_scoring import bm25f_score_terms, build_xref_graph, compute_weighted_tf, date_score
 from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 from ._recall_tokenization import tokenize
@@ -78,7 +78,6 @@ from .retrieval_graph import (
 )
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 from .telemetry import traced as _traced
-from .usage_meter import DailyTokenCapExceeded
 from .validity_gate import apply_validity_gate
 
 # A-MEM block metadata (optional — graceful degradation if unavailable)
@@ -2065,7 +2064,9 @@ def recall(
                 weight=llm_weight,
                 workspace=workspace,
             )
-        except DailyTokenCapExceeded as exc:
+        except RuntimeError as exc:
+            if not is_daily_token_cap_exceeded(exc):
+                raise
             # The day's model-call token cap is spent, so this rerank is
             # refused rather than made. Recall itself does not depend on it:
             # the deterministic order stands, unmodified. Logged at ERROR
@@ -2155,14 +2156,14 @@ def recall(
     if _HAS_LLM_EXTRACTOR and top:
         try:
             top = _llm_enrich_results(top, workspace=workspace)
-        except DailyTokenCapExceeded as exc:
-            # Same contract as the rerank stage above: refused, not failed,
-            # and said so at ERROR. Enrichment only adds metadata, so the
-            # results returned here are the same ones an operator who never
-            # enabled extraction would get -- nothing is truncated.
-            _log.error("llm_enrichment_refused_daily_token_cap", detail=str(exc))
         except Exception as e:
-            _log.warning("llm_enrichment_failed", error=str(e))
+            if is_daily_token_cap_exceeded(e):
+                # Same contract as the rerank stage above: refused, not
+                # failed, and said so at ERROR. Enrichment only adds
+                # metadata, so nothing is truncated.
+                _log.error("llm_enrichment_refused_daily_token_cap", detail=str(e))
+            else:
+                _log.warning("llm_enrichment_failed", error=str(e))
 
     _log.info(
         "query_complete",

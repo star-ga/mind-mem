@@ -451,3 +451,16 @@ def llm_rerank(
         _log.warning("llm_rerank_unexpected_error", error=str(e))
 
     return hits
+
+
+def is_daily_token_cap_exceeded(exc: BaseException) -> bool:
+    """Return whether *exc* is the usage boundary's typed cap refusal.
+
+    The scoring module imports this helper without importing the usage ledger.
+    Loading ledger state merely to name an exception would put prior-run state
+    on the scoring import path.  The type is therefore resolved only after a
+    model-call boundary has already raised.
+    """
+    from .usage_meter import DailyTokenCapExceeded
+
+    return isinstance(exc, DailyTokenCapExceeded)
