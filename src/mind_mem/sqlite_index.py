@@ -86,6 +86,28 @@ _BLOCK_ID_WEIGHT = 1.0
 _FTS_SCHEMA_VERSION = "2"
 
 
+#: How many blocks one dialogue may contribute before later ones are held
+#: behind blocks from other dialogues. 0 disables the cap entirely. Overridable
+#: so the value is chosen by measurement rather than by argument.
+_MAX_PER_DIALOGUE = int(os.environ.get("MIND_MEM_MAX_PER_DIALOGUE", "2"))
+
+
+def _dialogue_group(result: dict) -> str | None:
+    """The conversation a result belongs to, or None when it belongs to none.
+
+    Uses the product's own ``DiaID`` grammar -- ``D{session}:{turn}`` -- and
+    keys on the SESSION half, which is what makes two turns of one conversation
+    group together. Returns None when a block carries no DiaID, so a corpus
+    that is not conversational is completely unaffected: no DiaID, no grouping,
+    no cap.
+    """
+    dia = result.get("DiaID", "")
+    if not dia or not isinstance(dia, str):
+        return None
+    session = dia.split(":", 1)[0].strip()
+    return session or None
+
+
 def _bm25_weights() -> str:
     """Return the comma-separated bm25() weights aligned to blocks_fts.
 
@@ -1829,7 +1851,25 @@ def query_index(
     # Sort by score, then by block ID for deterministic tiebreaking
     results.sort(key=lambda r: (-r["score"], r.get("_id", "")))
 
-    # Dedup
+    # Dedup, then bound how much of the answer any ONE dialogue may occupy.
+    #
+    # The dedup below collapses exact repeats: same file+line, or the same
+    # DiaID under the same id prefix. It cannot collapse two DIFFERENT turns of
+    # one conversation, because a DiaID is ``D{session}:{turn}`` and those two
+    # turns carry different DiaIDs -- which is correct for dedup and useless
+    # for diversity. Measured on a per-turn-chunked conversational corpus, 157
+    # of 300 top-5 slots went to turns of a dialogue already represented, and
+    # 18 of 60 queries came back with every one of their five slots drawn from
+    # a single conversation. A memory answer built from five fragments of one
+    # conversation is worth much less than five sources, and the caller cannot
+    # recover the sources that were crowded out.
+    #
+    # So a per-dialogue cap is applied AFTER ranking and BEFORE truncation:
+    # the best-scoring blocks of a dialogue are kept in order, and once a
+    # dialogue has contributed its allowance the rest are held back so a
+    # different dialogue can be seen. Nothing is discarded that would otherwise
+    # have been returned unless a lower-ranked block from another dialogue
+    # takes its place.
     seen_keys = set()
     deduped = []
     for r in results:
@@ -1860,6 +1900,40 @@ def query_index(
     if rerank and len(deduped) > limit:
         rerank_cap = min(len(deduped), 200 if return_k is None else max(200, return_k))
         deduped = rerank_hits(query, deduped[:rerank_cap], debug=rerank_debug)
+
+    # Bound how much of the answer any ONE dialogue may occupy.
+    #
+    # This runs AFTER the reranker on purpose. An earlier revision applied it
+    # inside the dedup loop above, where it worked and was then silently undone:
+    # rerank_hits reorders the whole pool it is handed, so held-back blocks
+    # simply came back. Diversity is a property of the ORDER that is finally
+    # returned, so it has to be the last thing applied to that order.
+    #
+    # Measured on a per-turn-chunked conversational corpus: 157 of 300 top-5
+    # slots went to turns of a dialogue already represented, and 18 of 60
+    # queries came back with all five slots drawn from ONE conversation. Five
+    # fragments of one conversation are worth much less to a caller than five
+    # sources, and the sources crowded out are unrecoverable.
+    #
+    # Nothing is discarded -- a capped block is moved behind the blocks that
+    # earned a place, so a caller asking for more still receives it. A corpus
+    # with no DiaID has no groups and is untouched.
+    if _MAX_PER_DIALOGUE > 0:
+        kept: list[dict] = []
+        deferred: list[dict] = []
+        per_dialogue: dict[str, int] = {}
+        for r in deduped:
+            group = _dialogue_group(r)
+            if group is None:
+                kept.append(r)
+                continue
+            n = per_dialogue.get(group, 0)
+            if n >= _MAX_PER_DIALOGUE:
+                deferred.append(r)
+                continue
+            per_dialogue[group] = n + 1
+            kept.append(r)
+        deduped = kept + deferred
 
     # ``return_k`` widens this slice — and only this slice — when the caller
     # has a filter left to apply. It never narrows: ``limit`` is the floor, so

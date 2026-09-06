@@ -168,9 +168,18 @@ def session_block(sess: list, sid: object, date: str | None, turns: str) -> str:
         if not c.strip():
             continue
         blocks.append(
-            f"[SESSION-{sid}__t{j}]\nStatement: {c}\nDate: {sd}\nStatus: active\n"
+            # DiaID declares which conversation this turn belongs to, in the
+            # product's own D{session}:{turn} grammar. Without it the corpus
+            # tells mind-mem nothing about dialogue structure, so its
+            # per-dialogue diversity cap cannot apply and a single conversation
+            # is free to occupy every slot of an answer.
+            f"[SESSION-{sid}__t{j}]\nStatement: {c}\nDate: {sd}\n"
+            f"DiaID: D{sid}:{j}\nStatus: active\n"
         )
-    return "\n---\n\n".join(blocks) or f"[SESSION-{sid}__t0]\nStatement: (empty)\nDate: {sd}\nStatus: active\n"
+    return "\n---\n\n".join(blocks) or (
+        f"[SESSION-{sid}__t0]\nStatement: (empty)\nDate: {sd}\n"
+        f"DiaID: D{sid}:0\nStatus: active\n"
+    )
 
 
 # ── Workspace builder ───────────────────────────────────────────────────────
