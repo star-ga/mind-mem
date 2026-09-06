@@ -3473,6 +3473,265 @@ def _cmd_chain_verify_archive(args: argparse.Namespace) -> int:
     return 0 if all(c.status == ARCHIVE_OK for c in checks) else _CHAIN_DAMAGED
 
 
+def _cmd_chain_witness(args: argparse.Namespace) -> int:
+    """``mm chain witness`` — the canonical governed baseline-witness writer.
+
+    A legacy recovery anchor minted before the baseline keys existed carries no
+    companion baseline, so the cross-ledger check convicts it. The boundary that
+    would bind it CANNOT be inferred from the clock: a row appended after the
+    seal and stamped before it inverts a timestamp bracket, making it refuse the
+    true boundary and accept N+1. So the boundary is fixed by an operator, on the
+    record, and this is the only writer that does it.
+
+    Two steps, deliberately separate, because the operator must be the one who
+    pins the trust root:
+
+      1. WITHOUT --confirm: read the live companion prefix, build the witness,
+         print it and its digest. Nothing is written. The operator reviews the
+         count against an independently established receipt and pins the digest
+         into mind-mem.json under recovery.boundary_witness_pins.
+      2. WITH --confirm: append the attestation carrying that witness content
+         plus both denials. The verifier will later re-derive everything and
+         check the content against the PINNED digest -- so an attestation that
+         quietly changed the count cannot pass, because it cannot reproduce a
+         digest it did not author.
+
+    The writer never pins its own digest. If it did, the attestation would be
+    supplying its own trust root and the whole exercise would be circular.
+    """
+
+    from mind_mem import boundary_witness as bw
+    from mind_mem.cross_ledger import _archive_matches
+    from mind_mem.evidence_objects import EvidenceAction, EvidenceChain
+    from mind_mem.evidence_recovery import (
+        ATTESTS_ANCHOR_HASH_KEY,
+        ATTESTS_ANCHOR_ID_KEY,
+        BASELINE_VERB,
+        COMPANION_ENTRIES_KEY,
+        COMPANION_PRESENT_KEY,
+        COMPANION_TAIL_KEY,
+        DENIES_PREDECESSOR_KEY,
+        RECOVERY_ACTION,
+        RECOVERY_VERB,
+        RECOVERY_VERB_KEY,
+        TRUST_RESTORED_KEY,
+    )
+    from mind_mem.mind_filelock import FileLock, LockTimeout
+
+    store = _chain_store_path(args)
+    if not os.path.isfile(store):
+        print(f"error: no evidence store at {store}", file=sys.stderr)
+        return _CHAIN_REFUSED
+
+    status, length, _tail = bw.companion_status(store)
+    if status == bw.COMPANION_CORRUPT:
+        print("error: the companion hash chain will not open; refusing to witness a boundary over it", file=sys.stderr)
+        return _CHAIN_REFUSED
+    if status == bw.COMPANION_ABSENT:
+        print("error: no companion hash chain beside this store; there is no prefix to bind", file=sys.stderr)
+        return _CHAIN_REFUSED
+
+    count = int(args.entries) if args.entries is not None else length
+    if count < 0 or count > length:
+        print(f"error: --entries {count} is outside the companion chain (length {length})", file=sys.stderr)
+        return _CHAIN_REFUSED
+    tail = bw._prefix_tail(store, count)
+    if tail is None:
+        print("error: the companion prefix could not be read", file=sys.stderr)
+        return _CHAIN_REFUSED
+
+    # Prepare the witness from an anchor read under the store lock. This first
+    # lock covers only the lookup. Identity and chain checks below validate the
+    # preparation; the transaction at confirmation revalidates the anchor,
+    # archive, companion prefix and governed pin before appending under one lock.
+    anchor_rec = None
+    try:
+        with FileLock(store, timeout=30.0):
+            with open(store, encoding="utf-8") as handle:
+                for line in handle:
+                    if not line.strip():
+                        continue
+                    rec = json.loads(line)
+                    if isinstance(rec, dict) and rec.get("evidence_id") == args.anchor_id:
+                        anchor_rec = rec
+                        break
+    except LockTimeout:
+        print("error: the evidence store is locked by another writer; try again", file=sys.stderr)
+        return _CHAIN_REFUSED
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(f"error: the evidence store could not be read ({exc.__class__.__name__})", file=sys.stderr)
+        return _CHAIN_REFUSED
+    if anchor_rec is None:
+        print(f"error: no record {args.anchor_id} in this store", file=sys.stderr)
+        return _CHAIN_REFUSED
+    if anchor_rec.get("evidence_hash") != args.anchor_hash:
+        print("error: --anchor-hash does not match that record's evidence hash", file=sys.stderr)
+        return _CHAIN_REFUSED
+    if anchor_rec.get("action") != RECOVERY_ACTION.value:
+        print(
+            f"error: that record's action is {anchor_rec.get('action')!r}, not a recovery action",
+            file=sys.stderr,
+        )
+        return _CHAIN_REFUSED
+    meta = anchor_rec.get("metadata")
+    if not isinstance(meta, dict):
+        # A list or scalar here is malformed, not empty. `or {}` would have
+        # normalised it into "no verb" and produced a misleading refusal.
+        print("error: that record's metadata is malformed", file=sys.stderr)
+        return _CHAIN_REFUSED
+    if meta.get(RECOVERY_VERB_KEY) != RECOVERY_VERB:
+        print("error: that record is not a recovery anchor; only an anchor can be witnessed", file=sys.stderr)
+        return _CHAIN_REFUSED
+    anchor_archive = {k: meta.get(k) for k in ("archived_chain", "archived_sha256", "archived_bytes")}
+    if not anchor_archive.get("archived_chain"):
+        print(f"error: anchor {args.anchor_id} names no archive", file=sys.stderr)
+        return _CHAIN_REFUSED
+    _ok, _bad = EvidenceChain(store_path=store).verify_chain()
+    if not _ok:
+        print(f"error: the evidence chain does not verify ({_bad}); refusing to append", file=sys.stderr)
+        return _CHAIN_REFUSED
+
+    content = {
+        "anchor_id": args.anchor_id,
+        "anchor_hash": args.anchor_hash,
+        "prefix_count": count,
+        "prefix_tail": tail,
+        "authority": args.authority,
+        "trust_assumption": args.trust_assumption,
+    }
+    digest = bw.witness_digest(content)
+    if not digest:
+        print("error: the witness is malformed; every field is required", file=sys.stderr)
+        return _CHAIN_REFUSED
+
+    def _receipt(written: bool) -> None:
+        """Describe what HAPPENED, never what was requested.
+
+        This emitted written=bool(args.confirm) BEFORE the pin check and before
+        chain.create, so a refusal published a successful-write receipt for an
+        attestation that does not exist. Any consumer of that JSON would record
+        a write that never occurred.
+        """
+        print(json.dumps({"witness": content, "digest": digest, "written": written}, indent=2))
+
+    if not args.json:
+        print(f"  anchor            {args.anchor_id}")
+        print(f"  companion prefix  {count} of {length} entries")
+        print(f"  prefix tail       {tail[:32]}...")
+        print(f"  authority         {args.authority}")
+        print(f"  witness digest    {digest}")
+        print()
+        print("  Pin this digest under governance before it means anything:")
+        print(f'    mind-mem.json -> {{"recovery": {{"boundary_witness_pins": {{"{args.anchor_id}": "{digest}"}}}}}}')
+
+    if not args.confirm:
+        if args.json:
+            _receipt(False)
+        else:
+            print("\n  (nothing written; re-run with --confirm to append the attestation)")
+        return 0
+
+    pinned = bw.governed_witness_pin(store, args.anchor_id)
+    if not pinned:
+        print("\nerror: no governed pin for this anchor; pin the digest first, then --confirm", file=sys.stderr)
+        if args.json:
+            _receipt(False)
+        return _CHAIN_REFUSED
+    if pinned != digest:
+        print("\nerror: the governed pin does not match this witness; refusing to write", file=sys.stderr)
+        if args.json:
+            _receipt(False)
+        return _CHAIN_REFUSED
+
+    # AUTHORITATIVE REVALIDATION, inside the same held lock as the append.
+    # Everything checked above was checked against state that could since have
+    # moved: root reproduced exactly that, mutating the governed pin between its
+    # read and the append and getting rc=0 with written=true while both
+    # verifiers rejected the result. The checks below are re-derived against the
+    # state this record will actually link to.
+    #
+    # LIMIT: this binds writers that take this lock. No current writer of
+    # mind-mem.json does (baseline_snapshot, accountability_views,
+    # accountability_dashboard, event_fanout all write it lock-free), so the pin
+    # re-read here is last-moment DETECTION, not mutual exclusion. Stated rather
+    # than promised.
+    def _revalidate(txn) -> str:
+        # Uses the transaction's own validated snapshot rather than re-reading
+        # the file: re-reading asks a different question than "what will this
+        # record link to", and the earlier version took txn and ignored it.
+        rec = next(
+            (r for r in txn.records() if r.evidence_id == args.anchor_id),
+            None,
+        )
+        if rec is None:
+            return "the anchor is no longer in the chain"
+        if rec.evidence_hash != args.anchor_hash:
+            return "the anchor's evidence hash changed"
+        if rec.action != RECOVERY_ACTION:
+            return "the anchor's action changed"
+        m = rec.metadata
+        if not isinstance(m, dict) or m.get(RECOVERY_VERB_KEY) != RECOVERY_VERB:
+            return "the anchor is no longer a recovery anchor"
+        for key in ("archived_chain", "archived_sha256", "archived_bytes"):
+            if m.get(key) != anchor_archive.get(key):
+                return "the anchor's archive binding changed"
+        # ONE archive contract. The previous version re-hashed here by hand and
+        # checked the digest only, so it could drift from the canonical rule
+        # that also rejects a non-basename path and a malformed byte length.
+        ok, why = _archive_matches(store, m)
+        if not ok:
+            return why
+        st, ln, _t = bw.companion_status(store)
+        if st != bw.COMPANION_PRESENT:
+            return f"the companion hash chain is {st}"
+        if count > ln or bw._prefix_tail(store, count) != tail:
+            return "the companion prefix changed"
+        now = bw.governed_witness_pin(store, args.anchor_id)
+        if not now:
+            return "the governed pin disappeared"
+        if now != digest:
+            return "the governed pin changed after validation"
+        return ""
+
+    chain = EvidenceChain(store_path=store)
+    try:
+        with chain.transaction() as txn:
+            why = _revalidate(txn)
+            if why:
+                print(f"error: {why}; refusing to append", file=sys.stderr)
+                if args.json:
+                    _receipt(False)
+                return _CHAIN_REFUSED
+            txn.create(
+                action=EvidenceAction.ROLLBACK,
+                actor=args.authority,
+                target_block_id=args.anchor_id,
+                target_file="",
+                metadata={
+                    RECOVERY_VERB_KEY: BASELINE_VERB,
+                    ATTESTS_ANCHOR_ID_KEY: args.anchor_id,
+                    ATTESTS_ANCHOR_HASH_KEY: args.anchor_hash,
+                    COMPANION_PRESENT_KEY: True,
+                    COMPANION_ENTRIES_KEY: count,
+                    COMPANION_TAIL_KEY: tail,
+                    DENIES_PREDECESSOR_KEY: True,
+                    TRUST_RESTORED_KEY: False,
+                    bw.WITNESS_CONTENT_KEY: content,
+                    **anchor_archive,
+                },
+            )
+    except Exception as exc:  # noqa: BLE001 -- ANY append failure must not report success
+        print(f"error: the attestation could not be appended ({exc.__class__.__name__})", file=sys.stderr)
+        if args.json:
+            _receipt(False)
+        return _CHAIN_REFUSED
+    if args.json:
+        _receipt(True)  # only now: the record is persisted
+    else:
+        print("\n  attestation appended. The sealed history remains untrusted and unverifiable.")
+    return 0
+
+
 def _cmd_chain_recover(args: argparse.Namespace) -> int:
     """``mm chain recover`` — seal a damaged chain and re-anchor it.
 
@@ -4946,6 +5205,39 @@ def build_parser() -> argparse.ArgumentParser:
     ch_verify.add_argument("--store", default="", help="Check this JSONL file instead of <workspace>/memory/evidence_chain.jsonl.")
     ch_verify.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     ch_verify.set_defaults(func=_cmd_chain_verify_archive)
+
+    ch_witness = chain_sub.add_parser(
+        "witness",
+        help=(
+            "Fix a legacy recovery anchor's companion boundary under explicit operator "
+            "authority. Prints the witness and its digest; writes nothing until the digest "
+            "is pinned in mind-mem.json and --confirm is given."
+        ),
+    )
+    ch_witness.add_argument("workspace", nargs="?", default=".", help="Workspace path (default: current directory).")
+    ch_witness.add_argument("--store", default="", help="Act on this JSONL file instead of the workspace ledger.")
+    ch_witness.add_argument("--anchor-id", required=True, dest="anchor_id", help="The exact anchor evidence id.")
+    ch_witness.add_argument("--anchor-hash", required=True, dest="anchor_hash", help="The exact anchor evidence hash.")
+    ch_witness.add_argument(
+        "--entries",
+        type=int,
+        default=None,
+        help=(
+            "Companion prefix length the boundary fixes. Defaults to the current "
+            "chain length; supply it explicitly from an independently established "
+            "receipt."
+        ),
+    )
+    ch_witness.add_argument("--authority", default="operator", help="Authority the witness records.")
+    ch_witness.add_argument(
+        "--trust-assumption",
+        dest="trust_assumption",
+        default="fixes the boundary under operator authority; restores no historic trust",
+        help="The explicit assumption. Required, and recorded verbatim.",
+    )
+    ch_witness.add_argument("--confirm", action="store_true", help="Append the attestation. Requires the digest already pinned.")
+    ch_witness.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    ch_witness.set_defaults(func=_cmd_chain_witness)
 
     ch_recover = chain_sub.add_parser(
         "recover",

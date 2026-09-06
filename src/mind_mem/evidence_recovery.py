@@ -136,6 +136,29 @@ RECOVERY_VERB = "REANCHOR"
 RECOVERY_VERB_KEY = "recovery_verb"
 
 #: Hashed anchor fields binding the retained companion hash-chain prefix.
+#: Verb on a SUPPLEMENTAL baseline attestation. Deliberately distinct from
+#: :data:`RECOVERY_VERB`: an attestation is not a recovery, seals nothing, and
+#: must never be counted as a second anchor. One canonical recovery
+#: architecture, one extra verb inside it -- not a second ledger authority.
+BASELINE_VERB = "REANCHOR_BASELINE"
+
+#: ``metadata`` keys binding an attestation to the anchor it speaks for. The
+#: HASH matters as much as the id: an id alone is a label anyone can copy,
+#: while the evidence_hash pins the exact record.
+ATTESTS_ANCHOR_ID_KEY = "attests_anchor_id"
+ATTESTS_ANCHOR_HASH_KEY = "attests_anchor_hash"
+
+#: Set true on every attestation. It says out loud what the record does NOT
+#: mean: the sealed history is still untrusted and still fails to verify, and
+#: nothing here confers retrospective authorization on it. The attestation
+#: supplies a BINDING, never a blessing.
+DENIES_PREDECESSOR_KEY = "denies_predecessor_continuity"
+
+#: The companion denial. Emitting these was never enough: a verifier that does
+#: not CHECK them accepts an attestation that quietly omits the denial, or one
+#: that asserts the sealed history was rehabilitated. Both are enforced.
+TRUST_RESTORED_KEY = "predecessor_trust_restored"
+
 COMPANION_PRESENT_KEY = "companion_hash_chain_present"
 COMPANION_ENTRIES_KEY = "companion_hash_chain_entries"
 COMPANION_TAIL_KEY = "companion_hash_chain_tail"

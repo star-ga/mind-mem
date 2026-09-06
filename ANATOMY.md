@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1481 | **Est. tokens:** ~4422524
-**Generated:** 2026-09-06 16:30 UTC
+**Files:** 1492 | **Est. tokens:** ~4462741
+**Generated:** 2026-09-06 17:34 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~48800 |
+| `./` | 38 | ~57626 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5891 |
 | `.gemini/` | 1 | ~28 |
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206754 |
+| `docs/` | 95 | ~209502 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 229 | ~1056983 |
+| `src/mind_mem/` | 230 | ~1066678 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~47468 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 627 | ~1919442 |
+| `tests/` | 633 | ~1938390 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -123,6 +123,8 @@
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 - `AGENTS.md` (~995 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
+- `CLAUDE.md` (~4413 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~4413 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `CLAUDE.md` (~4413 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `CONTRIBUTING.md` (~753 tok, large) — Contributing to MIND-Mem
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
@@ -439,6 +441,8 @@
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
 - `governance.md` (~1374 tok, large) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~1374 tok, large) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~1374 tok, large) — MIND-Mem — governance design (5 layers)
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
@@ -718,6 +722,7 @@
 - `block_store_postgres.py` (~21229 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~3116 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
+- `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `calibration.py` (~7485 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~5255 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6359 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
@@ -756,7 +761,7 @@
 - `corpus_registry.py` (~5127 tok, huge) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~3583 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~1463 tok, large) — mind-mem Optional Cross-Encoder Reranker.
-- `cross_ledger.py` (~4149 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `cross_ledger.py` (~7869 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `daemon.py` (~3623 tok, huge) — Background daemon — `mm daemon` (v3.9.0 candidate).
 - `data_marking.py` (~1133 tok, large) — # Copyright 2026 STARGA, Inc.
 - `dead_ends.py` (~3855 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -771,9 +776,9 @@
 - `error_codes.py` (~1751 tok, huge) — mind-mem Error Codes — structured error classification.
 - `event_fanout.py` (~4850 tok, huge) — Governance event fan-out (v4.0 prep).
 - `evidence_bundle.py` (~2205 tok, huge) — Structured evidence bundle for answerer co-design (v3.3.0 Tier 3 #7).
-- `evidence_objects.py` (~13218 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `evidence_objects.py` (~15005 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3313 tok, huge) — Deterministic evidence packer for Mind-Mem.
-- `evidence_recovery.py` (~10310 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `evidence_recovery.py` (~10620 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `extraction_feedback.py` (~1877 tok, huge) — mind-mem Extraction Quality Feedback Tracker.
 - `extractor.py` (~7670 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `feature_gate.py` (~2240 tok, huge) — Shared config-resolver for retrieval features (architect audit item #6).
@@ -1203,12 +1208,15 @@
 - `test_block_types.py` (~437 tok, medium) — Tests for different block types in recall."""
 - `test_bootstrap_corpus.py` (~1798 tok, huge) — Tests for bootstrap_corpus.py — backfill pipeline module."""
 - `test_bootstrap_corpus_wiring.py` (~5443 tok, huge) — Wiring + quarantine proof for the ``mind-mem-bootstrap`` ingest door.
+- `test_boundary_witness.py` (~2442 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_boundary_witness_cli_e2e.py` (~3954 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_calibration.py` (~3269 tok, huge) — Tests for calibration feedback loop.
 - `test_calibration_window_determinism.py` (~1159 tok, large) — The calibration window boundary is UTC-anchored and pinnable.
 - `test_capture.py` (~2193 tok, huge) — Tests for capture.py — zero external deps (stdlib unittest)."""
 - `test_capture_governed_signals.py` (~2903 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_category_distiller.py` (~2660 tok, huge) — Tests for category_distiller.py — CategoryDistiller class."""
 - `test_causal_graph.py` (~1566 tok, huge) — Tests for mind-mem temporal causal graph (causal_graph.py)."""
+- `test_chain_transaction_capability.py` (~1204 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_chain_truncation.py` (~5069 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_change_stream_backpressure.py` (~956 tok, large) — The change stream's backpressure counters, and the drain that gives
 - `test_chat_with_memory.py` (~5985 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1221,6 +1229,7 @@
 - `test_coding_schemas.py` (~1284 tok, large) — Tests for mind-mem coding-native memory schemas."""
 - `test_cognitive_forget.py` (~2315 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compaction.py` (~1905 tok, huge) — Tests for compaction.py — GC and archival engine."""
+- `test_companion_baseline_attestation.py` (~5756 tok, huge) — A legacy recovery anchor may be bound forward, never blessed.
 - `test_competitive_intel.py` (~1881 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compiled_truth.py` (~4665 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
 - `test_compliance_export.py` (~3734 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1746,6 +1755,8 @@
 - `test_watcher.py` (~1832 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""
 - `test_withheld_not_in_stats.py` (~8119 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_witness_pin_race.py` (~2540 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_witness_writer_receipt_truth.py` (~3052 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_workspace_contextvar.py` (~1047 tok, large) — v3.2.1 — regression test for per-request workspace ContextVar scoping.
 - `test_workspace_init.py` (~502 tok, large) — Tests for workspace initialization."""
 - `test_workspace_structure.py` (~550 tok, large) — Tests for workspace directory structure."""

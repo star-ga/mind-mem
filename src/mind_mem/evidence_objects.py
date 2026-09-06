@@ -44,11 +44,14 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
+import copy
 import dataclasses
 import hashlib
 import json
 import os
 import threading
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, NoReturn, Union
@@ -554,8 +557,7 @@ class EvidenceChain:
                 # from the append is what let two processes each believe they
                 # owned the tail.
                 with self._store_lock():
-                    ev = self._forge(
-                        previous_hash=self._linkable_previous_hash(),
+                    ev = self._forge_and_persist_locked(
                         action=action,
                         actor=actor,
                         target_block_id=target_block_id,
@@ -564,15 +566,81 @@ class EvidenceChain:
                         metadata=metadata,
                         confidence=confidence,
                     )
-                    # Persist FIRST so an I/O failure cannot leave in-memory
-                    # state ahead of the on-disk chain. Only append to
-                    # _entries once the durable write has landed.
-                    self._append_to_file(ev)
-                    self._entries.append(ev)
 
         _log.info("evidence_created", action=action.value, actor=actor, target_block_id=target_block_id)
         metrics.inc("evidence_objects_created")
         return ev
+
+    def _forge_and_persist_locked(
+        self,
+        *,
+        action: "EvidenceAction",
+        actor: str,
+        target_block_id: str,
+        target_file: str,
+        payload_hash: str,
+        metadata: dict,
+        confidence: float,
+    ) -> "EvidenceObject":
+        """Forge and persist one record. THE store lock must already be held.
+
+        Factored out of :meth:`create` so a caller that needs to validate
+        against the very tail this record will link to can do so inside the same
+        lock acquisition, without a second forging implementation. There is one
+        append path; :meth:`create` and :meth:`transaction` are two doors to it.
+        """
+        ev = self._forge(
+            previous_hash=self._linkable_previous_hash(),
+            action=action,
+            actor=actor,
+            target_block_id=target_block_id,
+            target_file=target_file,
+            payload_hash=payload_hash,
+            metadata=metadata,
+            confidence=confidence,
+        )
+        # Persist FIRST so an I/O failure cannot leave in-memory state ahead of
+        # the on-disk chain. Only append to _entries once the write has landed.
+        self._append_to_file(ev)
+        self._entries.append(ev)
+        return ev
+
+    @contextlib.contextmanager
+    def transaction(self) -> "Iterator[ChainTransaction]":
+        """Hold the store lock across validate-then-append.
+
+        The window this closes: a witness writer that reads its inputs, releases
+        the lock, and then appends can have those inputs changed underneath it.
+        ``create()`` alone cannot detect that -- ``_refresh_from_store`` ABSORBS
+        records other writers legitimately appended (that is its documented job),
+        so a competing valid append is not a fork and is not refused. The
+        conditional refusal belongs to the caller's predicate, not to
+        ``create``, whose concurrent-append behaviour is deliberately unchanged.
+
+        LIMIT. This binds writers that take THIS lock. It cannot bind a process
+        that rewrites the config, the archive or the companion database while
+        ignoring the protocol -- an advisory lock has no way to. Measured on
+        2026-09-06: no current writer of ``mind-mem.json`` takes this lock, so a
+        predicate re-reading the pin here is performing last-moment DETECTION,
+        not mutual exclusion. Callers must not describe it as the latter.
+
+        The lock is non-reentrant, so nothing inside the block may call
+        :meth:`create`; use the transaction's own ``create``.
+        """
+        self._raise_if_compromised("append to")
+        if self._store_path is None:
+            raise RuntimeError("transaction() requires a store-backed chain")
+        with self._lock:
+            with self._store_lock():
+                self._refresh_from_store()
+                txn = ChainTransaction(self, _TXN_GRANT)
+                try:
+                    yield txn
+                finally:
+                    # Normal exit AND exception exit. Without this the handle
+                    # outlives the lock it depends on and becomes an unlocked
+                    # append door.
+                    txn._invalidate()
 
     def __len__(self) -> int:
         """Return the number of entries currently in the chain."""
@@ -1239,3 +1307,109 @@ class EvidenceChain:
                 previous_hash = ev.evidence_hash
                 loaded.append(ev)
         self._entries = loaded
+
+
+class TransactionClosed(RuntimeError):
+    """A transaction handle was used outside its scope."""
+
+
+class TransactionWrongThread(RuntimeError):
+    """A transaction handle was used from a thread that does not own it."""
+
+
+#: Minted only by :meth:`EvidenceChain.transaction`. A handle built any other
+#: way holds no capability, so direct construction authorises nothing -- closed
+#: by construction rather than by convention.
+_TXN_GRANT = object()
+
+
+class ChainTransaction:
+    """A capability scoped to ONE lock acquisition, ONE thread, ONE block.
+
+    The first version was none of those. It appended after its context exited,
+    appended from another thread while the context still held the lock, handed
+    out live record metadata a caller could mutate into the chain, and
+    authorised appends when constructed directly. That is an unlocked append
+    door -- worse than the race the transaction exists to close.
+
+    Every method checks the capability first, reads included: a stale ``tail``
+    is a stale premise for the caller's own decision, so serving it after the
+    scope has closed would be its own defect.
+    """
+
+    __slots__ = ("_chain", "_active", "_owner")
+
+    def __init__(self, chain: "EvidenceChain", _grant: object = None) -> None:
+        self._chain = chain
+        # Without the grant the handle is born inert. There is no setter.
+        self._active = _grant is _TXN_GRANT
+        self._owner = threading.get_ident() if self._active else None
+
+    def _require_active(self) -> None:
+        if not self._active:
+            raise TransactionClosed(
+                "this transaction handle is not active: its scope has ended, or it was "
+                "constructed directly rather than by EvidenceChain.transaction()"
+            )
+        if threading.get_ident() != self._owner:
+            raise TransactionWrongThread(
+                "this transaction handle belongs to the thread that opened it; the store lock it relies on is held by that thread alone"
+            )
+
+    def _invalidate(self) -> None:
+        self._active = False
+
+    @property
+    def tail(self) -> str:
+        """The hash the next record will link to."""
+        self._require_active()
+        return self._chain._linkable_previous_hash()
+
+    @property
+    def entries(self) -> int:
+        self._require_active()
+        return len(self._chain._entries)
+
+    def records(self) -> "tuple[EvidenceObject, ...]":
+        """A snapshot whose metadata is COPIED, not shared.
+
+        Returning the live objects meant a caller mutating a nested dict changed
+        chain evidence in place, which the docstring denied while the code
+        allowed. deepcopy on metadata is the whole fix; the records themselves
+        are immutable in every other respect.
+        """
+        self._require_active()
+        return tuple(dataclasses.replace(rec, metadata=copy.deepcopy(rec.metadata)) for rec in self._chain._entries)
+
+    def create(
+        self,
+        *,
+        action: "EvidenceAction",
+        actor: str,
+        target_block_id: str,
+        target_file: str,
+        payload: "Union[bytes, str, dict, None]" = None,
+        metadata: "dict | None" = None,
+        confidence: float = 1.0,
+        spec_hash: "str | None" = None,
+    ) -> "EvidenceObject":
+        """Append within this transaction. Same forge path as :meth:`EvidenceChain.create`."""
+        self._require_active()
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"confidence must be in [0.0, 1.0], got {confidence!r}")
+        effective: dict = dict(metadata or {})
+        if spec_hash is not None:
+            effective["spec_hash"] = spec_hash
+        effective.setdefault("evidence_schema", EVIDENCE_SCHEMA_VERSION)
+        ev = self._chain._forge_and_persist_locked(
+            action=action,
+            actor=actor,
+            target_block_id=target_block_id,
+            target_file=target_file,
+            payload_hash=_compute_payload_hash(payload),
+            metadata=effective,
+            confidence=confidence,
+        )
+        _log.info("evidence_created", action=action.value, actor=actor, target_block_id=target_block_id)
+        metrics.inc("evidence_objects_created")
+        return ev

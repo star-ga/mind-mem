@@ -56,14 +56,26 @@ import json
 import os
 import sqlite3
 from dataclasses import dataclass
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Sequence
 
+from .boundary_witness import (
+    TS_CONTRADICTS,
+    WITNESS_CONTENT_KEY,
+    governed_witness_pin,
+    timestamp_consistency,
+    verify_witness,
+)
 from .evidence_recovery import (
+    ATTESTS_ANCHOR_HASH_KEY,
+    ATTESTS_ANCHOR_ID_KEY,
+    BASELINE_VERB,
     COMPANION_ENTRIES_KEY,
     COMPANION_PRESENT_KEY,
     COMPANION_TAIL_KEY,
+    DENIES_PREDECESSOR_KEY,
     RECOVERY_VERB,
     RECOVERY_VERB_KEY,
+    TRUST_RESTORED_KEY,
 )
 from .hash_chain_v2 import GENESIS_HASH, HashChainV2
 
@@ -283,9 +295,11 @@ def _admission_rows(
     linked: list[str] = []
     baseline: Optional[tuple[bool, int, str]] = None
     baseline_errors: list[str] = []
+    anchors: list[dict] = []
+    attestations: list[dict] = []
     try:
         with open(evidence_path, encoding="utf-8") as handle:
-            for line in handle:
+            for line_no, line in enumerate(handle, 1):
                 if not line.strip():
                     continue
                 try:
@@ -301,33 +315,332 @@ def _admission_rows(
                 if meta.get("action_verb"):
                     admissions += 1
                 if meta.get(RECOVERY_VERB_KEY) == RECOVERY_VERB:
-                    present = meta.get(COMPANION_PRESENT_KEY)
-                    count = meta.get(COMPANION_ENTRIES_KEY)
-                    tail = meta.get(COMPANION_TAIL_KEY)
-                    if not (
-                        isinstance(present, bool)
-                        and isinstance(count, int)
-                        and not isinstance(count, bool)
-                        and count >= 0
-                        and isinstance(tail, str)
-                        and len(tail) == 128
-                        and all(ch in "0123456789abcdef" for ch in tail)
-                        and (count > 0 or tail == GENESIS_HASH)
-                        and (present or (count == 0 and tail == GENESIS_HASH))
-                    ):
-                        baseline_errors.append("a recovery anchor carries a missing or malformed companion hash-chain baseline")
-                    else:
-                        current = (present, count, tail)
-                        if baseline is not None and baseline != current:
-                            baseline_errors.append("multiple recovery anchors carry conflicting companion hash-chain baselines")
-                        baseline = current
+                    # Collected, not convicted here. An anchor with no baseline
+                    # of its own may still be bound by a LATER attestation, and
+                    # that cannot be known until the whole file has been read.
+                    anchors.append(
+                        {
+                            "line": line_no,
+                            "id": row.get("evidence_id"),
+                            "hash": row.get("evidence_hash"),
+                            "archive": {k: meta.get(k) for k in ("archived_chain", "archived_sha256", "archived_bytes")},
+                            "timestamp": row.get("timestamp"),
+                            "baseline": meta,
+                        }
+                    )
+                elif meta.get(RECOVERY_VERB_KEY) == BASELINE_VERB:
+                    att = dict(meta)
+                    att["line"] = line_no
+                    attestations.append(att)
                 if meta.get("write_phase") == PHASE_CLOSED and meta.get("operation") == OP_WRITE:
                     entry_id = meta.get("admission_entry_id")
                     if isinstance(entry_id, str) and entry_id:
                         linked.append(entry_id)
     except (OSError, UnicodeDecodeError):
         return 0, (), None, ()
+
+    # Now resolve each anchor: its own baseline first, a later attestation
+    # second, and fail-closed if neither. An anchor minted before the baseline
+    # keys existed is not malformed -- the fields were never written -- but it
+    # is unbound, and unbound is exactly as unusable until something binds it.
+    for anc in anchors:
+        meta = anc["baseline"]
+        present = meta.get(COMPANION_PRESENT_KEY)
+        count = meta.get(COMPANION_ENTRIES_KEY)
+        tail = meta.get(COMPANION_TAIL_KEY)
+        current: Optional[tuple[bool, int, str]] = None
+        if well_formed_baseline(present, count, tail):
+            current = (bool(present), int(count), str(tail))  # type: ignore[arg-type]
+        else:
+            supplemental, why = resolve_supplemental_baseline(
+                evidence_path,
+                str(anc["id"] or ""),
+                str(anc["hash"] or ""),
+                int(anc["line"]),
+                anc["archive"],
+                attestations,
+                str(anc.get("timestamp") or ""),
+                governed_witness_pin(evidence_path, str(anc["id"] or "")),
+            )
+            if supplemental is not None:
+                current = supplemental
+            else:
+                baseline_errors.append(why or "a recovery anchor carries a missing or malformed companion hash-chain baseline")
+                continue
+        if baseline is not None and baseline != current:
+            baseline_errors.append("multiple recovery anchors carry conflicting companion hash-chain baselines")
+        baseline = current
+
     return admissions, tuple(linked), baseline, tuple(baseline_errors)
+
+
+def verify_companion_prefix(workspace: str, entries: int, tail: str) -> tuple[bool, str]:
+    """Does the live companion chain's PREFIX of *entries* rows end in *tail*?
+
+    Not "is the current tail equal to tail" -- the companion chain keeps
+    growing, so that test would start failing the moment anything appended
+    after the attestation was written. This reads back to the attested row and
+    compares there, so the claim stays checkable forever.
+    """
+    from .hash_chain_v2 import GENESIS_HASH as _GEN
+    from .hash_chain_v2 import HashChainV2
+
+    db_path = os.path.join(os.path.dirname(os.path.abspath(workspace)), "hash_chain_v2.db")
+    if not os.path.isfile(db_path):
+        return False, "the companion hash chain is absent"
+    try:
+        chain = HashChainV2.open_readonly(db_path)
+        ok, broken_at = chain.verify_chain()
+        if not ok:
+            return False, f"the companion hash chain breaks at entry {broken_at}"
+        length = chain.length
+        if entries > length:
+            return False, f"the attestation claims {entries} companion entries but the chain holds {length}"
+        if entries == 0:
+            return (tail == _GEN), ("" if tail == _GEN else "an empty companion prefix must end at genesis")
+        rows = chain.get_latest(length - entries + 1)
+        if not rows:
+            return False, "the companion chain returned no rows for the attested prefix"
+        actual = rows[0].entry_hash
+    except Exception as exc:  # noqa: BLE001 -- any read failure is a refusal, never a pass
+        return False, f"the companion hash chain could not be read: {exc}"
+    if actual != tail:
+        return False, "the companion prefix does not end in the attested tail"
+    return True, ""
+
+
+def verify_recovery_boundary(workspace: str, entries: int, anchor_timestamp: str) -> tuple[bool, str]:
+    """Is *entries* the prefix that existed AT THE SEAL -- not merely A valid one?
+
+    A cryptographically valid prefix is not the recovery boundary. Every prefix
+    of a hash chain verifies, so an attestation offering a LARGER prefix -- the
+    606 pre-recovery rows plus admissions appended afterwards, with their
+    correctly matching tail -- passes a validity check while silently absorbing
+    post-recovery admission obligations into the baseline. A SMALLER prefix
+    understates it. Both are valid; neither is the boundary.
+
+    The boundary is bracketed against the anchor's own timestamp, which is
+    hash-bound in the evidence record, using companion timestamps, which are
+    hash-bound in the chain preimage:
+
+        row[entries]      must be at or before the seal
+        row[entries + 1]  if it exists, must be after the seal
+
+    TRUST ASSUMPTION, stated because it is not eliminable here. Timestamps are
+    tamper-EVIDENT: hashing them means they cannot be altered after the fact
+    without breaking the chain. They are not tamper-PROOF: a writer supplies its
+    own timestamp, so a row backdated at creation would satisfy this bracket.
+    This detects an honest-but-wrong boundary and a later edit; it does not
+    defeat a lying writer at write time. Where that matters, the boundary needs
+    an operator-reviewed attestation carrying its own governance authority
+    rather than automatic inference from metadata.
+
+    No count offsets and no tolerance: anything unreadable, unparseable or
+    out of order fails closed.
+    """
+    from datetime import datetime
+
+    from .hash_chain_v2 import HashChainV2
+
+    def _parse(value: object) -> "Optional[datetime]":
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    sealed_at = _parse(anchor_timestamp)
+    if sealed_at is None:
+        return False, "the anchor carries no parseable timestamp, so no boundary can be established"
+
+    db_path = os.path.join(os.path.dirname(os.path.abspath(workspace)), "hash_chain_v2.db")
+    if not os.path.isfile(db_path):
+        return False, "the companion hash chain is absent"
+    try:
+        chain = HashChainV2.open_readonly(db_path)
+        length = chain.length
+        if entries > length:
+            return False, f"the attestation claims {entries} companion entries but the chain holds {length}"
+        # Read from the attested row to the end: row[entries] is first.
+        window = chain.get_latest(length - entries + 1) if entries >= 1 else chain.get_latest(length)
+    except Exception as exc:  # noqa: BLE001 -- any read failure is a refusal
+        return False, f"the companion hash chain could not be read: {exc}"
+
+    if entries >= 1:
+        if not window:
+            return False, "the companion chain returned no rows at the attested boundary"
+        at_boundary = _parse(getattr(window[0], "timestamp", None))
+        if at_boundary is None:
+            return False, "the companion row at the attested boundary carries no parseable timestamp"
+        if at_boundary > sealed_at:
+            return False, (
+                "the attested prefix is TOO LARGE: it includes a companion row written after the seal, "
+                "which would absorb a post-recovery admission into the baseline"
+            )
+        following = window[1] if len(window) > 1 else None
+    else:
+        following = window[0] if window else None
+
+    if following is not None:
+        after = _parse(getattr(following, "timestamp", None))
+        if after is None:
+            return False, "the companion row after the attested boundary carries no parseable timestamp"
+        if after <= sealed_at:
+            return False, (
+                "the attested prefix is TOO SMALL: a companion row written at or before the seal "
+                "falls outside it, so the baseline understates the sealed history"
+            )
+    return True, ""
+
+
+def resolve_supplemental_baseline(
+    workspace: str,
+    anchor_id: str,
+    anchor_hash: str,
+    anchor_line: int,
+    anchor_archive: Mapping[str, object],
+    attestations: "Sequence[Mapping[str, object]]",
+    anchor_timestamp: str = "",
+    governed_witness_digest: str = "",
+    notes: "Optional[list[str]]" = None,
+) -> tuple[Optional[tuple[bool, int, str]], str]:
+    """A baseline for one legacy anchor, or a reason it stays fail-closed.
+
+    Every clause below is checked against an artifact, never against the
+    attestation's own assertion: the archive is re-hashed off disk, and the
+    companion prefix is re-derived from the live chain. The record supplies a
+    binding to check; it is not itself evidence.
+    """
+    if notes is None:
+        notes = []
+    matches: list[tuple[bool, int, str]] = []
+    for att in attestations:
+        att_line = att.get("line", 0)
+        if isinstance(att_line, int) and att_line <= anchor_line:
+            continue  # forward-only: an attestation cannot precede its anchor
+        if att.get(ATTESTS_ANCHOR_ID_KEY) != anchor_id:
+            continue
+        if att.get(ATTESTS_ANCHOR_HASH_KEY) != anchor_hash:
+            return None, "an attestation names this anchor with the wrong evidence hash"
+        # The denial is a REQUIREMENT, not decoration. An attestation binds an
+        # anchor to an archive; it must not be readable as rehabilitating the
+        # sealed history. Enforced as exact identities -- a truthy string or a
+        # missing key is malformed, and malformed fails closed.
+        if att.get(DENIES_PREDECESSOR_KEY) is not True:
+            return None, "a baseline attestation does not deny predecessor continuity"
+        if att.get(TRUST_RESTORED_KEY) is not False:
+            return None, "a baseline attestation does not deny predecessor trust restoration"
+        present = att.get(COMPANION_PRESENT_KEY)
+        count = att.get(COMPANION_ENTRIES_KEY)
+        tail = att.get(COMPANION_TAIL_KEY)
+        if not well_formed_baseline(present, count, tail):
+            return None, "a baseline attestation carries a malformed companion hash-chain baseline"
+        for key in ("archived_chain", "archived_sha256", "archived_bytes"):
+            if att.get(key) != anchor_archive.get(key):
+                return None, "a baseline attestation names a different archive than its anchor"
+        ok, why = _archive_matches(workspace, att)
+        if not ok:
+            return None, why
+        assert isinstance(count, int) and isinstance(tail, str)  # well_formed_baseline
+        ok, why = verify_companion_prefix(workspace, count, tail)
+        if not ok:
+            return None, why
+        # A valid prefix is necessary and NOT sufficient: it must be the prefix
+        # that existed at the seal. THE AUTHORITY FOR THAT IS A GOVERNED WITNESS,
+        # never the wall clock. A timestamp bracket does not just miss a
+        # post-recovery admission -- one row appended after the seal and stamped
+        # before it makes the bracket refuse the true boundary and ACCEPT N+1,
+        # certifying the overclaim. Reproduced; see boundary_witness.
+        witness, why = verify_witness(
+            workspace,
+            anchor_id,
+            anchor_hash,
+            att.get(WITNESS_CONTENT_KEY),
+            governed_witness_digest,
+        )
+        if witness is None:
+            return None, why
+        if witness.prefix_count != count or witness.prefix_tail != tail:
+            return None, "the attested baseline does not match the witnessed boundary"
+
+        # The clock is EVIDENCE, not authority. It may corroborate or contradict;
+        # it can never move a witnessed boundary, and it must never raise.
+        consistency = timestamp_consistency(workspace, count, anchor_timestamp)
+        if consistency == TS_CONTRADICTS:
+            notes.append("timestamp evidence contradicts the witnessed boundary")
+
+        matches.append((bool(present), count, tail))
+
+    if not matches:
+        return None, ""
+    if len(set(matches)) > 1:
+        return None, "competing baseline attestations disagree for one anchor"
+    # Byte-identical duplicates agree by definition and are collapsed rather
+    # than convicted: replaying the same claim adds nothing and removes nothing.
+    return matches[0], ""
+
+
+def _archive_matches(workspace: str, claim: Mapping[str, object]) -> tuple[bool, str]:
+    """Re-hash the named archive off disk and compare against the claim."""
+    import hashlib
+
+    name = str(claim.get("archived_chain") or "")
+    want_sha = str(claim.get("archived_sha256") or "")
+    want_bytes = claim.get("archived_bytes")
+    if not name or not want_sha:
+        return False, "a baseline attestation names no archive"
+    # REJECT a traversal-bearing claim; do not normalise it away. Passing the
+    # name through basename() would silently accept "../../etc/shadow" as
+    # "shadow" -- a claim that named something it had no business naming would
+    # be quietly rewritten into one that verifies. A name that is not already
+    # its own basename is malformed, and malformed fails closed.
+    if name != os.path.basename(name) or name in (os.curdir, os.pardir):
+        return False, "a baseline attestation names a non-basename archive path"
+    # A malformed byte length must REJECT, not skip the constraint. Guarding
+    # the comparison with isinstance meant a string, None or bool length
+    # bypassed the check entirely while looking stricter than it was.
+    if not isinstance(want_bytes, int) or isinstance(want_bytes, bool) or want_bytes < 0:
+        return False, "a baseline attestation carries a malformed archive byte length"
+    path = os.path.join(os.path.dirname(os.path.abspath(workspace)), name)
+    if not os.path.isfile(path):
+        return False, "the archive a baseline attestation binds is missing"
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+                size += len(chunk)
+    except OSError as exc:
+        # exc carries the absolute path; a public error must not leak it.
+        return False, f"the bound archive could not be read ({exc.__class__.__name__})"
+    if digest.hexdigest() != want_sha:
+        return False, "the bound archive does not match its attested digest"
+    if size != want_bytes:
+        return False, "the bound archive does not match its attested byte length"
+    return True, ""
+
+
+def well_formed_baseline(present: object, count: object, tail: object) -> bool:
+    """The ONE test for a companion hash-chain baseline.
+
+    Both the direct path (a baseline in the anchor's own metadata) and the
+    supplemental path (a baseline supplied by a later attestation) call this.
+    A second, weaker copy of this rule would be a way in, so there is exactly
+    one.
+    """
+    return bool(
+        isinstance(present, bool)
+        and isinstance(count, int)
+        and not isinstance(count, bool)
+        and count >= 0
+        and isinstance(tail, str)
+        and len(tail) == 128
+        and all(ch in "0123456789abcdef" for ch in tail)
+        and (count > 0 or tail == GENESIS_HASH)
+        and (present or (count == 0 and tail == GENESIS_HASH))
+    )
 
 
 def _served_anchors(workspace: str) -> tuple[tuple[int, str], ...]:
