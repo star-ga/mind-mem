@@ -31,7 +31,7 @@ import threading
 from datetime import date, datetime
 
 from .admissibility import is_admissible_status, workspace_release_ids
-from .block_parser import parse_file
+from .block_parser import canonical_day, parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
 from .connection_manager import ConnectionManager
 from .corpus_registry import corpus_label_for, discover_corpus_files
@@ -83,7 +83,7 @@ _BLOCK_ID_WEIGHT = 1.0
 #: be migrated into incrementally. Stored in ``meta``; a mismatch forces one
 #: full rebuild. v2 moved FACT sub-blocks out of ``blocks_fts`` into their own
 #: ``blocks_fts_facts`` surface so a derived row stops reweighting its parent.
-_FTS_SCHEMA_VERSION = "2"
+_FTS_SCHEMA_VERSION = "3"
 
 
 #: How many blocks one dialogue may contribute before later ones are held
@@ -909,7 +909,7 @@ def _insert_block(
             rel_path,
             block.get("_line", 0),
             block.get("Status", ""),
-            block.get("Date", ""),
+            canonical_day(block.get("Date", "")),
             speaker,
             tags_str,
             block.get("DiaID", ""),
@@ -995,7 +995,7 @@ def _insert_block(
                     rel_path,
                     block.get("_line", 0),
                     block.get("Status", "active"),
-                    card.get("date", block_date),
+                    canonical_day(card.get("date", block_date)),
                     card.get("speaker", ""),
                     fact_tags,
                     block.get("DiaID", ""),

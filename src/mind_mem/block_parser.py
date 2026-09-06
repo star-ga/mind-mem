@@ -68,6 +68,35 @@ _ENTITY_ID_RE = re.compile(
 # Both separators: a slash-dated corpus otherwise records no ``_dates`` at all.
 _DATE_RE = re.compile(r"\b(\d{4}[-/]\d{2}[-/]\d{2})\b")
 
+
+def canonical_day(raw: object) -> str:
+    """The leading calendar day of *raw* as ``YYYY-MM-DD``, or "" if there is none.
+
+    THE single place a ``Date:`` field becomes a comparable value. Both the
+    Python recall filter and the SQL push-down compare dates LEXICOGRAPHICALLY,
+    which is only valid on a canonical form: "/" is 0x2F and "-" is 0x2D, so a
+    slash-stamped day sorts as though it were the last instant of its year.
+    Measured on the shipped path before this existed, for a block really dated
+    2026-05-20 and stamped ``2026/05/20 (Wed) 02:21``: an ``until=2026-12-31``
+    bound DROPPED it and a ``since=2026-08-01`` bound SERVED it -- silent loss
+    in one direction and silent over-serving in the other, on the same block.
+
+    Only bounds inside the block's own calendar year were affected, because the
+    year digits are compared first; that is why the failure survived casual
+    testing.
+
+    Returns "" rather than raising: an unparseable date must remain "undated",
+    which every caller already handles, and must never become a date that
+    happens to sort somewhere convenient.
+    """
+    if not isinstance(raw, str):
+        return ""
+    m = _DATE_RE.search(raw)
+    if not m:
+        return ""
+    return m.group(1).replace("/", "-")
+
+
 # Negation patterns for detecting negated blocks
 _NEGATION_RE = re.compile(
     r"\b(not|never|don't|won't|shouldn't|cannot|can't|doesn't|didn't"

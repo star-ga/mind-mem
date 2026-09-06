@@ -60,7 +60,7 @@ from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 from ._recall_tokenization import tokenize
 from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
 from .block_maturity import apply_min_maturity_filter as _apply_min_maturity_filter
-from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
+from .block_parser import canonical_day, chunk_block, deduplicate_chunks, get_active, parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
 from .corpus_registry import discover_corpus_files
 from .enums import TaskStatus
@@ -457,16 +457,25 @@ class PostgresRecallBackend(RecallBackend):
 
 
 def _block_date(hit: dict) -> str | None:
-    """Return the block's date as an ISO-8601 string, or None when absent.
+    """Return the block's date as an ISO-8601 day, or None when absent.
 
     Each hit carries the original ``Date:`` block field as either ``Date``
     (verbatim case from markdown) or ``date`` (lowercased by some backends).
-    Returns whichever is present, stripped.
+
+    The value is NORMALISED, not merely stripped, because ``_in_date_range``
+    compares it lexicographically. Returning the raw field inverted bounds on
+    any non-ISO stamp: for a block really dated 2026-05-20 and written
+    ``2026/05/20 (Wed) 02:21``, ``until=2026-12-31`` dropped it and
+    ``since=2026-08-01`` served it. A previous fix for this edited the
+    same-named ``_block_date`` in ``memory_index``, which only feeds markdown
+    index generation and is not on this path -- so the defect it described
+    stayed live. Normalisation now lives in one shared function that both this
+    leg and the SQL push-down use.
     """
     for key in ("Date", "date"):
         v = hit.get(key)
         if isinstance(v, str) and v.strip():
-            return v.strip()
+            return canonical_day(v) or None
     return None
 
 
