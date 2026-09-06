@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1478 | **Est. tokens:** ~4417077
-**Generated:** 2026-09-06 14:47 UTC
+**Files:** 1481 | **Est. tokens:** ~4421373
+**Generated:** 2026-09-06 16:22 UTC
 
 ## Token Budget Guide
 
@@ -72,21 +72,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 229 | ~1055835 |
+| `src/mind_mem/` | 229 | ~1056983 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~47468 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
 | `src/mind_mem/importers/` | 9 | ~26660 |
 | `src/mind_mem/mcp/` | 3 | ~6417 |
 | `src/mind_mem/mcp/infra/` | 8 | ~12671 |
-| `src/mind_mem/mcp/tools/` | 29 | ~110195 |
+| `src/mind_mem/mcp/tools/` | 29 | ~110252 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11368 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 624 | ~1916351 |
+| `tests/` | 627 | ~1919442 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -679,7 +679,7 @@
 ### `src/mind_mem/`
 
 - `append_only.py` (~3657 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~25111 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~25378 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~6494 tok, huge) — mind-mem field-level audit sidecar — tamper-evident append-only ledger.
 - `audit_context.py` (~4198 tok, huge) — Request-scoped audit attribution for mind-mem's network transports.
 - `audit_pinned.py` (~3194 tok, huge) — Pinned-model audit pipeline — release-CI gate for ``mind-mem.json``.
@@ -713,7 +713,7 @@
 - `block_metadata.py` (~5685 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~8138 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_provenance.py` (~2728 tok, huge) — Provenance-rich blocks — optional actor/session/tool/source metadata.
-- `block_store.py` (~17187 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~18068 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `block_store_encrypted.py` (~5788 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `block_store_postgres.py` (~21229 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~3116 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
@@ -857,7 +857,7 @@
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~13694 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~13751 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~7091 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1811 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
@@ -1323,6 +1323,7 @@
 - `test_governance_bench.py` (~815 tok, large) — Tests for mind-mem governance benchmark suite."""
 - `test_governance_concurrency.py` (~1368 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_governance_raft.py` (~1398 tok, large) — v4.0 prep — Raft-style consensus wrapper for governance writes."""
+- `test_governance_receipt_ts_anchor.py` (~484 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `test_governance_scan_backends.py` (~2722 tok, huge) — Backend-aware governance ``scan`` — audit bugs #3 / #10.
 - `test_governed_artifact_writes.py` (~7353 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_clear_enumeration.py` (~4272 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1395,6 +1396,7 @@
 - `test_kg_fusion.py` (~2013 tok, huge) — Typed-knowledge-graph fusion into recall (opt-in, default OFF).
 - `test_knowledge_graph.py` (~3753 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ledger_hierarchy.py` (~8001 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_legacy_restore_symlink_confinement.py` (~1152 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_evidence.py` (~5244 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_filter.py` (~1781 tok, huge) — Unit tests for the optional lifecycle block field and recall filter.
 - `test_lineage_staleness.py` (~2161 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
@@ -1649,6 +1651,7 @@
 - `test_smart_chunker.py` (~8973 tok, huge) — Tests for smart_chunker.py — semantic-boundary document chunking."""
 - `test_smart_chunker_code.py` (~1135 tok, large) — Tests for code-aware chunking in smart_chunker.py."""
 - `test_smart_chunker_wiring.py` (~4909 tok, huge) — ``smart_chunker`` wired into the BM25 chunk-scoring boost.
+- `test_snapshot_path_confinement.py` (~1455 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_snapshot_snap_id.py` (~5713 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_spec_binding.py` (~3156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.

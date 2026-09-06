@@ -1183,7 +1183,10 @@ def rollback_proposal(receipt_ts: str, reason: str = "") -> str:
 
     import re
 
-    if not re.match(r"^\d{8}-\d{6}$", receipt_ts):
+    # \Z, not $: `$` matches before a trailing newline. apply_engine uses \Z for
+    # this same value, and on the gRPC route (fn(**request.args), no Pydantic
+    # model, no length pin) THIS is the first gate the value meets.
+    if not re.match(r"^\d{8}-\d{6}\Z", receipt_ts):
         return json.dumps({"error": f"Invalid receipt timestamp format: {receipt_ts}. Expected YYYYMMDD-HHMMSS."})
 
     if len(reason.strip()) < 8:

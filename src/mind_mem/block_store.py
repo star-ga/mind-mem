@@ -195,6 +195,24 @@ def _safe_copy(src: str, dst: str) -> None:
     shutil.copy2(src, dst)
 
 
+def _safe_snapshot_copy(snap_dir: str, src: str, relative: str) -> bool:
+    """Copy *src* to a confined path below *snap_dir*.
+
+    Snapshot destinations are usually derived from workspace paths, but the
+    destination directory can be supplied by a caller and may already contain
+    symlinks. Resolve the destination before creating its parent or copying;
+    otherwise a symlink such as ``snap/decisions`` can redirect a full
+    snapshot's bytes outside the snapshot tree.
+    """
+    try:
+        dst = _safe_child_path(snap_dir, relative)
+    except ValueError as exc:
+        _log.warning("snapshot_unsafe_dest", entry=relative, reason=str(exc))
+        return False
+    _safe_copy(src, dst)
+    return True
+
+
 def _build_cleanup_inventory(ws: str, roots: set[str]) -> dict[str, list[str]]:
     """Capture the pre-snapshot file inventory for touched top-level roots.
 
@@ -251,7 +269,9 @@ def _build_manifest(snap_dir: str, files: list[str], cleanup_inventory: dict[str
     """
     assert_ledger_free(files, what=f"snapshot manifest for {snap_dir}")
     normalized = [f.replace(os.sep, "/") for f in files]
-    manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+    # Write the manifest INSIDE the snapshot: a symlink at this path would
+    # otherwise redirect the write out of snap_dir entirely.
+    manifest_path = _safe_child_path(snap_dir, "MANIFEST.json")
     payload: dict[str, Any] = {"files": normalized, "version": 2}
     if cleanup_inventory:
         payload["cleanup_inventory"] = cleanup_inventory
@@ -259,20 +279,74 @@ def _build_manifest(snap_dir: str, files: list[str], cleanup_inventory: dict[str
         json.dump(payload, fh)
 
 
+def _drop_symlinks(src: str, names: list[str]) -> set[str]:
+    """``copytree`` ignore-callback: a snapshot never legitimately holds a symlink.
+
+    Dropping is deliberate, and ``symlinks=True`` is NOT the fix. That flag stops
+    the copy dereferencing and then plants the escaping symlink in the corpus,
+    where the parser follows it on read -- the same primitive, moved from copy
+    time to parse time. A product-written snapshot contains no symlinks at all
+    (``_safe_copy``/``copy2`` dereference when the snapshot is taken), so this is
+    behaviour-neutral for real snapshots and only bites crafted ones.
+    """
+    return {n for n in names if os.path.islink(os.path.join(src, n))}
+
+
+def _safe_intel_root(snap_dir: str) -> str:
+    """The snapshot's ``intelligence`` root, or "" when it escapes.
+
+    The restore leg validated each ITEM against this root while joining the root
+    itself raw -- so a symlinked ``<snap_dir>/intelligence`` pointed the whole
+    walk outside, and every item then validated cleanly against the symlink's
+    target. The comment there claimed protection the code did not provide.
+
+    Returns "" rather than raising because ``os.path.isdir("")`` is False, so the
+    caller's existing guard skips the leg. The WORKSPACE-side root is
+    deliberately NOT wrapped the same way: ``<ws>/intelligence`` as an operator
+    symlink to another volume is a legitimate configuration, and silently
+    skipping it would turn a restore into a partial restore.
+    """
+    try:
+        return _safe_child_path(snap_dir, "intelligence")
+    except ValueError as exc:
+        _log.warning("restore_unsafe_intel_root", snap_dir=snap_dir, reason=str(exc))
+        return ""
+
+
 def _read_manifest(snap_dir: str) -> dict[str, Any] | None:
-    """Read snapshot manifest, or None for legacy snapshots."""
-    manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+    """Read snapshot manifest, or None for legacy snapshots.
+
+    Raises ``ValueError`` when the manifest path escapes *snap_dir* -- a symlink
+    there otherwise makes the restore read and digest a foreign file. Failing
+    closed is already this function's contract: malformed JSON or manifest
+    shapes are refused before a restore can iterate attacker-controlled values.
+    """
+    manifest_path = _safe_child_path(snap_dir, "MANIFEST.json")
     if not os.path.exists(manifest_path):
         return None
     with open(manifest_path, encoding="utf-8") as fh:
         data = json.load(fh)
     if isinstance(data, list):
-        return {"files": data, "cleanup_inventory": {}, "version": 1}
-    return {
-        "files": data.get("files", []),
-        "cleanup_inventory": data.get("cleanup_inventory", {}),
-        "version": data.get("version", 1),
-    }
+        files = data
+        cleanup_inventory: Any = {}
+        version: Any = 1
+    elif isinstance(data, dict):
+        files = data.get("files", [])
+        cleanup_inventory = data.get("cleanup_inventory", {})
+        version = data.get("version", 1)
+    else:
+        raise ValueError("snapshot manifest must be a JSON object or legacy file list")
+
+    if not isinstance(files, list) or any(not isinstance(entry, str) for entry in files):
+        raise ValueError("snapshot manifest 'files' must be a list of strings")
+    if not isinstance(cleanup_inventory, dict):
+        raise ValueError("snapshot manifest 'cleanup_inventory' must be an object")
+    for root, entries in cleanup_inventory.items():
+        if not isinstance(root, str) or not isinstance(entries, list) or any(not isinstance(entry, str) for entry in entries):
+            raise ValueError("snapshot manifest cleanup inventory must map strings to string lists")
+    if not isinstance(version, int) or isinstance(version, bool):
+        raise ValueError("snapshot manifest 'version' must be an integer")
+    return {"files": files, "cleanup_inventory": cleanup_inventory, "version": version}
 
 
 def _is_removable_orphan(rel_posix: str, allowed: set[str]) -> bool:
@@ -1245,13 +1319,13 @@ class MarkdownBlockStore:
                 if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
                     continue  # nosec — path escapes workspace; skip it
                 if os.path.isfile(resolved):  # nosec — resolved is within ws_real (validated above)
-                    _safe_copy(resolved, os.path.join(snap_dir, rel_path))  # nosec — resolved validated; snap_dir is operator-controlled workspace subdirectory
-                    manifest_files.append(rel_path)
+                    if _safe_snapshot_copy(snap_dir, resolved, rel_path):
+                        manifest_files.append(rel_path)
             for f in SNAPSHOT_FILES:
                 src = os.path.join(ws, f)
                 if os.path.isfile(src):
-                    _safe_copy(src, os.path.join(snap_dir, f))
-                    manifest_files.append(f)
+                    if _safe_snapshot_copy(snap_dir, src, f):
+                        manifest_files.append(f)
         else:
             for d in SNAPSHOT_DIRS:
                 src_dir = os.path.join(ws, d)
@@ -1264,10 +1338,8 @@ class MarkdownBlockStore:
                                 # ``memory/`` is corpus AND ledger. Taking the
                                 # ledger is what makes the restore a rewind.
                                 continue
-                            dst_file = os.path.join(snap_dir, rel)
-                            os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                            _safe_copy(src_file, dst_file)
-                            manifest_files.append(rel)
+                            if _safe_snapshot_copy(snap_dir, src_file, rel):
+                                manifest_files.append(rel)
 
             intel_src = os.path.join(ws, "intelligence")
             if os.path.isdir(intel_src):
@@ -1279,16 +1351,14 @@ class MarkdownBlockStore:
                     for fname in files:
                         src_file = os.path.join(root, fname)
                         rel = os.path.relpath(src_file, ws)
-                        dst_file = os.path.join(snap_dir, rel)
-                        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                        _safe_copy(src_file, dst_file)
-                        manifest_files.append(rel)
+                        if _safe_snapshot_copy(snap_dir, src_file, rel):
+                            manifest_files.append(rel)
 
             for f in SNAPSHOT_FILES:
                 src = os.path.join(ws, f)
                 if os.path.isfile(src):
-                    _safe_copy(src, os.path.join(snap_dir, f))
-                    manifest_files.append(f)
+                    if _safe_snapshot_copy(snap_dir, src, f):
+                        manifest_files.append(f)
 
         _build_manifest(snap_dir, manifest_files, cleanup_inventory=cleanup_inventory)
         manifest_data = _read_manifest(snap_dir)
@@ -1407,7 +1477,7 @@ class MarkdownBlockStore:
                     os.unlink(tmp_dst)
                 elif os.path.isdir(tmp_dst):
                     shutil.rmtree(tmp_dst)
-                shutil.copytree(src, tmp_dst)
+                shutil.copytree(src, tmp_dst, ignore=_drop_symlinks)
                 # ``memory/`` is swapped wholesale here; carry the live
                 # ledgers across so the rmtree below cannot destroy them.
                 _carry_ledgers_into(ws, dst, tmp_dst)
@@ -1417,7 +1487,7 @@ class MarkdownBlockStore:
                     shutil.rmtree(dst)
                 os.rename(tmp_dst, dst)
 
-        intel_snap = os.path.join(snap_dir, "intelligence")
+        intel_snap = _safe_intel_root(snap_dir)
         intel_ws = os.path.join(ws, "intelligence")
         if os.path.isdir(intel_snap):
             for item in os.listdir(intel_snap):
@@ -1440,7 +1510,7 @@ class MarkdownBlockStore:
                         os.unlink(tmp_dst)
                     elif os.path.isdir(tmp_dst):
                         shutil.rmtree(tmp_dst)
-                    shutil.copytree(src, tmp_dst)
+                    shutil.copytree(src, tmp_dst, ignore=_drop_symlinks)
                     if os.path.islink(dst):
                         os.unlink(dst)
                     elif os.path.isdir(dst):

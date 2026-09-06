@@ -1560,8 +1560,15 @@ def generate_diff_text(ws, snap_dir, files_touched):
         abs_candidate = os.path.realpath(rel_path) if os.path.isabs(rel_path) else None
         if abs_candidate and abs_candidate.startswith(ws_real + os.sep):
             rel_path = os.path.relpath(abs_candidate, ws_real)
-        old_path = os.path.join(snap_dir, rel_path)
-        new_path = os.path.join(ws, rel_path)
+        # Confine BOTH sides. FilesTouched is proposal-supplied and only its
+        # ops' files are traversal-checked; an EXTRA entry reaches here
+        # unvalidated, and the normalisation above only catches ABSOLUTE paths.
+        # _safe_resolve is the validator this module already uses elsewhere.
+        try:
+            old_path = _safe_resolve(snap_dir, rel_path)
+            new_path = _safe_resolve(ws, rel_path)
+        except ValueError:
+            continue  # a FilesTouched entry escaping the workspace reads nothing
 
         old_lines = []
         new_lines = []
@@ -2187,7 +2194,17 @@ def rollback(ws, receipt_ts, reason="", strict=False):
     print(f"Restoring from snapshot: {snap_dir}")
     # Read the proposal id BEFORE the restore: it belongs in the record the
     # restore mints, and the receipt is the only place it is written down.
-    rolled_back_proposal = _proposal_id_from_receipt(os.path.join(snap_dir, "APPLY_RECEIPT.md"))
+    # The guarded twin of this exact read is 40 lines below at :2238, which
+    # routes the same literal filename through _safe_resolve. This one joined
+    # raw, so a symlinked receipt let a foreign file's Proposal: id be recorded
+    # as the thing that was rolled back. Audible on refusal, mirroring :2240 --
+    # a silent None here would look like "no receipt", which is a real state.
+    try:
+        _pre_receipt = _safe_resolve(snap_dir, "APPLY_RECEIPT.md")
+    except ValueError as exc:
+        print(f"WARNING: pre-restore receipt path escaped snapshot dir: {exc}", file=sys.stderr)
+        _pre_receipt = None
+    rolled_back_proposal = _proposal_id_from_receipt(_pre_receipt) if _pre_receipt is not None else None
     restore_snapshot(  # nosec — snap_dir validated by _safe_resolve above
         ws,
         snap_dir,
