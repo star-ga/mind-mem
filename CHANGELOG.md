@@ -2,6 +2,60 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## [Unreleased]
+
+### Added — a forked evidence chain has a way back that forges nothing
+
+`EvidenceChain` refuses to append to a store whose history did not load
+intact, and that refusal is correct: the in-memory chain is empty after a
+failed load, so an append would take `_GENESIS_HASH` as its `previous_hash`
+and root a second chain behind the untrusted tail. What it did not come with
+was a way back — a workspace whose ledger forked once could take no governed
+write ever again. Measured in the field on a 606-record store: **zero** records
+loaded, first break at line 30, **275** breaks in total (204 restarts at
+genesis, 71 forks from a stale head), the most recent one that same day.
+
+Recovery is deliberately not a repair. `_freeze_and_raise` already states the
+constraint the design obeys — *"repairing the history by rewriting hashes is
+never this code's decision"* — so the new `evidence_recovery` module **seals**
+instead:
+
+* `survey_chain_file()` reads the file end to end and classifies every break
+  (`genesis_restart`, `fork_from_stale_head`, `unknown_parent`,
+  `non_genesis_root`, `self_hash_mismatch`, `unreadable_record`,
+  `scheme_downgrade`). Deliberately not built on `verify_chain()`, which reads
+  the *loaded* entries and therefore has nothing to look at; and deliberately
+  not stopping at the first break the way the loader does, because a census
+  exists to say how much.
+* `recover_chain()` / `EvidenceChain.recover_by_reanchor()` archives the
+  damaged file byte-for-byte to `evidence_chain.jsonl.damaged-<UTC>`, proves
+  the copy faithful by digest before touching anything, drops its write bits,
+  and replaces the store with a single anchor record. That record links from
+  `_GENESIS_HASH`, carries the archive's sha256 **as its `payload_hash`** —
+  the digest is the thing being attested to, not a value alongside it — and
+  carries the record count, head hash and break census in `metadata`, which
+  the v3 preimage covers, so the census is as tamper-evident as the record.
+
+No stored hash is rewritten, no record is dropped or reordered, and the
+archived history still fails to verify afterwards with the same message it
+failed with before. That is the property: the break is made permanent and
+citable rather than made to go away. The new segment verifies from its own
+genesis and accepts governed writes again.
+
+The anchor is written under the existing `EvidenceAction.VERIFY` with
+`metadata["recovery_verb"] = "REANCHOR"`, following the precedent
+`lifecycle_evidence` set: a new enum member would make every older reader fail
+to load the chain, and a chain nobody older can read is a poor answer to a
+chain nobody can append to.
+
+**Explicit only.** Nothing reaches recovery from `__init__`, from `create()`,
+or from any read path — a ledger that heals itself when a process opens it is
+not tamper-evident. `recover_chain` refuses without `confirm=True`; the new
+`mm chain recover` refuses without `--confirm`, prints the damage census
+before acting on every run, and refuses outright on a chain that verifies
+clean. `mm chain survey` is read-only and exits 1 on damage so it can gate CI.
+`--store` exists so a recovery is rehearsed on a copy first.
+
 ## [5.0.2] - 2026-09-05
 
 ### Added — a snapshot has an identity, not just a directory

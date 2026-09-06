@@ -23,6 +23,7 @@ remain deferred (need ``watchdog`` and per-agent setup scripts).
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import os
@@ -3316,6 +3317,193 @@ def _cmd_anchor(args: argparse.Namespace) -> int:
     return 1 if result.skipped else 0
 
 
+# ---------------------------------------------------------------------------
+# chain — evidence-chain damage census and re-anchor recovery
+# ---------------------------------------------------------------------------
+
+#: The recovery declined and nothing on disk changed. Distinct from
+#: argparse's usage exit (2) so a script can tell "you asked wrong" from
+#: "there was nothing to do".
+_CHAIN_REFUSED: Final[int] = 3
+
+#: The recovery tried and could not finish — an unwritable archive, a lock
+#: nobody released. Separate from a refusal: something went wrong rather
+#: than being declined.
+_CHAIN_BAD_REQUEST: Final[int] = 2
+
+#: A damage census found breaks. ``chain survey`` exits with this so it can
+#: be used as a gate; ``chain recover`` never does.
+_CHAIN_DAMAGED: Final[int] = 1
+
+
+def _chain_store_path(args: argparse.Namespace) -> str:
+    """The evidence store the ``chain`` verbs act on.
+
+    ``--store`` wins so a recovery can be rehearsed against a copy before
+    it is run against the workspace — the only safe way to try this, since
+    the operation retires a ledger.
+    """
+    store: str = getattr(args, "store", "") or ""
+    if store:
+        return os.path.realpath(os.path.expanduser(store))
+    workspace: str = getattr(args, "workspace", "") or "."
+    return os.path.join(os.path.realpath(os.path.expanduser(workspace)), "memory", "evidence_chain.jsonl")
+
+
+def _print_damage_census(survey: Any, store: str, limit: int = 20) -> None:
+    """Print what a survey found, in line order, most useful facts first."""
+    print(f"store: {store}")
+    if survey.records == 0:
+        print("  no evidence record found")
+        return
+    print(f"  records:  {survey.records} ({survey.byte_size} bytes, sha256 {survey.sha256})")
+    print(f"  head:     {survey.head_hash}")
+    if not survey.is_damaged:
+        print("  verdict:  intact — links unbroken from genesis to head")
+        return
+    print(
+        f"  verdict:  DAMAGED — {len(survey.breaks)} break(s), "
+        f"first at line {survey.first_break_line}, last at line {survey.last_break_line}"
+    )
+    for kind, count in survey.census.items():
+        if count:
+            print(f"    {kind:<22} {count}")
+    print("  breaks:")
+    for brk in survey.breaks[:limit]:
+        print(f"    line {brk.line:<6} {brk.kind:<22} expected {brk.expected_previous[:16]}… got {brk.found_previous[:16]}…")
+    if len(survey.breaks) > limit:
+        print(f"    … and {len(survey.breaks) - limit} more (--limit 0 for all)")
+
+
+def _cmd_chain_survey(args: argparse.Namespace) -> int:
+    """``mm chain survey`` — read the evidence store and report every break.
+
+    Read-only in the strict sense: it opens the file, takes no lock,
+    creates nothing, and writes nothing. Safe on a live workspace and safe
+    on a store no ``EvidenceChain`` can load, which is the case it exists
+    for — a forked store loads zero records, so ``mind-mem-verify`` can say
+    only "compromised" while this says how much and where.
+
+    Exits 1 when the chain is damaged so it can be used as a gate.
+    """
+    from mind_mem.evidence_recovery import survey_chain_file
+
+    store = _chain_store_path(args)
+    if not os.path.isfile(store):
+        print(f"error: no evidence store at {store}", file=sys.stderr)
+        return _CHAIN_REFUSED
+
+    survey = survey_chain_file(store)
+    if args.json:
+        payload = survey.to_dict()
+        if args.limit:
+            payload["breaks"] = payload["breaks"][: args.limit]
+        print(json.dumps(payload, indent=2))
+    else:
+        _print_damage_census(survey, store, limit=args.limit if args.limit else len(survey.breaks))
+    return _CHAIN_DAMAGED if survey.is_damaged else 0
+
+
+def _cmd_chain_verify_archive(args: argparse.Namespace) -> int:
+    """``mm chain verify-archive`` — re-hash every archive the anchors attest.
+
+    Recovery records an archive's sha256 in a tamper-evident record, and until
+    this verb existed nothing ever read it back: deleting the archive left
+    ``verify_chain`` returning clean and a survey reporting "intact", because
+    the anchor named a file that was gone and no code looked. Recorded evidence
+    with no check behind it is a note, not tamper-evidence.
+
+    Read-only. Exits 1 if any archive is missing, unreadable or does not hash
+    to what its anchor committed to, so it can be used as a gate.
+
+    A store with NO anchors exits 1 as well, and says so: reporting "nothing to
+    check" as success is how a vacuous pass gets read as a clean bill.
+    """
+    from mind_mem.evidence_recovery import ARCHIVE_OK, verify_archives
+
+    store = _chain_store_path(args)
+    if not os.path.isfile(store):
+        print(f"error: no evidence store at {store}", file=sys.stderr)
+        return _CHAIN_REFUSED
+
+    checks = verify_archives(store)
+    if args.json:
+        print(json.dumps([dataclasses.asdict(c) for c in checks], indent=2))
+    else:
+        if not checks:
+            print(f"no recovery anchors in {store} — nothing attests an archive, so nothing was checked")
+        for c in checks:
+            print(f"  {c.status:10} {c.archive_name or '(unnamed)'}")
+            if c.status != ARCHIVE_OK:
+                print(f"             {c.detail}")
+                print(f"             expected sha256 {c.expected_sha256[:32]}...")
+                if c.actual_sha256:
+                    print(f"             actual   sha256 {c.actual_sha256[:32]}...")
+    if not checks:
+        return _CHAIN_DAMAGED
+    return 0 if all(c.status == ARCHIVE_OK for c in checks) else _CHAIN_DAMAGED
+
+
+def _cmd_chain_recover(args: argparse.Namespace) -> int:
+    """``mm chain recover`` — seal a damaged chain and re-anchor it.
+
+    Prints the damage census first, every time, including on the run that
+    acts: an operator retiring a governance ledger sees what is being
+    retired before it happens, not in a summary afterwards.
+
+    Without ``--confirm`` this is a report and nothing else. With it, the
+    damaged file is archived byte-for-byte and the store is replaced by a
+    single anchor record naming that archive and its sha256. No stored
+    hash is rewritten, no record is dropped, and the archive keeps failing
+    to verify — the break is made permanent, not repaired.
+    """
+    from mind_mem.evidence_recovery import ChainRecoveryRefused, recover_chain, survey_chain_file
+    from mind_mem.mind_filelock import LockTimeout
+
+    store = _chain_store_path(args)
+    if not os.path.isfile(store):
+        print(f"error: no evidence store at {store}", file=sys.stderr)
+        return _CHAIN_REFUSED
+
+    survey = survey_chain_file(store)
+    if not args.json:
+        _print_damage_census(survey, store)
+
+    if not survey.is_damaged:
+        print(
+            "refused: this chain verifies clean — recovery seals a broken history, it is not a tidy-up",
+            file=sys.stderr,
+        )
+        return _CHAIN_REFUSED
+
+    if not args.confirm:
+        print(
+            f"\nnothing was written. Re-run with --confirm to archive these {survey.records} record(s) "
+            f"beside the store and start a new segment anchored to their sha256.",
+        )
+        return 0
+
+    try:
+        result = recover_chain(store, actor=args.actor, reason=args.reason, confirm=True)
+    except ChainRecoveryRefused as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return _CHAIN_REFUSED
+    except (OSError, LockTimeout) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return _CHAIN_BAD_REQUEST
+
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print(f"\narchived {result.archived_records} record(s) to {result.archive_path}")
+        print(f"  sha256:  {result.archive_sha256}")
+        print("  mode:    read-only; the archive still fails to verify, which is the point")
+        print(f"anchored a new segment at {store}")
+        print(f"  anchor:  {result.anchor.evidence_id}")
+        print("  links from genesis; its payload_hash IS the archive digest above")
+    return 0
+
+
 def _cmd_verify_model(args: argparse.Namespace) -> int:
     from mind_mem.model_signing import ED25519_PUBLIC_KEY_BYTES, verify_model
 
@@ -4660,6 +4848,66 @@ def build_parser() -> argparse.ArgumentParser:
     p_anchor.add_argument("--actor", default="", help="Identity to attribute the anchoring to.")
     p_anchor.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     p_anchor.set_defaults(func=_cmd_anchor)
+
+    # ── chain — evidence-chain census and re-anchor recovery ─────────────
+    p_chain = sub.add_parser(
+        "chain",
+        help=(
+            "Evidence-chain damage census and re-anchor recovery. A store whose links "
+            "are broken loads zero records, so `mind-mem-verify` can only say "
+            "'compromised'; `survey` says how much and where, and `recover` seals the "
+            "damaged history and starts a new segment anchored to its sha256. No stored "
+            "hash is ever rewritten. Subcommands: survey, recover."
+        ),
+    )
+    chain_sub = p_chain.add_subparsers(dest="chain_action", required=True)
+
+    ch_survey = chain_sub.add_parser(
+        "survey",
+        help="Read the evidence store and report every linkage break. Writes nothing. Exits 1 when damaged.",
+    )
+    ch_survey.add_argument("workspace", nargs="?", default=".", help="Workspace path (default: current directory).")
+    ch_survey.add_argument("--store", default="", help="Survey this JSONL file instead of <workspace>/memory/evidence_chain.jsonl.")
+    ch_survey.add_argument("--limit", type=int, default=20, help="List at most this many breaks (0 for all).")
+    ch_survey.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    ch_survey.set_defaults(func=_cmd_chain_survey)
+
+    ch_verify = chain_sub.add_parser(
+        "verify-archive",
+        help=(
+            "Re-hash every archive a recovery anchor attests and compare against the "
+            "sha256 it recorded. Writes nothing. Exits 1 on any missing, unreadable or "
+            "altered archive, and on a store with no anchors."
+        ),
+    )
+    ch_verify.add_argument("workspace", nargs="?", default=".", help="Workspace path (default: current directory).")
+    ch_verify.add_argument("--store", default="", help="Check this JSONL file instead of <workspace>/memory/evidence_chain.jsonl.")
+    ch_verify.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    ch_verify.set_defaults(func=_cmd_chain_verify_archive)
+
+    ch_recover = chain_sub.add_parser(
+        "recover",
+        help=(
+            "Archive a damaged chain byte-for-byte and start a new segment whose first "
+            "record anchors the archive's sha256. Prints the census first, always. "
+            "Refuses on a chain that verifies clean, and writes nothing without --confirm."
+        ),
+    )
+    ch_recover.add_argument("workspace", nargs="?", default=".", help="Workspace path (default: current directory).")
+    ch_recover.add_argument(
+        "--store",
+        default="",
+        help="Recover this JSONL file instead of <workspace>/memory/evidence_chain.jsonl. Rehearse on a copy first.",
+    )
+    ch_recover.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Actually seal and re-anchor. Without it nothing is archived, replaced or written.",
+    )
+    ch_recover.add_argument("--actor", default="operator", help="Identity recorded in the anchor record.")
+    ch_recover.add_argument("--reason", default="", help="Free text recorded in the anchor's metadata.")
+    ch_recover.add_argument("--json", action="store_true", help="Emit machine-readable JSON for the result.")
+    ch_recover.set_defaults(func=_cmd_chain_recover)
 
     # ── mic — MIND IR graph serialization (mic@2 / mic-b) ─────────────────
     p_mic = sub.add_parser(

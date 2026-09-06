@@ -63,6 +63,7 @@ The sections below this index cover the frequently-used verbs in depth.
 | `mm config` | Read/write mind-mem.json. `config set` writes the key and re-attests .spec_binding.json in one step, so a setting change is not read back by GovernanceGate as config tampering. |
 | `mm audit-pinned` | Run the seven-check audit (and optional Ed25519 verify) on every entry in audit_pinned_models of mind-mem.json. Designed for release CI — non-zero exit on any HIGH finding or verify failure. |
 | `mm anchor` | Report corpus blocks that no write scope ever landed, and (with --apply) admit them under a restamp batch. The repair for the unanchored_blocks row of `mind-mem-verify`; content is rewritten unchanged and no status is minted, so anchoring cannot escalate a block. |
+| `mm chain` | Evidence-chain damage census and re-anchor recovery. A store whose links are broken loads zero records, so `mind-mem-verify` can only say 'compromised'; `survey` says how much and where, and `recover` seals the damaged history and starts a new segment anchored to its sha256. No stored hash is ever rewritten. Subcommands: survey, recover. |
 | `mm mic` | MIND IR graph serialization (mic@2 text + mic-b binary). Subcommands: convert, inspect. |
 | `mm inspect` | Print full block fields and provenance tree for a block ID. |
 | `mm explain` | Show per-stage retrieval scores (BM25 → vector → RRF → rerank) for a query. |
@@ -435,6 +436,82 @@ containing `tool`, `duration_ms`, `success`, and optionally `result_size`.
 | `--live` | off | Stream new events in real time |
 | `--last N` | 20 | Show last N calls (non-live mode) |
 | `--tool NAME` | (all) | Filter to a single tool name |
+
+---
+
+## Evidence-chain subcommands (5.0.2)
+
+`memory/evidence_chain.jsonl` is append-only and hash-linked. When its links
+break, `EvidenceChain` loads **zero** records — the loader stops at the first
+record it cannot trust rather than pass a verified prefix off as the history —
+and every governed write is then refused, because appending to a chain with no
+trustworthy tail would root a second chain at the genesis hash behind the
+untrusted one. `mind-mem-verify` can only report "compromised"; these two
+commands say how much, where, and what to do about it.
+
+Recovery **never repairs**. No stored hash is rewritten, no record is dropped
+or reordered. The damaged file is archived intact and a new chain is started
+whose first record anchors the archive's digest, so the break stays visible
+and citable forever.
+
+### `mm chain survey [workspace] [--store PATH] [--limit N] [--json]`
+
+Read the store end to end and report every linkage break, classified:
+
+| Kind | Meaning |
+|------|---------|
+| `genesis_restart` | A record claims the genesis hash as its parent while records precede it — a writer that loaded nothing and started over |
+| `fork_from_stale_head` | A record links to a real but earlier hash — two writers each believed they owned the tail |
+| `unknown_parent` | The named parent appears nowhere at or before the record |
+| `non_genesis_root` | The first record does not start at the genesis hash |
+| `self_hash_mismatch` | The record's own hash does not match its fields — tampering, not forking |
+| `unreadable_record` | The line is not an evidence record at all |
+| `scheme_downgrade` | A legacy-scheme record after a v3 one |
+
+Opens the file read-only, takes no lock, writes nothing, and creates nothing —
+safe on a live workspace. Exits **1** when the chain is damaged, so it works as
+a CI gate; **0** when intact; **3** when there is no store.
+
+```
+mm chain survey                      # the workspace's own chain
+mm chain survey --store /tmp/copy.jsonl --limit 0 --json
+```
+
+### `mm chain recover [workspace] [--store PATH] --confirm [--actor A] [--reason R]`
+
+Seal a damaged chain and re-anchor it. In order:
+
+1. **Print the census** — every run, including the run that acts, so nothing
+   is retired before the operator has seen what is being retired.
+2. **Archive** the store byte-for-byte to `evidence_chain.jsonl.damaged-<UTC>`,
+   prove the copy faithful by digest, and drop its write bits. An archive path
+   that already exists is refused, never overwritten.
+3. **Anchor** — replace the store with one record linked from the genesis hash,
+   whose `payload_hash` *is* the archive's sha256 and whose metadata carries
+   the record count, head hash and break census. Because the v3 preimage covers
+   `metadata`, that census is as tamper-evident as the record itself.
+
+Afterwards the new segment verifies from its own genesis and accepts governed
+writes again; the archive still fails to verify, which is the point.
+
+Refused — with nothing written — when the chain verifies clean (recovery seals
+a broken history; it is not a tidy-up), when the store is absent or empty, and
+whenever `--confirm` is absent. Exits **0** on success or on a dry run over a
+damaged chain, **3** on a refusal.
+
+```
+mm chain recover                                    # census only, writes nothing
+mm chain recover --confirm --actor nikolai --reason "3.8.3 genesis restarts"
+```
+
+Rehearse on a copy before running against a workspace — `--store` exists for
+exactly that, and it is the only safe way to try an operation that retires a
+ledger:
+
+```
+cp memory/evidence_chain.jsonl /tmp/rehearsal.jsonl
+mm chain recover --store /tmp/rehearsal.jsonl --confirm
+```
 
 ---
 

@@ -180,6 +180,45 @@ Two further rows in the same report are **not** ledgers
 `mind-mem.json` against its attestation, and `open_scopes` asks the evidence
 ledger which write scopes opened and never recorded a close (exit code 9).
 
+### When the evidence chain forks
+
+`EvidenceChain._load_from_file` stops at the first record it cannot trust and
+leaves the in-memory chain **empty** — deliberately, so a verified prefix
+never passes for the whole history. `create()` then refuses, because
+appending to a chain with no trustworthy tail would take the genesis hash as
+its parent and root a second chain behind the untrusted one, and the whole
+history would stop verifying rather than merely its tail.
+
+The refusal is correct and it is also a dead end, so recovery exists —
+`evidence_recovery`, surfaced as `mm chain survey` / `mm chain recover`. It
+does not repair. `_freeze_and_raise` states the rule the design obeys —
+*"repairing the history by rewriting hashes is never this code's decision"* —
+so recovery **seals** instead:
+
+1. Survey the file end to end (the loader stops at break one; a census must
+   not) and classify every break.
+2. Archive the damaged file byte-for-byte to a timestamped sibling, proven
+   faithful by digest before anything else is touched, and left read-only.
+   The name matches `corpus_registry.LEDGER_PATTERNS`, so a snapshot still
+   refuses to carry it off — an archived ledger is a ledger.
+3. Replace the store with a single anchor record linked from the genesis
+   hash, carrying the archive's sha256 as its `payload_hash` and the record
+   count, head hash and break census in `metadata` (which the v3 preimage
+   covers, so the census is tamper-evident too).
+
+No stored hash is rewritten and no record is dropped or reordered. The
+archive keeps failing to verify with the message it failed with before; the
+new segment verifies from its own genesis. The break becomes permanent and
+citable instead of disappearing — which is why the operation is explicit,
+reachable from no read path, and refused on a chain that verifies clean.
+
+One consequence to expect: `landed_block_ids` derives its answer from the
+CLOSE records in the *live* chain, so those move into the archive with
+everything else. On a chain that was already unloadable this costs nothing
+(an unloadable chain already reported zero landed ids), but on a recovered
+workspace `mind-mem-verify`'s `unanchored_blocks` row is answered by
+`mm anchor --apply`, not by the recovery.
+
 ## Components
 
 ## Core Modules

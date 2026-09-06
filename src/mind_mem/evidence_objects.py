@@ -51,7 +51,7 @@ import os
 import threading
 from datetime import datetime, timezone
 from enum import Enum
-from typing import NoReturn, Union
+from typing import TYPE_CHECKING, NoReturn, Union
 from uuid import uuid4
 
 from .admission import GovernanceBypassError
@@ -59,6 +59,12 @@ from .mind_filelock import FileLock, LockTimeout
 from .observability import get_logger, metrics
 from .preimage import preimage
 from .q1616 import hex_q16_16
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle broken for the runtime
+    # evidence_recovery operates ON this class, so it imports this module at
+    # module scope. The two recovery methods below import it back at call
+    # time; only the annotations need the names up here.
+    from .evidence_recovery import DamageSurvey, RecoveryResult
 
 _log = get_logger("evidence_objects")
 
@@ -764,6 +770,85 @@ class EvidenceChain:
             for ev in self._entries:
                 fh.write(json.dumps(ev.to_dict(), separators=(",", ":")) + "\n")
         _log.info("evidence_chain_exported", entries=len(self._entries), path=path)
+
+    def survey_damage(self) -> "DamageSurvey":
+        """Report every break in the stored chain, changing nothing.
+
+        Reads the **file**, not the loaded entries, because a forked store
+        loads zero entries: :meth:`_load_from_file` stops at the first
+        record it cannot trust, which is right for a loader and useless as
+        a census. :meth:`verify_chain` therefore answers "compromised" and
+        nothing more; this answers how much, where, and of what kind.
+
+        Read-only and always available — a frozen chain is exactly the one
+        an operator needs this for.
+
+        Returns:
+            A :class:`~mind_mem.evidence_recovery.DamageSurvey`. A
+            memory-only chain (no ``store_path``) surveys as empty.
+        """
+        from .evidence_recovery import survey_chain_file
+
+        return survey_chain_file(self._store_path or "")
+
+    def recover_by_reanchor(
+        self,
+        *,
+        actor: str,
+        reason: str = "",
+        confirm: bool = False,
+    ) -> "RecoveryResult":
+        """Seal this chain's damaged history and start a new segment.
+
+        The way back from the freeze :meth:`_freeze_and_raise` imposes,
+        and it obeys that method's own constraint: no stored hash is
+        rewritten, no record is dropped or reordered. The damaged file is
+        archived byte-for-byte to a timestamped sibling and this store is
+        replaced by a single anchor record — linked from ``_GENESIS_HASH``,
+        carrying the archive's sha256 as its ``payload_hash`` and the
+        break census in its metadata. The archived history still fails to
+        verify afterwards; that is what keeps the break visible.
+
+        **Never automatic.** Nothing calls this: not ``__init__``, not
+        :meth:`create`, not any read path. A ledger that healed itself
+        when a process opened it would not be tamper-evident, so recovery
+        is an operator action and refuses without *confirm*.
+
+        On success this chain is unfrozen in place — its entries become
+        the single anchor and its store offset is reset — so the caller
+        that recovered can append without reopening the store.
+
+        Args:
+            actor: Who is performing the recovery; recorded in the anchor.
+            reason: Free text recorded in the anchor's metadata.
+            confirm: Must be ``True`` for anything to happen.
+
+        Returns:
+            A :class:`~mind_mem.evidence_recovery.RecoveryResult`.
+
+        Raises:
+            ChainRecoveryRefused: If *confirm* is not ``True``, if this is a
+                memory-only chain, if the store is absent or empty, if the
+                stored chain verifies clean, or if the archive path is
+                taken. Nothing on disk changed in any of those cases.
+        """
+        from .evidence_recovery import ChainRecoveryRefused, recover_chain
+
+        if self._store_path is None:
+            raise ChainRecoveryRefused("refusing to re-anchor a memory-only chain: there is no stored history to archive")
+
+        result = recover_chain(self._store_path, actor=actor, reason=reason, confirm=confirm)
+
+        with self._lock:
+            # The store now holds exactly one record and this chain is the
+            # writer that put it there, so its view is current by
+            # construction rather than by re-reading. Clearing the freeze
+            # last means an exception anywhere above leaves the chain frozen.
+            self._entries = [result.anchor]
+            self._store_offset = os.path.getsize(self._store_path)
+            self._integrity_compromised = False
+            self._load_failure = None
+        return result
 
     def import_jsonl(self, path: str) -> None:
         """Load and verify a JSONL chain file, replacing current state.
