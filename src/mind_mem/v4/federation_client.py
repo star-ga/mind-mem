@@ -17,11 +17,14 @@ Passing ``cafile`` replaces the system trust store with the operator's
 own CA, and ``client_cert``/``client_key`` make the connection the
 client half of mutual TLS: together they bind the peer's identity.
 
-Certificate pinning is deliberately **not** implemented; the
-``pinned_pubkey_sha256`` argument exists solely to refuse loudly and
-name the decision rather than let a caller believe an argument that was
-silently ignored — see
-:data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION`.
+``pinned_pubkey_sha256`` adds certificate pinning on top of that. It is
+opt-in and off by default: a client that passes nothing opens exactly
+the connection it opened before pinning existed. When it is set, the
+peer's SubjectPublicKeyInfo fingerprint is checked after the handshake
+and *before* the request is written, so a peer whose key is not pinned
+never receives the request — see
+:data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION` for when to reach
+for it and what it costs.
 
 Example::
 
@@ -53,7 +56,7 @@ import ssl
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 from urllib.parse import quote, urlsplit
 
 from mind_mem.audit_context import outbound_audit_headers
@@ -138,7 +141,7 @@ class FederationClient:
         client_cert: str | None = None,
         client_key: str | None = None,
         client_key_password: str | None = None,
-        pinned_pubkey_sha256: str | None = None,
+        pinned_pubkey_sha256: str | Sequence[str] | None = None,
     ) -> None:
         """Build a client for one federation peer.
 
@@ -150,9 +153,11 @@ class FederationClient:
                 This is how a private-CA federation binds peer identity.
             client_cert, client_key, client_key_password: client half of
                 mutual TLS.
-            pinned_pubkey_sha256: **refused.** Accepted as a named
-                argument only so a caller who asks for pinning gets the
-                decision instead of silence — see
+            pinned_pubkey_sha256: SHA-256 of the peer's
+                SubjectPublicKeyInfo, as hex or base64, or a sequence of
+                them (pin the incoming key alongside the current one and
+                a renewal is not an outage). ``None`` — the default —
+                means no pinning and no behaviour change. See
                 :data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION`.
 
         Raises:
@@ -163,10 +168,6 @@ class FederationClient:
                 The client is not constructed, so no floorless connection
                 can be opened through it.
         """
-        if pinned_pubkey_sha256 is not None:
-            from mind_mem.v4.tls_floor import CERT_PINNING_DECISION  # noqa: PLC0415
-
-            raise FederationTransportError(f"pinned_pubkey_sha256 is not supported: {CERT_PINNING_DECISION}")
         # Issue #529 (1): scheme allowlist. urllib.request.urlopen
         # otherwise handles file://, ftp://, etc. so a base_url from a
         # config file / env var / peer-discovery handshake could turn
@@ -178,10 +179,10 @@ class FederationClient:
             )
         if not parts.netloc:
             raise FederationTransportError(f"federation base_url has no host: {base_url!r}")
-        if (client_key or client_cert or cafile or capath) and parts.scheme != "https":
+        if (client_key or client_cert or cafile or capath or pinned_pubkey_sha256) and parts.scheme != "https":
             raise FederationTransportError(
-                f"TLS options (cafile/capath/client_cert/client_key) were given for a {parts.scheme}:// base_url; "
-                "they would be silently ignored. Use https:// or drop them."
+                f"TLS options (cafile/capath/client_cert/client_key/pinned_pubkey_sha256) were given for a "
+                f"{parts.scheme}:// base_url; they would be silently ignored. Use https:// or drop them."
             )
         self._base = base_url.rstrip("/")
         self._base_scheme = parts.scheme
@@ -194,8 +195,12 @@ class FederationClient:
         # enforce the floor the constructor raises and there is no client
         # to open a floorless connection with.
         self._ssl_context: ssl.SSLContext | None = None
+        #: Canonical pin set, or None when this client does not pin. The
+        #: None case is the one that must stay free: no parsing, no
+        #: handler subclass, no per-connection check.
+        self._pins: frozenset[str] | None = None
         if parts.scheme == "https":
-            from mind_mem.v4.tls_floor import client_context  # noqa: PLC0415
+            from mind_mem.v4.tls_floor import client_context, normalise_pins  # noqa: PLC0415
 
             try:
                 self._ssl_context = client_context(
@@ -207,11 +212,21 @@ class FederationClient:
                 )
             except (OSError, ValueError) as exc:
                 raise FederationTransportError(f"federation TLS configuration is unusable: {exc}") from exc
+            if pinned_pubkey_sha256 is not None:
+                try:
+                    self._pins = normalise_pins(pinned_pubkey_sha256)
+                except ValueError as exc:
+                    raise FederationTransportError(f"federation certificate pin is unusable: {exc}") from exc
         # Issue #529 (2): same-origin redirect cap. Build an opener that
         # rejects redirects to a different scheme/host/port — blocks the
         # SSRF pivot to cloud metadata endpoints
         # (169.254.169.254, metadata.google.internal, etc.).
-        self._opener = _build_strict_opener(self._base_scheme, self._base_netloc, ssl_context=self._ssl_context)
+        self._opener = _build_strict_opener(
+            self._base_scheme,
+            self._base_netloc,
+            ssl_context=self._ssl_context,
+            pins=self._pins,
+        )
 
     # ------------------------------------------------------------------
     # Reader API
@@ -359,6 +374,17 @@ class FederationClient:
         except urllib.error.HTTPError as exc:
             self._raise_for_status(exc.code, _safe_read(exc))
         except urllib.error.URLError as exc:
+            # A pin mismatch arrives here because urllib wraps every
+            # OSError raised while connecting. Reported by name rather
+            # than as a generic "network error", so an operator whose
+            # peer rotated its key can tell that from a peer that is
+            # down. Guarded on self._pins so a client that never pinned
+            # takes the same branch, and the same import, it always did.
+            if self._pins is not None:
+                from mind_mem.v4.tls_floor import CertificatePinMismatch  # noqa: PLC0415
+
+                if isinstance(exc.reason, CertificatePinMismatch):
+                    raise FederationTransportError(f"federation peer rejected by certificate pin: {exc.reason}") from exc
             raise FederationTransportError(f"network error: {exc.reason}") from exc
         except ssl.SSLError as exc:
             # urllib only wraps OSError raised while *writing* the request;
@@ -429,6 +455,7 @@ def _build_strict_opener(
     netloc: str,
     *,
     ssl_context: ssl.SSLContext | None = None,
+    pins: frozenset[str] | None = None,
 ) -> urllib.request.OpenerDirector:
     """Build an opener with the same-origin redirect handler installed.
 
@@ -437,8 +464,18 @@ def _build_strict_opener(
     context's floor. Without it urllib falls back to
     ``ssl._create_default_https_context``, which has no floor above
     TLS 1.2 — which is exactly the state this replaced.
+
+    ``pins`` swaps that handler for one that checks the peer's public key
+    against the pin set before writing a request. It is only reached when
+    a caller asked for pinning: with ``pins=None`` this function builds
+    the same two handlers it always did.
     """
     handlers: list[urllib.request.BaseHandler] = [_SameOriginRedirectHandler(scheme, netloc)]
     if ssl_context is not None:
-        handlers.append(urllib.request.HTTPSHandler(context=ssl_context))
+        if pins:
+            from mind_mem.v4.tls_floor import pinned_https_handler  # noqa: PLC0415
+
+            handlers.append(pinned_https_handler(context=ssl_context, pins=pins))
+        else:
+            handlers.append(urllib.request.HTTPSHandler(context=ssl_context))
     return urllib.request.build_opener(*handlers)

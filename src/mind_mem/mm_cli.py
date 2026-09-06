@@ -1743,6 +1743,16 @@ def _cmd_skill_score(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+#: Passphrase for a TLS private key, read from the environment rather than
+#: taken as a flag: an argv value is visible to every process on the box.
+TLS_KEY_PASSWORD_ENV = "MIND_MEM_TLS_KEYFILE_PASSWORD"
+
+
+def _tls_keyfile_password() -> str | None:
+    """Return the configured TLS key passphrase, or None."""
+    return os.environ.get(TLS_KEY_PASSWORD_ENV) or None
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     from mind_mem.api.rest import run
 
@@ -1751,6 +1761,10 @@ def _cmd_serve(args: argparse.Namespace) -> int:
         port=args.port,
         workspace=_workspace(),
         allow_unauthenticated_localhost=args.allow_unauthenticated_localhost,
+        tls_certfile=args.tls_certfile,
+        tls_keyfile=args.tls_keyfile,
+        tls_keyfile_password=_tls_keyfile_password(),
+        tls_client_ca=args.tls_client_ca,
     )
     return 0
 
@@ -1760,12 +1774,17 @@ def _cmd_http_serve(args: argparse.Namespace) -> int:
     from mind_mem.http_transport import serve_http
 
     ws = _workspace()
-    print(f"mind-mem http-serve: workspace={ws} bind={args.host}:{args.port}")
+    scheme = "https" if args.tls_certfile else "http"
+    print(f"mind-mem http-serve: workspace={ws} bind={scheme}://{args.host}:{args.port}")
     thread, stop = serve_http(
         workspace=ws,
         host=args.host,
         port=args.port,
         allow_unauthenticated_localhost=args.allow_unauthenticated_localhost,
+        tls_certfile=args.tls_certfile,
+        tls_keyfile=args.tls_keyfile,
+        tls_keyfile_password=_tls_keyfile_password(),
+        tls_client_ca=args.tls_client_ca,
     )
     try:
         thread.join()
@@ -3895,6 +3914,31 @@ def _cmd_export(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _add_tls_arguments(parser: argparse.ArgumentParser) -> None:
+    """Attach the shared TLS listener flags to a ``serve``-style parser.
+
+    Both server commands take the same three, and both refuse a
+    half-configured listener rather than starting a plain-HTTP one under
+    a name the operator will read as encrypted. Passing none of them
+    leaves the plain listener exactly as it was.
+
+    There is deliberately no ``--tls-key-password``: an argv value is
+    readable by every process on the machine. Set
+    ``MIND_MEM_TLS_KEYFILE_PASSWORD`` instead.
+    """
+    parser.add_argument(
+        "--tls-certfile",
+        default=None,
+        help=("Serve TLS with this certificate chain. The listener is floored at TLS 1.3 — a TLS 1.2 peer cannot complete a handshake."),
+    )
+    parser.add_argument("--tls-keyfile", default=None, help="Private key for --tls-certfile (when not bundled in it).")
+    parser.add_argument(
+        "--tls-client-ca",
+        default=None,
+        help="Require client certificates signed by this CA (mutual TLS). Requires --tls-certfile.",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mm",
@@ -4396,6 +4440,7 @@ def build_parser() -> argparse.ArgumentParser:
             "authentication. Requires a loopback bind (127.0.0.1 / localhost / ::1)."
         ),
     )
+    _add_tls_arguments(p_serve)
     p_serve.set_defaults(func=_cmd_serve)
 
     # http-serve — stdlib-only HTTP transport (v3.9 candidate)
@@ -4413,6 +4458,7 @@ def build_parser() -> argparse.ArgumentParser:
             "non-token operators; refuses to start without it when no MIND_MEM_TOKEN is set."
         ),
     )
+    _add_tls_arguments(p_http)
     p_http.set_defaults(func=_cmd_http_serve)
 
     # daemon — v3.9 background scheduler (set-and-forget mode)

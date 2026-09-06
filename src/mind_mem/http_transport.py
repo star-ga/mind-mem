@@ -78,6 +78,7 @@ import json
 import logging
 import os
 import socket
+import ssl
 import threading
 import time
 from contextlib import AbstractContextManager
@@ -249,6 +250,50 @@ class _ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     # Bound the per-request handler thread join at shutdown so stop() is
     # deterministic and never blocks on a stuck client connection.
     block_on_close = True
+
+
+#: How long a peer gets to finish a TLS handshake. The handshake runs in
+#: the accept loop (that is where the connection is wrapped), so without a
+#: bound one client that connects and then says nothing stalls every other
+#: client. Only the handshake is bounded: the socket goes back to blocking
+#: afterwards, so request handling behaves exactly as it does over plain HTTP.
+_TLS_HANDSHAKE_TIMEOUT_SECS = 10.0
+
+
+class _TlsThreadingHTTPServer(_ThreadingHTTPServer):
+    """The same server, wrapping each accepted connection in TLS.
+
+    The listening socket is left plain and each *accepted* connection is
+    wrapped, rather than wrapping the listener itself, for one reason: a
+    connection that fails to hand shake can be closed explicitly here
+    instead of being dropped by an exception path that does not own it.
+    """
+
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        handler_cls: type[BaseHTTPRequestHandler],
+        *,
+        ssl_context: ssl.SSLContext,
+        handshake_timeout: float = _TLS_HANDSHAKE_TIMEOUT_SECS,
+    ) -> None:
+        self._ssl_context = ssl_context
+        self._handshake_timeout = handshake_timeout
+        super().__init__(server_address, handler_cls)
+
+    def get_request(self) -> tuple[Any, Any]:
+        sock, addr = super().get_request()
+        sock.settimeout(self._handshake_timeout)
+        try:
+            tls_sock = self._ssl_context.wrap_socket(sock, server_side=True)
+        except OSError:
+            # A refused handshake (no client certificate, TLS 1.2 peer, a
+            # port scanner) is an expected outcome, not a server fault.
+            # Close our end and let the accept loop's OSError guard drop it.
+            sock.close()
+            raise
+        tls_sock.settimeout(None)
+        return tls_sock, addr
 
 
 # Server-startup readiness handshake (deterministic boot). HTTPServer.__init__
@@ -1948,6 +1993,10 @@ def serve_http(
     host: str = DEFAULT_HOST,
     token: str | None = None,
     allow_unauthenticated_localhost: bool = False,
+    tls_certfile: str | None = None,
+    tls_keyfile: str | None = None,
+    tls_keyfile_password: str | None = None,
+    tls_client_ca: str | None = None,
 ) -> tuple[threading.Thread, Callable[[], None]]:
     """Start the v3.9 HTTP transport in a background thread.
 
@@ -1956,9 +2005,32 @@ def serve_http(
     not given explicitly. When binding to a loopback address the
     operator may pass ``allow_unauthenticated_localhost=True`` to
     bypass auth (matches the existing MCP HTTP transport posture).
+
+    Args:
+        tls_certfile, tls_keyfile, tls_keyfile_password: serve HTTPS
+            instead of plain HTTP. The listener is built through
+            :func:`mind_mem.v4.tls_floor.server_context`, so its context
+            carries the TLS 1.3 floor *before* the socket is wrapped and
+            a TLS 1.2 peer cannot complete a handshake (roadmap v4.0.0
+            Group D). Omitting them leaves the plain-HTTP transport
+            exactly as it was — nothing here is imported or read.
+        tls_client_ca: require client certificates signed by this CA
+            (mutual TLS). Requires ``tls_certfile``.
+
+    Raises:
+        ValueError: workspace missing, auth not configured, or a
+            half-configured TLS listener (a key with no certificate, or a
+            client CA with no listener certificate).
+        mind_mem.v4.tls_floor.TlsFloorUnavailable: TLS was asked for on
+            an interpreter that cannot enforce the floor. The socket is
+            never wrapped, so no floorless listener starts.
     """
     if not workspace:
         raise ValueError("workspace must be a non-empty path")
+    if tls_keyfile and not tls_certfile:
+        raise ValueError("tls_keyfile was given without tls_certfile; a TLS listener needs the certificate chain too")
+    if tls_client_ca and not tls_certfile:
+        raise ValueError("tls_client_ca requires tls_certfile: mutual TLS is a property of a TLS listener")
     if token is None:
         token = os.environ.get("MIND_MEM_TOKEN", "").strip() or None
     if not allow_unauthenticated_localhost and not token:
@@ -1990,7 +2062,25 @@ def serve_http(
         allow_unauthenticated_localhost=allow_unauthenticated_localhost,
         rate_limiter=rate_limiter,
     )
-    httpd = _ThreadingHTTPServer((host, port), handler_cls)
+    httpd: _ThreadingHTTPServer
+    if tls_certfile is None:
+        httpd = _ThreadingHTTPServer((host, port), handler_cls)
+    else:
+        # Imported here, not at module scope: a plain-HTTP listener — the
+        # default, and the loopback deployment — must not pay an import
+        # for a feature it did not ask for.
+        from .v4.tls_floor import server_context
+
+        httpd = _TlsThreadingHTTPServer(
+            (host, port),
+            handler_cls,
+            ssl_context=server_context(
+                tls_certfile,
+                tls_keyfile,
+                keyfile_password=tls_keyfile_password,
+                client_ca=tls_client_ca,
+            ),
+        )
     # serve_forever()'s poll interval bounds shutdown latency; tighten it so
     # _stop() returns promptly instead of waiting up to the 0.5s default.
     thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)

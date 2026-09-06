@@ -1,11 +1,10 @@
 """The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).
 
 The roadmap item asked for a TLS 1.3 minimum *and* certificate pinning.
-The architecture ruling for 5.0.2 kept the floor and **declined pinning**;
-:data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION` carries the reason and
-:class:`FederationClient` refuses a ``pinned_pubkey_sha256`` argument loudly
-rather than accepting one it would ignore. Both are pinned here so the
-decision cannot be quietly reversed or quietly forgotten.
+The floor is unconditional and lives here. Pinning is **opt-in** and lives in
+``test_network_cert_pinning.py``; what this file pins about it is the part
+that belongs to the floor — that a client which configures no pin behaves
+exactly as it did before pinning existed.
 
 "By construction" is the load-bearing claim, and it is what these tests
 attack: the floor lives on an :class:`ssl.SSLContext` that exists *before*
@@ -27,18 +26,15 @@ Copyright STARGA, Inc.
 
 from __future__ import annotations
 
-import contextlib
 import inspect
-import json
 import socket
 import ssl
-import threading
 import urllib.request
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
+from _tls_certs import mint_ca_and_certs, serving
 
 from mind_mem.v4 import tls_floor
 from mind_mem.v4.federation_client import FederationClient, FederationTransportError
@@ -84,17 +80,23 @@ class TestContextsCarryTheFloor:
         assert "\nimport os" not in source
 
 
-class TestPinningWasDeclinedOnPurpose:
-    def test_decision_is_recorded_with_its_reason_and_its_replacement(self) -> None:
+class TestPinningIsOptInOnTopOfTheFloor:
+    def test_decision_is_recorded_with_its_default_and_its_alternative(self) -> None:
         text = tls_floor.CERT_PINNING_DECISION
-        assert "NOT implemented" in text
+        assert "OPT-IN" in text
+        assert "off by default" in text
         # A recorded decision that does not say what to use instead is a
         # gap with better prose.
         assert "mutual TLS" in text
 
-    def test_federation_client_refuses_a_pin_instead_of_ignoring_it(self) -> None:
-        with pytest.raises(FederationTransportError, match="pinned_pubkey_sha256 is not supported"):
-            FederationClient("https://peer.example.com", pinned_pubkey_sha256="0" * 64)
+    def test_a_client_with_no_pin_is_the_client_that_shipped_before_pinning(self) -> None:
+        """The floor is unconditional; the pin is not. Nothing pins by default."""
+        client = FederationClient("https://peer.example.com")
+        assert client._pins is None
+        https = [h for h in client._opener.handlers if isinstance(h, urllib.request.HTTPSHandler)]
+        assert [type(h) for h in https] == [urllib.request.HTTPSHandler], (
+            "a client that configured no pin got something other than the stock HTTPSHandler"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -126,163 +128,13 @@ class TestFederationClientIsWiredToTheFloor:
 # ---------------------------------------------------------------------------
 
 
-def _mint_ca_and_certs(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
-    """Return (ca_pem, server_cert, server_key, client_cert, client_key).
-
-    Everything is minted into ``tmp_path`` and lives for a day; nothing
-    here touches a real trust store.
-    """
-    import datetime
-    import ipaddress
-
-    from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-    from cryptography.x509.oid import NameOID
-
-    now = datetime.datetime.now(datetime.timezone.utc)
-    not_before = now - datetime.timedelta(minutes=5)
-    not_after = now + datetime.timedelta(days=1)
-
-    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "mind-mem test CA")])
-    ca_cert = (
-        x509.CertificateBuilder()
-        .subject_name(ca_name)
-        .issuer_name(ca_name)
-        .public_key(ca_key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(not_before)
-        .not_valid_after(not_after)
-        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        # Newer OpenSSL builds refuse a chain whose CA carries no subject
-        # key identifier ("Missing Authority Key Identifier"), so the
-        # throwaway CA is minted with the same extensions a real one has.
-        .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
-        .add_extension(
-            x509.KeyUsage(
-                digital_signature=False,
-                content_commitment=False,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=True,
-                crl_sign=True,
-                encipher_only=False,
-                decipher_only=False,
-            ),
-            critical=True,
-        )
-        .sign(ca_key, hashes.SHA256())
-    )
-
-    def _leaf(common_name: str, *, loopback_san: bool) -> tuple[Any, Any]:
-        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        builder = (
-            x509.CertificateBuilder()
-            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)]))
-            .issuer_name(ca_name)
-            .public_key(key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(not_before)
-            .not_valid_after(not_after)
-            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-            .add_extension(
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
-                critical=False,
-            )
-            .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
-        )
-        if loopback_san:
-            # The IP SAN is deliberate: connecting by literal 127.0.0.1
-            # keeps name resolution (and a machine whose "localhost"
-            # answers ::1 first) out of the test.
-            builder = builder.add_extension(
-                x509.SubjectAlternativeName(
-                    [
-                        x509.DNSName("localhost"),
-                        x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
-                    ]
-                ),
-                critical=False,
-            )
-        return key, builder.sign(ca_key, hashes.SHA256())
-
-    server_key, server_cert = _leaf("localhost", loopback_san=True)
-    client_key, client_cert = _leaf("mind-mem test client", loopback_san=False)
-
-    pem = serialization.Encoding.PEM
-    fmt = serialization.PrivateFormat.TraditionalOpenSSL
-    no_enc = serialization.NoEncryption()
-
-    def _write(name: str, blob: bytes) -> Path:
-        path = tmp_path / name
-        path.write_bytes(blob)
-        return path
-
-    return (
-        _write("ca.pem", ca_cert.public_bytes(pem)),
-        _write("server.crt", server_cert.public_bytes(pem)),
-        _write("server.key", server_key.private_bytes(pem, fmt, no_enc)),
-        _write("client.crt", client_cert.public_bytes(pem)),
-        _write("client.key", client_key.private_bytes(pem, fmt, no_enc)),
-    )
-
-
 @pytest.fixture()
 def certs(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     pytest.importorskip(
         "cryptography",
         reason="cryptography is needed to mint the throwaway CA these handshake tests use",
     )
-    return _mint_ca_and_certs(tmp_path)
-
-
-class _RecordingHandler(BaseHTTPRequestHandler):
-    """Answers the one federation route these tests call, and records the hit."""
-
-    protocol_version = "HTTP/1.1"
-
-    def do_GET(self) -> None:  # noqa: N802 - stdlib naming
-        self.server.requests.append(self.path)  # type: ignore[attr-defined]
-        body = json.dumps({"version_vector": {"peer-a": 7}}).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, fmt: str, *args: Any) -> None:  # noqa: A003
-        return
-
-
-class _TlsServer(ThreadingHTTPServer):
-    daemon_threads = True
-
-    def __init__(self, ctx: ssl.SSLContext) -> None:
-        super().__init__(("127.0.0.1", 0), _RecordingHandler)
-        #: Paths of the requests that reached a handler. A handshake the
-        #: listener refuses never appears here — which is the point.
-        self.requests: list[str] = []
-        self.socket = ctx.wrap_socket(self.socket, server_side=True)
-
-    def handle_error(self, request: Any, client_address: Any) -> None:
-        # Refused connections are an expected outcome in half these tests;
-        # swallow rather than print a traceback into the pytest log.
-        return
-
-
-@contextlib.contextmanager
-def _serving(ctx: ssl.SSLContext) -> Iterator[_TlsServer]:
-    server = _TlsServer(ctx)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield server
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=5)
+    return mint_ca_and_certs(tmp_path)
 
 
 class TestRealHandshakes:
@@ -293,7 +145,7 @@ class TestRealHandshakes:
         client that refuses to connect to anything.
         """
         ca, cert, key, _cc, _ck = certs
-        with _serving(tls_floor.server_context(str(cert), str(key))) as server:
+        with serving(tls_floor.server_context(str(cert), str(key))) as server:
             client = FederationClient(f"https://127.0.0.1:{server.server_port}", cafile=str(ca), timeout=10.0)
             assert client.get_vclock("block-42") == {"peer-a": 7}
             assert server.requests == ["/federation/vclock/block-42"]
@@ -310,7 +162,7 @@ class TestRealHandshakes:
         legacy.load_cert_chain(str(cert), str(key))
         legacy.maximum_version = ssl.TLSVersion.TLSv1_2
 
-        with _serving(legacy) as server:
+        with serving(legacy) as server:
             # Server-side control: a client with no floor completes the
             # handshake against this exact listener.
             floorless = ssl.create_default_context(cafile=str(ca))
@@ -331,7 +183,7 @@ class TestRealHandshakes:
         (RM-2382): the mTLS half ships, the pinning half is declined.
         """
         ca, cert, key, client_cert, client_key = certs
-        with _serving(tls_floor.server_context(str(cert), str(key), client_ca=str(ca))) as server:
+        with serving(tls_floor.server_context(str(cert), str(key), client_ca=str(ca))) as server:
             url = f"https://127.0.0.1:{server.server_port}"
 
             # No client certificate -> the listener rejects the connection.

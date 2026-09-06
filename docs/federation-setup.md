@@ -92,8 +92,8 @@ Notes worth knowing before you run it:
 ## Transport security on the HTTP federation leg
 
 `FederationClient` is what one host uses to reach another's
-`/federation/*` endpoints. Three things are true about its TLS, and one of
-them is a decision rather than a feature:
+`/federation/*` endpoints. Three things are true about its TLS — one is
+unconditional, and two are switches an operator turns on:
 
 **A TLS 1.3 floor, enforced by construction.** An `https://` peer URL builds
 its `ssl.SSLContext` with `minimum_version = TLSv1_3` *before* the socket
@@ -117,19 +117,53 @@ client = FederationClient(
 )
 ```
 
-The inbound half is the same shape:
-`mind_mem.api.rest.run(tls_certfile=..., tls_keyfile=..., tls_client_ca=...)`
-serves HTTPS with the same floor, and `tls_client_ca` makes client
-certificates mandatory.
+The inbound half is the same shape, on either listener:
 
-**Certificate pinning is deliberately not implemented.** For a product whose
-default deployment is loopback, a pinned SPKI store turns every routine peer
-certificate renewal into a coordinated outage, and operators respond by
-disabling the pin — which is worse than never having had one. Use a private CA
-via `cafile` plus mTLS instead; that survives renewal. The decision is recorded
-in code as `mind_mem.v4.tls_floor.CERT_PINNING_DECISION`, and passing
-`pinned_pubkey_sha256=` to `FederationClient` raises with that text rather than
-accepting an argument it would ignore.
+```bash
+mm serve      --tls-certfile peer.crt --tls-keyfile peer.key --tls-client-ca ca.pem
+mm http-serve --tls-certfile peer.crt --tls-keyfile peer.key --tls-client-ca ca.pem
+```
+
+Both floor the listener at TLS 1.3 before the socket is wrapped, and
+`--tls-client-ca` makes client certificates mandatory. There is no
+`--tls-key-password` flag on purpose — an argv value is readable by every
+process on the machine; set `MIND_MEM_TLS_KEYFILE_PASSWORD` instead. The
+library entry points are `mind_mem.api.rest.run(...)` and
+`mind_mem.http_transport.serve_http(...)` with the same four arguments.
+
+**Certificate pinning, opt-in.**
+
+```python
+client = FederationClient(
+    "https://peer.internal:8765",
+    cafile="/etc/mind-mem/federation-ca.pem",
+    # SHA-256 of the peer's SubjectPublicKeyInfo — hex or base64, and a
+    # list during a rotation so the incoming key is pinned before it lands.
+    pinned_pubkey_sha256=["<current key>", "<next key>"],
+)
+```
+
+A pinned peer whose key is not in the set is refused **after the handshake and
+before the request is written**, so it never receives the request it would have
+been sent. This is the defence mutual TLS does not give you: a certificate that
+a trusted CA should never have issued — a mis-issuance, or a TLS-intercepting
+proxy whose root the machine trusts — passes ordinary verification and fails
+the pin.
+
+It is off by default, and the reason is operational rather than technical: a
+pinned key store turns every routine certificate renewal into a coordinated
+outage unless the next key was pinned first, and an operator surprised by that
+disables the pin, which is worse than never having had one. So pin the *key*
+(SPKI), not the certificate — a renewal that keeps the key keeps working — and
+add the incoming key **before** rotating. Mutual TLS with a private CA remains
+the recommended default for binding a peer's identity; pinning is the extra
+layer for a hostile network. The full reasoning is recorded in code as
+`mind_mem.v4.tls_floor.CERT_PINNING_DECISION`. Fingerprints are read out of a
+certificate with:
+
+```bash
+openssl x509 -in peer.crt -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256
+```
 
 ## Audit headers across a federation hop
 

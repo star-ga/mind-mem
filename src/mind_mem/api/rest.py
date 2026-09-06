@@ -1427,9 +1427,10 @@ def run(
         ``uvicorn.run`` path exactly as it was.
     tls_client_ca:
         Require client certificates signed by this CA (mutual TLS). This
-        is the supported way to bind a peer's identity; certificate
-        pinning is deliberately not offered — see
-        :data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION`.
+        is the recommended way to bind a peer's identity. Certificate
+        pinning is the outbound half of the same question and lives on
+        the client (``FederationClient(..., pinned_pubkey_sha256=...)``),
+        opt-in — see :data:`mind_mem.v4.tls_floor.CERT_PINNING_DECISION`.
     """
     try:
         import uvicorn  # type: ignore[import-untyped]
