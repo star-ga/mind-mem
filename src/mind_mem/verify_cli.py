@@ -368,7 +368,13 @@ def check_evidence_archives(workspace: str, report: VerifyReport, *, strict: boo
     from .evidence_recovery import ARCHIVE_OK, verify_archives
 
     path = os.path.join(workspace, "memory", "evidence_chain.jsonl")
-    checks = verify_archives(path) if os.path.isfile(path) else ()
+    try:
+        checks = verify_archives(path) if os.path.isfile(path) else ()
+    except (OSError, UnicodeError) as exc:
+        report.record("evidence_archives", False, f"cannot read recovery claims from evidence ledger: {exc}")
+        if report.exit_code == EXIT_OK:
+            report.exit_code = EXIT_EVIDENCE
+        return
     if not checks:
         report.record(
             "evidence_archives",

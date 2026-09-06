@@ -19,8 +19,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)" \
-  || ROOT_DIR="$(git rev-parse --show-toplevel)"
+ROOT_DIR="$(git rev-parse --show-toplevel)"
 
 SCRIPT="$ROOT_DIR/scripts/check_docs_alignment.py"
 [ -f "$SCRIPT" ] || exit 0
@@ -32,7 +31,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR \
 [ -z "$staged" ] && exit 0
 
 cd "$ROOT_DIR"
-PY="$(command -v python3.12 || command -v python3 || true)"
+PY="$(command -v python3.14 || command -v python3 || true)"
 [ -n "$PY" ] || exit 0
 "$PY" "$SCRIPT" --fix >/dev/null 2>&1 || exit 0
 

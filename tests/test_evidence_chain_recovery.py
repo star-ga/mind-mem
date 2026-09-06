@@ -818,3 +818,79 @@ def test_the_check_resolves_by_basename_only(tmp_path):
     os.remove(archive)
     check = verify_archives(store)[0]
     assert check.status == ARCHIVE_MISSING, f"the check followed a path out of the record instead of the store's own directory: {check}"
+
+
+@pytest.mark.parametrize("symlink", [False, True])
+def test_recovery_preserves_an_existing_pending_path(tmp_path, symlink):
+    store = _genesis_restart_store(tmp_path)
+    before = _sha256_file(store)
+    pending = store + ".reanchor-pending"
+    if symlink:
+        try:
+            os.symlink(store, pending)
+        except OSError as exc:
+            pytest.skip(f"symlink unavailable: {exc}")
+    else:
+        with open(pending, "wb") as handle:
+            handle.write(b"previous operation evidence")
+    error = None
+    try:
+        recover_chain(store, actor="operator", confirm=True)
+    except (ChainRecoveryRefused, OSError) as exc:
+        error = exc
+    assert _sha256_file(store) == before, "pending-path alias must never truncate the evidence store"
+    assert error is not None, "existing pending state must refuse recovery"
+    assert os.path.lexists(pending), "preexisting pending state belongs to its original owner"
+    assert not [name for name in os.listdir(os.path.dirname(store)) if ARCHIVE_INFIX in name]
+    if not symlink:
+        with open(pending, "rb") as handle:
+            assert handle.read() == b"previous operation evidence"
+
+
+def test_recovery_refuses_a_pending_symlink_created_after_precheck(tmp_path, monkeypatch):
+    import mind_mem.evidence_recovery as recovery
+
+    store = _genesis_restart_store(tmp_path)
+    before = _sha256_file(store)
+    pending = store + ".reanchor-pending"
+    # Verify host support before beginning the interleaving.
+    probe = tmp_path / "probe-link"
+    try:
+        os.symlink(store, probe)
+    except OSError as exc:
+        pytest.skip(f"symlink unavailable: {exc}")
+    os.unlink(probe)
+    original = recovery._anchor_metadata
+
+    def insert_alias(*args, **kwargs):
+        os.symlink(store, pending)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(recovery, "_anchor_metadata", insert_alias)
+    with pytest.raises((ChainRecoveryRefused, OSError)):
+        recover_chain(store, actor="operator", confirm=True)
+    assert _sha256_file(store) == before, "exclusive pending creation must close the check/write race"
+    assert os.path.islink(pending), "do not delete the path that won the race"
+    assert not [name for name in os.listdir(os.path.dirname(store)) if ARCHIVE_INFIX in name]
+
+
+@pytest.mark.parametrize("failure", [PermissionError("denied"), UnicodeError("invalid text")])
+def test_unreadable_live_recovery_claims_never_report_no_anchor(tmp_path, monkeypatch, failure):
+    import builtins
+
+    from mind_mem.verify_cli import VerifyReport, check_evidence_archives
+
+    store = _genesis_restart_store(tmp_path)
+    recover_chain(store, actor="operator", confirm=True)
+    real_open = builtins.open
+
+    def unreadable(path, *args, **kwargs):
+        if os.fspath(path) == store:
+            raise failure
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", unreadable)
+    report = VerifyReport(workspace=str(tmp_path), ok=True)
+    check_evidence_archives(str(tmp_path), report)
+    assert report.checks["evidence_archives"] is False
+    assert report.exit_code == EXIT_EVIDENCE

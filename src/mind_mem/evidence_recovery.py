@@ -650,6 +650,13 @@ def recover_chain(
 
         companion = _companion_baseline(store_path)
 
+        pending = f"{store_path}.reanchor-pending"
+        if os.path.lexists(pending):
+            raise ChainRecoveryRefused(
+                f"refusing to re-anchor {store_path!r}: pending path {pending!r} already exists; "
+                "its contents belong to a previous operation and were not changed"
+            )
+
         archive_path = archive_path_for(store_path)
         if os.path.exists(archive_path):
             raise ChainRecoveryRefused(
@@ -698,12 +705,20 @@ def recover_chain(
         # Write the new segment beside the store and rename it into place, so
         # the store is never observed half-replaced: a reader sees either the
         # damaged history or the anchored new one.
-        pending = f"{store_path}.reanchor-pending"
         line = json.dumps(anchor.to_dict(), separators=(",", ":")) + "\n"
-        with open(pending, "w", encoding="utf-8") as handle:
-            handle.write(line)
-            handle.flush()
-            os.fsync(handle.fileno())
+        try:
+            with open(pending, "x", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except FileExistsError as exc:
+            # A path can appear after the precheck. Never follow a symlink or
+            # truncate that winner; remove only the archive this operation made.
+            os.unlink(archive_path)
+            raise ChainRecoveryRefused(
+                f"refusing to re-anchor {store_path!r}: pending path {pending!r} appeared during recovery; "
+                "the store and competing pending path were not changed"
+            ) from exc
 
         # Last look before the store is replaced. The append lock serialises
         # every writer in this release, but the release that caused this
@@ -825,7 +840,7 @@ def verify_archives(store_path: str) -> tuple[ArchiveCheck, ...]:
     try:
         with open(store, "r", encoding="utf-8") as handle:
             lines = handle.readlines()
-    except OSError:
+    except FileNotFoundError:
         return ()
 
     for raw in lines:

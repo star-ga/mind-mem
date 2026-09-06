@@ -8,8 +8,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" \
-  || ROOT_DIR="$(git rev-parse --show-toplevel)"
+ROOT_DIR="$(git rev-parse --show-toplevel)"
 
 ANATOMY="$ROOT_DIR/ANATOMY.md"
 SCRIPT="$ROOT_DIR/scripts/anatomy.sh"

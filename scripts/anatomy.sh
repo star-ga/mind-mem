@@ -179,6 +179,10 @@ total_tokens=0
 
 # Get project name
 project_name=$(basename "$(pwd)")
+# A linked worktree's directory is an operator detail, not the project name.
+if common_git_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
+  project_name=$(basename "$(dirname "$common_git_dir")")
+fi
 
 # Count stats first
 declare -A dir_tokens

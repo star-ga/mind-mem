@@ -18,12 +18,9 @@ bash "/home/n/mind-sdlc/bin/sdlc" precommit "$(git rev-parse --show-toplevel)" |
 
 set -euo pipefail
 
-# Resolve to the REAL script directory. This hook is invoked through the
-# .git/hooks/pre-commit symlink, so a bare dirname "${BASH_SOURCE[0]}" yields
-# .git/hooks/ and every sibling lookup below silently misses — which, because a
-# hook that fails to run is a hook that permits the commit, would leave the
-# guard installed-but-inert. Prefer the git-tracked scripts/ dir.
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# Shared Git hooks may point into another checkout. Resolve helpers from the
+# active worktree so generated documentation and its staged source agree.
+SCRIPT_DIR="$(git rev-parse --show-toplevel)/scripts"
 
 # 1. Identity guard — refuses a commit that would enter history under a
 #    non-STARGA identity. Public history cannot be un-leaked, so this is a hard
