@@ -4,8 +4,8 @@
 **Not the ledger of record.** What a mutation was allowed to do is
 recorded by the gate in ``hash_chain_v2``; why it was allowed is
 recorded in ``evidence_chain``. This module is a *sidecar* of those
-two: it carries field-granular detail for the four doors that write to
-it -- three distinct verbs between them -- and nothing else reaches it. It is one of the four ledgers
+two: it carries per-act detail for the five doors that write to
+it -- six distinct verbs between them -- and nothing else reaches it. It is one of the four ledgers
 ``mind-mem-verify`` walks, and the only one whose rows name individual
 fields.
 
@@ -15,6 +15,8 @@ Everything that writes here, and nothing else does:
 * ``compliance.audit.record_redaction``  -> ``update_field``
 * ``auto_resolver`` (resolution applied) -> ``apply_proposal``
 * ``importers.quarantine``               -> ``create_block``
+* ``lifecycle_evidence.LifecycleRecorder`` -> ``demote_block`` /
+  ``archive_block`` / ``forget_block``
 
 :data:`VALID_OPERATIONS` is exactly that written set, and
 ``tests/test_ledger_hierarchy.py`` re-derives it from the source by
@@ -88,6 +90,16 @@ VALID_OPERATIONS = frozenset(
         "create_block",
         "update_field",
         "apply_proposal",
+        # RA.3 — the three lifecycle losses. Written by
+        # ``lifecycle_evidence.LifecycleRecorder`` and by nothing else,
+        # each beside the evidence-chain row that carries the same act
+        # as ``DEMOTE`` / ``ARCHIVE`` / ``FORGET``. They are here rather
+        # than in :data:`RETIRED_OPERATIONS` because a door does write
+        # them; the flag that door reads decides whether a given
+        # workspace has any, not whether the verb exists.
+        "demote_block",
+        "archive_block",
+        "forget_block",
     }
 )
 

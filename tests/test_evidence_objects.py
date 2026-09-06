@@ -57,6 +57,15 @@ def _make_evidence(chain: EvidenceChain, **kwargs) -> EvidenceObject:
 
 class TestEvidenceAction:
     def test_all_required_actions_exist(self):
+        """The committed membership: seven governance verbs, and only seven.
+
+        Equality, not containment, and deliberately so — a member is a wire
+        value that an older reader parses strictly, so one arriving unannounced
+        should fail here rather than in a fleet. RA.3's lifecycle losses do NOT
+        appear: they write ROLLBACK and carry their verb in
+        ``metadata["lifecycle_verb"]``, which is the same shape governing
+        DELETE uses and the reason both can be read by a 5.0.1 process.
+        """
         names = {a.name for a in EvidenceAction}
         required = {"PROPOSE", "APPLY", "ROLLBACK", "CONTRADICT", "DRIFT", "RESOLVE", "VERIFY"}
         assert required == names

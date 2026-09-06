@@ -32,6 +32,7 @@ from typing import Optional
 
 from .connection_manager import ConnectionManager
 from .event_fanout import EVENT_TIER_DEMOTED, EVENT_TIER_PROMOTED, emit_event
+from .lifecycle_evidence import DEMOTE_VERB, FORGET_VERB, SUBJECT_TIER_ASSIGNMENT, LifecycleRecorder
 from .observability import get_logger, metrics
 
 
@@ -227,6 +228,13 @@ class TierManager:
         # does not gets exactly the pre-5.0.1 behaviour, since ``emit_event``
         # with no workspace is a no-op.
         self._workspace = workspace
+        # RA.3 — the ledger receipt for a lifecycle loss. Resolved ONCE, here,
+        # because the flag behind it is a file read and this manager runs a
+        # whole decay sweep: probing per block would put a config parse on the
+        # path that demotes every stale block in the corpus. ``None`` for a
+        # workspace that has not opted in, and ``None`` without a disk read at
+        # all when there is no workspace to ask.
+        self._lifecycle: Optional[LifecycleRecorder] = LifecycleRecorder.for_workspace(workspace)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -350,6 +358,24 @@ class TierManager:
                 "reason_code": reason.value,
             },
         )
+        # RA.3 — the receipt, minted after the row has landed and only for a
+        # demotion that actually happened: the early returns above leave the
+        # ladder untouched, so recording them would put attempts in a ledger
+        # of acts. An event fan-out is not a record — it is in-process,
+        # default-off, and keeps nothing.
+        if self._lifecycle is not None:
+            self._lifecycle.record(
+                DEMOTE_VERB,
+                block_id,
+                subject=SUBJECT_TIER_ASSIGNMENT,
+                door="memory_tiers.TierManager.demote",
+                reason=f"tier demotion: {reason.value}",
+                detail={
+                    "from_tier": current.name,
+                    "to_tier": to_tier.name,
+                    "reason_code": reason.value,
+                },
+            )
         return True
 
     def get_blocks_by_tier(self, tier: MemoryTier) -> list[str]:
@@ -450,17 +476,39 @@ class TierManager:
                 return None
 
     def _evict(self, block_id: str) -> bool:
-        """Remove the block from tier tracking (used by run_decay_cycle)."""
+        """Remove the block from tier tracking (used by run_decay_cycle).
+
+        RA.3 — this destroys a ``block_tiers`` row outright, so it earns a
+        ``FORGET`` receipt. The receipt says ``subject=tier_assignment``
+        and it must: the block's text is untouched, ``BlockStore.get_by_id``
+        still resolves it, and a row implying the block itself was
+        destroyed would be a false statement sealed under a hash.
+        """
+        # Read before the delete or there is nothing left to name. Only on
+        # the eviction path, which is rare — the decay sweep already holds
+        # the tier for its own decision and this costs one extra read per
+        # block that actually dies, not per block examined.
+        tier = self.get_tier(block_id) if self._lifecycle is not None else None
         with self._lock:
             try:
                 with self._conn_mgr.write_lock:
                     conn = self._conn_mgr.get_write_connection()
                     cur = conn.execute("DELETE FROM block_tiers WHERE id = ?", (block_id,))
                     conn.commit()
-                    return cur.rowcount > 0
+                    evicted = cur.rowcount > 0
             except sqlite3.Error as exc:
                 _log.warning("evict_failed", block_id=block_id, error=str(exc))
                 return False
+        if evicted and self._lifecycle is not None and tier is not None:
+            self._lifecycle.record(
+                FORGET_VERB,
+                block_id,
+                subject=SUBJECT_TIER_ASSIGNMENT,
+                door="memory_tiers.TierManager._evict",
+                reason="tier ttl expired: ladder record destroyed",
+                detail={"from_tier": tier.name},
+            )
+        return evicted
 
     # ------------------------------------------------------------------
     # Semi-private helper used by tests to pre-register blocks

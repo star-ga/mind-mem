@@ -2,8 +2,9 @@
 """mind-mem Evidence Objects — structured, tamper-evident governance records.
 
 Every governance decision (propose, apply, rollback, contradiction, drift,
-resolve, verify) gets an immutable evidence record that is self-hashing and
-chain-linked. The chain can be verified at any point to detect tampering.
+resolve, verify) and every lifecycle loss (demote, archive, forget) gets an
+immutable evidence record that is self-hashing and chain-linked. The chain
+can be verified at any point to detect tampering.
 
 Hash computation:
     payload_hash   = sha256(canonical_payload_bytes)
@@ -18,6 +19,9 @@ Integration points (do not import here — document only):
     apply_engine.py        — Create APPLY evidence on successful proposal apply.
     contradiction_detector.py — Create CONTRADICT evidence when conflicts found.
     drift_detector.py      — Create DRIFT evidence when belief evolution detected.
+    lifecycle_evidence.py  — Create DEMOTE / ARCHIVE / FORGET evidence when a
+                             block loses standing, leaves the served surface,
+                             or has its ladder record destroyed.
 
 Zero external deps — dataclasses, enum, hashlib, json, os, uuid (all stdlib).
 
@@ -164,6 +168,13 @@ class EvidenceAction(str, Enum):
     DRIFT = "DRIFT"
     RESOLVE = "RESOLVE"
     VERIFY = "VERIFY"
+
+    # --- Lifecycle losses (RA.3). ------------------------------------
+    # The seven members above cover content arriving, being withdrawn,
+    # and being argued about. None of them covers a block quietly
+    # ceasing to be found, which is what a tier demotion, a tier
+    # eviction and an archive move each do — so those three were the
+    # only governed acts in the product that left no receipt at all.
 
     @classmethod
     def parse(cls, raw: str) -> Union["EvidenceAction", UnknownAction]:

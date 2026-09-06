@@ -45,6 +45,13 @@ from datetime import datetime, timedelta
 
 from .block_parser import parse_file
 from .enums import IngestTier, TaskStatus
+
+# Aliased: this module already defines its own ARCHIVE_VERB ("MIGRATE") for
+# the governance scope at line 75, and an unaliased import is silently
+# shadowed by it -- which sent "MIGRATE" to the lifecycle recorder and got
+# every archive receipt dropped as an unknown verb.
+from .lifecycle_evidence import ARCHIVE_VERB as LIFECYCLE_ARCHIVE_VERB
+from .lifecycle_evidence import SUBJECT_BLOCK, LifecycleRecorder
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
@@ -178,6 +185,13 @@ def archive_completed_blocks(ws: str, days: int = 90, dry_run: bool = False) -> 
 
     moved_ids = [str(b["_id"]) for _rel, _path, _arch, to_archive in plan for b in to_archive]
 
+    # RA.3 — resolved ONCE for the whole sweep, before a byte moves and
+    # after the dry-run return above, so a preview neither writes a receipt
+    # nor reads the flag that decides whether to. ``None`` when the
+    # workspace has not opted in, which is the only cost a disabled
+    # workspace pays per block.
+    lifecycle = LifecycleRecorder.for_workspace(ws)
+
     # Imported here, as the delete doors import it: the governance layer
     # is not a dependency of importing this module, only of running a
     # sweep that rewrites the corpus.
@@ -197,22 +211,40 @@ def archive_completed_blocks(ws: str, days: int = 90, dry_run: bool = False) -> 
             "files": [rel for rel, _p, _a, _t in plan],
         },
     ) as receipt:
-        for _rel_path, path, archive_rel, to_archive in plan:
-            archived.extend(_archive_one_file(ws, path, archive_rel, to_archive))
+        for rel_path, path, archive_rel, to_archive in plan:
+            archived.extend(_archive_one_file(ws, path, archive_rel, to_archive, source_rel=rel_path, lifecycle=lifecycle))
         _log.info("compaction_archived", blocks=len(archived), admission=receipt.entry_id)
 
     return archived
 
 
-def _archive_one_file(ws: str, path: str, archive_rel: str, to_archive: list[dict]) -> list[str]:
+def _archive_one_file(
+    ws: str,
+    path: str,
+    archive_rel: str,
+    to_archive: list[dict],
+    *,
+    source_rel: str,
+    lifecycle: LifecycleRecorder | None,
+) -> list[str]:
     """Move *to_archive* out of *path* into *archive_rel*; return the action lines.
 
     Runs inside the caller's open ``admit_batch`` scope. Split out of
     :func:`archive_completed_blocks` so the planning half and the moving
     half are each readable on their own; the body is the pre-5.0.2 move
     verbatim, because the defect was the missing scope and not this.
+
+    RA.3 — each block that really moved earns an ``ARCHIVE`` receipt naming
+    it, minted after the source file has been rewritten. The batch
+    admission above says a run happened and how many blocks it planned to
+    move; only these rows say WHICH block stopped being recallable, which
+    is the question an auditor asks about a block nobody can find.
     """
     moved: list[str] = []
+    #: Ids whose raw text was actually located and written to the archive.
+    #: A block the extractor could not find moved nothing, so it earns no
+    #: receipt — a row for it would claim a relocation that never happened.
+    relocated: list[str] = []
     archive_path = os.path.join(ws, archive_rel)
 
     with FileLock(path):
@@ -227,6 +259,7 @@ def _archive_one_file(ws: str, path: str, archive_rel: str, to_archive: list[dic
             block_text = _extract_block_text(content, b["_id"])
             if block_text:
                 archive_lines.append(block_text)
+                relocated.append(str(b["_id"]))
 
         if not archive_lines:
             return moved
@@ -250,6 +283,21 @@ def _archive_one_file(ws: str, path: str, archive_rel: str, to_archive: list[dic
         with open(tmp_path, "w", encoding="utf-8") as f:
             f.write(new_content)
         os.replace(tmp_path, path)
+
+    # The blocks are out of the file of record. Report them under the scope
+    # that authorised it — after the rewrite and outside the file lock, at
+    # the point ``compact_signals`` reports its own removals.
+    if lifecycle is not None:
+        for block_id in relocated:
+            lifecycle.record(
+                LIFECYCLE_ARCHIVE_VERB,
+                block_id,
+                subject=SUBJECT_BLOCK,
+                door="compaction.archive_completed_blocks",
+                target_file=archive_rel,
+                reason=f"retention archive: moved out of {source_rel}",
+                detail={"from_file": source_rel, "to_file": archive_rel},
+            )
 
     for b in to_archive:
         moved.append(f"Archived {b['_id']} ({b.get('Status')}) -> {archive_rel}")

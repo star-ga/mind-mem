@@ -240,8 +240,10 @@ def list_evidence(
 
     Args:
         block_id: Filter to evidence records for this block ID (optional).
-        action: Filter by evidence action type — PROPOSE, APPLY, ROLLBACK,
-                CONTRADICT, DRIFT, RESOLVE, VERIFY (optional).
+        action: Filter by evidence action type — the seven governance verbs
+                (PROPOSE, APPLY, ROLLBACK, CONTRADICT, DRIFT, RESOLVE,
+                VERIFY) plus the three lifecycle losses (DEMOTE, ARCHIVE,
+                FORGET) (optional).
         limit: Maximum number of records to return (default 20).
 
     Returns:
