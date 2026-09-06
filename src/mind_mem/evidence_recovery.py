@@ -134,6 +134,11 @@ RECOVERY_VERB = "REANCHOR"
 #: ``metadata`` key carrying :data:`RECOVERY_VERB`.
 RECOVERY_VERB_KEY = "recovery_verb"
 
+#: Hashed anchor fields binding the retained companion hash-chain prefix.
+COMPANION_PRESENT_KEY = "companion_hash_chain_present"
+COMPANION_ENTRIES_KEY = "companion_hash_chain_entries"
+COMPANION_TAIL_KEY = "companion_hash_chain_tail"
+
 #: The :class:`~mind_mem.evidence_objects.EvidenceAction` the anchor is
 #: written under. See :data:`RECOVERY_VERB`.
 RECOVERY_ACTION = EvidenceAction.VERIFY
@@ -503,7 +508,34 @@ def _fsync_directory(path: str) -> None:
         os.close(fd)
 
 
-def _anchor_metadata(survey: DamageSurvey, archive_path: str, archive_sha256: str, reason: str) -> dict:
+def _companion_baseline(store_path: str) -> tuple[bool, int, str]:
+    """Read the companion hash-chain count and tail without creating it."""
+    from .hash_chain_v2 import GENESIS_HASH, HashChainV2
+
+    db_path = os.path.join(os.path.dirname(os.path.abspath(store_path)), "hash_chain_v2.db")
+    if not os.path.isfile(db_path):
+        return False, 0, GENESIS_HASH
+    try:
+        chain = HashChainV2.open_readonly(db_path)
+        ok, broken_at = chain.verify_chain()
+        if not ok:
+            raise ChainRecoveryRefused(f"refusing to bind companion hash chain {db_path!r}: its own chain breaks at entry {broken_at}")
+        entries = chain.length
+        latest = chain.get_latest(1) if entries else []
+    except ChainRecoveryRefused:
+        raise
+    except Exception as exc:
+        raise ChainRecoveryRefused(f"refusing to bind unreadable companion hash chain {db_path!r}: {exc}") from exc
+    return True, entries, latest[-1].entry_hash if latest else GENESIS_HASH
+
+
+def _anchor_metadata(
+    survey: DamageSurvey,
+    archive_path: str,
+    archive_sha256: str,
+    reason: str,
+    companion: tuple[bool, int, str],
+) -> dict:
     """The claim the anchor makes about the history it seals.
 
     Every value here is covered by the record's ``evidence_hash`` — the v3
@@ -515,6 +547,9 @@ def _anchor_metadata(survey: DamageSurvey, archive_path: str, archive_sha256: st
         RECOVERY_VERB_KEY: RECOVERY_VERB,
         "continues_predecessor_chain": False,
         "predecessor_trust_restored": False,
+        COMPANION_PRESENT_KEY: companion[0],
+        COMPANION_ENTRIES_KEY: companion[1],
+        COMPANION_TAIL_KEY: companion[2],
         "archived_chain": os.path.basename(archive_path),
         "archived_sha256": archive_sha256,
         "archived_bytes": survey.byte_size,
@@ -613,6 +648,8 @@ def recover_chain(
                 "for nothing"
             )
 
+        companion = _companion_baseline(store_path)
+
         archive_path = archive_path_for(store_path)
         if os.path.exists(archive_path):
             raise ChainRecoveryRefused(
@@ -654,7 +691,7 @@ def recover_chain(
             # The payload being attested to IS the archived history, so its
             # digest is the payload hash — not a value carried alongside one.
             payload_hash=archive_sha256,
-            metadata=_anchor_metadata(survey, archive_path, archive_sha256, reason),
+            metadata=_anchor_metadata(survey, archive_path, archive_sha256, reason, companion),
             confidence=1.0,
         )
 
@@ -678,7 +715,13 @@ def recover_chain(
         # rename; it cannot close it, which is why the operator is told to
         # stop the writers first.
         final_sha256, _ = _sha256_and_size(store_path)
-        if final_sha256 != survey.sha256:
+        try:
+            final_companion = _companion_baseline(store_path)
+        except ChainRecoveryRefused:
+            os.unlink(pending)
+            os.unlink(archive_path)
+            raise
+        if final_sha256 != survey.sha256 or final_companion != companion:
             # Unwind completely rather than leave a half-done recovery: the
             # archive is now a *prefix* of the store, not the history, and a
             # file named for archived history that is missing a record is
@@ -688,7 +731,8 @@ def recover_chain(
             os.unlink(archive_path)
             raise ChainRecoveryRefused(
                 f"refusing to re-anchor {store_path!r}: the store changed while the recovery "
-                f"ran (surveyed {survey.sha256}, now {final_sha256}) — another writer appended, "
+                f"ran (evidence sha256 {survey.sha256} -> {final_sha256}; companion "
+                f"{companion!r} -> {final_companion!r}) — another writer appended, "
                 "and replacing the store now would destroy a record the archive does not hold. "
                 "Nothing was kept: the store is untouched and the partial archive was removed. "
                 "Stop every writer on this workspace and re-run"

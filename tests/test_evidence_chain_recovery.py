@@ -28,10 +28,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 
 import pytest
 
+from mind_mem.cross_ledger import reconcile
 from mind_mem.evidence_objects import (
     _GENESIS_HASH,
     EvidenceAction,
@@ -47,6 +49,9 @@ from mind_mem.evidence_recovery import (
     ARCHIVE_UNREADABLE,
     BREAK_FORK_FROM_STALE_HEAD,
     BREAK_GENESIS_RESTART,
+    COMPANION_ENTRIES_KEY,
+    COMPANION_PRESENT_KEY,
+    COMPANION_TAIL_KEY,
     RECOVERY_VERB,
     RECOVERY_VERB_KEY,
     ChainRecoveryRefused,
@@ -54,6 +59,8 @@ from mind_mem.evidence_recovery import (
     survey_chain_file,
     verify_archives,
 )
+from mind_mem.hash_chain_v2 import GENESIS_HASH as COMPANION_GENESIS_HASH
+from mind_mem.hash_chain_v2 import HashChainV2, head_path
 from mind_mem.verify_cli import EXIT_EVIDENCE, verify_workspace
 
 # ---------------------------------------------------------------------------
@@ -128,6 +135,35 @@ def _clean_store(tmp_path) -> str:
     store = str(tmp_path / "memory" / "evidence_chain.jsonl")
     _seed(store, 4)
     return store
+
+
+def _seed_companion(store: str, n: int = 3, prefix: str = "retained") -> tuple[str, str]:
+    db_path = os.path.join(os.path.dirname(store), "hash_chain_v2.db")
+    chain = HashChainV2(db_path)
+    for index in range(n):
+        chain.append(f"{prefix}-{index}", "WRITE", f"content-{prefix}-{index}")
+    tail = chain.get_latest(1)[0].entry_hash if n else COMPANION_GENESIS_HASH
+    return db_path, tail
+
+
+def _rewrite_anchor_metadata(store: str, mutate) -> None:
+    """Replace the one-record recovery segment with a valid changed anchor."""
+    original = EvidenceChain(store_path=store).get_latest(1)[0]
+    metadata = dict(original.metadata)
+    mutate(metadata)
+    rewritten = EvidenceChain()._forge(
+        previous_hash=original.previous_hash,
+        action=original.action,
+        actor=original.actor,
+        target_block_id=original.target_block_id,
+        target_file=original.target_file,
+        payload_hash=original.payload_hash,
+        metadata=metadata,
+        confidence=original.confidence,
+    )
+    with open(store, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(rewritten.to_dict(), separators=(",", ":")) + "\n")
+    assert EvidenceChain(store_path=store).verify_chain() == (True, [])
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +268,26 @@ def test_recovery_accepts_the_exact_reviewed_digest(tmp_path):
     assert result.archive_sha256 == expected
 
 
+def test_recovery_refuses_a_corrupt_companion_chain_without_mutation(tmp_path):
+    store = _genesis_restart_store(tmp_path)
+    db_path, _tail = _seed_companion(store, n=3)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("UPDATE hash_chain SET content_hash = 'tampered' WHERE rowid = 2")
+        connection.commit()
+    finally:
+        connection.close()
+    before = _sha256_file(store)
+    companion_before = _sha256_file(db_path)
+
+    with pytest.raises(ChainRecoveryRefused, match="own chain breaks"):
+        recover_chain(store, actor="operator", confirm=True, expected_sha256=before)
+
+    assert _sha256_file(store) == before
+    assert _sha256_file(db_path) == companion_before
+    assert not [name for name in os.listdir(os.path.dirname(store)) if ".damaged-" in name or name.endswith(".reanchor-pending")]
+
+
 def test_recovery_aborts_when_a_writer_appends_mid_operation(tmp_path, monkeypatch):
     """A record that landed after the archive was taken must not be destroyed.
 
@@ -269,6 +325,29 @@ def test_recovery_aborts_when_a_writer_appends_mid_operation(tmp_path, monkeypat
     result = recover_chain(store, actor="operator", confirm=True)
     assert os.path.isfile(result.archive_path)
     assert result.archived_records == 5
+
+
+def test_recovery_aborts_when_the_companion_chain_moves_mid_operation(tmp_path, monkeypatch):
+    import mind_mem.evidence_recovery as recovery
+
+    store = _genesis_restart_store(tmp_path)
+    db_path, _tail = _seed_companion(store, n=2)
+    before = _sha256_file(store)
+    real_metadata = recovery._anchor_metadata
+
+    def append_companion_then_build(*args, **kwargs):
+        HashChainV2(db_path).append("raced", "WRITE", "raced content")
+        return real_metadata(*args, **kwargs)
+
+    monkeypatch.setattr(recovery, "_anchor_metadata", append_companion_then_build)
+
+    with pytest.raises(ChainRecoveryRefused, match="companion"):
+        recover_chain(store, actor="operator", confirm=True)
+
+    assert _sha256_file(store) == before
+    assert HashChainV2(db_path).length == 3, "the raced companion row was preserved"
+    leftovers = os.listdir(os.path.dirname(store))
+    assert not [name for name in leftovers if ".damaged-" in name or name.endswith(".reanchor-pending")]
 
 
 def test_recovery_refuses_to_overwrite_an_existing_archive(tmp_path, monkeypatch):
@@ -367,6 +446,73 @@ def test_anchor_explicitly_denies_continuity_and_hashes_both_claims(tmp_path):
     changed = json.loads(json.dumps(result.anchor.to_dict()))
     changed["metadata"]["continues_predecessor_chain"] = True
     assert not EvidenceChain().verify(EvidenceObject.from_dict(changed))
+
+
+def test_anchor_binds_the_retained_companion_hash_chain(tmp_path):
+    store = _genesis_restart_store(tmp_path)
+    _db_path, tail = _seed_companion(store, n=3)
+
+    result = recover_chain(store, actor="operator", confirm=True)
+    meta = result.anchor.metadata
+
+    assert meta[COMPANION_PRESENT_KEY] is True
+    assert meta[COMPANION_ENTRIES_KEY] == 3
+    assert meta[COMPANION_TAIL_KEY] == tail
+    verdict = reconcile(str(tmp_path))
+    assert verdict.ok, verdict.reasons
+    assert verdict.recovery_baseline_present is True
+    assert verdict.recovery_baseline_entries == 3
+    assert verdict.recovery_baseline_tail == tail
+
+
+@pytest.mark.parametrize("damage", ["missing", "truncated", "replaced"])
+def test_reconciliation_rejects_missing_or_changed_retained_history(tmp_path, damage):
+    store = _genesis_restart_store(tmp_path)
+    db_path, _tail = _seed_companion(store, n=3)
+    recover_chain(store, actor="operator", confirm=True)
+
+    if os.path.isfile(head_path(db_path)):
+        os.remove(head_path(db_path))
+    if damage == "missing":
+        os.remove(db_path)
+    elif damage == "truncated":
+        connection = sqlite3.connect(db_path)
+        try:
+            connection.execute("DELETE FROM hash_chain WHERE rowid = (SELECT MAX(rowid) FROM hash_chain)")
+            connection.commit()
+        finally:
+            connection.close()
+    else:
+        os.remove(db_path)
+        _seed_companion(store, n=3, prefix="replacement")
+
+    verdict = reconcile(str(tmp_path))
+    assert not verdict.ok
+    assert any("recovery anchor" in reason or "retained hash-chain prefix" in reason for reason in verdict.reasons)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda meta: meta.pop(COMPANION_ENTRIES_KEY),
+        lambda meta: meta.__setitem__(COMPANION_PRESENT_KEY, "yes"),
+        lambda meta: meta.__setitem__(COMPANION_ENTRIES_KEY, "3"),
+        lambda meta: meta.__setitem__(COMPANION_ENTRIES_KEY, True),
+        lambda meta: meta.__setitem__(COMPANION_ENTRIES_KEY, -1),
+        lambda meta: meta.__setitem__(COMPANION_TAIL_KEY, None),
+    ],
+    ids=["missing", "boolean-type", "count-type", "boolean-count", "negative-count", "tail-type"],
+)
+def test_reconciliation_rejects_a_malformed_recovery_baseline(tmp_path, mutate):
+    store = _genesis_restart_store(tmp_path)
+    recover_chain(store, actor="operator", confirm=True)
+    _rewrite_anchor_metadata(store, mutate)
+
+    verdict = reconcile(str(tmp_path))
+
+    assert verdict.checked
+    assert not verdict.ok
+    assert "a recovery anchor carries a missing or malformed companion hash-chain baseline" in verdict.reasons
 
 
 def test_no_stored_hash_is_rewritten(tmp_path):

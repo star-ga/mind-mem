@@ -38,6 +38,13 @@ three and the only one that catches a truncation of rows nothing else
 points at — which is why all three are here rather than whichever one
 seemed sufficient.
 
+Recovery does not reset this accounting. A recovery anchor binds the retained
+hash chain's entry count and prefix-tail hash. Those historical entries form
+the baseline, and admission rows written after the anchor are added to it.
+Without that binding, replacing 606 evidence rows with one anchor would make
+the admission count zero and turn leg 2 into a vacuous pass over the retained
+hash history.
+
 Read-only, reads no clock, and creates nothing: every artifact is probed
 with :func:`os.path.isfile` before a reader is built.
 """
@@ -51,7 +58,14 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
-from .hash_chain_v2 import HashChainV2
+from .evidence_recovery import (
+    COMPANION_ENTRIES_KEY,
+    COMPANION_PRESENT_KEY,
+    COMPANION_TAIL_KEY,
+    RECOVERY_VERB,
+    RECOVERY_VERB_KEY,
+)
+from .hash_chain_v2 import GENESIS_HASH, HashChainV2
 
 __all__ = ["LedgerReconciliation", "reconcile"]
 
@@ -95,6 +109,9 @@ class LedgerReconciliation:
     unresolved_admissions: tuple[str, ...]
     unresolved_anchors: tuple[int, ...]
     reasons: tuple[str, ...]
+    recovery_baseline_present: Optional[bool] = None
+    recovery_baseline_entries: Optional[int] = None
+    recovery_baseline_tail: Optional[str] = None
 
     @property
     def tolerated(self) -> bool:
@@ -116,17 +133,32 @@ def reconcile(workspace: str) -> LedgerReconciliation:
             admission_rows=0,
             shortfall=0,
             served_rows=0,
+            recovery_baseline_present=None,
+            recovery_baseline_entries=None,
+            recovery_baseline_tail=None,
             unresolved_admissions=(),
             unresolved_anchors=(),
             reasons=("the hash chain cannot be read, so nothing can be reconciled against it",),
         )
 
-    admissions, linked = _admission_rows(evidence_path)
+    admissions, linked, baseline, baseline_errors = _admission_rows(evidence_path)
     served = _served_anchors(workspace)
     entries = _chain_entries(chain)
-    checked = bool(entries or admissions or served)
+    checked = bool(entries or admissions or served or baseline or baseline_errors)
 
-    reasons: list[str] = []
+    reasons: list[str] = list(baseline_errors)
+
+    baseline_present: Optional[bool] = None
+    baseline_entries: Optional[int] = None
+    baseline_tail: Optional[str] = None
+    if baseline is not None:
+        baseline_present, baseline_entries, baseline_tail = baseline
+        if baseline_present:
+            hashes = list(entries.values())
+            if len(hashes) < baseline_entries:
+                reasons.append(f"the recovery anchor binds {baseline_entries} retained hash-chain entries, but only {len(hashes)} remain")
+            elif baseline_entries and hashes[baseline_entries - 1] != baseline_tail:
+                reasons.append("the retained hash-chain prefix no longer ends at the tail bound by the recovery anchor")
 
     unresolved_admissions = tuple(eid for eid in linked if eid not in entries)
     if unresolved_admissions:
@@ -135,9 +167,16 @@ def reconcile(workspace: str) -> LedgerReconciliation:
             f"longer holds: {list(unresolved_admissions[:3])}"
         )
 
-    shortfall = max(0, admissions - len(entries))
+    expected_entries = admissions + (baseline_entries if baseline_present and baseline_entries is not None else 0)
+    shortfall = max(0, expected_entries - len(entries))
     if shortfall > TOLERATED_SHORTFALL:
-        reasons.append(f"the chain holds {len(entries)} entries against {admissions} admission rows — {shortfall} are missing")
+        if baseline_present:
+            reasons.append(
+                f"the chain holds {len(entries)} entries against a retained baseline of "
+                f"{baseline_entries} plus {admissions} post-recovery admission rows — {shortfall} are missing"
+            )
+        else:
+            reasons.append(f"the chain holds {len(entries)} entries against {admissions} admission rows — {shortfall} are missing")
 
     # Derive the anchor set only when there is a served row to check it
     # against. It is one SHA-256 per chain entry, so on a large chain in a
@@ -161,6 +200,9 @@ def reconcile(workspace: str) -> LedgerReconciliation:
         admission_rows=admissions,
         shortfall=shortfall,
         served_rows=len(served),
+        recovery_baseline_present=baseline_present,
+        recovery_baseline_entries=baseline_entries,
+        recovery_baseline_tail=baseline_tail,
         unresolved_admissions=unresolved_admissions,
         unresolved_anchors=unresolved_anchors,
         reasons=tuple(reasons),
@@ -207,8 +249,10 @@ def _chain_entries(chain: Optional[HashChainV2]) -> dict[str, str]:
     return {entry.entry_id: entry.entry_hash for entry in chain.get_latest(n=chain.length)}
 
 
-def _admission_rows(evidence_path: str) -> tuple[int, tuple[str, ...]]:
-    """``(admission rows, admission entry ids named by close records)``.
+def _admission_rows(
+    evidence_path: str,
+) -> tuple[int, tuple[str, ...], Optional[tuple[bool, int, str]], tuple[str, ...]]:
+    """Admissions, links, and the recovery anchor's companion baseline.
 
     An *admission row* is one :meth:`GovernanceGate._write_records` minted,
     identified by ``metadata["action_verb"]`` — a key that method sets on
@@ -231,12 +275,14 @@ def _admission_rows(evidence_path: str) -> tuple[int, tuple[str, ...]]:
     twice would report one broken ledger as two findings.
     """
     if not os.path.isfile(evidence_path):
-        return 0, ()
+        return 0, (), None, ()
 
     from .governance_gate import OP_WRITE, PHASE_CLOSED
 
     admissions = 0
     linked: list[str] = []
+    baseline: Optional[tuple[bool, int, str]] = None
+    baseline_errors: list[str] = []
     try:
         with open(evidence_path, encoding="utf-8") as handle:
             for line in handle:
@@ -254,13 +300,35 @@ def _admission_rows(evidence_path: str) -> tuple[int, tuple[str, ...]]:
                     continue
                 if meta.get("action_verb"):
                     admissions += 1
+                if meta.get(RECOVERY_VERB_KEY) == RECOVERY_VERB:
+                    present = meta.get(COMPANION_PRESENT_KEY)
+                    count = meta.get(COMPANION_ENTRIES_KEY)
+                    tail = meta.get(COMPANION_TAIL_KEY)
+                    valid = (
+                        isinstance(present, bool)
+                        and isinstance(count, int)
+                        and not isinstance(count, bool)
+                        and count >= 0
+                        and isinstance(tail, str)
+                        and len(tail) == 128
+                        and all(ch in "0123456789abcdef" for ch in tail)
+                        and (count > 0 or tail == GENESIS_HASH)
+                        and (present or (count == 0 and tail == GENESIS_HASH))
+                    )
+                    if not valid:
+                        baseline_errors.append("a recovery anchor carries a missing or malformed companion hash-chain baseline")
+                    else:
+                        current = (present, count, tail)
+                        if baseline is not None and baseline != current:
+                            baseline_errors.append("multiple recovery anchors carry conflicting companion hash-chain baselines")
+                        baseline = current
                 if meta.get("write_phase") == PHASE_CLOSED and meta.get("operation") == OP_WRITE:
                     entry_id = meta.get("admission_entry_id")
                     if isinstance(entry_id, str) and entry_id:
                         linked.append(entry_id)
     except (OSError, UnicodeDecodeError):
-        return 0, ()
-    return admissions, tuple(linked)
+        return 0, (), None, ()
+    return admissions, tuple(linked), baseline, tuple(baseline_errors)
 
 
 def _served_anchors(workspace: str) -> tuple[tuple[int, str], ...]:

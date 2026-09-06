@@ -673,6 +673,9 @@ def check_cross_ledger(workspace: str, report: VerifyReport, *, strict: bool = F
         "admission_rows": verdict.admission_rows,
         "shortfall": verdict.shortfall,
         "served_rows": verdict.served_rows,
+        "recovery_baseline_present": verdict.recovery_baseline_present,
+        "recovery_baseline_entries": verdict.recovery_baseline_entries,
+        "recovery_baseline_tail": verdict.recovery_baseline_tail,
         "unresolved_admissions": list(verdict.unresolved_admissions[:8]),
         "unresolved_anchors": list(verdict.unresolved_anchors[:8]),
     }

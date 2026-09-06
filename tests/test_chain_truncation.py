@@ -41,6 +41,9 @@ import pytest
 
 from mind_mem.cross_ledger import TOLERATED_SHORTFALL, reconcile
 from mind_mem.enums import IngestTier
+from mind_mem.evidence_objects import _GENESIS_HASH as EVIDENCE_GENESIS_HASH
+from mind_mem.evidence_objects import EvidenceAction, EvidenceChain
+from mind_mem.evidence_recovery import recover_chain
 from mind_mem.governance_gate import evict_gate, get_gate
 from mind_mem.hash_chain_v2 import GENESIS_HASH, HashChainV2, head_path, read_head, verify_head, write_head
 from mind_mem.init_workspace import init
@@ -412,6 +415,35 @@ class TestEachLegFiresAlone:
             scoring_instant="2026-09-03",
         )
         assert reconcile(ws).unresolved_anchors == ()
+
+    def test_post_recovery_admissions_are_counted_after_the_bound_baseline(self, ws: str) -> None:
+        _governed_write(ws, "D-20260903-001")
+        ev = EvidenceChain()._forge(
+            previous_hash=EVIDENCE_GENESIS_HASH,
+            action=EvidenceAction.APPLY,
+            actor="stale-writer",
+            target_block_id="B-restart",
+            target_file="decisions/DECISIONS.md",
+            payload_hash="0" * 64,
+            metadata={"evidence_schema": "v3.1"},
+            confidence=1.0,
+        )
+        evidence_path = os.path.join(ws, "memory", "evidence_chain.jsonl")
+        with open(evidence_path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(ev.to_dict(), separators=(",", ":")) + "\n")
+        evict_gate(ws)
+
+        recover_chain(evidence_path, actor="operator", confirm=True)
+        baseline = reconcile(ws)
+        assert baseline.ok, baseline.reasons
+        assert baseline.recovery_baseline_entries == baseline.chain_entries
+        assert baseline.admission_rows == 0
+
+        _governed_write(ws, "D-20260903-002")
+        after = reconcile(ws)
+        assert after.ok, after.reasons
+        assert after.admission_rows >= 2
+        assert after.chain_entries == after.recovery_baseline_entries + after.admission_rows
 
 
 # ---------------------------------------------------------------------------

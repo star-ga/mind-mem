@@ -209,7 +209,11 @@ so recovery **seals** instead:
    count, head hash and break census in `metadata` (which the v3 preimage
    covers, so the census is tamper-evident too). The same hashed metadata
    explicitly records `continues_predecessor_chain: false` and
-   `predecessor_trust_restored: false`.
+   `predecessor_trust_restored: false`. When the companion
+   `memory/hash_chain_v2.db` exists, the anchor also binds its retained entry
+   count and prefix-tail hash. The `cross_ledger` check requires that prefix
+   to remain present and adds later admission rows after the bound baseline,
+   instead of treating a one-row recovery segment as a zero-count pass.
 
 No stored hash is rewritten and no record is dropped or reordered. The
 archive keeps failing to verify with the message it failed with before; the
