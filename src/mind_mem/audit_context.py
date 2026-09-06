@@ -123,6 +123,14 @@ class AuditContext:
     #: auth has not run or did not identify anyone; it is NEVER filled from
     #: a header.
     agent_authenticated: Optional[str] = field(default=None)
+    #: Canonical names of the headers the CALLER actually supplied a usable
+    #: value for. Distinct from the fields above because :attr:`request_id`
+    #: is minted when absent, so a non-empty value is not evidence that
+    #: anyone sent one — and "did the caller attribute this request?" is
+    #: exactly the question a transport must answer before it writes the
+    #: correlation token into durable state. A header that sanitises away
+    #: to nothing counts as absent, like any other absence.
+    supplied: frozenset[str] = field(default_factory=frozenset)
 
     def log_bindings(self) -> dict[str, str]:
         """Key/value bindings for :mod:`mind_mem.v4.logging_context`.
@@ -179,16 +187,29 @@ def context_from_headers(
     dict adapt to it in one lambda. A missing or unusable request id is
     replaced by a fresh UUID-4 so every request is correlatable, including
     the ones from callers that send nothing.
+
+    :attr:`AuditContext.supplied` records which of the three the caller
+    actually sent — measured *before* the request id is minted, because
+    afterwards the minted id is indistinguishable from a sent one.
     """
+    request_id = sanitize_header_value(getter("x-mindmem-request-id"), max_len=MAX_REQUEST_ID_LEN)
+    actor = sanitize_header_value(getter("x-mindmem-actor"))
+    purpose = sanitize_header_value(getter("x-mindmem-purpose"))
+    supplied = {
+        name
+        for name, value in (
+            (HEADER_REQUEST_ID, request_id),
+            (HEADER_ACTOR, actor),
+            (HEADER_PURPOSE, purpose),
+        )
+        if value
+    }
     return AuditContext(
-        request_id=sanitize_header_value(
-            getter("x-mindmem-request-id"),
-            default=str(uuid.uuid4()),
-            max_len=MAX_REQUEST_ID_LEN,
-        ),
-        actor_claimed=sanitize_header_value(getter("x-mindmem-actor")),
-        purpose=sanitize_header_value(getter("x-mindmem-purpose")),
+        request_id=request_id or str(uuid.uuid4()),
+        actor_claimed=actor,
+        purpose=purpose,
         transport=transport,
+        supplied=frozenset(supplied),
     )
 
 

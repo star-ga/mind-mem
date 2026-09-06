@@ -26,6 +26,16 @@ Body limit — every JSON-bodied endpoint refuses payloads larger than
 vector. (Same posture as
 ``ingestion_pipeline.serve_webhook``.)
 
+Audit headers — ``X-MindMem-Request-Id`` / ``X-MindMem-Actor`` /
+``X-MindMem-Purpose`` are accepted on any request, bound for its
+duration through :mod:`mind_mem.audit_context`, echoed on the response,
+and recorded in the chain entry a governed mutation leaves. All three
+are optional and every value is sanitised before it is echoed, logged or
+persisted. The one thing a caller who sends none of them gets that they
+did not get before is a server-minted request id on the response — a
+correlation token nobody can see is not one. See the
+``Audit-header propagation`` section below.
+
 Read admission — the egress half of the governance seam applies here,
 not only on the MCP surface. Two rules, both structural rather than
 remembered:
@@ -70,11 +80,13 @@ import os
 import socket
 import threading
 import time
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from typing import Any, Callable
 
+from . import audit_context as _audit_ctx
 from .admission import admit_read
 from .protection import AUTH_HEADER
 
@@ -114,6 +126,7 @@ def _corpus_encoding_response(exc: Any, workspace: str, **extra: Any) -> tuple[i
 
 __all__ = [
     "ANONYMOUS_ACTORS",
+    "AUDIT_TRANSPORT",
     "CONTENT",
     "DIRECT_CALL_ACTOR",
     "HTTP_TOKEN_ACTOR_PREFIX",
@@ -216,6 +229,13 @@ _FED_VCLOCK_PREFIX = "/federation/vclock/"
 
 # Loopback addresses that may skip auth when the operator opts in.
 _LOOPBACK_ADDRS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+#: Name this leg gives itself in an :class:`~mind_mem.audit_context.AuditContext`
+#: and therefore in every structured log line it binds. ``"rest"`` and
+#: ``"grpc"`` are taken by the two optional-extra transports; this is the
+#: stdlib one ``mm serve`` starts, and a mixed deployment has to be able to
+#: tell them apart in one grep.
+AUDIT_TRANSPORT = "http"
 
 
 # ---------------------------------------------------------------------------
@@ -335,10 +355,102 @@ def _read_body(handler: BaseHTTPRequestHandler) -> tuple[bytes | None, int]:
     return (handler.rfile.read(length), 0)
 
 
+# ---------------------------------------------------------------------------
+# Audit-header propagation (roadmap v4.0.0 Group D)
+# ---------------------------------------------------------------------------
+#
+# The REST and gRPC legs carry ``X-MindMem-Request-Id`` /
+# ``X-MindMem-Actor`` / ``X-MindMem-Purpose`` through
+# :mod:`mind_mem.audit_context`; this transport carried none of them, so a
+# request served by ``mm serve`` correlated with nothing and the chain row
+# a ``DELETE`` left named the door credential and no request.
+#
+# All three are OPTIONAL and stay optional. The only thing a caller who
+# sends nothing gets that they did not get before is a minted
+# ``X-MindMem-Request-Id`` on the response — a correlation token is
+# useless if only well-behaved callers have one. Nothing else changes for
+# them: no echoed actor or purpose is invented, and
+# :func:`_request_audit_metadata` returns ``None``, which the gate reads
+# as ``metadata or {}`` — the same chain entry as before, key for key.
+
+
+def _request_audit_context(handler: BaseHTTPRequestHandler) -> _audit_ctx.AuditContext:
+    """Attribution for one served request, read from its own headers.
+
+    ``handler.headers`` is an :class:`email.message.Message`, whose
+    ``get`` is already case-insensitive and already returns ``None`` for
+    an absent name — exactly the shape
+    :func:`~mind_mem.audit_context.context_from_headers` wants. The
+    ``isinstance`` narrowing is not decoration: that ``get`` is typed as
+    returning ``Any``, and a malformed multipart header can hand back a
+    non-string, which must read as absence rather than reach the
+    sanitiser as an object.
+    """
+
+    def _get(name: str) -> str | None:
+        value = handler.headers.get(name)
+        return value if isinstance(value, str) else None
+
+    return _audit_ctx.context_from_headers(_get, transport=AUDIT_TRANSPORT)
+
+
+def _audit_echo_headers() -> dict[str, str]:
+    """Audit headers to stamp on the response, or ``{}`` outside a request.
+
+    The request id is always echoed — including the one this server
+    minted, because a caller cannot correlate on a token it never sees.
+    The actor and purpose are echoed only when the caller sent them:
+    absence of the header is how an operator reads "unattributed", and
+    echoing a synthetic value would make every request look attributed.
+
+    Every value here came off the wire and was sanitised at
+    :func:`~mind_mem.audit_context.sanitize_header_value` before the
+    context was built, so none of them can carry the CR/LF that would
+    split this response into two.
+    """
+    ctx = _audit_ctx.current_audit_context()
+    if ctx is None:
+        return {}
+    echo = {_audit_ctx.HEADER_REQUEST_ID: ctx.request_id}
+    if ctx.actor_claimed:
+        echo[_audit_ctx.HEADER_ACTOR] = ctx.actor_claimed
+    if ctx.purpose:
+        echo[_audit_ctx.HEADER_PURPOSE] = ctx.purpose
+    return echo
+
+
+def _request_audit_metadata() -> dict[str, str] | None:
+    """Chain-record metadata naming the request behind a mutation.
+
+    ``None`` — not ``{}`` — in the two cases where there is nothing the
+    caller told us: no bound context at all (a library or in-process
+    call), and a request that supplied none of the three headers. The
+    gate spreads ``metadata or {}`` into the entry, so ``None`` writes the
+    chain row this door has always written, key for key. That is the
+    whole "optional" guarantee, made structural rather than remembered.
+
+    ``actor_claimed`` is deliberately named as a claim and kept apart from
+    the entry's ``actor``, which is the identity the door authenticated.
+    Merging them would let anyone with a valid token write any name they
+    liked into an evidence chain.
+    """
+    ctx = _audit_ctx.current_audit_context()
+    if ctx is None or not ctx.supplied:
+        return None
+    meta = {"request_id": ctx.request_id}
+    if ctx.actor_claimed:
+        meta["actor_claimed"] = ctx.actor_claimed
+    if ctx.purpose:
+        meta["purpose"] = ctx.purpose
+    return meta
+
+
 def _write_json(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
     body = json.dumps(payload, sort_keys=True).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
+    for name, value in _audit_echo_headers().items():
+        handler.send_header(name, value)
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -890,6 +1002,12 @@ def _handle_delete_memory(
     that passed authentication and passes it here, once, for every
     mutating route — see :data:`HTTP_TOKEN_ACTOR_PREFIX`.
 
+    A third part of the record, when the caller offered one: the request
+    behind the deletion. :func:`_request_audit_metadata` returns the
+    sanitised ``X-MindMem-*`` values, or ``None`` when the caller sent
+    none — and ``None`` is what the gate already spreads as ``metadata or
+    {}``, so an unattributed delete writes the entry it always wrote.
+
     There is **no existence pre-check**. Resolving the target before
     opening the scope answered "is this id real?" to a caller the gate
     had not yet authorised, and left no record of the question; inside a
@@ -940,6 +1058,7 @@ def _handle_delete_memory(
             block_id,
             rationale=rationale or DEFAULT_DELETE_RATIONALE,
             actor=actor,
+            metadata=_request_audit_metadata(),
         ) as receipt:
             admission_id = receipt.entry_id
             removed = store.delete_block(block_id)
@@ -1089,7 +1208,13 @@ def _handle_clear(workspace: str, body: dict[str, Any], *, actor: str = DIRECT_C
     undecodable: dict[str, Exception] = {}
     try:
         gate = get_gate(workspace)
-        with gate.admit_delete_batch(batch_id, block_ids, rationale=rationale, actor=actor) as receipt:
+        with gate.admit_delete_batch(
+            batch_id,
+            block_ids,
+            rationale=rationale,
+            actor=actor,
+            metadata=_request_audit_metadata(),
+        ) as receipt:
             admission_id = receipt.entry_id
             # deferred: the loop is O(n²) on a Markdown corpus — each
             # delete_block re-reads and rewrites the whole .md file.
@@ -1522,6 +1647,13 @@ def build_handler(
             self.send_response(429)
             self.send_header("Content-Type", "application/json")
             self.send_header("Retry-After", str(int(retry_after) or 1))
+            # This response is hand-built rather than routed through
+            # ``_write_json``, so the echo has to be repeated here. A 429
+            # is one of the responses an operator most wants to correlate
+            # with their upstream logs, and it is exactly the one a
+            # forgotten branch would drop.
+            for _name, _value in _audit_echo_headers().items():
+                self.send_header(_name, _value)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -1697,6 +1829,27 @@ def build_handler(
             to remember and "the route table says so" is a thing to
             declare — and ``Route.__post_init__`` refuses at import to
             route a mutating handler that cannot take one.
+
+            A mutating route also records that identity on the request's
+            :class:`~mind_mem.audit_context.AuditContext`, under the same
+            declaration and for the same reason: it is the seam
+            :func:`~mind_mem.audit_context.current_agent` reads, so a gate
+            call that passes no explicit actor still names the door, and
+            it is the identity :func:`outbound_audit_headers` forwards to
+            a peer. Under the same rule, not a second one — a route that
+            declares no mutation gets no attribution here either, and
+            ``tests/test_governed_delete_http.py``'s dispatcher twin
+            (which restores the pre-5.0.2 ``mutates=False`` table) still
+            reproduces the anonymous row it was built to reproduce.
+
+            Neither identity is ever filled from ``X-MindMem-Actor``: that
+            header is an unauthenticated claim, and it stays one all the
+            way into the chain entry, under its own ``actor_claimed`` key.
+
+            The log binding is unconditional, because it is observability
+            rather than attribution — it says which door served a request,
+            for every request, and it surfaces only while
+            ``v4.logging_context`` is armed.
             """
             base, params = _parse_query_params(self.path)
             route, tail = _match_route(method, base)
@@ -1706,50 +1859,79 @@ def build_handler(
             if route.takes == "tail" and not tail and route.empty_tail_error:
                 _write_status(self, 400, route.empty_tail_error)
                 return
-            attribution: dict[str, Any] = {"actor": self._door_actor()} if route.mutates else {}
-            if route.takes == "workspace":
-                status, body = route.handler(workspace, **attribution)
-            elif route.takes == "params":
-                status, body = route.handler(workspace, params, **attribution)
-            elif route.takes == "body":
-                status, body = route.handler(workspace, payload if payload is not None else {}, **attribution)
-            else:
-                status, body = route.handler(workspace, tail, **attribution)
-            _write_json(self, status, body)
+            actor = self._door_actor()
+            attribution: dict[str, Any] = {}
+            if route.mutates:
+                attribution["actor"] = actor
+                _audit_ctx.record_authenticated_agent(actor)
+            # The context's log bindings were snapshotted at bind time,
+            # before auth had run, so the resolved identity is pushed here
+            # rather than backfilled into a frame that already exists.
+            with _audit_ctx.log_scope(agent=actor):
+                if route.takes == "workspace":
+                    status, body = route.handler(workspace, **attribution)
+                elif route.takes == "params":
+                    status, body = route.handler(workspace, params, **attribution)
+                elif route.takes == "body":
+                    status, body = route.handler(workspace, payload if payload is not None else {}, **attribution)
+                else:
+                    status, body = route.handler(workspace, tail, **attribution)
+                _write_json(self, status, body)
+
+        # -- audit scope (roadmap v4.0.0 Group D) -----------------------
+        def _audit_scope(self) -> AbstractContextManager[_audit_ctx.AuditContext]:
+            """Bind this request's attribution for everything it reaches.
+
+            Opened by every verb entry point *before* the guards, so a
+            refusal — 401, 403, 413, 429 — carries the same correlation
+            token as a success. A response an operator cannot correlate is
+            most useful precisely when the request failed.
+
+            One scope per request, and every response this transport
+            writes is emitted inside one. The exception is a response the
+            stdlib emits for us before ``do_*`` is reached (a malformed
+            request line, a header block over the parser's cap): those
+            never see a handler and carry no audit headers.
+            """
+            return _audit_ctx.bind_audit_context(_request_audit_context(self))
 
         # -- OPTIONS (CORS preflight reject — S-7) ----------------------
         def do_OPTIONS(self) -> None:
-            _write_status(self, 405, "method not allowed")
+            with self._audit_scope():
+                _write_status(self, 405, "method not allowed")
 
         # -- GET --------------------------------------------------------
         def do_GET(self) -> None:
-            if not self._guards_passed():
-                return
-            self._dispatch("GET")
+            with self._audit_scope():
+                if not self._guards_passed():
+                    return
+                self._dispatch("GET")
 
         # -- POST -------------------------------------------------------
         def do_POST(self) -> None:
-            if not self._guards_passed():
-                return
-            # Body first, route second — unchanged. An oversized body is
-            # a 413 whatever path it was aimed at, so a caller cannot use
-            # an unknown path to smuggle one past the cap.
-            payload, err = self._read_json_body()
-            if err:
-                _write_status(self, err, "bad request body")
-                return
-            if payload is None:
-                # err==0 implies non-None payload, but be defensive
-                # rather than assert — a stale handler shouldn't 500.
-                _write_status(self, 400, "empty body")
-                return
-            self._dispatch("POST", payload)
+            with self._audit_scope():
+                if not self._guards_passed():
+                    return
+                # Body first, route second — unchanged. An oversized body
+                # is a 413 whatever path it was aimed at, so a caller
+                # cannot use an unknown path to smuggle one past the cap.
+                payload, err = self._read_json_body()
+                if err:
+                    _write_status(self, err, "bad request body")
+                    return
+                if payload is None:
+                    # err==0 implies non-None payload, but be defensive
+                    # rather than assert — a stale handler shouldn't 500.
+                    _write_status(self, 400, "empty body")
+                    return
+                self._dispatch("POST", payload)
 
         # -- DELETE -----------------------------------------------------
         def do_DELETE(self) -> None:
-            if not self._guards_passed():
-                return
-            self._dispatch("DELETE")
+            with self._audit_scope():
+                if not self._guards_passed():
+                    return
+                self._dispatch("DELETE")
 
     return Handler
 
