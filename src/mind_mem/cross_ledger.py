@@ -304,7 +304,7 @@ def _admission_rows(
                     present = meta.get(COMPANION_PRESENT_KEY)
                     count = meta.get(COMPANION_ENTRIES_KEY)
                     tail = meta.get(COMPANION_TAIL_KEY)
-                    valid = (
+                    if not (
                         isinstance(present, bool)
                         and isinstance(count, int)
                         and not isinstance(count, bool)
@@ -314,8 +314,7 @@ def _admission_rows(
                         and all(ch in "0123456789abcdef" for ch in tail)
                         and (count > 0 or tail == GENESIS_HASH)
                         and (present or (count == 0 and tail == GENESIS_HASH))
-                    )
-                    if not valid:
+                    ):
                         baseline_errors.append("a recovery anchor carries a missing or malformed companion hash-chain baseline")
                     else:
                         current = (present, count, tail)

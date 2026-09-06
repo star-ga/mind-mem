@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1478 | **Est. tokens:** ~4415265
-**Generated:** 2026-09-06 12:10 UTC
+**Files:** 1478 | **Est. tokens:** ~4415256
+**Generated:** 2026-09-06 12:18 UTC
 
 ## Token Budget Guide
 
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 229 | ~1054901 |
+| `src/mind_mem/` | 229 | ~1054892 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~47468 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -756,7 +756,7 @@
 - `corpus_registry.py` (~5127 tok, huge) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~3583 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~1463 tok, large) — mind-mem Optional Cross-Encoder Reranker.
-- `cross_ledger.py` (~4158 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `cross_ledger.py` (~4149 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `daemon.py` (~3623 tok, huge) — Background daemon — `mm daemon` (v3.9.0 candidate).
 - `data_marking.py` (~1133 tok, large) — # Copyright 2026 STARGA, Inc.
 - `dead_ends.py` (~3855 tok, huge) — # Copyright 2026 STARGA, Inc.
