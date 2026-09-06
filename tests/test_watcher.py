@@ -52,6 +52,21 @@ class TestFileWatcher(unittest.TestCase):
         finally:
             watcher.stop()
 
+    def test_detects_size_change_when_timestamp_is_unchanged(self):
+        """A rapid append must not disappear into the baseline timestamp."""
+        path = os.path.join(self.td, "same-mtime.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("# Original\n")
+        baseline = os.stat(path)
+
+        watcher = FileWatcher(self.td, callback=self._callback)
+        watcher._scan()
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("## Modified\n")
+        os.utime(path, ns=(baseline.st_atime_ns, baseline.st_mtime_ns))
+
+        self.assertIn(path, watcher._scan())
+
     def test_detects_deleted_file(self):
         path = os.path.join(self.td, "delete-me.md")
         with open(path, "w", encoding="utf-8") as f:

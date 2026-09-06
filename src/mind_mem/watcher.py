@@ -38,14 +38,17 @@ class FileWatcher:
         self.workspace = os.path.abspath(workspace)
         self.callback = callback
         self.interval = interval
-        self._mtimes: dict[str, float] = {}
+        # A timestamp alone can alias rapid writes, especially on Windows.
+        # Size catches an append even when the filesystem reports the same
+        # modification time for the baseline and the changed file.
+        self._file_state: dict[str, tuple[int, int]] = {}
         self._running = False
         self._thread: threading.Thread | None = None
 
     def _scan(self) -> set[str]:
         """Return set of changed file paths since last scan."""
         changed: set[str] = set()
-        current: dict[str, float] = {}
+        current: dict[str, tuple[int, int]] = {}
 
         for root, _dirs, files in os.walk(self.workspace):
             # Skip hidden dirs and index dirs
@@ -57,16 +60,17 @@ class FileWatcher:
                     continue
                 path = os.path.join(root, f)
                 try:
-                    mtime = os.path.getmtime(path)
+                    stat = os.stat(path)
                 except OSError:
                     continue
-                current[path] = mtime
-                if path not in self._mtimes or self._mtimes[path] != mtime:
+                state = (stat.st_mtime_ns, stat.st_size)
+                current[path] = state
+                if path not in self._file_state or self._file_state[path] != state:
                     changed.add(path)
 
         # Detect deletions
-        deleted = set(self._mtimes.keys()) - set(current.keys())
-        self._mtimes = current
+        deleted = set(self._file_state.keys()) - set(current.keys())
+        self._file_state = current
         return changed | deleted
 
     def start(self) -> None:

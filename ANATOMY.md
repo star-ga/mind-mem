@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1490 | **Est. tokens:** ~4454563
-**Generated:** 2026-09-06 20:17 UTC
+**Files:** 1490 | **Est. tokens:** ~4454794
+**Generated:** 2026-09-06 21:19 UTC
 
 ## Token Budget Guide
 
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 230 | ~1067132 |
+| `src/mind_mem/` | 230 | ~1067208 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~47468 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 635 | ~1941273 |
+| `tests/` | 635 | ~1941428 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1058,7 +1058,7 @@
 - `vector_inertness.py` (~3125 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `verify_cli.py` (~10537 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `walkthrough.py` (~2449 tok, huge) — Dependency-ordered walkthrough — `compile_walkthrough` (v3.9.0 candidate).
-- `watcher.py` (~1377 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
+- `watcher.py` (~1453 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
 - `world_anchors.py` (~2986 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `world_git_probe.py` (~1660 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `world_staleness.py` (~3891 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1750,7 +1750,7 @@
 - `test_verify_cli.py` (~4647 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vocabulary_wiring.py` (~2980 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_walkthrough.py` (~2441 tok, huge) — Tests for the v3.9 dependency-ordered walkthrough."""
-- `test_watcher.py` (~1882 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""
+- `test_watcher.py` (~2037 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""
 - `test_withheld_not_in_stats.py` (~8119 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_witness_pin_race.py` (~2540 tok, huge) — # Copyright 2026 STARGA, Inc.
