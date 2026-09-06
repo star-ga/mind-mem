@@ -962,23 +962,30 @@ def _insert_block(
                 fact_tags += f", {card['speaker']}"
             fact_block = {
                 "Statement": card["content"],
-                # The turn this card was extracted FROM, carried as context.
+                # NOT the parent's text.
                 #
-                # Extraction is lossy by design: it keeps the atomic clause and
-                # drops the surrounding language, and the dropped words are
-                # frequently the ones a question uses. Measured -- a turn
-                # reading "my internet speed has been really good ... I
-                # upgraded to 500 Mbps" yields the card "upgraded to 500 Mbps
-                # about three weeks ago", which contains not one of "speed",
-                # "internet" or "plan". The question "What speed is my new
-                # internet plan?" therefore could not reach the single card in
-                # the corpus that answered it, and small-to-big retrieval
-                # cannot lift a parent whose card is unreachable.
+                # d487549 copied the whole parent statement into this card's
+                # Context so a card would stay reachable by the language it was
+                # extracted from -- a real problem: a turn reading "my internet
+                # speed has been really good ... I upgraded to 500 Mbps" yields
+                # the card "upgraded to 500 Mbps about three weeks ago", which
+                # carries none of "speed", "internet" or "plan".
                 #
-                # Context is the lowest-weighted searchable column (0.5 against
-                # 3.0 for statement), so this restores reachability without
-                # letting the parent's language outrank the card's own.
-                "Context": statement,
+                # Measured, that cure was far worse. On one LongMemEval haystack
+                # the fact surface went from 14,426 indexed characters to
+                # 448,559 (31x) and the database from 4 KB to 5.2 MB, because a
+                # card's searchable text grew from 37 characters to 1,221 -- the
+                # card became a COPY of its parent. Which is also why it stopped
+                # working: a card that contains its parent's words can only
+                # match when the parent already matched, so the small-to-big
+                # injection branch below has nothing left to contribute. On a
+                # 488-parent corpus injections went 338 to 0. No recall gain was
+                # measured in exchange.
+                #
+                # The parent's language is already searchable on the parent
+                # surface, which is queried separately. A card earns its place by
+                # being SMALL and specific; making it big is the one thing that
+                # cannot help.
                 "Tags": fact_tags,
                 "Date": card.get("date", block_date),
                 "Status": block.get("Status", "active"),

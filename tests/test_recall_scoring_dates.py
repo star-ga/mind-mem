@@ -95,8 +95,14 @@ class TestDateRangeFilterKeepsDatedBlocks:
     SINCE, UNTIL = "2023-05-01", "2023-06-01"
 
     def _kept(self, date_value: str) -> bool:
-        from mind_mem._recall_core import _in_date_range
-        from mind_mem.memory_index import _block_date
+        # BOTH names come from _recall_core, which is the module whose filter
+        # this class is about. An earlier version imported _block_date from
+        # memory_index -- a DIFFERENT function of the same name, with no
+        # consumer outside its own module -- so these assertions passed while
+        # the shipped filter still dropped the block. Same-named helpers in
+        # sibling modules is exactly how that shipped; import from the module
+        # under test, never by name from wherever it resolves.
+        from mind_mem._recall_core import _block_date, _in_date_range
 
         return _in_date_range(_block_date({"Date": date_value, "_id": "S-1"}), self.SINCE, self.UNTIL)
 
