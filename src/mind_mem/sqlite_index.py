@@ -30,6 +30,7 @@ import sqlite3
 import threading
 from datetime import date, datetime
 
+from ._recall_constants import _STOPWORDS
 from .admissibility import is_admissible_status, workspace_release_ids
 from .block_parser import canonical_day, parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
@@ -1671,7 +1672,31 @@ def query_index(
     # Build FTS5 MATCH query from tokens
     # Quote each token to prevent FTS5 operator injection (NOT, AND, NEAR, etc.)
     # Also reject tokens that aren't alphanumeric to prevent wildcard injection (e.g. "*")
-    fts_query = " OR ".join(f'"{t.replace(chr(34), "")}"' for t in query_tokens if _FTS5_SAFE.match(t))
+    # The RAW query words go into MATCH alongside the processed tokens.
+    #
+    # This index is built with FTS5's real Porter stemmer
+    # (tokenize='porter unicode61'), but ``tokenize()`` above has already run
+    # mind-mem's own simplified stemmer over the query, so FTS5 then stems an
+    # already-stemmed token a second time and the two token spaces stop
+    # agreeing. Measured over 470 LongMemEval-S questions: 165 of 1592 distinct
+    # query words land on a term the index does not contain, affecting 332 of
+    # 4420 served query tokens. Two shapes, both from the same cause -- the
+    # index space is Porter-over-raw-text with no lemma table:
+    #   over-truncation   speed->spe, creamer->cream, sister->sist, denver->denv
+    #   irregular lemma   bought->buy, got->get, spent->spend
+    # Worked case: for "What speed is my new internet plan?", MATCH "speed"
+    # returns the gold block at rank 1 while MATCH "spe" returns NOTHING.
+    #
+    # The raw words are ADDED rather than substituted. Dropping the processed
+    # tokens outright measured net-positive on the affected questions but lost
+    # one on an unaffected control, because the lemma and month expansions do
+    # real work; a union keeps both token spaces reachable and lets bm25 decide.
+    _raw_terms = [t for t in re.findall(r"[a-z0-9_]+", query.lower()) if t not in _STOPWORDS and len(t) > 1 and _FTS5_SAFE.match(t)]
+    _match_terms: list[str] = []
+    for _t in list(query_tokens) + _raw_terms:
+        if _FTS5_SAFE.match(_t) and _t not in _match_terms:
+            _match_terms.append(_t)
+    fts_query = " OR ".join(f'"{t.replace(chr(34), "")}"' for t in _match_terms)
     if not fts_query:
         return []
 
