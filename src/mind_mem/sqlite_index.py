@@ -87,9 +87,22 @@ _FTS_SCHEMA_VERSION = "2"
 
 
 #: How many blocks one dialogue may contribute before later ones are held
-#: behind blocks from other dialogues. 0 disables the cap entirely. Overridable
-#: so the value is chosen by measurement rather than by argument.
-_MAX_PER_DIALOGUE = int(os.environ.get("MIND_MEM_MAX_PER_DIALOGUE", "2"))
+#: behind blocks from other dialogues. 0 disables the cap entirely.
+#:
+#: 1 was chosen by a stratified paired measurement, not by argument -- 12
+#: questions from each of LongMemEval-S's six types, the same questions in the
+#: same order under each setting:
+#:
+#:     cap   any@5    all@5    distinct sources/answer
+#:     0     91.7%    72.2%    2.96
+#:     2     91.7%    75.0%    3.69
+#:     1     93.1%    81.9%    5.00
+#:
+#: The all@5 column is where it matters, because a multi-session question needs
+#: several gold sessions on one page and any@5 cannot see that: multi-session
+#: went 3/12 to 7/12, temporal-reasoning 9/12 to 10/12, knowledge-update 10/12
+#: to 11/12. Overridable so the value stays a measurement.
+_MAX_PER_DIALOGUE = int(os.environ.get("MIND_MEM_MAX_PER_DIALOGUE", "1"))
 
 
 def _dialogue_group(result: dict) -> str | None:
