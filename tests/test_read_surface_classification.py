@@ -405,6 +405,9 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     # fails the build until it is swept.
     "recall": (
         {"query": "architecture decision", "limit": 10},
+        {"query": "frost telemetry", "mode": "auto", "explain": True, "scoring_instant": "2026-06-01"},
+        {"query": "frost telemetry", "mode": "bm25", "explain": True, "active_only": False, "scoring_instant": "2026-06-01"},
+        {"query": "frost telemetry", "mode": "hybrid", "explain": True, "scoring_instant": "2026-06-01"},
         {"query": "frost telemetry", "mode": "bm25", "active_only": False, "scoring_instant": "2026-06-01"},
         {"query": "frost telemetry", "mode": "hybrid", "active_only": True},
         {"query": "frost telemetry", "backend": "hybrid"},
@@ -743,37 +746,8 @@ def test_tripwire_e_fails_on_an_unswept_mode(monkeypatch: pytest.MonkeyPatch) ->
 
 
 # ---------------------------------------------------------------------------
-# Tripwire F — a shadowed tool name is swept as the SERVER serves it
+# Tripwire F — every swept tool has one unambiguous registered owner
 # ---------------------------------------------------------------------------
-
-
-def _registration_order() -> list[str]:
-    """Tool module stems in the order ``mcp/server.py`` registers them.
-
-    Pure AST over the server source: the ``from mind_mem.mcp.tools import (x as
-    _alias)`` bindings, then the ``_alias.register(mcp)`` call sequence.
-    """
-    import ast
-
-    source = (_ROOT / "src" / "mind_mem" / "mcp" / "server.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    alias_to_stem: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == "mind_mem.mcp.tools":
-            for alias in node.names:
-                alias_to_stem[alias.asname or alias.name] = alias.name
-    order: list[str] = []
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "register"
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id in alias_to_stem
-        ):
-            order.append(alias_to_stem[node.func.value.id])
-    assert order, "could not read the registration order out of mcp/server.py"
-    return order
 
 
 def _modules_defining(name: str) -> list[str]:
@@ -782,39 +756,29 @@ def _modules_defining(name: str) -> list[str]:
     return [path.stem for path in _tool_source_files() if name in _tool_names(path)]
 
 
-def test_a_shadowed_tool_name_is_swept_as_the_server_serves_it() -> None:
-    """``recall`` is registered twice. The sweep must exercise the winner.
+def test_every_swept_tool_has_one_registered_owner() -> None:
+    """A tool cannot depend on registration order to select its implementation.
 
-    ``public.recall`` (the nine-mode dispatcher) and ``recall.recall`` (the
-    ranked-pipeline leg) share a name. FastMCP keeps the LAST registration --
-    measured, not assumed: importing ``mind_mem.mcp.server`` logs "Component
-    already exists: tool:recall" and ``get_tool("recall").fn`` resolves to
-    ``mind_mem.mcp.tools.public``, which is why ``server.py`` registers
-    ``public`` last on purpose.
-
-    ``tool_module`` resolves by sorted filename, and today that agrees by
-    coincidence (``public.py`` sorts before ``recall.py``). Rename either file
-    and the sweep would start exercising the shadowed function while the server
-    served the other one -- 121 green rows over a tool nobody calls. This pins
-    the agreement instead of relying on the alphabet.
+    Recall previously had two registrations and the sweep found the intended
+    one only because its filename sorted first. Every tool must now have one
+    owner, and the canary sweep must resolve to that same module.
     """
-    order = _registration_order()
     mismatched = {}
     for name in sorted(registered_tools()):
         defining = _modules_defining(name)
-        if len(defining) < 2:
-            continue
-        winner = max(defining, key=lambda stem: order.index(stem) if stem in order else -1)
         swept = tool_module(name).rsplit(".", 1)[-1]
-        if swept != winner:
-            mismatched[name] = {"server serves": winner, "sweep exercises": swept}
-    assert not mismatched, f"shadowed tool names the sweep resolves differently from the server: {mismatched}"
+        if defining != [swept]:
+            mismatched[name] = {"registered owners": defining, "sweep exercises": swept}
+    assert not mismatched, f"tool registrations without one matching sweep owner: {mismatched}"
 
 
-def test_tripwire_f_would_catch_a_reordered_registration(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Flip the registration order; the sweep's resolution must go stale."""
-    reordered = [stem for stem in _registration_order() if stem != "public"]
-    reordered.insert(0, "public")
-    monkeypatch.setattr(sys.modules[__name__], "_registration_order", lambda: reordered)
+def test_tripwire_f_catches_a_duplicate_registration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reintroducing the legacy registration fails even in the old good order."""
+    original = _modules_defining
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_modules_defining",
+        lambda name: original(name) + (["recall"] if name == "recall" else []),
+    )
     with pytest.raises(AssertionError, match="recall"):
-        test_a_shadowed_tool_name_is_swept_as_the_server_serves_it()
+        test_every_swept_tool_has_one_registered_owner()

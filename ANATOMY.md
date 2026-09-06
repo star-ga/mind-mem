@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1491 | **Est. tokens:** ~4458350
-**Generated:** 2026-09-06 22:40 UTC
+**Files:** 1491 | **Est. tokens:** ~4457956
+**Generated:** 2026-09-06 23:18 UTC
 
 ## Token Budget Guide
 
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 636 | ~1944679 |
+| `tests/` | 636 | ~1944285 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1529,7 +1529,7 @@
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
 - `test_query_term_stemming.py` (~1052 tok, large) — The query and the index must agree on what a word stems to.
 - `test_read_surface_admission.py` (~6315 tok, huge) — Every read surface, swept with a three-status canary.
-- `test_read_surface_classification.py` (~9226 tok, huge) — The registry-wide read-surface classification — the committed table.
+- `test_read_surface_classification.py` (~8832 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~3776 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_resources.py` (~7355 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall.py` (~3898 tok, huge) — Tests for recall.py — zero external deps (stdlib unittest)."""
