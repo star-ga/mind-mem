@@ -5,9 +5,8 @@ Adds 7 consolidated dispatchers (``recall``, ``staged_change``,
 ``memory_verify``, ``graph``, ``core``, ``kernels``,
 ``compiled_truth``) that route to the existing 57-tool
 implementations via a ``mode`` / ``phase`` / ``action`` argument.
-The v3.1.x tools remain registered unchanged — this module is
-purely **additive** so callers can adopt the consolidated entry
-points at their own pace without a breaking change.
+The specialised tool names remain available. This module owns the
+``recall`` wire name; its legacy Python implementation stays callable.
 
 **Why add consolidators?** Agent context windows are finite, and
 tool-selection reliability degrades as the catalog grows. 57 tool
@@ -27,10 +26,13 @@ Design notes:
 * Each dispatcher returns the same JSON envelope shape the
   underlying tool returns. The dispatcher layer is transparent
   to the caller.
-* Backward compatibility: the v3.1.x 57 tool names remain
-  registered. ``public.recall(mode='bm25', query=...)`` and
-  ``recall(query=...)`` produce identical envelopes; new agents
-  can use either.
+* Backward compatibility: the v3.1.x tool names remain registered,
+  with ONE deliberate exception -- ``recall``. This module is its
+  single wire owner; ``tools.recall.recall`` keeps the Python API
+  and remains the implementation this dispatcher calls, but does
+  not register the wire name. ``public.recall(mode='bm25', ...)``
+  and the v3.1.x ``recall(...)`` still produce identical envelopes;
+  new agents can use either.
 
 v4.0 will move the 39 specialised tools behind an opt-in
 ``mcp.expose_advanced_tools`` flag (default off) once the
@@ -58,6 +60,9 @@ def _err(message: str, **extra: Any) -> str:
 
 
 # ───────────────────────────────────────────────────────────
+#: Modes whose implementation produces the ``_explain`` score decomposition.
+EXPLAIN_MODES = frozenset({"auto", "bm25", "hybrid"})
+
 # recall — consolidates 8 retrieval tools
 # ───────────────────────────────────────────────────────────
 
@@ -76,12 +81,21 @@ def recall(
     max_tokens: int = 2000,
     signals: str = "",
     scoring_instant: str = "",
+    explain: bool = False,
 ) -> str:
     """Unified retrieval entry point.
 
     Backward compatibility: v3.1.x callers passing ``backend=``
     (rather than ``mode=``) still work — the dispatcher treats
-    ``backend`` as an alias for ``mode`` when it's set.
+    ``backend`` as an alias for ``mode`` when it's set. That alias
+    also selects ``explain`` support: ``backend='bm25'`` resolves to
+    ``mode='bm25'``, which is an explaining mode.
+
+    ``explain=True`` adds the ``_explain`` score decomposition to
+    every hit, for the modes in :data:`EXPLAIN_MODES` (``auto``,
+    ``bm25``, ``hybrid``) whose implementation produces it. Any
+    other mode REFUSES ``explain=True`` with an error envelope
+    rather than accepting the flag and silently dropping it.
 
     ``mode`` dispatches to the specialised implementation:
 
@@ -128,14 +142,20 @@ def recall(
 
     from . import recall as _r
 
-    if mode in ("auto", "bm25", "hybrid"):
+    if mode in EXPLAIN_MODES:
         return _r._recall_impl(
             query,
             limit=limit,
             active_only=active_only,
             backend=mode,
+            explain=explain,
             scoring_instant=scoring_instant or None,
         )
+    # Every branch below routes to an implementation that does not produce the
+    # ``_explain`` decomposition. Accepting the flag and discarding it is the
+    # exact failure this change exists to end, so it is refused explicitly.
+    if explain:
+        return _err(f"explain=True is not available for mode={mode!r}; supported modes: {', '.join(sorted(EXPLAIN_MODES))}")
     if mode == "similar":
         if not block_id:
             return _err("mode='similar' requires 'block_id'")
@@ -446,15 +466,11 @@ def compiled_truth(
 def register(mcp) -> None:
     """Register the 7 consolidated v3.2.0 dispatchers on *mcp*.
 
-    Collides-safe: each dispatcher's name (``recall``, ``graph``,
-    etc.) is deliberately distinct from every legacy tool name in
-    the 57-tool surface, so this registration is purely additive
-    when layered on top of the existing ``<domain>.register(mcp)``
-    calls in ``server.py``. (``recall`` as a dispatcher vs
-    ``recall`` as the v3.1.x tool: the v3.2.0 dispatcher wins
-    because it registers last in ``server.py`` registration order,
-    and FastMCP's internal registry is a straight dict — the newer
-    binding replaces the older one at the same name.)
+    Additive for six of the seven: ``graph`` and the rest use names no
+    legacy tool claims. ``recall`` is the exception, and this module
+    is its SINGLE wire owner — ``tools.recall.register`` no longer
+    registers that name, so ownership no longer depends on which
+    module registers last in ``server.py``.
 
     v3.2.0 callers can opt into the consolidated surface tool by
     tool; v3.1.x tool names remain usable unchanged for every tool

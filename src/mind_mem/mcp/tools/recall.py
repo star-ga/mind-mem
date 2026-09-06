@@ -1456,8 +1456,13 @@ def prefetch(signals: str, limit: int = 5) -> str:
 
 
 def register(mcp) -> None:
-    """Wire the recall tools onto *mcp*."""
-    mcp.tool(recall)
+    """Wire the recall tools onto *mcp*.
+
+    ``recall`` is intentionally absent: :mod:`mind_mem.mcp.tools.public` is the
+    single wire owner of that name and delegates back to :func:`recall` above,
+    which stays exported and callable as the Python API. Registering it in both
+    places made the surviving surface depend on registration order.
+    """
     mcp.tool(pack_recall_budget)
     mcp.tool(recall_with_axis)
     mcp.tool(hybrid_search)
