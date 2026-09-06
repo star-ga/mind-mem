@@ -13,6 +13,7 @@ imported cleanly without the optional dependencies installed.
 
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
@@ -57,6 +58,38 @@ __all__ = ["PostgresBlockStore", "BlockStoreError"]
 # pool, regardless of how many wrapper instances the factory constructs.
 _pool_registry: dict[tuple[str, str], Any] = {}
 _pool_registry_lock = threading.Lock()
+_pool_registry_shutdown = False
+
+
+def _shutdown_pool_registry() -> None:
+    """Close every shared pool before late interpreter finalization.
+
+    The registry deliberately keeps pools alive for the process lifetime so
+    repeated MCP calls reuse their worker threads.  At process exit, however,
+    leaving those workers to ``ConnectionPool.__del__`` is too late: Python
+    3.14 refuses to join daemon threads during finalization.  Detach all pools
+    atomically, then close them without holding the registry lock so a close
+    callback cannot deadlock by re-entering registry code.
+
+    Setting the shutdown flag in the same critical section prevents an
+    in-flight or re-entrant factory call from publishing a new pool after the
+    final snapshot.  Duplicate pool references are closed once, and repeated
+    or concurrent shutdown calls are harmless.
+    """
+    global _pool_registry_shutdown
+    with _pool_registry_lock:
+        _pool_registry_shutdown = True
+        pools = {id(pool): pool for pool in _pool_registry.values()}
+        _pool_registry.clear()
+
+    for pool in pools.values():
+        try:
+            pool.close()
+        except Exception as exc:
+            _log.debug("pg_pool_shutdown_failed: %s", exc)
+
+
+atexit.register(_shutdown_pool_registry)
 
 # ─── Fast-fail connection bounds (#140) ───────────────────────────────────────
 # A down / unreachable Postgres must fail *fast and loud*, never stall the
@@ -747,14 +780,22 @@ class PostgresBlockStore:
         still caches the resolved pool locally so repeated calls on the
         same instance skip the registry lookup.
         """
-        if self._pool is not None:
-            return self._pool
-        _, ConnectionPool = _require_psycopg()
-        with self._init_lock:
+        # The registry lock makes the fast path participate in the same
+        # lifecycle boundary as shutdown: once shutdown detaches the registry,
+        # no caller can return or publish another shared pool.
+        with _pool_registry_lock:
+            if _pool_registry_shutdown:
+                raise RuntimeError("Postgres connection-pool registry is shut down")
             if self._pool is not None:
                 return self._pool
+        _, ConnectionPool = _require_psycopg()
+        with self._init_lock:
             key = (self._dsn, self._schema)
             with _pool_registry_lock:
+                if _pool_registry_shutdown:
+                    raise RuntimeError("Postgres connection-pool registry is shut down")
+                if self._pool is not None:
+                    return self._pool
                 pool = _pool_registry.get(key)
                 if pool is None or pool.closed:
                     pool = ConnectionPool(
