@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1478 | **Est. tokens:** ~4417021
-**Generated:** 2026-09-06 14:23 UTC
+**Files:** 1478 | **Est. tokens:** ~4417077
+**Generated:** 2026-09-06 14:47 UTC
 
 ## Token Budget Guide
 
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 229 | ~1055808 |
+| `src/mind_mem/` | 229 | ~1055835 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~47468 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 624 | ~1916322 |
+| `tests/` | 624 | ~1916351 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -773,7 +773,7 @@
 - `evidence_bundle.py` (~2205 tok, huge) — Structured evidence bundle for answerer co-design (v3.3.0 Tier 3 #7).
 - `evidence_objects.py` (~13218 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3313 tok, huge) — Deterministic evidence packer for Mind-Mem.
-- `evidence_recovery.py` (~10283 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `evidence_recovery.py` (~10310 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `extraction_feedback.py` (~1877 tok, huge) — mind-mem Extraction Quality Feedback Tracker.
 - `extractor.py` (~7670 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `feature_gate.py` (~2240 tok, huge) — Shared config-resolver for retrieval features (architect audit item #6).
@@ -1292,7 +1292,7 @@
 - `test_every_serving_surface_attests.py` (~10651 tok, huge) — Every door proves what it served — not one of them.
 - `test_evidence_bundle.py` (~1562 tok, huge) — v3.3.0 Tier 3 #7 — structured evidence bundle.
 - `test_evidence_chain_fork_refusal.py` (~2849 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_evidence_chain_recovery.py` (~9768 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_evidence_chain_recovery.py` (~9797 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_evidence_forward_compat.py` (~2819 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_evidence_objects.py` (~4263 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_evidence_packer.py` (~5180 tok, huge) — Tests for the evidence packer module."""

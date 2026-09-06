@@ -702,6 +702,8 @@ def test_the_archive_is_left_read_only(tmp_path):
 
     mode = os.stat(result.archive_path).st_mode & 0o777
     assert mode & 0o222 == 0, oct(mode)
+    if os.name == "posix":
+        assert mode == 0o400, "recovery must not expose archived evidence to other users"
 
 
 # ---------------------------------------------------------------------------

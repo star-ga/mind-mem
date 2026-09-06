@@ -737,9 +737,10 @@ def recover_chain(
         # An archive is not a place anything appends to again. Dropping the
         # write bits will not stop a determined root, and is not meant to:
         # it stops the ordinary accident of a tool opening the nearest
-        # matching filename for append.
+        # matching filename for append. Keep the archived evidence readable
+        # only by its owner rather than widening access during recovery.
         try:
-            os.chmod(archive_path, 0o444)
+            os.chmod(archive_path, 0o400)
         except OSError:  # pragma: no cover - platform dependent
             _log.info("evidence_archive_chmod_skipped", path=archive_path)
 
