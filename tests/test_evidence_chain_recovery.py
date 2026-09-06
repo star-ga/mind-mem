@@ -380,10 +380,10 @@ def test_recovery_preserves_a_changed_partial_archive_on_race_abort(tmp_path, mo
         names = [name for name in os.listdir(directory) if ARCHIVE_INFIX in name]
         assert len(names) == 1
         archive = os.path.join(directory, names[0])
-        os.chmod(archive, 0o644)
+        os.chmod(archive, 0o600)
         with open(archive, "ab") as handle:
             handle.write(b"changed by another actor")
-        os.chmod(archive, 0o444)
+        os.chmod(archive, 0o400)
         _raw_append(store, _GENESIS_HASH, "B-raced")
         return real_metadata(*args, **kwargs)
 
