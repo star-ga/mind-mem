@@ -1,32 +1,35 @@
-# Code-scanning triage — the 17 alerts blocking 5.0.2
+# Code-scanning triage — historical findings and follow-up
 
-Alerts as recorded at commit `6cd37e5f`. Line numbers are given twice where
-they moved: **`@6cd37e5f`** is the line the alert points at, **`@now`** is the
-line in the tree after the fixes below.
+The table below records the original review of alerts #241–#257. Its refreshed
+line anchors refer to commit `69c8bc2`; they are historical locations, not line
+numbers guaranteed to match later fixes.
 
-Nothing here has been dismissed on GitHub. Dismissal is an outward-facing act
-and the operator makes it; this file is the evidence for that decision.
+The authenticated inventory on 2026-09-06 at main `aa4bc3e` contained **18 open
+alerts, 13 marked high**. No alert dismissal is performed by this change.
+Individual current instances still require review before closure; shared source
+paths do not establish a verdict for every alert.
 
-**Result: 1 true positive (fixed), 16 false positives (rationale below).**
-The true positive is *not* one of the flows CodeQL reported — it was found by
-auditing the `apply_engine` cluster rather than accepting it.
+Independent review found additional snapshot defects beyond the original
+reported flows. The implementation in `ba92a36` addresses the paths described
+in the final section. The earlier aggregate statement “1 true positive, 16 false
+positives” is withdrawn: an unreported defect is not one of those 17 alerts.
 
 ---
 
-## Summary
+## Historical assessment
 
 | # | Rule | Location `@6cd37e5f` | Verdict | Action |
 |---|------|----------------------|---------|--------|
-| 243 | py/path-injection | apply_engine.py:521 | FALSE POSITIVE | rationale §1 |
-| 244 | py/path-injection | apply_engine.py:540 | FALSE POSITIVE | rationale §1 |
-| 245 | py/path-injection | apply_engine.py:561 | FALSE POSITIVE (reported flow) | rationale §1 — **but see §2: the same line held a real, unreported defect, now fixed** |
-| 246 | py/path-injection | apply_engine.py:2047 | FALSE POSITIVE | rationale §1 |
-| 247 | py/path-injection | block_parser.py:574 | FALSE POSITIVE | rationale §1 |
-| 248 | py/path-injection | block_store.py:1257 | FALSE POSITIVE | rationale §1 |
-| 249 | py/path-injection | block_store.py:1290 | FALSE POSITIVE | rationale §1 |
-| 254 | py/path-injection | block_store.py:1304 | FALSE POSITIVE | rationale §1 |
-| 241 | py/clear-text-storage-sensitive-data | apply_engine.py:2151 | FALSE POSITIVE | rationale §3 |
-| 242 | py/clear-text-storage-sensitive-data | apply_engine.py:2153 | FALSE POSITIVE | rationale §3 |
+| 243 | py/path-injection | apply_engine.py:522 (was 521 @6cd37e5f) | FALSE POSITIVE | rationale §1 |
+| 244 | py/path-injection | apply_engine.py:541 (was 540 @6cd37e5f) | FALSE POSITIVE | rationale §1 |
+| 245 | py/path-injection | apply_engine.py:581 (was 561 @6cd37e5f) | FALSE POSITIVE (reported flow) | rationale §1 — **but see §2: the same line held a real, unreported defect, now fixed** |
+| 246 | py/path-injection | apply_engine.py:2139 (was 2047 @6cd37e5f) | FALSE POSITIVE | rationale §1 |
+| 247 | py/path-injection | block_parser.py:604 (was 574 @6cd37e5f) | FALSE POSITIVE | rationale §1 |
+| 248 | py/path-injection | block_store.py:1410 (was 1257 @6cd37e5f) | FALSE POSITIVE | rationale §1 |
+| 249 | py/path-injection | block_store.py:1443 (was 1290 @6cd37e5f) | FALSE POSITIVE | rationale §1 |
+| 254 | py/path-injection | block_store.py:1457 (was 1304 @6cd37e5f) | FALSE POSITIVE | rationale §1 |
+| 241 | py/clear-text-storage-sensitive-data | apply_engine.py:2247 (was 2151 @6cd37e5f) | FALSE POSITIVE | rationale §3 |
+| 242 | py/clear-text-storage-sensitive-data | apply_engine.py:2249 (was 2153 @6cd37e5f) | FALSE POSITIVE | rationale §3 |
 | 250 | py/tarslip | scripts/alignment_authorities.py:273 | FALSE POSITIVE (re-verified) | rationale §4 |
 | 255 | py/insecure-protocol | tests/test_network_tls_floor.py:267 | FALSE POSITIVE (re-verified) | rationale §5 |
 | 256 | py/insecure-protocol | tests/test_network_tls_floor.py:318 | FALSE POSITIVE (re-verified) | rationale §5 |
@@ -249,13 +252,13 @@ Mutation control (the test must be able to fail): restoring the bare
 the newline test red. Both were run, then reverted and confirmed byte-identical
 with `cmp -s`.
 
-### Related, not fixed, reported instead
+### Related defect, corrected in the follow-up
 
-`apply_engine.generate_diff_text:1471` joins `files_touched` entries onto
-`snap_dir` with a partial normalisation (`:1468-1470`) and no rejection. Its
-input is internally generated from the proposal's ops rather than from file
-content, and it is not one of the 17 alerts, so it is named here rather than
-changed under a security triage.
+The historical `generate_diff_text` path joined proposal-supplied `FilesTouched`
+entries onto the snapshot directory without full confinement. Those entries
+must be treated as untrusted even though they pass through proposal processing.
+The follow-up routes the diff and snapshot legs through the shared containment
+guard.
 
 ---
 
@@ -469,3 +472,80 @@ constant list and carries no claim that a specific injection exists.
 * `pytest` over the 86 test files touching rollback / restore / apply_engine /
   MANIFEST — **1935 passed, 34 skipped, 0 failed**
 * Mutation controls run and reverted (`cmp -s` byte-identical) for both fixes
+
+
+---
+
+## Re-verification 2026-09-06 — anchors refreshed, two claims retracted
+
+Every table anchor above was stale: the file moved between `6cd37e5f` and
+`69c8bc2`, so each row pointed at a line that was no longer the sink. Rows now
+carry the anchor **verified at 69c8bc2** with the old line kept beside it. Note
+that the fixes on `fix/snapshot-path-confinement-20260906` shift these again;
+an anchor is only meaningful with its commit.
+
+### Two statements in this document are wrong and are retracted
+
+1. **"the alphabet is `[0-9]` plus one `-`, which spells no path separator."**
+   `\d` is Unicode-aware. A `receipt_ts` of fullwidth or Arabic-Indic digits is
+   accepted by both the Pydantic model and the engine gate. The correct wording
+   is "only Unicode decimal digits, none of which is a path separator" — the
+   conclusion survives, the reasoning as written did not.
+
+2. **"no snapshot this product writes can reach the legacy branch."**
+   `MANIFEST.json` is written LAST, and `_read_manifest` returns `None` when it
+   is absent — so an interrupted snapshot leaves a manifest-less directory and
+   the legacy branch fires. It was observed firing. The legacy path is reachable
+   from ordinary operation, not only from a crafted snapshot.
+
+### Reachability correction
+
+`rollback()` has **five** callers, not three: REST, the MCP `rollback_proposal`
+tool, `public.py:246` `staged_change` via `__wrapped__`, the gRPC
+`handle_governance` route, and the CLI `--rollback`. The false-positive verdicts
+that rest on reachability therefore rest on `staged_change` being in
+`ADMIN_TOOLS` (`acl.py:97`) — **a future reclassification to `USER_TOOLS`
+invalidates those findings** and this table must be re-derived, not re-read.
+
+### What the 2026-09-06 pass changed in code
+
+The reported flows remain unexploitable. Triage nevertheless measured defects
+the scanner did not report, fixed on `fix/snapshot-path-confinement-20260906`:
+
+    e91791b  FilesTouched confinement on the diff and snapshot legs
+    17fe36b  symlinked snapshot content on the legacy restore path
+    f887d62  pre-restore receipt path through the workspace guard
+    b86e6a8  governance receipt_ts gate anchored with \Z
+
+Alert #249 stays open in this record as a **disagreement**, not a verdict: two
+independent reviewers split on whether a sink with a reproduced out-of-workspace
+read and a comment misstating its own protection can be called clean. Its current instance must be rechecked after the complete snapshot repair
+lands; this disagreement is not a dismissal instruction.
+
+
+## Integrated snapshot repair and validation
+
+Commit `ba92a36` includes the four functional corrections listed above and the
+independent follow-up: every full or partial snapshot destination is confined
+before directory creation or copying. Previously, a pre-existing `decisions`
+symlink inside a snapshot could cause a normal full snapshot to write outside
+that directory. The corrected path refuses that entry and preserves normal
+root-file copies.
+
+Manifest validation now accepts the supported object and legacy file-list
+formats and rejects malformed container, file-entry, cleanup-inventory, and
+version shapes with `ValueError` before restoration. Legacy restore filters
+nested file and directory symlinks. Legitimate workspace symlinks remain
+supported, and governance ledgers remain excluded from rollback.
+
+Validation: **172 tests passed on Python 3.14**, covering the new confinement and
+manifest cases, receipt timestamp checks, and existing backup, snapshot, apply,
+abort, and double-apply behavior. Ruff lint and formatting passed. These tests
+exercise static path confinement; they do not establish atomic protection
+against a concurrent process replacing filesystem entries.
+
+Two newer alert locations were inspected separately: #262 refers to the name
+of an environment variable used to obtain a TLS key passphrase, not a literal
+passphrase; #263 points to a loopback TLS test listener whose context is supplied
+by positive and deliberately incompatible handshake tests. These observations
+are inputs to individual alert review, not automatic dismissal of either alert.

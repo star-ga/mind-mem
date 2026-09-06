@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1481 | **Est. tokens:** ~4421373
-**Generated:** 2026-09-06 16:22 UTC
+**Files:** 1481 | **Est. tokens:** ~4422524
+**Generated:** 2026-09-06 16:30 UTC
 
 ## Token Budget Guide
 
@@ -67,7 +67,7 @@
 | `sdk/js/test/` | 1 | ~3096 |
 | `sdk/release/` | 3 | ~4922 |
 | `sdk/spec/` | 2 | ~5702 |
-| `security/` | 5 | ~23545 |
+| `security/` | 5 | ~24696 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
@@ -628,7 +628,7 @@
 
 - `api-security-2026-04-28.md` (~5929 tok, huge) — MIND-Mem v3.1.8 — API / MCP Surface Security Audit
 - `api-security-review-2026-04-28.md` (~3563 tok, huge) — MIND-Mem API Security Review — 2026-04-28
-- `code-scanning-triage-2026-09-04.md` (~5712 tok, huge) — Code-scanning triage — the 17 alerts blocking 5.0.2
+- `code-scanning-triage-2026-09-04.md` (~6863 tok, huge) — Code-scanning triage — historical findings and follow-up
 - `threat-model-2026-04-28.md` (~1517 tok, huge) — MIND-Mem Threat Model — 2026-04-28
 - `threat-model-online-trainer.md` (~6824 tok, huge) — MIND-Mem Threat Model — `online_trainer.py` (T-009) — 2026-08-31
 ### `skills/apply-proposal/`
