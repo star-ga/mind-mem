@@ -68,7 +68,8 @@ _ARCH_METRIC_ALLOWLIST = frozenset(
         "governance_kernel_coverage",
     }
 )
-_ARCH_ID_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,128}$")
+# Anchor the entire identifier; `$` would also accept a trailing newline.
+_ARCH_ID_RE = re.compile(r"\A[A-Za-z0-9_.\-]{1,128}\Z")
 _ARCH_PATH_MAX = 4096
 _ARCH_HISTORY_DAYS_MAX = 36500  # ~100 years, generous upper bound
 
@@ -104,16 +105,18 @@ def _validate_arch_path(name: str, value: str) -> str:
 
 
 def _validate_arch_id(name: str, value: str) -> str:
-    """Validate an opaque identifier (agent_id, commit_sha) for subprocess.
+    """Validate an opaque identifier (agent_id, commit_sha) for list argv.
 
-    Allowed: ``^[A-Za-z0-9_.\\-]{1,128}$``. Any character outside that
-    class is rejected so a hostile caller cannot smuggle whitespace,
-    quote, or flag-prefix bytes into the arch-mind argv.
+    Allow 1–128 ASCII letters, digits, underscores, dots, or hyphens. Reject
+    leading hyphens so an identifier cannot become an arch-mind CLI option;
+    internal hyphens remain valid. Full-string anchoring rejects newlines.
     """
     if not isinstance(value, str):
         raise ArchMindError(f"arch-mind {name}: expected str, got {type(value).__name__}")
+    if value.startswith("-"):
+        raise ArchMindError(f"arch-mind {name}: may not start with '-' (flag-injection guard)")
     if not _ARCH_ID_RE.match(value):
-        raise ArchMindError(f"arch-mind {name}: must match ^[A-Za-z0-9_.\\-]{{1,128}}$")
+        raise ArchMindError(f"arch-mind {name}: must match \\A[A-Za-z0-9_.\\-]{{1,128}}\\Z")
     return value
 
 

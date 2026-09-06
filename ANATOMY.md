@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1492 | **Est. tokens:** ~4462741
-**Generated:** 2026-09-06 17:34 UTC
+**Files:** 1489 | **Est. tokens:** ~4452756
+**Generated:** 2026-09-06 18:23 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 38 | ~57626 |
+| `./` | 36 | ~48800 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5891 |
 | `.gemini/` | 1 | ~28 |
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~209502 |
+| `docs/` | 93 | ~206754 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -79,14 +79,14 @@
 | `src/mind_mem/importers/` | 9 | ~26660 |
 | `src/mind_mem/mcp/` | 3 | ~6417 |
 | `src/mind_mem/mcp/infra/` | 8 | ~12671 |
-| `src/mind_mem/mcp/tools/` | 29 | ~110252 |
+| `src/mind_mem/mcp/tools/` | 29 | ~110311 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11368 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 633 | ~1938390 |
+| `tests/` | 634 | ~1939920 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -123,8 +123,6 @@
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 - `AGENTS.md` (~995 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~4413 tok, huge) — MIND-Mem — Persistent AI Memory System
-- `CLAUDE.md` (~4413 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `CLAUDE.md` (~4413 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `CONTRIBUTING.md` (~753 tok, large) — Contributing to MIND-Mem
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
@@ -440,8 +438,6 @@
 - `federation-setup.md` (~2332 tok, huge) — mind-mem federation & multi-machine setup
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `governance.md` (~1374 tok, large) — MIND-Mem — governance design (5 layers)
-- `governance.md` (~1374 tok, large) — MIND-Mem — governance design (5 layers)
 - `governance.md` (~1374 tok, large) — MIND-Mem — governance design (5 layers)
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
@@ -853,7 +849,7 @@
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `_helpers.py` (~1412 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `agent.py` (~3001 tok, huge) — Agent-bridge + vault MCP tools.
-- `arch_mind.py` (~3416 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
+- `arch_mind.py` (~3475 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
 - `audit.py` (~4247 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~2334 tok, huge) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~2845 tok, huge) — Calibration MCP tools — feedback (quality) + outcome attribution (utility).
@@ -1169,6 +1165,7 @@
 - `test_apply_engine_op_routing.py` (~1849 tok, huge) — v3.2.2 — execute_op routes block-level ops through BlockStore.
 - `test_apply_engine_text_range_atomic.py` (~2033 tok, huge) — Text-range ops (``insert_after_block`` / ``replace_range``) must be atomic.
 - `test_apply_engine_timestamp_utc.py` (~3319 tok, huge) — Apply/rollback audit timestamps must be genuinely UTC, not local-time-with-a-Z.
+- `test_arch_mind_argument_guards.py` (~1530 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_arch_mind_fixture_provenance.py` (~3452 tok, huge) — Provenance of the arch-mind governance fixtures.
 - `test_arch_mind_rules_gate.py` (~4959 tok, huge) — Mechanical enforcement of ``.arch-mind/rules.mind``.
 - `test_atomicity_maintenance_scope.py` (~1326 tok, large) — v3.2.0 §2.2 — regression test for the ``maintenance/`` atomicity fix.
