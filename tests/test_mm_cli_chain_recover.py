@@ -172,6 +172,25 @@ def test_recover_refuses_a_missing_store(tmp_path, capsys):
     assert "no evidence store" in capsys.readouterr().err
 
 
+def test_recover_refuses_a_mismatched_sha256_pin_without_mutation(damaged, capsys):
+    before = _sha256(damaged)
+    directory_before = sorted(os.listdir(os.path.dirname(damaged)))
+
+    assert main(["chain", "recover", "--store", damaged, "--confirm", "--expect-sha256", "0" * 64]) == 3
+
+    assert "in-lock survey" in capsys.readouterr().err
+    assert _sha256(damaged) == before
+    assert sorted(os.listdir(os.path.dirname(damaged))) == directory_before
+
+
+def test_recover_accepts_the_exact_sha256_pin(damaged, capsys):
+    expected = _sha256(damaged)
+
+    assert main(["chain", "recover", "--store", damaged, "--confirm", "--expect-sha256", expected]) == 0
+
+    assert expected in capsys.readouterr().out
+
+
 def test_recover_seals_and_reanchors(damaged, capsys):
     original = _sha256(damaged)
     directory = os.path.dirname(damaged)

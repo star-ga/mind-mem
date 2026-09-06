@@ -3513,7 +3513,13 @@ def _cmd_chain_recover(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        result = recover_chain(store, actor=args.actor, reason=args.reason, confirm=True)
+        result = recover_chain(
+            store,
+            actor=args.actor,
+            reason=args.reason,
+            confirm=True,
+            expected_sha256=args.expect_sha256,
+        )
     except ChainRecoveryRefused as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return _CHAIN_REFUSED
@@ -4962,6 +4968,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ch_recover.add_argument("--actor", default="operator", help="Identity recorded in the anchor record.")
     ch_recover.add_argument("--reason", default="", help="Free text recorded in the anchor's metadata.")
+    ch_recover.add_argument(
+        "--expect-sha256",
+        default=None,
+        help=("Refuse unless the digest surveyed under the append lock matches this reviewed 64-hex SHA-256 pin."),
+    )
     ch_recover.add_argument("--json", action="store_true", help="Emit machine-readable JSON for the result.")
     ch_recover.set_defaults(func=_cmd_chain_recover)
 

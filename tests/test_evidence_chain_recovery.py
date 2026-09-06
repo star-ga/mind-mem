@@ -44,6 +44,7 @@ from mind_mem.evidence_recovery import (
     ARCHIVE_MISMATCH,
     ARCHIVE_MISSING,
     ARCHIVE_OK,
+    ARCHIVE_UNREADABLE,
     BREAK_FORK_FROM_STALE_HEAD,
     BREAK_GENESIS_RESTART,
     RECOVERY_VERB,
@@ -53,6 +54,7 @@ from mind_mem.evidence_recovery import (
     survey_chain_file,
     verify_archives,
 )
+from mind_mem.verify_cli import EXIT_EVIDENCE, verify_workspace
 
 # ---------------------------------------------------------------------------
 # Fixtures — chains damaged the way the field damaged them
@@ -209,6 +211,27 @@ def test_recovery_refuses_a_store_that_does_not_exist(tmp_path):
         recover_chain(store, actor="operator", confirm=True)
 
 
+def test_recovery_refuses_a_mismatched_reviewed_digest_without_mutation(tmp_path):
+    store = _genesis_restart_store(tmp_path)
+    before = _sha256_file(store)
+    directory_before = sorted(os.listdir(os.path.dirname(store)))
+
+    with pytest.raises(ChainRecoveryRefused, match="in-lock survey"):
+        recover_chain(store, actor="operator", confirm=True, expected_sha256="0" * 64)
+
+    assert _sha256_file(store) == before
+    assert sorted(os.listdir(os.path.dirname(store))) == directory_before
+
+
+def test_recovery_accepts_the_exact_reviewed_digest(tmp_path):
+    store = _genesis_restart_store(tmp_path)
+    expected = _sha256_file(store)
+
+    result = recover_chain(store, actor="operator", confirm=True, expected_sha256=expected.upper())
+
+    assert result.archive_sha256 == expected
+
+
 def test_recovery_aborts_when_a_writer_appends_mid_operation(tmp_path, monkeypatch):
     """A record that landed after the archive was taken must not be destroyed.
 
@@ -330,6 +353,20 @@ def test_anchor_carries_the_break_census(tmp_path):
     assert meta["archived_first_break_line"] == 4
     assert meta["archived_last_break_line"] == 5
     assert meta["archived_chain"] == os.path.basename(result.archive_path)
+
+
+def test_anchor_explicitly_denies_continuity_and_hashes_both_claims(tmp_path):
+    store = _genesis_restart_store(tmp_path)
+    result = recover_chain(store, actor="operator", confirm=True)
+    meta = result.anchor.metadata
+
+    assert meta["continues_predecessor_chain"] is False
+    assert meta["predecessor_trust_restored"] is False
+    assert EvidenceChain(store_path=store).verify(result.anchor)
+
+    changed = json.loads(json.dumps(result.anchor.to_dict()))
+    changed["metadata"]["continues_predecessor_chain"] = True
+    assert not EvidenceChain().verify(EvidenceObject.from_dict(changed))
 
 
 def test_no_stored_hash_is_rewritten(tmp_path):
@@ -530,6 +567,80 @@ def test_a_store_with_no_anchors_reports_nothing_rather_than_passing(tmp_path):
     """An empty result is not a pass, and callers must not read it as one."""
     store = _clean_store(tmp_path)
     assert verify_archives(store) == ()
+
+
+def test_workspace_verifier_discloses_archive_absence(tmp_path):
+    _clean_store(tmp_path)
+
+    report = verify_workspace(str(tmp_path))
+
+    assert report.checks["evidence_archives"] is True
+    assert report.details["evidence_archives"] == {"archives": 0, "statuses": {}, "archive_names": []}
+    assert any("no recovery anchor" in message for message in report.messages)
+
+
+def test_workspace_verifier_checks_an_attested_archive(tmp_path):
+    store, archive = _recovered(tmp_path)
+
+    report = verify_workspace(str(tmp_path))
+
+    assert report.checks["evidence_archives"] is True
+    assert report.details["evidence_archives"]["archives"] == 1
+    assert report.details["evidence_archives"]["statuses"] == {ARCHIVE_OK: 1}
+    assert report.details["evidence_archives"]["archive_names"] == [os.path.basename(archive)]
+    assert report.checks["evidence_chain"] is True
+    assert os.path.samefile(store, tmp_path / "memory" / "evidence_chain.jsonl")
+
+
+@pytest.mark.parametrize("damage", ["missing", "mismatch"])
+def test_workspace_verifier_fails_on_a_missing_or_mismatched_archive(tmp_path, damage):
+    _store, archive = _recovered(tmp_path)
+    os.chmod(archive, 0o644)
+    if damage == "missing":
+        os.remove(archive)
+        expected_status = ARCHIVE_MISSING
+    else:
+        with open(archive, "ab") as handle:
+            handle.write(b"tamper")
+        expected_status = ARCHIVE_MISMATCH
+
+    report = verify_workspace(str(tmp_path))
+
+    assert report.checks["evidence_archives"] is False
+    assert report.details["evidence_archives"]["statuses"] == {expected_status: 1}
+    assert report.exit_code == EXIT_EVIDENCE
+
+
+def test_workspace_verifier_fails_when_an_archive_cannot_be_read(tmp_path, monkeypatch):
+    _store, archive = _recovered(tmp_path)
+    real_open = open
+
+    def deny_archive(path, *args, **kwargs):
+        if os.path.abspath(os.fspath(path)) == os.path.abspath(archive):
+            raise PermissionError("synthetic archive read refusal")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", deny_archive)
+    report = verify_workspace(str(tmp_path))
+
+    assert report.checks["evidence_archives"] is False
+    assert report.details["evidence_archives"]["statuses"] == {ARCHIVE_UNREADABLE: 1}
+    assert report.exit_code == EXIT_EVIDENCE
+
+
+def test_workspace_verifier_fails_closed_on_malformed_archive_claim(tmp_path):
+    store, _archive = _recovered(tmp_path)
+    rows = [json.loads(line) for line in open(store, encoding="utf-8") if line.strip()]
+    rows[0]["metadata"]["archived_bytes"] = "not-an-integer"
+    with open(store, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(rows[0]) + "\n")
+
+    report = verify_workspace(str(tmp_path))
+
+    assert report.checks["evidence_chain"] is False
+    assert report.checks["evidence_archives"] is False
+    assert report.details["evidence_archives"]["statuses"] == {ARCHIVE_MISMATCH: 1}
+    assert report.exit_code == EXIT_EVIDENCE
 
 
 def test_the_check_resolves_by_basename_only(tmp_path):

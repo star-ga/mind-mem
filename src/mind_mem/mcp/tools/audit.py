@@ -136,7 +136,13 @@ def mind_mem_verify(snapshot: str = "") -> str:
 #: Non-ledger checks :func:`~mind_mem.verify_cli.verify_workspace` also
 #: produces, republished beside the ledgers so the envelope carries every
 #: row the verifier ran rather than the subset this module remembers.
-_EXTRA_CHECKS: tuple[str, ...] = ("spec_binding", "snapshot_anchor", "merkle_root", "chain_head")
+_EXTRA_CHECKS: tuple[str, ...] = (
+    "spec_binding",
+    "evidence_archives",
+    "snapshot_anchor",
+    "merkle_root",
+    "chain_head",
+)
 
 
 @mcp_tool_observe

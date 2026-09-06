@@ -450,5 +450,6 @@ class TestOpenWriteScopes:
         from mind_mem.verify_cli import LEDGER_CHECKS, NON_LEDGER_CHECKS
 
         assert "open_scopes" in NON_LEDGER_CHECKS
+        assert "evidence_archives" in NON_LEDGER_CHECKS
         assert "open_scopes" not in LEDGER_CHECKS
         assert not (set(LEDGER_CHECKS) & set(NON_LEDGER_CHECKS)), "a row in both tuples has no single classification"

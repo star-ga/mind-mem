@@ -233,6 +233,20 @@ def test_the_same_report_with_every_row_present_passes() -> None:
     assert _envelope_over(report)["valid"] is True
 
 
+def test_archive_integrity_is_republished_and_fails_the_workspace_verdict() -> None:
+    from mind_mem.verify_cli import VerifyReport
+
+    report = VerifyReport(workspace="/nowhere", ok=True)
+    for name in LEDGER_CHECKS:
+        report.record(name, True)
+    report.record("evidence_archives", False, details={"archives": 1, "statuses": {"MISSING": 1}})
+
+    envelope = _envelope_over(report)
+    assert envelope["valid"] is True, "archive integrity is not itself a ledger walk"
+    assert envelope["workspace_valid"] is False
+    assert envelope["evidence_archives"] == {"valid": False, "archives": 1, "statuses": {"MISSING": 1}}
+
+
 # ---------------------------------------------------------------------------
 # 4. The docs row names what the tool verifies
 # ---------------------------------------------------------------------------

@@ -797,6 +797,7 @@ class EvidenceChain:
         actor: str,
         reason: str = "",
         confirm: bool = False,
+        expected_sha256: str | None = None,
     ) -> "RecoveryResult":
         """Seal this chain's damaged history and start a new segment.
 
@@ -822,6 +823,8 @@ class EvidenceChain:
             actor: Who is performing the recovery; recorded in the anchor.
             reason: Free text recorded in the anchor's metadata.
             confirm: Must be ``True`` for anything to happen.
+            expected_sha256: Optional reviewed digest checked under the
+                store's append lock before recovery writes anything.
 
         Returns:
             A :class:`~mind_mem.evidence_recovery.RecoveryResult`.
@@ -837,7 +840,13 @@ class EvidenceChain:
         if self._store_path is None:
             raise ChainRecoveryRefused("refusing to re-anchor a memory-only chain: there is no stored history to archive")
 
-        result = recover_chain(self._store_path, actor=actor, reason=reason, confirm=confirm)
+        result = recover_chain(
+            self._store_path,
+            actor=actor,
+            reason=reason,
+            confirm=confirm,
+            expected_sha256=expected_sha256,
+        )
 
         with self._lock:
             # The store now holds exactly one record and this chain is the

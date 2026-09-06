@@ -477,7 +477,7 @@ mm chain survey                      # the workspace's own chain
 mm chain survey --store /tmp/copy.jsonl --limit 0 --json
 ```
 
-### `mm chain recover [workspace] [--store PATH] --confirm [--actor A] [--reason R]`
+### `mm chain recover [workspace] [--store PATH] --confirm [--expect-sha256 HEX] [--actor A] [--reason R]`
 
 Seal a damaged chain and re-anchor it. In order:
 
@@ -501,7 +501,8 @@ damaged chain, **3** on a refusal.
 
 ```
 mm chain recover                                    # census only, writes nothing
-mm chain recover --confirm --actor nikolai --reason "3.8.3 genesis restarts"
+mm chain recover --confirm --expect-sha256 "$REVIEWED_DIGEST" \
+  --actor nikolai --reason "3.8.3 genesis restarts"
 ```
 
 Rehearse on a copy before running against a workspace — `--store` exists for

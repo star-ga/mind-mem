@@ -183,6 +183,7 @@ def test_every_ledger_check_is_named_in_LEDGER_CHECKS(four_ledger_ws: str) -> No
     """
     checks = set(verify_workspace(four_ledger_ws).checks)
     assert checks - set(NON_LEDGER_CHECKS) == set(LEDGER_CHECKS), sorted(checks - set(NON_LEDGER_CHECKS))
+    assert "evidence_archives" in NON_LEDGER_CHECKS
 
 
 def test_json_output_names_all_four_ledgers(four_ledger_ws: str) -> None:

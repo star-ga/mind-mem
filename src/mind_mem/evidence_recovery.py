@@ -513,6 +513,8 @@ def _anchor_metadata(survey: DamageSurvey, archive_path: str, archive_sha256: st
     return {
         "evidence_schema": EVIDENCE_SCHEMA_VERSION,
         RECOVERY_VERB_KEY: RECOVERY_VERB,
+        "continues_predecessor_chain": False,
+        "predecessor_trust_restored": False,
         "archived_chain": os.path.basename(archive_path),
         "archived_sha256": archive_sha256,
         "archived_bytes": survey.byte_size,
@@ -533,6 +535,7 @@ def recover_chain(
     actor: str,
     reason: str = "",
     confirm: bool = False,
+    expected_sha256: str | None = None,
 ) -> RecoveryResult:
     """Seal a damaged evidence store and re-anchor it into a new segment.
 
@@ -563,6 +566,9 @@ def recover_chain(
         confirm: Must be ``True``. Without it nothing is read, copied or
             written — recovery is an operator decision, so the default
             has to be refusal rather than a convenience.
+        expected_sha256: Optional reviewed digest of the damaged store.
+            It is compared with the in-lock survey before any archive or
+            pending segment is created.
 
     Returns:
         A :class:`RecoveryResult` describing the archive and the anchor.
@@ -588,6 +594,15 @@ def recover_chain(
             raise ChainRecoveryRefused(f"refusing to re-anchor {store_path!r}: there is no stored chain at that path")
 
         survey = survey_chain_file(store_path)
+        if expected_sha256 is not None:
+            expected = expected_sha256.strip().lower()
+            if len(expected) != 64 or any(ch not in "0123456789abcdef" for ch in expected):
+                raise ChainRecoveryRefused("expected_sha256 must be exactly 64 hexadecimal characters")
+            if expected != survey.sha256:
+                raise ChainRecoveryRefused(
+                    f"refusing to re-anchor {store_path!r}: reviewed sha256 pin {expected} "
+                    f"does not match the in-lock survey {survey.sha256}; nothing was written"
+                )
         if survey.records == 0:
             raise ChainRecoveryRefused(f"refusing to re-anchor {store_path!r}: the store holds no evidence record to archive")
         if not survey.is_damaged:
@@ -777,6 +792,8 @@ def verify_archives(store_path: str) -> tuple[ArchiveCheck, ...]:
             record = json.loads(stripped)
         except (json.JSONDecodeError, ValueError):
             continue
+        if not isinstance(record, Mapping):
+            continue
         metadata = record.get("metadata")
         if not isinstance(metadata, dict):
             continue
@@ -785,12 +802,30 @@ def verify_archives(store_path: str) -> tuple[ArchiveCheck, ...]:
 
         name = str(metadata.get("archived_chain") or "")
         expected_sha = str(metadata.get("archived_sha256") or "")
-        expected_bytes = int(metadata.get("archived_bytes") or 0)
+        raw_expected_bytes = metadata.get("archived_bytes")
+        expected_bytes = raw_expected_bytes if isinstance(raw_expected_bytes, int) and not isinstance(raw_expected_bytes, bool) else -1
         anchor_id = str(record.get("evidence_id") or "")
         # Resolved beside the store by BASENAME only: the anchor records a
         # basename, and honouring a path from the record would let a rewritten
         # record redirect the check at a file of its choosing.
         path = os.path.join(directory, os.path.basename(name)) if name else ""
+
+        valid_sha = len(expected_sha) == 64 and all(ch in "0123456789abcdef" for ch in expected_sha)
+        if not valid_sha or expected_bytes < 0:
+            checks.append(
+                ArchiveCheck(
+                    anchor_id=anchor_id,
+                    archive_name=name,
+                    archive_path=path,
+                    status=ARCHIVE_MISMATCH,
+                    expected_sha256=expected_sha,
+                    actual_sha256="",
+                    expected_bytes=expected_bytes,
+                    actual_bytes=0,
+                    detail="the recovery anchor carries an invalid archive digest or byte count",
+                )
+            )
+            continue
 
         if not name or not os.path.isfile(path):
             checks.append(

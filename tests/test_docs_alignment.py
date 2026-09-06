@@ -1805,6 +1805,16 @@ class TestArchitectureNamesEveryLedger:
         named = {line.split("`")[1] for line in rows}
         assert "a_fifth_ledger_that_does_not_exist" not in named
 
+    def test_recovery_archive_check_and_false_continuity_claims_are_documented(self) -> None:
+        doc = self.DOC.read_text(encoding="utf-8")
+        for required in (
+            "evidence_archives",
+            "continues_predecessor_chain: false",
+            "predecessor_trust_restored: false",
+            "--expect-sha256",
+        ):
+            assert required in doc, f"recovery verification contract is missing {required!r}"
+
 
 class TestCompiledKernelClaim:
     """ "Scoring kernels compiled from MIND source" is not true of any wheel.

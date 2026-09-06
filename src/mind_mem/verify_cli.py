@@ -56,6 +56,8 @@ walks of one:
   corpus is human-editable Markdown, and a block appended to it by hand
   was indexed, served, and verified green against empty ledgers
   (:mod:`mind_mem.anchoring`).
+* ``evidence_archives`` — every damaged-chain archive attested by a live
+  recovery anchor, re-hashed against its pinned digest and byte count.
 * ``merkle_root`` / ``chain_head`` from an optional
   ``memory/<snapshot>/manifest.json``.
 
@@ -159,6 +161,7 @@ LEDGER_CHECKS: tuple[str, ...] = (
 NON_LEDGER_CHECKS: tuple[str, ...] = (
     "workspace",
     "spec_binding",
+    "evidence_archives",
     "open_scopes",
     "unanchored_blocks",
     "chain_head_seal",
@@ -351,6 +354,53 @@ def check_evidence_chain(workspace: str, report: VerifyReport, *, strict: bool =
         )
         if report.exit_code == EXIT_OK:
             report.exit_code = EXIT_EVIDENCE
+
+
+def check_evidence_archives(workspace: str, report: VerifyReport, *, strict: bool = False) -> None:
+    """Verify every archive attested by a recovery anchor.
+
+    This is a non-ledger check: it reads the recovery claims from the evidence
+    ledger, then verifies the immutable bytes those claims name. A workspace
+    with no recovery anchor reports that absence explicitly and stays valid.
+    Once an anchor exists, every named archive must be present and match.
+    """
+    del strict  # Archive absence is expected until a recovery anchor exists.
+    from .evidence_recovery import ARCHIVE_OK, verify_archives
+
+    path = os.path.join(workspace, "memory", "evidence_chain.jsonl")
+    checks = verify_archives(path) if os.path.isfile(path) else ()
+    if not checks:
+        report.record(
+            "evidence_archives",
+            True,
+            "no recovery anchor attests an archive",
+            details={"archives": 0, "statuses": {}, "archive_names": []},
+        )
+        return
+
+    statuses: dict[str, int] = {}
+    for check in checks:
+        statuses[check.status] = statuses.get(check.status, 0) + 1
+    failed = [check for check in checks if check.status != ARCHIVE_OK]
+    names = [check.archive_name for check in checks]
+    if failed:
+        summary = ", ".join(f"{check.archive_name or '(unnamed)'}={check.status}" for check in failed[:3])
+        report.record(
+            "evidence_archives",
+            False,
+            f"{len(failed)} of {len(checks)} recovery archive(s) failed verification: {summary}",
+            details={"archives": len(checks), "statuses": statuses, "archive_names": names},
+        )
+        if report.exit_code == EXIT_OK:
+            report.exit_code = EXIT_EVIDENCE
+        return
+
+    report.record(
+        "evidence_archives",
+        True,
+        f"{len(checks)} recovery archive(s) verified",
+        details={"archives": len(checks), "statuses": statuses, "archive_names": names},
+    )
 
 
 def check_open_scopes(workspace: str, report: VerifyReport, *, strict: bool = False) -> None:
@@ -903,6 +953,7 @@ def verify_workspace(
     check_chain_head_seal(workspace, report, strict=strict)
     check_spec_binding(workspace, report, strict=strict)
     check_evidence_chain(workspace, report, strict=strict)
+    check_evidence_archives(workspace, report, strict=strict)
     check_open_scopes(workspace, report, strict=strict)
     check_audit_sidecar(workspace, report, strict=strict)
     check_served_ledger(workspace, report, strict=strict)

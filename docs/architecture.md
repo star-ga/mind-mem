@@ -175,10 +175,13 @@ moved, and the fourth says what a reader was later shown. A verification that
 walked one and reported on "the audit chain" would be answering a different
 question from the one asked.
 
-Two further rows in the same report are **not** ledgers
+Further rows in the same report are **not** ledgers
 (`verify_cli.NON_LEDGER_CHECKS`): `spec_binding` compares the live
-`mind-mem.json` against its attestation, and `open_scopes` asks the evidence
-ledger which write scopes opened and never recorded a close (exit code 9).
+`mind-mem.json` against its attestation, `open_scopes` asks the evidence
+ledger which write scopes opened and never recorded a close (exit code 9),
+and `evidence_archives` re-hashes each recovery archive named by a live
+anchor. A workspace with no recovery anchor reports that absence; once an
+anchor exists, a missing, changed, or unreadable archive fails with exit 4.
 
 ### When the evidence chain forks
 
@@ -204,13 +207,18 @@ so recovery **seals** instead:
 3. Replace the store with a single anchor record linked from the genesis
    hash, carrying the archive's sha256 as its `payload_hash` and the record
    count, head hash and break census in `metadata` (which the v3 preimage
-   covers, so the census is tamper-evident too).
+   covers, so the census is tamper-evident too). The same hashed metadata
+   explicitly records `continues_predecessor_chain: false` and
+   `predecessor_trust_restored: false`.
 
 No stored hash is rewritten and no record is dropped or reordered. The
 archive keeps failing to verify with the message it failed with before; the
 new segment verifies from its own genesis. The break becomes permanent and
 citable instead of disappearing — which is why the operation is explicit,
 reachable from no read path, and refused on a chain that verifies clean.
+For an operator-approved recovery, `--expect-sha256` pins the reviewed source
+digest and is checked again under the canonical append lock before any archive
+or pending segment is created.
 
 One consequence to expect: `landed_block_ids` derives its answer from the
 CLOSE records in the *live* chain, so those move into the archive with
