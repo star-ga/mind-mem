@@ -927,6 +927,23 @@ def _insert_block(
                 fact_tags += f", {card['speaker']}"
             fact_block = {
                 "Statement": card["content"],
+                # The turn this card was extracted FROM, carried as context.
+                #
+                # Extraction is lossy by design: it keeps the atomic clause and
+                # drops the surrounding language, and the dropped words are
+                # frequently the ones a question uses. Measured -- a turn
+                # reading "my internet speed has been really good ... I
+                # upgraded to 500 Mbps" yields the card "upgraded to 500 Mbps
+                # about three weeks ago", which contains not one of "speed",
+                # "internet" or "plan". The question "What speed is my new
+                # internet plan?" therefore could not reach the single card in
+                # the corpus that answered it, and small-to-big retrieval
+                # cannot lift a parent whose card is unreachable.
+                #
+                # Context is the lowest-weighted searchable column (0.5 against
+                # 3.0 for statement), so this restores reachability without
+                # letting the parent's language outrank the card's own.
+                "Context": statement,
                 "Tags": fact_tags,
                 "Date": card.get("date", block_date),
                 "Status": block.get("Status", "active"),
@@ -1339,7 +1356,9 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
 #: thousands), so blending them re-imports the cross-scale error the split
 #: exists to remove. This can reorder parents that are already near-tied on
 #: their own surface and cannot move one past a materially better parent.
-_FACT_TIEBREAK = 1.02
+#: Overridable so the value can be chosen by a paired sweep rather than by
+#: argument; the default is what that sweep selected.
+_FACT_TIEBREAK = float(os.environ.get("MIND_MEM_FACT_TIEBREAK", "1.02"))
 
 
 def _aggregate_facts_to_parents(
