@@ -54,6 +54,7 @@ import dataclasses
 import hashlib
 import json
 import os
+import stat
 from datetime import datetime, timezone
 from typing import Mapping
 
@@ -564,6 +565,59 @@ def _anchor_metadata(
     }
 
 
+def _remove_uncommitted_archive(path: str, expected_sha256: str, expected_bytes: int) -> None:
+    """Remove the exact partial archive made by this recovery attempt.
+
+    Successful archives stay read-only.  An aborted attempt owns its partial
+    archive, but Windows will not unlink that file until its read-only bit is
+    cleared.  Re-hash before changing the mode and again before unlinking so a
+    path replaced or modified during recovery is preserved rather than treated
+    as this operation's disposable output.
+    """
+
+    def inspect() -> tuple[os.stat_result, str, int]:
+        info = os.stat(path, follow_symlinks=False)
+        if not stat.S_ISREG(info.st_mode) or os.path.islink(path):
+            raise OSError(f"refusing to remove changed recovery archive {path!r}: path is not a regular file")
+        digest, byte_size = _sha256_and_size(path)
+        return info, digest, byte_size
+
+    if ARCHIVE_INFIX not in os.path.basename(path):
+        raise OSError(f"refusing to remove non-archive path {path!r}")
+
+    before, digest, byte_size = inspect()
+    if digest != expected_sha256 or byte_size != expected_bytes:
+        raise OSError(
+            f"refusing to remove changed recovery archive {path!r}: expected "
+            f"sha256 {expected_sha256} and {expected_bytes} bytes, found {digest} and {byte_size} bytes"
+        )
+
+    original_mode = stat.S_IMODE(before.st_mode)
+    made_writable = not original_mode & stat.S_IWRITE
+    try:
+        if made_writable:
+            os.chmod(path, original_mode | stat.S_IWRITE)
+
+        after, digest, byte_size = inspect()
+        if (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino):
+            raise OSError(f"refusing to remove changed recovery archive {path!r}: path identity changed")
+        if digest != expected_sha256 or byte_size != expected_bytes:
+            raise OSError(
+                f"refusing to remove changed recovery archive {path!r}: expected "
+                f"sha256 {expected_sha256} and {expected_bytes} bytes, found {digest} and {byte_size} bytes"
+            )
+        os.unlink(path)
+    except Exception:
+        if made_writable:
+            try:
+                current = os.stat(path, follow_symlinks=False)
+                if stat.S_ISREG(current.st_mode) and (current.st_dev, current.st_ino) == (before.st_dev, before.st_ino):
+                    os.chmod(path, original_mode)
+            except OSError as restore_exc:
+                raise OSError(f"could not restore read-only mode on retained recovery archive {path!r}") from restore_exc
+        raise
+
+
 def recover_chain(
     store_path: str,
     *,
@@ -672,7 +726,7 @@ def recover_chain(
         archive_sha256, archive_bytes = _sha256_and_size(archive_path)
         source_sha256, _ = _sha256_and_size(store_path)
         if archive_sha256 != survey.sha256 or source_sha256 != survey.sha256:
-            os.unlink(archive_path)
+            _remove_uncommitted_archive(archive_path, archive_sha256, archive_bytes)
             raise OSError(
                 f"archive of {store_path!r} is not byte-identical to the surveyed file "
                 f"(surveyed {survey.sha256}, archive {archive_sha256}, source now "
@@ -714,7 +768,7 @@ def recover_chain(
         except FileExistsError as exc:
             # A path can appear after the precheck. Never follow a symlink or
             # truncate that winner; remove only the archive this operation made.
-            os.unlink(archive_path)
+            _remove_uncommitted_archive(archive_path, archive_sha256, archive_bytes)
             raise ChainRecoveryRefused(
                 f"refusing to re-anchor {store_path!r}: pending path {pending!r} appeared during recovery; "
                 "the store and competing pending path were not changed"
@@ -734,7 +788,7 @@ def recover_chain(
             final_companion = _companion_baseline(store_path)
         except ChainRecoveryRefused:
             os.unlink(pending)
-            os.unlink(archive_path)
+            _remove_uncommitted_archive(archive_path, archive_sha256, archive_bytes)
             raise
         if final_sha256 != survey.sha256 or final_companion != companion:
             # Unwind completely rather than leave a half-done recovery: the
@@ -743,7 +797,7 @@ def recover_chain(
             # worse than no file. Both are this operation's own, created
             # moments ago, so removing them restores the disk exactly.
             os.unlink(pending)
-            os.unlink(archive_path)
+            _remove_uncommitted_archive(archive_path, archive_sha256, archive_bytes)
             raise ChainRecoveryRefused(
                 f"refusing to re-anchor {store_path!r}: the store changed while the recovery "
                 f"ran (evidence sha256 {survey.sha256} -> {final_sha256}; companion "

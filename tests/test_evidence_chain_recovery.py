@@ -29,6 +29,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import stat
 import subprocess
 
 import pytest
@@ -74,6 +75,21 @@ def _sha256_file(path: str) -> str:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _emulate_windows_readonly_unlink(monkeypatch) -> None:
+    """Make Linux exercise Windows' refusal to unlink a read-only file."""
+    real_unlink = os.unlink
+
+    def unlink(path, *args, **kwargs):
+        candidate = os.fspath(path)
+        if ARCHIVE_INFIX in os.path.basename(candidate):
+            mode = os.stat(candidate, follow_symlinks=False).st_mode
+            if not mode & stat.S_IWRITE:
+                raise PermissionError(f"read-only Windows file: {candidate}")
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", unlink)
 
 
 def _seed(store: str, n: int = 3) -> EvidenceChain:
@@ -297,6 +313,7 @@ def test_recovery_aborts_when_a_writer_appends_mid_operation(tmp_path, monkeypat
     """
     import mind_mem.evidence_recovery as recovery
 
+    _emulate_windows_readonly_unlink(monkeypatch)
     store = _genesis_restart_store(tmp_path)
     real_metadata = recovery._anchor_metadata
 
@@ -330,6 +347,7 @@ def test_recovery_aborts_when_a_writer_appends_mid_operation(tmp_path, monkeypat
 def test_recovery_aborts_when_the_companion_chain_moves_mid_operation(tmp_path, monkeypatch):
     import mind_mem.evidence_recovery as recovery
 
+    _emulate_windows_readonly_unlink(monkeypatch)
     store = _genesis_restart_store(tmp_path)
     db_path, _tail = _seed_companion(store, n=2)
     before = _sha256_file(store)
@@ -348,6 +366,63 @@ def test_recovery_aborts_when_the_companion_chain_moves_mid_operation(tmp_path, 
     assert HashChainV2(db_path).length == 3, "the raced companion row was preserved"
     leftovers = os.listdir(os.path.dirname(store))
     assert not [name for name in leftovers if ".damaged-" in name or name.endswith(".reanchor-pending")]
+
+
+def test_recovery_preserves_a_changed_partial_archive_on_race_abort(tmp_path, monkeypatch):
+    import mind_mem.evidence_recovery as recovery
+
+    store = _genesis_restart_store(tmp_path)
+    before = _sha256_file(store)
+    real_metadata = recovery._anchor_metadata
+
+    def change_archive_then_append(*args, **kwargs):
+        directory = os.path.dirname(store)
+        names = [name for name in os.listdir(directory) if ARCHIVE_INFIX in name]
+        assert len(names) == 1
+        archive = os.path.join(directory, names[0])
+        os.chmod(archive, 0o644)
+        with open(archive, "ab") as handle:
+            handle.write(b"changed by another actor")
+        os.chmod(archive, 0o444)
+        _raw_append(store, _GENESIS_HASH, "B-raced")
+        return real_metadata(*args, **kwargs)
+
+    monkeypatch.setattr(recovery, "_anchor_metadata", change_archive_then_append)
+
+    with pytest.raises(OSError, match="refusing to remove changed recovery archive"):
+        recover_chain(store, actor="operator", confirm=True)
+
+    assert _sha256_file(store) != before, "the concurrent store append must survive"
+    archives = [os.path.join(os.path.dirname(store), name) for name in os.listdir(os.path.dirname(store)) if ARCHIVE_INFIX in name]
+    assert len(archives) == 1, "a changed path must not be deleted as this operation's disposable output"
+    assert not os.stat(archives[0]).st_mode & stat.S_IWRITE, "the retained archive must remain read-only"
+
+
+def test_recovery_restores_readonly_mode_if_partial_archive_unlink_fails(tmp_path, monkeypatch):
+    import mind_mem.evidence_recovery as recovery
+
+    store = _genesis_restart_store(tmp_path)
+    real_metadata = recovery._anchor_metadata
+    real_unlink = os.unlink
+
+    def append_then_build(*args, **kwargs):
+        _raw_append(store, _GENESIS_HASH, "B-raced")
+        return real_metadata(*args, **kwargs)
+
+    def reject_archive_unlink(path, *args, **kwargs):
+        if ARCHIVE_INFIX in os.path.basename(os.fspath(path)):
+            raise PermissionError("simulated delete failure")
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(recovery, "_anchor_metadata", append_then_build)
+    monkeypatch.setattr(os, "unlink", reject_archive_unlink)
+
+    with pytest.raises(PermissionError, match="simulated delete failure"):
+        recover_chain(store, actor="operator", confirm=True)
+
+    archives = [os.path.join(os.path.dirname(store), name) for name in os.listdir(os.path.dirname(store)) if ARCHIVE_INFIX in name]
+    assert len(archives) == 1
+    assert not os.stat(archives[0]).st_mode & stat.S_IWRITE, "failed cleanup must not leave a sealed archive writable"
 
 
 def test_recovery_refuses_to_overwrite_an_existing_archive(tmp_path, monkeypatch):
@@ -850,6 +925,7 @@ def test_recovery_preserves_an_existing_pending_path(tmp_path, symlink):
 def test_recovery_refuses_a_pending_symlink_created_after_precheck(tmp_path, monkeypatch):
     import mind_mem.evidence_recovery as recovery
 
+    _emulate_windows_readonly_unlink(monkeypatch)
     store = _genesis_restart_store(tmp_path)
     before = _sha256_file(store)
     pending = store + ".reanchor-pending"
