@@ -65,6 +65,31 @@ K_VALUES = [1, 3, 5, 10]
 OLLAMA = "http://127.0.0.1:11434"
 EXPAND_MODEL = "mind-mem:4b"
 
+def _vector_device() -> str:
+    """cuda when a GPU is present AND has room, else cpu.
+
+    Falls back rather than raising: the benchmark's job is to measure
+    retrieval, and it must not report a memory-pressure failure as a retrieval
+    miss. Honours CUDA_VISIBLE_DEVICES="" so a caller can force cpu.
+    """
+    if not os.environ.get("CUDA_VISIBLE_DEVICES", "1"):
+        return "cpu"
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return "cpu"
+        free, _total = torch.cuda.mem_get_info()
+        # Headroom, not just fit. The observed failure had roughly 3 GB free at
+        # start and still raised mid-run on a 20 MiB allocation, because the
+        # process holding the rest of the card grows while the benchmark runs.
+        # A threshold that only asks "does it fit right now" reproduces exactly
+        # that failure, so this asks for room to spare.
+        return "cuda" if free > 4_000_000_000 else "cpu"
+    except Exception:  # noqa: BLE001 -- any probe failure means "do not use cuda"
+        return "cpu"
+
+
 CONFIG = {
     "recall": {
         "backend": "sqlite",
@@ -72,7 +97,13 @@ CONFIG = {
         "vector_enabled": True,
         "model": "sentence-transformers/all-MiniLM-L6-v2",
         "vector_model": "sentence-transformers/all-MiniLM-L6-v2",
-        "vector_device": "cuda",
+        # Pinned to cuda ONLY when a GPU is actually free. Hardcoding it meant
+        # that on a box whose GPU is already committed -- here, ollama holds
+        # 5.4 GB of a 10 GB card and that hold is load-bearing -- 18 of 48
+        # questions died on CUDA OOM and were scored as MISSES. A crashed
+        # question is not a miss, and a run with 18 of them is not a
+        # measurement; it silently understated every metric it reported.
+        "vector_device": _vector_device(),
         "provider": "local",
         "bm25_weight": 1.0,
         "vector_weight": 1.0,
