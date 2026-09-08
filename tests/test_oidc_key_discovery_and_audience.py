@@ -23,10 +23,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytest.importorskip("jose", reason="python-jose not installed; skipping OIDC tests")
+pytest.importorskip("jwt", reason="PyJWT not installed; skipping OIDC tests")
 pytest.importorskip("httpx", reason="httpx not installed; skipping OIDC tests")
 
-from jose import jwt  # noqa: E402
+import jwt  # noqa: E402
 
 from mind_mem.api.auth import AuthError, OIDCConfig, OIDCProvider  # noqa: E402
 
@@ -38,7 +38,7 @@ _SECRET = "test-secret-not-used-in-production"
 
 
 def _provider(jwks_uri: str = "") -> OIDCProvider:
-    return OIDCProvider(
+    provider = OIDCProvider(
         OIDCConfig(
             issuer=_ISSUER,
             client_id="mm-client",
@@ -47,6 +47,8 @@ def _provider(jwks_uri: str = "") -> OIDCProvider:
             jwks_uri=jwks_uri,
         )
     )
+    provider._jwks = {"keys": []}
+    return provider
 
 
 def _json_response(payload: Any) -> MagicMock:
@@ -140,32 +142,28 @@ class TestKeysComeFromDiscovery:
 
 
 class TestAudienceIsRequired:
-    def test_library_alone_accepts_a_token_with_no_aud(self) -> None:
-        """Pin the upstream behaviour this guard exists for.
-
-        The JWT library skips audience validation when the claim is absent,
-        so ``verify_aud=True`` constrains only tokens that opted in.
-        """
+    def test_library_rejects_a_token_with_no_aud(self) -> None:
+        """PyJWT treats a configured audience as a required claim."""
         token = jwt.encode(
             {"iss": _ISSUER, "sub": "user-1", "exp": int(time.time()) + 3600},
             _SECRET,
             algorithm="HS256",
         )
-        claims = jwt.decode(
-            token,
-            _SECRET,
-            algorithms=["HS256"],
-            audience=_AUDIENCE,
-            issuer=_ISSUER,
-            options={"verify_exp": True, "verify_iss": True, "verify_aud": True},
-        )
-        assert "aud" not in claims
+        with pytest.raises(jwt.MissingRequiredClaimError):
+            jwt.decode(
+                token,
+                _SECRET,
+                algorithms=["HS256"],
+                audience=_AUDIENCE,
+                issuer=_ISSUER,
+                options={"verify_exp": True, "verify_iss": True, "verify_aud": True},
+            )
 
     def test_verify_rejects_a_token_with_no_aud(self) -> None:
         provider = _provider(jwks_uri=_JWKS_URI)
         decoded = {"iss": _ISSUER, "sub": "user-1", "exp": int(time.time()) + 3600}
 
-        with patch.object(OIDCProvider, "_get_jwks", return_value={"keys": []}):
+        with patch.object(OIDCProvider, "_select_verification_key", return_value=(object(), "RS256")):
             with patch("mind_mem.api.auth.jwt.decode", return_value=decoded):
                 with pytest.raises(AuthError) as exc_info:
                     provider.verify("any.token.here")
@@ -176,7 +174,7 @@ class TestAudienceIsRequired:
         provider = _provider(jwks_uri=_JWKS_URI)
         decoded = {"iss": _ISSUER, "sub": "user-1", "aud": _AUDIENCE}
 
-        with patch.object(OIDCProvider, "_get_jwks", return_value={"keys": []}):
+        with patch.object(OIDCProvider, "_select_verification_key", return_value=(object(), "RS256")):
             with patch("mind_mem.api.auth.jwt.decode", return_value=decoded):
                 assert provider.verify("any.token.here") == decoded
 
@@ -184,7 +182,7 @@ class TestAudienceIsRequired:
         provider = _provider(jwks_uri=_JWKS_URI)
         decoded = {"iss": _ISSUER, "sub": "user-1", "aud": ["other-app", _AUDIENCE]}
 
-        with patch.object(OIDCProvider, "_get_jwks", return_value={"keys": []}):
+        with patch.object(OIDCProvider, "_select_verification_key", return_value=(object(), "RS256")):
             with patch("mind_mem.api.auth.jwt.decode", return_value=decoded):
                 assert provider.verify("any.token.here") == decoded
 
@@ -203,7 +201,7 @@ class TestAudienceIsRequired:
         provider = _provider(jwks_uri=_JWKS_URI)
         decoded = {"iss": _ISSUER, "sub": "user-1", "aud": aud}
 
-        with patch.object(OIDCProvider, "_get_jwks", return_value={"keys": []}):
+        with patch.object(OIDCProvider, "_select_verification_key", return_value=(object(), "RS256")):
             with patch("mind_mem.api.auth.jwt.decode", return_value=decoded):
                 with pytest.raises(AuthError) as exc_info:
                     provider.verify("any.token.here")

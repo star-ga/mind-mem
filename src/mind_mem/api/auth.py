@@ -5,7 +5,7 @@ The signing keys are located the way OIDC specifies — read ``jwks_uri``
 out of the issuer's discovery document — then fetched on first use and
 cached in-process. Set :attr:`OIDCConfig.jwks_uri` to skip discovery.
 
-Dependencies (api extra): python-jose[cryptography], httpx
+Dependencies (api extra): PyJWT[crypto], httpx
 """
 
 from __future__ import annotations
@@ -16,10 +16,26 @@ from typing import Any
 
 try:
     import httpx
-    from jose import ExpiredSignatureError, JWTError, jwt
-    from jose.backends.rsa_backend import RSAKey  # noqa: F401 — presence check
+    import jwt
+    from jwt import PyJWK
+    from jwt.exceptions import (
+        ExpiredSignatureError,
+        InvalidAudienceError,
+        InvalidIssuerError,
+        MissingRequiredClaimError,
+        PyJWTError,
+    )
 except ImportError as _err:  # pragma: no cover
     raise ImportError("OIDC auth requires the 'api' extra: pip install 'mind-mem[api]'") from _err
+
+_ALLOWED_JWT_KEYS: dict[str, tuple[str, str | None]] = {
+    "RS256": ("RSA", None),
+    "RS384": ("RSA", None),
+    "RS512": ("RSA", None),
+    "ES256": ("EC", "P-256"),
+    "ES384": ("EC", "P-384"),
+    "ES512": ("EC", "P-521"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -126,27 +142,90 @@ class OIDCProvider:
         Raises:
             AuthError: On any validation failure.
         """
-        jwks = self._get_jwks()
         try:
+            key, algorithm = self._select_verification_key(token)
             claims: dict = jwt.decode(
                 token,
-                jwks,
-                algorithms=["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"],
+                key,
+                algorithms=[algorithm],
                 audience=self._config.audience,
                 issuer=self._config.issuer,
-                options={"verify_exp": True, "verify_iss": True, "verify_aud": True},
+                options={
+                    "verify_exp": True,
+                    "verify_nbf": True,
+                    "verify_iss": True,
+                    "verify_aud": True,
+                },
             )
         except ExpiredSignatureError as exc:
             raise AuthError("Token has expired", code="token_expired") from exc
-        except JWTError as exc:
-            msg = str(exc).lower()
-            if "issuer" in msg:
-                raise AuthError(f"Token issuer mismatch: {exc}", code="wrong_issuer") from exc
-            if "audience" in msg:
-                raise AuthError(f"Token audience mismatch: {exc}", code="wrong_audience") from exc
+        except InvalidAudienceError as exc:
+            raise AuthError(f"Token audience mismatch: {exc}", code="wrong_audience") from exc
+        except InvalidIssuerError as exc:
+            raise AuthError(f"Token issuer mismatch: {exc}", code="wrong_issuer") from exc
+        except MissingRequiredClaimError as exc:
+            if exc.claim == "aud":
+                raise AuthError(
+                    f"Token has no 'aud' claim; expected {self._config.audience!r}",
+                    code="wrong_audience",
+                ) from exc
+            if exc.claim == "iss":
+                raise AuthError("Token has no 'iss' claim", code="wrong_issuer") from exc
+            raise AuthError(f"Token validation failed: {exc}", code="invalid_token") from exc
+        except (PyJWTError, TypeError, ValueError) as exc:
             raise AuthError(f"Token validation failed: {exc}", code="invalid_token") from exc
         self._require_audience(claims)
         return claims
+
+    def _select_verification_key(self, token: str) -> tuple[Any, str]:
+        """Bind an allowlisted JWT algorithm and ``kid`` to one exact JWKS key.
+
+        PyJWT deliberately requires callers to supply the allowed algorithms.
+        It must not derive that policy from attacker-controlled token data or
+        from a JWK's optional ``alg`` member.  We therefore validate the header,
+        key family, curve and key intent before constructing the public key.
+        """
+        header = jwt.get_unverified_header(token)
+        algorithm = header.get("alg")
+        if not isinstance(algorithm, str) or algorithm not in _ALLOWED_JWT_KEYS:
+            raise jwt.InvalidAlgorithmError("JWT algorithm is not allowed")
+        kid = header.get("kid")
+        if kid is not None and (not isinstance(kid, str) or not kid):
+            raise jwt.InvalidTokenError("JWT kid must be a non-empty string")
+
+        jwks = self._get_jwks()
+        keys = jwks.get("keys") if isinstance(jwks, dict) else None
+        if not isinstance(keys, list):
+            raise jwt.PyJWKSetError("JWKS must contain a keys array")
+
+        expected_kty, expected_curve = _ALLOWED_JWT_KEYS[algorithm]
+        matches: list[PyJWK] = []
+        for raw in keys:
+            if not isinstance(raw, dict):
+                continue
+            if kid is not None and raw.get("kid") != kid:
+                continue
+            if raw.get("kty") != expected_kty:
+                continue
+            if expected_curve is not None and raw.get("crv") != expected_curve:
+                continue
+            declared_algorithm = raw.get("alg")
+            if declared_algorithm is not None and declared_algorithm != algorithm:
+                continue
+            if raw.get("use") not in (None, "sig"):
+                continue
+            key_ops = raw.get("key_ops")
+            if key_ops is not None and (not isinstance(key_ops, list) or "verify" not in key_ops):
+                continue
+            try:
+                matches.append(PyJWK.from_dict(raw, algorithm=algorithm))
+            except (PyJWTError, TypeError, ValueError):
+                continue
+
+        if len(matches) != 1:
+            qualifier = f"kid {kid!r}" if kid is not None else "the token without a kid"
+            raise jwt.InvalidTokenError(f"JWKS has {len(matches)} compatible keys for {qualifier}")
+        return matches[0], algorithm
 
     def _require_audience(self, claims: dict) -> None:
         """Reject a token whose ``aud`` is missing, malformed, or foreign.

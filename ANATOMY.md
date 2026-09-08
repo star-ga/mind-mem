@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1525 | **Est. tokens:** ~4538078
-**Generated:** 2026-09-08 19:25 UTC
+**Files:** 1526 | **Est. tokens:** ~4540757
+**Generated:** 2026-09-08 19:28 UTC
 
 ## Token Budget Guide
 
@@ -22,14 +22,14 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~50173 |
+| `./` | 36 | ~50140 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~19165 |
+| `.github/workflows/` | 11 | ~19164 |
 | `.roo/` | 1 | ~22 |
 | `audits/` | 5 | ~24039 |
 | `benchmarks/` | 66 | ~181940 |
@@ -74,7 +74,7 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 231 | ~1076280 |
-| `src/mind_mem/api/` | 5 | ~25701 |
+| `src/mind_mem/api/` | 5 | ~26529 |
 | `src/mind_mem/bench/` | 17 | ~48607 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
 | `src/mind_mem/importers/` | 9 | ~26660 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 648 | ~1973365 |
+| `tests/` | 649 | ~1975250 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -142,7 +142,7 @@
 - `install.sh` (~5444 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
-- `pyproject.toml` (~3766 tok, huge) — [project]
+- `pyproject.toml` (~3733 tok, huge) — [project]
 - `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
 - `train_mind7b_runpod.py` (~1659 tok, huge)
@@ -193,7 +193,7 @@
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
 - `release.yml` (~6318 tok, huge) — name: Release
-- `security.yml` (~2855 tok, huge) — name: Supply-Chain Security
+- `security.yml` (~2854 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `.roo/`
 
@@ -697,9 +697,9 @@
 
 - `__init__.py` (~20 tok, tiny)
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
-- `auth.py` (~3502 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
+- `auth.py` (~4328 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `grpc_server.py` (~3956 tok, huge) — gRPC wire protocol for mind-mem (v4.0 prep).
-- `rest.py` (~15506 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
+- `rest.py` (~15508 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
 
 - `append_only.py` (~3657 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1294,7 +1294,7 @@
 - `test_decrypt_file_audit_trail.py` (~1282 tok, large) — Regression test for the `decrypt_file` forensic audit trail
 - `test_dedup.py` (~5670 tok, huge) — Tests for dedup.py -- 4-layer deduplication filter."""
 - `test_dedup_vector.py` (~1087 tok, large) — Tests for vector-enhanced cosine dedup (Layer 2b)."""
-- `test_dependency_audit_closure.py` (~1465 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_dependency_audit_closure.py` (~1464 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
 - `test_docs_alignment.py` (~24506 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1516,14 +1516,15 @@
 - `test_network_tls_floor.py` (~3100 tok, huge) — The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).
 - `test_niah.py` (~5014 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
 - `test_no_silent_success_paths.py` (~3801 tok, huge) — Regressions for paths that used to report success while doing the wrong thing.
-- `test_no_vacuous_skips.py` (~7108 tok, huge) — A skipped test reads as a pass — so the skip surface itself needs a gate.
+- `test_no_vacuous_skips.py` (~7101 tok, huge) — A skipped test reads as a pass — so the skip surface itself needs a gate.
 - `test_novel_term_gate.py` (~2202 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observability.py` (~791 tok, large) — Tests for observability.py — structured logging and metrics."""
 - `test_observation_axis.py` (~3330 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
-- `test_oidc_admin_enforcement.py` (~1819 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
-- `test_oidc_auth.py` (~3294 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
-- `test_oidc_key_discovery_and_audience.py` (~2064 tok, huge) — Regression tests: where the signing keys come from, and who a token is for.
+- `test_oidc_admin_enforcement.py` (~1830 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
+- `test_oidc_auth.py` (~3323 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
+- `test_oidc_key_discovery_and_audience.py` (~2069 tok, huge) — Regression tests: where the signing keys come from, and who a token is for.
+- `test_oidc_pyjwt_security.py` (~1833 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_okf_bundle_round_trip_fidelity.py` (~1605 tok, huge) — An OKF bundle must survive its own writer, and a dropped concept must be loud.
 - `test_okf_export.py` (~3745 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ollama_host_resolver.py` (~2781 tok, huge) — Tests for the shared ollama base-URL resolver (v4.3.1).
@@ -1638,7 +1639,7 @@
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
 - `test_rest_admin_gate_api_key_only.py` (~2102 tok, huge) — The REST admin gate must fire in an API-key-only deployment.
 - `test_rest_api.py` (~4314 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
-- `test_rest_api_oidc.py` (~2722 tok, huge) — Tests for OIDC callback + admin API key endpoints (v3.2.0)."""
+- `test_rest_api_oidc.py` (~2737 tok, huge) — Tests for OIDC callback + admin API key endpoints (v3.2.0)."""
 - `test_rest_audit_headers.py` (~1517 tok, huge) — Regression tests for the audit-header middleware (roadmap v4.0.0 Group D).
 - `test_rest_docs_and_bucket_hardening.py` (~1129 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_rest_hardening_batch.py` (~2443 tok, huge) — REST-layer defects found inside files that also carried a HIGH finding.

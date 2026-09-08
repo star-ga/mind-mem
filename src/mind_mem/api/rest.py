@@ -144,7 +144,7 @@ def _verify_oidc_token(token: str) -> tuple[str, tuple[str, ...]] | None:
         return None
     if token.count(".") != 2:
         # Fast reject: JWTs have exactly two dots. Avoids the cost of
-        # dragging in python-jose for every bearer token.
+        # importing the optional JWT stack for every bearer token.
         return None
     try:
         from mind_mem.api.auth import AuthError  # noqa: PLC0415

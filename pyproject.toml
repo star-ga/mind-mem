@@ -30,10 +30,11 @@ classifiers = [
 [project.optional-dependencies]
 # SECURITY FLOORS ON TRANSITIVE DEPENDENCIES — added 2026-09-07.
 #
-# None of the packages pinned below are direct dependencies; every one arrives
-# through fastmcp, fastapi, python-jose or sentence-transformers. They are
-# floored explicitly because a resolver left to itself picked versions carrying
-# live advisories, and the audit that should have caught that had never run:
+# These packages are either direct dependencies of shipped extras or explicit
+# floors on their transitive closure through fastmcp, fastapi, PyJWT and
+# sentence-transformers. The floors are explicit because a resolver left to
+# itself picked versions carrying live advisories, and the audit that should
+# have caught that had never run:
 # `dependencies = []` here means `pip-audit .` resolved an EMPTY set and passed
 # unconditionally. See ROADMAP.md "Dependency CVE bumps".
 #
@@ -59,8 +60,8 @@ test = [
     "authlib>=1.6.12",  # security floor (transitive via fastmcp)
     "mcp>=1.28.1",  # security floor (transitive via fastmcp)
     "starlette>=1.3.1",  # security floor (transitive via fastmcp/fastapi)
-    "cryptography>=49.0.0",  # security floor (transitive via python-jose)
-    "pyjwt>=2.13.0",  # security floor (transitive via python-jose)
+    "cryptography>=49.0.0",  # security floor (used by PyJWT)
+    "PyJWT[crypto]>=2.13.0,<3.0",  # OIDC JWT verification
     "python-multipart>=0.0.31",  # security floor (transitive via fastapi)
     "transformers>=5.10.0",  # security floor (transitive via sentence-transformers)
     "pytest>=7.4,<10.0",
@@ -80,13 +81,12 @@ test = [
     "onnxruntime>=1.20,<2.0",
     "tokenizers>=0.22,<1.0",
     "sentence-transformers>=5.0,<7.0",
-    # v3.2.0 REST-layer tests import fastapi + python-jose directly;
+    # v3.2.0 REST-layer tests import fastapi + PyJWT directly;
     # install them in the test matrix so tests/test_rest_api.py et al.
     # don't fail collection on a fresh CI runner.
     "fastapi>=0.110,<1.0",
     "httpx>=0.27,<1.0",
     "httpx2>=2.12,<3.0",
-    "python-jose[cryptography]>=3.3,<4.0",
     # v3.8.8 fuzz harness for the MIC/MAP serialization primitive —
     # property-based tests live in tests/test_mic_map_fuzz.py and
     # importorskip-fence on absence so this is a soft floor.
@@ -100,12 +100,11 @@ api = [
     "authlib>=1.6.12",  # security floor (transitive via fastmcp)
     "mcp>=1.28.1",  # security floor (transitive via fastmcp)
     "starlette>=1.3.1",  # security floor (transitive via fastmcp/fastapi)
-    "cryptography>=49.0.0",  # security floor (transitive via python-jose)
-    "pyjwt>=2.13.0",  # security floor (transitive via python-jose)
+    "cryptography>=49.0.0",  # security floor (used by PyJWT)
+    "PyJWT[crypto]>=2.13.0,<3.0",  # OIDC JWT verification
     "python-multipart>=0.0.31",  # security floor (transitive via fastapi)
     "fastapi>=0.110,<1.0",
     "uvicorn[standard]>=0.30,<1.0",
-    "python-jose[cryptography]>=3.3,<4.0",
     # Not optional for this surface, despite belonging to the MCP stack:
     # api/rest.py imports mind_mem.mcp.infra.http_auth at module scope, and
     # that chain reaches fastmcp. Without it `pip install mind-mem[api]`
@@ -151,8 +150,8 @@ otel = [
     "prometheus-client>=0.18,<1.0",
 ]
 all = [
-    "cryptography>=49.0.0",  # security floor (transitive via python-jose)
-    "pyjwt>=2.13.0",  # security floor (transitive via python-jose)
+    "cryptography>=49.0.0",  # security floor (used by PyJWT)
+    "PyJWT[crypto]>=2.13.0,<3.0",  # OIDC JWT verification
     "python-multipart>=0.0.31",  # security floor (transitive via fastapi)
     "authlib>=1.6.12",  # security floor (transitive via fastmcp)
     "mcp>=1.28.1",  # security floor (transitive via fastmcp)

@@ -111,7 +111,10 @@ class TestOIDCCallback:
         # party always carries it, so the mock must too.
         fake_claims = {"sub": "user-abc", "aud": "aud", "scope": "openid email"}
 
-        with patch("mind_mem.api.auth.OIDCProvider._get_jwks", return_value={"keys": []}):
+        with patch(
+            "mind_mem.api.auth.OIDCProvider._select_verification_key",
+            return_value=(object(), "RS256"),
+        ):
             with patch("mind_mem.api.auth.jwt.decode", return_value=fake_claims):
                 resp = admin_client.post(
                     "/v1/auth/oidc/callback",

@@ -65,7 +65,7 @@ jobs:
         #
         # `.[all]` is NOT the closure of what ships. Measured on this tree it
         # omits 12 dependencies of shipped extras -- cython (accelerated),
-        # fastapi/httpx/python-jose/uvicorn (api),
+        # fastapi/httpx/PyJWT/uvicorn (api),
         # opentelemetry-{api,sdk,exporter-otlp}/prometheus-client (otel) and
         # pgvector/psycopg/psycopg-pool (postgres) -- so auditing `.[all]`
         # alone left every one of those, and their transitive chains, out of

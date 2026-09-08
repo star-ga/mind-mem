@@ -433,7 +433,7 @@ class TestTestSuiteHasNoVacuousSkips:
 # one line silently withdraws an entire file. So each one has to name a
 # dependency that at least one CI job actually installs, for a file that job
 # actually selects. Everything the audit classified as legitimate passes this:
-# ``fastapi`` / ``httpx`` / ``jose`` / ``hypothesis`` / ``sentence_transformers``
+# ``fastapi`` / ``httpx`` / ``jwt`` / ``hypothesis`` / ``sentence_transformers``
 # / ``cryptography`` ship in the ``[test]`` extra that every matrix row
 # installs, and ``psycopg`` ships in ``[postgres]``, installed by the dedicated
 # "postgres backend" job -- which selects its files by grepping tests/ for its
@@ -454,7 +454,7 @@ PYPROJECT = TESTS_DIR.parent / "pyproject.toml"
 # give the same answer on a runner that does NOT have the package installed,
 # which is precisely the situation it exists to reason about.
 _IMPORT_NAME = {
-    "python-jose": "jose",
+    "pyjwt": "jwt",
     "pyyaml": "yaml",
     "opentelemetry-api": "opentelemetry",
     "opentelemetry-sdk": "opentelemetry",
@@ -463,7 +463,7 @@ _IMPORT_NAME = {
 # Keys are matched AFTER any ``[extra]`` suffix is stripped, so write
 # ``psycopg``, never ``psycopg[binary]`` — the bracketed form would be a dead
 # entry that reads as coverage. A requirement's bracketed extras also
-# contribute their own names (``python-jose[cryptography]`` -> ``cryptography``,
+# contribute their own names (``PyJWT[crypto]`` -> ``crypto``,
 # which is exactly right); a few of those are build flavours rather than
 # importable modules (``psycopg[binary]`` -> ``binary``). That only ever makes
 # the available-set slightly larger, and no real gate imports a name like that.
@@ -587,7 +587,7 @@ class TestModuleScopeGatesAreSatisfiableSomewhere:
             "file-selection model is stale and must be re-derived, not relaxed"
         )
         names = _extra_import_names("test")
-        assert {"pytest", "fastapi", "jose", "sentence_transformers"} <= names, sorted(names)
+        assert {"pytest", "fastapi", "jwt", "sentence_transformers"} <= names, sorted(names)
         assert "psycopg" in _extra_import_names("postgres")
         # The two-tier model (matrix rows vs the one job with the extra) is only
         # meaningful while [postgres] supplies something [test] does not. If a

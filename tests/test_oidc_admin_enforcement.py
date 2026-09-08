@@ -66,7 +66,10 @@ def _mock_jwt(claims: dict) -> Any:
 
 
 def _mock_jwks() -> Any:
-    return patch("mind_mem.api.auth.OIDCProvider._get_jwks", return_value={"keys": []})
+    return patch(
+        "mind_mem.api.auth.OIDCProvider._select_verification_key",
+        return_value=(object(), "RS256"),
+    )
 
 
 # Valid JWT format (three dot-separated parts) — the actual decoding is mocked.

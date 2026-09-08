@@ -2,7 +2,7 @@
 """The dependency audit must cover every extra that actually ships.
 
 `.[all]` does not mean "all". Measured on this tree it omits 12 dependencies
-of shipped extras -- cython, fastapi, httpx, python-jose, uvicorn, the four
+of shipped extras -- cython, fastapi, httpx, PyJWT, uvicorn, the four
 opentelemetry/prometheus packages, and pgvector/psycopg/psycopg-pool -- so an
 audit that installed `.[all]` alone left every one of those and their
 transitive chains out of scope while reporting success.

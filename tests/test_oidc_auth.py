@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytest.importorskip("jose", reason="python-jose not installed; skipping OIDC tests")
+pytest.importorskip("jwt", reason="PyJWT not installed; skipping OIDC tests")
 pytest.importorskip("httpx", reason="httpx not installed; skipping OIDC tests")
 
-from jose import jwt  # noqa: E402
+import jwt  # noqa: E402
 
 from mind_mem.api.auth import AuthError, OIDCConfig, OIDCProvider  # noqa: E402
 
@@ -24,9 +24,9 @@ _AUDIENCE = "mind-mem-api"
 _CLIENT_ID = "test-client"
 _JWKS_URI = "https://keys.test.example.com/oauth2/v3/certs"
 
-# Minimal RSA-like test key generated with python-jose for tests only.
-# We use HS256 (symmetric) so tests stay dependency-free and fast;
-# the OIDCProvider algorithm list is patched to allow HS256 in tests.
+# Symmetric key used only to build test tokens whose decode call is mocked.
+# We use HS256 (symmetric) so token construction stays fast; verification-key
+# selection and decoding are both patched in the unit tests that use it.
 _SECRET = "test-secret-not-used-in-production"
 
 
@@ -175,11 +175,7 @@ class TestOIDCProviderVerify:
     def test_valid_token_returns_claims(self) -> None:
         token = _make_token()
         provider = _provider()
-        with patch.object(
-            OIDCProvider,
-            "_get_jwks",
-            return_value={"keys": []},
-        ):
+        with patch.object(OIDCProvider, "_select_verification_key", return_value=(object(), "RS256")):
             with patch(
                 "mind_mem.api.auth.jwt.decode",
                 return_value={"sub": "user-123", "iss": _ISSUER, "aud": _AUDIENCE},
@@ -188,10 +184,10 @@ class TestOIDCProviderVerify:
         assert claims["sub"] == "user-123"
 
     def test_expired_token_raises_auth_error(self) -> None:
-        from jose import ExpiredSignatureError
+        from jwt.exceptions import ExpiredSignatureError
 
         provider = _provider()
-        with patch.object(provider, "_get_jwks", return_value={"keys": []}):
+        with patch.object(provider, "_select_verification_key", return_value=(object(), "RS256")):
             with patch(
                 "mind_mem.api.auth.jwt.decode",
                 side_effect=ExpiredSignatureError("expired"),
@@ -201,37 +197,37 @@ class TestOIDCProviderVerify:
         assert exc_info.value.code == "token_expired"
 
     def test_wrong_audience_raises_auth_error(self) -> None:
-        from jose import JWTError
+        from jwt.exceptions import InvalidAudienceError
 
         provider = _provider()
-        with patch.object(provider, "_get_jwks", return_value={"keys": []}):
+        with patch.object(provider, "_select_verification_key", return_value=(object(), "RS256")):
             with patch(
                 "mind_mem.api.auth.jwt.decode",
-                side_effect=JWTError("audience"),
+                side_effect=InvalidAudienceError("audience"),
             ):
                 with pytest.raises(AuthError) as exc_info:
                     provider.verify("any.token.here")
-        assert exc_info.value.code in ("wrong_audience", "invalid_token")
+        assert exc_info.value.code == "wrong_audience"
 
     def test_wrong_issuer_raises_auth_error(self) -> None:
-        from jose import JWTError
+        from jwt.exceptions import InvalidIssuerError
 
         provider = _provider()
-        with patch.object(provider, "_get_jwks", return_value={"keys": []}):
+        with patch.object(provider, "_select_verification_key", return_value=(object(), "RS256")):
             with patch(
                 "mind_mem.api.auth.jwt.decode",
-                side_effect=JWTError("issuer"),
+                side_effect=InvalidIssuerError("issuer"),
             ):
                 with pytest.raises(AuthError) as exc_info:
                     provider.verify("bad.issuer.token")
-        assert exc_info.value.code in ("wrong_issuer", "invalid_token")
+        assert exc_info.value.code == "wrong_issuer"
 
     def test_malformed_token_raises_auth_error(self) -> None:
-        from jose import JWTError
+        from jwt.exceptions import DecodeError
 
         provider = _provider()
-        with patch.object(provider, "_get_jwks", return_value={"keys": []}):
-            with patch("mind_mem.api.auth.jwt.decode", side_effect=JWTError("bad")):
+        with patch.object(provider, "_select_verification_key", return_value=(object(), "RS256")):
+            with patch("mind_mem.api.auth.jwt.decode", side_effect=DecodeError("bad")):
                 with pytest.raises(AuthError):
                     provider.verify("notajwt")
 
