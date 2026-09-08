@@ -271,5 +271,17 @@
     "verdict": "underpowered",
     "note": "1 discordant pair(s): below 6, no split can reach p<=0.05, so this difference cannot be evidence at any effect size. Report it as noise."
   },
-  "digest": "3f29d396e7334e9fc8a08f1987927b6a1d53a6fc1221ee8c82a83ec9dcdb16a4"
+  "digest": "3f29d396e7334e9fc8a08f1987927b6a1d53a6fc1221ee8c82a83ec9dcdb16a4",
+  "provenance": {
+    "public_copy": "path-sanitized",
+    "changed": [
+      "agent.argv[0]: an absolute host path was replaced by the command name"
+    ],
+    "digest_binds": "the ORIGINAL receipt bytes, not this file",
+    "digest_recomputes_over_this_file": false,
+    "original_digest": "3f29d396e7334e9fc8a08f1987927b6a1d53a6fc1221ee8c82a83ec9dcdb16a4",
+    "original_bytes_sha256": "2be2915cb75a198679a2a9f26df6ff5e40292b070b1d05e74bec68c3a328c704",
+    "note": "The sanitized argv is NOT literally what executed. It names the same command without disclosing where it lived. Scores, counts, spend and every per-task row are byte-for-byte the original; nothing was recomputed, and the digest was deliberately NOT regenerated, because a regenerated digest would make a rewritten receipt look like one that was produced that way.",
+    "raw_receipt": "retained privately by the publisher"
+  }
 }

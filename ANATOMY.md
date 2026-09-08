@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1514 | **Est. tokens:** ~4,496,778
-**Generated:** 2026-09-08 13:38 UTC
+**Files:** 1515 | **Est. tokens:** ~4,502,632
+**Generated:** 2026-09-08 13:41 UTC
 
 ## Token Budget Guide
 
@@ -42,7 +42,7 @@
 | `docs/benchmarks/` | 25 | ~42,861 |
 | `docs/benchmarks/ablation/` | 2 | ~12,181 |
 | `docs/benchmarks/head-20260907/` | 8 | ~6,467 |
-| `docs/benchmarks/memory-ab-420s-runs/` | 24 | ~71,518 |
+| `docs/benchmarks/memory-ab-420s-runs/` | 25 | ~77,372 |
 | `docs/decisions/` | 1 | ~3,174 |
 | `docs/design/` | 9 | ~16,095 |
 | `docs/evidence/5.0.2-f1/` | 12 | ~188,585 |
@@ -338,30 +338,31 @@
 - `benchmarks.md` (~1746 tok, huge) — Benchmarks
 ### `docs/benchmarks/memory-ab-420s-runs/`
 
-- `single_file__mm-00bb4eeb3eb0__rep1.json` (~2850 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-1ddc953ce424__rep1.json` (~3138 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-27c60f9b55ad__rep1.json` (~3053 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-28203bdf502e__rep1.json` (~2833 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-39b49f88e7ab__rep1.json` (~3186 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-3b811e71490d__rep1.json` (~2493 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-5d66147a3d1d__rep1.json` (~2762 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-605384718d16__rep1.json` (~2583 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-66b03be1ef24__rep1.json` (~3256 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-7571daeac51c__rep1.json` (~2361 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-78c09fbe2c2f__rep1.json` (~2446 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-8009be3fbd79__rep1.json` (~2805 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-81142206d8ac__rep1.json` (~2552 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-8ac223858f56__rep1.json` (~2865 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-9956b7aba6cf__rep1.json` (~2775 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-a63d572ddb0d__rep1.json` (~2917 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-d048b5565cd9__rep1.json` (~3329 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-d59f9832a452__rep1.json` (~3200 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-db4e90b3bf73__rep1.json` (~2720 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-e79c2b1f94b3__rep1.json` (~5270 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-e94acc7bb86c__rep1.json` (~3171 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-e98c1449bce7__rep1.json` (~3150 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-f64409645dfa__rep1.json` (~2829 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-fa0b654ca566__rep1.json` (~2974 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `README.md` (~464 tok, medium) — A/B run receipts — path-sanitized public copies
+- `single_file__mm-00bb4eeb3eb0__rep1.json` (~3075 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-1ddc953ce424__rep1.json` (~3362 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-27c60f9b55ad__rep1.json` (~3278 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-28203bdf502e__rep1.json` (~3058 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-39b49f88e7ab__rep1.json` (~3410 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-3b811e71490d__rep1.json` (~2718 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-5d66147a3d1d__rep1.json` (~2987 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-605384718d16__rep1.json` (~2807 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-66b03be1ef24__rep1.json` (~3480 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-7571daeac51c__rep1.json` (~2586 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-78c09fbe2c2f__rep1.json` (~2670 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-8009be3fbd79__rep1.json` (~3029 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-81142206d8ac__rep1.json` (~2777 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-8ac223858f56__rep1.json` (~3090 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-9956b7aba6cf__rep1.json` (~3000 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-a63d572ddb0d__rep1.json` (~3142 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-d048b5565cd9__rep1.json` (~3554 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-d59f9832a452__rep1.json` (~3425 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-db4e90b3bf73__rep1.json` (~2944 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-e79c2b1f94b3__rep1.json` (~5494 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-e94acc7bb86c__rep1.json` (~3395 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-e98c1449bce7__rep1.json` (~3375 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-f64409645dfa__rep1.json` (~3053 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-fa0b654ca566__rep1.json` (~3199 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
 ### `docs/benchmarks/`
 
 - `SOTA-GATE.md` (~1680 tok, huge) — The SOTA gate — what is required, and what is measured

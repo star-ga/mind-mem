@@ -249,5 +249,17 @@
     "verdict": "no_evidence",
     "note": "The arms agreed on every task; a paired test has nothing to work with."
   },
-  "digest": "7f73bef77e2fba24cd482678288452ac2c50e0abe52cd0fc1590ccd9309caf5a"
+  "digest": "7f73bef77e2fba24cd482678288452ac2c50e0abe52cd0fc1590ccd9309caf5a",
+  "provenance": {
+    "public_copy": "path-sanitized",
+    "changed": [
+      "agent.argv[0]: an absolute host path was replaced by the command name"
+    ],
+    "digest_binds": "the ORIGINAL receipt bytes, not this file",
+    "digest_recomputes_over_this_file": false,
+    "original_digest": "7f73bef77e2fba24cd482678288452ac2c50e0abe52cd0fc1590ccd9309caf5a",
+    "original_bytes_sha256": "4c53ac7911404a1e3e6e6f866815e38c9fefb0e8ba9f1cc787b04c911df9b83f",
+    "note": "The sanitized argv is NOT literally what executed. It names the same command without disclosing where it lived. Scores, counts, spend and every per-task row are byte-for-byte the original; nothing was recomputed, and the digest was deliberately NOT regenerated, because a regenerated digest would make a rewritten receipt look like one that was produced that way.",
+    "raw_receipt": "retained privately by the publisher"
+  }
 }
