@@ -61,6 +61,45 @@ _pool_registry_lock = threading.Lock()
 _pool_registry_shutdown = False
 
 
+def _reset_pooled_connection(conn: Any) -> None:
+    """Restore the intended connection state before it re-enters the pool.
+
+    Second layer under the scoped restoration in ``_ensure_schema``. Measured
+    against the installed psycopg_pool 3.3.1 rather than assumed: the pool
+    invokes this on EVERY check-in, including the exceptional exits, and it
+    has already rolled the connection back to IDLE first -- a connection left
+    INTRANS or INERROR arrives here IDLE and usable. So this callback never
+    has to unwind an active or failed transaction; it only has to put the
+    session mode back.
+
+    Without it, one ``conn.autocommit = True`` anywhere leaks into every later
+    checkout of that pooled connection, and bare statements outside an explicit
+    ``conn.transaction()`` would self-commit.
+
+    **This function must NOT swallow a restoration failure.** Read from the
+    installed psycopg_pool 3.3.1 ``_reset_connection`` rather than assumed:
+
+        try:
+            self._reset(conn)
+            if conn.pgconn.transaction_status != IDLE: raise ProgrammingError(...)
+        except CLIENT_EXCEPTIONS as ex:          # CLIENT_EXCEPTIONS is Exception
+            logger.warning("error resetting connection: %s", ex)
+            self._close_connection(conn)
+
+    So raising is the ONLY way to reach the pool's discard path. The pool's own
+    post-check inspects transaction_status, which cannot see a wrong autocommit
+    -- a connection whose restoration failed is still IDLE and would be handed
+    straight back out. An earlier version caught everything and logged at debug,
+    which meant a failed restoration returned a poisoned connection to the pool
+    and reported success. Let the exception propagate.
+    """
+    conn.autocommit = False
+    if conn.autocommit:
+        # The setter reported success but the state did not take. Raise so the
+        # pool discards rather than recycling a connection we cannot vouch for.
+        raise RuntimeError("pooled connection refused autocommit restoration; discarding rather than returning it to the pool")
+
+
 def _shutdown_pool_registry() -> None:
     """Close every shared pool before late interpreter finalization.
 
@@ -810,6 +849,9 @@ class PostgresBlockStore:
                         # seconds instead of stalling the MCP recall turn.
                         kwargs=_pool_connect_kwargs(self._dsn),
                         timeout=_pool_checkout_timeout(),
+                        # Every check-in restores the session mode; see
+                        # _reset_pooled_connection for the measured semantics.
+                        reset=_reset_pooled_connection,
                         # Append the pgvector extension's schema to each
                         # connection's search_path so the bare ``vector``
                         # type, ``<=>`` operator and ``vector_cosine_ops``
@@ -897,30 +939,40 @@ class PostgresBlockStore:
             pool = self._get_pool()
             try:
                 with pool.connection() as conn:
+                    # DDL wants autocommit, but this connection is POOLED and goes
+                    # back into a process-wide registry. Left set, it silently hands
+                    # the next checkout a connection whose bare statements
+                    # self-commit, which would defeat any claim/lease not wrapped in
+                    # conn.transaction(). Restored in finally so an exceptional exit
+                    # cannot leak it; the pool's reset callback is the second layer.
+                    _prior_autocommit = conn.autocommit
                     conn.autocommit = True
-                    conn.execute(_ddl(self._schema))
-                    # Returns the namespace the vector extension lives in
-                    # (e.g. "public"), or None when pgvector is unusable.
-                    # We schema-qualify all vector references with it so
-                    # embeddings work even when the DSN's search_path
-                    # excludes that namespace (the schema-isolation case).
-                    vector_schema = _try_create_extension_vector(conn)
-                    self._has_vector = vector_schema is not None
-                    if self._has_vector and vector_schema is not None:
-                        self._vector_schema = vector_schema
-                        try:
-                            conn.execute(_ddl_pgvector(self._schema, self._embedding_dim, vector_schema=vector_schema))
-                        except Exception as vec_exc:
-                            # Vector ext present but DDL failed (e.g. dim
-                            # mismatch with an existing column). Don't
-                            # fail the whole migration; degrade to
-                            # BM25-only and surface in the log.
-                            self._has_vector = False
-                            _log.warning(
-                                "postgres_pgvector_ddl_failed",
-                                extra={"schema": self._schema, "error": str(vec_exc)[:200]},
-                            )
-                    self._backfill_active_from_status(conn)
+                    try:
+                        conn.execute(_ddl(self._schema))
+                        # Returns the namespace the vector extension lives in
+                        # (e.g. "public"), or None when pgvector is unusable.
+                        # We schema-qualify all vector references with it so
+                        # embeddings work even when the DSN's search_path
+                        # excludes that namespace (the schema-isolation case).
+                        vector_schema = _try_create_extension_vector(conn)
+                        self._has_vector = vector_schema is not None
+                        if self._has_vector and vector_schema is not None:
+                            self._vector_schema = vector_schema
+                            try:
+                                conn.execute(_ddl_pgvector(self._schema, self._embedding_dim, vector_schema=vector_schema))
+                            except Exception as vec_exc:
+                                # Vector ext present but DDL failed (e.g. dim
+                                # mismatch with an existing column). Don't
+                                # fail the whole migration; degrade to
+                                # BM25-only and surface in the log.
+                                self._has_vector = False
+                                _log.warning(
+                                    "postgres_pgvector_ddl_failed",
+                                    extra={"schema": self._schema, "error": str(vec_exc)[:200]},
+                                )
+                        self._backfill_active_from_status(conn)
+                    finally:
+                        conn.autocommit = _prior_autocommit
                 self._schema_ready = True
                 _log.info(
                     "postgres_block_store_schema_ready",

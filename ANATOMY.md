@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1493 | **Est. tokens:** ~4,463,409
-**Generated:** 2026-09-08 08:49 UTC
+**Files:** 1494 | **Est. tokens:** ~4,467,456
+**Generated:** 2026-09-08 08:50 UTC
 
 ## Token Budget Guide
 
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 230 | ~1,068,378 |
+| `src/mind_mem/` | 230 | ~1,069,140 |
 | `src/mind_mem/api/` | 5 | ~25,701 |
 | `src/mind_mem/bench/` | 17 | ~47,468 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 638 | ~1,947,395 |
+| `tests/` | 639 | ~1,950,680 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -705,7 +705,7 @@
 - `block_parser.py` (~8138 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_provenance.py` (~2728 tok, huge) — Provenance-rich blocks — optional actor/session/tool/source metadata.
 - `block_store_encrypted.py` (~5788 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~21683 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~22445 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~3116 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `block_store.py` (~18068 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
@@ -1509,6 +1509,7 @@
 - `test_paired_scorecard_gate.py` (~6587 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""
 - `test_pg_block_store_ping.py` (~738 tok, large) — Tests for ``PostgresBlockStore.ping()`` — active backend health probe.
+- `test_pg_pool_autocommit_isolation.py` (~3285 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_pg_restore_file_path.py` (~1187 tok, large) — restore() must preserve each block's file_path (routing metadata).
 - `test_pipeline_hash.py` (~3381 tok, huge) — Tests for v3.9 hash-of-code pipeline invalidation."""
 - `test_postgres_active_admission.py` (~6670 tok, huge) — R2-06 — on Postgres, ``blocks.active`` must mean what admission means.
