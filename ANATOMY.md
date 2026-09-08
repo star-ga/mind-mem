@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1525 | **Est. tokens:** ~4537417
-**Generated:** 2026-09-08 17:30 UTC
+**Files:** 1525 | **Est. tokens:** ~4537957
+**Generated:** 2026-09-08 18:32 UTC
 
 ## Token Budget Guide
 
@@ -61,7 +61,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2170 |
 | `mind/` | 27 | ~9687 |
-| `scripts/` | 21 | ~64726 |
+| `scripts/` | 21 | ~64725 |
 | `sdk/go/` | 10 | ~9098 |
 | `sdk/js/` | 6 | ~4864 |
 | `sdk/js/src/` | 5 | ~3178 |
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1076123 |
+| `src/mind_mem/` | 231 | ~1076278 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~48607 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 648 | ~1972860 |
+| `tests/` | 648 | ~1973246 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -589,7 +589,7 @@
 - `alignment_authorities.py` (~8062 tok, huge) — Where each counted doc claim gets its TRUE value from.
 - `anatomy-hook.sh` (~237 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
-- `bandit_gate.py` (~3204 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `build_integrity_manifest.py` (~634 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `check_author_identity.sh` (~1880 tok, huge) — check_author_identity.sh — enforce the single-author identity rule.
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
@@ -927,7 +927,7 @@
 - `ontology.py` (~3933 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `outcome_attribution.py` (~4288 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
 - `outcome_store.py` (~4094 tok, huge) — Outcome-attribution persistence over the calibration store.
-- `payload_admission.py` (~3463 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `payload_admission.py` (~3618 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `personas.py` (~1256 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
 - `pipeline_hash.py` (~3314 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
 - `prefetch.py` (~6830 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1534,7 +1534,7 @@
 - `test_outcome_attribution.py` (~4120 tok, huge) — Regression gate for outcome attribution — did the memory actually help?
 - `test_outcome_attribution_bounds.py` (~3311 tok, huge) — Abuse bounds for outcome attribution — one reporter, one vote.
 - `test_paired_scorecard_gate.py` (~6587 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_payload_admission.py` (~5039 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_payload_admission.py` (~5425 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""
 - `test_pg_block_store_ping.py` (~738 tok, large) — Tests for ``PostgresBlockStore.ping()`` — active backend health probe.
 - `test_pg_pool_autocommit_isolation.py` (~3285 tok, huge) — # Copyright 2026 STARGA, Inc.

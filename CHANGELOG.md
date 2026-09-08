@@ -4,6 +4,29 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Admit new audit and evidence payloads into immutable preimage bytes before
+  hashing. Reject unsupported structured values, non-string or oversized keys,
+  cycles, and resource-limit violations before writing. Existing ledger rows
+  and the bytes of accepted payloads remain unchanged.
+- Restore pooled PostgreSQL connections to the intended transaction mode on
+  every check-in; discard a connection if restoration fails.
+- Route vector indexing through the configured embedding provider chain.
+  Keep usage-ledger imports outside retrieval scoring while retaining token-cap
+  refusals and workspace binding for model-backed query expansion.
+- Make dependency, Bandit, type-checking and PostgreSQL CI gates fail on missing
+  execution or unusable reports. Require named pool-isolation controls to pass.
+
+### Added
+
+- Opt-in ontology constraints for predicate domains and ranges. Existing
+  unconstrained stores retain their behavior until validation is enabled.
+- Reproducible LongMemEval-S retrieval receipts and a Chroma comparison adapter.
+  Retrieval measurements remain distinct from answer accuracy and independent
+  verification; the committed replay gate checks published figures against
+  their raw rows.
+
 ### Added — a forked evidence chain has a way back that forges nothing
 
 `EvidenceChain` refuses to append to a store whose history did not load

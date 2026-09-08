@@ -178,11 +178,22 @@ def _canonical_json(payload: dict) -> str:
 
         if isinstance(node, dict):
             keys = []
+            key_budget = max(MAX_NODES - state["nodes"], 0)
             for key in node:
                 if not isinstance(key, str):
                     raise PayloadRejected(
-                        f"{path}[{key!r}]",
-                        f"dict key is {type(key).__name__}, not str; {key!r} and {str(key)!r} would render identically",
+                        f"{path or '<payload>'}[key]",
+                        f"dict key is {type(key).__name__}, not str; non-string keys would render identically to their text form",
+                    )
+                if len(key) > MAX_STRING_CHARS:
+                    raise PayloadRejected(
+                        f"{path or '<payload>'}[key]",
+                        f"dict key is {len(key)} characters, past the {MAX_STRING_CHARS}-character bound",
+                    )
+                if len(keys) >= key_budget:
+                    raise PayloadRejected(
+                        path or "<payload>",
+                        f"payload exceeds {MAX_NODES} values; a ledger entry records an operation, not a dump",
                     )
                 keys.append(key)
             emit("{", path)

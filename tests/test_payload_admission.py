@@ -43,6 +43,7 @@ UNSUPPORTED = {
     "set": {"who": {"a", "b"}},
     "bytes_nested": {"blob": b"x"},
     "non_str_key": {1: "a"},
+    "oversized_key": {"k" * (MAX_STRING_CHARS + 1): "value"},
     "nan": {"x": float("nan")},
     "infinity": {"x": float("inf")},
 }
@@ -254,6 +255,41 @@ def test_a_huge_string_and_a_huge_serialization_are_refused_by_name() -> None:
     assert len(json.dumps(wide, sort_keys=True)) > MAX_PAYLOAD_BYTES, "positive control: it really is over the size bound"
     with pytest.raises(PayloadRejected, match="more than"):
         validate_payload(wide)
+
+
+def test_key_length_is_bounded_before_serialization(monkeypatch) -> None:
+    key = "k" * (MAX_STRING_CHARS + 1)
+    real_dumps = json.dumps
+    serialized_keys = []
+
+    def observed_dumps(value, *args, **kwargs):
+        if value is key:
+            serialized_keys.append(value)
+        return real_dumps(value, *args, **kwargs)
+
+    monkeypatch.setattr(json, "dumps", observed_dumps)
+    with pytest.raises(PayloadRejected, match="key.*characters"):
+        admit_payload({key: None}, accepts_bytes=False)
+    assert serialized_keys == [], "oversized keys must be refused before allocating their encoded form"
+    accepted = {key[:-1]: None}
+    assert admit_payload(accepted, accepts_bytes=False).preimage == real_dumps(accepted, sort_keys=True).encode()
+
+
+def test_key_inventory_stops_at_the_remaining_node_budget() -> None:
+    class CountedKeys(dict):
+        visits = 0
+
+        def __iter__(self):
+            for key in super().__iter__():
+                self.visits += 1
+                yield key
+
+    payload = CountedKeys((str(i), None) for i in range(MAX_NODES + 2))
+    with pytest.raises(PayloadRejected, match="exceeds"):
+        admit_payload(payload, accepts_bytes=False)
+    assert payload.visits == MAX_NODES, "do not materialize and sort an unbounded key inventory before admission"
+    accepted = {str(i): None for i in range(MAX_NODES - 1)}
+    assert admit_payload(accepted, accepts_bytes=False).preimage == json.dumps(accepted, sort_keys=True).encode()
 
 
 # ---------------------------------------------------------------------------

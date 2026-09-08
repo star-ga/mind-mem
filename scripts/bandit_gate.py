@@ -33,8 +33,8 @@ The MEDIUM row is why `issue_severity` is the authority and `level` is only
 corroboration: `level` is not always emitted at all, so any rule that reads it
 first silently classifies a MEDIUM finding as "no level".
 
-AND SEVERITY MUST BE PRESENT. Root demonstrated `results: [{}]` with exit 1
-passing as one non-HIGH finding: with no `properties` and no `level`, a result
+AND SEVERITY MUST BE PRESENT. A `results: [{}]` report with exit 1 was incorrectly
+accepted as one non-HIGH finding: with no `properties` and no `level`, a result
 carrying no severity at all fell through every comparison and was counted as
 benign. Absence is not a severity. A result whose severity cannot be read
 makes the REPORT unusable (exit 2); it is never quietly treated as low.
@@ -64,7 +64,7 @@ BANDIT_FOUND_ISSUES = 1
 #:     runs[].invocations[0].executionSuccessful = true
 #: A structurally empty object like {"runs": [{}]} carries none of these, and
 #: reading it as "zero findings" is fabricating execution evidence from an
-#: absence. Root demonstrated exactly that against the first version.
+#: absence. The malformed-report controls cover this case.
 _EXPECTED_TOOL = "bandit"
 
 #: Severities the tool really emits. A value outside this set is not a milder
