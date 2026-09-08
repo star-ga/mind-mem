@@ -51,17 +51,38 @@ jobs:
         run: pip install pip-audit
 
       - name: Run pip-audit
+        # This job used to audit NOTHING. `pyproject.toml` declares
+        # `dependencies = []` — every third-party package lives in an extra — so
+        # `pip-audit .` resolved an empty dependency set and always passed, and
+        # the `|| true` swallowed whatever was left. A gate that cannot fail is
+        # not a gate.
+        #
+        # Audit the INSTALLED environment with the extras actually shipped, so
+        # transitive chains are in scope. Measured 2026-09-07: fastmcp 3.4.7
+        # requires fastmcp-slim[client,server]==3.4.7 unconditionally, and both
+        # of those extras require authlib>=1.6.11 — a hard transitive dependency
+        # that the old invocation could never have seen.
         run: |
-          pip-audit --desc \
-            --format json \
-            --output pip-audit-results.json \
-            -r <(pip install --dry-run . 2>&1 | grep "Requirement already satisfied\|Would install" || true) \
-            . || true
-          # Also run directly against pyproject.toml dependencies
-          pip install . --dry-run 2>/dev/null || true
-          pip-audit --desc --format json --output pip-audit-results.json . || EXIT=$?
+          set -euo pipefail
+          pip install '.[all]'
+          # Environment mode: no target argument, so the resolved venv is what
+          # gets audited rather than an empty project.
+          pip-audit --desc --format json --output pip-audit-results.json
           cat pip-audit-results.json
-          exit ${EXIT:-0}
+
+      - name: Prove the audit had a non-empty dependency set
+        # Guards the failure this step replaced: if the audit set is ever empty
+        # again, fail here rather than reporting a green that means nothing.
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, sys
+          data = json.load(open("pip-audit-results.json"))
+          deps = data.get("dependencies", data if isinstance(data, list) else [])
+          if len(deps) < 10:
+              sys.exit(f"pip-audit saw {len(deps)} packages — the audit set is empty or truncated")
+          print(f"pip-audit covered {len(deps)} packages")
+          PY
 
       - name: Upload pip-audit results
         if: always()
