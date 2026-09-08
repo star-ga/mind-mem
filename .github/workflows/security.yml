@@ -62,9 +62,22 @@ jobs:
         # requires fastmcp-slim[client,server]==3.4.7 unconditionally, and both
         # of those extras require authlib>=1.6.11 — a hard transitive dependency
         # that the old invocation could never have seen.
+        #
+        # `.[all]` is NOT the closure of what ships. Measured on this tree it
+        # omits 12 dependencies of shipped extras -- cython (accelerated),
+        # fastapi/httpx/python-jose/uvicorn (api),
+        # opentelemetry-{api,sdk,exporter-otlp}/prometheus-client (otel) and
+        # pgvector/psycopg/psycopg-pool (postgres) -- so auditing `.[all]`
+        # alone left every one of those, and their transitive chains, out of
+        # scope while the job reported success.
+        #
+        # The closure is therefore named EXPLICITLY here rather than inherited
+        # from an extra that does not mean what its name suggests, and
+        # tests/test_dependency_audit_closure.py fails if a shipped extra is
+        # added without being added here too.
         run: |
           set -euo pipefail
-          pip install '.[all]'
+          pip install '.[all]' '.[api]' '.[otel]' '.[postgres]' '.[accelerated]' '.[embeddings]' '.[cross-encoder]' '.[mcp]'
           # Environment mode: no target argument, so the resolved venv is what
           # gets audited rather than an empty project.
           pip-audit --desc --format json --output pip-audit-results.json
@@ -109,13 +122,48 @@ jobs:
         run: pip install bandit[sarif]
 
       - name: Run bandit
-        run: bandit -r src -f sarif -o bandit.sarif || true
+        # `|| true` made this unconditional: every finding, and every failure
+        # to run at all, reported success. The SARIF upload is why the ignore
+        # was there -- bandit exits non-zero when it finds something, and the
+        # file still has to be uploaded -- so the exit code is CAPTURED and
+        # re-raised after the upload instead of discarded.
+        #
+        # Severity split, stated rather than implied: HIGH fails the job, and
+        # anything below is reported through code scanning without blocking.
+        # That is a real gate on the class that matters, not a claim of
+        # complete SAST coverage.
+        run: |
+          set -uo pipefail
+          bandit -r src -f sarif -o bandit.sarif
+          echo "bandit_exit=$?" >> "$GITHUB_ENV"
+          test -s bandit.sarif || { echo "bandit produced no SARIF; it did not run" >&2; exit 1; }
 
       - name: Upload SARIF to GitHub code scanning
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
         with:
           sarif_file: bandit.sarif
           category: bandit
+
+      - name: Fail on high-severity findings
+        # After the upload, so a real finding is always visible in code
+        # scanning even when it stops the build.
+        run: |
+          set -euo pipefail
+          python - <<'CHECK'
+          import json, sys
+          sarif = json.load(open("bandit.sarif"))
+          high = []
+          for run in sarif.get("runs", []):
+              rules = {r.get("id"): r for r in (run.get("tool", {}).get("driver", {}).get("rules") or [])}
+              for res in run.get("results", []):
+                  level = res.get("level") or rules.get(res.get("ruleId"), {}).get("defaultConfiguration", {}).get("level")
+                  if str(level).lower() == "error":
+                      high.append(f"{res.get('ruleId')}: {(res.get('message') or {}).get('text', '')[:120]}")
+          print(f"bandit: {len(high)} high-severity finding(s)")
+          for h in high:
+              print("  " + h)
+          sys.exit(1 if high else 0)
+          CHECK
 
   # ── Gitleaks secret scanning ─────────────────────────────────────────────────
   secrets-scan:

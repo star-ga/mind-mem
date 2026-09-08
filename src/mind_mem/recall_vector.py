@@ -779,8 +779,19 @@ class VectorBackend(RecallBackend):
         if result is not None:
             return result
 
-        # Try llama_cpp if configured
-        if backend == "llama_cpp" or str(backend).lower() == "llama_cpp":
+        # Try llama_cpp if configured -- by EITHER signal.
+        #
+        # This used to read only `onnx_backend`, while `index()` decided the
+        # same question from `self.provider`. Two names for one fact, so a
+        # workspace whose PROVIDER is llama_cpp but whose `onnx_backend` is
+        # unset never reached llama_cpp here at all -- which is exactly why
+        # `index()` grew a direct `embed_llama_cpp` call that bypassed this
+        # function, and with it the circuit breaker, the fall-through logging
+        # and the rest of the chain.
+        #
+        # Accepting both signals makes the bypass unnecessary, so it is gone
+        # and llama_cpp indexing is guarded like every other provider.
+        if str(backend).lower() == "llama_cpp" or str(getattr(self, "provider", "")).lower() == "llama_cpp":
             result = _try("llama_cpp", self.embed_llama_cpp)
             if result is not None:
                 return result
@@ -1228,12 +1239,14 @@ class VectorBackend(RecallBackend):
             # ``vector_index_blocks: 0`` — a hybrid run whose dense leg
             # contributed nothing.
             #
-            # llama_cpp keeps its explicit branch because the chain only tries
-            # it when the backend is configured for it.
-            if self.provider == "llama_cpp":
-                embeddings = self.embed_llama_cpp(texts)
-            else:
-                embeddings = self._embed_for_provider(texts)
+            # llama_cpp no longer has an explicit branch here. It had one
+            # because the chain consulted `onnx_backend` while this consulted
+            # `self.provider`, so a llama_cpp-configured workspace would have
+            # fallen straight past it. The chain now accepts both signals, and
+            # routing through it means llama_cpp indexing finally gets the
+            # circuit breaker, the logged fall-through and the rest of the
+            # chain that every other embedding site has always had.
+            embeddings = self._embed_for_provider(texts)
 
             if not embeddings:
                 _log.error("embedding_generation_failed")

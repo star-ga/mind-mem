@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1517 | **Est. tokens:** ~4,513,170
-**Generated:** 2026-09-08 14:17 UTC
+**Files:** 1519 | **Est. tokens:** ~4,516,760
+**Generated:** 2026-09-08 14:27 UTC
 
 ## Token Budget Guide
 
@@ -53,7 +53,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~18,589 |
+| `.github/workflows/` | 11 | ~19,259 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 230 | ~1,071,956 |
+| `src/mind_mem/` | 230 | ~1,072,203 |
 | `src/mind_mem/api/` | 5 | ~25,701 |
 | `src/mind_mem/bench/` | 17 | ~48,607 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 643 | ~1,957,812 |
+| `tests/` | 645 | ~1,960,485 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -536,7 +536,7 @@
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
 - `release.yml` (~6318 tok, huge) — name: Release
-- `security.yml` (~2237 tok, huge) — name: Supply-Chain Security
+- `security.yml` (~2907 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `hooks/`
 
@@ -948,7 +948,7 @@
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `_recall_temporal.py` (~2214 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~22392 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~22639 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1990 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `replay_check.py` (~4309 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1295,6 +1295,7 @@
 - `test_decrypt_file_audit_trail.py` (~1282 tok, large) — Regression test for the `decrypt_file` forensic audit trail
 - `test_dedup.py` (~5670 tok, huge) — Tests for dedup.py -- 4-layer deduplication filter."""
 - `test_dedup_vector.py` (~1087 tok, large) — Tests for vector-enhanced cosine dedup (Layer 2b)."""
+- `test_dependency_audit_closure.py` (~1379 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
 - `test_docs_alignment.py` (~24506 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1435,6 +1436,7 @@
 - `test_lineage_staleness.py` (~2161 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
 - `test_lint_autofix.py` (~3142 tok, huge) — Tests for the lint -> repair-proposal path (mind_mem.lint / lint_autofix).
 - `test_lint_wiring.py` (~4237 tok, huge) — ``lint`` is actually reachable — from ``mm lint`` and from the MCP surface.
+- `test_llama_cpp_provider_contract.py` (~1294 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_llm_extractor_gate.py` (~2248 tok, huge) — Backend wiring — :func:`mind_mem.llm_extractor._gate_check_local`.
 - `test_llm_extractor.py` (~1842 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2359 tok, huge) — # Copyright 2026 STARGA, Inc.
