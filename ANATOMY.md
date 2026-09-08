@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1525 | **Est. tokens:** ~4537410
-**Generated:** 2026-09-08 16:56 UTC
+**Files:** 1525 | **Est. tokens:** ~4537433
+**Generated:** 2026-09-08 17:16 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 648 | ~1972853 |
+| `tests/` | 648 | ~1972876 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1202,7 +1202,7 @@
 - `test_backpressure_recovery.py` (~1081 tok, large) — Two defects the slice-3 verifier reproduced, pinned so they cannot return.
 - `test_backpressure_wiring.py` (~5799 tok, huge) — ``v4/backpressure`` wired into the producer loops that can drown the store.
 - `test_backup_restore.py` (~3306 tok, huge) — Tests for backup_restore.py — zero external deps (stdlib unittest)."""
-- `test_bandit_gate.py` (~5274 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_bandit_gate.py` (~5280 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_baseline_snapshot.py` (~3033 tok, huge) — Tests for baseline snapshot and drift detection (#431)."""
 - `test_bench_eval_harness.py` (~4522 tok, huge) — Tests for the LongMemEval consolidation harness (self-asserting adapters).
 - `test_bench_hard_timeout.py` (~1824 tok, huge) — The per-question timeout must preempt a NATIVE hang, not just a Python one.
@@ -1445,7 +1445,7 @@
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.
-- `test_make_typecheck_gate.py` (~1554 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_make_typecheck_gate.py` (~1567 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_agent_inject.py` (~5423 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_anchor_tools.py` (~2280 tok, huge) — The external-anchor tools wired onto the audit family in 5.0.0.
 - `test_mcp_arch_mind_tools.py` (~2320 tok, huge) — Tests for the arch-mind MCP tool wrapper.
@@ -1631,7 +1631,7 @@
 - `test_repro_cross_drive_paths.py` (~612 tok, large) — A package written to another drive must not take down the run.
 - `test_repro_disclosure_consistency.py` (~1312 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_repro_package.py` (~2585 tok, huge) — The verifier must be able to FAIL.
-- `test_required_named_controls.py` (~1880 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_required_named_controls.py` (~1884 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.
 - `test_reranker_model_cache.py` (~1909 tok, huge) — Reranker weights load once per process, not once per query.

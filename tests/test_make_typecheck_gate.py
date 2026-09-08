@@ -108,7 +108,9 @@ def test_a_real_type_error_makes_the_gate_fail(tmp_path) -> None:
     shutil.copytree(ROOT, work, symlinks=True, ignore=shutil.ignore_patterns(".git", "*.egg-info", "__pycache__", ".venv"))
 
     def run() -> subprocess.CompletedProcess:
-        return subprocess.run(["make", "-s", "typecheck"], cwd=work, capture_output=True, text=True, timeout=1800)
+            return subprocess.run(
+                ["make", "-s", "typecheck"], cwd=work, capture_output=True, text=True, timeout=1800, encoding="utf-8"
+            )
 
     clean = run()
     assert clean.returncode == 0, (

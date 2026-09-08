@@ -45,7 +45,7 @@ def _required() -> list[str]:
 
 
 def _run(path: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(_SCRIPT), path], capture_output=True, text=True, timeout=120)
+    return subprocess.run([sys.executable, str(_SCRIPT), path], capture_output=True, text=True, timeout=120, encoding="utf-8")
 
 
 def test_every_required_control_present_and_passed_is_accepted(tmp_path) -> None:
