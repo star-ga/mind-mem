@@ -143,11 +143,11 @@ def test_required_names_under_a_DIFFERENT_class_do_not_count(tmp_path) -> None:
     assert "ABSENT" in r.stderr
 
 
-def test_a_failure_is_never_overwritten_by_a_later_pass(tmp_path) -> None:
-    """Each real FAILED control followed by an unrelated same-named pass used to pass.
+def test_a_real_failure_plus_an_unrelated_same_named_pass_is_refused(tmp_path) -> None:
+    """Same-named controls under different classes must keep distinct status.
 
-    The report was keyed on the bare name and the last write won, so a genuine
-    failure was erased by an unrelated success.
+    The classname binding keeps the unrelated pass from overwriting the real
+    failure. Assert the reason so a different refusal cannot satisfy this case.
     """
     real = _real_classname()
     cases: list[tuple[str, str, str | None]] = []
@@ -156,18 +156,35 @@ def test_a_failure_is_never_overwritten_by_a_later_pass(tmp_path) -> None:
         cases.append(("tests.unrelated", n, None))
     r = _run(_report_id(tmp_path, cases))
     assert r.returncode == 1, r.stdout
+    assert "was failure" in r.stderr, f"the real failure was not reported as one: {r.stderr}"
+
+
+def test_a_required_identity_recorded_twice_is_refused_even_when_both_passed(tmp_path) -> None:
+    """THE control that isolates the duplicate refusal.
+
+    Both records pass, so the status check is satisfied and only the duplicate
+    refusal can fail this run. Without it, narrowing the refusal to
+    non-required identities turned no control red -- the duplicate check and
+    the worst-outcome-wins line were each passing for the other's reason, and
+    both looked tested.
+
+    Two records for one identity mean the report describes something other than
+    a single clean run, and picking either is a guess.
+    """
+    real = _real_classname()
+    cases = [(real, n, None) for n in _required()] * 2
+    r = _run(_report_id(tmp_path, cases))
+    assert r.returncode == 1, r.stdout
+    assert "more than once" in r.stderr, f"the duplicate was not the stated reason: {r.stderr}"
 
 
 def test_a_duplicate_required_identity_is_refused(tmp_path) -> None:
-    """Even under the RIGHT class: a required control must be witnessed once.
-
-    Two records for one identity means the report describes something other
-    than a single clean run, and picking either is a guess.
-    """
+    """Even under the RIGHT class: a required control must be witnessed once."""
     real = _real_classname()
     cases = [(real, n, "failure") for n in _required()] + [(real, n, None) for n in _required()]
     r = _run(_report_id(tmp_path, cases))
     assert r.returncode == 1, r.stdout
+    assert "more than once" in r.stderr, f"the duplicate was not the stated reason: {r.stderr}"
 
 
 def test_the_correct_identities_still_pass(tmp_path) -> None:

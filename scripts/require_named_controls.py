@@ -85,8 +85,9 @@ def main(argv: list[str]) -> int:
                 break
         if identity in seen:
             duplicates.add(identity)
-            # Worst outcome wins. A second, passing record for the same
-            # identity must never erase the first one's failure.
+            # Preserve the worst outcome as a backstop. Required duplicates
+            # already fail below regardless of status, so this branch cannot
+            # independently decide their rejection while that rule stands.
             if seen[identity] == "passed":
                 seen[identity] = status
         else:

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1526 | **Est. tokens:** ~4540757
-**Generated:** 2026-09-08 19:28 UTC
+**Files:** 1526 | **Est. tokens:** ~4541022
+**Generated:** 2026-09-08 19:38 UTC
 
 ## Token Budget Guide
 
@@ -61,7 +61,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2170 |
 | `mind/` | 27 | ~9687 |
-| `scripts/` | 21 | ~64725 |
+| `scripts/` | 21 | ~64748 |
 | `sdk/go/` | 10 | ~9098 |
 | `sdk/js/` | 6 | ~4864 |
 | `sdk/js/src/` | 5 | ~3178 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 649 | ~1975250 |
+| `tests/` | 649 | ~1975492 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -606,7 +606,7 @@
 - `pre-push-hook.sh` (~460 tok, medium) — pre-push-hook.sh — the last LOCAL gate before an identity becomes public.
 - `reachability_baseline.txt` (~366 tok, medium) — api.grpc_server  # waiting: a named client integration that requires gRPC (strea
 - `regen_bash_literals.py` (~424 tok, medium) — Regenerate src/mind_mem/_task_status_literals.sh from enums.py.
-- `require_named_controls.py` (~1252 tok, large) — # Copyright 2026 STARGA, Inc.
+- `require_named_controls.py` (~1275 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `sdk/go/`
 
 - `.gitignore` (~5 tok, tiny) — *.test
@@ -1632,7 +1632,7 @@
 - `test_repro_cross_drive_paths.py` (~612 tok, large) — A package written to another drive must not take down the run.
 - `test_repro_disclosure_consistency.py` (~1312 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_repro_package.py` (~2585 tok, huge) — The verifier must be able to FAIL.
-- `test_required_named_controls.py` (~1884 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_required_named_controls.py` (~2126 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.
 - `test_reranker_model_cache.py` (~1909 tok, huge) — Reranker weights load once per process, not once per query.
