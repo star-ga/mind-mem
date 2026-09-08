@@ -38,6 +38,7 @@ from . import vector_inertness
 from ._recall_constants import MAX_RERANK_CANDIDATES
 from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
 from .enums import Leg
+from .error_codes import DailyTokenCapExceeded
 from .observability import get_logger, metrics, timed
 from .retrieval_trace import current_trace, is_trace_enabled
 from .retrieval_trace import step as _record_step
@@ -846,6 +847,8 @@ class HybridBackend:
                     # Only the LLM expander makes a model call. Preserve the
                     # established NLP hook signature when there is no call to
                     # meter, while still binding paid expansion to a workspace.
+                    # An unconditional workspace= is what silently collapsed
+                    # the fan-out to a single query against an older hook.
                     expansion_kwargs["workspace"] = workspace
                 expanded = expand_queries(query, **expansion_kwargs)
                 if len(expanded) > 1:
@@ -865,16 +868,22 @@ class HybridBackend:
                         rerank=rerank,
                         **kwargs,
                     )
+            except DailyTokenCapExceeded as exc:
+                # The day's model-call token cap is spent, so the paid
+                # expansion is refused. Search continues on the original
+                # query, and the configured ceiling is explicit at ERROR.
+                #
+                # Caught by TYPE. The published implementation classified a
+                # broad ``Exception`` through a lazy predicate that imported
+                # the usage ledger to name the class; that put prior-run state
+                # on the scoring import path. External behaviour here is
+                # identical -- refusal still logs at ERROR and search still
+                # continues on the original query -- but the classification is
+                # now the exception type itself.
+                _log.error("query_expansion_refused_daily_token_cap", detail=str(exc))
             except Exception as exc:
-                from ._recall_reranking import is_daily_token_cap_exceeded
-
-                if is_daily_token_cap_exceeded(exc):
-                    # The day's model-call token cap is spent, so the paid
-                    # expansion is refused. Search continues on the original
-                    # query, and the configured ceiling is explicit at ERROR.
-                    _log.error("query_expansion_refused_daily_token_cap", detail=str(exc))
-                else:
-                    _log_fanout_failure("query_expansion_failed", exc)
+                # Unrelated failure: the documented fan-out fallback, unchanged.
+                _log_fanout_failure("query_expansion_failed", exc)
 
         # v3.3.0 Tier 1 #1 — query decomposition for multi-hop queries.
         # Split compound questions ("A after B") into independent

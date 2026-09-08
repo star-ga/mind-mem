@@ -62,6 +62,10 @@ from types import MappingProxyType
 from typing import Any, Optional
 
 from .cognitive_forget import estimate_tokens
+
+# Re-exported, not defined here: the recall scoring path catches this and
+# must not load this ledger to do so. See error_codes.DailyTokenCapExceeded.
+from .error_codes import DailyTokenCapExceeded
 from .observability import get_logger
 
 _log = get_logger("usage_meter")
@@ -93,10 +97,6 @@ OP_QUERY_EXPANSION = "query-expansion"
 _DAY_FORMAT = "%Y-%m-%d"
 _MAX_OPERATION_LEN = 64
 _LOCK = threading.Lock()
-
-
-class DailyTokenCapExceeded(RuntimeError):
-    """A metered model call was refused: the day's token cap is used up."""
 
 
 # ---------------------------------------------------------------------------

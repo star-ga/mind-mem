@@ -562,8 +562,8 @@ def _refine_boundaries_with_llm(
         return boundary_scores
 
     try:
+        from .error_codes import DailyTokenCapExceeded
         from .llm_extractor import _query_llm, is_available
-        from .usage_meter import DailyTokenCapExceeded
 
         if not is_available(backend=config.llm_backend):
             _log.info("llm_refine_skip", reason="no_backend_available")

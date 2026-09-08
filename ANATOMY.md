@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1492 | **Est. tokens:** ~4,461,931
-**Generated:** 2026-09-08 08:48 UTC
+**Files:** 1493 | **Est. tokens:** ~4,463,409
+**Generated:** 2026-09-08 08:49 UTC
 
 ## Token Budget Guide
 
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 230 | ~1,068,020 |
+| `src/mind_mem/` | 230 | ~1,068,378 |
 | `src/mind_mem/api/` | 5 | ~25,701 |
 | `src/mind_mem/bench/` | 17 | ~47,468 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 637 | ~1,946,275 |
+| `tests/` | 638 | ~1,947,395 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -760,7 +760,7 @@
 - `entity_ingest.py` (~3309 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
 - `entity_prefetch.py` (~3059 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
 - `enums.py` (~3698 tok, huge) — Centralised enum definitions for mind-mem.
-- `error_codes.py` (~1751 tok, huge) — mind-mem Error Codes — structured error classification.
+- `error_codes.py` (~1918 tok, huge) — mind-mem Error Codes — structured error classification.
 - `event_fanout.py` (~4850 tok, huge) — Governance event fan-out (v4.0 prep).
 - `evidence_bundle.py` (~2205 tok, huge) — Structured evidence bundle for answerer co-design (v3.3.0 Tier 3 #7).
 - `evidence_objects.py` (~15005 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -785,7 +785,7 @@
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10904 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~23483 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
-- `hybrid_recall.py` (~24139 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~24311 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 ### `src/mind_mem/importers/`
 
 - `engine.py` (~6090 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1026,7 +1026,7 @@
 - `turbo_quant.py` (~1295 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
 - `union_recall.py` (~1310 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
-- `usage_meter.py` (~5230 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `usage_meter.py` (~5249 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/v4/`
 
 - `backpressure.py` (~4318 tok, huge) — v4 backpressure controller (round 4 audit, DeepSeek 9.75→10 gap).
@@ -1635,6 +1635,7 @@
 - `test_roadmap_ticks_gate.py` (~2721 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_sdk_js_packaging.py` (~2404 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.

@@ -14,6 +14,20 @@ from __future__ import annotations
 from enum import Enum
 
 
+class DailyTokenCapExceeded(RuntimeError):
+    """A metered model call was refused: the day's token cap is used up.
+
+    Defined HERE, in a leaf that imports only ``enum``, rather than beside the
+    meter that raises it. The recall scoring path catches this exception but
+    never meters anything, and importing it from ``usage_meter`` pulled that
+    whole ledger -- ``.mind-mem-index/usage.json``, its retention window and
+    its version -- onto the ranking path. ``usage_meter`` re-exports the name,
+    so every existing import and ``except`` clause binds this same class.
+
+    See tests/test_recall_attestation_v2.py, whose surface ratchet caught it.
+    """
+
+
 class ErrorSeverity(Enum):
     """Error severity levels."""
 
