@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1525 | **Est. tokens:** ~4537419
-**Generated:** 2026-09-08 16:25 UTC
+**Files:** 1525 | **Est. tokens:** ~4537410
+**Generated:** 2026-09-08 16:56 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 648 | ~1972862 |
+| `tests/` | 648 | ~1972853 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1534,7 +1534,7 @@
 - `test_outcome_attribution.py` (~4120 tok, huge) — Regression gate for outcome attribution — did the memory actually help?
 - `test_outcome_attribution_bounds.py` (~3311 tok, huge) — Abuse bounds for outcome attribution — one reporter, one vote.
 - `test_paired_scorecard_gate.py` (~6587 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_payload_admission.py` (~5048 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_payload_admission.py` (~5039 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""
 - `test_pg_block_store_ping.py` (~738 tok, large) — Tests for ``PostgresBlockStore.ping()`` — active backend health probe.
 - `test_pg_pool_autocommit_isolation.py` (~3285 tok, huge) — # Copyright 2026 STARGA, Inc.

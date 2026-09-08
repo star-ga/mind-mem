@@ -196,9 +196,7 @@ def test_audit_refuses_an_undocumented_root_and_writes_nothing(tmp_path, name) -
     assert before[1] == 1, "positive control: the good payload did not land"
 
     with pytest.raises(PayloadRejected):
-        chain.append(
-            operation="create_block", target="t.md", agent="a", reason="r", payload=UNDOCUMENTED_ROOTS[name]()
-        )
+        chain.append(operation="create_block", target="t.md", agent="a", reason="r", payload=UNDOCUMENTED_ROOTS[name]())
 
     assert _state(path) == before, "the audit file changed on a refused root"
 
@@ -212,9 +210,7 @@ def test_each_ledger_is_bound_to_its_own_documented_contract(tmp_path) -> None:
     given one merged contract; each passes its own.
     """
     evidence = EvidenceChain(store_path=str(tmp_path / "memory" / "evidence_chain.jsonl"))
-    ev = evidence.create(
-        action=EvidenceAction.APPLY, actor="t", target_block_id="B-1", target_file="b.md", payload=b"raw"
-    )
+    ev = evidence.create(action=EvidenceAction.APPLY, actor="t", target_block_id="B-1", target_file="b.md", payload=b"raw")
     assert ev.payload_hash == hashlib.sha256(b"raw").hexdigest(), "the documented bytes preimage moved"
 
     audit = AuditChain(str(tmp_path))
