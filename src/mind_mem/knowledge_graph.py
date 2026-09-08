@@ -56,6 +56,7 @@ from typing import Any, Mapping, Optional
 from .admission import require_admission
 from .graph_schema import stamp as stamp_schema_version
 from .graph_schema import version_of as schema_version_of
+from .observability import get_logger
 
 # ---------------------------------------------------------------------------
 # Predicate registry
@@ -81,6 +82,25 @@ class Predicate(str, Enum):
     SUPPORTS = "supports"
     REFINES = "refines"
     DERIVED_FROM = "derived_from"
+
+    # The four relation classes our corpus is actually made of, which the
+    # repo-topology predicates above cannot express. Added 2026-09-07.
+    #
+    # Safe to widen here because the vocabulary is VERSIONED: graph_schema
+    # folds ",".join(predicate_vocabulary()) into the schema_version stamped on
+    # every edge, so adding a member moves the version (measured:
+    # gs1-1c6c120ab419 -> gs1-9c14774a8026) and pre-widening edges stay
+    # distinguishable through schema_version_histogram() and
+    # edges_by_schema_version(). That sequencing — version before widening —
+    # is what the roadmap item asked for, and it was already satisfied.
+    #
+    # Nothing else needs updating: llm_extractor builds its prompt vocabulary
+    # from this enum directly, and graph_schema.predicate_vocabulary() reads it
+    # too, so both pick these up without a second edit.
+    MEMBER_OF = "member_of"  # person <-> organization
+    JUSTIFIED_BY = "justified_by"  # decision <-> rationale
+    OWNED_BY = "owned_by"  # commitment <-> owner
+    EVIDENCED_BY = "evidenced_by"  # claim <-> evidence
 
     @classmethod
     def from_str(cls, name: str) -> "Predicate":
@@ -413,6 +433,48 @@ class EntityRegistry:
             self._conn.commit()
         return True
 
+    def migrate_entity_type(self) -> bool:
+        """Add the nullable ``entity_type`` column. Idempotent, no clock, no rand.
+
+        Entities were ``(id, canonical)`` — untyped. That is why the graph would
+        accept ``DOG --works_at--> MICROSOFT``: not because no rule existed, but
+        because there was no type for a rule to check. Predicate domain/range
+        (``ontology.PredicateConstraint``) needs a type on each end.
+
+        NULLABLE on purpose. Every entity already in a store predates typing,
+        and back-filling a guess would manufacture provenance the operator never
+        asserted. An untyped entity is honestly unknown, and
+        ``Ontology.validate_triple`` treats unknown against a constrained side
+        as a violation rather than a pass — so typing is required to write a
+        constrained edge, never assumed.
+
+        Returns ``True`` when this call added the column.
+        """
+        with self._lock:
+            cols = {row[1] for row in self._conn.execute("PRAGMA table_info(entities)").fetchall()}
+            if "entity_type" in cols:
+                return False
+            self._conn.execute("ALTER TABLE entities ADD COLUMN entity_type TEXT")
+            self._conn.commit()
+        return True
+
+    def set_entity_type(self, entity_id: str, entity_type: Optional[str]) -> None:
+        """Record (or clear) the type of a resolved entity."""
+        self.migrate_entity_type()
+        with self._lock:
+            self._conn.execute("UPDATE entities SET entity_type = ? WHERE id = ?", (entity_type, entity_id))
+            self._conn.commit()
+
+    def type_of(self, entity_id: str) -> Optional[str]:
+        """Return the entity's declared type, or ``None`` when untyped."""
+        self.migrate_entity_type()
+        with self._lock:
+            row = self._conn.execute("SELECT entity_type FROM entities WHERE id = ?", (entity_id,)).fetchone()
+        if row is None:
+            return None
+        value = row["entity_type"]
+        return str(value) if value else None
+
     def _require_observations(self) -> None:
         """Gate observation access behind the v4 ``entity_observations`` flag
         and ensure the column exists (lazy, idempotent migration)."""
@@ -717,6 +779,17 @@ class GraphStats:
         }
 
 
+_log = get_logger("knowledge_graph")
+
+
+class OntologyViolation(ValueError):
+    """An edge contradicts the active ontology's domain/range for its predicate.
+
+    Raised only in ``enforce`` mode. In ``warn`` the violation is logged and the
+    edge is written, so a store can be measured before it is policed.
+    """
+
+
 class KnowledgeGraph:
     """SQLite-backed triple store with entity registry + N-hop traversal.
 
@@ -775,10 +848,71 @@ class KnowledgeGraph:
             self._conn.executescript(self.SCHEMA)
             self._conn.commit()
         self.entities = EntityRegistry(self._conn, self._lock)
+        # Ontology gate, inert until an operator sets it. Held as plain
+        # attributes rather than read from config on each call so the OFF path
+        # costs one string compare and never touches disk.
+        self._ontology_mode: str = "off"
+        self._ontology = None
 
     # ------------------------------------------------------------------
     # Edge CRUD
     # ------------------------------------------------------------------
+
+    def set_ontology(self, ontology, *, mode: str = "enforce") -> None:
+        """Install an ontology and choose how violations are handled.
+
+        *mode* is ``off`` / ``warn`` / ``enforce``. Passing ``None`` for
+        *ontology* removes it, which returns the graph to its previous
+        behaviour exactly.
+        """
+        valid = {"off", "warn", "enforce"}
+        if mode not in valid:
+            raise ValueError(f"ontology mode must be one of {sorted(valid)}, got {mode!r}")
+        self._ontology = ontology
+        self._ontology_mode = "off" if ontology is None else mode
+
+    def _active_ontology(self):
+        return self._ontology
+
+    def _enforce_ontology(self, s_id: str, pred: "Predicate | str", o_id: str) -> None:
+        """Refuse an edge the active ontology says cannot exist.
+
+        The predicate vocabulary said which verbs are spellable; it never said
+        which subjects and objects they are meaningful between, so
+        ``DOG --works_at--> MICROSOFT`` was as writable as a true statement.
+        ``ontology.PredicateConstraint`` supplies domain and range;
+        ``entities.type_of`` supplies the two ends.
+
+        Three modes, matching the redaction layer's idiom rather than inventing
+        a second one:
+
+        ``off``      (default) no check at all — not even a type lookup, so a
+                     store that does not use this pays nothing for it;
+        ``warn``     log the violation and write the edge anyway;
+        ``enforce``  raise ``OntologyViolation`` and write nothing.
+
+        Off by default because enabling it rejects edges the store previously
+        accepted, and because an untyped entity fails a constrained side by
+        design — a store that predates typing would refuse most writes until
+        its entities are typed. That is the correct order (type, then enforce),
+        and it is the operator's to sequence.
+        """
+        mode = str(self._ontology_mode or "off").lower()
+        if mode == "off":
+            return
+        onto = self._active_ontology()
+        if onto is None:
+            return
+        name = pred.value if hasattr(pred, "value") else str(pred)
+        errors = onto.validate_triple(self.entities.type_of(s_id), name, self.entities.type_of(o_id))
+        if not errors:
+            return
+        detail = f"{s_id} --{name}--> {o_id}: " + "; ".join(errors)
+        if mode == "warn":
+            _log.warning("ontology_violation_admitted", detail=detail, mode=mode)
+            return
+        _log.warning("ontology_violation_refused", detail=detail, mode=mode)
+        raise OntologyViolation(detail)
 
     def add_edge(
         self,
@@ -853,6 +987,15 @@ class KnowledgeGraph:
         if valid_from is not None and valid_until is not None:
             if _parse_iso8601(valid_until) < _parse_iso8601(valid_from):
                 raise ValueError("valid_until must be >= valid_from")
+
+        # ONTOLOGY GATE — what this edge may CONNECT, checked after both ends
+        # resolve (their types are needed) and before anything is written.
+        #
+        # Default OFF. Turning it on rejects edges the store previously
+        # accepted, so it is opt-in per the versioning rule; and an untyped
+        # entity fails a constrained side, which would refuse most writes in a
+        # store that predates typing until its entities are typed.
+        self._enforce_ontology(s_id, pred, o_id)
 
         edge = Edge(
             subject=s_id,

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1494 | **Est. tokens:** ~4,467,456
-**Generated:** 2026-09-08 08:50 UTC
+**Files:** 1496 | **Est. tokens:** ~4,474,146
+**Generated:** 2026-09-08 08:51 UTC
 
 ## Token Budget Guide
 
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 230 | ~1,069,140 |
+| `src/mind_mem/` | 230 | ~1,071,956 |
 | `src/mind_mem/api/` | 5 | ~25,701 |
 | `src/mind_mem/bench/` | 17 | ~47,468 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 639 | ~1,950,680 |
+| `tests/` | 641 | ~1,954,554 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -809,7 +809,7 @@
 - `iterative_recall.py` (~2856 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4672 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kg_fusion.py` (~2054 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
-- `knowledge_graph.py` (~15876 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~17602 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lifecycle_evidence.py` (~4750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
@@ -893,7 +893,7 @@
 - `observation_compress.py` (~1401 tok, large) — Observation Compression Layer for Mind-Mem.
 - `ollama_host.py` (~1022 tok, large) — Single source of truth for the ollama base URL.
 - `online_trainer.py` (~6077 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `ontology.py` (~2843 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `ontology.py` (~3933 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `outcome_attribution.py` (~4288 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
 - `outcome_store.py` (~4094 tok, huge) — Outcome-attribution persistence over the calibration store.
 - `personas.py` (~1256 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
@@ -1503,6 +1503,7 @@
 - `test_ollama_host_resolver.py` (~2781 tok, huge) — Tests for the shared ollama base-URL resolver (v4.3.1).
 - `test_one_corpus_definition.py` (~9425 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_online_trainer_wiring.py` (~8382 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_ontology_predicate_constraints.py` (~2315 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_outcome_attribution_bounds.py` (~3311 tok, huge) — Abuse bounds for outcome attribution — one reporter, one vote.
 - `test_outcome_attribution.py` (~4120 tok, huge) — Regression gate for outcome attribution — did the memory actually help?
@@ -1767,6 +1768,7 @@
 - `test_workspace_structure.py` (~550 tok, large) — Tests for workspace directory structure."""
 - `test_world_staleness_config_fallbacks.py` (~1465 tok, large) — A silent fallback is a config the operator thinks is in force and is not.
 - `test_world_staleness.py` (~5183 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_write_path_guarantee.py` (~1559 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_tls_certs.py` (~1957 tok, huge) — Throwaway CA, leaf certificates and a recording TLS peer for the TLS tests.
 - `_toml_compat.py` (~462 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `_write_path_scan.py` (~11624 tok, huge) — # Copyright 2026 STARGA, Inc.

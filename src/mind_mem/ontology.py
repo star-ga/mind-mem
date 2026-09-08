@@ -78,6 +78,35 @@ _TYPE_MAP: dict[str, tuple[type, ...]] = {
 }
 
 
+@dataclass(frozen=True)
+class PredicateConstraint:
+    """Domain and range for one predicate — OWL-lite, on the edge rather than the node.
+
+    ``EntityType`` constrains what a *node* may carry. Nothing constrained
+    what an *edge* may connect, so the typed triple store would accept
+    ``DOG --works_at--> MICROSOFT`` as readily as a true one: the predicate
+    vocabulary said which verbs exist, never which subjects and objects they
+    are meaningful between.
+
+    ``domain`` is the set of entity types allowed on the subject side and
+    ``range`` the set allowed on the object side. An empty set means
+    unconstrained on that side, so a partially-specified ontology is useful
+    immediately — declaring only ``range`` for ``works_at`` still rejects
+    ``... --works_at--> RUST``.
+
+    Subtypes satisfy their parent: with ``EntityType(name="ENGINEER",
+    parent="PERSON")``, an ENGINEER passes a domain of ``{"PERSON"}``.
+    """
+
+    predicate: str
+    domain: frozenset[str] = frozenset()
+    range: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        if not self.predicate or not re.fullmatch(r"[a-z][a-z0-9_]*", self.predicate):
+            raise ValueError(f"PredicateConstraint.predicate must be lowercase snake_case, got {self.predicate!r}")
+
+
 class ValidationError(Exception):
     """Raised when a block fails ontology validation."""
 
@@ -93,6 +122,10 @@ class Ontology:
 
     version: str
     types: dict[str, EntityType]
+    #: Predicate name -> its domain/range constraint. Empty by default, so an
+    #: ontology written before edge constraints existed keeps validating
+    #: exactly as it did and every triple passes.
+    predicates: dict[str, PredicateConstraint] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.version or not isinstance(self.version, str):
@@ -185,6 +218,51 @@ class Ontology:
                 errors.append(f"type mismatch for {prop!r}: expected {label}, got {type(value).__name__}")
         return errors
 
+    def _satisfies(self, type_name: Optional[str], allowed: frozenset[str]) -> bool:
+        """Does *type_name*, or any ancestor of it, sit in *allowed*?"""
+        if not allowed:
+            return True  # unconstrained on this side
+        if type_name is None:
+            return False  # constrained side, untyped entity — cannot be checked
+        seen: set[str] = set()
+        cur: Optional[str] = type_name
+        while cur and cur not in seen:
+            if cur in allowed:
+                return True
+            seen.add(cur)
+            et = self.types.get(cur)
+            cur = et.parent if et else None
+        return False
+
+    def validate_triple(
+        self,
+        subject_type: Optional[str],
+        predicate: str,
+        object_type: Optional[str],
+    ) -> list[str]:
+        """Return validation errors for one edge. Empty list means allowed.
+
+        A predicate with no declared constraint is unconstrained: an ontology
+        that has not yet been extended must not start rejecting edges it
+        previously accepted.
+
+        An UNTYPED end against a CONSTRAINED side is an error, not a pass.
+        Treating unknown as acceptable is how a constraint quietly stops
+        constraining — every entity written before typing existed would slip
+        through the rule that was added to catch them.
+        """
+        constraint = self.predicates.get(predicate)
+        if constraint is None:
+            return []
+        errors: list[str] = []
+        if not self._satisfies(subject_type, constraint.domain):
+            got = subject_type or "untyped"
+            errors.append(f"domain violation: {predicate!r} expects subject in {sorted(constraint.domain)}, got {got}")
+        if not self._satisfies(object_type, constraint.range):
+            got = object_type or "untyped"
+            errors.append(f"range violation: {predicate!r} expects object in {sorted(constraint.range)}, got {got}")
+        return errors
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
@@ -197,6 +275,16 @@ class Ontology:
                     "property_types": dict(et.property_types),
                 }
                 for name, et in self.types.items()
+            },
+            # Sorted so the serialised form is deterministic — an ontology is
+            # hashed into provenance, and set iteration order is not stable.
+            "predicates": {
+                name: {
+                    "predicate": pc.predicate,
+                    "domain": sorted(pc.domain),
+                    "range": sorted(pc.range),
+                }
+                for name, pc in sorted(self.predicates.items())
             },
         }
 
@@ -211,7 +299,14 @@ class Ontology:
                 parent=raw.get("parent"),
                 property_types=dict(raw.get("property_types", {})),
             )
-        return cls(version=str(data["version"]), types=types)
+        predicates: dict[str, PredicateConstraint] = {}
+        for name, raw in data.get("predicates", {}).items():
+            predicates[name] = PredicateConstraint(
+                predicate=str(raw.get("predicate", name)),
+                domain=frozenset(raw.get("domain", ())),
+                range=frozenset(raw.get("range", ())),
+            )
+        return cls(version=str(data["version"]), types=types, predicates=predicates)
 
 
 # ---------------------------------------------------------------------------
