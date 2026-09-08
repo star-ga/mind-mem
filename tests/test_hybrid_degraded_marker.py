@@ -316,7 +316,14 @@ def test_expansion_end_to_end_propagates_degraded(monkeypatch):
     hb._vector_available = True  # reach the fused path in each recursion
 
     # Expand into 3 variants.
-    monkeypatch.setattr(qe, "expand_queries", lambda query, config=None: [query, query + " alt", query + " alt2"])
+    # ``**_`` is load-bearing, not laziness. The real expand_queries grew a
+    # keyword-only ``workspace`` param; a stub pinned to the old signature
+    # raised TypeError inside search()'s expansion try-block, which the
+    # fan-out fallback swallowed as ``query_expansion_failed``. The search
+    # then ran SINGLE-query and still produced a degraded marker, so the two
+    # assertions above kept passing while this test silently stopped
+    # exercising the multi-variant path it exists to cover.
+    monkeypatch.setattr(qe, "expand_queries", lambda query, config=None, **_: [query, query + " alt", query + " alt2"])
 
     # Every variant's vector leg fails -> each single-query result degrades.
     def _boom(*a, **k):

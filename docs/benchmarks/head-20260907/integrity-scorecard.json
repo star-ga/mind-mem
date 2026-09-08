@@ -1,0 +1,48 @@
+{
+  "dimensions": {
+    "entity_resolution": {
+      "reason": "no knowledge graph in this workspace",
+      "status": "UNMEASURED"
+    },
+    "governance": {
+      "exit_code": 0,
+      "gate": "check_reachable_modules.py",
+      "output_tail": [
+        "console_script entry points: 20",
+        "allowlisted (reason recorded): 10",
+        "unreachable total: 6  (baseline 6)"
+      ],
+      "passes": true,
+      "status": "MEASURED"
+    },
+    "ontology_validity": {
+      "reason": "no knowledge graph in this workspace",
+      "status": "UNMEASURED"
+    },
+    "provenance": {
+      "blocks_total": 120,
+      "evidence_chain": {
+        "chain_verifies": true,
+        "coverage": 1.0,
+        "first_break": [],
+        "n": 120,
+        "of": 120,
+        "records": 240
+      },
+      "note": "origin_field is a mutable string; evidence_chain is tamper-evident. They are not the same guarantee and must not be quoted as one.",
+      "origin_field": {
+        "coverage": 0.0,
+        "n": 0,
+        "of": 120
+      }
+    },
+    "replay_determinism": {
+      "coverage": 1.0,
+      "identical": 4,
+      "mismatched_queries": [],
+      "probes": 4,
+      "status": "MEASURED"
+    }
+  },
+  "workspace": "synthetic-public-fixture (120 blocks, all written through the governed path)"
+}

@@ -70,3 +70,11 @@ docs/FLEET_MCP_WIRING.md
 
 # Written by the test suite's thread-ceiling watchdog when it stops a run.
 .pytest-thread-ceiling.log
+
+# Comms / evidence surfaces — these live outside the tree by design.
+# Belt-and-braces so a stray copy can never ride along into the public repo.
+evidence_chain.jsonl
+evidence_chain.jsonl.*
+hash_chain_v2.db
+hash_chain_v2.db-*
+audit_chain.jsonl

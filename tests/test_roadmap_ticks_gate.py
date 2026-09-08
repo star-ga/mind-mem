@@ -207,7 +207,18 @@ class TestTheGateHasTeeth:
         they are pinned here by name.
         """
         text = ROADMAP.read_text(encoding="utf-8")
-        for label in ("Pluggable redaction layer", "Compliance export pipeline", "Provenance-rich blocks"):
+        # "Provenance-rich blocks" was removed from this lock on 2026-09-07 and
+        # from the twin lock in tests/test_roadmap_hygiene.py at the same time —
+        # two guards that disagree about the same item are worse than one.
+        #
+        # Its retraction rested on "the off|recommended|required policy has zero
+        # occurrences in src/", which is now false. Traced rather than grepped:
+        # compliance/provenance_policy.py (193 lines) defines POLICY_OFF /
+        # POLICY_RECOMMENDED / POLICY_REQUIRED; compliance/prewrite.py:65 calls
+        # resolve_policy; and prewrite.screen is reached from TWO real entry
+        # points, mm_cli.py:3750 and mcp/tools/governance.py:328. An import
+        # alone would not have justified unpinning a deliberate lock.
+        for label in ("Pluggable redaction layer", "Compliance export pipeline"):
             ticked = [ln for ln in text.splitlines() if label in ln and ln.lstrip().startswith("- [x]")]
             assert ticked == [], f"{label} is ticked again: {ticked}"
 

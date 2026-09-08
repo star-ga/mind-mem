@@ -1,0 +1,13 @@
+{
+  "recall": {
+    "backend": "hybrid",
+    "knee_cutoff": false,
+    "dedup": {"enabled": false},
+    "vector_enabled": true,
+    "model": "mxbai-embed-large",
+    "ollama_embed_model": "mxbai-embed-large",
+    "rrf_k": 60,
+    "bm25_weight": 1.0,
+    "vector_weight": 1.0
+  }
+}

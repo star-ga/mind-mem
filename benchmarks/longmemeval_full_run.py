@@ -207,11 +207,20 @@ def run(
     config: dict[str, Any] | None = None,
     qtimeout_s: float = DEFAULT_QTIMEOUT_S,
     limit: int = 0,
+    stride: int = 1,
     progress_every: int = 10,
     mask: str = "",
 ) -> dict[str, Any]:
     """Score the eligible pool, one hard-killed child process per question."""
     pool, excl_abs, excl_no_gold = eligible_questions(dataset)
+    if stride > 1:
+        # LongMemEval-S is ORDERED BY QUESTION TYPE, so ``limit`` returns a
+        # prefix that is a biased sample: the first 150 eligible questions
+        # contain three of the six types and not one ``temporal-reasoning``
+        # question, which is both the largest type and one of the two the
+        # product loses on. A stride spans every type in proportion, so a
+        # sub-sample stays representative of the metric it is standing in for.
+        pool = pool[::stride]
     if limit:
         pool = pool[:limit]
     done = _load_done(ndjson_path)
@@ -362,6 +371,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--qtimeout", type=float, default=DEFAULT_QTIMEOUT_S, help="per-question hard kill, seconds")
     ap.add_argument("--limit", type=int, default=0, help="score only the first N eligible questions (0 = all)")
+    ap.add_argument(
+        "--stride",
+        type=int,
+        default=1,
+        help="score every Nth eligible question. The set is ordered by type, so this "
+        "keeps a sub-sample type-representative where --limit does not (1 = all)",
+    )
     ap.add_argument("--rep", type=int, default=1, help="repetition index; only labels the artifact")
     ap.add_argument("--ndjson", default=None)
     ap.add_argument("--scorecard", default=None)
@@ -393,6 +409,7 @@ def main(argv: list[str] | None = None) -> int:
         config=config,
         qtimeout_s=a.qtimeout,
         limit=a.limit,
+        stride=a.stride,
         mask=a.mask,
     )
 

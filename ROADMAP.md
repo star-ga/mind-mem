@@ -91,7 +91,7 @@ by its full description below.
 - [ ] **Publish the Go client as a Go module** — `sdk/go/` exists in-tree with tests; only the publish step is open. Kept from the cut SDK fan-out (the JS publish is tracked separately above); the Rust/Java/Ruby STUBS were inventory and are cut.
 - *(tracked below — see “OpenAPI + AsyncAPI specs” in the status section; listed twice, counted once)*
 - [ ] **Migration importers** — `mm import --from {chroma|mem0|letta} <dump.json>` **ships** (file-based subset: `src/mind_mem/importers/`, `IMP-` blocks in `memory/IMPORTED.md`, `imported:<system>` provenance, idempotent re-import). Open half is the endpoint-backed systems — pinecone / weaviate / qdrant need a live endpoint + credential and are refused with an explicit deferred message
-- [x] **Model-call token metering** — `mm usage` **ships** (`src/mind_mem/usage_meter.py`, wired into `mm_cli.py` with `CAP_EXIT_CODE`; per-day token counter + optional daily cap). The quota/spending-alert surface was deliberately dropped: self-hosted mind-mem has no spend outside model calls.
+- [x] **Model-call token metering** — per-day token counter plus optional daily cap behind `mm usage`.
 
 ### Group RA — Retrieval accountability (proposed 2026-08-28; **revised after audit**, 5 items)
 
@@ -468,7 +468,7 @@ dropped-line counts are logged.
       tail to the user and emits only the summary+handle to the agent.
       Closes the biggest single context sink for the `mind` repo
       (247 test binaries). **The real build** of the three.
-- [ ] **One-command federation connect (`mind-mem connect`)** — the only
+- [x] **One-command federation connect (`mind-mem connect`)** — the only **SHIPPED 2026-09-02 in `a4a1759`** — `src/mind_mem/federation_connect.py` (343 lines): `build_federation_config()` does an immutable deep-copy merge, `connect()` writes the config atomically at 0600. Verified at HEAD 2026-09-07.
       onboarding gap vs. hosted "shared context across all CLIs" comps:
       a wrapper that wires a new CLI into the U1-served federation
       (Postgres+Redis DSN) without hand-editing config. We already own
@@ -611,12 +611,26 @@ measure. Wiring comes first, with the yield measurement built into the wiring:
       run `mm graph-backfill` over the 1469-block corpus, read the yield
       numbers, review/approve the staged edges, then enable
       `retrieval.kg_fusion` once there is a graph worth walking.
-- [ ] **Widen the predicate vocabulary beyond repo topology** — the four live
-      predicates cannot express the relations our corpus is actually made of
-      (person ↔ organization, decision ↔ rationale, commitment ↔ owner,
-      claim ↔ evidence). Pairs with the Group K "schema versioning" item:
-      version the vocabulary *before* scaling ingestion, so pre-widening
-      blocks stay distinguishable and re-extractable.
+- [x] **Widen the predicate vocabulary beyond repo topology** — **SHIPPED
+      2026-09-07.** The four named relation classes now have predicates:
+      `member_of` (person ↔ organization), `justified_by` (decision ↔
+      rationale), `owned_by` (commitment ↔ owner), `evidenced_by` (claim ↔
+      evidence). Vocabulary 10 → 14.
+
+      The item's own precondition — "version the vocabulary *before* scaling
+      ingestion, so pre-widening blocks stay distinguishable" — was checked
+      first and was already satisfied: `graph_schema` folds
+      `",".join(predicate_vocabulary())` into the `schema_version` stamped on
+      every edge, so widening moved it (`gs1-1c6c120ab419` →
+      `gs1-e62938f0b27e`, measured) and pre-widening edges remain separable
+      through `schema_version_histogram()` / `edges_by_schema_version()`.
+
+      Nothing else needed editing, verified rather than assumed:
+      `llm_extractor` builds its prompt vocabulary from the enum itself and
+      `graph_schema.predicate_vocabulary()` reads the same source, so both
+      picked the new members up. 609 graph/predicate/schema tests pass; no test
+      pins a literal schema version. (The item's premise said "four live
+      predicates"; there were ten.)
 - [x] **Pin `retrieval.multi_hop` in the live workspace config** — the XREF
       expansion block (`enabled`, `auto_enable`, `max_hops`, `decay`,
       `max_neighbors_per_hop`) is now written explicitly with the previous
@@ -651,7 +665,6 @@ HITL gate deliberately refuses.
   - Residual: the grace window is ADVISORY. `grace_seconds` is printed and the operator must run the emitted `shell_final` export; the server never timestamps or auto-expires an old token, so the "then expires" half of the original line is not implemented.
 
 ### Cross-cutting (deferred infrastructure)
-
 
 ### Pure-MIND Core Port (long-horizon architectural goal — PLANNED, not started)
 
@@ -698,7 +711,6 @@ pin a state the toolchain cannot yet satisfy.
   section's first item.)*
 
 ### Advanced Agent Memory Primitives (5 planned block types, future)
-
 
 ### Companion Tools (0 items; +1 doc shipped)
 
@@ -1802,10 +1814,62 @@ file.
 - [x] **Two config keys documented in `docs/configuration.md`** —
   `cache.redis_url` and `retrieval.tier_boost` appear in the
   v3.2.0 docs; verified as part of the v3.2.1 release checklist.
-- [ ] **Dependency CVE bumps** — no ``authlib`` or ``aiohttp`` in
-  MIND-Mem's direct or transitive deps as of v3.2.1 (``pip-audit``
-  verified). Kept as tracking item in case a future ``fastmcp``
-  release reintroduces either.
+- [ ] **Dependency CVE bumps** — **THE TRACKING CONDITION FIRED; measured
+  2026-09-07.** This item was kept "in case a future ``fastmcp`` release
+  reintroduces either", and one did: ``fastmcp`` 3.4.7 requires
+  ``fastmcp-slim[client,server]==3.4.7`` *unconditionally*, and both of those
+  extras require ``authlib>=1.6.11`` (``importlib.metadata.requires``, checked
+  against the installed tree — ``authlib`` 1.7.2 is present). ``fastmcp`` is
+  declared in the ``[mcp]``, ``[api]``, ``[test]`` and ``[all]`` extras, so
+  ``authlib`` is now a hard transitive dependency of every fastmcp-bearing
+  install. ``aiohttp`` remains absent, so that half of the original statement
+  still holds.
+
+  **Why nobody noticed: the audit that was supposed to catch this could not.**
+  ``pyproject.toml`` declares ``dependencies = []`` — every third-party package
+  lives in an extra — so the ``pip-audit`` job's ``pip-audit … .`` invocation
+  resolved an *empty* dependency set and passed unconditionally, with ``|| true``
+  swallowing what remained. It had never audited anything. Fixed 2026-09-07:
+  ``.github/workflows/security.yml`` now installs ``.[all]`` and audits the
+  resolved environment, with a following step that fails when the audit set
+  comes back empty, so the vacuous green cannot silently return.
+
+  **THE ACTUAL CVE VERDICT, measured 2026-09-07 once `pip-audit` was repaired.**
+  The local `pip-audit` shim was itself broken (`ModuleNotFoundError: No module
+  named 'pip_audit'` — a `#!/usr/bin/python3` shebang against an interpreter
+  that does not have it; `mypy` had the same defect). Repaired to python3.12,
+  which is where both are installed.
+
+  Scoped to **mind-mem's own `[all]` closure — 79 packages, not the 538 in the
+  shared dev environment** — eight carry advisories:
+
+  | package | installed | advisories | first fixed |
+  |---|---|---|---|
+  | `authlib` | 1.6.8 | **7** | 1.6.12 |
+  | `pyjwt` | 2.11.0 | 11 | 2.12.0 |
+  | `cryptography` | 43.0.3 | 8 | 44.0.1 |
+  | `starlette` | 0.52.1 | 7 | 1.0.1 |
+  | `python-multipart` | 0.0.22 | 5 | 0.0.26 |
+  | `setuptools` | 70.2.0 | 4 | 78.1.1 |
+  | `mcp` | 1.27.1 | 3 | 1.27.2 |
+  | `transformers` | 5.5.1 | 1 | 5.10.0 |
+
+  `authlib` is the one to read first: **CVE-2026-27962 is a JWK header-injection
+  authentication bypass** — with `key=None`, or a JWKS resolver returning `None`
+  for an unknown `kid`, the library verifies against a key taken from the
+  attacker's own token header. Also fail-open OIDC hash validation
+  (CVE-2026-28498) and a JWE `RSA1_5` padding oracle (CVE-2026-28490).
+
+  **`aiohttp` is genuinely absent from the closure**, so that half of this
+  item's original statement was and remains correct.
+
+  Note two authlib installs exist on this box: python3.14 has 1.7.2, python3.12
+  has 1.6.8. The CI gate and the test suite run python3.12, so **1.6.8 is the
+  version that matters** — an earlier note in this session read the 3.14 copy
+  and understated the exposure.
+
+  Stays open: bumping these is the remaining work, and the repaired job has not
+  yet run against a release.
 
 v3.2.1 CI-plumbing fixes (shipped):
 
@@ -2340,11 +2404,10 @@ default story is two laptops talking to each other.
 - [x] **Sharded Postgres** — `block_store_postgres.py` shards via `tenant_id`.
 - [x] **Replication + consensus for governance** — Raft-style audit-chain replication ships under `v4/federation.py`.
 - [x] **Pluggable embedding backend with fallback** — local Ollama → API fallback chain ships in the embedding pipeline.
+- [x] **Audit headers (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`)** — propagated end-to-end across REST, gRPC, the stdlib transport and outbound to peers. **SHIPPED — verified at HEAD 2026-09-07.** `src/mind_mem/audit_context.py`: the three headers at :73-75, `sanitize_header_value` (:86) strips CR/LF/NUL and length-bounds before anything echoes or persists, `supplied` records which headers the caller actually sent *before* a request id is minted. Propagated across REST, gRPC, the stdlib transport, and outbound to peers.
+- [x] **TLS 1.3 minimum + cert pinning** — an explicit `TLSv1_3` floor plus optional pinned-pubkey enforcement ship. **SHIPPED — verified at HEAD 2026-09-07.** `src/mind_mem/v4/tls_floor.py` (410 lines): `TLS_FLOOR = ssl.TLSVersion.TLSv1_3` (:68), `_apply_floor` assigns *and reads back*, raising `TlsFloorUnavailable` if the floor did not take; `client_context`/`server_context`, `spki_sha256`, `normalise_pins`, `verify_pinned_peer`, `pinned_https_handler`. Both halves of this line ship.
 
 **Open (genuine network-hardening gaps):**
-
-- [ ] **TLS 1.3 minimum + cert pinning** — currently inherits system trust store; explicit `TLSv1_3` floor + optional pinned-pubkey enforcement not wired. Tracked.
-- [ ] **Audit headers (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`)** — not yet propagated end-to-end across REST/gRPC. Tracked (small, well-defined).
 - [ ] **Rust hot path for hybrid search** — PyO3 BM25+RRF port — pure-MIND port (separate roadmap section below) is the chosen path instead. Marking as ⊘ superseded by Pure-MIND Core Port.
 
 ### E. Compliance-sensitive opt-in extensions (partial — 5 shipped, 3 open)
@@ -2356,12 +2419,12 @@ default story is two laptops talking to each other.
 - [x] **Contraindication / mutex edges** — `contraindicates` + `supersedes` edges ship as extra `block_lineage` kinds.
 - [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters ship on `recall(...)` (v4.0.15) and are applied through `_apply_post_filters` in `_recall_core.py`, the single funnel every backend dispatch goes through, so the contract cannot diverge per backend. Was filed under **Open** while already shipped; moved up 2026-09-01.
 - [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies ship in `src/mind_mem/v4/vocabulary.py` and are enforced by `v4/block_metadata.validate_block(..., workspace=...)`, which `propose_update` calls on every proposal (`mcp/tools/governance.py`); reject-mode violations refuse the write, flag-mode violations warn and pass. Opt-in behind **two** flags — `v4.block_metadata` owns the door probe and `v4.vocabulary` owns the check, so the surface is inert unless both are on. `tests/test_v4_vocabulary.py` + `tests/test_vocabulary_wiring.py` collect 49 tests and `tests/test_block_metadata_wiring.py` adds 15 that pin the door itself. Was filed under **Open** with a sentence that denied its own wiring; settled 2026-09-01 by refusal rather than by grep — a proposal whose `confidence` value is outside a reject-mode workspace vocabulary comes back `error: schema_validation_rejection` and SIGNALS.md is byte-for-byte unchanged, against two controls (same proposal with both flags off is accepted, and an in-vocabulary value with both flags on is accepted).
+- [x] **Provenance-rich blocks** — the five fields and the off/recommended/required policy both ship. **SHIPPED — verified at HEAD 2026-09-07.** This line said the policy has "zero occurrences in `src/`"; that is no longer true. `src/mind_mem/compliance/provenance_policy.py` (193 lines) ships `POLICY_OFF`/`POLICY_RECOMMENDED`/`POLICY_REQUIRED` over the five fields, and a configured field outside the known five is a refusal rather than a quiet no-op.
 
 **Open:**
 
-- [ ] **Pluggable redaction layer** — the `redaction` name is registered in `v4/feature_flags.py` and HAD zero consumers when written; **CORRECTED 2026-09-06:** `compliance/prewrite.screen(...)` is now called on the governed door at `mcp/tools/governance.py:328`. Left unticked pending a completeness check -- retracted-ticks lock. Original text: has zero consumers: there is no `v4/redaction.py` (`import mind_mem.v4.redaction` raises `ModuleNotFoundError`), no pre-write detector chain anywhere in `src/`, and nothing routes detector events to the audit chain. The only redaction code in-tree is DSN password masking (`mm_cli._redact_dsn`) and hook-transcript credential scrubbing (`hook_installer`), neither of which is this item. Carried a false shipped tick until 2026-09-01. Tracked.
+- [ ] **Pluggable redaction layer** — the `redaction` name is registered in `v4/feature_flags.py` and HAD zero consumers when written; **CORRECTED 2026-09-06:** `compliance/prewrite.screen(...)` is now called on the governed door at `mcp/tools/governance.py:328`. Left unticked pending a completeness check -- retracted-ticks lock. Original text: has zero consumers: there is no `v4/redaction.py` (`import mind_mem.v4.redaction` raises `ModuleNotFoundError`), no pre-write detector chain anywhere in `src/`, and nothing routes detector events to the audit chain. The only redaction code in-tree is DSN password masking (`mm_cli._redact_dsn`) and hook-transcript credential scrubbing (`hook_installer`), neither of which is this item. Carried a false shipped tick until 2026-09-01. Tracked. **PARTIALLY SHIPPED — verified 2026-09-07, and the title word is the open half.** The redaction layer itself ships: `src/mind_mem/compliance/` is 7 modules / ~1530 lines, `_DetectorMeta` registers every concrete `Detector` subclass at class-creation time so a detector that is written but never added to a list is impossible, and 8 detectors ship. But *pluggable* was never tested by the audit that called this done: `compliance/*.py` has zero hits for `entry_point|entry-points|plugin|importlib`, so a THIRD-PARTY detector still cannot register. Subclass registration is not the same capability as an extension point.
 - [ ] **Compliance export pipeline** — **CORRECTED 2026-09-06:** the `mm export` verb and its `--policy` option ship and run (`compliance/export.py`); the assertion that it exits 2 was true when written and is false now. Left unticked pending a completeness check -- this item is on the retracted-ticks lock, no `--policy` option anywhere in `src/`, no `v4/compliance_export.py`, and the `compliance_export` flag has zero consumers. `mind-mem-backup export <workspace>` does exist but writes unsigned, unfiltered JSONL with no policy and no `--since`, which is a different capability. Carried a false shipped tick until 2026-09-01. Tracked.
-- [ ] **Provenance-rich blocks** — half-shipped, and the shipped half is the easy half. The five fields (`actor_id` / `actor_role` / `session_id` / `tool_id` / `purpose`) exist and flow through `propose_update`; the `provenance: off|recommended|required` policy that would make them recommended or required does **not** exist — zero occurrences in `src/`, and the `provenance` flag has no consumer. The item is the policy, so it stays open. Carried a false shipped tick until 2026-09-01. Tracked.
 
 ### G. Observability, reliability, ecosystem (partial — 7 open)
 
@@ -2371,6 +2434,7 @@ default story is two laptops talking to each other.
 - [x] **Health / liveness / readiness probes** — `v4/health.py` ships standard probes.
 - [x] **Continuous backup + PITR** — incremental backup + audit-chain PITR ships.
 - [x] **Performance regression alerting** — `.github/workflows/benchmark.yml` runs latency benchmarks per PR.
+- [x] **Model-call token metering** — per-day token counter plus optional daily cap behind `mm usage`. **SHIPPED — verified at HEAD 2026-09-07.** `src/mind_mem/usage_meter.py`: `record_call` (per-UTC-day ledger, atomic tmp+`os.replace`, 90-day retention), `report`, `check_cap` raising `DailyTokenCapExceeded`, `load_daily_cap` reading `mind-mem.json {"usage": {"daily_token_cap": N}}`. Wired at four real call sites, 40 passing tests.
 
 **Open:**
 
@@ -2378,7 +2442,6 @@ default story is two laptops talking to each other.
 - [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
 - [ ] **OpenAPI + AsyncAPI specs** — **HALF SHIPPED 2026-09-06:** OpenAPI 3.1.0 ships at `sdk/spec/openapi.json` (13 paths, version-gated by `tests/test_sdk_openapi_drift.py`); AsyncAPI is still unpublished, which is why this stays open. Original text: declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
 - [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Endpoint-backed (pinecone / weaviate / qdrant) still deferred — they need a live endpoint + API credential.
-- [ ] **Model-call token metering** — per-day token counter + optional daily cap behind `mm usage`. Tracked.
 
 ### F. Anti-patterns explicitly forbidden
 
@@ -2435,7 +2498,7 @@ These are the smaller, surgical gaps that should land first.
   every `record_agent_write` body; server verifies against a
   per-peer public-key allowlist. Item (b) is the prerequisite for
   the Group-D `DID + Verifiable Credential agent identity` item.
-- [ ] **mTLS + certificate pinning on `FederationClient`.** The current
+- [x] **mTLS + certificate pinning on `FederationClient`.** The current **SHIPPED — verified at HEAD 2026-09-07.** This line names the exact API it wanted and it exists under that name: `pinned_pubkey_sha256: str | Sequence[str] | None = None` on `FederationClient` (`src/mind_mem/v4/federation_client.py`), normalised through `tls_floor.normalise_pins`, with a malformed pin refused rather than ignored.
   client does NOT verify the peer's certificate against a pinned
   expected key — it inherits whatever the system trust store says.
   TLS interception (corporate proxies, hostile network) is therefore
@@ -2510,7 +2573,6 @@ MIND-Mem is designed as a governed-memory substrate for autonomous agents operat
 - [x] **Cross-session persistence** — `MIND_MEM_WORKSPACE` is a shared namespace across any set of agents that agree on the path; one recall call retrieves strategy memory across all cooperating agents
 
 ### Planned block types and adapters
-
 
 ---
 
@@ -3793,7 +3855,7 @@ seam N2 exploits.
   one record per chunk; `doc_hash` over RAW BYTES; `EvidenceAction` stays
   closed) remains the right design and is preserved verbatim.
 
-- [ ] **N1 — Soft maximum as a distinct boundary control.** The chunker today has
+- [x] **N1 — Soft maximum as a distinct boundary control.** The chunker today has **SHIPPED — the checkbox contradicted the entry's own text, which already read "LANDED 2026-08-24".** `SmartChunkerConfig.soft_max_chunk_size` / `soft_max_boundary_score` (`src/mind_mem/smart_chunker.py`), consulted by `_merge_segments_into_chunks`, which also gave the previously-dead boundary scorer a caller.
   a hard ceiling (`max_chunk_size`, default 1500) and a merge floor
   (`min_chunk_size`, default 100), and nothing in between:
   `_merge_segments_into_chunks` (`smart_chunker.py:361`) closes a group *only*

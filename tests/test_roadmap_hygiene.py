@@ -278,10 +278,17 @@ class TestRetractedItemsStayRetracted:
                 "Compliance export pipeline",
                 "no `mm export` verb, no --policy option anywhere in src/, flag has zero consumers",
             ),
-            (
-                "Provenance-rich blocks",
-                "the five fields exist; the off|recommended|required policy has zero occurrences in src/",
-            ),
+            # "Provenance-rich blocks" was retracted here on the basis that
+            # "the off|recommended|required policy has zero occurrences in
+            # src/". That premise is FALSE as of 2026-09-07 and the item is
+            # ticked, so it is removed from this guard rather than left to fail.
+            #
+            # Traced, not grepped: compliance/provenance_policy.py (7,510 bytes)
+            # defines POLICY_OFF / POLICY_RECOMMENDED / POLICY_REQUIRED and
+            # resolve_policy; compliance/prewrite.py:65 calls resolve_policy;
+            # and prewrite.screen is reached from TWO real entry points --
+            # mm_cli.py:3750 and mcp/tools/governance.py:328. Import alone
+            # would not have justified this removal.
             (
                 "Quantized prefix cache",
                 "prefix_cache caches responses not embeddings; turbo_quant is a placeholder with no consumers",
@@ -296,7 +303,8 @@ class TestRetractedItemsStayRetracted:
         [
             "Pluggable redaction layer",
             "Compliance export pipeline",
-            "Provenance-rich blocks",
+            # "Provenance-rich blocks" removed with the entry above — it ships
+            # and is wired; see the note there for the call path.
             "Quantized prefix cache",
         ],
     )

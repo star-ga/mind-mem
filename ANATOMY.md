@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1496 | **Est. tokens:** ~4,474,146
-**Generated:** 2026-09-08 08:51 UTC
+**Files:** 1513 | **Est. tokens:** ~4,495,061
+**Generated:** 2026-09-08 12:53 UTC
 
 ## Token Budget Guide
 
@@ -22,11 +22,11 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~49,678 |
+| `./` | 36 | ~49,882 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,891 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 64 | ~176,857 |
+| `benchmarks/` | 66 | ~181,087 |
 | `benchmarks/repro/` | 1 | ~689 |
 | `benchmarks/repro/niah/` | 4 | ~2,557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
@@ -39,8 +39,9 @@
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
-| `docs/benchmarks/` | 18 | ~34,476 |
+| `docs/benchmarks/` | 25 | ~42,861 |
 | `docs/benchmarks/ablation/` | 2 | ~12,181 |
+| `docs/benchmarks/head-20260907/` | 8 | ~6,467 |
 | `docs/benchmarks/memory-ab-420s-runs/` | 24 | ~71,662 |
 | `docs/decisions/` | 1 | ~3,174 |
 | `docs/design/` | 9 | ~16,095 |
@@ -74,7 +75,7 @@
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 230 | ~1,071,956 |
 | `src/mind_mem/api/` | 5 | ~25,701 |
-| `src/mind_mem/bench/` | 17 | ~47,468 |
+| `src/mind_mem/bench/` | 17 | ~48,607 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
 | `src/mind_mem/importers/` | 9 | ~26,660 |
 | `src/mind_mem/mcp/` | 3 | ~6,417 |
@@ -86,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 641 | ~1,954,554 |
+| `tests/` | 641 | ~1,955,044 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -122,10 +123,10 @@
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
-- `EVIDENCE.md` (~1771 tok, huge) — Evidence Matrix
+- `EVIDENCE.md` (~1913 tok, huge) — Evidence Matrix
 - `generate_mind7b_training.py` (~5567 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~243 tok, medium) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~432 tok, medium) — *.pyc
+- `.gitignore` (~494 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~5444 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
@@ -189,6 +190,7 @@
 - `grid_search.py` (~2849 tok, huge) — BM25F Field Weight Grid Search for mind-mem Recall Engine.
 - `hard_timeout.py` (~2768 tok, huge) — Per-unit timeouts that actually preempt, for long benchmark runs.
 - `__init__.py` (~0 tok, tiny)
+- `integrity_benchmark.py` (~2833 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lme_ablation_report.py` (~1300 tok, large) — # Copyright 2026 STARGA, Inc.
 - `local_stack_audit.py` (~1822 tok, huge) — Single-shot audit of the local mind-mem stack before a bench run.
 - `locomo_harness.py` (~4147 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
@@ -203,10 +205,11 @@
 - `longmemeval_clean.py` (~1411 tok, large) — LongMemEval-S — clean reproducible mind-mem retrieval benchmark.
 - `LONGMEMEVAL_FINDINGS_2026-05-19.md` (~2123 tok, huge) — LongMemEval-S Benchmark Audit — Findings (2026-05-19)
 - `longmemeval_fullpotential.py` (~6291 tok, huge) — LongMemEval-S — mind-mem FULL POTENTIAL harness (same-equipment, best-vs-best).
-- `longmemeval_full_run.py` (~4752 tok, huge) — Full-corpus LongMemEval-S driver: subprocess-isolated, resumable.
+- `longmemeval_full_run.py` (~4953 tok, huge) — Full-corpus LongMemEval-S driver: subprocess-isolated, resumable.
 - `longmemeval_harness.py` (~2973 tok, huge) — LongMemEval Benchmark Harness for mind-mem recall engine.
 - `longmemeval_hybrid4b.py` (~1823 tok, huge) — LongMemEval-S — mind-mem hybrid (BM25F+mxbai RRF) + 4b query expansion.
 - `longmemeval_real_harness.py` (~1656 tok, huge) — LongMemEval-S harness — real product pipeline (Phase A: own best honest number).
+- `make_public_integrity_workspace.py` (~1084 tok, large) — # Copyright 2026 STARGA, Inc.
 - `memory_ab_analysis.py` (~3471 tok, huge) — Reduce repeated memory-A/B runs to one paired number, plus the counter-metric.
 - `memory_ab_bench.py` (~342 tok, medium) — With-memory versus without-memory, on this repository's own history.
 - `memory_ab_placebo.py` (~1754 tok, huge) — The placebo arm: same shape, same length, same framing — wrong corpus.
@@ -243,7 +246,7 @@
 - `README.md` (~689 tok, large) — Repro packages
 ### `benchmarks/`
 
-- `repro_verify.py` (~3229 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
+- `repro_verify.py` (~3341 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `STATUS.md` (~3163 tok, huge) — Benchmark Status
 - `strat_probe.py` (~879 tok, large) — Stratified LongMemEval probe.
@@ -311,10 +314,25 @@
 - `2026-09-06-dialogue-diversity-cap1.ndjson` (~3666 tok, huge) — {"all": true, "any": true, "distinct": 5, "n_gold": 2, "qid": "6a1eabeb", "qtype
 - `2026-09-06-dialogue-diversity-cap2.ndjson` (~3774 tok, huge) — {"all": true, "any": true, "distinct": 3, "n_gold": 2, "qid": "6a1eabeb", "qtype
 - `2026-09-06-stemming-union-cap1.ndjson` (~3682 tok, huge) — {"all": true, "any": true, "distinct": 5, "n_gold": 2, "qid": "6a1eabeb", "qtype
+- `2026-09-07-external-chroma.md` (~1035 tok, large) — An external system under the same contract — and what it actually shows
+- `2026-09-07-hybrid-vector-on.md` (~1001 tok, large) — Vector-on hybrid on the full set — `all@5` beats the floor, and 36 runs did not get a dense leg
+- `2026-09-07-longmemeval-s-HEAD.md` (~1088 tok, large) — LongMemEval-S on HEAD — the 09-03 deficit is gone
+- `2026-09-07-no-expansion-gate.md` (~940 tok, large) — `no_expansion` on the full set — the ordering gap closes, at no recall cost
+- `2026-09-08-class-a-public-integrity.md` (~701 tok, large) — Class A integrity — public synthetic-workspace evidence
 ### `docs/benchmarks/ablation/`
 
 - `paired-scorecards.json` (~10689 tok, huge) — Keys: control_path, floor_by_type, floor_headline, floor_path, k
 - `paired-scorecards-posthoc.json` (~1492 tok, large) — Keys: no_facts, no_facts_plain
+### `docs/benchmarks/head-20260907/`
+
+- `hybrid-config.json` (~71 tok, small) — Keys: recall
+- `integrity-scorecard.json` (~324 tok, medium) — Keys: dimensions, workspace
+- `lme-chroma.md` (~1044 tok, large) — LongMemEval-S scorecard — `chroma_baseline` (2026-09-07)
+- `lme-floor-head.md` (~1039 tok, large) — LongMemEval-S scorecard — `bm25_baseline` (2026-09-07)
+- `lme-hybrid-vecon.md` (~998 tok, large) — LongMemEval-S scorecard — `mind_mem` (2026-09-07)
+- `lme-mind_mem-head.md` (~1016 tok, large) — LongMemEval-S scorecard — `mind_mem` (2026-09-07)
+- `lme-no_expansion.md` (~1015 tok, large) — LongMemEval-S scorecard — `mind_mem` (2026-09-07)
+- `report.json` (~960 tok, large) — Keys: control_path, floor_by_type, floor_headline, floor_path, k
 ### `docs/`
 
 - `benchmarks.md` (~1746 tok, huge) — Benchmarks
@@ -344,6 +362,10 @@
 - `single_file__mm-e98c1449bce7__rep1.json` (~3156 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
 - `single_file__mm-f64409645dfa__rep1.json` (~2835 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
 - `single_file__mm-fa0b654ca566__rep1.json` (~2980 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+### `docs/benchmarks/`
+
+- `SOTA-GATE.md` (~1680 tok, huge) — The SOTA gate — what is required, and what is measured
+- `SOTA-NORTH-STAR.md` (~1940 tok, huge) — 100% across every dimension — what that means per dimension, measured
 ### `docs/`
 
 - `block-format.md` (~431 tok, medium) — Block Format
@@ -690,7 +712,7 @@
 - `ab_stats.py` (~1524 tok, huge) — The delta, with its uncertainty attached.
 - `ab_task.py` (~1210 tok, large) — The unit of the with-memory versus without-memory comparison.
 - `eval_adapter.py` (~1250 tok, large) — Pluggable retrieval-eval adapter contract + pipeline self-assertion.
-- `eval_adapters.py` (~7065 tok, huge) — Concrete retrieval-eval adapters.
+- `eval_adapters.py` (~8204 tok, huge) — Concrete retrieval-eval adapters.
 - `eval_scorer.py` (~1122 tok, large) — Dual-protocol retrieval scoring for the eval harness.
 - `__init__.py` (~696 tok, large) — mind-mem benchmark harnesses — scalar metrics over the live corpus.
 - `longmemeval_suite.py` (~4270 tok, huge) — LongMemEval-S consolidation harness — one loop, any adapter, self-asserting.
@@ -1371,7 +1393,7 @@
 - `test_http_read_admission.py` (~10399 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_transport_audit_headers.py` (~6628 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_transport.py` (~5409 tok, huge) — Tests for the v3.9 HTTP transport adapter.
-- `test_hybrid_degraded_marker.py` (~4024 tok, huge) — Tests for the in-band recall degradation marker (Task 2).
+- `test_hybrid_degraded_marker.py` (~4151 tok, huge) — Tests for the in-band recall degradation marker (Task 2).
 - `test_hybrid_expansion_reentrancy.py` (~4145 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hybrid_recall_fusion_noise.py` (~2099 tok, huge) — Regression gate for the hybrid-recall NOISE bug (empty BM25 arm → 1/(k+1) floor).
 - `test_hybrid_recall.py` (~3107 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
@@ -1633,8 +1655,8 @@
 - `test_review_queue.py` (~2038 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_review_render.py` (~2348 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
-- `test_roadmap_hygiene.py` (~4119 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_roadmap_ticks_gate.py` (~2721 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_roadmap_hygiene.py` (~4292 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_roadmap_ticks_gate.py` (~2911 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.

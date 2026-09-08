@@ -225,8 +225,13 @@ def discover_packages() -> list[str]:
 
 def discover_scorecards() -> list[tuple[str, str]]:
     """Committed NDJSON artifacts that have a scorecard published beside them."""
+    # Recursive on purpose. The glob was top-level only, so a run committed
+    # into a dated subdirectory -- docs/benchmarks/head-20260907/ -- published
+    # its numbers with raw rows sitting right beside them and was still never
+    # recomputed. A verifier that silently skips a whole directory is worse
+    # than one that fails, because the scorecards look verified by association.
     pairs = []
-    for nd in sorted(glob.glob(os.path.join(_REPO_ROOT, "docs", "benchmarks", "*.ndjson"))):
+    for nd in sorted(glob.glob(os.path.join(_REPO_ROOT, "docs", "benchmarks", "**", "*.ndjson"), recursive=True)):
         md = nd[: -len(".ndjson")] + ".md"
         if os.path.isfile(md):
             pairs.append((nd, md))
@@ -242,7 +247,9 @@ def discover_unverifiable_scorecards() -> list[str]:
     such rather than blend in with the ones that verified.
     """
     return sorted(
-        md for md in glob.glob(os.path.join(_REPO_ROOT, "docs", "benchmarks", "*.md")) if not os.path.isfile(md[: -len(".md")] + ".ndjson")
+        md
+        for md in glob.glob(os.path.join(_REPO_ROOT, "docs", "benchmarks", "**", "*.md"), recursive=True)
+        if not os.path.isfile(md[: -len(".md")] + ".ndjson")
     )
 
 

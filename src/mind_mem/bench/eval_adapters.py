@@ -615,11 +615,115 @@ class MindMemAdapter:
         shutil.rmtree(state.workspace, ignore_errors=True)
 
 
+# --------------------------------------------------------------------------
+# Chroma adapter — an EXTERNAL system under the same contract
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class _ChromaState:
+    collection: Any
+    client: Any
+    probe: PipelineProbe
+
+
+class ChromaBaselineAdapter:
+    """Chroma, run under the identical adapter contract on the same box.
+
+    Why this exists: a SOTA claim needs a competitor, and ``bm25_baseline`` is
+    a FLOOR, not one — it is our own 40-line BM25, so beating it says only that
+    we are not worse than the cheapest honest thing. This adapter is the first
+    third-party retrieval system to run the same corpus, the same questions and
+    the same ``init``/``query``/``teardown`` contract.
+
+    **Embedding is held fixed on purpose.** Chroma ships a default embedding
+    function (all-MiniLM-L6-v2 via onnxruntime); using it would make any
+    difference a comparison of EMBEDDING MODELS wearing the label of a
+    comparison of systems. Both sides are therefore given the same vectors from
+    the same locally pinned ``mxbai-embed-large``, which isolates what is
+    actually under test: candidate selection and ranking. The trade is
+    disclosed rather than silent — this measures Chroma's retrieval, not
+    Chroma as it ships out of the box.
+
+    Chroma is not installed in the system interpreter (PEP 668 externally
+    managed), so this adapter imports lazily and says so if it is absent
+    instead of failing the whole harness.
+    """
+
+    name = "chroma_baseline"
+
+    def _embed(self, texts: list[str]) -> list[list[float]]:
+        """The same embedder mind-mem uses, through the same provider chain."""
+        from ..recall_vector import VectorBackend
+
+        vb = VectorBackend({"provider": "local", "model": "mxbai-embed-large"})
+        return vb._embed_for_provider(texts)
+
+    def init(self, sessions: list[SessionDoc], config: dict[str, Any] | None) -> _ChromaState:
+        try:
+            import chromadb
+        except ImportError as exc:  # pragma: no cover - environment-dependent
+            raise RuntimeError(
+                "chroma_baseline needs chromadb; it is absent from this interpreter. Run the harness with the benchmark venv's python."
+            ) from exc
+
+        client = chromadb.EphemeralClient()
+        col = client.create_collection(name="lme", metadata={"hnsw:space": "cosine"})
+
+        docs = [d.text for d in sessions]
+        ids = [d.doc_id for d in sessions]
+        embeddings = self._embed(docs) if docs else []
+
+        if embeddings:
+            col.add(ids=ids, documents=docs, embeddings=embeddings)
+
+        # Round-trip the count through the STORE, never the writer's own
+        # return: a build that produced something the query leg cannot read
+        # must count zero and say so.
+        stored = col.count()
+        probe = PipelineProbe(
+            adapter=self.name,
+            declared_backend="chroma_hnsw_cosine",
+            effective_backend="chroma_hnsw_cosine",
+            vector_available=bool(stored),
+            config_sha256=config_sha256(config),
+            notes="" if stored == len(ids) else f"indexed {stored} of {len(ids)} documents",
+            extra={
+                "chroma_version": chromadb.__version__,
+                "embedder": "mxbai-embed-large (shared with mind_mem, not Chroma's default)",
+                "n_sessions": len(sessions),
+                "indexed": stored,
+            },
+        )
+        return _ChromaState(collection=col, client=client, probe=probe)
+
+    def query(self, q: str, state: _ChromaState, k: int) -> list[dict[str, Any]]:
+        if state.collection.count() == 0:
+            return []
+        emb = self._embed([q])
+        res = state.collection.query(query_embeddings=emb, n_results=k)
+        ids = (res.get("ids") or [[]])[0]
+        dists = (res.get("distances") or [[]])[0]
+        out: list[dict[str, Any]] = []
+        for doc_id, dist in zip(ids, dists):
+            # Cosine DISTANCE -> a similarity the harness can sort descending,
+            # matching the other adapters' "higher is better" convention.
+            out.append({"doc_id": doc_id, "score": round(1.0 - float(dist), 6)})
+        return out
+
+    def teardown(self, state: _ChromaState) -> None:
+        try:
+            state.client.delete_collection("lme")
+        except Exception:  # pragma: no cover - ephemeral client dies with the process
+            pass
+
+
 def get_adapter(name: str):
-    """Return an adapter instance by name (``bm25_baseline`` / ``mind_mem``)."""
+    """Return an adapter by name (``bm25_baseline`` / ``mind_mem`` / ``chroma_baseline``)."""
     registry = {
         Bm25BaselineAdapter.name: Bm25BaselineAdapter,
         MindMemAdapter.name: MindMemAdapter,
+        ChromaBaselineAdapter.name: ChromaBaselineAdapter,
     }
     if name not in registry:
         raise KeyError(f"unknown adapter {name!r}; known: {sorted(registry)}")
