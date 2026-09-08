@@ -35,6 +35,7 @@ ships, they do not reimplement it:
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 import re
@@ -45,6 +46,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .eval_adapter import PipelineProbe, SessionDoc, config_sha256
+
+_LOGGER = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------
 # BM25 baseline (honesty floor)
@@ -715,7 +718,7 @@ class ChromaBaselineAdapter:
         try:
             state.client.delete_collection("lme")
         except Exception:  # pragma: no cover - ephemeral client dies with the process
-            pass
+            _LOGGER.debug("Chroma collection teardown failed")
 
 
 def get_adapter(name: str):

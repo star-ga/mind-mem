@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1526 | **Est. tokens:** ~4541993
-**Generated:** 2026-09-08 22:00 UTC
+**Files:** 1526 | **Est. tokens:** ~4542018
+**Generated:** 2026-09-08 22:06 UTC
 
 ## Token Budget Guide
 
@@ -75,7 +75,7 @@
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 231 | ~1076280 |
 | `src/mind_mem/api/` | 5 | ~26782 |
-| `src/mind_mem/bench/` | 17 | ~48607 |
+| `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
 | `src/mind_mem/importers/` | 9 | ~26660 |
 | `src/mind_mem/mcp/` | 3 | ~6417 |
@@ -724,7 +724,7 @@
 - `ab_stats.py` (~1524 tok, huge) — The delta, with its uncertainty attached.
 - `ab_task.py` (~1210 tok, large) — The unit of the with-memory versus without-memory comparison.
 - `eval_adapter.py` (~1250 tok, large) — Pluggable retrieval-eval adapter contract + pipeline self-assertion.
-- `eval_adapters.py` (~8204 tok, huge) — Concrete retrieval-eval adapters.
+- `eval_adapters.py` (~8229 tok, huge) — Concrete retrieval-eval adapters.
 - `eval_scorer.py` (~1122 tok, large) — Dual-protocol retrieval scoring for the eval harness.
 - `longmemeval_suite.py` (~4270 tok, huge) — LongMemEval-S consolidation harness — one loop, any adapter, self-asserting.
 - `repo_task_cli.py` (~3637 tok, huge) — Generate ``benchmarks/tasks/real_repo_tasks.json`` -- the A/B task set.
