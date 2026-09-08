@@ -19,12 +19,16 @@ from __future__ import annotations
 import pathlib
 import sys
 
-import pytest
-
 _REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO / "benchmarks"))
 
-repro_verify = pytest.importorskip("repro_verify")
+# Imported directly, NOT through importorskip. `repro_verify` is a script in
+# this repository, so it is always importable -- a module-scope skip would
+# withdraw this whole file on every CI row while the run reported green, which
+# is the vacuous-skip class the repo forbids and which its own gate caught
+# here. If this import fails, something is genuinely wrong and the right
+# outcome is a failure, not a silent skip.
+import repro_verify  # noqa: E402
 
 
 def _rows(n: int, *, backend: str, embedder: str | None) -> list[dict]:

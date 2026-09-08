@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1523 | **Est. tokens:** ~4,524,138
-**Generated:** 2026-09-08 14:53 UTC
+**Files:** 1523 | **Est. tokens:** ~4,524,236
+**Generated:** 2026-09-08 15:01 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 647 | ~1,964,749 |
+| `tests/` | 647 | ~1,964,847 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1632,7 +1632,7 @@
 - `test_repo_task_repeats_floor.py` (~1012 tok, large) — ``repeats`` below two silently deleted the determinism guarantee.
 - `test_repo_task_tar_extraction_guard.py` (~811 tok, large) — The tar-extraction guard in ``bench.repo_task_validation``.
 - `test_repro_cross_drive_paths.py` (~612 tok, large) — A package written to another drive must not take down the run.
-- `test_repro_disclosure_consistency.py` (~1214 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_repro_disclosure_consistency.py` (~1312 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_repro_package.py` (~2585 tok, huge) — The verifier must be able to FAIL.
 - `test_required_named_controls.py` (~1880 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
