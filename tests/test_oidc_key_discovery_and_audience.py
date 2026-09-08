@@ -127,7 +127,14 @@ class TestKeysComeFromDiscovery:
 
     @pytest.mark.parametrize(
         "jwks_uri",
-        ["http://keys.example.net/certs", "https:///certs", "https://", "https:// bad.example/certs"],
+        [
+            "http://keys.example.net/certs",
+            "https:///certs",
+            "https://",
+            "https:// bad.example/certs",
+            "https://user:pass@keys.example/certs",
+            "https://keys.example:bad/certs",
+        ],
     )
     def test_explicit_jwks_uri_must_be_https_and_well_formed(self, jwks_uri: str) -> None:
         fetcher = _Fetcher({jwks_uri: {"keys": []}})
