@@ -308,6 +308,14 @@ jobs:
           --health-retries 20
     env:
       MIND_MEM_TEST_PG_DSN: "postgresql://mmtest:mmtest@127.0.0.1:5432/mmtest"
+      # The pool-isolation controls take a SEPARATE variable plus an
+      # attestation, deliberately: they refuse a DSN whose isolation nobody
+      # vouched for rather than inferring it. The service container above IS an
+      # ephemeral per-job database, so this job is exactly the launcher that
+      # can attest it. Without both, those controls SKIP -- and a skip in CI
+      # reads as a pass.
+      MIND_MEM_TEST_DSN: "postgresql://mmtest:mmtest@127.0.0.1:5432/mmtest"
+      MIND_MEM_TEST_ISOLATED_ID: "127.0.0.1:5432/mmtest"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -348,9 +356,43 @@ jobs:
           PROVISION
       - name: Postgres-backed tests
         run: |
-          FILES=$(grep -rl "MIND_MEM_TEST_PG_DSN" tests/ --include='*.py' | tr '\n' ' ')
-          echo "running: $FILES"
-          python -m pytest $FILES -q -p no:randomly
+          set -euo pipefail
+          # BOTH variables. The selector matched only MIND_MEM_TEST_PG_DSN, so
+          # every control that reads MIND_MEM_TEST_DSN -- the pool-isolation
+          # file among them -- was never selected and its absence looked
+          # exactly like success.
+          FILES=$(grep -rlE "MIND_MEM_TEST_(PG_)?DSN" tests/ --include='*.py' | sort | tr '\n' ' ')
+          echo "selected: $FILES"
+
+          # An empty or shrunken selector must fail the job, not run nothing
+          # quietly. The floor is a floor, not the exact count: new files may
+          # be added, and a hardcoded total would go stale and be raised
+          # thoughtlessly.
+          COUNT=$(printf '%s\n' $FILES | grep -c . || true)
+          test "$COUNT" -ge 8 || { echo "selector matched only $COUNT file(s); it is broken" >&2; exit 1; }
+
+          # And the file this job exists to run must actually be in the set.
+          printf '%s\n' $FILES | grep -qx 'tests/test_pg_pool_autocommit_isolation.py' \
+            || { echo "the pool-isolation controls are not selected" >&2; exit 1; }
+
+          python -m pytest $FILES -q -p no:randomly -rs
+
+      - name: Assert the pool-isolation controls actually executed
+        run: |
+          set -euo pipefail
+          # Executed, not skipped. These controls skip when no isolated
+          # database is attested, which is correct locally and would be a
+          # silent hole here: this job provides one, so a skip means the
+          # wiring broke.
+          OUT=$(python -m pytest tests/test_pg_pool_autocommit_isolation.py -q -p no:randomly -rs 2>&1) || {
+            echo "$OUT"; exit 1;
+          }
+          echo "$OUT" | tail -5
+          echo "$OUT" | grep -qE '[0-9]+ passed' || { echo "no control reported passed" >&2; exit 1; }
+          if echo "$OUT" | grep -qE '[0-9]+ skipped'; then
+            echo "a pool-isolation control SKIPPED in CI, which reads as a pass; the attestation is not reaching it" >&2
+            exit 1
+          fi
 
 
   author-identity:

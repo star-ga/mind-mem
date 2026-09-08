@@ -49,11 +49,43 @@
 
 ## Retrieval legs actually exercised
 
-- **Vector deps importable:** `[False, True]` — this is a *dependency* fact, not a pipeline fact.
-- **Vector leg exercised:** `False` — **no** dense leg was configured, so this number is lexical-only regardless of what the `Embedder:` line above says.
-- **Effective backend(s) probed:** `chroma_hnsw_cosine, unknown`
-- **Effective embedder:** `none — BM25F lexical only`
-- *Basis:* derived from the config handed to the adapter plus the per-question pipeline probe. It is not instrumentation inside `recall`, and is not evidence that a configured leg produced every score.
+The earlier version of this section said the dense leg was not configured and
+the effective embedder was `none - BM25F lexical only`. **That was false**, and
+it was false in the direction that flattered nothing: it described a vector
+store as lexical-only. It came from aggregating the whole run with a
+minimum/union across rows, so the 34 rows that carry no pipeline block
+dragged the summary for all 470.
+
+Recounted from the committed NDJSON, denominator preserved:
+
+| | rows |
+|---|---|
+| total | **470** |
+| `unit_status = ok` | **436** |
+| `unit_status = error` | **34** |
+
+Across the **436** scored rows, every one of them:
+
+- `effective_backend` = `chroma_hnsw_cosine` (436)
+- `vector_available` = `True` (436)
+- `pipeline_mismatch` = `False` (436)
+- embedder = `mxbai-embed-large (shared with mind_mem, not Chroma's default)` (436)
+
+The **34** error rows record no pipeline at all, so their backend is
+genuinely **unknown** rather than lexical. Their causes, from the committed
+tracebacks: 23 x sentence_transformers missing, 11 x adapter.init failure.
+
+- *Basis, and the limit of the claim.* These fields are what the adapter
+  **declared** and what the harness **probed** before scoring. They are not
+  instrumentation inside the provider call, so they establish that a dense
+  backend was configured, reachable and reported for every scored question --
+  not that a vector query produced every individual score. That distinction is
+  the whole reason the probe exists, and stating it is not a hedge: a
+  config-less fallback cannot be reported as the full stack, and neither can a
+  configured stack be reported as instrumented evidence.
+- **No metric changed.** This section describes the same rows the scores were
+  computed from; nothing was rerun, rescored or reranked, and the baseline
+  still wins on this dataset.
 
 ## Unit isolation and timeouts
 

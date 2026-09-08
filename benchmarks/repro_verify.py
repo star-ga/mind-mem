@@ -211,7 +211,76 @@ def verify_scorecard(ndjson_path: str, scorecard_path: str) -> Report:
         rep.check(overall.get(key) == value, f"{key}", value, overall.get(key))
     for key, value in sorted(published["summary"].items()):
         rep.check(overall.get(key) == value, f"{key}", value, overall.get(key))
+    verify_pipeline_disclosure(rows, scorecard_path, rep)
     return rep
+
+
+def dense_provider_rows(rows: list[dict]) -> list[dict]:
+    """Rows whose probe records a REAL dense provider, evidence-first.
+
+    The discriminator is `pipeline.extra.embedder`: a row that names an
+    embedder was scored against a dense provider. Measured across the
+    committed artifacts, this is exactly the separation that matters and no
+    backend-name list is needed --
+
+        lme-chroma        effective_backend=chroma_hnsw_cosine  embedder=mxbai-embed-large
+        lme-mind_mem-head effective_backend=sqlite              embedder=None
+        lme-no_expansion  effective_backend=sqlite              embedder=None
+        lme-hybrid-vecon  effective_backend=hybrid              embedder=None
+
+    `vector_available` is deliberately NOT the test. It is a dependency fact --
+    the scorecards say so themselves -- and it is `true` in all four runs
+    above, including the ones that really are lexical. A first version of this
+    check used it and failed two honest scorecards for saying something true.
+    """
+    out = []
+    for row in rows:
+        probe = row.get("pipeline") or {}
+        embedder = (probe.get("extra") or {}).get("embedder")
+        if embedder and str(embedder).strip().lower() not in {"none", "null"}:
+            out.append(row)
+    return out
+
+
+def verify_pipeline_disclosure(rows: list[dict], scorecard_path: str, rep: Report) -> None:
+    """A scorecard must not describe a pipeline its own rows contradict.
+
+    Numeric replay does not catch this. The Chroma scorecard recomputed every
+    figure correctly while telling the reader the run was "lexical-only ...
+    effective embedder: none", when 436 of its 470 rows recorded
+    `effective_backend: chroma_hnsw_cosine` with a real embedder. The prose was
+    aggregated across all rows with a minimum/union, so the 34 rows carrying no
+    pipeline block decided the description of the other 436, and a
+    purpose-built vector store was published as BM25.
+
+    The check only fires on rows that record a dense provider, so a run that
+    genuinely has none stays free to say lexical-only -- which is the point:
+    this must not become "never mention lexical".
+    """
+    dense = dense_provider_rows(rows)
+    if not dense:
+        return
+
+    try:
+        with open(scorecard_path, "r", encoding="utf-8") as fh:
+            text = fh.read().lower()
+    except OSError:
+        return
+
+    backends = sorted({str((r.get("pipeline") or {}).get("effective_backend")) for r in dense})
+    detail = f"{len(dense)}/{len(rows)} rows record a dense provider {backends}"
+
+    rep.check(
+        not ("effective embedder:** `none" in text or "embedder: `none" in text),
+        f"scorecard says the effective embedder is none, but {detail}",
+    )
+    if "lexical-only" in text or "lexical only" in text:
+        # The phrase may legitimately appear while CORRECTING an earlier claim,
+        # so the failure is only when nothing marks it as retracted.
+        rep.check(
+            any(marker in text for marker in ("was false", "is false", "recounted")),
+            f"scorecard asserts lexical-only, but {detail}",
+        )
 
 
 # ---------------------------------------------------------------------------

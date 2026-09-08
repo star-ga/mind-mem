@@ -9,10 +9,14 @@ which turned every outcome into exit 0 -- a type error, a crash, and mypy
 never running at all. An independent audit demonstrated it with a stub
 `python3` returning 7: the target still exited 0 and printed the skip message.
 
-Worse, measured while fixing it: `python3 -m mypy` is not importable on a
-machine where mypy installs as a standalone executable, which is the ordinary
-case. On such a machine the target has printed "skipping" and exited 0 every
-time it has ever been invoked. The gate never type-checked anything.
+Measured in ONE environment while fixing it, and scoped to it: on the machine
+this was fixed on, `python3 -m mypy` is not importable -- mypy is installed as
+a standalone executable rather than into that interpreter -- so the target
+printed "skipping" and exited 0 without type-checking. What that measurement
+establishes is that the failure is REACHABLE and reproducible, not that it
+happened on every machine or on every previous run. Package importability
+depends on the interpreter and environment, and the earlier wording asserted a
+history no measurement of mine covers.
 
 Two controls, because one direction alone proves nothing: the target really
 invokes a type checker, and a real type error really propagates.
@@ -83,7 +87,7 @@ def test_the_target_cannot_swallow_a_failure() -> None:
     # The availability probe is allowed to branch; it exits non-zero when it
     # finds nothing, which the behavioural control does not cover because a
     # runner without mypy skips it.
-    assert 'not installed — skipping' not in body, "the skip-on-failure message is back"
+    assert "not installed — skipping" not in body, "the skip-on-failure message is back"
     assert "exit 2" in body, "a missing type checker no longer fails the target"
 
 
@@ -107,7 +111,9 @@ def test_a_real_type_error_makes_the_gate_fail(tmp_path) -> None:
         return subprocess.run(["make", "-s", "typecheck"], cwd=work, capture_output=True, text=True, timeout=1800)
 
     clean = run()
-    assert clean.returncode == 0, f"the gate fails on a clean tree, so the negative half would prove nothing:\n{clean.stdout}\n{clean.stderr}"
+    assert clean.returncode == 0, (
+        f"the gate fails on a clean tree, so the negative half would prove nothing:\n{clean.stdout}\n{clean.stderr}"
+    )
 
     probe = work / "src" / "mind_mem" / "pipeline_hash.py"
     probe.write_text(probe.read_text(encoding="utf-8") + '\n\ndef _typecheck_probe() -> int:\n    return "not an int"\n', encoding="utf-8")

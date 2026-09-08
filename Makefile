@@ -72,10 +72,13 @@ typecheck: ## Run type checking
 # "mypy not installed — skipping"` turned any type error, and any failure to
 # run at all, into exit 0 plus a reassuring message.
 #
-# Measured while fixing it, and worse than a masked error: `python3 -m mypy`
-# is not importable here at all -- mypy installs as a standalone executable --
-# so the target has been printing "skipping" and exiting 0 every time it has
-# ever been invoked on such a machine. The gate never type-checked anything.
+# Measured in ONE environment while fixing it, stated as such: on this machine
+# `python3 -m mypy` is not importable, because mypy is installed as a
+# standalone executable rather than into this interpreter. There the target
+# printed "skipping" and exited 0 -- so the gate reported success without
+# type-checking. Whether any other machine's interpreter could import mypy is
+# not something that measurement establishes, and the earlier wording claimed
+# it did.
 #
 # So: prefer the executable, fall back to the module, and if neither is
 # present say so with a non-zero exit and installation guidance. Absence is

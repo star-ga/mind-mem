@@ -1,5 +1,6 @@
 {
   "control_path": "docs/benchmarks/head-20260907/lme-control.ndjson",
+  "control_path_status": "unavailable: the named artifact is not committed",
   "floor_by_type": {
     "single-session-preference": {
       "mrr": 0.5522221666666667,
@@ -21,6 +22,7 @@
     "recall_any@k": 0.9702127659574468
   },
   "floor_path": "docs/benchmarks/head-20260907/lme-floor-head.ndjson",
+  "floor_path_sha256": "d586ad28f3486d006467d8cabf558f4566c0210f529127f1be34f0aa404e7c2d",
   "k": 5,
   "masks": {
     "bm25f_only": {
@@ -63,7 +65,9 @@
       "missing": "docs/benchmarks/head-20260907/lme-no_date_boost.ndjson"
     },
     "no_expansion": {
-      "missing": "docs/benchmarks/head-20260907/lme-no_expansion.ndjson"
+      "artifact": "docs/benchmarks/head-20260907/lme-no_expansion.ndjson",
+      "artifact_sha256": "80e887b76e58ef3518818911f4ad07d348d3eb66d3c295cda0ba4632c8cb88a4",
+      "metrics_status": "not computed in this report. The artifact is committed and bound by hash above; its rows were never scored into this file and are not being scored now."
     },
     "no_multipliers": {
       "missing": "docs/benchmarks/head-20260907/lme-no_multipliers.ndjson"
@@ -131,5 +135,29 @@
         "verdict": "not_significant"
       }
     }
+  },
+  "provenance_corrections": {
+    "committed_inputs": {
+      "lme-chroma.ndjson": "72bab170e89b9964fd3ef4040bd2c227c51ce12b65d109176b6c64973d23daad",
+      "lme-floor-head.ndjson": "d586ad28f3486d006467d8cabf558f4566c0210f529127f1be34f0aa404e7c2d",
+      "lme-hybrid-vecon.ndjson": "4d195f40de0a49c6c7aabac640688931b9a23d3aafbd6fe477f43fe6b420c8be",
+      "lme-mind_mem-head.ndjson": "e127be73bf54c2071fbd7851b82dfcef7fdfa142f9ac310cc8fda4c58e402738",
+      "lme-no_expansion.ndjson": "80e887b76e58ef3518818911f4ad07d348d3eb66d3c295cda0ba4632c8cb88a4"
+    },
+    "corrections": [
+      {
+        "field": "control_path",
+        "resolution": "left as recorded and marked unavailable. Substituting another committed run as 'the control' would assert a provenance nobody measured; the numbers under masks.control stay exactly as they were produced.",
+        "status": "referent absent from the repository",
+        "was": "docs/benchmarks/head-20260907/lme-control.ndjson"
+      },
+      {
+        "field": "masks.no_expansion",
+        "resolution": "bound by path + sha256; metrics deliberately not computed",
+        "status": "artifact is committed",
+        "was": "missing"
+      }
+    ],
+    "note": "References checked against the artifacts actually committed beside this file. No metric in this report was recomputed or rerun; only the references and their input hashes were corrected."
   }
 }

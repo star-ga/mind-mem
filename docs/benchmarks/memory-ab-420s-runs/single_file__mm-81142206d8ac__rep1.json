@@ -29,7 +29,21 @@
       "OPENAI_API_KEY",
       "OPENAI_BASE_URL",
       "OPENAI_MODEL"
-    ]
+    ],
+    "argv_display": [
+      "qwen",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "argv_redacted": [
+      "<absolute path removed>",
+      "-y",
+      "-p",
+      "{prompt}"
+    ],
+    "argv_is_executed_evidence": false,
+    "argv_note": "A SANITIZED PRESENTATION, not the executed command line. The command is the same; its location on the machine that ran it was removed. Reproduction instructions are not argv evidence."
   },
   "task_set": {
     "path": "benchmarks/tasks/real_repo_tasks.json",
@@ -272,6 +286,10 @@
     "original_digest": "7c01afa2009454d95ed43006f2f0da93b8a04bc40d7f54b86c63615836b4db8e",
     "original_bytes_sha256": "f626154c760be645f5f6b789dff6fc71bae43af1eb022ccb3c9838d08d2b10fe",
     "note": "The sanitized argv is NOT literally what executed. It names the same command without disclosing where it lived. Scores, counts, spend and every per-task row are byte-for-byte the original; nothing was recomputed, and the digest was deliberately NOT regenerated, because a regenerated digest would make a rewritten receipt look like one that was produced that way.",
-    "raw_receipt": "retained privately by the publisher"
+    "raw_receipt": "retained privately by the publisher",
+    "executable_binding": {
+      "status": "unavailable",
+      "reason": "The historical executable's version and hash were not recorded at run time, and deriving them from today's installed binary would fabricate a binding that was never measured."
+    }
   }
 }
