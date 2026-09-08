@@ -219,6 +219,7 @@ def test_a_level_without_a_severity_is_refused_rather_than_inferred(tmp_path) ->
 # Shaped-but-empty reports. Root demonstrated both against the first version.
 # ---------------------------------------------------------------------------
 
+
 def _real(results: list[dict]) -> dict:
     """The same real shape the fixtures above use."""
     return _sarif(results)

@@ -86,11 +86,7 @@ def test_all_really_does_omit_shipped_dependencies() -> None:
 def test_bandit_does_not_swallow_its_exit_code() -> None:
     """`bandit ... || true` reported success for every outcome, findings included."""
     text = _WORKFLOW.read_text(encoding="utf-8")
-    recipe = [
-        line
-        for line in text.splitlines()
-        if "bandit -r src" in line and not line.lstrip().startswith("#")
-    ]
+    recipe = [line for line in text.splitlines() if "bandit -r src" in line and not line.lstrip().startswith("#")]
     assert recipe, "the bandit job no longer scans src"
     for line in recipe:
         assert "|| true" not in line, f"bandit's exit code is masked again: {line.strip()}"

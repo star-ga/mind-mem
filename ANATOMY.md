@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1525 | **Est. tokens:** ~4537433
-**Generated:** 2026-09-08 17:16 UTC
+**Files:** 1525 | **Est. tokens:** ~4537417
+**Generated:** 2026-09-08 17:30 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 648 | ~1972876 |
+| `tests/` | 648 | ~1972860 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1294,7 +1294,7 @@
 - `test_decrypt_file_audit_trail.py` (~1282 tok, large) — Regression test for the `decrypt_file` forensic audit trail
 - `test_dedup.py` (~5670 tok, huge) — Tests for dedup.py -- 4-layer deduplication filter."""
 - `test_dedup_vector.py` (~1087 tok, large) — Tests for vector-enhanced cosine dedup (Layer 2b)."""
-- `test_dependency_audit_closure.py` (~1456 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_dependency_audit_closure.py` (~1448 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
 - `test_docs_alignment.py` (~24506 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1445,7 +1445,7 @@
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.
-- `test_make_typecheck_gate.py` (~1567 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_make_typecheck_gate.py` (~1559 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_agent_inject.py` (~5423 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_anchor_tools.py` (~2280 tok, huge) — The external-anchor tools wired onto the audit family in 5.0.0.
 - `test_mcp_arch_mind_tools.py` (~2320 tok, huge) — Tests for the arch-mind MCP tool wrapper.

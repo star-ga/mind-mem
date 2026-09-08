@@ -74,7 +74,7 @@ def test_a_genuinely_lexical_run_may_say_so(tmp_path) -> None:
 
 
 def test_a_corrected_scorecard_passes(tmp_path) -> None:
-    """"lexical-only" may appear while RETRACTING it, and must not re-fail."""
+    """ "lexical-only" may appear while RETRACTING it, and must not re-fail."""
     rep = repro_verify.Report("probe")
     repro_verify.verify_pipeline_disclosure(
         _rows(436, backend="chroma_hnsw_cosine", embedder="mxbai-embed-large"),
