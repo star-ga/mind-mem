@@ -13,6 +13,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 try:
     import httpx
@@ -36,6 +37,26 @@ _ALLOWED_JWT_KEYS: dict[str, tuple[str, str | None]] = {
     "ES384": ("EC", "P-384"),
     "ES512": ("EC", "P-521"),
 }
+
+
+def _require_https_endpoint(value: str, label: str) -> str:
+    """Require an HTTPS URL with a parseable, non-empty host before fetching."""
+    try:
+        parsed = urlsplit(value)
+        hostname = parsed.hostname
+        parsed.port  # Force malformed-port validation before any network call.
+    except ValueError as exc:
+        raise AuthError(f"{label} is malformed", code="jwks_fetch_failed") from exc
+    if (
+        parsed.scheme.lower() != "https"
+        or not hostname
+        or hostname != hostname.strip()
+        or any(character.isspace() for character in hostname)
+    ):
+        raise AuthError(f"{label} must be an https URL with a host", code="jwks_fetch_failed")
+    if parsed.username is not None or parsed.password is not None:
+        raise AuthError(f"{label} must not contain URL credentials", code="jwks_fetch_failed")
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -403,9 +424,9 @@ class OIDCProvider:
         """
         configured = self._config.jwks_uri.strip()
         if configured:
-            return configured
+            return _require_https_endpoint(configured, "https jwks_uri")
 
-        uri = self._config.discovery_uri
+        uri = _require_https_endpoint(self._config.discovery_uri, "https OIDC discovery URI")
         try:
             response = httpx.get(uri, timeout=10.0)
             response.raise_for_status()
@@ -422,15 +443,15 @@ class OIDCProvider:
             ) from exc
 
         jwks_uri = document.get("jwks_uri") if isinstance(document, dict) else None
-        if not isinstance(jwks_uri, str) or not jwks_uri.startswith("https://"):
+        if not isinstance(jwks_uri, str):
             # No usable key endpoint: fail closed rather than guessing one.
-            # A non-HTTPS jwks_uri is refused outright — signing keys fetched
-            # over a downgradeable channel are keys an on-path attacker picks.
             raise AuthError(
                 f"OIDC discovery document at {uri} declares no https jwks_uri",
                 code="jwks_fetch_failed",
             )
-        return jwks_uri
+        # A non-HTTPS or malformed jwks_uri is refused outright — signing keys
+        # fetched over a downgradeable channel are keys an on-path attacker picks.
+        return _require_https_endpoint(jwks_uri, "https jwks_uri")
 
     def _fetch_jwks(self) -> dict[str, Any]:
         """HTTP GET the JWKS URI and return the parsed JSON."""

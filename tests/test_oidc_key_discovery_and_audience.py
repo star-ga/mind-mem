@@ -37,10 +37,10 @@ _DISCOVERY_URI = f"{_ISSUER}/.well-known/openid-configuration"
 _SECRET = "test-secret-not-used-in-production"
 
 
-def _provider(jwks_uri: str = "") -> OIDCProvider:
+def _provider(jwks_uri: str = "", issuer: str = _ISSUER) -> OIDCProvider:
     provider = OIDCProvider(
         OIDCConfig(
-            issuer=_ISSUER,
+            issuer=issuer,
             client_id="mm-client",
             client_secret="secret",
             audience=_AUDIENCE,
@@ -122,6 +122,30 @@ class TestKeysComeFromDiscovery:
         with patch("httpx.get", side_effect=fetcher):
             with pytest.raises(AuthError, match="https jwks_uri"):
                 _provider()._fetch_jwks()
+
+        assert fetcher.urls == [_DISCOVERY_URI]
+
+    @pytest.mark.parametrize(
+        "jwks_uri",
+        ["http://keys.example.net/certs", "https:///certs", "https://", "https:// bad.example/certs"],
+    )
+    def test_explicit_jwks_uri_must_be_https_and_well_formed(self, jwks_uri: str) -> None:
+        fetcher = _Fetcher({jwks_uri: {"keys": []}})
+
+        with patch("httpx.get", side_effect=fetcher):
+            with pytest.raises(AuthError, match="https jwks_uri"):
+                _provider(jwks_uri=jwks_uri)._fetch_jwks()
+
+        assert fetcher.urls == [], "invalid configured endpoint must be rejected before fetch"
+
+    def test_http_issuer_discovery_is_refused_before_fetch(self) -> None:
+        fetcher = _Fetcher({})
+
+        with patch("httpx.get", side_effect=fetcher):
+            with pytest.raises(AuthError, match="https OIDC discovery URI"):
+                _provider(issuer="http://idp.example.com")._fetch_jwks()
+
+        assert fetcher.urls == []
 
     def test_google_shaped_issuer_resolves_offhost_keys(self) -> None:
         """The concrete case the derivation broke: keys on another host."""
