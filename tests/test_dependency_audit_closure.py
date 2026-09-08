@@ -95,7 +95,11 @@ def test_bandit_does_not_swallow_its_exit_code() -> None:
     for line in recipe:
         assert "|| true" not in line, f"bandit's exit code is masked again: {line.strip()}"
 
-    assert "Fail on high-severity findings" in text, "nothing fails the job on a high-severity finding"
+    # Asserted by what the job RUNS, not by a step's display name -- a rename
+    # would otherwise break this control while the gate still worked, and the
+    # first version of it did exactly that.
+    assert "scripts/bandit_gate.py" in text, "nothing evaluates the bandit result; findings cannot fail the job"
+    assert "bandit_exit" in text, "the exit code is not persisted for the gate to read"
 
 
 @pytest.mark.parametrize("claim", ["complete sast", "full sast", "comprehensive security"])

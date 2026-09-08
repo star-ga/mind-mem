@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1519 | **Est. tokens:** ~4,516,760
-**Generated:** 2026-09-08 14:27 UTC
+**Files:** 1523 | **Est. tokens:** ~4,521,418
+**Generated:** 2026-09-08 14:42 UTC
 
 ## Token Budget Guide
 
@@ -53,7 +53,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~19,259 |
+| `.github/workflows/` | 11 | ~19,165 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -61,7 +61,7 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 19 | ~60,270 |
+| `scripts/` | 21 | ~62,231 |
 | `sdk/go/` | 10 | ~9,098 |
 | `sdk/js/` | 6 | ~4,864 |
 | `sdk/js/src/` | 5 | ~3,178 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 645 | ~1,960,485 |
+| `tests/` | 647 | ~1,963,276 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -529,14 +529,14 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~7521 tok, huge) — name: CI
+- `ci.yml` (~7479 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
 - `release.yml` (~6318 tok, huge) — name: Release
-- `security.yml` (~2907 tok, huge) — name: Supply-Chain Security
+- `security.yml` (~2855 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `hooks/`
 
@@ -595,6 +595,7 @@
 - `alignment_authorities.py` (~8062 tok, huge) — Where each counted doc claim gets its TRUE value from.
 - `anatomy-hook.sh` (~237 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
+- `bandit_gate.py` (~1244 tok, large) — # Copyright 2026 STARGA, Inc.
 - `build_integrity_manifest.py` (~634 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `check_author_identity.sh` (~1880 tok, huge) — check_author_identity.sh — enforce the single-author identity rule.
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
@@ -611,6 +612,7 @@
 - `pre-push-hook.sh` (~460 tok, medium) — pre-push-hook.sh — the last LOCAL gate before an identity becomes public.
 - `reachability_baseline.txt` (~366 tok, medium) — api.grpc_server  # waiting: a named client integration that requires gRPC (strea
 - `regen_bash_literals.py` (~424 tok, medium) — Regenerate src/mind_mem/_task_status_literals.sh from enums.py.
+- `require_named_controls.py` (~717 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `sdk/go/`
 
 - `client.go` (~1194 tok, large) — Option is a functional option for NewClient.
@@ -1204,6 +1206,7 @@
 - `test_backpressure_recovery.py` (~1081 tok, large) — Two defects the slice-3 verifier reproduced, pinned so they cannot return.
 - `test_backpressure_wiring.py` (~5799 tok, huge) — ``v4/backpressure`` wired into the producer loops that can drown the store.
 - `test_backup_restore.py` (~3306 tok, huge) — Tests for backup_restore.py — zero external deps (stdlib unittest)."""
+- `test_bandit_gate.py` (~1637 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_baseline_snapshot.py` (~3033 tok, huge) — Tests for baseline snapshot and drift detection (#431)."""
 - `test_bench_eval_harness.py` (~4522 tok, huge) — Tests for the LongMemEval consolidation harness (self-asserting adapters).
 - `test_bench_hard_timeout.py` (~1824 tok, huge) — The per-question timeout must preempt a NATIVE hang, not just a Python one.
@@ -1295,7 +1298,7 @@
 - `test_decrypt_file_audit_trail.py` (~1282 tok, large) — Regression test for the `decrypt_file` forensic audit trail
 - `test_dedup.py` (~5670 tok, huge) — Tests for dedup.py -- 4-layer deduplication filter."""
 - `test_dedup_vector.py` (~1087 tok, large) — Tests for vector-enhanced cosine dedup (Layer 2b)."""
-- `test_dependency_audit_closure.py` (~1379 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_dependency_audit_closure.py` (~1453 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
 - `test_docs_alignment.py` (~24506 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1631,6 +1634,7 @@
 - `test_repro_cross_drive_paths.py` (~612 tok, large) — A package written to another drive must not take down the run.
 - `test_repro_disclosure_consistency.py` (~1214 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_repro_package.py` (~2585 tok, huge) — The verifier must be able to FAIL.
+- `test_required_named_controls.py` (~1080 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.
 - `test_reranker_model_cache.py` (~1909 tok, huge) — Reranker weights load once per process, not once per query.

@@ -365,9 +365,8 @@ jobs:
           echo "selected: $FILES"
 
           # An empty or shrunken selector must fail the job, not run nothing
-          # quietly. The floor is a floor, not the exact count: new files may
-          # be added, and a hardcoded total would go stale and be raised
-          # thoughtlessly.
+          # quietly. A floor, not an exact count: new files may be added, and
+          # a hardcoded total goes stale and gets raised thoughtlessly.
           COUNT=$(printf '%s\n' $FILES | grep -c . || true)
           test "$COUNT" -ge 8 || { echo "selector matched only $COUNT file(s); it is broken" >&2; exit 1; }
 
@@ -375,25 +374,19 @@ jobs:
           printf '%s\n' $FILES | grep -qx 'tests/test_pg_pool_autocommit_isolation.py' \
             || { echo "the pool-isolation controls are not selected" >&2; exit 1; }
 
-          python -m pytest $FILES -q -p no:randomly -rs
+          # ONE run, with a machine-readable report. The named controls are
+          # then inspected from THIS report rather than by executing the same
+          # file a second time.
+          python -m pytest $FILES -q -p no:randomly -rs --junitxml=pg-results.xml
 
-      - name: Assert the pool-isolation controls actually executed
-        run: |
-          set -euo pipefail
-          # Executed, not skipped. These controls skip when no isolated
-          # database is attested, which is correct locally and would be a
-          # silent hole here: this job provides one, so a skip means the
-          # wiring broke.
-          OUT=$(python -m pytest tests/test_pg_pool_autocommit_isolation.py -q -p no:randomly -rs 2>&1) || {
-            echo "$OUT"; exit 1;
-          }
-          echo "$OUT" | tail -5
-          echo "$OUT" | grep -qE '[0-9]+ passed' || { echo "no control reported passed" >&2; exit 1; }
-          if echo "$OUT" | grep -qE '[0-9]+ skipped'; then
-            echo "a pool-isolation control SKIPPED in CI, which reads as a pass; the attestation is not reaching it" >&2
-            exit 1
-          fi
-
+      - name: Assert the named pool-isolation controls executed and passed
+        if: always()
+        # A file-count floor does not witness that a METHOD still exists: a
+        # file shrinking to one remaining test satisfies it. So the required
+        # cases are named, and each must be present, passed, and neither
+        # skipped nor errored. A skip in CI reads as a pass, which is the same
+        # false green one level up.
+        run: python3 scripts/require_named_controls.py pg-results.xml
 
   author-identity:
     # Catches the leak path that no local hook can: a commit made in another

@@ -122,48 +122,46 @@ jobs:
         run: pip install bandit[sarif]
 
       - name: Run bandit
-        # `|| true` made this unconditional: every finding, and every failure
-        # to run at all, reported success. The SARIF upload is why the ignore
-        # was there -- bandit exits non-zero when it finds something, and the
-        # file still has to be uploaded -- so the exit code is CAPTURED and
-        # re-raised after the upload instead of discarded.
+        # `|| true` reported success for findings, for crashes and for not
+        # running. The first repair captured the exit code and never read it,
+        # and `set -uo pipefail` does not clear an inherited errexit -- under
+        # `bash -e` the failing command ended the step before the capture.
         #
-        # Severity split, stated rather than implied: HIGH fails the job, and
-        # anything below is reported through code scanning without blocking.
-        # That is a real gate on the class that matters, not a claim of
-        # complete SAST coverage.
+        # So: an explicit if/else that cannot be short-circuited by errexit, a
+        # code that is persisted AND read, and a stale report removed first so
+        # an earlier step's file can never answer for this run.
         run: |
           set -uo pipefail
-          bandit -r src -f sarif -o bandit.sarif
-          echo "bandit_exit=$?" >> "$GITHUB_ENV"
-          test -s bandit.sarif || { echo "bandit produced no SARIF; it did not run" >&2; exit 1; }
+          rm -f bandit.sarif
+          if bandit -r src -f sarif -o bandit.sarif; then
+            rc=0
+          else
+            rc=$?
+          fi
+          echo "bandit_exit=$rc" >> "$GITHUB_ENV"
+          echo "bandit exited $rc"
 
       - name: Upload SARIF to GitHub code scanning
+        # always(): a real finding must reach code scanning even when it goes
+        # on to fail the build, and a crash must not hide whatever partial
+        # report exists.
+        if: always() && hashFiles('bandit.sarif') != ''
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4
         with:
           sarif_file: bandit.sarif
           category: bandit
 
-      - name: Fail on high-severity findings
-        # After the upload, so a real finding is always visible in code
-        # scanning even when it stops the build.
-        run: |
-          set -euo pipefail
-          python - <<'CHECK'
-          import json, sys
-          sarif = json.load(open("bandit.sarif"))
-          high = []
-          for run in sarif.get("runs", []):
-              rules = {r.get("id"): r for r in (run.get("tool", {}).get("driver", {}).get("rules") or [])}
-              for res in run.get("results", []):
-                  level = res.get("level") or rules.get(res.get("ruleId"), {}).get("defaultConfiguration", {}).get("level")
-                  if str(level).lower() == "error":
-                      high.append(f"{res.get('ruleId')}: {(res.get('message') or {}).get('text', '')[:120]}")
-          print(f"bandit: {len(high)} high-severity finding(s)")
-          for h in high:
-              print("  " + h)
-          sys.exit(1 if high else 0)
-          CHECK
+      - name: Gate on the result
+        # Decided in scripts/bandit_gate.py so it can be executed against
+        # stubs -- clean, low-only, high, a crashed scanner with a stale
+        # report, and a malformed or missing one. A gate that only ever runs
+        # in CI is a gate nobody has tested.
+        #
+        # exit 1 = high-severity findings; exit 2 = the scan or its report is
+        # unusable. A broken scanner and a clean codebase must never produce
+        # the same answer.
+        if: always()
+        run: python3 scripts/bandit_gate.py --sarif bandit.sarif --exit-code "${{ env.bandit_exit }}"
 
   # ── Gitleaks secret scanning ─────────────────────────────────────────────────
   secrets-scan:
