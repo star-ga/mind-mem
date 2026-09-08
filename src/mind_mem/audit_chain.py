@@ -73,6 +73,7 @@ from datetime import datetime, timezone
 from .admission import current_admission
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
+from .payload_admission import admit_payload
 
 _log = get_logger("audit_chain")
 
@@ -438,12 +439,23 @@ class AuditChain:
             except ValueError:
                 pass  # Different drives on Windows
 
+        # BEFORE the lock: a refusal must not have taken the chain lock, read
+        # the tail or touched a byte. NEW payloads only; nothing stored is
+        # revisited and no accepted preimage changes.
+        #
+        # Admission returns the PREIMAGE, and the hash below is taken from it.
+        # The caller's object is never traversed a second time, so a payload
+        # that changes after it was checked cannot be the payload that gets
+        # hashed. `accepts_bytes=False` is this API's own documented contract
+        # (`dict | str | None`), not a preference.
+        admitted = admit_payload(payload, accepts_bytes=False)
+
         with FileLock(self._chain_path):
             last = self._last_entry()
             prev_hash = last.entry_hash if last else _GENESIS_HASH
             seq = self._next_seq(last)
             ts = datetime.now(timezone.utc).isoformat()
-            p_hash = _payload_hash(payload)
+            p_hash = admitted.digest()
 
             entry_hash = AuditEntry.compute_entry_hash(seq, ts, operation, target, agent, reason, p_hash, prev_hash)
 

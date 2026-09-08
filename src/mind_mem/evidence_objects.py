@@ -60,6 +60,7 @@ from uuid import uuid4
 from .admission import GovernanceBypassError
 from .mind_filelock import FileLock, LockTimeout
 from .observability import get_logger, metrics
+from .payload_admission import admit_payload
 from .preimage import preimage
 from .q1616 import hex_q16_16
 
@@ -534,7 +535,19 @@ class EvidenceChain:
         effective_metadata.setdefault("evidence_schema", EVIDENCE_SCHEMA_VERSION)
         metadata = effective_metadata
 
-        payload_hash = _compute_payload_hash(payload)
+        # BEFORE the lock and before any mutation: a refusal must leave the
+        # file bytes, the record count and the in-memory tail exactly as they
+        # were. NEW payloads only -- nothing stored is revisited, no accepted
+        # preimage changes, and every historical entry keeps verifying by the
+        # rule it was written under.
+        #
+        # The digest comes from the bytes admission produced, not from a
+        # second traversal of the caller's object: checking one shape and
+        # hashing another is a gap, and it was demonstrated rather than
+        # argued. `accepts_bytes=True` is this API's documented contract.
+        admitted = admit_payload(payload, accepts_bytes=True)
+
+        payload_hash = admitted.digest()
 
         with self._lock:
             if self._store_path is None:
@@ -1401,12 +1414,19 @@ class ChainTransaction:
         if spec_hash is not None:
             effective["spec_hash"] = spec_hash
         effective.setdefault("evidence_schema", EVIDENCE_SCHEMA_VERSION)
+        # The transactional writer is a SECOND public entry point and needs the
+        # same admission: a payload refused through create() and accepted here
+        # would be the hole rather than the fix. Same snapshot rule -- the
+        # digest below is taken from the admitted bytes, never from a second
+        # look at the caller's object.
+        admitted = admit_payload(payload, accepts_bytes=True)
+
         ev = self._chain._forge_and_persist_locked(
             action=action,
             actor=actor,
             target_block_id=target_block_id,
             target_file=target_file,
-            payload_hash=_compute_payload_hash(payload),
+            payload_hash=admitted.digest(),
             metadata=effective,
             confidence=confidence,
         )
