@@ -23,7 +23,7 @@ import pathlib
 import re
 
 import pytest
-import tomllib
+from _toml_compat import load_pyproject
 
 _REPO = pathlib.Path(__file__).resolve().parents[1]
 _WORKFLOW = _REPO / ".github" / "workflows" / "security.yml"
@@ -33,7 +33,9 @@ DEV_ONLY = frozenset({"test", "benchmark", "red-team"})
 
 
 def _extras() -> dict[str, list[str]]:
-    data = tomllib.loads((_REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    data = load_pyproject()
+    if data is None:
+        pytest.fail("a TOML parser is required to inspect pyproject.toml")
     return data["project"].get("optional-dependencies", {})
 
 

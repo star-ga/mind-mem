@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1525 | **Est. tokens:** ~4537956
-**Generated:** 2026-09-08 18:34 UTC
+**Files:** 1525 | **Est. tokens:** ~4537976
+**Generated:** 2026-09-08 18:53 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1076277 |
+| `src/mind_mem/` | 231 | ~1076280 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~48607 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 648 | ~1973246 |
+| `tests/` | 648 | ~1973263 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -927,7 +927,7 @@
 - `ontology.py` (~3933 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `outcome_attribution.py` (~4288 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
 - `outcome_store.py` (~4094 tok, huge) — Outcome-attribution persistence over the calibration store.
-- `payload_admission.py` (~3611 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `payload_admission.py` (~3614 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `personas.py` (~1256 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
 - `pipeline_hash.py` (~3314 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
 - `prefetch.py` (~6830 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1294,7 +1294,7 @@
 - `test_decrypt_file_audit_trail.py` (~1282 tok, large) — Regression test for the `decrypt_file` forensic audit trail
 - `test_dedup.py` (~5670 tok, huge) — Tests for dedup.py -- 4-layer deduplication filter."""
 - `test_dedup_vector.py` (~1087 tok, large) — Tests for vector-enhanced cosine dedup (Layer 2b)."""
-- `test_dependency_audit_closure.py` (~1448 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_dependency_audit_closure.py` (~1465 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
 - `test_docs_alignment.py` (~24506 tok, huge) — # Copyright 2026 STARGA, Inc.

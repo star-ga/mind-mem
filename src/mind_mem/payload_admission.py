@@ -178,7 +178,7 @@ def _canonical_json(payload: dict) -> str:
             seen.add(marker)
 
         if isinstance(node, dict):
-            keys = []
+            keys: list[str] = []
             key_budget = max(MAX_NODES - state["nodes"], 0)
             for key in node:
                 if not isinstance(key, str):
