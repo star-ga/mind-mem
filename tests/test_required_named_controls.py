@@ -104,3 +104,82 @@ def test_the_workflow_does_not_run_the_pg_file_twice() -> None:
     assert not runs, f"the PG file is executed a second time: {runs}"
     assert "--junitxml=pg-results.xml" in wf, "the single run produces no machine-readable report"
     assert "require_named_controls.py pg-results.xml" in wf, "the named-control receipt is not wired"
+
+
+# ---------------------------------------------------------------------------
+# Identity, not a bare name. Root demonstrated both false greens.
+# ---------------------------------------------------------------------------
+
+
+def _real_classname() -> str:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("rnc", _SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod.classname_for(list(mod.REQUIRED)[0])
+
+
+def _report_id(tmp_path: pathlib.Path, cases: list[tuple[str, str, str | None]]) -> str:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    suite = ET.Element("testsuite", name="pytest", tests=str(len(cases)))
+    for cls, name, status in cases:
+        case = ET.SubElement(suite, "testcase", classname=cls, name=name)
+        if status:
+            ET.SubElement(case, status, message="x")
+    path = tmp_path / "r.xml"
+    ET.ElementTree(suite).write(path)
+    return str(path)
+
+
+def test_required_names_under_a_DIFFERENT_class_do_not_count(tmp_path) -> None:
+    """All six names emitted under an unrelated classname used to pass.
+
+    A bare method name is not an identity: any file can define a function with
+    the same name, and the gate would accept it as the control it requires.
+    """
+    r = _run(_report_id(tmp_path, [("tests.unrelated", n, None) for n in _required()]))
+    assert r.returncode == 1, r.stdout
+    assert "ABSENT" in r.stderr
+
+
+def test_a_failure_is_never_overwritten_by_a_later_pass(tmp_path) -> None:
+    """Each real FAILED control followed by an unrelated same-named pass used to pass.
+
+    The report was keyed on the bare name and the last write won, so a genuine
+    failure was erased by an unrelated success.
+    """
+    real = _real_classname()
+    cases: list[tuple[str, str, str | None]] = []
+    for n in _required():
+        cases.append((real, n, "failure"))
+        cases.append(("tests.unrelated", n, None))
+    r = _run(_report_id(tmp_path, cases))
+    assert r.returncode == 1, r.stdout
+
+
+def test_a_duplicate_required_identity_is_refused(tmp_path) -> None:
+    """Even under the RIGHT class: a required control must be witnessed once.
+
+    Two records for one identity means the report describes something other
+    than a single clean run, and picking either is a guess.
+    """
+    real = _real_classname()
+    cases = [(real, n, "failure") for n in _required()] + [(real, n, None) for n in _required()]
+    r = _run(_report_id(tmp_path, cases))
+    assert r.returncode == 1, r.stdout
+
+
+def test_the_correct_identities_still_pass(tmp_path) -> None:
+    real = _real_classname()
+    assert _run(_report_id(tmp_path, [(real, n, None) for n in _required()])).returncode == 0
+
+
+def test_the_classname_matches_what_pytest_really_emits() -> None:
+    """Measured, not assumed: tests/x.py reports classname tests.x."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("rnc", _SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    assert mod.classname_for("tests/test_pg_pool_autocommit_isolation.py") == "tests.test_pg_pool_autocommit_isolation"

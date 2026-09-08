@@ -74,7 +74,7 @@ def test_all_really_does_omit_shipped_dependencies() -> None:
     """
 
     def names(reqs: list[str]) -> set[str]:
-        return {re.split(r"[\[><=; ]", r.strip(), 1)[0].strip() for r in reqs}
+        return {re.split(r"[\[><=; ]", r.strip(), maxsplit=1)[0].strip() for r in reqs}
 
     extras = _extras()
     covered = names(extras["all"])

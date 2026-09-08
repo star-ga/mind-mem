@@ -33,37 +33,40 @@ import pytest
 _REPO = pathlib.Path(__file__).resolve().parents[1]
 _GATE = _REPO / "scripts" / "bandit_gate.py"
 
-CLEAN = {"runs": [{"tool": {"driver": {"name": "Bandit"}}, "results": []}]}
-LOW_ONLY = {
-    "runs": [
-        {
-            "tool": {"driver": {"name": "Bandit"}},
-            "results": [
-                {"ruleId": "B404", "level": "note", "properties": {"issue_severity": "LOW"}, "message": {"text": "import subprocess"}}
-            ],
-        }
-    ]
+#: The shape the installed Bandit really emits, measured:
+#:     tool.driver.name / version, an explicit results list, and
+#:     invocations[0].executionSuccessful.
+#: The first version of these fixtures had none of it -- they were exactly the
+#: structurally-empty reports that turned out to be a false green, so they
+#: could never have caught it.
+_DRIVER = {"name": "Bandit", "version": "1.9.4", "semanticVersion": "1.9.4"}
+_INVOCATIONS = [{"executionSuccessful": True, "endTimeUtc": "2026-09-08T14:36:44Z"}]
+
+
+def _sarif(results: list[dict]) -> dict:
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{"tool": {"driver": dict(_DRIVER)}, "invocations": [dict(i) for i in _INVOCATIONS], "results": results}],
+    }
+
+
+_LOW = {"ruleId": "B404", "level": "note", "properties": {"issue_severity": "LOW"}, "message": {"text": "import subprocess"}}
+_HIGH = {
+    "ruleId": "B602",
+    "level": "error",
+    "properties": {"issue_severity": "HIGH"},
+    "message": {"text": "subprocess with shell=True"},
 }
-HIGH = {
-    "runs": [
-        {
-            "tool": {"driver": {"name": "Bandit"}},
-            "results": [
-                {"ruleId": "B404", "level": "note", "properties": {"issue_severity": "LOW"}, "message": {"text": "import subprocess"}},
-                {
-                    "ruleId": "B602",
-                    "level": "error",
-                    "properties": {"issue_severity": "HIGH"},
-                    "message": {"text": "subprocess with shell=True"},
-                },
-            ],
-        }
-    ]
-}
+
+CLEAN = _sarif([])
+LOW_ONLY = _sarif([_LOW])
+HIGH = _sarif([_LOW, _HIGH])
 NO_RUNS = {"runs": []}
 
 
 def _run(tmp_path: pathlib.Path, sarif, exit_code: int) -> subprocess.CompletedProcess:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "bandit.sarif"
     if sarif is not None:
         path.write_text(sarif if isinstance(sarif, str) else json.dumps(sarif), encoding="utf-8")
@@ -139,9 +142,7 @@ def test_the_three_outcomes_are_distinguishable(tmp_path) -> None:
     """
     codes = {}
     for name, sarif, exit_code in (("clean", CLEAN, 0), ("high", HIGH, 1), ("broken", CLEAN, 127)):
-        d = tmp_path / name
-        d.mkdir()
-        codes[name] = _run(d, sarif, exit_code).returncode
+        codes[name] = _run(tmp_path / name, sarif, exit_code).returncode
     assert len(set(codes.values())) == 3, f"outcomes are not distinguishable: {codes}"
 
 
@@ -170,5 +171,65 @@ def test_severity_is_read_from_a_field_bandit_really_emits(tmp_path, field) -> N
         result["properties"] = {"issue_severity": "HIGH"}
     else:
         result["level"] = "error"
-    r = _run(tmp_path, {"runs": [{"tool": {"driver": {}}, "results": [result]}]}, 1)
+    r = _run(tmp_path, _sarif([result]), 1)
     assert r.returncode == 1, f"a HIGH finding expressed via {field} was not caught: {r.stdout} {r.stderr}"
+
+
+# ---------------------------------------------------------------------------
+# Shaped-but-empty reports. Root demonstrated both against the first version.
+# ---------------------------------------------------------------------------
+
+def _real(results: list[dict]) -> dict:
+    """The same real shape the fixtures above use."""
+    return _sarif(results)
+
+
+def test_a_structurally_empty_run_is_not_a_clean_scan(tmp_path) -> None:
+    """`{"runs": [{}]}` with exit 0 passed. It carries no evidence of anything.
+
+    No tool identity, no results list, no invocation. Reading it as "zero
+    findings" fabricates execution evidence out of an absence.
+    """
+    r = _run(tmp_path, {"runs": [{}]}, 0)
+    assert r.returncode == 2, r.stdout
+    assert "no tool identity" in r.stderr or "names no tool" in r.stderr
+
+
+def test_findings_exit_with_an_empty_report_is_incoherent(tmp_path) -> None:
+    """`{"runs":[{"results":[]}]}` with exit 1 passed. Bandit exits 1 only on a finding."""
+    r = _run(tmp_path, {"runs": [{"results": []}]}, 1)
+    assert r.returncode == 2, r.stdout
+
+
+def test_a_report_from_another_tool_is_refused(tmp_path) -> None:
+    doc = _real([])
+    doc["runs"][0]["tool"] = {"driver": {"name": "SomeOtherScanner", "version": "1.0"}}
+    r = _run(tmp_path, doc, 0)
+    assert r.returncode == 2
+    assert "not Bandit" in r.stderr
+
+
+@pytest.mark.parametrize("mutation", ["no_results_key", "null_results", "no_invocations", "unsuccessful"])
+def test_each_missing_piece_of_completed_scan_evidence_is_refused(tmp_path, mutation) -> None:
+    doc = _real([])
+    run = doc["runs"][0]
+    if mutation == "no_results_key":
+        del run["results"]
+    elif mutation == "null_results":
+        run["results"] = None
+    elif mutation == "no_invocations":
+        del run["invocations"]
+    else:
+        run["invocations"] = [{"executionSuccessful": False}]
+    r = _run(tmp_path / mutation, doc, 0)
+    assert r.returncode == 2, f"{mutation} was accepted: {r.stdout}"
+
+
+def test_a_real_shaped_clean_report_still_passes(tmp_path) -> None:
+    """The whole point of the shape checks is to keep honest reports green."""
+    assert _run(tmp_path, _real([]), 0).returncode == 0
+
+
+def test_a_real_shaped_low_only_report_still_passes(tmp_path) -> None:
+    low = [{"ruleId": "B404", "level": "note", "properties": {"issue_severity": "LOW"}, "message": {"text": "x"}}]
+    assert _run(tmp_path, _real(low), 1).returncode == 0

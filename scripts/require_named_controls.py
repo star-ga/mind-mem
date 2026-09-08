@@ -32,6 +32,28 @@ REQUIRED = {
 }
 
 
+def classname_for(path: str) -> str:
+    """pytest's JUnit classname for a test file: the dotted module path.
+
+    Measured against a real run: `tests/test_pg_pool_autocommit_isolation.py`
+    reports `classname="tests.test_pg_pool_autocommit_isolation"`.
+    """
+    return path.removesuffix(".py").replace("/", ".")
+
+
+def required_identities() -> set[tuple[str, str]]:
+    """(classname, name) for every required control. Identity, not just a name."""
+    out: set[tuple[str, str]] = set()
+    for path, names in REQUIRED.items():
+        cls = classname_for(path)
+        for name in names:
+            identity = (cls, name)
+            if identity in out:
+                raise SystemExit(f"REQUIRED lists {identity} twice; a duplicate requirement cannot be witnessed")
+            out.add(identity)
+    return out
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print("usage: require_named_controls.py <junit.xml>", file=sys.stderr)
@@ -42,30 +64,52 @@ def main(argv: list[str]) -> int:
         print(f"cannot read the JUnit report {argv[1]}: {exc}", file=sys.stderr)
         return 2
 
-    seen: dict[str, str] = {}
+    # IDENTITY IS (classname, name), not a bare method name, and a FAILURE IS
+    # NEVER OVERWRITTEN. Both were real false greens, demonstrated against the
+    # first version: all six required names emitted under an unrelated
+    # classname passed, and each genuinely FAILED control followed by an
+    # unrelated same-named pass also passed, because the dict was keyed on the
+    # bare name and the last write won.
+    #
+    # A parameterised case reports as `name[param]`, so the exact recorded name
+    # is compared -- a required identity must match a case that really ran
+    # under that identity, not one that merely shares a method name.
+    seen: dict[tuple[str, str], str] = {}
+    duplicates: set[tuple[str, str]] = set()
     for case in tree.iter("testcase"):
-        name = case.get("name") or ""
+        identity = (case.get("classname") or "", case.get("name") or "")
         status = "passed"
         for child in case:
             if child.tag in ("skipped", "failure", "error"):
                 status = child.tag
                 break
-        seen[name] = status
+        if identity in seen:
+            duplicates.add(identity)
+            # Worst outcome wins. A second, passing record for the same
+            # identity must never erase the first one's failure.
+            if seen[identity] == "passed":
+                seen[identity] = status
+        else:
+            seen[identity] = status
 
     if not seen:
         print("the JUnit report contains no test cases; nothing was witnessed", file=sys.stderr)
         return 2
 
     problems: list[str] = []
-    for path, names in REQUIRED.items():
-        for name in names:
-            status = seen.get(name)
-            if status is None:
-                problems.append(f"{path}::{name} is ABSENT from the report -- renamed, removed, or never selected")
-            elif status != "passed":
-                problems.append(f"{path}::{name} was {status}; a skip in CI reads as a pass")
+    for cls, name in sorted(required_identities()):
+        status = seen.get((cls, name))
+        if status is None:
+            near = [c for (c, n) in seen if n == name]
+            hint = f" (a case of that name ran under {sorted(set(near))})" if near else ""
+            problems.append(f"{cls}::{name} is ABSENT from the report{hint}")
+        elif status != "passed":
+            problems.append(f"{cls}::{name} was {status}; a skip in CI reads as a pass")
 
-    print(f"required controls: {sum(len(v) for v in REQUIRED.values())}; cases in report: {len(seen)}")
+    for identity in sorted(duplicates & required_identities()):
+        problems.append(f"{identity[0]}::{identity[1]} appears more than once; a required identity must be witnessed exactly once")
+
+    print(f"required controls: {len(required_identities())}; cases in report: {len(seen)}")
     for p in problems:
         print(f"  {p}", file=sys.stderr)
     return 1 if problems else 0
