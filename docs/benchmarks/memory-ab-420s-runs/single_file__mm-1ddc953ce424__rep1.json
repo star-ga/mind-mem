@@ -20,7 +20,7 @@
   "agent": {
     "name": "command",
     "argv": [
-      "/home/n/.npm-global/bin/qwen",
+      "qwen",
       "-y",
       "-p",
       "{prompt}"

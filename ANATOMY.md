@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1513 | **Est. tokens:** ~4,495,061
-**Generated:** 2026-09-08 12:53 UTC
+**Files:** 1513 | **Est. tokens:** ~4,495,045
+**Generated:** 2026-09-08 13:00 UTC
 
 ## Token Budget Guide
 
@@ -24,9 +24,9 @@
 |-----------|-------|-------------|
 | `./` | 36 | ~49,882 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 7 | ~5,891 |
+| `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 66 | ~181,087 |
+| `benchmarks/` | 66 | ~181,144 |
 | `benchmarks/repro/` | 1 | ~689 |
 | `benchmarks/repro/niah/` | 4 | ~2,557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
@@ -35,17 +35,17 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 93 | ~206,754 |
+| `docs/` | 93 | ~206,747 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
 | `docs/benchmarks/` | 25 | ~42,861 |
 | `docs/benchmarks/ablation/` | 2 | ~12,181 |
 | `docs/benchmarks/head-20260907/` | 8 | ~6,467 |
-| `docs/benchmarks/memory-ab-420s-runs/` | 24 | ~71,662 |
+| `docs/benchmarks/memory-ab-420s-runs/` | 24 | ~71,518 |
 | `docs/decisions/` | 1 | ~3,174 |
 | `docs/design/` | 9 | ~16,095 |
-| `docs/evidence/5.0.2-f1/` | 12 | ~188,628 |
+| `docs/evidence/5.0.2-f1/` | 12 | ~188,585 |
 | `docs/plans/` | 1 | ~6,134 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,203 |
@@ -61,7 +61,7 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 19 | ~60,145 |
+| `scripts/` | 19 | ~60,270 |
 | `sdk/go/` | 10 | ~9,098 |
 | `sdk/js/` | 6 | ~4,864 |
 | `sdk/js/src/` | 5 | ~3,178 |
@@ -152,7 +152,7 @@
 - `SKILL.md` (~456 tok, medium) — MIND-Mem Development
 ### `.arch-mind/`
 
-- `baseline_2026-08-29.json` (~163 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `baseline_2026-08-29.json` (~159 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
 - `fixture.json` (~265 tok, medium) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
 - `last_summary.json` (~265 tok, medium) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
 - `rescan.py` (~2916 tok, huge) — # Copyright 2026 STARGA, Inc. — Apache-2.0 (see ../LICENSE).
@@ -249,7 +249,7 @@
 - `repro_verify.py` (~3341 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `STATUS.md` (~3163 tok, huge) — Benchmark Status
-- `strat_probe.py` (~879 tok, large) — Stratified LongMemEval probe.
+- `strat_probe.py` (~936 tok, large) — Stratified LongMemEval probe.
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
 - `train_config_a100.yaml` (~347 tok, medium) — base_model: star-ga/mind-mem-4b
 - `train_config.yaml` (~208 tok, medium) — base_model: star-ga/mind-mem-4b
@@ -338,30 +338,30 @@
 - `benchmarks.md` (~1746 tok, huge) — Benchmarks
 ### `docs/benchmarks/memory-ab-420s-runs/`
 
-- `single_file__mm-00bb4eeb3eb0__rep1.json` (~2856 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-1ddc953ce424__rep1.json` (~3144 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-27c60f9b55ad__rep1.json` (~3059 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-28203bdf502e__rep1.json` (~2839 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-39b49f88e7ab__rep1.json` (~3192 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-3b811e71490d__rep1.json` (~2499 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-5d66147a3d1d__rep1.json` (~2768 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-605384718d16__rep1.json` (~2589 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-66b03be1ef24__rep1.json` (~3262 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-7571daeac51c__rep1.json` (~2367 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-78c09fbe2c2f__rep1.json` (~2452 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-8009be3fbd79__rep1.json` (~2811 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-81142206d8ac__rep1.json` (~2558 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-8ac223858f56__rep1.json` (~2871 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-9956b7aba6cf__rep1.json` (~2781 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-a63d572ddb0d__rep1.json` (~2923 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-d048b5565cd9__rep1.json` (~3335 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-d59f9832a452__rep1.json` (~3206 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-db4e90b3bf73__rep1.json` (~2726 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-e79c2b1f94b3__rep1.json` (~5276 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-e94acc7bb86c__rep1.json` (~3177 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-e98c1449bce7__rep1.json` (~3156 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-f64409645dfa__rep1.json` (~2835 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
-- `single_file__mm-fa0b654ca566__rep1.json` (~2980 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-00bb4eeb3eb0__rep1.json` (~2850 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-1ddc953ce424__rep1.json` (~3138 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-27c60f9b55ad__rep1.json` (~3053 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-28203bdf502e__rep1.json` (~2833 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-39b49f88e7ab__rep1.json` (~3186 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-3b811e71490d__rep1.json` (~2493 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-5d66147a3d1d__rep1.json` (~2762 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-605384718d16__rep1.json` (~2583 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-66b03be1ef24__rep1.json` (~3256 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-7571daeac51c__rep1.json` (~2361 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-78c09fbe2c2f__rep1.json` (~2446 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-8009be3fbd79__rep1.json` (~2805 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-81142206d8ac__rep1.json` (~2552 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-8ac223858f56__rep1.json` (~2865 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-9956b7aba6cf__rep1.json` (~2775 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-a63d572ddb0d__rep1.json` (~2917 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-d048b5565cd9__rep1.json` (~3329 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-d59f9832a452__rep1.json` (~3200 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-db4e90b3bf73__rep1.json` (~2720 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-e79c2b1f94b3__rep1.json` (~5270 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-e94acc7bb86c__rep1.json` (~3171 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-e98c1449bce7__rep1.json` (~3150 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-f64409645dfa__rep1.json` (~2829 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
+- `single_file__mm-fa0b654ca566__rep1.json` (~2974 tok, huge) — Keys: schema_version, harness, budget, agent, task_set
 ### `docs/benchmarks/`
 
 - `SOTA-GATE.md` (~1680 tok, huge) — The SOTA gate — what is required, and what is measured
@@ -399,9 +399,9 @@
 - `docker-deployment.md` (~571 tok, large) — Docker Deployment
 ### `docs/evidence/5.0.2-f1/`
 
-- `score-contract-after-5.0.2.json` (~21981 tok, huge) — Keys: cases, provenance
-- `score-contract-before-6cd37e5.json` (~25061 tok, huge) — Keys: cases, provenance
-- `score-contract-report.json` (~1422 tok, large) — Keys: after, before, cases, default_path, monotonicity_after
+- `score-contract-after-5.0.2.json` (~21977 tok, huge) — Keys: cases, provenance
+- `score-contract-before-6cd37e5.json` (~25044 tok, huge) — Keys: cases, provenance
+- `score-contract-report.json` (~1400 tok, large) — Keys: after, before, cases, default_path, monotonicity_after
 - `session-scorecard-after-5.0.2-sn000.ndjson` (~23048 tok, huge) — {"first_gold_rank": 1, "n_gold": 3, "n_served": 10, "question_id": "Q0000", "rec
 - `session-scorecard-after-5.0.2-sn060.ndjson` (~23056 tok, huge) — {"first_gold_rank": 1, "n_gold": 3, "n_served": 10, "question_id": "Q0000", "rec
 - `session-scorecard-after-5.0.2-sn085.ndjson` (~22953 tok, huge) — {"first_gold_rank": 1, "n_gold": 3, "n_served": 10, "question_id": "Q0000", "rec
@@ -444,7 +444,7 @@
 - `RESTORE-44-WIRING-PLAN.md` (~6134 tok, huge) — Restore-44 Wiring Plan — from restored to reachable-and-working
 ### `docs/`
 
-- `postgres-parity-audit-2026-06-14.md` (~5468 tok, huge) — mind-mem — Postgres/SQLite backend parity audit (2026-06-14)
+- `postgres-parity-audit-2026-06-14.md` (~5466 tok, huge) — mind-mem — Postgres/SQLite backend parity audit (2026-06-14)
 - `POST-V4.4.0-ROADMAP-PLAN.md` (~1905 tok, huge) — mind-mem — Post-v4.4.0 Roadmap Plan (reference)
 - `protection.md` (~1443 tok, large) — MIND-Mem Library Protection
 - `quality-gate.md` (~1267 tok, large) — Quality Gate — Operator Runbook
@@ -470,7 +470,7 @@
 
 - `security-model.md` (~823 tok, large) — Security Model
 - `setup.md` (~1870 tok, huge) — Setup
-- `SOTA_GAP_RULING_2026-09-03.md` (~8058 tok, huge) — mind-mem SOTA gap ruling — architecture seat, 2026-09-03
+- `SOTA_GAP_RULING_2026-09-03.md` (~8053 tok, huge) — mind-mem SOTA gap ruling — architecture seat, 2026-09-03
 - `status.md` (~1335 tok, large) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
@@ -592,7 +592,7 @@
 
 - `alignment_authorities.py` (~8062 tok, huge) — Where each counted doc claim gets its TRUE value from.
 - `anatomy-hook.sh` (~237 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
-- `anatomy.sh` (~2123 tok, huge) — anatomy — Generate ANATOMY.md for any repo
+- `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `build_integrity_manifest.py` (~634 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `check_author_identity.sh` (~1880 tok, huge) — check_author_identity.sh — enforce the single-author identity rule.
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.

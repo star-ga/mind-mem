@@ -1,10 +1,10 @@
 {
   "after": {
-    "hybrid_recall_path": "/home/n/mind-mem/src/mind_mem/hybrid_recall.py",
+    "hybrid_recall_path": "src/mind_mem/hybrid_recall.py",
     "hybrid_recall_sha256": "5f6e16a4a499ab152f3c887e39b668b8a081f796fcda39d156d676561b8306e9"
   },
   "before": {
-    "hybrid_recall_path": "/tmp/claude-1000/-home-n/fc74df2c-72fb-4904-a620-cbb8f40fe87f/scratchpad/f1evidence/base-6cd37e5/src/mind_mem/hybrid_recall.py",
+    "hybrid_recall_path": "<baseline-checkout 6cd37e5>/src/mind_mem/hybrid_recall.py",
     "hybrid_recall_sha256": "116566d2298426b483dd9183e201190014f154e70202f1d1fb548bf25c6ef4a5"
   },
   "cases": 125,

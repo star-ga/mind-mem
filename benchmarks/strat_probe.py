@@ -13,11 +13,15 @@ import argparse
 import collections
 import json
 import os
+import pathlib
 import sys
 import tempfile
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--root", default="/home/n/mind-mem")
+# Default to the repository this script lives in, so the probe runs from any
+# checkout. A hardcoded absolute path both discloses the author's machine and
+# only works there.
+ap.add_argument("--root", default=str(pathlib.Path(__file__).resolve().parents[1]))
 ap.add_argument("--per-type", type=int, default=12)
 ap.add_argument("--out", required=True)
 a = ap.parse_args()
@@ -29,7 +33,7 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 from benchmarks._ch_minilm_spawn import build_ws  # noqa: E402
 from mind_mem.sqlite_index import build_index, query_index  # noqa: E402
 
-DATA = "/home/n/mind-mem/benchmarks/.cache/longmemeval_s.json"
+DATA = os.path.join(a.root, "benchmarks", ".cache", "longmemeval_s.json")
 allq = json.load(open(DATA, encoding="utf-8"))
 
 by_type = collections.defaultdict(list)

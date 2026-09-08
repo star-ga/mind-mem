@@ -5,7 +5,7 @@ against the tree by the architecture seat. 7/7 agents completed, 0 errors.
 
 PASS_WITH_NOTES
 
-# mind-mem SOTA GAP RULING — HEAD 2697baf, /home/n/mind-mem
+# mind-mem SOTA GAP RULING — HEAD 2697baf
 
 ## 0. Verification performed
 

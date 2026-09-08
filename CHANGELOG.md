@@ -4418,7 +4418,7 @@ Postgres workspace.
 
 ### Verified
 
-- Live migration on the ~/.openclaw/workspace corpus: 263 blocks
+- Live migration on a production corpus: 263 blocks
   written + embedded in ~10s end-to-end (~25 blocks/s with embedding,
   370/s without). Receipt at `memory/migrations/<ts>-markdown-to-postgres.json`.
 - `hybrid_search("STARGA git commit author policy", embedding=...)`

@@ -6240,7 +6240,7 @@
     ]
   },
   "provenance": {
-    "hybrid_recall_path": "/home/n/mind-mem/src/mind_mem/hybrid_recall.py",
+    "hybrid_recall_path": "src/mind_mem/hybrid_recall.py",
     "hybrid_recall_sha256": "5f6e16a4a499ab152f3c887e39b668b8a081f796fcda39d156d676561b8306e9"
   }
 }

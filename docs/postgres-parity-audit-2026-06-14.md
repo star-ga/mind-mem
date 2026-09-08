@@ -50,7 +50,7 @@
 
 ### 8. [MEDIUM] init_workspace has no Postgres support: generated mind-mem.json omits block_store and no --backend/--dsn flags; also creates a junk './--help' directory
 - **Module:** src/mind_mem/init_workspace.py:88-95 (config template) + arg parsing (treats --help as workspace path)
-- **Error:** python3 -m mind_mem.init_workspace <ws> writes a config with only {recall:{backend:'bm25'}} and NO block_store section; there is no flag to select postgres. `--help` is consumed as a workspace path and created a literal directory /home/n/mind-mem/--help (removed during audit).
+- **Error:** python3 -m mind_mem.init_workspace <ws> writes a config with only {recall:{backend:'bm25'}} and NO block_store section; there is no flag to select postgres. `--help` is consumed as a workspace path and created a literal directory `<repo>/--help` (removed during audit).
 - **Root cause:** The documented first-run (mind-mem-init) only scaffolds the SQLite/markdown layout. A Postgres user must hand-edit mind-mem.json to add the block_store {backend,dsn,schema} block after init — there is no out-of-box path to a working PG install, and the init CLI lacks argparse (so --help/--backend aren't handled).
 - **Fix:** Add argparse to init_workspace with --backend {markdown,postgres,encrypted} and --dsn/--schema; when postgres is chosen, write the block_store section (and set recall.backend appropriately) and optionally call store._ensure_schema(). Reject unknown flags instead of treating them as the workspace path.
 

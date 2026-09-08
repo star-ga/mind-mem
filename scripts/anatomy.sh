@@ -123,7 +123,13 @@ cd "$TARGET_DIR"
 # generated index publish the existence and description of files nobody staged.
 collect_files() {
   if git rev-parse --is-inside-work-tree &>/dev/null; then
-    git ls-files --cached 2>/dev/null
+    # Tracked REGULAR files only. `git ls-files --cached` also lists symlinks
+    # (mode 120000), and reading through one publishes wherever it points --
+    # which for a local checkpoint link is an absolute path on the author's
+    # machine. Mode-filtering here means no symlink can reintroduce one,
+    # whatever ends up committed. The find branch below is already safe:
+    # `-type f` does not match a symlink.
+    git ls-files --cached --stage 2>/dev/null | awk '$1 != "120000" { $1=""; $2=""; $3=""; sub(/^[ \t]+/, ""); print }'
   else
     find . -maxdepth "$MAX_DEPTH" -type f \
       -not -path '*/.git/*' \
