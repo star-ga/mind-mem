@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1513 | **Est. tokens:** ~4,495,045
-**Generated:** 2026-09-08 13:00 UTC
+**Files:** 1514 | **Est. tokens:** ~4,496,778
+**Generated:** 2026-09-08 13:38 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~49,882 |
+| `./` | 36 | ~50,134 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 641 | ~1,955,044 |
+| `tests/` | 642 | ~1,956,525 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -131,7 +131,7 @@
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~5444 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
 - `LICENSE` (~2695 tok, huge)
-- `Makefile` (~806 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
+- `Makefile` (~1058 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
@@ -1442,6 +1442,7 @@
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.
+- `test_make_typecheck_gate.py` (~1481 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_agent_inject.py` (~5423 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_anchor_tools.py` (~2280 tok, huge) — The external-anchor tools wired onto the audit family in 5.0.0.
 - `test_mcp_arch_mind_tools.py` (~2320 tok, huge) — Tests for the arch-mind MCP tool wrapper.

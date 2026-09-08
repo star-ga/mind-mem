@@ -4,7 +4,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-test: ## Run all 1352 tests
+test: ## Run the test suite
 	python3 -m pytest tests/ -x -q
 
 lint: ## Run ruff linter (whole repo — same scope as the CI lint job)
@@ -67,8 +67,30 @@ docs: ## Validate documentation links
 format: ## Auto-format code (same scope as the CI format check)
 	python3 -m ruff format . --exclude benchmarks --exclude train
 
-typecheck: ## Run type checking (if mypy installed)
-	python3 -m mypy src/ --ignore-missing-imports --no-error-summary 2>/dev/null || echo "mypy not installed — skipping"
+typecheck: ## Run type checking
+# This gate reported success for every outcome. `... 2>/dev/null || echo
+# "mypy not installed — skipping"` turned any type error, and any failure to
+# run at all, into exit 0 plus a reassuring message.
+#
+# Measured while fixing it, and worse than a masked error: `python3 -m mypy`
+# is not importable here at all -- mypy installs as a standalone executable --
+# so the target has been printing "skipping" and exiting 0 every time it has
+# ever been invoked on such a machine. The gate never type-checked anything.
+#
+# So: prefer the executable, fall back to the module, and if neither is
+# present say so with a non-zero exit and installation guidance. Absence is
+# reported as absence. mypy's own exit code and its stderr propagate.
+	@if command -v mypy >/dev/null 2>&1; then \
+	  MYPY="mypy"; \
+	elif python3 -c 'import mypy' >/dev/null 2>&1; then \
+	  MYPY="python3 -m mypy"; \
+	else \
+	  echo "typecheck: mypy is not available as an executable or as a module." >&2; \
+	  echo "           Install it with:  pip install mypy" >&2; \
+	  exit 2; \
+	fi; \
+	echo "typecheck: using $$MYPY"; \
+	$$MYPY src/ --ignore-missing-imports --no-error-summary
 
 regen-bash-literals: ## Regenerate src/mind_mem/_task_status_literals.sh from enums.py
 	python3 scripts/regen_bash_literals.py
