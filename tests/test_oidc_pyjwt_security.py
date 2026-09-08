@@ -148,22 +148,32 @@ def test_token_without_kid_uses_one_unambiguous_compatible_key(
 
 
 @pytest.mark.parametrize(
-    ("change", "code"),
+    ("claim", "code"),
     [
-        ({"exp": int(time.time()) - 10}, "token_expired"),
-        ({"nbf": int(time.time()) + 300}, "invalid_token"),
-        ({"iss": "https://attacker.example"}, "wrong_issuer"),
-        ({"aud": "other-service"}, "wrong_audience"),
+        ("exp", "token_expired"),
+        ("nbf", "invalid_token"),
+        ("iss", "wrong_issuer"),
+        ("aud", "wrong_audience"),
     ],
 )
 def test_registered_claim_failures_remain_fail_closed(
-    change: dict[str, object],
+    claim: str,
     code: str,
     rsa_material: tuple[Any, dict[str, Any]],
 ) -> None:
     private, jwk = rsa_material
+    # Build temporal values when the case executes, rather than at collection.
+    # The full matrix can spend longer than the five-minute nbf horizon between
+    # collection and this test, turning the intended future token into a valid one.
+    now = int(time.time())
+    change: dict[str, object] = {
+        "exp": now - 10,
+        "nbf": now + 300,
+        "iss": "https://attacker.example",
+        "aud": "other-service",
+    }
     with pytest.raises(AuthError) as exc_info:
-        _provider(jwk).verify(_encode(_claims(**change), private, "RS256"))
+        _provider(jwk).verify(_encode(_claims(**{claim: change[claim]}), private, "RS256"))
     assert exc_info.value.code == code
 
 

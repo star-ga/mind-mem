@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1526 | **Est. tokens:** ~4541909
-**Generated:** 2026-09-08 19:52 UTC
+**Files:** 1526 | **Est. tokens:** ~4541993
+**Generated:** 2026-09-08 22:00 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 649 | ~1976042 |
+| `tests/` | 649 | ~1976126 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1524,7 +1524,7 @@
 - `test_oidc_admin_enforcement.py` (~1830 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~3323 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_oidc_key_discovery_and_audience.py` (~2358 tok, huge) — Regression tests: where the signing keys come from, and who a token is for.
-- `test_oidc_pyjwt_security.py` (~2094 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_oidc_pyjwt_security.py` (~2178 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_okf_bundle_round_trip_fidelity.py` (~1605 tok, huge) — An OKF bundle must survive its own writer, and a dropped concept must be loud.
 - `test_okf_export.py` (~3745 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ollama_host_resolver.py` (~2781 tok, huge) — Tests for the shared ollama base-URL resolver (v4.3.1).
