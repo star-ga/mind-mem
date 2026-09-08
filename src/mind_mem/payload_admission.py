@@ -17,15 +17,16 @@ it on faith: every call to either hash function is on a WRITE path --
 admission changes no accepted preimage, no stored row and no historical
 result. Old entries keep verifying exactly as they did.
 
-ADMISSION RETURNS THE PREIMAGE, AND THAT IS THE POINT. An earlier shape of
-this module validated the caller's object and then let the writer hash the
-same object in a SECOND traversal. Two traversals of one mutable object is a
-gap, and it was demonstrated rather than argued: a payload that passed
-validation and then gained a ``datetime`` was hashed with the stringified
-value anyway. :func:`admit_payload` therefore performs ONE traversal that both
-checks and ENCODES, and hands back immutable bytes. Every writer hashes those
-bytes and never looks at the caller's object again, so there is no window in
-which the checked value and the hashed value can differ.
+ADMISSION RETURNS THE PREIMAGE, AND THAT IS THE INVARIANT. Checking a caller's
+object and then hashing it in a SECOND traversal leaves a window: the payload
+is mutable, so the value that was checked and the value that is hashed need not
+be the same one. :func:`admit_payload` performs ONE traversal that both checks
+and ENCODES, and returns immutable bytes; every writer hashes those bytes and
+never reads the caller's object again, so the window does not exist.
+
+Pinned by ``tests/test_payload_admission.py``, which asserts each writer
+traverses the caller's object exactly once, using a dict that changes after its
+first traversal.
 
 WHAT IS REFUSED, and each is a way two payloads become one digest, one payload
 becomes two, or the serializer fails past the admission point:

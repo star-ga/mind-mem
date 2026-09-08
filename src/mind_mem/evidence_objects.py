@@ -542,9 +542,10 @@ class EvidenceChain:
         # rule it was written under.
         #
         # The digest comes from the bytes admission produced, not from a
-        # second traversal of the caller's object: checking one shape and
-        # hashing another is a gap, and it was demonstrated rather than
-        # argued. `accepts_bytes=True` is this API's documented contract.
+        # second traversal of the caller's object: a payload is mutable, so
+        # checking one traversal and hashing another leaves a window in which
+        # the two differ. `accepts_bytes=True` is this API's documented
+        # contract.
         admitted = admit_payload(payload, accepts_bytes=True)
 
         payload_hash = admitted.digest()

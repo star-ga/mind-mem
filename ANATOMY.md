@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1525 | **Est. tokens:** ~4537957
-**Generated:** 2026-09-08 18:32 UTC
+**Files:** 1525 | **Est. tokens:** ~4537956
+**Generated:** 2026-09-08 18:34 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1076278 |
+| `src/mind_mem/` | 231 | ~1076277 |
 | `src/mind_mem/api/` | 5 | ~25701 |
 | `src/mind_mem/bench/` | 17 | ~48607 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -796,7 +796,7 @@
 - `error_codes.py` (~1918 tok, huge) — mind-mem Error Codes — structured error classification.
 - `event_fanout.py` (~4850 tok, huge) — Governance event fan-out (v4.0 prep).
 - `evidence_bundle.py` (~2205 tok, huge) — Structured evidence bundle for answerer co-design (v3.3.0 Tier 3 #7).
-- `evidence_objects.py` (~15291 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `evidence_objects.py` (~15297 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3313 tok, huge) — Deterministic evidence packer for Mind-Mem.
 - `evidence_recovery.py` (~10620 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `extraction_feedback.py` (~1877 tok, huge) — mind-mem Extraction Quality Feedback Tracker.
@@ -927,7 +927,7 @@
 - `ontology.py` (~3933 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `outcome_attribution.py` (~4288 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
 - `outcome_store.py` (~4094 tok, huge) — Outcome-attribution persistence over the calibration store.
-- `payload_admission.py` (~3618 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `payload_admission.py` (~3611 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `personas.py` (~1256 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
 - `pipeline_hash.py` (~3314 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
 - `prefetch.py` (~6830 tok, huge) — # Copyright 2026 STARGA, Inc.
