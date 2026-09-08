@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1491 | **Est. tokens:** ~4,459,129
-**Generated:** 2026-09-08 08:47 UTC
+**Files:** 1492 | **Est. tokens:** ~4,461,931
+**Generated:** 2026-09-08 08:48 UTC
 
 ## Token Budget Guide
 
@@ -72,7 +72,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 230 | ~1,067,208 |
+| `src/mind_mem/` | 230 | ~1,068,020 |
 | `src/mind_mem/api/` | 5 | ~25,701 |
 | `src/mind_mem/bench/` | 17 | ~47,468 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -86,7 +86,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 636 | ~1,944,285 |
+| `tests/` | 637 | ~1,946,275 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -924,7 +924,7 @@
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `_recall_temporal.py` (~2214 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~21580 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~22392 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1990 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `replay_check.py` (~4309 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1749,6 +1749,7 @@
 - `test_vault_allowlist_separator.py` (~868 tok, large) — The vault allowlist separator, and why a Windows drive letter broke it.
 - `test_vault_wikilinks.py` (~1876 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vector_index_admission.py` (~1350 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_vector_index_provider_chain.py` (~1990 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vector_index_shape_contract.py` (~4682 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vector_inertness.py` (~1607 tok, huge) — The vector-leg honesty gauge.
 - `test_verify_cli.py` (~4647 tok, huge) — # Copyright 2026 STARGA, Inc.

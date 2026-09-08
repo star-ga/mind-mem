@@ -291,6 +291,16 @@ def load_local_index(workspace: str, index_path: str) -> tuple[dict[str, Any] | 
 # ---------------------------------------------------------------------------
 
 
+class EmbeddingProvidersExhausted(RuntimeError):
+    """Every provider in the embedding chain declined.
+
+    Raised in place of the last resort's own OSError when that error would
+    misdirect: sentence-transformers reports an unresolvable HuggingFace repo
+    id, which is true but is not the cause when the configured model is a
+    provider tag like ``mxbai-embed-large``.
+    """
+
+
 class VectorBackend(RecallBackend):
     """Semantic search backend using sentence-transformers embeddings.
 
@@ -781,7 +791,34 @@ class VectorBackend(RecallBackend):
             return result
 
         # Final fallback: sentence-transformers (unguarded last resort).
-        return self.embed(texts)
+        #
+        # It cannot succeed for an ollama-configured workspace: the model name
+        # is an ollama TAG, not a HuggingFace repo id, so SentenceTransformer
+        # raises OSError("... is not a valid model identifier"). That message
+        # names the wrong cause. The real cause is that every provider ahead of
+        # it declined — usually ollama being briefly unavailable under load.
+        #
+        # Measured 2026-09-07: across a 470-question hybrid benchmark, 36 runs
+        # (7.7%) surfaced exactly that OSError and built an EMPTY index while
+        # ollama was healthy before and after. An operator reading the error
+        # would go looking at HuggingFace, which is not where the problem is.
+        #
+        # So: keep the fallback, but if the configured model does not look like
+        # a HuggingFace repo id, say what actually happened instead of letting
+        # a misdirecting error escape.
+        try:
+            return self.embed(texts)
+        except OSError as exc:
+            if "/" not in self.model_name:
+                raise EmbeddingProvidersExhausted(
+                    f"every embedding provider declined and the last resort cannot "
+                    f"apply: model {self.model_name!r} is a provider tag, not a "
+                    f"HuggingFace repo id, so sentence-transformers can never load "
+                    f"it. The likely cause is the configured provider (ollama) "
+                    f"being unavailable — check it before looking at HuggingFace. "
+                    f"Underlying error: {exc}"
+                ) from exc
+            raise
 
     def _sqlite_vec_db_path(self, workspace: str) -> str:
         """Return path to the sqlite-vec DB (shares recall.db with BM25 index)."""
@@ -1171,11 +1208,32 @@ class VectorBackend(RecallBackend):
 
             _log.info("generating_embeddings", count=len(texts))
 
-            # Generate embeddings — route based on provider
+            # Generate embeddings through the SAME provider chain every other
+            # embedding site uses.
+            #
+            # This branch used to call ``self.embed`` directly, which is the
+            # raw sentence-transformers path, so it skipped
+            # ``_embed_for_provider`` — the ollama -> llama_cpp -> fastembed ->
+            # sentence-transformers chain that ``search``, ``rebuild_index``
+            # and the sqlite-vec builder all go through. The chain has five
+            # callers and this was not one of them.
+            #
+            # The visible failure: a workspace configured for ollama with
+            # ``model = "mxbai-embed-large"`` builds an EMPTY index. That name
+            # is an ollama tag, not a HuggingFace repo id, so
+            # SentenceTransformer cannot resolve it and raises OSError, while
+            # ``embed_ollama`` answers the same config correctly (measured:
+            # 1024-dim vectors). The benchmark adapter reported the result
+            # honestly as ``vector_leg_inert: True`` with
+            # ``vector_index_blocks: 0`` — a hybrid run whose dense leg
+            # contributed nothing.
+            #
+            # llama_cpp keeps its explicit branch because the chain only tries
+            # it when the backend is configured for it.
             if self.provider == "llama_cpp":
                 embeddings = self.embed_llama_cpp(texts)
             else:
-                embeddings = self.embed(texts)
+                embeddings = self._embed_for_provider(texts)
 
             if not embeddings:
                 _log.error("embedding_generation_failed")
