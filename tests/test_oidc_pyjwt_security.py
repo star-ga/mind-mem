@@ -181,6 +181,33 @@ def test_missing_exp_preserves_the_existing_optional_exp_contract(rsa_material: 
     assert _provider(jwk).verify(_encode(claims, private, "RS256"))["sub"] == "subject"
 
 
+def test_missing_iat_preserves_the_existing_optional_iat_contract(
+    rsa_material: tuple[Any, dict[str, Any]],
+) -> None:
+    private, jwk = rsa_material
+    claims = _claims()
+    claims.pop("iat")
+    assert _provider(jwk).verify(_encode(claims, private, "RS256"))["sub"] == "subject"
+
+
+def test_future_iat_is_rejected_with_typed_auth_error(rsa_material: tuple[Any, dict[str, Any]]) -> None:
+    private, jwk = rsa_material
+    with pytest.raises(AuthError) as exc_info:
+        _provider(jwk).verify(_encode(_claims(iat=int(time.time()) + 3600), private, "RS256"))
+    assert exc_info.value.code == "invalid_token"
+
+
+@pytest.mark.parametrize("iat", ["not-an-integer", None], ids=["string", "null"])
+def test_malformed_iat_is_rejected_with_typed_auth_error(
+    iat: object,
+    rsa_material: tuple[Any, dict[str, Any]],
+) -> None:
+    private, jwk = rsa_material
+    with pytest.raises(AuthError) as exc_info:
+        _provider(jwk).verify(_encode(_claims(iat=iat), private, "RS256"))
+    assert exc_info.value.code == "invalid_token"
+
+
 @pytest.mark.parametrize(("claim", "code"), [("aud", "wrong_audience"), ("iss", "wrong_issuer")])
 def test_missing_required_identity_claim_is_mapped(
     claim: str,

@@ -124,6 +124,12 @@ set), every bearer token is first probed as a JWT:
 - Non-JWT token → falls through to the `MIND_MEM_TOKEN` /
   `MIND_MEM_ADMIN_TOKEN` static-token path.
 
+JWT `iat` handling follows PyJWT's issuance-time validation. When `iat` is
+present it is converted to an integer timestamp and checked against the current time;
+future timestamps are rejected with zero configured clock leeway. A missing
+`iat` remains accepted for compatibility. Malformed `iat` values are rejected
+as invalid tokens.
+
 Supported providers via preset factories in `OIDCProvider`:
 
 | Provider | Factory method |

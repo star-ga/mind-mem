@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1526 | **Est. tokens:** ~4541564
-**Generated:** 2026-09-08 19:51 UTC
+**Files:** 1526 | **Est. tokens:** ~4541909
+**Generated:** 2026-09-08 19:52 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206747 |
+| `docs/` | 93 | ~206831 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 649 | ~1975781 |
+| `tests/` | 649 | ~1976042 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -421,7 +421,7 @@
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~15903 tok, huge) — Configuration Reference
+- `configuration.md` (~15987 tok, huge) — Configuration Reference
 ### `docs/decisions/`
 
 - `author-identity.md` (~3174 tok, huge) — Commit author identity — policy, measured state, and the open decision
@@ -1524,7 +1524,7 @@
 - `test_oidc_admin_enforcement.py` (~1830 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~3323 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_oidc_key_discovery_and_audience.py` (~2358 tok, huge) — Regression tests: where the signing keys come from, and who a token is for.
-- `test_oidc_pyjwt_security.py` (~1833 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_oidc_pyjwt_security.py` (~2094 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_okf_bundle_round_trip_fidelity.py` (~1605 tok, huge) — An OKF bundle must survive its own writer, and a dropped concept must be loud.
 - `test_okf_export.py` (~3745 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ollama_host_resolver.py` (~2781 tok, huge) — Tests for the shared ollama base-URL resolver (v4.3.1).
