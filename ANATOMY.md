@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1525 | **Est. tokens:** ~4537976
-**Generated:** 2026-09-08 18:53 UTC
+**Files:** 1525 | **Est. tokens:** ~4538078
+**Generated:** 2026-09-08 19:25 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 648 | ~1973263 |
+| `tests/` | 648 | ~1973365 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1445,7 +1445,7 @@
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.
-- `test_make_typecheck_gate.py` (~1559 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_make_typecheck_gate.py` (~1661 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_agent_inject.py` (~5423 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_anchor_tools.py` (~2280 tok, huge) — The external-anchor tools wired onto the audit family in 5.0.0.
 - `test_mcp_arch_mind_tools.py` (~2320 tok, huge) — Tests for the arch-mind MCP tool wrapper.

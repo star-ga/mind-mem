@@ -93,10 +93,13 @@ def test_the_target_cannot_swallow_a_failure() -> None:
 
 @pytest.mark.skipif(shutil.which("make") is None, reason="make is not available on this runner")
 def test_a_real_type_error_makes_the_gate_fail(tmp_path) -> None:
-    """Behavioural, both directions, on a COPY so the checkout is never dirtied.
+    """Run the actual recipe and checker against an isolated typed fixture.
 
     The positive half is what stops this passing on a target that fails for
-    some unrelated reason; the negative half is the gate itself.
+    some unrelated reason; the negative half is the gate itself. The dedicated
+    typecheck job validates the full application. This control tests exit-code
+    propagation without importing optional runtime packages whose stubs may
+    require a newer Python target than the application's minimum version.
     """
     if shutil.which("mypy") is None:
         try:
@@ -105,7 +108,12 @@ def test_a_real_type_error_makes_the_gate_fail(tmp_path) -> None:
             pytest.skip("no type checker available, so neither direction can be measured")
 
     work = tmp_path / "tree"
-    shutil.copytree(ROOT, work, symlinks=True, ignore=shutil.ignore_patterns(".git", "*.egg-info", "__pycache__", ".venv"))
+    work.mkdir()
+    shutil.copy2(MAKEFILE, work / "Makefile")
+    shutil.copy2(ROOT / "pyproject.toml", work / "pyproject.toml")
+    (work / "src").mkdir()
+    probe = work / "src" / "typecheck_probe.py"
+    probe.write_text("def value() -> int:\n    return 1\n", encoding="utf-8")
 
     def run() -> subprocess.CompletedProcess:
         return subprocess.run(["make", "-s", "typecheck"], cwd=work, capture_output=True, text=True, timeout=1800, encoding="utf-8")
@@ -115,12 +123,12 @@ def test_a_real_type_error_makes_the_gate_fail(tmp_path) -> None:
         f"the gate fails on a clean tree, so the negative half would prove nothing:\n{clean.stdout}\n{clean.stderr}"
     )
 
-    probe = work / "src" / "mind_mem" / "pipeline_hash.py"
-    probe.write_text(probe.read_text(encoding="utf-8") + '\n\ndef _typecheck_probe() -> int:\n    return "not an int"\n', encoding="utf-8")
+    probe.write_text('def value() -> int:\n    return "not an int"\n', encoding="utf-8")
 
     broken = run()
     assert broken.returncode != 0, "a real type error did not fail the gate"
     assert "error:" in (broken.stdout + broken.stderr), "the gate failed without reporting the diagnosis"
+    assert "typecheck_probe.py" in (broken.stdout + broken.stderr), "the gate failed outside the injected source fixture"
 
 
 def test_the_help_line_does_not_hardcode_a_test_count() -> None:
