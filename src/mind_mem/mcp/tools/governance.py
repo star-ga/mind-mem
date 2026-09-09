@@ -981,7 +981,7 @@ def scan() -> str:
         try:
             store_contradictions = _detect_statement_contradictions(active_blocks)
             checks["contradictions"] = _contradiction_scan_summary(store_contradictions)
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             _log.warning("scan_store_contradiction_check_failed", error=str(exc))
             checks["contradictions"] = _incomplete_contradiction_summary("statement-level contradiction scan failed before completion")
 

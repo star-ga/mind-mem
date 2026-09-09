@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1538 | **Est. tokens:** ~4558986
-**Generated:** 2026-09-09 16:13 UTC
+**Files:** 1538 | **Est. tokens:** ~4558978
+**Generated:** 2026-09-09 16:18 UTC
 
 ## Token Budget Guide
 
@@ -80,7 +80,7 @@
 | `src/mind_mem/importers/` | 9 | ~26660 |
 | `src/mind_mem/mcp/` | 3 | ~6512 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13249 |
-| `src/mind_mem/mcp/tools/` | 29 | ~113649 |
+| `src/mind_mem/mcp/tools/` | 29 | ~113641 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11368 |
@@ -881,7 +881,7 @@
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~14750 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~14742 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~7091 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1811 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
