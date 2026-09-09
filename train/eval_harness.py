@@ -519,7 +519,7 @@ def _load_model():
             trust_remote_code=True,
         )
         model.eval()
-        return tokenizer, model
+        return tokenizer, model, fullft_dir
 
     if not ADAPTER.is_dir():
         sys.exit(f"no weights found — checked full-FT dir {fullft_dir} and adapter {ADAPTER}. Train first.")
@@ -537,7 +537,7 @@ def _load_model():
     from peft import PeftModel  # lazy: only the legacy QLoRA path needs peft
     model = PeftModel.from_pretrained(model, str(ADAPTER))
     model.eval()
-    return tokenizer, model
+    return tokenizer, model, ADAPTER
 
 
 #: Targeted 1-shot exemplars for known paraphrase-stress paraphrases.
@@ -812,7 +812,7 @@ def _bench_v4_surfaces(tokenizer, model) -> dict:
 
 
 def main() -> None:
-    tokenizer, model = _load_model()
+    tokenizer, model, model_root = _load_model()
     tool_bench = _bench_tool_calls(tokenizer, model)
     schema_bench = _bench_block_schemas(tokenizer, model)
     workflow_bench = _bench_workflows(tokenizer, model)
@@ -825,6 +825,32 @@ def main() -> None:
     v312_lineage_staleness_bench = _bench_v312_lineage_staleness(tokenizer, model)
     v4_surfaces_bench = _bench_v4_surfaces(tokenizer, model)
 
+    from eval_receipt import build_receipt
+
+    repo_root = Path(__file__).resolve().parents[1]
+    corpus = Path(os.environ.get("MM_CORPUS", _BASE_DIR / "corpus.jsonl"))
+    receipt = build_receipt(
+        repo_root=repo_root,
+        model_root=model_root,
+        dataset_root=corpus,
+        source_paths=(Path(__file__), repo_root / "train/eval_holdout.py", repo_root / "train/build_corpus.py"),
+        probe_sets={
+            "main": {
+                "tool_call": TOOL_CALL_QUESTIONS,
+                "block_schema": BLOCK_SCHEMA_QUESTIONS,
+                "workflow": WORKFLOW_QUESTIONS,
+                "v39_new_tools": V39_NEW_TOOLS,
+                "v39_transform_hash": V39_TRANSFORMHASH_PROMPTS,
+                "v39_transport_guard": V39_TRANSPORT_PROMPTS,
+                "v311_new_tools": V311_NEW_TOOLS,
+                "v311_explain_field": V311_EXPLAIN_FIELD,
+                "v312_quality_gate_strict_mode": V312_QUALITY_GATE_STRICT_MODE,
+                "v312_lineage_staleness": V312_LINEAGE_STALENESS,
+                "v4_surfaces": V4_SURFACES,
+            }
+        },
+        command="python3 train/eval_harness.py",
+    )
     report = {
         "tool_call": tool_bench,
         "block_schema": schema_bench,
@@ -837,6 +863,7 @@ def main() -> None:
         "v312_quality_gate_strict_mode": v312_quality_gate_bench,
         "v312_lineage_staleness": v312_lineage_staleness_bench,
         "v4_surfaces": v4_surfaces_bench,
+        "receipt": receipt,
         "targets": {
             "tool_call": 0.95,
             "block_schema": 0.98,
@@ -872,6 +899,10 @@ def main() -> None:
         pass_str = "PASS" if bench["accuracy"] >= target else "FAIL"
         print(f"  {name}  {bench['hits']:3d}/{bench['total']:<3d}  {bench['accuracy']:.2%}   (target {target:.0%})  [{pass_str}]")
     print(f"\nreport → {REPORT}")
+
+    if not receipt["complete"]:
+        print("FAIL: evaluation receipt is incomplete; refusing a green gate")
+        sys.exit(2)
 
     passed = (
         tool_bench["accuracy"] >= 0.95

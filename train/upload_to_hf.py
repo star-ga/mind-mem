@@ -34,6 +34,35 @@ _DEFAULT_WEIGHTS_DIR = (OUT_DIR / "full-ft") if (OUT_DIR / "full-ft" / "model.sa
 WEIGHTS_DIR = Path(os.environ.get("MM_WEIGHTS_DIR", str(_DEFAULT_WEIGHTS_DIR)))
 
 
+def _require_eval_receipts() -> None:
+    """Refuse publication until both existing eval gates are attested."""
+    import json
+
+    report_paths = (
+        OUT_DIR / "eval_report.json",
+        Path(
+            os.environ.get(
+                "MM_HOLDOUT_REPORT",
+                str(OUT_DIR.parent / "full-ft" / "eval_holdout_report.json"),
+            )
+        ),
+    )
+    from eval_receipt import bindings_match, receipt_is_valid
+
+    for path in report_paths:
+        try:
+            report = json.loads(path.read_text(encoding="utf-8"))
+            receipt = report["receipt"]
+        except (OSError, ValueError, KeyError, TypeError):
+            sys.exit(f"refusing upload: missing or invalid evaluation receipt at {path}")
+        if (
+            not receipt.get("complete")
+            or not receipt_is_valid(receipt)
+            or not bindings_match(receipt)
+        ):
+            sys.exit(f"refusing upload: evaluation receipt is incomplete or tampered at {path}")
+
+
 def _discover_upload_paths() -> list[tuple[Path, str]]:
     """Return (local_path, path_in_repo) for every file we want to push."""
     uploads: list[tuple[Path, str]] = []
@@ -94,6 +123,8 @@ def main() -> None:
         print(f"  {local}  →  {REPO_ID}:{remote}  ({local.stat().st_size} bytes)")
     if args.dry_run:
         return
+
+    _require_eval_receipts()
 
     if not args.token:
         sys.exit("no HF token provided. Pass --token hf_... or set HF_TOKEN env. Token must have 'write' scope for star-ga/mind-mem-4b.")

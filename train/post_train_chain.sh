@@ -55,6 +55,37 @@ python3 -u train/eval_holdout.py 2>&1 | tee "$HOLDOUT_LOG"
 HOLDOUT_RC=$?
 echo "[chain] eval_holdout exit=$HOLDOUT_RC"
 
+RECEIPT_RC=1
+if [[ "$EVAL_RC" -eq 0 && "$HOLDOUT_RC" -eq 0 ]]; then
+    EVAL_REPORT=/data/checkpoints/mm-workspace/train-output/eval_report.json \
+    HOLDOUT_REPORT=/data/checkpoints/mm-workspace/full-ft/eval_holdout_report.json \
+    python3 - <<'PY'
+import json
+import os
+import sys
+
+from train.eval_receipt import receipt_is_valid
+
+for name in ("EVAL_REPORT", "HOLDOUT_REPORT"):
+    path = os.environ[name]
+    try:
+        report = json.loads(open(path, encoding="utf-8").read())
+        receipt = report["receipt"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"[chain] FAIL: {name} has no usable receipt: {exc}")
+        sys.exit(1)
+    if not receipt.get("complete") or not receipt_is_valid(receipt):
+        print(f"[chain] FAIL: {name} receipt is incomplete or tampered")
+        sys.exit(1)
+print("[chain] evaluation receipts complete and self-consistent")
+PY
+    RECEIPT_RC=$?
+fi
+if [[ "$RECEIPT_RC" -ne 0 ]]; then
+    echo "[chain] FAIL: refusing to report a shippable eval without complete receipts"
+    exit 2
+fi
+
 echo "[chain] DONE — eval_harness rc=$EVAL_RC, eval_holdout rc=$HOLDOUT_RC"
 echo "[chain] reports:"
 echo "  $EVAL_LOG"

@@ -177,8 +177,8 @@ def _verify_no_verbatim_in_corpus() -> None:
     memorisation-vs-learning signal.
     """
     if not CORPUS.is_file():
-        print(f"WARN: corpus file not found at {CORPUS} — skipping verbatim check")
-        return
+        print(f"FAIL: corpus file not found at {CORPUS} — held-out gate cannot run")
+        raise SystemExit(2)
     holdout_qs: set[str] = {q for q, _ in V4_HOLDOUT + V312_HOLDOUT}
     seen: set[str] = set()
     with CORPUS.open(encoding="utf-8") as f:
@@ -216,7 +216,7 @@ def _bench(tokenizer, model, probes: list[tuple[str, list[str]]]) -> dict:
 
 def main() -> None:
     _verify_no_verbatim_in_corpus()
-    tokenizer, model = _load_model()
+    tokenizer, model, model_root = _load_model()
     v4 = _bench(tokenizer, model, V4_HOLDOUT)
     v312 = _bench(tokenizer, model, V312_HOLDOUT)
 
@@ -224,6 +224,17 @@ def main() -> None:
     total = v4["total"] + v312["total"]
     overall = total_hits / total
 
+    from eval_receipt import build_receipt
+
+    repo_root = Path(__file__).resolve().parents[1]
+    receipt = build_receipt(
+        repo_root=repo_root,
+        model_root=model_root,
+        dataset_root=CORPUS,
+        source_paths=(repo_root / "train/eval_harness.py", Path(__file__), repo_root / "train/build_corpus.py"),
+        probe_sets={"holdout": {"v4": V4_HOLDOUT, "v312": V312_HOLDOUT}},
+        command="python3 train/eval_holdout.py",
+    )
     report = {
         "v4_holdout": v4,
         "v312_holdout": v312,
@@ -231,6 +242,7 @@ def main() -> None:
         "total_hits": total_hits,
         "total_probes": total,
         "targets": {"per_group": 0.90, "overall": 0.90},
+        "receipt": receipt,
     }
     REPORT.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
