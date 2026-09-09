@@ -291,6 +291,36 @@ def load_local_index(workspace: str, index_path: str) -> tuple[dict[str, Any] | 
 # ---------------------------------------------------------------------------
 
 
+def _looks_like_cache_miss(exc: BaseException) -> bool:
+    """Whether *exc* is "the model is not on disk" rather than a real HF fault.
+
+    Prefers huggingface_hub's own exception type over reading the message; the
+    string check is the fallback for builds that do not expose it. Anything
+    this does NOT recognise propagates unchanged, so a gated repo or a corrupt
+    cache entry keeps its own error instead of being reported as a cache miss.
+    """
+    try:
+        from huggingface_hub.errors import LocalEntryNotFoundError
+
+        if isinstance(exc, LocalEntryNotFoundError):
+            return True
+    except ImportError:
+        pass
+    text = str(exc).lower()
+    # A mention of offline mode is not evidence of a missing model: corrupt
+    # files and permission errors can mention the same loader setting.
+    return any(
+        phrase in text
+        for phrase in (
+            "not cached",
+            "not in the local cache",
+            "cannot find the requested files in the disk cache",
+            "couldn't find them in the cached files",
+            "cannot find an appropriate cached snapshot",
+        )
+    )
+
+
 class EmbeddingProvidersExhausted(RuntimeError):
     """Every provider in the embedding chain declined.
 
@@ -358,6 +388,10 @@ class VectorBackend(RecallBackend):
         self.config = config
         self.provider = str(config.get("provider", "local"))
         self.model_name = str(config.get("model", "all-MiniLM-L6-v2"))
+        # Set only while the LAST-RESORT fallback is running. It makes the
+        # sentence-transformers load cache-only, so a path reached because
+        # every configured provider declined can never start a download.
+        self._st_cache_only = False
         self.index_path = str(config.get("index_path", ".mind-mem-vectors"))
         dim = config.get("dimension")
         self.dimension = int(dim) if dim is not None else None
@@ -505,11 +539,29 @@ class VectorBackend(RecallBackend):
                     sys.path[:] = _saved
                 cache_dir = os.environ.get("SENTENCE_TRANSFORMERS_HOME")
                 device = self.config.get("vector_device", "cpu")
-                self._model = SentenceTransformer(
-                    self.model_name,
-                    cache_folder=cache_dir,
-                    device=device,
-                )
+                st_kwargs: dict[str, Any] = {"cache_folder": cache_dir, "device": device}
+                if self._st_cache_only:
+                    # Older sentence-transformers may not accept this. Refusing
+                    # the last resort is correct there: we cannot promise
+                    # cache-only, and an unbounded download is what we are
+                    # preventing. Only rejection of this constructor keyword
+                    # is a version incompatibility; encoder errors are not.
+                    st_kwargs["local_files_only"] = True
+                try:
+                    self._model = SentenceTransformer(self.model_name, **st_kwargs)
+                except TypeError as exc:
+                    if self._st_cache_only and (
+                        "unexpected keyword argument 'local_files_only'" in str(exc)
+                        or 'unexpected keyword argument "local_files_only"' in str(exc)
+                    ):
+                        raise EmbeddingProvidersExhausted(
+                            "every embedding provider declined, and the last resort "
+                            "was refused: this sentence-transformers constructor "
+                            "does not accept local_files_only. A cache-only load "
+                            "cannot be promised; upgrade sentence-transformers or "
+                            "restore the configured provider."
+                        ) from exc
+                    raise
                 self._model_loaded = True
                 _log.info("embedding_model_loaded", model=self.model_name)
             except ImportError as e:
@@ -746,8 +798,8 @@ class VectorBackend(RecallBackend):
         recall. A tripped or failing provider falls through to the next
         one in the chain; every fall-through is logged loudly — the
         degradation is never silent. If the whole chain is exhausted, the
-        final sentence-transformers fallback runs unguarded and any
-        exception propagates so the caller (the vector leg) can mark the
+        final sentence-transformers fallback uses only cached models. Its
+        failures propagate so the caller (the vector leg) can mark the
         recall degraded rather than quietly return nothing.
         """
         backend = self.config.get("onnx_backend", True)
@@ -801,35 +853,64 @@ class VectorBackend(RecallBackend):
         if result is not None:
             return result
 
-        # Final fallback: sentence-transformers (unguarded last resort).
+        # Final fallback: sentence-transformers, CACHE-ONLY.
         #
-        # It cannot succeed for an ollama-configured workspace: the model name
-        # is an ollama TAG, not a HuggingFace repo id, so SentenceTransformer
-        # raises OSError("... is not a valid model identifier"). That message
-        # names the wrong cause. The real cause is that every provider ahead of
-        # it declined — usually ollama being briefly unavailable under load.
+        # The real cause of reaching this line is always the same — every
+        # configured provider declined, usually ollama being briefly
+        # unavailable under load. Measured 2026-09-07: across a 470-question
+        # hybrid benchmark, 36 runs (7.7%) built an EMPTY index this way while
+        # ollama was healthy before and after.
         #
-        # Measured 2026-09-07: across a 470-question hybrid benchmark, 36 runs
-        # (7.7%) surfaced exactly that OSError and built an EMPTY index while
-        # ollama was healthy before and after. An operator reading the error
-        # would go looking at HuggingFace, which is not where the problem is.
+        # This used to try an ordinary load and then inspect the OSError,
+        # rewriting it when the model name held no "/". That guard could not
+        # work, for two independent reasons, both measured:
         #
-        # So: keep the fallback, but if the configured model does not look like
-        # a HuggingFace repo id, say what actually happened instead of letting
-        # a misdirecting error escape.
+        #  * it sat in an ``except`` handler, DOWNSTREAM of the network call it
+        #    existed to avoid. On Windows CI (job 102579093360) the load did
+        #    not raise — it HUNG downloading from HuggingFace until
+        #    pytest-timeout killed the run. A hang never reaches a handler.
+        #  * its premise is false for the default model: ``all-MiniLM-L6-v2``
+        #    has no "/", but sentence-transformers resolves bare names against
+        #    its own org, so the load succeeds — slowly, by downloading.
+        #
+        # So the fallback is now satisfiable only from what is already on disk.
+        # A last resort may use a model the operator already has; it may not
+        # go and fetch one. If nothing is cached this fails fast and names the
+        # cause, instead of stalling a recall on a multi-hundred-megabyte
+        # download nobody asked for.
+        # The rewrite below stays NARROW. A real HuggingFace problem — a gated
+        # repo, a corrupt cache entry — must keep its own message: masking every
+        # last-resort failure behind one about ollama hides the cases an
+        # operator most needs to see. The download prevention is done by
+        # local_files_only above, NOT by this filter; that separation is the
+        # whole correction.
+        previous = self._st_cache_only
+        self._st_cache_only = True
         try:
             return self.embed(texts)
         except OSError as exc:
-            if "/" not in self.model_name:
+            if "/" not in self.model_name and "is not a valid model identifier" in str(exc):
                 raise EmbeddingProvidersExhausted(
                     f"every embedding provider declined and the last resort cannot "
-                    f"apply: model {self.model_name!r} is a provider tag, not a "
-                    f"HuggingFace repo id, so sentence-transformers can never load "
-                    f"it. The likely cause is the configured provider (ollama) "
-                    f"being unavailable — check it before looking at HuggingFace. "
+                    f"apply: model {self.model_name!r}, a provider tag or bare "
+                    f"shorthand, was rejected as a model identifier. The last "
+                    f"resort is deliberately cache-only and will not download. The "
+                    f"likely cause is the configured provider (ollama) being "
+                    f"unavailable — check it before looking at HuggingFace. "
+                    f"Underlying error: {exc}"
+                ) from exc
+            if _looks_like_cache_miss(exc):
+                raise EmbeddingProvidersExhausted(
+                    f"every embedding provider declined, and the last resort could not "
+                    f"run offline: model {self.model_name!r} is not in the local "
+                    f"sentence-transformers cache. The last resort is deliberately "
+                    f"cache-only, so it will not download. Check the configured "
+                    f"provider (ollama) first, or pre-fetch the model. "
                     f"Underlying error: {exc}"
                 ) from exc
             raise
+        finally:
+            self._st_cache_only = previous
 
     def _sqlite_vec_db_path(self, workspace: str) -> str:
         """Return path to the sqlite-vec DB (shares recall.db with BM25 index)."""

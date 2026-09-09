@@ -34,6 +34,7 @@ embedding extra -- rather than writing the label it wants to see.
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import os
 import shutil
@@ -56,6 +57,37 @@ from mind_mem.bench.eval_adapters import MindMemAdapter  # noqa: E402
 from mind_mem.hybrid_recall import HybridBackend  # noqa: E402
 
 _HAS_EMBEDDER = importlib.util.find_spec("sentence_transformers") is not None
+
+
+@functools.lru_cache(maxsize=1)
+def _dense_leg_usable_offline() -> bool:
+    """Whether a dense leg can actually run HERE, without touching the network.
+
+    Deliberately a SECOND fact, not a redefinition of ``_HAS_EMBEDDER``: that
+    one answers "are the deps importable", which is what
+    ``probe.extra["deps_importable"]`` is asserted against below. Collapsing
+    the two is what made this file hang.
+
+    Measured on Windows CI (job 102579093360): sentence-transformers WAS
+    importable, so the old ``_HAS_EMBEDDER`` guard let these tests run; ollama
+    then refused the connection, fastembed was absent, and the chain fell
+    through to a HuggingFace download that hung until pytest-timeout killed
+    the whole run. Linux passes only because the same download happens to
+    finish in time -- so both platforms were reaching the network from a unit
+    test, and one of them was merely luckier.
+
+    An importable package is not a usable capability. This asks the question
+    the tests actually depend on, and asks it offline.
+    """
+    if not _HAS_EMBEDDER:
+        return False
+    try:
+        from sentence_transformers import SentenceTransformer
+
+        SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True, device="cpu")
+        return True
+    except Exception:
+        return False
 
 #: A haystack with one obvious lexical target and four distractors. Small
 #: enough to embed in a test, wide enough that a fusion can reorder it.
@@ -234,7 +266,10 @@ def test_query_expansion_makes_the_lexical_arms_diverge_and_that_is_recorded() -
     assert [block_id for block_id, _score in sqlite_fp] == [block_id for block_id, _score in hybrid_fp]
 
 
-@pytest.mark.skipif(not _HAS_EMBEDDER, reason="dense leg needs the embedding extra")
+@pytest.mark.skipif(
+    not _dense_leg_usable_offline(),
+    reason="dense leg needs an embedding model available offline (no network in tests)",
+)
 def test_a_servable_dense_leg_moves_the_ranking() -> None:
     """The dense leg must change the answer, or measuring it is pointless.
 
@@ -355,7 +390,10 @@ def test_legs_are_measured_per_question_and_reach_the_ndjson_row() -> None:
         adapter.teardown(state)
 
 
-@pytest.mark.skipif(not _HAS_EMBEDDER, reason="dense leg needs the embedding extra")
+@pytest.mark.skipif(
+    not _dense_leg_usable_offline(),
+    reason="dense leg needs an embedding model available offline (no network in tests)",
+)
 def test_a_servable_dense_leg_is_labelled_hybrid_and_actually_fuses_two_arms() -> None:
     """The run the SOTA claim needs: two real arms, measured as two.
 
