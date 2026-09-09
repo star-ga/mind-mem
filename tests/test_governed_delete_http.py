@@ -685,7 +685,7 @@ def test_a_mutating_route_whose_handler_cannot_take_an_actor_is_refused_at_impor
         return (200, {})  # pragma: no cover - never routed
 
     with pytest.raises(ValueError, match="no keyword-only 'actor'"):
-        Route("POST", "/wipe-everything", _handler_without_actor, "body", NO_CONTENT, mutates=True)
+        Route("POST", "/wipe-everything", _handler_without_actor, "body", NO_CONTENT, mutates=True, scope="admin")
 
 
 def test_a_handler_that_takes_an_actor_cannot_be_declared_read_only() -> None:
@@ -695,7 +695,7 @@ def test_a_handler_that_takes_an_actor_cannot_be_declared_read_only() -> None:
     row — the mutation cannot be expressed as a ``Route``.
     """
     with pytest.raises(ValueError, match="declared read-only"):
-        Route("DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT, mutates=False)
+        Route("DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT, mutates=False, scope="admin")
 
 
 # ---------------------------------------------------------------------------
@@ -835,6 +835,11 @@ class TestMutationTwins:
                 verdict=route.verdict,
                 mutates=False,
                 empty_tail_error=route.empty_tail_error,
+                # Carried through unchanged: this mutation removes the ACTOR
+                # attribution, not the route's authorisation. Dropping scope
+                # here would make the fake crash the dispatcher instead of
+                # exercising the anonymous-delete path this test is about.
+                scope=route.scope,
             )
             for route in ROUTES
         )

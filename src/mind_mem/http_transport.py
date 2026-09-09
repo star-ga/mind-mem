@@ -81,6 +81,7 @@ import socket
 import ssl
 import threading
 import time
+from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -187,6 +188,42 @@ MAX_TRACKED_CLIENTS = 1024  # LRU cap to bound limiter memory under attack
 # token); old tokens stay valid through the grace window so in-flight
 # clients don't break, then the operator removes the old entry. Server
 # reads on every request (no restart needed).
+def _active_admin_tokens() -> list[str]:
+    """Admin credentials for this transport, read at request time.
+
+    SEPARATE from :func:`_active_tokens` on purpose. That function is the
+    authentication path and is owned elsewhere; this one answers a different
+    question -- not "is this caller authenticated" but "is this caller allowed
+    the admin routes". Keeping them apart means adding an authorisation axis
+    here cannot change who authenticates.
+
+    Reads ``MIND_MEM_ADMIN_TOKEN``, the same variable ``rest._auth_is_configured``
+    already counts, so an operator configures one admin credential rather than
+    two spellings of it.
+    """
+    raw = os.environ.get("MIND_MEM_ADMIN_TOKEN", "")
+    return [t for t in (part.strip() for part in raw.split(",")) if t]
+
+
+def _caller_is_admin(presented: str | None, active_admin: Sequence[str]) -> bool:
+    """Whether *presented* is an admin credential. FAILS CLOSED.
+
+    Every uncertain answer is ``False``: no credential presented, no admin
+    credential configured, or no match. The direction is the whole point --
+    denying an admin route to a legitimate admin is an operator inconvenience
+    they can fix by configuring ``MIND_MEM_ADMIN_TOKEN``, while allowing one to
+    a user-tier caller is the defect this exists to close. An admin route must
+    never be reachable *because* admin identity could not be established.
+
+    Constant-time, and one comparison per configured credential whatever the
+    answer, matching the timing discipline ``_authorized`` already keeps.
+    """
+    if not presented or not active_admin:
+        return False
+    results = [hmac.compare_digest(presented, t) for t in active_admin]
+    return any(results)
+
+
 def _active_tokens(fallback: str | None = None) -> list[str]:
     """Return the set of currently-active tokens.
 
@@ -1567,9 +1604,27 @@ class Route:
     #: actor unforgettable — the next handler cannot be added to this
     #: table without it, rather than being expected to remember.
     mutates: bool
+    #: Who may call this route: ``"admin"`` or ``"user"``. NO DEFAULT, for the
+    #: same reason ``verdict`` has none -- a new endpoint must not become
+    #: routable until someone decides who may call it. Before this field the
+    #: transport had no admin/user axis at all: ``_authorized`` returns a bare
+    #: bool, so one flat bearer reached every route including ``POST /clear``,
+    #: which deletes every block the store returns. An agent holding the
+    #: USER-tier credential that the MCP door refuses ``delete_memory_item``
+    #: to could wipe the corpus through this door instead.
+    scope: str
     #: Response for a prefix route whose tail is empty, when the handler
     #: should not be reached at all with a blank id.
     empty_tail_error: str | None = None
+    #: The MCP capability this route mirrors, when it has one. The MCP ACL is
+    #: the AUTHORITY for scope; declaring the twin lets the parity be asserted
+    #: instead of assumed, so drift becomes a build failure the way the content
+    #: sweep already works for ``verdict``.
+    mirrors: str | None = None
+    #: Why this scope, for a route with no MCP twin. A route with no
+    #: counterpart is the easy place to hide a permission hole, so it carries a
+    #: written justification rather than defaulting quietly.
+    scope_reason: str = ""
 
     def __post_init__(self) -> None:
         # Import-time, not test-time: a malformed route cannot be loaded,
@@ -1602,12 +1657,58 @@ class Route:
 #: other kind is an exact match on the path with the query string split
 #: off. Order is the match order.
 ROUTES: tuple[Route, ...] = (
-    Route("GET", PATH_STATUS, _handle_status, "workspace", NO_CONTENT, mutates=False),
-    Route("GET", PATH_MEMORIES, _handle_list_memories, "params", CONTENT, mutates=False),
-    Route("GET", PATH_FED_CONFLICTS, _handle_fed_conflicts, "params", NO_CONTENT, mutates=False),
-    Route("GET", _FED_VCLOCK_PREFIX, _handle_fed_vclock, "tail", NO_CONTENT, mutates=False, empty_tail_error="block_id required"),
-    Route("POST", PATH_QUERY, _handle_query, "body", CONTENT, mutates=False),
-    Route("POST", PATH_CONSOLIDATE, _handle_consolidate, "body", NO_CONTENT, mutates=True),
+    Route(
+        "GET",
+        PATH_STATUS,
+        _handle_status,
+        "workspace",
+        NO_CONTENT,
+        mutates=False,
+        scope="user",
+        scope_reason=(
+            "Operational liveness only; serves no block content and mutates nothing. No MCP twin: the MCP surface reports health "
+            "through its own transport."
+        ),
+    ),
+    Route(
+        "GET",
+        PATH_MEMORIES,
+        _handle_list_memories,
+        "params",
+        CONTENT,
+        mutates=False,
+        scope="user",
+        scope_reason=(
+            "Reads governed content under the same admission filter as recall, which is user scope on the MCP side. No MCP twin has "
+            "this exact listing shape."
+        ),
+    ),
+    Route(
+        "GET",
+        PATH_FED_CONFLICTS,
+        _handle_fed_conflicts,
+        "params",
+        NO_CONTENT,
+        mutates=False,
+        scope="user",
+        scope_reason=(
+            "Read-only federation state, already gated by the MIND_MEM_FED_PEERS source allowlist, which is the primary control for "
+            "this endpoint family. No MCP twin: federation has no MCP tools."
+        ),
+    ),
+    Route(
+        "GET",
+        _FED_VCLOCK_PREFIX,
+        _handle_fed_vclock,
+        "tail",
+        NO_CONTENT,
+        mutates=False,
+        scope="user",
+        empty_tail_error="block_id required",
+        scope_reason="Read-only vector-clock lookup behind the same federation peer allowlist. No MCP twin exists.",
+    ),
+    Route("POST", PATH_QUERY, _handle_query, "body", CONTENT, mutates=False, scope="user", mirrors="recall"),
+    Route("POST", PATH_CONSOLIDATE, _handle_consolidate, "body", NO_CONTENT, mutates=True, scope="admin", mirrors="compact"),
     # MEASURED, not assumed. ``compile_walkthrough`` projects recall rows
     # into ``{step, block_id, role, score, subject}`` and the rows carry
     # ``excerpt`` rather than ``Statement``, so the subject comes out
@@ -1616,14 +1717,41 @@ ROUTES: tuple[Route, ...] = (
     # The reach check is what keeps this honest: the day the projection
     # starts carrying text, the sweep's reach set grows and the build
     # fails until this row says CONTENT.
-    Route("POST", PATH_WALKTHROUGH, _handle_walkthrough, "body", NO_CONTENT, mutates=False),
-    Route("POST", PATH_CLEAR, _handle_clear, "body", NO_CONTENT, mutates=True),
-    Route("POST", PATH_FED_WRITE, _handle_fed_write, "body", NO_CONTENT, mutates=True),
-    Route("POST", PATH_FED_RESOLVE, _handle_fed_resolve, "body", NO_CONTENT, mutates=True),
+    Route(
+        "POST", PATH_WALKTHROUGH, _handle_walkthrough, "body", NO_CONTENT, mutates=False, scope="user", mirrors="compile_truth_walkthrough"
+    ),
+    Route("POST", PATH_CLEAR, _handle_clear, "body", NO_CONTENT, mutates=True, scope="admin", mirrors="delete_memory_item"),
+    Route(
+        "POST",
+        PATH_FED_WRITE,
+        _handle_fed_write,
+        "body",
+        NO_CONTENT,
+        mutates=True,
+        scope="admin",
+        scope_reason=(
+            "Writes replicated blocks into the governed store. No MCP twin; scope follows the rule that a route mutating governed "
+            "content is admin regardless of any caller-supplied dry-run flag."
+        ),
+    ),
+    Route(
+        "POST",
+        PATH_FED_RESOLVE,
+        _handle_fed_resolve,
+        "body",
+        NO_CONTENT,
+        mutates=True,
+        scope="admin",
+        scope_reason=(
+            "Resolves a conflict by writing a winner into the governed store. No MCP twin; same mutating-content rule as federation write."
+        ),
+    ),
     # The tail is a block id the caller supplied, so an empty one reaches
     # the handler and is refused there by ``_valid_block_id`` — one
     # rejection path for a bad id, not two.
-    Route("DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT, mutates=True),
+    Route(
+        "DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT, mutates=True, scope="admin", mirrors="delete_memory_item"
+    ),
 )
 
 
@@ -1903,6 +2031,36 @@ def build_handler(
                 return
             if route.takes == "tail" and not tail and route.empty_tail_error:
                 _write_status(self, 400, route.empty_tail_error)
+                return
+            # SEC02 -- per-route authorisation, mirrored to the MCP ACL.
+            #
+            # Authentication (above) answers "is this a known caller". It does
+            # NOT answer "may this caller run THIS route", and before this the
+            # transport had no second question at all: one flat bearer reached
+            # every route, so a caller holding the user-tier credential that the
+            # MCP door refuses ``delete_memory_item`` to could reach ``POST
+            # /clear`` here and delete every block the store returns.
+            #
+            # Denial is 404, not 403: a user-scope caller learns nothing about
+            # which admin routes exist, matching how an unmatched path answers.
+            # Enforced ONLY when the operator has configured an admin
+            # credential. That is not a softening -- it is where the defect
+            # actually lives. With one token there is no privilege separation
+            # to breach: the operator issued one credential with full access
+            # and got exactly that. The hole is an operator who configures
+            # MIND_MEM_ADMIN_TOKEN, hands out the user-tier token, and finds
+            # this transport IGNORING the distinction they set up, so the user
+            # token reaches POST /clear. Enforcing unconditionally would instead
+            # make every existing single-token deployment lose its admin routes
+            # on upgrade, which breaks public compatibility to fix a hole those
+            # deployments do not have.
+            _admin_tokens = _active_admin_tokens()
+            if route.scope == "admin" and _admin_tokens and not _caller_is_admin(self.headers.get(AUTH_HEADER, ""), _admin_tokens):
+                _log.warning(
+                    "http_admin_route_denied",
+                    extra={"route": _safe_log(route.name), "actor": _safe_log(self._door_actor())},
+                )
+                _write_status(self, 404, "not found")
                 return
             actor = self._door_actor()
             attribution: dict[str, Any] = {}

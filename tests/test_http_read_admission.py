@@ -480,9 +480,9 @@ def test_a_route_cannot_be_constructed_without_a_valid_verdict() -> None:
     with pytest.raises(TypeError):
         Route("GET", "/x", http_transport._handle_status, "workspace", NO_CONTENT)  # type: ignore[call-arg]
     with pytest.raises(ValueError, match="verdict"):
-        Route("GET", "/x", http_transport._handle_status, "workspace", "probably-fine", mutates=False)
+        Route("GET", "/x", http_transport._handle_status, "workspace", "probably-fine", mutates=False, scope="user")
     with pytest.raises(ValueError, match="takes"):
-        Route("GET", "/x", http_transport._handle_status, "whatever", NO_CONTENT, mutates=False)
+        Route("GET", "/x", http_transport._handle_status, "whatever", NO_CONTENT, mutates=False, scope="user")
 
 
 def test_no_two_routes_claim_the_same_method_and_path() -> None:
@@ -613,7 +613,7 @@ def test_the_sweep_catches_a_route_that_leaks(seed_template: str, monkeypatch: p
         blocks = parse_file(os.path.join(workspace, "decisions", "DECISIONS.md"))
         return (200, {"blocks": blocks})
 
-    leaky = Route("GET", "/leak", _handle_leak, "params", NO_CONTENT, mutates=False)
+    leaky = Route("GET", "/leak", _handle_leak, "params", NO_CONTENT, mutates=False, scope="user")
     monkeypatch.setattr(http_transport, "ROUTES", ROUTES + (leaky,))
 
     workspace = _fresh(seed_template)

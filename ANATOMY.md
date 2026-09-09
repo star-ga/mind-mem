@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1536 | **Est. tokens:** ~4572672
-**Generated:** 2026-09-09 14:32 UTC
+**Files:** 1537 | **Est. tokens:** ~4576458
+**Generated:** 2026-09-09 15:13 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1081021 |
+| `src/mind_mem/` | 231 | ~1082721 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 659 | ~1997712 |
+| `tests/` | 660 | ~1999798 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -817,7 +817,7 @@
 - `guardrails.py` (~5942 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10904 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `http_transport.py` (~23483 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
+- `http_transport.py` (~25183 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~24311 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 ### `src/mind_mem/importers/`
 
@@ -1364,7 +1364,7 @@
 - `test_governed_delete_clear_enumeration.py` (~4272 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_compaction.py` (~5793 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_forward_compat.py` (~3018 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_governed_delete_http.py` (~9789 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_governed_delete_http.py` (~9881 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_mcp_tool.py` (~6382 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_stores.py` (~8439 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_unmapped_prefix.py` (~2991 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1395,7 +1395,7 @@
 - `test_hook_installer_registry.py` (~4945 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1884 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_auth_optin_not_honoured_when_auth_configured.py` (~1049 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_http_read_admission.py` (~10399 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_http_read_admission.py` (~10410 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_transport.py` (~5409 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_http_transport_audit_headers.py` (~6628 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hybrid_degraded_marker.py` (~4151 tok, huge) — Tests for the in-band recall degradation marker (Task 2).
@@ -1682,6 +1682,7 @@
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_route_conformance.py` (~1778 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_sec02_route_scope_parity.py` (~1983 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_security_scanning_alerts.py` (~1395 tok, large) — Regression tests for code-scanning alerts #189 and #192.
 - `test_self_editing_old_content.py` (~980 tok, large) — ``propose_edit`` must snapshot the block's real current content.
 - `test_self_update.py` (~2727 tok, huge) — # Copyright 2026 STARGA, Inc.
