@@ -125,13 +125,33 @@ def _run():
       chain = eo.EvidenceChain(store_path=store)
       for r in range(rounds):
           barrier("r%d" % r)
-          chain.create(
-              action=eo.EvidenceAction.APPLY,
-              actor=tag,
-              target_block_id="%s-%04d" % (tag, r),
-              target_file="decisions/DECISIONS.md",
-              payload=("%s-%d" % (tag, r)).encode(),
-          )
+
+          def append_evidence():
+              chain.create(
+                  action=eo.EvidenceAction.APPLY,
+                  actor=tag,
+                  target_block_id="%s-%04d" % (tag, r),
+                  target_file="decisions/DECISIONS.md",
+                  payload=("%s-%d" % (tag, r)).encode(),
+              )
+
+          if defeat and r == 0:
+              # Every chain was opened before the round barrier and still
+              # believes the store is empty.  Let one stale writer land its
+              # genesis row before releasing the other stale writers.  On
+              # Windows their seek-then-write race can otherwise overwrite
+              # the only surviving genesis row, making the fork report
+              # depend on which write happened to win.  This is a schedule
+              # barrier, not a sleep, and it is defeat-only: placing it under
+              # the real store lock would deadlock the fixed path.
+              if tag == "w0":
+                  append_evidence()
+                  barrier("first_evidence_written")
+              else:
+                  barrier("first_evidence_written")
+                  append_evidence()
+          else:
+              append_evidence()
   else:
       import mind_mem.audit_chain as ac
 
