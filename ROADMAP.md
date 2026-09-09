@@ -1139,7 +1139,7 @@ Release criteria:
 - [x] **Compression ratio metric** — track block count reduction per consolidation cycle
 - [x] **Forgetting governance** — every forget decision produces an Evidence Object; reversible within 30-day grace period
 - [x] **Memory pressure alerts** — when block count exceeds configurable threshold, trigger consolidation cycle
-- [x] **`consolidate` MCP tool** — manual trigger with dry-run mode
+- [x] **`plan_consolidation` MCP tool** — manual dry-run planner is shipped. A compatibility-named `consolidate` tool remains open.
 
 ### Token Budget Management
 - [x] **Context window awareness** — recall accepts `max_tokens` parameter; packer allocates budget across: system prompt, graph context, retrieved blocks, conversation history
@@ -1213,10 +1213,10 @@ MIND-Mem currently has append-only logs → manual promotion to MEMORY.md. This 
 - [x] **Tier 1 (Episodic)** — compressed session summaries (`summaries/weekly/`), auto-generated from Tier 0
 - [x] **Tier 2 (Semantic)** — verified facts and entity knowledge (`entities/`, `MEMORY.md`), promoted from Tier 1 after N repetitions or explicit confirmation
 - [x] **Tier 3 (Procedural)** — learned patterns and strategies (`decisions/`), highest durability, governance-gated
-- [x] **Ebbinghaus strength decay** — each block has `strength` field (0.0–1.0), decays exponentially with configurable half-life (default 30 days), reset on access
-- [x] **Auto-promotion triggers** — block repeated 3+ times across sessions → auto-promote to next tier (governance proposal if Tier 2→3)
+- [ ] **Ebbinghaus strength decay** — not shipped: the current tier implementation uses TTL/max-idle demotion and eviction. A per-block `strength` field, exponential half-life, and access reset remain open.
+- [ ] **Auto-promotion triggers** — repeated dated observations produce consolidation candidates, but that candidate path is not wired to a governed automatic next-tier trigger. `memory_tiers.run_promotion_cycle` is a separate policy-driven direct API; proposal/approval semantics remain to be reconciled.
 - [x] **Tier-aware retrieval** — higher tiers get retrieval priority boost (Tier 3: 2.0x, Tier 2: 1.5x, Tier 1: 1.0x, Tier 0: 0.7x)
-- [x] **`consolidate` MCP tool** — trigger consolidation cycle with `--dry-run` and `--tier` filters
+- [ ] **Tier-filtered `consolidate` MCP tool** — the shipped API is `plan_consolidation` with dry-run planning; `consolidate` naming and `--tier` filtering remain open.
 
 ### Agent Hook Auto-Capture
 _Rationale: a memory system that requires explicit calls to capture is never used — silent observation through CLI hooks is the only path to comprehensive coverage._
@@ -1257,7 +1257,7 @@ _Rationale: when multiple agents work on the same project, isolated memories div
 - [x] **Conflict resolution** — last-write-wins for Tier 0-1, governance-gated merge for Tier 2-3
 - [x] **Namespace isolation** — shared vs private memory with per-scope access control
 - [x] **Sync audit log** — every sync event recorded with peer ID, scope, blocks transferred, conflicts resolved
-- [x] **`mesh_status` MCP resource** — connected peers, sync lag, scope health
+- [ ] **`mesh_status` MCP resource** — no such MCP resource is registered; connected-peer, sync-lag, and scope-health reporting remain open.
 
 ### Model Reliability Score (MRS) Framework
 _Rationale: model endpoints + retrieval backends are infrastructure — they need SLO-style reliability scoring (latency/quality/drift), not anecdotal "feels slow" judgement._
@@ -2395,19 +2395,19 @@ default story is two laptops talking to each other.
 - [x] **Workspace ACLs** — `mcp/infra/acl.py` ships block-level grants on signed chain.
 - [x] **Cross-instance federation protocol** — `src/mind_mem/v4/federation.py` ships signed handshake + three-way merge.
 - [x] **End-to-end encryption for sensitive workspaces** — `EncryptedBlockStore` ships ciphertext + hash-indexed.
-- [x] **Discovery / WebFinger** — `/.well-known/mind-mem` endpoint advertises capabilities + public keys.
-- [x] **Subscriptions / webhooks** — `subscribe(workspace, filter, callback_url)` ships.
 - [x] **Per-tenant rate limiting + circuit breakers** — `circuit_breaker.py` + `backpressure.py` ship.
-- [x] **Per-tenant routing** — `namespaces.py` routes per-tenant KMS + audit chain + rate-limit bucket.
 - [x] **gRPC + REST parity** — `api/grpc_server.py` parallels REST with identical auth/audit.
 - [x] **Single-binary distribution** — `pip install mind-mem; mm serve` ships authenticated endpoint.
 - [x] **Sharded Postgres** — `block_store_postgres.py` shards via `tenant_id`.
-- [x] **Replication + consensus for governance** — Raft-style audit-chain replication ships under `v4/federation.py`.
 - [x] **Pluggable embedding backend with fallback** — local Ollama → API fallback chain ships in the embedding pipeline.
 - [x] **Audit headers (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`)** — propagated end-to-end across REST, gRPC, the stdlib transport and outbound to peers. **SHIPPED — verified at HEAD 2026-09-07.** `src/mind_mem/audit_context.py`: the three headers at :73-75, `sanitize_header_value` (:86) strips CR/LF/NUL and length-bounds before anything echoes or persists, `supplied` records which headers the caller actually sent *before* a request id is minted. Propagated across REST, gRPC, the stdlib transport, and outbound to peers.
 - [x] **TLS 1.3 minimum + cert pinning** — an explicit `TLSv1_3` floor plus optional pinned-pubkey enforcement ship. **SHIPPED — verified at HEAD 2026-09-07.** `src/mind_mem/v4/tls_floor.py` (410 lines): `TLS_FLOOR = ssl.TLSVersion.TLSv1_3` (:68), `_apply_floor` assigns *and reads back*, raising `TlsFloorUnavailable` if the floor did not take; `client_context`/`server_context`, `spki_sha256`, `normalise_pins`, `verify_pinned_peer`, `pinned_https_handler`. Both halves of this line ship.
 
-**Open (genuine network-hardening gaps):**
+**Open capability gaps verified against source:**
+- [ ] **Discovery / WebFinger** — no `/.well-known/mind-mem` endpoint is shipped; capability and public-key discovery remain open.
+- [ ] **Workspace subscriptions / webhooks** — local change-stream callbacks and the opt-in ingest webhook exist, but `subscribe(workspace, filter, callback_url)` is not shipped.
+- [ ] **Per-tenant routing** — `namespaces.py` provides agent/path ACL namespaces; per-tenant KMS, audit-chain, and rate-limit routing as one request path remains open.
+- [ ] **Distributed replication + consensus for governance** — `v4/federation.py` provides feature-gated local version vectors/conflict resolution, while `governance_raft.py` is a single-node pluggable facade. Real multi-node Raft audit-chain replication remains open.
 - [ ] **Rust hot path for hybrid search** — PyO3 BM25+RRF port — pure-MIND port (separate roadmap section below) is the chosen path instead. Marking as ⊘ superseded by Pure-MIND Core Port.
 
 ### E. Compliance-sensitive opt-in extensions (partial — 5 shipped, 3 open)
