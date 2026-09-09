@@ -89,6 +89,7 @@ def _dense_leg_usable_offline() -> bool:
     except Exception:
         return False
 
+
 #: A haystack with one obvious lexical target and four distractors. Small
 #: enough to embed in a test, wide enough that a fusion can reorder it.
 _DOCS = [

@@ -88,9 +88,7 @@ def test_the_last_resort_never_downloads(spy_sentence_transformers, monkeypatch)
 
     # POSITIVE CONTROL: prove we actually REACHED the last resort. Without this
     # the test passes when the chain never got there and nothing was proven.
-    assert spy_sentence_transformers.calls, (
-        "the last resort was never reached, so this test proved nothing about it"
-    )
+    assert spy_sentence_transformers.calls, "the last resort was never reached, so this test proved nothing about it"
     assert spy_sentence_transformers.calls[-1].get("local_files_only") is True
 
 

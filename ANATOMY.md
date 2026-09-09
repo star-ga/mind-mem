@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1539 | **Est. tokens:** ~4559231
-**Generated:** 2026-09-09 20:35 UTC
+**Files:** 1539 | **Est. tokens:** ~4559228
+**Generated:** 2026-09-09 20:38 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 663 | ~2006571 |
+| `tests/` | 663 | ~2006568 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1205,7 +1205,7 @@
 - `test_baseline_snapshot.py` (~3033 tok, huge) — Tests for baseline snapshot and drift detection (#431)."""
 - `test_bench_eval_harness.py` (~4522 tok, huge) — Tests for the LongMemEval consolidation harness (self-asserting adapters).
 - `test_bench_hard_timeout.py` (~1824 tok, huge) — The per-question timeout must preempt a NATIVE hang, not just a Python one.
-- `test_bench_hybrid_dispatch.py` (~6302 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_bench_hybrid_dispatch.py` (~6303 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_bigrams.py` (~168 tok, small) — Tests for bigram extraction."""
 - `test_bitemporal_edge_validity.py` (~2524 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_block_id_format.py` (~345 tok, medium) — Tests for block ID format validation."""
@@ -1311,7 +1311,7 @@
 - `test_edge_corroboration.py` (~3178 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_edge_grounded_answer.py` (~4262 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_embed_fallback_error_provenance.py` (~880 tok, large) — Fallback diagnostics must preserve genuine loader and encoder failures."""
-- `test_embed_last_resort_is_cache_only.py` (~1239 tok, large) — The last-resort embedding fallback must not perform an unbounded download.
+- `test_embed_last_resort_is_cache_only.py` (~1235 tok, large) — The last-resort embedding fallback must not perform an unbounded download.
 - `test_embedding_augmentation_probe.py` (~1685 tok, huge) — M1 — the embed-vs-store exposure, measured rather than assumed.
 - `test_encryption.py` (~2848 tok, huge) — Tests for mind-mem encryption at rest."""
 - `test_entity_ingest.py` (~4122 tok, huge) — Tests for the entity_ingest module — extraction, filtering, signal generation."""
