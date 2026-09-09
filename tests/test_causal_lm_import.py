@@ -35,6 +35,7 @@ def _run_loader(helper_dir: Path, stub_dir: Path, cwd: Path) -> subprocess.Compl
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 
