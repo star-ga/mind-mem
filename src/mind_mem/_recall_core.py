@@ -1015,6 +1015,10 @@ def recall(
     # requested candidate count is unchanged.
     _filters_on = _any_filter_set(since, until, lifecycle, event_id, min_maturity)
     _indexed_recall_cfg = _get_config(workspace).get("recall", {})
+    if not isinstance(_indexed_recall_cfg, dict):
+        # Match backend resolution: malformed optional recall settings do
+        # not disable a backend selected through the block-store config.
+        _indexed_recall_cfg = {}
     _validity_cfg = _indexed_recall_cfg.get("validity_gate")
     _validity_on = isinstance(_validity_cfg, dict) and bool(_validity_cfg.get("enabled", False))
     # Demotion needs candidates outside the original top-k. Otherwise an

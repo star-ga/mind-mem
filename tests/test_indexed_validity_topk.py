@@ -116,6 +116,18 @@ class _LimitedBackend(_recall_core.RecallBackend):
         return None
 
 
+@pytest.mark.parametrize("recall_config", ["not_a_dict", [], None, 1, False])
+def test_malformed_recall_config_preserves_configured_backend(monkeypatch, tmp_path, recall_config):
+    """Optional settings cannot turn a working provider into an empty fallback."""
+    backend = _LimitedBackend()
+    monkeypatch.setattr(_recall_core, "_load_backend", lambda workspace: backend)
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"recall": recall_config}), encoding="utf-8")
+    hits = _recall_core.recall(str(tmp_path), "needle", limit=1, rerank=False)
+    assert backend.requested_limits == [1]
+    assert [hit["_id"] for hit in hits] == [TOP_ID]
+    assert "validity" not in hits[0]
+
+
 @pytest.mark.parametrize("enabled, expected_id, expected_limit", [(True, NEXT_ID, 200), (False, TOP_ID, 1)])
 def test_recall_backend_validity_respects_enabled_pool_and_limit(monkeypatch, tmp_path, enabled, expected_id, expected_limit):
     """The arbitrary backend must widen only for enabled validity."""
