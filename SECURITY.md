@@ -145,7 +145,8 @@ set from `mind-mem.json`.
 
 | Variable | Effect |
 |----------|--------|
-| `MIND_MEM_TOKEN` / `MIND_MEM_ADMIN_TOKEN` | Bearer credentials. Empty is treated as unset. |
+| `MIND_MEM_TOKEN` | User bearer credential; an empty value does not supply a credential. |
+| `MIND_MEM_ADMIN_TOKEN` | Admin bearer credentials. In `mm http-serve`, setting this variable enables route privilege separation: an empty or comma-only value denies admin routes, while unsetting it preserves legacy single-token full access. |
 | `MIND_MEM_ACL_DISABLED` | Opt out of the default-on ACL gate (N-01/T-002). |
 | `MIND_MEM_VAULT_ALLOWLIST` | `:`-separated vault roots. `vault_scan`/`vault_sync` refuse when unset (T-006). |
 | `MIND_MEM_VAULT_ALLOW_ANY` | Restores the pre-T-006 open vault behaviour. Not recommended. |

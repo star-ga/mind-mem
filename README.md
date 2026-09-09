@@ -1507,6 +1507,16 @@ The flag is a no-op if the bind host isn't `127.0.0.1` / `::1` /
 `localhost` — the server still refuses to start. Production
 deployments should always set a token.
 
+The standalone `mm http-serve` adapter also enforces route privileges when
+`MIND_MEM_ADMIN_TOKEN` is configured. Send either credential through
+`X-MindMem-Token`: the user token can access user routes, while the admin
+token also authenticates and may access admin routes. A user request to an
+admin route receives HTTP 404. Setting the admin variable to an empty or
+comma-only value keeps admin routes closed; leaving it unset preserves
+legacy single-token full access. Authentication and route authorization
+share one credential snapshot per request, refreshed for each request on
+a persistent connection, so a token rotation takes effect on the next request.
+
 ### Safety Guarantees
 
 - **`propose_update` never writes to DECISIONS.md or TASKS.md.** All proposals go to SIGNALS.md.

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1537 | **Est. tokens:** ~4554803
-**Generated:** 2026-09-09 15:17 UTC
+**Files:** 1537 | **Est. tokens:** ~4554864
+**Generated:** 2026-09-09 15:29 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~50140 |
+| `./` | 36 | ~50201 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
@@ -130,7 +130,7 @@
 - `EVIDENCE.md` (~1913 tok, huge) — Evidence Matrix
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~1097 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
-- `SECURITY.md` (~2459 tok, huge) — Security Policy
+- `SECURITY.md` (~2520 tok, huge) — Security Policy
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
 - `SPEC.md` (~6429 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""

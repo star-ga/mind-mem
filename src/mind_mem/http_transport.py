@@ -15,11 +15,13 @@ endpoints are 5–20-line wrappers around existing public APIs:
                                (governance-protected; requires rationale)
 
 Auth — bearer-token via ``X-MindMem-Token`` header (matches the MCP
-HTTP transport convention). The token is read from
-``MIND_MEM_TOKEN`` env at server startup. Localhost-only by default;
-loopback binds skip auth when
-``--allow-unauthenticated-localhost`` is set (matches the existing
-MCP HTTP transport flag).
+HTTP transport convention). Credentials are captured once per request from
+``MIND_MEM_TOKENS`` / ``MIND_MEM_TOKEN`` and ``MIND_MEM_ADMIN_TOKEN``.
+When the admin variable is configured, user credentials cannot invoke
+admin routes; an empty or comma-only admin value keeps those routes closed.
+When it is unset, legacy single-token full access remains supported.
+Localhost-only by default; ``--allow-unauthenticated-localhost`` permits
+unauthenticated loopback access only when no credentials are configured.
 
 Body limit — every JSON-bodied endpoint refuses payloads larger than
 1 MiB with HTTP 413 so the surface cannot be used as a memory-DoS
@@ -227,11 +229,10 @@ def _read_admin_auth_state() -> _AdminAuthState:
 def _active_admin_tokens() -> list[str]:
     """Admin credentials for this transport, read at request time.
 
-    SEPARATE from :func:`_active_tokens` on purpose. That function is the
-    authentication path and is owned elsewhere; this one answers a different
-    question -- not "is this caller authenticated" but "is this caller allowed
-    the admin routes". Keeping them apart means adding an authorisation axis
-    here cannot change who authenticates.
+    This compatibility helper exposes the admin subset. Request dispatch
+    uses :func:`_capture_auth_snapshot` instead, so authentication and route
+    authorization see the same configuration even during token rotation.
+    Admin credentials belong to the accepted bearer set as well as this subset.
 
     Reads ``MIND_MEM_ADMIN_TOKEN``, the same variable ``rest._auth_is_configured``
     already counts, so an operator configures one admin credential rather than
