@@ -506,22 +506,12 @@ class TestDemotionVersusForcedSurfacing:
 
 
 class TestBackendAsymmetry:
-    """Where the two mechanisms stop composing: a non-default recall backend.
+    """Validity scoring and guardrail surfacing compose on indexed backends.
 
-    ``apply_validity_gate`` is Stage 2.65 of the BM25 scan pipeline, but the
-    ``sqlite`` and vector backends return from ``recall()`` long before it
-    (``_recall_core.recall`` early-returns through ``_apply_post_filters``
-    around line 710). Guardrail surfacing lives *inside*
-    ``_apply_post_filters``, so it survives that early return and the gate
-    does not: on those backends guardrails fire and nothing is ever scored
-    for validity — no annotation, no demotion, and no provenance / outcome /
-    world-staleness evidence read at all.
-
-    ``recall.backend`` is ``"sqlite"`` for a Postgres block store
-    (``init_workspace._BACKEND_RECALL``), so this is a real deployment, not a
-    hypothetical one. Pinned as a tripwire, not as an endorsement: if the
-    gate is ever hoisted into the shared funnel, this test is the one that
-    should fail and be rewritten.
+    The indexed legs return before the scan pipeline's validity stage, so they
+    apply the gate once before post-filtering and the final result limit. The
+    helper uses the current call's demotion count; incoming hit annotations do
+    not control whether scoring runs.
     """
 
     def _sqlite_ws(self, masters, tmp_path) -> str:
@@ -538,11 +528,16 @@ class TestBackendAsymmetry:
         assert hits[0]["guardrail"] is True
         assert hits[0]["_id"] == ID_GR_DEMOTABLE
 
-    def test_the_validity_gate_does_not_run_on_the_sqlite_backend(self, masters, tmp_path) -> None:
+    def test_the_validity_gate_now_runs_on_the_sqlite_backend(self, masters, tmp_path) -> None:
+        """Inverted 2026-09-09: this asserted the defect, and the defect is fixed.
+
+        The old body asserted ``"validity" not in h`` with the message "gate
+        reached the sqlite path — update this test". It reached it; this is that
+        update.
+        """
         hits = recall(self._sqlite_ws(masters, tmp_path), QUERY, limit=10, guardrail_context=GUARDRAIL_CTX)
         assert hits, "precondition: the sqlite path returns something"
-        assert all("validity" not in h for h in hits), "gate reached the sqlite path — update this test"
-        assert all("_validity_demoted" not in h for h in hits)
+        assert all("validity" in h for h in hits), "the enabled validity gate did not annotate the sqlite leg — it is inert again"
 
 
 class TestDocumentedCompositionQuirks:

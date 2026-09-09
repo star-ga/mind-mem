@@ -96,8 +96,13 @@ def apply_validity_gate(
     cfg: dict[str, Any],
     *,
     scoring_instant: date | None = None,
-) -> None:
+) -> int:
     """Annotate every hit with a ``validity`` diagnostic; demote low scorers.
+
+    Returns the number of hits THIS CALL demoted, so a caller can decide whether
+    to re-sort without reading state off the hits. Reading it off the hits was a
+    defect: a stale ``_validity_demoted`` marker made a DISABLED gate reorder
+    results (measured: X,Y became Y,X with the gate off).
 
     Mutates ``hits`` in place, matching the Stage 2.6 hard-negative idiom.
     A no-op (no annotation, no DB reads) unless
@@ -117,9 +122,9 @@ def apply_validity_gate(
     """
     vg_cfg = cfg.get("validity_gate")
     if not isinstance(vg_cfg, dict) or not vg_cfg.get("enabled", False):
-        return
+        return 0
     if not hits:
-        return
+        return 0
 
     threshold = _unit_fraction(vg_cfg.get("threshold"), VALIDITY_GATE_THRESHOLD)
     demotion = _unit_fraction(vg_cfg.get("demotion"), VALIDITY_DEMOTION)
@@ -133,7 +138,11 @@ def apply_validity_gate(
     provenance_enabled = _provenance_enabled(vg_cfg)
     confirmed_ids = _load_confirmed_ids(workspace, block_ids, scoring_instant=scoring_instant) if provenance_enabled else frozenset()
 
+    demoted = 0
     for hit in hits:
+        # Recompute from current evidence: a backend or cached hit may carry
+        # forged or stale validity metadata. Dispatch applies this stage once
+        # per result path, preventing repeated score demotion.
         components = validity_components(
             hit,
             contradicted_ids,
@@ -146,12 +155,18 @@ def apply_validity_gate(
         if components["score"] < threshold:
             hit["score"] = round(hit["score"] * demotion, 4)
             hit["_validity_demoted"] = True
+            demoted += 1
+        else:
+            # Clear a marker we did not set on this pass, so a stale one cannot
+            # survive to be read as this run's verdict.
+            hit.pop("_validity_demoted", None)
 
     _log.debug(
         "validity_gate_applied",
         hits=len(hits),
         demoted=sum(1 for h in hits if h.get("_validity_demoted")),
     )
+    return demoted
 
 
 def validity_components(

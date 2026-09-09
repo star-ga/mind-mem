@@ -377,11 +377,11 @@ def _recall_impl_ranked(
     # since / until / lifecycle / event_id / min_maturity -- it would return the
     # unfiltered local answer and the filter would silently do nothing. Same
     # exemption, and the same reasoning, as ``format="bundle"`` below.
-    _anticipation_on = anticipation_enabled(_raw_config) and not _trace_on and not _active_filters and not active_only and backend == "auto"
+    # A usable generation identity is the admission condition. Keep the runtime
+    # guard at each use site so it remains effective under optimized Python.
     _anticipation_identity: str | None = None
-    if _anticipation_on:
+    if anticipation_enabled(_raw_config) and not _trace_on and not _active_filters and not active_only and backend == "auto":
         _anticipation_identity = anticipation_generation_identity(_raw_config, str(MCP_SCHEMA_VERSION))
-        _anticipation_on = _anticipation_identity is not None
     # ``format="bundle"`` never takes the local answer. The early return below
     # skips the post-cache stages, and the bundle re-shaping is one of them, so
     # serving here would hand a bundle client the raw blocks envelope with no
@@ -389,8 +389,7 @@ def _recall_impl_ranked(
     # ``tests/test_recall_format_cache_isolation.py`` exists to prevent, arriving
     # through a different door. Falling through costs one round-trip and is
     # always correct, which is the trade this whole module makes everywhere else.
-    if _anticipation_on and format == "blocks":
-        assert _anticipation_identity is not None
+    if _anticipation_identity is not None and format == "blocks":
         _anticipated = _anticipation_envelope(
             ws,
             query,
@@ -468,8 +467,7 @@ def _recall_impl_ranked(
     # because nothing ever told it what a query resolved to). Recorded against
     # the head the answer was computed at, so a write that lands between now
     # and the next lookup retires this bundle rather than aging it out.
-    if _anticipation_on and raw:
-        assert _anticipation_identity is not None
+    if _anticipation_identity is not None and raw:
         _record_anticipation_bundle(ws, "recall", raw, _index_anchor, _anticipation_identity)
 
     return raw

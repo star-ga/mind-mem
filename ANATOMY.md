@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1533 | **Est. tokens:** ~4563927
-**Generated:** 2026-09-09 11:54 UTC
+**Files:** 1535 | **Est. tokens:** ~4567192
+**Generated:** 2026-09-09 12:21 UTC
 
 ## Token Budget Guide
 
@@ -73,21 +73,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1079829 |
+| `src/mind_mem/` | 231 | ~1080023 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
 | `src/mind_mem/importers/` | 9 | ~26660 |
 | `src/mind_mem/mcp/` | 3 | ~6512 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13249 |
-| `src/mind_mem/mcp/tools/` | 29 | ~112653 |
+| `src/mind_mem/mcp/tools/` | 29 | ~112650 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11368 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 656 | ~1990877 |
+| `tests/` | 658 | ~1993951 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -895,7 +895,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~18381 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~18378 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1571 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -1079,7 +1079,7 @@
 - `validate.sh` (~1350 tok, large) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
 - `validate_py.py` (~5676 tok, huge) — Mind Mem Integrity Validator — canonical engine.
-- `validity_gate.py` (~3906 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
+- `validity_gate.py` (~4100 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
 - `vector_inertness.py` (~3125 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `verify_cli.py` (~10537 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `walkthrough.py` (~2449 tok, huge) — Dependency-ordered walkthrough — `compile_walkthrough` (v3.9.0 candidate).
@@ -1350,7 +1350,7 @@
 - `test_field_extraction.py` (~201 tok, medium) — Tests for field token extraction."""
 - `test_filelock.py` (~7529 tok, huge) — Tests for filelock.py — cross-platform advisory locking."""
 - `test_filelock_stress.py` (~1196 tok, large) — Stress tests for mind-mem file locking under contention."""
-- `test_flag_composition.py` (~6812 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_flag_composition.py` (~6718 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_flag_registry.py` (~8442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_frames_disclosure.py` (~3138 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_fts5_bm25_weights.py` (~391 tok, medium) — bm25() weights must align 1:1 with the indexed blocks_fts columns.
@@ -1411,6 +1411,7 @@
 - `test_inbox.py` (~2419 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""
+- `test_indexed_validity_topk.py` (~1901 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ingest_tiers.py` (~4614 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ingestion_pipeline_wiring.py` (~6467 tok, huge) — The webhook ingest door — wiring proof for `mm ingest-serve` (5.0.1).
 - `test_init_workspace.py` (~4105 tok, huge) — Tests for init_workspace — config validation and workspace scaffolding."""
@@ -1785,6 +1786,7 @@
 - `test_validity_gate.py` (~1253 tok, large) — Regression gate for the Phase-2 recall validity gate (Stage 2.65).
 - `test_validity_gate_contradiction_list_fields.py` (~1553 tok, huge) — Regression gate: c3 must debit blocks named in a *real* CONTRADICTIONS.md.
 - `test_validity_gate_extension_composition.py` (~1858 tok, huge) — Regression gate for the INDEPENDENCE of the validity gate's two opt-in
+- `test_validity_gate_reaches_indexed_legs.py` (~1267 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_validity_provenance_class.py` (~2746 tok, huge) — Regression gate for the validity gate's FIFTH component (provenance class).
 - `test_vault_allowlist_separator.py` (~868 tok, large) — The vault allowlist separator, and why a Windows drive letter broke it.
 - `test_vault_wikilinks.py` (~1876 tok, huge) — # Copyright 2026 STARGA, Inc.

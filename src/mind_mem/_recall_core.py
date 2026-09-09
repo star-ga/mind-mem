@@ -775,6 +775,23 @@ def _project_recall_carrier(
     return carried
 
 
+def _apply_validity_and_resort(
+    hits: list[dict],
+    workspace: str,
+    recall_cfg: dict,
+    scoring_instant: date | None,
+) -> list[dict]:
+    """Apply validity scoring before an indexed leg returns its final top-k.
+
+    These legs return before the scan path's validity stage. Sort only when
+    this call demoted a hit; the disabled gate preserves backend ordering,
+    even when incoming hits carry stale demotion markers.
+    """
+    if apply_validity_gate(hits, workspace, recall_cfg, scoring_instant=scoring_instant):
+        hits.sort(key=lambda h: h.get("score", 0.0), reverse=True)
+    return hits
+
+
 def _apply_post_filters(
     hits: list[dict],
     *,
@@ -986,18 +1003,23 @@ def recall(
 
     # Filter push-down. A post-filter that receives an already-``limit``-sized
     # list can only subtract from the top-k, so a query whose in-range matches
-    # all rank below the top-k answered with nothing at all. Two moves fix it,
-    # and both are gated on this one predicate so an unfiltered query keeps the
-    # exact retrieval it had:
+    # all rank below the top-k answered with nothing at all. Filtered queries
+    # use two complementary steps:
     #   * push what the leg can evaluate into candidate generation (a WHERE on
     #     ``blocks.date`` for sqlite, a corpus pre-filter for the scan leg), and
     #   * where the leg cannot evaluate it, widen the retrieval and let
     #     ``_apply_post_filters`` do the cut over the WIDE pool.
     # ``_apply_post_filters`` stays the single funnel either way: it now
     # confirms a decision already taken upstream instead of being the only
-    # place the decision is taken.
+    # place the decision is taken. With no filters and validity disabled, the
+    # requested candidate count is unchanged.
     _filters_on = _any_filter_set(since, until, lifecycle, event_id, min_maturity)
-    _wide_pool_k = max(retrieve_wide_k, limit) if _filters_on else None
+    _indexed_recall_cfg = _get_config(workspace).get("recall", {})
+    _validity_cfg = _indexed_recall_cfg.get("validity_gate")
+    _validity_on = isinstance(_validity_cfg, dict) and bool(_validity_cfg.get("enabled", False))
+    # Demotion needs candidates outside the original top-k. Otherwise an
+    # enabled gate can lower the first hit's score but cannot replace it.
+    _wide_pool_k = max(retrieve_wide_k, limit) if _filters_on or _validity_on else None
 
     if _cfg_backend == "sqlite":
         from .sqlite_index import query_index
@@ -1020,6 +1042,7 @@ def recall(
             until=until,
             return_k=_wide_pool_k,
         )
+        hits = _apply_validity_and_resort(hits, workspace, _indexed_recall_cfg, _scoring_instant)
         return _apply_post_filters(
             hits,
             since=since,
@@ -1038,8 +1061,8 @@ def recall(
         try:
             # No pushable surface on an arbitrary backend, so the only lever
             # is over-fetch: ask for the wide pool and let the funnel below cut
-            # it to ``limit`` AFTER filtering. ``_wide_pool_k`` is ``None`` on
-            # an unfiltered query, so that request is the one it always was.
+            # it to ``limit`` after validity scoring and filtering. With no
+            # filters and validity disabled, the request remains ``limit``.
             backend_hits: list[dict] = _cfg_backend.search(workspace, query, limit=_wide_pool_k or limit, active_only=active_only)
             # Capture before filtering or empty-result fallback. Either can
             # turn the carrier into a plain list or replace the provider's
@@ -1050,6 +1073,7 @@ def recall(
 
                 _degraded_marker = _merge_leg_markers(_degraded_marker, dict(_backend_marker))
             if backend_hits:
+                backend_hits = _apply_validity_and_resort(backend_hits, workspace, _indexed_recall_cfg, _scoring_instant)
                 filtered = _apply_post_filters(
                     backend_hits,
                     since=since,
