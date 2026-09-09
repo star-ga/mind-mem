@@ -6,8 +6,10 @@ This is the single source of truth for which directories constitute the corpus.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from fnmatch import fnmatch
+from glob import glob
 from typing import NamedTuple
 
 # Core corpus directories (order matters for scan priority)
@@ -372,32 +374,94 @@ class LedgerCaptureError(RuntimeError):
 def _normalise(rel_path: str) -> str:
     """Workspace-relative path in canonical forward-slash form.
 
-    Collapses ``\\`` to ``/``, drops a leading ``./`` and any leading or
-    trailing ``/`` so ``memory/x``, ``./memory/x`` and ``memory\\x`` are one
-    key. Nothing here resolves symlinks or ``..`` — callers hand this
-    already-validated manifest entries, and a path that escapes the
-    workspace is rejected by ``_safe_child_path`` before it gets here.
+    Empty and ``.`` components are removed, while an interior ``..`` is
+    folded when it stays inside the relative path. Leading ``..`` remains,
+    so filesystem containment is still the caller's responsibility.
     """
-    rel = str(rel_path).replace("\\", "/").strip("/")
-    while rel.startswith("./"):
-        rel = rel[2:]
-    return rel
+    parts: list[str] = []
+    for part in str(rel_path).replace("\\", "/").split("/"):
+        if not part or part == ".":
+            continue
+        if part == "..":
+            if parts and parts[-1] != "..":
+                parts.pop()
+            else:
+                parts.append(part)
+            continue
+        parts.append(part)
+    return "/".join(parts)
 
 
 def is_ledger_path(rel_path: str) -> bool:
     """True when *rel_path* names a ledger of record.
 
-    *rel_path* is workspace-relative. Separators are normalised, so a
-    Windows-native ``memory\\hash_chain_v2.db`` matches the same row as the
-    POSIX spelling — the manifests this is asked about are written on one
-    OS and read on another.
+    *rel_path* is workspace-relative. Separators and case are normalised, so
+    a Windows-native ``memory\\hash_chain_v2.db`` matches the same row as
+    the POSIX spelling — the manifests this is asked about are written on
+    one OS and read on another.
     """
-    rel = _normalise(rel_path)
+    rel = _normalise(rel_path).casefold()
     if not rel:
         return False
     if rel in LEDGER_FILES:
         return True
-    return any(fnmatch(rel, pattern) for pattern in LEDGER_PATTERNS)
+    return any(fnmatch(rel, pattern.casefold()) for pattern in LEDGER_PATTERNS)
+
+
+def is_ledger_target(workspace: str, rel_path: str) -> bool:
+    """True when a workspace-relative spelling resolves to a ledger.
+
+    ``is_ledger_path`` protects archive and manifest names. Restore and
+    snapshot writers also protect the destination they will open: an
+    existing in-workspace symlink or hardlink can make a harmless-looking
+    name point at a ledger. Hardlink identity is compared only against the
+    registered ledger files and patterns, so an ordinary single-link corpus
+    file remains eligible. Traversal and outside-workspace rejection remain
+    the caller's path guard.
+    """
+    if is_ledger_path(rel_path):
+        return True
+    workspace_real = os.path.realpath(workspace)
+    native = str(rel_path).replace("/", os.sep).replace("\\", os.sep)
+    target = os.path.realpath(os.path.join(workspace_real, native))
+    try:
+        if os.path.commonpath([workspace_real, target]) != workspace_real:
+            return False
+    except ValueError:
+        return False
+    resolved_rel = os.path.relpath(target, workspace_real)
+    if is_ledger_path(resolved_rel):
+        return True
+
+    # A hardlink keeps the same inode while ``realpath`` keeps the alias's
+    # spelling. Only inspect existing targets with more than one link; an
+    # ordinary single-link corpus file cannot be a distinct hardlink to a
+    # ledger. The registry has only a handful of exact/pattern paths, so this
+    # stays bounded and does not walk the corpus for every file.
+    try:
+        target_stat = os.stat(target)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        # A permission/stat failure is not evidence that the destination is
+        # safe. Refuse conservatively at a destructive write boundary.
+        return True
+    if target_stat.st_nlink <= 1:
+        return False
+    ledger_candidates = [os.path.join(workspace_real, rel) for rel in LEDGER_FILES]
+    for pattern in LEDGER_PATTERNS:
+        ledger_candidates.extend(glob(os.path.join(workspace_real, pattern)))
+    target_identity = (target_stat.st_dev, target_stat.st_ino)
+    for ledger in ledger_candidates:
+        try:
+            ledger_stat = os.stat(ledger)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return True
+        if (ledger_stat.st_dev, ledger_stat.st_ino) == target_identity:
+            return True
+    return False
 
 
 def strip_ledger_paths(paths: Iterable[str]) -> list[str]:

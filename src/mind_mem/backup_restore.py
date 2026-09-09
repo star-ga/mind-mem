@@ -25,7 +25,7 @@ import tarfile
 from datetime import datetime
 
 from .block_parser import parse_blocks, parse_file
-from .corpus_registry import BACKUP_DIRS, is_ledger_path, iter_ledger_paths
+from .corpus_registry import BACKUP_DIRS, is_ledger_path, is_ledger_target, iter_ledger_paths
 from .enums import IngestTier
 from .observability import get_logger, metrics
 
@@ -65,6 +65,11 @@ RESTORE_VERB = "RESTORE"
 def _exclude_ledgers(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo | None:
     """``tar.add`` filter: drop any member whose name is a ledger path."""
     return None if is_ledger_path(tarinfo.name) else tarinfo
+
+
+def _exclude_ledger_targets(tarinfo: tarfile.TarInfo, workspace: str) -> tarfile.TarInfo | None:
+    """Backup filter that also drops symlink aliases of ledgers."""
+    return None if is_ledger_target(workspace, tarinfo.name) else tarinfo
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +298,7 @@ def backup_workspace(workspace: str, output: str, *, allow_empty: bool = False) 
         for d in BACKUP_DIRS:
             path = os.path.join(ws, d)
             if os.path.isdir(path):
-                tar.add(path, arcname=d, filter=_exclude_ledgers)
+                tar.add(path, arcname=d, filter=lambda info: _exclude_ledger_targets(info, ws))
                 archived.append(d)
 
         for f in BACKUP_FILES:
@@ -572,7 +577,7 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
                 continue
             # A pre-5.0.2 archive names the ledgers under their live path.
             # Writing one back IS the rewind this function exists to stop.
-            if is_ledger_path(member.name):
+            if is_ledger_target(ws, member.name):
                 _log.warning("restore_ledger_refused", member=member.name, reason="a restore may not overwrite a ledger of record")
                 refused_ledgers += 1
                 continue

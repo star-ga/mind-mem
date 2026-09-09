@@ -733,6 +733,7 @@ class TestMutationTwin:
 
         monkeypatch.setattr(block_store_mod, "is_ledger_path", lambda rel: False)
         monkeypatch.setattr(block_store_mod, "assert_ledger_free", lambda paths, *, what: None)
+        monkeypatch.setattr(block_store_mod, "is_ledger_target", lambda *args, **kwargs: False)
 
         write_governed_block(workspace, "D-20260902-001")
         snap_dir = create_snapshot(workspace, "20260902-170000", files_touched=None)
@@ -753,15 +754,19 @@ class TestMutationTwin:
         """Let the sweep treat a ledger as an orphan; it deletes the chain."""
         from mind_mem.evidence_objects import EvidenceChainCompromisedError
 
+        write_governed_block(workspace, "D-20260902-001")
+        snap_dir = create_snapshot(workspace, "20260902-170001", files_touched=None)
+        assert os.path.isfile(os.path.join(workspace, EVIDENCE_REL))
+
+        # Both the historical orphan predicate and the new workspace-aware
+        # destination guard must be disabled to exercise the destructive
+        # mutation; otherwise the second guard correctly preserves the chain.
         monkeypatch.setattr(
             block_store_mod,
             "_is_removable_orphan",
             lambda rel_posix, allowed: rel_posix not in allowed,
         )
-
-        write_governed_block(workspace, "D-20260902-001")
-        snap_dir = create_snapshot(workspace, "20260902-170001", files_touched=None)
-        assert os.path.isfile(os.path.join(workspace, EVIDENCE_REL))
+        monkeypatch.setattr(block_store_mod, "is_ledger_target", lambda *args, **kwargs: False)
 
         with pytest.raises(EvidenceChainCompromisedError):
             restore_snapshot(workspace, snap_dir)
@@ -829,6 +834,7 @@ class TestMutationTwin:
             tar.add(stale, arcname=EVIDENCE_REL)
 
         monkeypatch.setattr(backup_restore, "is_ledger_path", lambda rel: False)
+        monkeypatch.setattr(backup_restore, "is_ledger_target", lambda *args, **kwargs: False)
         with pytest.raises(EvidenceChainCompromisedError):
             restore_workspace(workspace, str(archive), force=True)
 

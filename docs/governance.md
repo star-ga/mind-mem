@@ -49,7 +49,11 @@ The load-bearing layer. Every `recall` (read) or `propose_update` (write) flows 
 
 The drift-detection layer:
 
-- **CI** on every push and PR — full pytest matrix (11,741 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
+<<<<<<< HEAD
+- **CI** on every push and PR — full pytest matrix (11,752 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
+=======
+- **CI** on every push and PR — full pytest matrix (11,752 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
+>>>>>>> c0f0baa (fix(storage): protect ledger identities across backup and restore)
 - **PyPI release** on tag push via OIDC trusted publishing (no long-lived tokens).
 - **LoCoMo benchmark snapshot** per release; regression on any axis (mean / adversarial / temporal) is documented in CHANGELOG.
 
@@ -74,3 +78,18 @@ A change to the kernel surface in 512-mind propagates here through the MIND-Mem 
 ---
 
 *Memory governance design v3.1.x, 2026-05-02. Canonical kernel description: [`512-mind/docs/governance.md`](https://github.com/star-ga/512-mind/blob/main/docs/governance.md).*
+
+
+### Ledger preservation during backup and restore
+
+Backups and snapshots exclude the audit, evidence, served-run and hash-chain
+ledgers, including registered sidecars. Restore checks both the member name
+and its existing filesystem destination: alternate separators, interior dot
+segments, symlinks and hardlinks cannot turn a ledger into ordinary corpus data.
+Ordinary files and non-ledger hardlinks remain restorable.
+
+Legacy directory staging preserves every registered ledger filename, including
+sidecars that share an inode. A failed ledger file check aborts staging instead
+of silently omitting that ledger. These checks protect the destinations observed
+at validation time; they do not establish immunity to a separate process racing
+to replace a path between validation and the write.

@@ -4,9 +4,9 @@
 > estimates to decide whether you need the full file or the summary is enough.
 > Re-generate with: `anatomy .`
 
-**Project:** `mind-mem`
-**Files:** 1535 | **Est. tokens:** ~4567364
-**Generated:** 2026-09-09 12:54 UTC
+**Project:** `mm-ledger-alias-publication-20260909`
+**Files:** 1540 | **Est. tokens:** ~4584310
+**Generated:** 2026-09-09 14:14 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~50140 |
+| `./` | 38 | ~59236 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~207469 |
+| `docs/` | 95 | ~211015 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1080023 |
+| `src/mind_mem/` | 231 | ~1081021 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 658 | ~1994123 |
+| `tests/` | 659 | ~1997429 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -124,7 +124,9 @@
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 - `AGENTS.md` (~995 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~4413 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~4503 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~4503 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~4503 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `CONTRIBUTING.md` (~753 tok, large) — Contributing to MIND-Mem
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
 - `EVIDENCE.md` (~1913 tok, huge) — Evidence Matrix
@@ -460,7 +462,9 @@
 - `federation-setup.md` (~2332 tok, huge) — mind-mem federation & multi-machine setup
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `governance.md` (~1374 tok, large) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~1640 tok, huge) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~1640 tok, huge) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~1640 tok, huge) — MIND-Mem — governance design (5 layers)
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
@@ -703,13 +707,13 @@
 ### `src/mind_mem/`
 
 - `append_only.py` (~3657 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~25378 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~25390 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~6665 tok, huge) — mind-mem field-level audit sidecar — tamper-evident append-only ledger.
 - `audit_context.py` (~4198 tok, huge) — Request-scoped audit attribution for mind-mem's network transports.
 - `audit_pinned.py` (~3194 tok, huge) — Pinned-model audit pipeline — release-CI gate for ``mind-mem.json``.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4688 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `backup_restore.py` (~7048 tok, huge) — mind-mem Backup & Restore CLI. Zero external deps.
+- `backup_restore.py` (~7122 tok, huge) — mind-mem Backup & Restore CLI. Zero external deps.
 - `baseline_snapshot.py` (~4176 tok, huge) — Baseline snapshot for intent drift detection.
 ### `src/mind_mem/bench/`
 
@@ -737,7 +741,7 @@
 - `block_metadata.py` (~5685 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~8138 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_provenance.py` (~2728 tok, huge) — Provenance-rich blocks — optional actor/session/tool/source metadata.
-- `block_store.py` (~18068 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~18340 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `block_store_encrypted.py` (~5788 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `block_store_postgres.py` (~22445 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~3116 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
@@ -778,7 +782,7 @@
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4893 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `core_export.py` (~8336 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `corpus_registry.py` (~5127 tok, huge) — Central corpus path registry for mind-mem.
+- `corpus_registry.py` (~5767 tok, huge) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~3583 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~1463 tok, large) — mind-mem Optional Cross-Encoder Reranker.
 - `cross_ledger.py` (~7869 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1434,6 +1438,7 @@
 - `test_kg_fusion.py` (~2013 tok, huge) — Typed-knowledge-graph fusion into recall (opt-in, default OFF).
 - `test_knowledge_graph.py` (~3753 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ledger_hierarchy.py` (~8001 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_ledger_path_identity.py` (~3178 tok, huge) — Regression controls for ledger refusal across path aliases."""
 - `test_legacy_restore_symlink_confinement.py` (~1152 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_evidence.py` (~5244 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_filter.py` (~1781 tok, huge) — Unit tests for the optional lifecycle block field and recall filter.
@@ -1652,7 +1657,7 @@
 - `test_rest_hardening_batch.py` (~2443 tok, huge) — REST-layer defects found inside files that also carried a HIGH finding.
 - `test_rest_local_anonymous_capability.py` (~834 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_restore44_parked_modules.py` (~6241 tok, huge) — The parked modules from the 5.0.0 restore: still here, still whole, still parked.
-- `test_restore_does_not_rewind.py` (~10594 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_restore_does_not_rewind.py` (~10722 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_restore_is_gated_at_the_seam.py` (~5004 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_restore_record_manifest_containment.py` (~2236 tok, huge) — A snapshot MANIFEST.json cannot make the restore record name foreign blocks.
 - `test_retention_class.py` (~2883 tok, huge) — RA.4 — the retention class, and the two things it must refuse to be.

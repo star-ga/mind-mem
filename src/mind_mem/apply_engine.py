@@ -36,7 +36,7 @@ from .block_store import (
     _safe_child_path,
     _safe_copy,  # noqa: F401 — re-exported; tests import from apply_engine
 )
-from .corpus_registry import SNAPSHOT_DIRS, is_ledger_path
+from .corpus_registry import SNAPSHOT_DIRS, is_ledger_path, is_ledger_target
 from .enums import IngestTier
 from .mind_filelock import FileLock, LockTimeout
 from .namespaces import NamespaceManager
@@ -226,7 +226,7 @@ def _cleanup_orphan_files(ws, pre_apply_files):
     immediate delete succeeding.
     """
     current_files = _list_workspace_files(ws)
-    orphans = {f for f in current_files - pre_apply_files if not is_ledger_path(f)}
+    orphans = {f for f in current_files - pre_apply_files if not is_ledger_path(f) and not is_ledger_target(ws, f)}
     for orphan in orphans:
         path = os.path.join(ws, orphan)
         if os.path.isfile(path):

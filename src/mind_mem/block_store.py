@@ -26,6 +26,7 @@ from .corpus_registry import (
     SNAPSHOT_EXCLUDE_DIRS,
     assert_ledger_free,
     is_ledger_path,
+    is_ledger_target,
 )
 from .mind_filelock import FileLock
 from .observability import get_logger
@@ -374,14 +375,32 @@ def _carry_ledgers_into(ws: str, live_dir: str, staged_dir: str) -> None:
     """
     if not os.path.isdir(live_dir):
         return
+    candidates: list[tuple[str, str]] = []
     for root, _dirs, files in os.walk(live_dir):
         for fname in files:
             live_path = os.path.join(root, fname)
-            if not is_ledger_path(os.path.relpath(live_path, ws)):
+            if os.path.islink(live_path):
                 continue
-            staged_path = os.path.join(staged_dir, os.path.relpath(live_path, live_dir))
-            os.makedirs(os.path.dirname(staged_path), exist_ok=True)
-            shutil.copy2(live_path, staged_path)
+            rel_live = os.path.relpath(live_path, ws)
+            if is_ledger_target(ws, rel_live):
+                candidates.append((rel_live, live_path))
+
+    # Preserve every registered ledger spelling, including sidecars that
+    # share an inode. Process those paths before unregistered aliases so
+    # deduplication can omit aliases without dropping a ledger name.
+    candidates.sort(key=lambda item: (not is_ledger_path(item[0]), item[0]))
+    seen: set[tuple[int, int]] = set()
+    for rel_live, live_path in candidates:
+        # A failed ledger stat must abort the directory swap. Silently
+        # skipping it could replace the live directory without its ledger.
+        stat = os.stat(live_path)
+        identity = (stat.st_dev, stat.st_ino)
+        if identity in seen and not is_ledger_path(rel_live):
+            continue
+        seen.add(identity)
+        staged_path = os.path.join(staged_dir, os.path.relpath(live_path, live_dir))
+        os.makedirs(os.path.dirname(staged_path), exist_ok=True)
+        shutil.copy2(live_path, staged_path)
 
 
 def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_inventory: dict[str, list[str]] | None = None) -> None:
@@ -451,7 +470,8 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
                         continue
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
-                        if _is_removable_orphan(rel.replace(os.sep, "/"), allowed):
+                        rel_posix = rel.replace(os.sep, "/")
+                        if _is_removable_orphan(rel_posix, allowed) and not is_ledger_target(ws, rel_posix):
                             os.remove(os.path.join(root, fname))
         else:
             dirpath = os.path.join(ws, d)
@@ -463,7 +483,8 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
                     dirs[:] = [sub for sub in dirs if not _is_in_excluded_dir(ws, os.path.join(root, sub))]
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
-                        if _is_removable_orphan(rel.replace(os.sep, "/"), allowed):
+                        rel_posix = rel.replace(os.sep, "/")
+                        if _is_removable_orphan(rel_posix, allowed) and not is_ledger_target(ws, rel_posix):
                             os.remove(os.path.join(root, fname))
 
 
@@ -1313,7 +1334,7 @@ class MarkdownBlockStore:
                 {p.replace("\\", "/").split("/", 1)[0] for p in files_touched if p},
             )
             for rel_path in files_touched:
-                if is_ledger_path(rel_path):
+                if is_ledger_target(ws, rel_path):
                     continue  # a ledger of record is never snapshot content
                 resolved = os.path.realpath(os.path.join(ws_real, rel_path))  # nosec — realpath resolves symlinks; traversal filtered by startswith check below
                 if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
@@ -1334,7 +1355,7 @@ class MarkdownBlockStore:
                         for fname in files:
                             src_file = os.path.join(root, fname)
                             rel = os.path.relpath(src_file, ws)
-                            if is_ledger_path(rel):
+                            if is_ledger_target(ws, rel):
                                 # ``memory/`` is corpus AND ledger. Taking the
                                 # ledger is what makes the restore a rewind.
                                 continue
@@ -1421,7 +1442,7 @@ class MarkdownBlockStore:
                 except ValueError as exc:
                     _log.warning("restore_unsafe_manifest_entry", entry=rel_posix, reason=str(exc))
                     continue
-                if is_ledger_path(rel_posix):
+                if is_ledger_target(ws, rel_posix):
                     # A snapshot taken before 5.0.2 names the ledgers. Putting
                     # one back IS the rewind, so the write is refused — but the
                     # entry stays in ``safe_manifest`` so the orphan sweep does
