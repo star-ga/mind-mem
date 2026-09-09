@@ -54,4 +54,3 @@ def load_causal_lm(
     config = auto_config.from_pretrained(source, **config_options)
     normalized = normalize_causal_lm_config(config)
     return auto_model.from_pretrained(source, config=normalized, **model_kwargs)
-

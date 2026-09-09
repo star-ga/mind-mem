@@ -64,17 +64,17 @@ def test_loader_forwards_config_and_model_options_without_mutation() -> None:
     original_config_options = dict(config_options)
     original_model_options = dict(model_options)
 
-    assert load_causal_lm(
-        "local/checkpoint",
-        auto_config=AutoConfig,
-        auto_model=AutoModel,
-        config_kwargs=config_options,
-        **model_options,
-    ) == "model"
+    assert (
+        load_causal_lm(
+            "local/checkpoint",
+            auto_config=AutoConfig,
+            auto_model=AutoModel,
+            config_kwargs=config_options,
+            **model_options,
+        )
+        == "model"
+    )
     assert AutoConfig.seen == [("local/checkpoint", original_config_options)]
-    assert AutoModel.seen == [
-        ("local/checkpoint", {"config": text, **original_model_options})
-    ]
+    assert AutoModel.seen == [("local/checkpoint", {"config": text, **original_model_options})]
     assert config_options == original_config_options
     assert model_options == original_model_options
-

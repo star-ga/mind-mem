@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1539 | **Est. tokens:** ~4559228
-**Generated:** 2026-09-09 20:38 UTC
+**Files:** 1544 | **Est. tokens:** ~4563166
+**Generated:** 2026-09-09 23:01 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 230 | ~1058660 |
+| `src/mind_mem/` | 231 | ~1059258 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 663 | ~2006568 |
+| `tests/` | 665 | ~2007779 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -100,7 +100,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 31 | ~58107 |
+| `train/` | 33 | ~60236 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -747,6 +747,7 @@
 - `capture.py` (~5255 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6359 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~4689 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
+- `causal_lm_loader.py` (~552 tok, large) — Load causal language models with the narrow Qwen3.5 config workaround.
 - `chain_of_note.py` (~1512 tok, huge) — Chain-of-note evidence packing (v3.4.0).
 - `change_stream.py` (~3164 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `chat_citations.py` (~2480 tok, huge) — Citation extraction + validation for the conversational chat layer.
@@ -846,7 +847,7 @@
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `lint.py` (~3856 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lint_autofix.py` (~2148 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `llm_extractor.py` (~8811 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
+- `llm_extractor.py` (~8857 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~5228 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `maintenance_migrate.py` (~2109 tok, huge) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
 - `maturity_breadth_scan.py` (~3027 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1238,6 +1239,8 @@
 - `test_capture_governed_signals.py` (~2903 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_category_distiller.py` (~2660 tok, huge) — Tests for category_distiller.py — CategoryDistiller class."""
 - `test_causal_graph.py` (~1566 tok, huge) — Tests for mind-mem temporal causal graph (causal_graph.py)."""
+- `test_causal_lm_import.py` (~589 tok, large)
+- `test_causal_lm_loader.py` (~622 tok, large)
 - `test_chain_transaction_capability.py` (~1204 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_chain_truncation.py` (~5069 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_change_stream_backpressure.py` (~956 tok, large) — The change stream's backpressure counters, and the drain that gives
@@ -1824,26 +1827,28 @@
 - `README.md` (~675 tok, large) — mind-mem-4b training pipeline
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
 - `V4_RETRAIN_TODO.md` (~2361 tok, huge) — v4 Retrain — Probe Honesty TODO
+- `_causal_lm_import.py` (~493 tok, medium) — Import the shared causal loader from a checkout or a deployed RunPod file."""
 - `audit_canonical_coverage.json` (~5300 tok, huge) — Keys: threshold, total_probes, total_weak, by_group, weak
 - `audit_canonical_coverage.py` (~1479 tok, large) — Audit canonical-answer coverage on every eval probe.
 - `audit_semantic_correctness.json` (~5 tok, tiny) — Keys: findings
 - `audit_semantic_correctness.py` (~1971 tok, huge) — Cross-check every 'file X ships Y' claim in the corpus against src/.
 - `backport_sweep.py` (~1722 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
 - `build_model_card.py` (~4824 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
-- `eval_harness.py` (~8643 tok, huge) — Eval harness for mind-mem-4b.
+- `eval_harness.py` (~8755 tok, huge) — Eval harness for mind-mem-4b.
 - `eval_holdout.py` (~2182 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `merge_and_eval_v4.1.0.py` (~1488 tok, large) — Post-Kaggle: pull LoRA adapter, merge with v4.0.0-base, eval 131 probes.
 - `post_train_chain.sh` (~632 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
 - `post_train_pipeline.sh` (~592 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
 - `qlora_local_3080.py` (~1182 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
-- `resume_pod_train.sh` (~1138 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
-- `runpod_deploy.py` (~5340 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
-- `runpod_full_ft.py` (~2551 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
+- `qwen35_text_config_control.py` (~1075 tok, large) — Offline smoke control for the Qwen3.5 composite-config adapter.
+- `resume_pod_train.sh` (~1220 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
+- `runpod_deploy.py` (~5470 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_full_ft.py` (~2669 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `ship_gguf_ollama_v4.1.0.py` (~1754 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.0.
 - `ship_gguf_ollama_v4.1.1.py` (~1804 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
 - `spend_guard.py` (~2040 tok, huge) — spend_guard — mechanical interlock on cloud spend.
-- `train_qlora.py` (~1314 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
+- `train_qlora.py` (~1433 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `upload_to_hf.py` (~1122 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
 ### `web/`
 
