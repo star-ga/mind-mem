@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mind_mem.recall_cache import (
+    _KEY_FORMAT,
     LRUCache,
     RecallCache,
     cached_recall,
@@ -47,7 +48,7 @@ class TestCacheKey:
 
     def test_key_contains_namespace_prefix(self) -> None:
         key = make_cache_key("q", namespace="mytenant")
-        assert "mindmem:recall:mytenant:" in key
+        assert f"mindmem:recall:{_KEY_FORMAT}:mytenant:" in key
 
 
 class TestLRUCache:
@@ -100,13 +101,16 @@ class TestLRUCache:
 
     def test_invalidate_namespace_removes_matching(self) -> None:
         cache = LRUCache()
-        cache.set("mindmem:recall:ns1:abc", "v1")
-        cache.set("mindmem:recall:ns1:def", "v2")
-        cache.set("mindmem:recall:ns2:xyz", "v3")
+        ns1a = make_cache_key("a", namespace="ns1")
+        ns1b = make_cache_key("b", namespace="ns1")
+        ns2 = make_cache_key("a", namespace="ns2")
+        cache.set(ns1a, "v1")
+        cache.set(ns1b, "v2")
+        cache.set(ns2, "v3")
         dropped = cache.invalidate_namespace("ns1")
         assert dropped == 2
-        assert cache.get("mindmem:recall:ns1:abc") is None
-        assert cache.get("mindmem:recall:ns2:xyz") == "v3"
+        assert cache.get(ns1a) is None
+        assert cache.get(ns2) == "v3"
 
     def test_clear(self) -> None:
         cache = LRUCache()
@@ -160,7 +164,7 @@ class TestRecallCache:
             with patch("mind_mem.recall_cache._RedisCache", return_value=fake_redis):
                 cache = RecallCache(redis_url="redis://fake:6379")
                 # Seed LRU
-                cache.set("mindmem:recall:default:foo", "bar")
+                cache.set(make_cache_key("foo", namespace="default"), "bar")
                 dropped = cache.invalidate_namespace("default")
                 # 1 from LRU + 5 from Redis
                 assert dropped == 6

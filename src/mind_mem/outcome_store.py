@@ -78,8 +78,8 @@ def _workspace_of(mgr: ConnectionManager) -> str:
 
     The inverse of ``calibration._db_path``, spelled with the same constant
     so the two cannot drift: if the index ever moves, this follows it rather
-    than pointing at a stale ancestor. Used only by the OFF-by-default
-    profile leg below — nothing else here needs a filesystem path.
+    than pointing at a stale ancestor. Used by explicit served-run validation and the OFF-by-default
+    profile leg below.
     """
     db_path = os.path.abspath(mgr.db_path)
     suffix = os.sep + _DB_REL_PATH.replace("/", os.sep)
@@ -133,12 +133,68 @@ def _fold_into_noise_profile(
         _log.warning("llm_noise_profile_update_failed", error=str(exc))
 
 
+def _resolve_run_binding(
+    workspace: str,
+    block_ids: Iterable[str] | None,
+    query_id: str,
+    run_id: str,
+) -> tuple[tuple[str, ...], str, str]:
+    """Resolve an explicit served-run identity before opening a write path.
+
+    ``query_id`` remains a legacy, caller-supplied label.  Only ``run_id`` is
+    validated against this workspace's append-only served ledger.  The
+    physical outcome column is still named ``query_id`` for old rows and
+    readers; the returned third value is the explicit semantic run binding.
+    """
+    if not run_id:
+        return normalize_block_ids(block_ids), query_id, ""
+
+    if query_id and query_id != run_id:
+        raise ValueError("query_id and run_id disagree; refusing a conflicting outcome binding")
+    if len(run_id) != 64 or any(char not in "0123456789abcdef" for char in run_id):
+        raise ValueError("run_id must be a 64-character lowercase hexadecimal served-run identity")
+
+    from .served_ledger import (
+        _append_lock,
+        ledger_enabled,
+        ledger_path,
+        read_served_runs,
+        verify_served_chain,
+    )
+
+    if not ledger_enabled(workspace):
+        raise ValueError("run_id cannot be validated because the served-set ledger is disabled")
+    if not os.path.isdir(os.path.dirname(ledger_path(workspace))):
+        raise ValueError("run_id does not identify a served run in this workspace")
+
+    # All ledger writers use this lock.  Validate the chain and select the row
+    # from one stable snapshot, so a concurrent append cannot change the file
+    # between integrity verification and membership selection.
+    with _append_lock(workspace):
+        chain = verify_served_chain(workspace)
+        if not chain.ok:
+            raise ValueError(f"served-run ledger integrity check failed: {chain.reason}")
+        served_run = next((row for row in read_served_runs(workspace) if row.run_id == run_id), None)
+        if served_run is None:
+            raise ValueError("run_id does not identify a served run in this workspace")
+
+    ids = normalize_block_ids(served_run.ids if block_ids is None else block_ids)
+    served_ids = set(served_run.ids)
+    outside = sorted(set(ids) - served_ids)
+    if outside:
+        raise ValueError(f"block_ids are not in the served run: {outside}")
+    # Store the explicit identity in the historical physical column so all
+    # existing run_precision readers continue to join it.
+    return ids, run_id, run_id
+
+
 def record_outcome(
     mgr: ConnectionManager,
-    block_ids: Iterable[str],
+    block_ids: Iterable[str] | None,
     outcome: str,
     *,
     query_id: str = "",
+    run_id: str = "",
     task_id: str = "",
     actor_id: str = "",
     session_id: str = "",
@@ -183,8 +239,9 @@ def record_outcome(
     unchanged.
     """
     verdict = validate_outcome(outcome)
-    ids = normalize_block_ids(block_ids)
     query_id = bounded_field("query_id", query_id)
+    run_id = bounded_field("run_id", run_id)
+    ids, query_id, bound_run_id = _resolve_run_binding(_workspace_of(mgr), block_ids, query_id, run_id)
     task_id = bounded_field("task_id", task_id)
     actor_id = bounded_field("actor_id", actor_id)
     session_id = bounded_field("session_id", session_id)
@@ -194,6 +251,7 @@ def record_outcome(
     outcome_id, payload_hash = canonical_outcome_id(
         ids,
         verdict,
+        run_id=bound_run_id,
         task_id=task_id,
         actor_id=actor_id,
         session_id=session_id,
@@ -289,6 +347,7 @@ def record_outcome(
         "projected": projected,
         "calibration_feedback": feedback if project_to_calibration else "",
         "query_id": query_id,
+        "run_id": bound_run_id,
         "task_id": task_id,
         "actor_id": actor_id,
         "session_id": session_id,

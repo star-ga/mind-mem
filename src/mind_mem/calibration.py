@@ -384,10 +384,11 @@ class CalibrationManager:
 
     def record_outcome(
         self,
-        block_ids: Iterable[str],
+        block_ids: Iterable[str] | None,
         outcome: str,
         *,
         query_id: str = "",
+        run_id: str = "",
         task_id: str = "",
         actor_id: str = "",
         session_id: str = "",
@@ -407,6 +408,7 @@ class CalibrationManager:
             block_ids,
             outcome,
             query_id=query_id,
+            run_id=run_id,
             task_id=task_id,
             actor_id=actor_id,
             session_id=session_id,

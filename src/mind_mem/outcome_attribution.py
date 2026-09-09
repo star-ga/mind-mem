@@ -81,6 +81,7 @@ Copyright (c) STARGA, Inc.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -198,6 +199,7 @@ def canonical_outcome_id(
     block_ids: Sequence[str],
     outcome: str,
     *,
+    run_id: str = "",
     task_id: str = "",
     actor_id: str = "",
     session_id: str = "",
@@ -210,17 +212,19 @@ def canonical_outcome_id(
     tamper-evident record of exactly what was reported. ``outcome_id`` is
     its short, human-pasteable prefix and the idempotency key.
     """
-    payload = _FIELD_SEP.join(
-        (
-            outcome,
-            task_id,
-            actor_id,
-            session_id,
-            tool_id,
-            evidence,
-            _RECORD_SEP.join(block_ids),
+    # Preserve the historical payload for unbound reports.  An explicit run
+    # binding gets a domain/version marker and the served-run identity, so the
+    # same block/verdict reported for two different runs cannot deduplicate.
+    # The new form is a JSON array rather than separator concatenation: the
+    # latter lets a field containing ``_FIELD_SEP`` collide with its neighbor.
+    if run_id:
+        payload = json.dumps(
+            ["outcome-v2", run_id, outcome, task_id, actor_id, session_id, tool_id, evidence, list(block_ids)],
+            ensure_ascii=True,
+            separators=(",", ":"),
         )
-    )
+    else:
+        payload = _FIELD_SEP.join((outcome, task_id, actor_id, session_id, tool_id, evidence, _RECORD_SEP.join(block_ids)))
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return f"out-{digest[:24]}", digest
 
@@ -311,10 +315,11 @@ class OutcomeSignal:
 
 def report_outcome(
     workspace: str,
-    block_ids: Iterable[str],
+    block_ids: Iterable[str] | None,
     outcome: str,
     *,
     query_id: str = "",
+    run_id: str = "",
     task_id: str = "",
     actor_id: str = "",
     session_id: str = "",
@@ -329,7 +334,11 @@ def report_outcome(
         workspace: Workspace root (the calibration DB lives under it).
         block_ids: Blocks that were recalled and acted upon.
         outcome: ``success`` | ``failure`` | ``neutral``.
-        query_id: Originating recall ``query_id``, when known.
+        query_id: Legacy caller-supplied query label, when known. It is not
+            validated as a served run; use ``run_id`` for that contract.
+        run_id: Explicit identity of a row in this workspace's served-set
+            ledger. When supplied, block IDs default to that row's served IDs
+            and are required to be a subset of them.
         task_id: What the consumer was doing (build id, ticket, test name).
         actor_id: Who/what reported the outcome.
         session_id: Session provenance.
@@ -360,6 +369,7 @@ def report_outcome(
         block_ids=block_ids,
         outcome=outcome,
         query_id=query_id,
+        run_id=run_id,
         task_id=task_id,
         actor_id=actor_id,
         session_id=session_id,

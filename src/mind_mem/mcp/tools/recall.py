@@ -31,6 +31,7 @@ from typing import Any
 
 from mind_mem.error_codes import ErrorCode
 from mind_mem.recall import recall as recall_engine
+from mind_mem.recall_cache import retrieval_config_fingerprint
 from mind_mem.retrieval_graph import retrieval_diagnostics as _retrieval_diag
 from mind_mem.scoring_instant import format_scoring_instant, resolve_scoring_instant
 from mind_mem.sqlite_index import _db_path as fts_db_path
@@ -85,6 +86,7 @@ def _anticipation_envelope(
     config: Any,
     head: str,
     instant_iso: str,
+    generation_identity: str,
 ) -> str | None:
     """Answer *query* from the local bundle cache, or ``None`` to fall through.
 
@@ -136,6 +138,7 @@ def _anticipation_envelope(
         limit=limit,
         gate_config=anticipation_config(config),
         head=head,
+        generation_identity=generation_identity,
     )
     if not decision.serve_from_cache:
         return None
@@ -162,7 +165,13 @@ def _anticipation_envelope(
     return json.dumps(envelope, indent=2, default=str)
 
 
-def _record_anticipation_bundle(ws: str, origin: str, raw: str, head: str) -> None:
+def _record_anticipation_bundle(
+    ws: str,
+    origin: str,
+    raw: str,
+    head: str,
+    generation_identity: str,
+) -> None:
     """Store a served envelope's blocks as a bundle at *head*. Never raises.
 
     The producer half. Only reached when the feature is on, so the flag-off
@@ -180,7 +189,7 @@ def _record_anticipation_bundle(ws: str, origin: str, raw: str, head: str) -> No
         hits = [r for r in results if isinstance(r, dict)]
         if not hits:
             return
-        get_cache().record(ws, origin, hits, head=head)
+        get_cache().record(ws, origin, hits, head=head, generation_identity=generation_identity)
         observe_served(str(envelope.get("query", "")), hits)
     except Exception as exc:  # pragma: no cover — a cache write must not break recall
         _log.warning("anticipation_cache_record_failed", origin=origin, error=str(exc))
@@ -361,14 +370,18 @@ def _recall_impl_ranked(
     # no per-hit work for the feature's presence. Attribution tracing takes the
     # same exemption as the recall cache, and for the same reason: a locally
     # answered recall ran none of the retrieval features a trace would claim.
-    from mind_mem.prefetch import anticipation_enabled
+    from mind_mem.prefetch import anticipation_enabled, anticipation_generation_identity
 
     # A filtered request never takes the anticipation answer. That path answers
     # locally, WITHOUT running the retrieval pipeline, so it cannot apply
     # since / until / lifecycle / event_id / min_maturity -- it would return the
     # unfiltered local answer and the filter would silently do nothing. Same
     # exemption, and the same reasoning, as ``format="bundle"`` below.
-    _anticipation_on = anticipation_enabled(_raw_config) and not _trace_on and not _active_filters
+    _anticipation_on = anticipation_enabled(_raw_config) and not _trace_on and not _active_filters and not active_only and backend == "auto"
+    _anticipation_identity: str | None = None
+    if _anticipation_on:
+        _anticipation_identity = anticipation_generation_identity(_raw_config, str(MCP_SCHEMA_VERSION))
+        _anticipation_on = _anticipation_identity is not None
     # ``format="bundle"`` never takes the local answer. The early return below
     # skips the post-cache stages, and the bundle re-shaping is one of them, so
     # serving here would hand a bundle client the raw blocks envelope with no
@@ -377,7 +390,16 @@ def _recall_impl_ranked(
     # through a different door. Falling through costs one round-trip and is
     # always correct, which is the trade this whole module makes everywhere else.
     if _anticipation_on and format == "blocks":
-        _anticipated = _anticipation_envelope(ws, query, limit, _raw_config, _index_anchor, instant_iso)
+        assert _anticipation_identity is not None
+        _anticipated = _anticipation_envelope(
+            ws,
+            query,
+            limit,
+            _raw_config,
+            _index_anchor,
+            instant_iso,
+            _anticipation_identity,
+        )
         if _anticipated is not None:
             return _anticipated
 
@@ -392,6 +414,9 @@ def _recall_impl_ranked(
             ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
             scoring_instant=instant_iso,
             index_anchor=_index_anchor,
+            workspace=ws,
+            config_fingerprint=retrieval_config_fingerprint(_raw_config),
+            schema_version=str(MCP_SCHEMA_VERSION),
             filters=_active_filters,
         )
     else:
@@ -444,7 +469,8 @@ def _recall_impl_ranked(
     # the head the answer was computed at, so a write that lands between now
     # and the next lookup retires this bundle rather than aging it out.
     if _anticipation_on and raw:
-        _record_anticipation_bundle(ws, "recall", raw, _index_anchor)
+        assert _anticipation_identity is not None
+        _record_anticipation_bundle(ws, "recall", raw, _index_anchor, _anticipation_identity)
 
     return raw
 
@@ -855,7 +881,7 @@ def _recall_impl_uncached(
         from mind_mem._recall_core import _apply_post_filters
 
         results = _apply_post_filters(
-            list(results),
+            results,
             since=since,
             until=until,
             lifecycle=lifecycle,
@@ -864,6 +890,20 @@ def _recall_impl_uncached(
             limit=limit,
             workspace=ws,
         )
+        # The scan fallback can itself dispatch a configured backend. Its
+        # degradation/trace carrier is just as authoritative as the direct
+        # HybridBackend carrier captured above; merge it after the funnel so a
+        # material filter cannot erase it.
+        from mind_mem.hybrid_recall import _merge_leg_markers
+
+        filtered_degraded = getattr(results, "degraded", None)
+        # The funnel preserves the original carrier when it can, so the same
+        # marker may arrive through both variables.  Re-merging that duplicate
+        # collapses evidence fields (for example ``index_shape``) to the
+        # generic ``leg``/``reason`` union shape.  Merge only distinct signals.
+        if filtered_degraded != hybrid_degraded:
+            hybrid_degraded = _merge_leg_markers(hybrid_degraded, filtered_degraded)
+        hybrid_trace = hybrid_trace or getattr(results, "trace", None)
 
     recall_elapsed = time.monotonic() - recall_start
     if recall_elapsed > timeout_seconds:
@@ -1513,12 +1553,21 @@ def prefetch(signals: str, limit: int = 5) -> str:
         # recall can be answered from them without a round-trip. Gated on the
         # same flag as the consumer, read from the workspace config already on
         # hand, so an opted-out workspace pays nothing for the wiring.
-        from mind_mem.prefetch import anticipation_enabled, get_cache
+        from mind_mem.prefetch import anticipation_enabled, anticipation_generation_identity, get_cache
 
-        if anticipation_enabled(_load_config(ws)):
-            hits = [r for r in results if isinstance(r, dict)]
-            if hits:
-                get_cache().record(ws, "prefetch", hits, head=_resolve_chain_head(ws))
+        _prefetch_config = _load_config(ws)
+        if anticipation_enabled(_prefetch_config):
+            _prefetch_identity = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
+            if _prefetch_identity is not None:
+                hits = [r for r in results if isinstance(r, dict)]
+                if hits:
+                    get_cache().record(
+                        ws,
+                        "prefetch",
+                        hits,
+                        head=_resolve_chain_head(ws),
+                        generation_identity=_prefetch_identity,
+                    )
         # This tool is a door: it hands assembled block content back to a
         # caller, so it owes the same proof every other door owes. It cannot
         # inherit one from underneath — ``prefetch_context`` fans its signals

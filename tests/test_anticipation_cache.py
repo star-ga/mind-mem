@@ -145,6 +145,22 @@ class TestChainHeadIsTheGeneration:
         assert cache.lookup("/ws-a", "recall determinism scoring", head="head-A").serve_from_cache is True
         assert cache.lookup("/ws-b", "recall determinism scoring", head="head-A").serve_from_cache is False
 
+    def test_policy_identity_change_retires_the_generation_at_the_same_head(self) -> None:
+        cache = prefetch.AnticipationCache()
+        cache.record("/ws", "recall", _hits(), head="head-A", generation_identity="p2:1:aaa")
+
+        changed = cache.lookup(
+            "/ws",
+            "recall determinism scoring",
+            head="head-A",
+            generation_identity="p2:1:bbb",
+        )
+
+        assert changed.serve_from_cache is False
+        assert changed.reason == prefetch.REASON_COLD
+        assert changed.generation_identity == "p2:1:bbb"
+        assert cache.stats()["retired_bundles"] == 1
+
 
 class TestChainHeadResolution:
     def test_head_is_the_value_the_attestation_binds(self, chained_workspace) -> None:
@@ -546,6 +562,92 @@ class TestWiredIntoTheRecallSurface:
 
         assert prefetch.get_cache().stats()["bundles"] == 1
         assert prefetch.get_cache().stats()["documents"] >= 1
+
+    def test_config_change_cannot_serve_a_bundle_from_the_same_corpus_head(self, tmp_path) -> None:
+        from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
+        from mind_mem.mcp.infra.workspace import use_workspace
+        from mind_mem.mcp.tools.recall import _recall_impl
+
+        ws = str(tmp_path / "config-generation")
+        os.makedirs(ws, exist_ok=True)
+        _seed_recall_workspace(ws)
+        config_path = os.path.join(ws, "mind-mem.json")
+
+        def write_config(max_results: int) -> None:
+            with open(config_path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "cache": {"enabled": False, "anticipation": {"enabled": True}},
+                        "limits": {"max_recall_results": max_results},
+                    },
+                    fh,
+                )
+
+        write_config(10)
+        with use_workspace(ws):
+            head = prefetch.chain_head(ws)
+            first = json.loads(_recall_impl("recall scoring instant input", scoring_instant="2026-01-02"))
+            write_config(11)
+            second = json.loads(_recall_impl("recall scoring instant", scoring_instant="2026-01-02"))
+            assert prefetch.chain_head(ws) == head, "the corpus moved, so this did not isolate config identity"
+            third = json.loads(_recall_impl("recall scoring instant", scoring_instant="2026-01-02"))
+
+        assert first["backend"] != "anticipation_cache"
+        assert second["backend"] != "anticipation_cache", "the old-policy bundle crossed a config boundary"
+        assert third["backend"] == "anticipation_cache", "positive control: the new-policy bundle was not usable"
+        with open(config_path, encoding="utf-8") as fh:
+            expected_identity = prefetch.anticipation_generation_identity(json.load(fh), str(MCP_SCHEMA_VERSION))
+        assert third["anticipation"]["generation_identity"] == expected_identity
+        assert len(third["anticipation"]["generation_identity"].rsplit(":", 1)[-1]) == 64
+
+    def test_active_only_request_bypasses_a_warm_unfiltered_bundle(self, tmp_path) -> None:
+        from mind_mem.mcp.infra.workspace import use_workspace
+        from mind_mem.mcp.tools.recall import _recall_impl
+
+        ws = str(tmp_path / "active-only")
+        os.makedirs(ws, exist_ok=True)
+        _seed_recall_workspace(ws)
+        decisions = os.path.join(ws, "decisions", "DECISIONS.md")
+        with open(decisions, encoding="utf-8") as fh:
+            body = fh.read()
+        prefix, target = body.split("[D-20260101-001]", 1)
+        with open(decisions, "w", encoding="utf-8") as fh:
+            fh.write(prefix + "[D-20260101-001]" + target.replace("Status: active", "Status: archived", 1))
+        with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as fh:
+            json.dump(
+                {"cache": {"enabled": False, "anticipation": {"enabled": True}}, "limits": {"max_recall_results": 20}},
+                fh,
+            )
+
+        with use_workspace(ws):
+            warm = json.loads(_recall_impl("recall scoring instant input", limit=20, scoring_instant="2026-01-02"))
+            active = json.loads(_recall_impl("recall scoring instant", limit=20, active_only=True, scoring_instant="2026-01-02"))
+            default = json.loads(_recall_impl("recall scoring instant", limit=20, scoring_instant="2026-01-02"))
+
+        assert any(hit["_id"] == "D-20260101-001" for hit in warm["results"])
+        assert active["backend"] != "anticipation_cache"
+        assert all(hit["_id"] != "D-20260101-001" for hit in active["results"])
+        assert default["backend"] == "anticipation_cache", "default-auto anticipation was disabled too broadly"
+        assert any(hit["_id"] == "D-20260101-001" for hit in default["results"])
+
+    def test_explicit_backend_request_bypasses_a_warm_default_bundle(self, tmp_path) -> None:
+        from mind_mem.mcp.infra.workspace import use_workspace
+        from mind_mem.mcp.tools.recall import _recall_impl
+
+        ws = str(tmp_path / "backend")
+        os.makedirs(ws, exist_ok=True)
+        _seed_recall_workspace(ws)
+        with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as fh:
+            json.dump({"cache": {"enabled": False, "anticipation": {"enabled": True}}}, fh)
+
+        with use_workspace(ws):
+            warm = json.loads(_recall_impl("recall scoring instant input", scoring_instant="2026-01-02"))
+            explicit = json.loads(_recall_impl("recall scoring instant", backend="bm25", scoring_instant="2026-01-02"))
+            default = json.loads(_recall_impl("recall scoring instant", scoring_instant="2026-01-02"))
+
+        assert warm["backend"] != "anticipation_cache"
+        assert explicit["backend"] != "anticipation_cache"
+        assert default["backend"] == "anticipation_cache", "default-auto anticipation was disabled too broadly"
 
     def test_a_real_recall_feeds_the_co_retrieval_loop_the_roadmap_called_starving(self, tmp_path) -> None:
         """``prefetch observations = 0`` was the symptom; this is the wire.

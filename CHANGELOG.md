@@ -6,6 +6,15 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Isolate recall cache entries by workspace, schema, request filters and a
+  versioned configuration fingerprint, including workspaces with empty governed
+  anchors. Keep provider-degradation evidence through filtering and cache replay.
+- Bind opt-in anticipation bundles to the configuration and schema that
+  produced them, retiring bundles when those coordinates change.
+- Add explicit served-run outcome attribution. Validate the current workspace's
+  served ledger and block membership before recording credit; distinct run
+  identities stay distinct and repeated reports remain idempotent. Historical
+  unbound outcome IDs and query labels remain readable.
 - Apply recall lifecycle, event, maturity and date filters through the public
   MCP surface and cache keys. Preserve filter metadata on indexed hits and
   apply compound predicates before the final result limit.

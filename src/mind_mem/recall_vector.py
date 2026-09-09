@@ -1527,10 +1527,20 @@ class VectorBackend(RecallBackend):
 
         # Compute similarity scores
         results = []
+        # Missing status and explicit inactivity are different observations.
+        # Both remain withheld, but a legacy index cannot prove status at all;
+        # that loss of evidence must be carried to the caller.
+        dropped_absent = 0
+        dropped_inactive = 0
         for block, doc_emb in zip(blocks, embeddings):
             # Filter by status if requested
-            if active_only and block.get("status") != "active":
-                continue
+            if active_only:
+                if "status" not in block or block.get("status") in (None, ""):
+                    dropped_absent += 1
+                    continue
+                if block.get("status") != "active":
+                    dropped_inactive += 1
+                    continue
 
             # Compute cosine similarity
             similarity = self.cosine_similarity(query_emb, doc_emb)
@@ -1570,6 +1580,18 @@ class VectorBackend(RecallBackend):
 
         # Sort by score descending
         results.sort(key=lambda r: r["score"], reverse=True)
+        if dropped_absent and self.last_index_diagnostic == "legacy_list_shape":
+            from .hybrid_recall import RecallResults
+
+            marked = RecallResults(results[:limit])
+            marked.degraded = {
+                "leg": "vector",
+                "reason": "status_absent",
+                "rows_missing_status": str(dropped_absent),
+                "rows_inactive": str(dropped_inactive),
+                "index_shape": "legacy_list_shape",
+            }
+            return marked
         return results[:limit]
 
     def _search_qdrant(self, workspace: str, query: str, limit: int, active_only: bool) -> list[dict]:

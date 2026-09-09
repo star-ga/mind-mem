@@ -57,7 +57,8 @@ from mind_mem.accountability_views import (
     run_precision,
     serve_counts,
 )
-from mind_mem.outcome_attribution import report_outcome
+from mind_mem.calibration import CalibrationManager
+from mind_mem.outcome_attribution import canonical_outcome_id, report_outcome
 from mind_mem.recall_attestation import (
     RECALL_ATTEST_TAG,
     RecallAttestation,
@@ -385,6 +386,113 @@ def test_reporting_an_outcome_against_the_published_id_makes_the_join(tmp_path: 
     assert after.credited == 1
     assert after.precision == round(1 / len(served), 6)
     assert after.credit_rows_with_unjoinable_query_id == 1, "an unjoinable row stays named after the join fires"
+
+
+def test_public_run_id_dispatch_defaults_to_the_served_set(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The public recall envelope can validate a complete run-bound report."""
+    ws, envelope = _live_run(tmp_path, monkeypatch, "explicit-run")
+    import mind_mem.mcp.tools.calibration as mcp_calibration
+
+    monkeypatch.setattr(mcp_calibration, "_workspace", lambda: ws)
+    run_id = envelope["attestation"]["query_id"]
+    result = json.loads(
+        mcp_calibration.report_outcome(
+            block_ids=None,
+            outcome="success",
+            run_id=run_id,
+        )
+    )
+
+    assert result["status"] == "recorded"
+    assert set(result["block_ids"]) == {hit["_id"] for hit in envelope["results"]}
+    assert result["run_id"] == run_id
+    assert run_precision(ws).available is True
+
+
+def test_explicit_run_id_rejects_foreign_or_unserved_blocks_before_writing(tmp_path: pathlib.Path) -> None:
+    ws = _live_workspace(tmp_path, "membership")
+    ids = ("D-20260901-001", "D-20260901-002")
+    row = append_served_run(
+        ws,
+        query_hash=query_hash("membership"),
+        served_digest=served_set_digest(ids),
+        ids=ids,
+        pipeline_hash=PIPELINE,
+        index_anchor=ANCHOR,
+        scoring_instant=INSTANT,
+    )
+    assert row is not None
+
+    with pytest.raises(ValueError, match="not in the served run"):
+        report_outcome(ws, ["D-20260901-999"], "success", run_id=row.run_id)
+    other = _live_workspace(tmp_path, "other")
+    with pytest.raises(ValueError, match="does not identify"):
+        report_outcome(other, list(ids), "success", run_id=row.run_id)
+    assert CalibrationManager(ws).list_outcomes() == []
+
+    ledger = pathlib.Path(ws) / ".mind-mem-ledger" / "served.jsonl"
+    original = ledger.read_text(encoding="utf-8")
+    row_data = json.loads(original)
+    row_data["index_anchor"] = "0" * 64
+    ledger.write_text(json.dumps(row_data) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="integrity check"):
+        report_outcome(ws, list(ids), "success", run_id=row.run_id)
+    assert CalibrationManager(ws).list_outcomes() == []
+
+
+def test_run_bound_identity_distinguishes_two_runs_and_replays_idempotently(tmp_path: pathlib.Path) -> None:
+    ws = _live_workspace(tmp_path, "identity")
+    ids = ("D-20260901-001", "D-20260901-002")
+    rows = [
+        append_served_run(
+            ws,
+            query_hash=query_hash(f"identity-{i}"),
+            served_digest=served_set_digest(ids),
+            ids=ids,
+            pipeline_hash=PIPELINE,
+            index_anchor=ANCHOR,
+            scoring_instant=f"2026-09-0{i + 1}",
+        )
+        for i in range(2)
+    ]
+    assert all(rows)
+    first_row, second_row = rows
+    assert first_row is not None
+    assert second_row is not None
+
+    first = report_outcome(ws, [ids[0]], "success", run_id=first_row.run_id, recorded_at=INSTANT)
+    replay = report_outcome(ws, [ids[0]], "success", run_id=first_row.run_id, recorded_at="2026-09-02")
+    second = report_outcome(ws, [ids[0]], "success", run_id=second_row.run_id, recorded_at=INSTANT)
+
+    assert first["outcome_id"] == replay["outcome_id"]
+    assert replay["idempotent"] is True
+    assert first["outcome_id"] != second["outcome_id"]
+    assert len(CalibrationManager(ws).list_outcomes()) == 2
+
+
+def test_explicit_and_legacy_bindings_cannot_be_confused(tmp_path: pathlib.Path) -> None:
+    ws = _live_workspace(tmp_path, "conflict")
+    ids = ("D-20260901-001", "D-20260901-002")
+    row = append_served_run(
+        ws,
+        query_hash=query_hash("conflict"),
+        served_digest=served_set_digest(ids),
+        ids=ids,
+        pipeline_hash=PIPELINE,
+        index_anchor=ANCHOR,
+        scoring_instant=INSTANT,
+    )
+    assert row is not None
+    with pytest.raises(ValueError, match="disagree"):
+        report_outcome(ws, [ids[0]], "success", query_id="legacy-label", run_id=row.run_id)
+    assert CalibrationManager(ws).list_outcomes() == []
+
+
+def test_run_bound_identity_is_unambiguous_for_separator_content() -> None:
+    run = "a" * 64
+    left = canonical_outcome_id(["D-1"], "success", run_id=run, task_id="a\x1fb", actor_id="c")
+    right = canonical_outcome_id(["D-1"], "success", run_id=run, task_id="a", actor_id="b\x1fc")
+    assert left != right
 
 
 def test_the_join_test_can_fail(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:

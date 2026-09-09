@@ -175,6 +175,7 @@ def report_outcome(
     block_ids: list[str] | None = None,
     outcome: str = "",
     query_id: str = "",
+    run_id: str = "",
     task_id: str = "",
     actor_id: str = "",
     session_id: str = "",
@@ -201,7 +202,11 @@ def report_outcome(
     Args:
         block_ids: Blocks that were recalled and acted upon.
         outcome: "success", "failure", or "neutral".
-        query_id: The query_id from the recall result that produced them.
+        query_id: Legacy caller-supplied query label. Use ``run_id`` for an
+            validated served-run attribution.
+        run_id: Served-run identity from the recall envelope. The current
+            workspace's served ledger validates it; omitted block IDs
+            then mean every block in that run.
         task_id: What was being done (build id, ticket, test name).
         actor_id: Who/what is reporting.
         session_id: Session provenance.
@@ -221,9 +226,10 @@ def report_outcome(
 
         result = _report(
             ws,
-            block_ids or [],
+            block_ids,
             outcome,
             query_id=query_id,
+            run_id=run_id,
             task_id=task_id,
             actor_id=actor_id,
             session_id=session_id,

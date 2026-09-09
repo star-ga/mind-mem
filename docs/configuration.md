@@ -846,7 +846,21 @@ unreachable (fail-open).
 | `cache.anticipation.novel_ratio_threshold` | float | `0.45` | Suppress the local hit above this share of query stems the bundles do not hold. Strict: a ratio exactly at the threshold is served. |
 | `cache.anticipation.min_corpus_stems` | integer | `200` | Distinct cached stems required before the ratio is trusted at all. Below this floor every query falls through to the store, so a cold cache resolves in the safe direction. |
 
-**Cache key format:** `mindmem:recall:<namespace>:<sha256(query+namespace+limit+backend+active_only+scoring_instant+index_anchor)>`
+**Cache key format:** `mindmem:recall:v3:<namespace>:<digest-prefix>`.
+The digest binds the canonical local workspace path, versioned raw non-cache
+configuration, MCP schema, query, namespace, limit, backend, active-only flag,
+scoring instant, governed index anchor and selected filters. A workspace with
+no governed anchor still has its own cache identity. Invalid programmatic
+configuration bypasses caching instead of sharing a fallback key. This is a
+configuration identity, not a claim to fingerprint external model weights or
+mutable environment state.
+
+Anticipation bundles also bind the raw configuration and schema that generated
+them. A configuration change retires the prior local generation even if the
+workspace's governed head has not moved. Active-only requests, explicit backend selections and filter-bearing
+requests bypass anticipation so their constraints reach the retrieval path.
+These bundles remain explicitly unattested; this cache change does not create
+a served-ledger certificate.
 
 `index_anchor` is the workspace's governed-ledger head — the hash chain the
 governance gate appends to on every admitted write and delete. It is in the key because
@@ -1204,6 +1218,28 @@ four panels:
 - **Apply Rollback Rate** — `rate(apply_rollback_total[5m])`.
 
 ---
+
+## Served-run outcome attribution
+
+Use `report_outcome(run_id=...)` to bind an outcome to an attested recall. The
+run identity is currently exposed as `envelope["attestation"]["query_id"]`.
+The tool validates the current workspace's served chain and requires the named
+run to exist there. Omit `block_ids` to credit all blocks in that served run, or
+provide a subset. Unknown runs, corrupt chains, foreign-workspace runs,
+unserved block IDs and conflicting `run_id`/`query_id` values refuse before
+outcome rows are written.
+
+The identity names the deterministic query, ordered served set and pipeline;
+it does not uniquely name a wall-clock invocation. Identical answers may share
+it, while the served ledger's `seq` distinguishes recorded invocations. New
+run-bound outcomes use a versioned, unambiguous payload: two distinct run IDs
+produce distinct outcomes, and replaying the same report is idempotent.
+
+`query_id` without `run_id` retains its historical caller-supplied-label
+behavior and existing outcome IDs. It does not acquire the new validation
+contract. Actor and tool labels remain descriptive, not authenticated principals.
+Outcome reporting does not directly promote memory tiers or mutate governed
+block content; the existing optional calibration projection remains opt-in.
 
 ## LLM Reliability Profile (`v4.llm_noise_profile`)
 

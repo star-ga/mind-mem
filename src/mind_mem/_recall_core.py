@@ -742,6 +742,39 @@ def _prefilter_corpus(
     return kept
 
 
+def _project_recall_carrier(
+    source: list[dict],
+    projected: list[dict],
+    *,
+    degraded: dict[str, object] | None = None,
+) -> list[dict]:
+    """Preserve run metadata when a post-filter creates a new result list.
+
+    ``list`` slicing, live-status refresh and every material filtering helper
+    return a plain list. Capture the carrier from the pre-filter object and
+    restore degradation/trace on the new list. A pre-existing attestation is
+    deliberately not copied after projection: it binds the old served rows and
+    the public surface derives the valid attestation after filtering.
+
+    When nothing changed, return the exact source object. This keeps the
+    established no-filter identity and any valid attestation already on it.
+    """
+    source_degraded = getattr(source, "degraded", None)
+    marker = degraded if degraded is not None else source_degraded
+    trace = getattr(source, "trace", None)
+    if projected is source and marker == source_degraded:
+        return source
+    if marker is None and trace is None:
+        return projected
+
+    from .hybrid_recall import RecallResults
+
+    carried = RecallResults(projected)
+    carried.degraded = marker
+    carried.trace = trace
+    return carried
+
+
 def _apply_post_filters(
     hits: list[dict],
     *,
@@ -784,6 +817,7 @@ def _apply_post_filters(
     drop it. ``None`` (the default) skips the step entirely and returns
     the filtered hits untouched.
     """
+    carrier = hits
     # Admissibility first: a block recall may not serve must never occupy
     # a result slot, whatever the other filters decide.
     hits = _withhold_inadmissible(hits, workspace, status_key="status", leg="funnel", allow=admission_allow)
@@ -809,7 +843,7 @@ def _apply_post_filters(
             context=guardrail_context,
             policy=guardrail_policy,
         )
-    return hits
+    return _project_recall_carrier(carrier, hits)
 
 
 @_traced("recall")
@@ -1007,8 +1041,16 @@ def recall(
             # it to ``limit`` AFTER filtering. ``_wide_pool_k`` is ``None`` on
             # an unfiltered query, so that request is the one it always was.
             backend_hits: list[dict] = _cfg_backend.search(workspace, query, limit=_wide_pool_k or limit, active_only=active_only)
+            # Capture before filtering or empty-result fallback. Either can
+            # turn the carrier into a plain list or replace the provider's
+            # result with the lexical scan below.
+            _backend_marker = getattr(backend_hits, "degraded", None)
+            if _backend_marker is not None:
+                from .hybrid_recall import _merge_leg_markers
+
+                _degraded_marker = _merge_leg_markers(_degraded_marker, dict(_backend_marker))
             if backend_hits:
-                return _apply_post_filters(
+                filtered = _apply_post_filters(
                     backend_hits,
                     since=since,
                     until=until,
@@ -1022,6 +1064,7 @@ def recall(
                     guardrail_policy=_guardrail_policy,
                     admission_allow=_admission_allow,
                 )
+                return _project_recall_carrier(filtered, filtered, degraded=_degraded_marker)
         except Exception as exc:
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
 
@@ -2221,17 +2264,7 @@ def recall(
         guardrail_policy=_guardrail_policy,
         admission_allow=_admission_allow,
     )
-    if _degraded_marker is not None:
-        # ``RecallResults`` IS a list, so wrapping is transparent to every
-        # caller that only iterates/indexes; a degradation-aware caller reads
-        # ``.degraded``. Only built when the corpus was actually truncated —
-        # the untruncated path returns the same plain list it always did.
-        from .hybrid_recall import RecallResults
-
-        marked = RecallResults(top)
-        marked.degraded = _degraded_marker
-        return marked
-    return top
+    return _project_recall_carrier(top, top, degraded=_degraded_marker)
 
 
 #: Every ``recall.backend`` value this loader has a case for. Anything else

@@ -74,6 +74,75 @@ _LRU_MAX_ENTRIES = 1024
 # ---------------------------------------------------------------------------
 
 
+#: Cache-key contract version. Entries produced before workspace, retrieval
+#: projection, schema, and filter coordinates were all bound must never be
+#: adopted into the stronger contract.
+_KEY_FORMAT = "v3"
+
+
+def canonical_workspace_id(workspace: str | None) -> str:
+    """Return the local filesystem identity used to isolate cache entries.
+
+    ``realpath`` makes aliases of one local root share an entry. This is a
+    local path identity, not a portable authority or authenticated principal.
+    An absent workspace gets a reserved sentinel instead of colliding with the
+    empty governed anchor.
+    """
+    import os
+
+    if not workspace or not str(workspace).strip():
+        return "\x00unscoped"
+    try:
+        return os.path.realpath(str(workspace))
+    except (OSError, ValueError):
+        return str(workspace)
+
+
+#: Version of the retrieval-config projection itself. A projection change must
+#: change the digest even for the overwhelmingly common empty/default config.
+PROJECTION_VERSION = "p2"
+
+#: Returned only for programmatic, non-JSON configurations. The public config
+#: loader parses JSON, so ordinary files cannot produce this value; callers
+#: that construct an invalid mapping must bypass the cache rather than share a
+#: sentinel key with another invalid mapping.
+UNCACHEABLE_CONFIG_FINGERPRINT = "\x00unserialisable"
+
+
+#: Storage-only settings do not change an answer. Every other top-level field
+#: is retained conservatively: a newly introduced provider or policy section
+#: must cause an extra miss until its semantics are understood, never reuse an
+#: answer produced under another configuration.
+_CACHE_ONLY_SECTIONS = frozenset({"cache"})
+
+
+def effective_retrieval_projection(config: dict | None) -> dict:
+    """Project every raw non-cache config field into cache identity.
+
+    This intentionally does not resolve defaults. Explicit and implicit forms
+    may therefore miss each other's cache entries, which is safe; treating two
+    differently resolved configs as identical could serve the wrong answer.
+    Environment and model-artifact state remain outside this raw-file contract.
+    """
+    if not isinstance(config, dict):
+        return {}
+    return {key: value for key, value in config.items() if key not in _CACHE_ONLY_SECTIONS}
+
+
+def retrieval_config_fingerprint(config: dict | None) -> str:
+    """Digest the versioned JSON retrieval projection, including its empty state."""
+    relevant = effective_retrieval_projection(config)
+    try:
+        body = json.dumps(
+            {"v": PROJECTION_VERSION, "sections": relevant},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError):
+        return UNCACHEABLE_CONFIG_FINGERPRINT
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
 def make_cache_key(
     query: str,
     *,
@@ -83,6 +152,9 @@ def make_cache_key(
     active_only: bool = False,
     scoring_instant: str = "",
     index_anchor: str = "",
+    workspace: str = "",
+    config_fingerprint: str = "",
+    schema_version: str = "",
     filters: dict | None = None,
 ) -> str:
     """Derive a stable cache key for a recall invocation.
@@ -115,6 +187,9 @@ def make_cache_key(
     outside the recall path; the recall path always supplies it.
     """
     payload = {
+        "workspace": canonical_workspace_id(workspace),
+        "config": config_fingerprint,
+        "schema": schema_version,
         "query": query,
         "namespace": namespace,
         "limit": int(limit),
@@ -137,7 +212,7 @@ def make_cache_key(
         payload["filters"] = {k: str(v) for k, v in sorted(active_filters.items())}
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    return f"mindmem:recall:{namespace}:{digest[:24]}"
+    return f"mindmem:recall:{_KEY_FORMAT}:{namespace}:{digest[:24]}"
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +259,7 @@ class LRUCache:
 
     def invalidate_namespace(self, namespace: str) -> int:
         """Remove every entry whose key contains the namespace."""
-        prefix = f"mindmem:recall:{namespace}:"
+        prefix = f"mindmem:recall:{_KEY_FORMAT}:{namespace}:"
         with self._lock:
             to_delete = [k for k in self._data if k.startswith(prefix)]
             for k in to_delete:
@@ -233,7 +308,7 @@ class _RedisCache:
     def invalidate_namespace(self, namespace: str) -> int:
         """SCAN + DEL every key under the namespace prefix."""
         try:
-            prefix = f"mindmem:recall:{namespace}:*"
+            prefix = f"mindmem:recall:{_KEY_FORMAT}:{namespace}:*"
             count = 0
             for batch in _scan_iter_chunks(self._client, prefix, 500):
                 if batch:
@@ -351,6 +426,9 @@ def cached_recall(
     config: dict[str, Any] | None = None,
     scoring_instant: str = "",
     index_anchor: str = "",
+    workspace: str = "",
+    config_fingerprint: str = "",
+    schema_version: str = "",
     filters: dict | None = None,
 ) -> str:
     """Cache-wrapped call to a recall function.
@@ -367,6 +445,13 @@ def cached_recall(
     See :func:`make_cache_key` for why the anchor, not the TTL, is what makes a
     superseded entry unservable.
     """
+    if config_fingerprint == UNCACHEABLE_CONFIG_FINGERPRINT:
+        # A shared sentinel in the key would make every distinct malformed
+        # config collide. The file-backed public config is JSON and never takes
+        # this branch; it protects programmatic callers without guessing an
+        # identity for data the canonical serializer refused.
+        return str(inner(query, limit=limit, active_only=active_only, backend=backend, **(filters or {})))
+
     key = make_cache_key(
         query,
         namespace=namespace,
@@ -375,6 +460,9 @@ def cached_recall(
         active_only=active_only,
         scoring_instant=scoring_instant,
         index_anchor=index_anchor,
+        workspace=workspace,
+        config_fingerprint=config_fingerprint,
+        schema_version=schema_version,
         filters=filters,
     )
     cache = get_cache(config)

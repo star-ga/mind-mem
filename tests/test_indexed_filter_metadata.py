@@ -119,6 +119,69 @@ def test_unfiltered_funnel_preserves_result_carrier_identity():
     assert result.degraded == {"leg": "vector", "reason": "deadline_exceeded"}
 
 
+def test_filtered_carrier_keeps_degradation_and_trace_but_not_stale_attestation():
+    from mind_mem.hybrid_recall import RecallResults
+
+    hits = RecallResults(
+        [
+            {"_id": "keep", "status": "active", "Lifecycle": "durable"},
+            {"_id": "drop", "status": "active", "Lifecycle": "ephemeral"},
+        ]
+    )
+    hits.degraded = {"leg": "vector", "reason": "deadline_exceeded"}
+    hits.trace = {"vector": {"ran": True}}
+    hits.attestation = {"results_digest": "binds-the-two-row-input"}
+    result = _apply_post_filters(
+        hits,
+        since=None,
+        until=None,
+        lifecycle="durable",
+        event_id=None,
+        min_maturity=None,
+        limit=10,
+    )
+    assert [hit["_id"] for hit in result] == ["keep"]
+    assert result.degraded == hits.degraded
+    assert result.trace == hits.trace
+    assert result.attestation is None
+
+
+def test_truncated_carrier_keeps_run_metadata_without_stale_attestation():
+    from mind_mem.hybrid_recall import RecallResults
+
+    hits = RecallResults([{"_id": "first", "status": "active"}, {"_id": "second", "status": "active"}])
+    hits.degraded = {"leg": "bm25", "reason": "corpus_truncated"}
+    hits.trace = {"bm25": {"ran": True}}
+    hits.attestation = {"results_digest": "binds-the-two-row-input"}
+    result = _apply_post_filters(hits, since=None, until=None, lifecycle=None, event_id=None, min_maturity=None, limit=1)
+    assert [hit["_id"] for hit in result] == ["first"]
+    assert result.degraded == hits.degraded
+    assert result.trace == hits.trace
+    assert result.attestation is None
+
+
+def test_live_status_copy_does_not_strip_the_carrier(monkeypatch):
+    from mind_mem import _recall_core
+    from mind_mem.hybrid_recall import RecallResults
+
+    hits = RecallResults([{"_id": "D-1", "status": "active"}])
+    hits.degraded = {"leg": "vector", "reason": "status_absent"}
+    hits.trace = {"vector": {"ran": True}}
+    monkeypatch.setattr(_recall_core, "live_statuses", lambda workspace: {"D-1": "active"})
+    result = _apply_post_filters(
+        hits,
+        since=None,
+        until=None,
+        lifecycle=None,
+        event_id=None,
+        min_maturity=None,
+        limit=10,
+        workspace="/unused",
+    )
+    assert result.degraded == hits.degraded
+    assert result.trace == hits.trace
+
+
 @pytest.mark.parametrize("mode", ["similar", "axis", "pack", "prefetch", "classify", "diagnostics"])
 @pytest.mark.parametrize(
     "filters",

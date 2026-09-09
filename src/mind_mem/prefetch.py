@@ -83,6 +83,7 @@ from ._recall_tokenization import tokenize
 from .novel_term_gate import DEFAULT_CONFIG as GATE_DEFAULT_CONFIG
 from .novel_term_gate import NovelTermGateConfig, NovelTermVerdict, evaluate_stems
 from .recall_attestation import GENESIS_ANCHOR, _resolve_index_anchor
+from .recall_cache import PROJECTION_VERSION, UNCACHEABLE_CONFIG_FINGERPRINT, retrieval_config_fingerprint
 
 __all__ = [
     "DEFAULT_MAX_BUNDLES",
@@ -93,6 +94,7 @@ __all__ = [
     "REASON_NO_MATCH",
     "anticipation_config",
     "anticipation_enabled",
+    "anticipation_generation_identity",
     "chain_head",
     "get_cache",
     "reset_cache",
@@ -224,6 +226,21 @@ def anticipation_config(config: Mapping[str, Any] | None) -> NovelTermGateConfig
     return NovelTermGateConfig(novel_ratio_threshold=float(threshold), min_corpus_stems=int(floor))
 
 
+def anticipation_generation_identity(config: Mapping[str, Any] | None, schema_version: str) -> str | None:
+    """Bind a bundle generation to retrieval policy and public schema.
+
+    A programmatic mapping that the shared JSON projection cannot represent
+    bypasses anticipation rather than sharing an invalid identity.
+    """
+    try:
+        fingerprint = retrieval_config_fingerprint(dict(config) if isinstance(config, Mapping) else None)
+    except (TypeError, ValueError):
+        return None
+    if fingerprint == UNCACHEABLE_CONFIG_FINGERPRINT:
+        return None
+    return f"{PROJECTION_VERSION}:{schema_version}:{fingerprint}"
+
+
 # ---------------------------------------------------------------------------
 # Bundles
 # ---------------------------------------------------------------------------
@@ -298,6 +315,7 @@ class Bundle:
 
     head: str
     origin: str
+    generation_identity: str = ""
     documents: tuple[_Document, ...] = field(default_factory=tuple)
 
     @property
@@ -322,6 +340,7 @@ class AnticipationDecision:
     head: str
     bundle_count: int
     document_count: int
+    generation_identity: str = ""
     verdict: NovelTermVerdict | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -329,6 +348,7 @@ class AnticipationDecision:
             "serve_from_cache": self.serve_from_cache,
             "reason": self.reason,
             "head": self.head,
+            "generation_identity": self.generation_identity,
             "bundles": self.bundle_count,
             "documents": self.document_count,
         }
@@ -345,7 +365,7 @@ class AnticipationDecision:
 
 
 class AnticipationCache:
-    """Process-local bundle store, partitioned by chain head.
+    """Process-local bundle store, partitioned by corpus and policy generation.
 
     Entirely in memory and entirely per-process: this is a *client-side* cache,
     and pushing it to a shared transport would put one agent's locally-answered
@@ -356,10 +376,10 @@ class AnticipationCache:
     def __init__(self, max_bundles: int = DEFAULT_MAX_BUNDLES) -> None:
         self._max = max(1, int(max_bundles))
         self._lock = threading.RLock()
-        # workspace -> (head, OrderedDict[bundle_key, Bundle]) — one live
+        # workspace -> (head, config/schema identity, bundle map) — one live
         # generation per workspace. A head change replaces the mapping rather
         # than pruning it, so a superseded generation cannot be half-retired.
-        self._generations: dict[str, tuple[str, "OrderedDict[str, Bundle]"]] = {}
+        self._generations: dict[str, tuple[str, str, "OrderedDict[str, Bundle]"]] = {}
         self._hits = 0
         self._misses = 0
         self._retired = 0
@@ -373,6 +393,7 @@ class AnticipationCache:
         hits: Sequence[Mapping[str, Any]],
         *,
         head: str | None = None,
+        generation_identity: str = "",
     ) -> Bundle | None:
         """Store *hits* as a bundle at the workspace's current chain head.
 
@@ -407,9 +428,14 @@ class AnticipationCache:
             )
         if not documents:
             return None
-        bundle = Bundle(head=resolved_head, origin=str(origin), documents=tuple(documents))
+        bundle = Bundle(
+            head=resolved_head,
+            origin=str(origin),
+            generation_identity=generation_identity,
+            documents=tuple(documents),
+        )
         with self._lock:
-            generation = self._generation_for(workspace, resolved_head)
+            generation = self._generation_for(workspace, resolved_head, generation_identity)
             generation[bundle.origin] = bundle
             generation.move_to_end(bundle.origin)
             while len(generation) > self._max:
@@ -426,6 +452,7 @@ class AnticipationCache:
         limit: int = 10,
         gate_config: NovelTermGateConfig = GATE_DEFAULT_CONFIG,
         head: str | None = None,
+        generation_identity: str = "",
     ) -> AnticipationDecision:
         """Decide whether *query* can be answered from the local bundles.
 
@@ -440,7 +467,7 @@ class AnticipationCache:
         """
         resolved_head = chain_head(workspace) if head is None else head
         with self._lock:
-            generation = self._generation_for(workspace, resolved_head)
+            generation = self._generation_for(workspace, resolved_head, generation_identity)
             bundles = tuple(generation.values())
         documents = tuple(doc for bundle in bundles for doc in bundle.documents)
         if not documents:
@@ -452,6 +479,7 @@ class AnticipationCache:
                 head=resolved_head,
                 bundle_count=len(bundles),
                 document_count=0,
+                generation_identity=generation_identity,
             )
 
         corpus_stems: set[str] = set()
@@ -467,6 +495,7 @@ class AnticipationCache:
                 head=resolved_head,
                 bundle_count=len(bundles),
                 document_count=len(documents),
+                generation_identity=generation_identity,
                 verdict=verdict,
             )
 
@@ -480,6 +509,7 @@ class AnticipationCache:
                 head=resolved_head,
                 bundle_count=len(bundles),
                 document_count=len(documents),
+                generation_identity=generation_identity,
                 verdict=verdict,
             )
         self._count(miss=False)
@@ -490,6 +520,7 @@ class AnticipationCache:
             head=resolved_head,
             bundle_count=len(bundles),
             document_count=len(documents),
+            generation_identity=generation_identity,
             verdict=verdict,
         )
 
@@ -542,22 +573,26 @@ class AnticipationCache:
 
     # -- generations -------------------------------------------------------
 
-    def _generation_for(self, workspace: str, head: str) -> "OrderedDict[str, Bundle]":
-        """The live bundle map for (*workspace*, *head*), retiring any older one.
+    def _generation_for(
+        self,
+        workspace: str,
+        head: str,
+        generation_identity: str,
+    ) -> "OrderedDict[str, Bundle]":
+        """Return the live map for one workspace/head/config/schema generation.
 
-        Called under the lock. When the recorded head differs from *head* the
-        whole map is replaced: a generation is retired wholesale, never
-        selectively, so there is no path on which one stale bundle survives a
-        head move because a filter forgot about it.
+        Called under the lock. A corpus-head or policy-identity change replaces
+        the whole map: a generation is retired wholesale, never selectively,
+        so no stale bundle survives because an invalidation hook forgot it.
         """
         key = os.path.abspath(workspace) if workspace else ""
         existing = self._generations.get(key)
-        if existing is not None and existing[0] == head:
-            return existing[1]
+        if existing is not None and existing[0] == head and existing[1] == generation_identity:
+            return existing[2]
         if existing is not None:
-            self._retired += len(existing[1])
+            self._retired += len(existing[2])
         fresh: "OrderedDict[str, Bundle]" = OrderedDict()
-        self._generations[key] = (head, fresh)
+        self._generations[key] = (head, generation_identity, fresh)
         return fresh
 
     # -- introspection -----------------------------------------------------
@@ -569,8 +604,8 @@ class AnticipationCache:
         single moment rather than a smear across concurrent lookups.
         """
         with self._lock:
-            bundles = sum(len(gen) for _head, gen in self._generations.values())
-            documents = sum(len(b.documents) for _h, gen in self._generations.values() for b in gen.values())
+            bundles = sum(len(gen) for _head, _identity, gen in self._generations.values())
+            documents = sum(len(b.documents) for _head, _identity, gen in self._generations.values() for b in gen.values())
             hits, misses, retired = self._hits, self._misses, self._retired
             workspaces = len(self._generations)
         total = hits + misses

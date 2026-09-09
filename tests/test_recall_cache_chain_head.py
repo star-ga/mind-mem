@@ -22,7 +22,7 @@ import os
 
 import pytest
 
-from mind_mem.recall_cache import cached_recall, make_cache_key, reset_singleton
+from mind_mem.recall_cache import _KEY_FORMAT, cached_recall, make_cache_key, reset_singleton
 
 
 @pytest.fixture(autouse=True)
@@ -50,7 +50,7 @@ class TestTheAnchorIsInTheKey:
 
     def test_omitting_the_anchor_still_yields_a_key(self) -> None:
         """Callers outside the recall path keep working; they just get one bucket."""
-        assert make_cache_key("q").startswith("mindmem:recall:default:")
+        assert make_cache_key("q").startswith(f"mindmem:recall:{_KEY_FORMAT}:default:")
 
     def test_the_anchor_is_not_confused_with_the_instant(self) -> None:
         anchored = make_cache_key("q", index_anchor="a" * 64, scoring_instant="")
