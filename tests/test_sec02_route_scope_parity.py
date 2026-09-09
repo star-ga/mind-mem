@@ -28,6 +28,8 @@ denies. Never the reverse. No route may become MORE permissive here.
 
 from __future__ import annotations
 
+import pytest
+
 from mind_mem.http_transport import ROUTES
 from mind_mem.mcp.infra.acl import ADMIN_TOOLS, USER_TOOLS
 
@@ -56,6 +58,19 @@ def test_no_mutating_route_is_user_scope():
     """The SEC02 defect in one assertion."""
     leaks = [r.name for r in ROUTES if r.mutates and r.scope != ADMIN]
     assert not leaks, f"mutating routes reachable at user scope: {leaks}"
+
+
+def test_parity_is_enforced_at_IMPORT_not_only_asserted_here():
+    """Root: do not claim import-time parity unless the code performs it.
+
+    It does now -- Route.__post_init__ consults the MCP ACL -- so this control
+    verifies the CONSTRUCTOR refuses, rather than re-walking the table and
+    calling that a parity check.
+    """
+    from mind_mem.http_transport import NO_CONTENT, Route, _handle_status
+
+    with pytest.raises(ValueError, match="MCP twin"):
+        Route("GET", "/x", _handle_status, "workspace", NO_CONTENT, mutates=False, scope="user", mirrors="delete_memory_item")
 
 
 def test_declared_scope_matches_the_mcp_authority():

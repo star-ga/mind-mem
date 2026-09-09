@@ -188,6 +188,16 @@ MAX_TRACKED_CLIENTS = 1024  # LRU cap to bound limiter memory under attack
 # token); old tokens stay valid through the grace window so in-flight
 # clients don't break, then the operator removes the old entry. Server
 # reads on every request (no restart needed).
+#: Stand-in admin credential for a SET-BUT-MALFORMED ``MIND_MEM_ADMIN_TOKEN``.
+#:
+#: It cannot equal any presented bearer: it is not a token an operator can
+#: configure and not a value a client can send, so every admin comparison
+#: against it is False. That is the point -- an operator who intended
+#: separation and mis-typed it gets admin routes CLOSED rather than silently
+#: reopened to every authenticated caller.
+_ADMIN_UNCONFIGURABLE = "\x00mind-mem/admin-token-set-but-empty\x00"
+
+
 def _active_admin_tokens() -> list[str]:
     """Admin credentials for this transport, read at request time.
 
@@ -201,8 +211,21 @@ def _active_admin_tokens() -> list[str]:
     already counts, so an operator configures one admin credential rather than
     two spellings of it.
     """
-    raw = os.environ.get("MIND_MEM_ADMIN_TOKEN", "")
-    return [t for t in (part.strip() for part in raw.split(",")) if t]
+    raw = os.environ.get("MIND_MEM_ADMIN_TOKEN")
+    if raw is None:
+        # UNSET: this deployment has no privilege separation. Legacy
+        # single-token full access, which stays supported.
+        return []
+    toks = [t for t in (part.strip() for part in raw.split(",")) if t]
+    if not toks:
+        # SET BUT EMPTY OR MALFORMED. The operator asked for separation and
+        # mis-spelled it. Degrading to legacy here would silently hand every
+        # authenticated caller the admin routes the operator was trying to
+        # restrict -- the failure would look exactly like success. So this is
+        # the one case that fails CLOSED: a sentinel that matches no presented
+        # credential, so admin routes deny while user routes keep working.
+        return [_ADMIN_UNCONFIGURABLE]
+    return toks
 
 
 def _caller_is_admin(presented: str | None, active_admin: Sequence[str]) -> bool:
@@ -233,17 +256,43 @@ def _active_tokens(fallback: str | None = None) -> list[str]:
     to the handler-bound *fallback* (the server's startup-time token).
     Whitespace + empty entries are stripped.
     """
+    admin = _active_admin_tokens()
     multi = os.environ.get("MIND_MEM_TOKENS", "").strip()
     if multi:
         toks = [t.strip() for t in multi.split(",") if t.strip()]
         if toks:
-            return toks
+            return _merge_admin(toks, admin)
     single = os.environ.get("MIND_MEM_TOKEN", "").strip()
     if single:
-        return [single]
+        return _merge_admin([single], admin)
     if fallback:
-        return [fallback]
-    return []
+        return _merge_admin([fallback], admin)
+    # No user credential configured. An admin credential alone is still a
+    # credential, and refusing it here would make an admin-only deployment
+    # unauthenticable.
+    return list(admin)
+
+
+def _merge_admin(user_tokens: list[str], admin_tokens: Sequence[str]) -> list[str]:
+    """User credentials plus admin credentials, de-duplicated, order preserved.
+
+    THE DEFECT THIS CLOSES. Authorisation was added to this transport on top of
+    an authentication path that did not know the admin credential existed. With
+    the documented configuration -- MIND_MEM_TOKEN=user, MIND_MEM_ADMIN_TOKEN=admin
+    -- MEASURED: _active_tokens() returned ['user'] only, so the admin passed
+    _caller_is_admin and then FAILED AUTHENTICATION before ever reaching it. The
+    admin routes became unreachable by the admin unless the operator duplicated
+    the admin token into the general set, which is precisely the mistake an
+    operator should not have to know to avoid.
+
+    An admin credential authenticates BECAUSE it is a credential; whether it may
+    run a given route is the separate question ``_caller_is_admin`` answers.
+    Keeping the two questions distinct is the point -- merging here does not
+    grant a user token any authority, and does not let an admin token skip the
+    scope check.
+    """
+    seen = set(user_tokens)
+    return list(user_tokens) + [t for t in admin_tokens if t not in seen]
 
 
 # Endpoint paths — kept as constants so tests can import them.
@@ -1570,6 +1619,14 @@ _VERDICTS = frozenset({CONTENT, NO_CONTENT})
 _TAKES = frozenset({"workspace", "params", "body", "tail"})
 
 
+_SCOPE_ADMIN = "admin"
+_SCOPE_USER = "user"
+#: The only two scopes a route may declare. Checked at import by
+#: :meth:`Route.__post_init__`, so a typo cannot produce a route that is
+#: silently user-reachable.
+_SCOPES = frozenset({_SCOPE_ADMIN, _SCOPE_USER})
+
+
 @dataclass(frozen=True)
 class Route:
     """One reachable endpoint, and whether it can serve block content.
@@ -1634,6 +1691,41 @@ class Route:
             raise ValueError(f"route {self.method} {self.path} has verdict {self.verdict!r}; must be one of {sorted(_VERDICTS)}")
         if self.takes not in _TAKES:
             raise ValueError(f"route {self.method} {self.path} takes {self.takes!r}; must be one of {sorted(_TAKES)}")
+        # Scope, in the same idiom and for the same reason. Mandatory
+        # constructor syntax is not validation: `scope="admn"` type-checks,
+        # constructs, and then silently fails every `route.scope == "admin"`
+        # test in the dispatcher -- the route becomes user-reachable through a
+        # typo. Rejected at import so a malformed route cannot be loaded.
+        if self.scope not in _SCOPES:
+            raise ValueError(f"route {self.method} {self.path} has scope {self.scope!r}; must be one of {sorted(_SCOPES)}")
+        # A route that changes governed state is admin. Enforced here rather
+        # than only in a test, so the rule cannot be violated by a route added
+        # in a module a test does not sweep.
+        if self.mutates and self.scope != _SCOPE_ADMIN:
+            raise ValueError(
+                f"route {self.method} {self.path} mutates but is declared {self.scope!r}; a door that changes governed state is admin"
+            )
+        # PARITY, AT IMPORT. Previously only a test asserted this, so the claim
+        # that the MCP ACL is the authority was true of the test suite and not
+        # of the code. A route naming an MCP twin now agrees with that twin at
+        # import or the module refuses to load. Imported lazily: mcp.infra.acl
+        # must not become an import-time dependency of the transport.
+        if self.mirrors:
+            from .mcp.infra.acl import ADMIN_TOOLS, USER_TOOLS
+
+            if self.mirrors not in ADMIN_TOOLS and self.mirrors not in USER_TOOLS:
+                raise ValueError(f"route {self.method} {self.path} mirrors {self.mirrors!r}, which is in neither MCP ACL set")
+            expected = _SCOPE_ADMIN if self.mirrors in ADMIN_TOOLS else _SCOPE_USER
+            if self.scope != expected:
+                raise ValueError(
+                    f"route {self.method} {self.path} declares scope {self.scope!r} but its MCP twin "
+                    f"{self.mirrors!r} is {expected!r}; the MCP ACL is the authority"
+                )
+        if not self.mirrors and len((self.scope_reason or "").strip()) < 20:
+            raise ValueError(
+                f"route {self.method} {self.path} has no MCP twin and no scope_reason; a route with no "
+                "counterpart is where a permission hole hides, so it must say why it has the scope it has"
+            )
         actor_param = inspect.signature(self.handler).parameters.get("actor")
         takes_actor = actor_param is not None and actor_param.kind is inspect.Parameter.KEYWORD_ONLY
         if self.mutates and not takes_actor:
