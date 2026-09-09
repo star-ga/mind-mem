@@ -82,6 +82,20 @@ def _get(port: int, path: str, token: str | None) -> int:
         return int(e.code)
 
 
+def _raw_status(port: int, request: bytes) -> str:
+    """Send a deliberately raw request, including bytes urllib rejects."""
+    with socket.create_connection(("127.0.0.1", port), timeout=10) as conn:
+        conn.sendall(request)
+        conn.shutdown(socket.SHUT_WR)
+        response = b""
+        while True:
+            chunk = conn.recv(65536)
+            if not chunk:
+                break
+            response += chunk
+    return response.split(b"\r\n", 1)[0].decode("latin-1", "replace")
+
+
 @pytest.fixture
 def separated(tmp_path, monkeypatch):
     """The documented separated configuration."""
@@ -138,6 +152,50 @@ def test_a_malformed_admin_config_fails_closed_rather_than_becoming_legacy(tmp_p
         assert code == 404, f"malformed admin config degraded to legacy full access: {code}"
 
 
+def test_malformed_admin_config_never_turns_into_a_raw_header_credential(tmp_path, monkeypatch):
+    """A malformed setting is state, not a synthetic bearer token.
+
+    BaseHTTPRequestHandler accepts NUL bytes in a raw header value. The old
+    NUL-bearing sentinel therefore was replayable over the network and could
+    authenticate as an admin. The malformed configuration must deny it at the
+    authentication boundary before route authorization is considered.
+    """
+    monkeypatch.delenv("MIND_MEM_TOKENS", raising=False)
+    monkeypatch.setenv("MIND_MEM_TOKEN", USER)
+    monkeypatch.setenv("MIND_MEM_ADMIN_TOKEN", "   ")
+    raw_sentinel = b"\x00mind-mem/admin-token-set-but-empty\x00"
+    with _serve(str(tmp_path), token=USER) as port:
+        request = (
+            b"POST /clear HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            + AUTH_HEADER.encode("ascii")
+            + b": "
+            + raw_sentinel
+            + b"\r\nContent-Type: application/json\r\n"
+            + b"Content-Length: 46\r\nConnection: close\r\n\r\n"
+            + b'{"confirm":"wrong","rationale":"raw sentinel"}'
+        )
+        assert _raw_status(port, request) == "HTTP/1.0 401 Unauthorized"
+
+
+def test_auth_and_scope_use_one_admin_snapshot(separated, monkeypatch):
+    """Rotation between auth and dispatch cannot change the request's role."""
+    from mind_mem import http_transport
+
+    reads: list[int] = []
+
+    def rotating_admin_state():
+        reads.append(1)
+        if len(reads) == 1:
+            return http_transport._AdminAuthState((ADMIN,), True)
+        return http_transport._AdminAuthState((USER,), True)
+
+    monkeypatch.setattr(http_transport, "_read_admin_auth_state", rotating_admin_state)
+    with _serve(separated, token=USER) as port:
+        code = _post(port, PATH_CLEAR, ADMIN, {"confirm": "wrong-confirm-string", "rationale": "snapshot control"})
+    assert code == 400, f"the role changed after authentication (got {code})"
+    assert reads == [1], f"request read mutable admin configuration {len(reads)} times"
+
+
 # ---------------------------------------------------------------------------
 # MUTATION CONTROLS. Root's finding was that source-inspection controls "would
 # survive a dispatcher early bypass" -- i.e. they could not tell an enforced
@@ -173,7 +231,11 @@ def test_emptying_the_admin_set_also_lets_the_user_through(separated, monkeypatc
     """
     from mind_mem import http_transport
 
-    monkeypatch.setattr(http_transport, "_active_admin_tokens", lambda: [])
+    monkeypatch.setattr(
+        http_transport,
+        "_capture_auth_snapshot",
+        lambda *, fallback: http_transport._RequestAuthSnapshot((USER,), (), False),
+    )
     with _serve(separated, token=USER) as port:
         code = _post(port, PATH_CLEAR, USER, {"confirm": "wrong-confirm-string", "rationale": "sec02 mutation"})
     assert code == 400, f"emptying the admin set did not reopen the route (got {code})"

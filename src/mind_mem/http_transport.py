@@ -188,14 +188,40 @@ MAX_TRACKED_CLIENTS = 1024  # LRU cap to bound limiter memory under attack
 # token); old tokens stay valid through the grace window so in-flight
 # clients don't break, then the operator removes the old entry. Server
 # reads on every request (no restart needed).
-#: Stand-in admin credential for a SET-BUT-MALFORMED ``MIND_MEM_ADMIN_TOKEN``.
-#:
-#: It cannot equal any presented bearer: it is not a token an operator can
-#: configure and not a value a client can send, so every admin comparison
-#: against it is False. That is the point -- an operator who intended
-#: separation and mis-typed it gets admin routes CLOSED rather than silently
-#: reopened to every authenticated caller.
-_ADMIN_UNCONFIGURABLE = "\x00mind-mem/admin-token-set-but-empty\x00"
+@dataclass(frozen=True, slots=True)
+class _AdminAuthState:
+    """One read of the optional privilege-separation configuration.
+
+    ``configured`` is deliberately separate from ``tokens``. An empty or
+    malformed configured value must close admin routes, but it must never be
+    represented as a credential that a raw HTTP header could replay.
+    """
+
+    tokens: tuple[str, ...]
+    configured: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _RequestAuthSnapshot:
+    """Immutable authentication and authorization inputs for one request."""
+
+    active_tokens: tuple[str, ...]
+    admin_tokens: tuple[str, ...]
+    admin_configured: bool
+
+
+def _read_admin_auth_state() -> _AdminAuthState:
+    """Read admin configuration once, without manufacturing a credential."""
+
+    raw = os.environ.get("MIND_MEM_ADMIN_TOKEN")
+    if raw is None:
+        # UNSET: this deployment has no privilege separation. Legacy
+        # single-token full access, which stays supported.
+        return _AdminAuthState((), False)
+    toks = tuple(t for t in (part.strip() for part in raw.split(",")) if t)
+    # SET BUT EMPTY OR MALFORMED: configured remains true, so admin routes
+    # deny, while the empty value is never inserted into a bearer set.
+    return _AdminAuthState(toks, True)
 
 
 def _active_admin_tokens() -> list[str]:
@@ -211,21 +237,7 @@ def _active_admin_tokens() -> list[str]:
     already counts, so an operator configures one admin credential rather than
     two spellings of it.
     """
-    raw = os.environ.get("MIND_MEM_ADMIN_TOKEN")
-    if raw is None:
-        # UNSET: this deployment has no privilege separation. Legacy
-        # single-token full access, which stays supported.
-        return []
-    toks = [t for t in (part.strip() for part in raw.split(",")) if t]
-    if not toks:
-        # SET BUT EMPTY OR MALFORMED. The operator asked for separation and
-        # mis-spelled it. Degrading to legacy here would silently hand every
-        # authenticated caller the admin routes the operator was trying to
-        # restrict -- the failure would look exactly like success. So this is
-        # the one case that fails CLOSED: a sentinel that matches no presented
-        # credential, so admin routes deny while user routes keep working.
-        return [_ADMIN_UNCONFIGURABLE]
-    return toks
+    return list(_read_admin_auth_state().tokens)
 
 
 def _caller_is_admin(presented: str | None, active_admin: Sequence[str]) -> bool:
@@ -256,7 +268,15 @@ def _active_tokens(fallback: str | None = None) -> list[str]:
     to the handler-bound *fallback* (the server's startup-time token).
     Whitespace + empty entries are stripped.
     """
-    admin = _active_admin_tokens()
+    admin = _read_admin_auth_state().tokens
+    return _active_tokens_with_admin(fallback=fallback, admin=admin)
+
+
+def _active_tokens_with_admin(
+    *, fallback: str | None, admin: Sequence[str]
+) -> list[str]:
+    """Build the active bearer set from one already-captured admin state."""
+
     multi = os.environ.get("MIND_MEM_TOKENS", "").strip()
     if multi:
         toks = [t.strip() for t in multi.split(",") if t.strip()]
@@ -271,6 +291,14 @@ def _active_tokens(fallback: str | None = None) -> list[str]:
     # credential, and refusing it here would make an admin-only deployment
     # unauthenticable.
     return list(admin)
+
+
+def _capture_auth_snapshot(*, fallback: str | None) -> _RequestAuthSnapshot:
+    """Capture all environment-backed auth inputs exactly once."""
+
+    admin_state = _read_admin_auth_state()
+    active = _active_tokens_with_admin(fallback=fallback, admin=admin_state.tokens)
+    return _RequestAuthSnapshot(tuple(active), admin_state.tokens, admin_state.configured)
 
 
 def _merge_admin(user_tokens: list[str], admin_tokens: Sequence[str]) -> list[str]:
@@ -1945,6 +1973,14 @@ def build_handler(
             return host_url in _LOOPBACK_ORIGINS
 
         # -- auth --------------------------------------------------------
+        def _auth_snapshot(self) -> _RequestAuthSnapshot:
+            """Return the immutable auth inputs captured for this request."""
+            snapshot = getattr(self, "_request_auth_snapshot", None)
+            if snapshot is None:
+                snapshot = _capture_auth_snapshot(fallback=token)
+                self._request_auth_snapshot = snapshot
+            return snapshot
+
         def _authenticated(self) -> bool:
             if not auth_required:
                 return True
@@ -1960,7 +1996,7 @@ def build_handler(
             # Read at request time so ``mm token rotate`` (which appends
             # to MIND_MEM_TOKENS) takes effect for the next request
             # without restarting the server.
-            active = _active_tokens(fallback=token)
+            active = self._auth_snapshot().active_tokens
             if not active:
                 return False
             # Constant-time comparison against EVERY active token (audit
@@ -2146,8 +2182,11 @@ def build_handler(
             # make every existing single-token deployment lose its admin routes
             # on upgrade, which breaks public compatibility to fix a hole those
             # deployments do not have.
-            _admin_tokens = _active_admin_tokens()
-            if route.scope == "admin" and _admin_tokens and not _caller_is_admin(self.headers.get(AUTH_HEADER, ""), _admin_tokens):
+            auth_snapshot = self._auth_snapshot()
+            _admin_tokens = auth_snapshot.admin_tokens
+            if route.scope == "admin" and auth_snapshot.admin_configured and not _caller_is_admin(
+                self.headers.get(AUTH_HEADER, ""), _admin_tokens
+            ):
                 _log.warning(
                     "http_admin_route_denied",
                     extra={"route": _safe_log(route.name), "actor": _safe_log(self._door_actor())},

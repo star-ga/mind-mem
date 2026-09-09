@@ -155,8 +155,8 @@ def test_enforcement_follows_the_operator_configuration():
     from mind_mem import http_transport
 
     src = inspect.getsource(http_transport)
-    assert "_admin_tokens = _active_admin_tokens()" in src
-    assert 'route.scope == "admin" and _admin_tokens and not _caller_is_admin(' in src, (
+    assert "_capture_auth_snapshot(" in src
+    assert 'route.scope == "admin" and auth_snapshot.admin_configured and not _caller_is_admin(' in src, (
         "admin enforcement must be conditional on an admin credential existing, "
         "or every single-token deployment loses its admin routes on upgrade"
     )
@@ -188,6 +188,6 @@ def test_denial_does_not_disclose_which_admin_routes_exist():
     from mind_mem import http_transport
 
     src = inspect.getsource(http_transport)
-    i = src.index('route.scope == "admin" and _admin_tokens')
+    i = src.index('route.scope == "admin" and auth_snapshot.admin_configured')
     window = src[i : i + 900]
     assert "404" in window and "403" not in window, "an admin-route denial should read like an unmatched path, not confirm the route exists"
