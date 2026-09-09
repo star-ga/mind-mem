@@ -1923,6 +1923,22 @@ def build_handler(
     class Handler(BaseHTTPRequestHandler):
         server_version = "mind-mem-http/0.1"
 
+        def handle_one_request(self) -> None:
+            """Give each keep-alive request a fresh authentication snapshot.
+
+            ``BaseHTTPRequestHandler`` reuses one handler instance for every
+            request on an HTTP/1.1 connection.  The snapshot is immutable for
+            one request, but retaining it on that connection would make token
+            rotation apply only after the client disconnects.  Clear it at
+            both boundaries so a later request reads the current configured
+            credentials while an in-flight request still sees one snapshot.
+            """
+            self._request_auth_snapshot: _RequestAuthSnapshot | None = None
+            try:
+                super().handle_one_request()
+            finally:
+                self._request_auth_snapshot = None
+
         def log_message(self, format: str, *args: Any) -> None:  # silence default
             return
 

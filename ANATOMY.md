@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1537 | **Est. tokens:** ~4554313
-**Generated:** 2026-09-09 15:16 UTC
+**Files:** 1537 | **Est. tokens:** ~4554803
+**Generated:** 2026-09-09 15:17 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 661 | ~2002836 |
+| `tests/` | 661 | ~2003326 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1681,7 +1681,7 @@
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_route_conformance.py` (~1778 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_sec02_live_request_parity.py` (~2769 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_sec02_live_request_parity.py` (~3259 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_route_scope_parity.py` (~2140 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_security_scanning_alerts.py` (~1395 tok, large) — Regression tests for code-scanning alerts #189 and #192.
 - `test_self_editing_old_content.py` (~980 tok, large) — ``propose_edit`` must snapshot the block's real current content.

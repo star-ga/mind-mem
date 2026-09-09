@@ -19,6 +19,7 @@ These go over a loopback socket.
 from __future__ import annotations
 
 import contextlib
+import http.client
 import json
 import socket
 import urllib.error
@@ -194,6 +195,52 @@ def test_auth_and_scope_use_one_admin_snapshot(separated, monkeypatch):
         code = _post(port, PATH_CLEAR, ADMIN, {"confirm": "wrong-confirm-string", "rationale": "snapshot control"})
     assert code == 400, f"the role changed after authentication (got {code})"
     assert reads == [1], f"request read mutable admin configuration {len(reads)} times"
+
+
+def test_auth_snapshot_rotates_per_keepalive_request(separated, monkeypatch):
+    """A persistent HTTP/1.1 connection must not pin the first token forever.
+
+    ``serve_http`` defaults to HTTP/1.0 for compatibility, so this explicitly
+    exercises the supported handler mode in which BaseHTTPRequestHandler
+    serves multiple requests on one connection.  The old token is accepted by
+    the first request, refused after rotation, and the new token is accepted
+    immediately on that same socket.
+    """
+    from mind_mem import http_transport
+
+    original_build_handler = http_transport.build_handler
+
+    def build_http11_handler(*args, **kwargs):
+        handler = original_build_handler(*args, **kwargs)
+        handler.protocol_version = "HTTP/1.1"
+        return handler
+
+    monkeypatch.setattr(http_transport, "build_handler", build_http11_handler)
+    with _serve(separated, token=USER) as port:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        try:
+            headers = {AUTH_HEADER: USER, "Connection": "keep-alive"}
+            conn.request("GET", PATH_STATUS, headers=headers)
+            first = conn.getresponse()
+            assert first.status == 200
+            first.read()
+
+            monkeypatch.setenv("MIND_MEM_TOKEN", "rotated-user-token")
+            conn.request("GET", PATH_STATUS, headers=headers)
+            old_token = conn.getresponse()
+            assert old_token.status == 401, "rotated-out token remained valid on keep-alive connection"
+            old_token.read()
+
+            conn.request(
+                "GET",
+                PATH_STATUS,
+                headers={AUTH_HEADER: "rotated-user-token", "Connection": "keep-alive"},
+            )
+            new_token = conn.getresponse()
+            assert new_token.status == 200, "new token was not read on the next keep-alive request"
+            new_token.read()
+        finally:
+            conn.close()
 
 
 # ---------------------------------------------------------------------------
