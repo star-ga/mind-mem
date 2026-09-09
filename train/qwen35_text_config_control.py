@@ -18,8 +18,17 @@ def main() -> int:
         import torch
         import transformers
         from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForImageTextToText
+    except ModuleNotFoundError as exc:
+        print(json.dumps({
+            "status": "skipped",
+            "reason": f"unsupported optional dependency missing: {exc.name}",
+        }))
+        return 0
     except ImportError as exc:
-        print(json.dumps({"status": "skipped", "reason": f"optional dependency missing: {exc}"}))
+        print(json.dumps({
+            "status": "skipped",
+            "reason": f"unsupported optional Transformers API: {exc}",
+        }))
         return 0
 
     from _causal_lm_import import load_causal_lm
@@ -73,9 +82,11 @@ def main() -> int:
         assert not loading.get("missing_keys"), loading
         assert not loading.get("unexpected_keys"), loading
         assert not loading.get("mismatched_keys"), loading
+        assert not loading.get("error_msgs"), loading
         model.eval()
         with torch.no_grad():
             output = model(input_ids=torch.tensor([[1, 2, 3]]), use_cache=False)
+        assert list(output.logits.shape) == [1, 3, 32], output.logits.shape
         print(json.dumps({
             "status": "pass",
             "transformers_version": transformers.__version__,
@@ -92,4 +103,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -44,7 +44,9 @@ from trl import SFTConfig, SFTTrainer
 
 try:
     from train._causal_lm_import import load_causal_lm
-except ModuleNotFoundError:
+except ModuleNotFoundError as exc:
+    if exc.name not in {"train", "train._causal_lm_import"}:
+        raise
     # RunPod receives this script and the helper beside it, without an
     # installed mind-mem checkout or package on PYTHONPATH.
     from _causal_lm_import import load_causal_lm

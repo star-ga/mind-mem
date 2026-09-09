@@ -30,7 +30,9 @@ from trl import SFTConfig, SFTTrainer
 
 try:
     from train._causal_lm_import import load_causal_lm
-except ModuleNotFoundError:
+except ModuleNotFoundError as exc:
+    if exc.name not in {"train", "train._causal_lm_import"}:
+        raise
     # Keep this script runnable from the bare RunPod bundle as well as a
     # source checkout where the package has not been installed.
     from _causal_lm_import import load_causal_lm

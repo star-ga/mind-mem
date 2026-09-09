@@ -10,18 +10,14 @@ from typing import Any
 
 
 def _load_module() -> ModuleType:
-    """Find the canonical loader without assuming the package is installed."""
+    """Find the canonical loader without assuming the package is installed.
+
+    A checkout or the staged RunPod bundle is authoritative for this helper.
+    Importing an installed package first could silently select an older
+    revision while the adjacent source had already been corrected.
+    """
 
     module_name = "mind_mem.causal_lm_loader"
-    try:
-        return importlib.import_module(module_name)
-    except ModuleNotFoundError as exc:
-        # A source checkout and the RunPod deployment both carry the same
-        # canonical file.  Do not mask unrelated import failures from an
-        # installed package.
-        if exc.name not in {"mind_mem", module_name}:
-            raise
-
     candidates = (
         Path(__file__).resolve().parents[1] / "src" / "mind_mem" / "causal_lm_loader.py",
         Path(__file__).resolve().with_name("mind_mem_causal_lm_loader.py"),
@@ -35,14 +31,22 @@ def _load_module() -> ModuleType:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
-    raise ModuleNotFoundError(
-        "mind_mem.causal_lm_loader is unavailable; install mind-mem or deploy "
-        "mind_mem_causal_lm_loader.py beside the training script"
-    )
+
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        # Do not turn an installed loader's missing transitive dependency into
+        # a misleading "loader unavailable" message or silently try another
+        # revision. Only absence of the package/module itself is fallback-safe.
+        if exc.name not in {"mind_mem", module_name}:
+            raise
+        raise ModuleNotFoundError(
+            "mind_mem.causal_lm_loader is unavailable; install mind-mem or deploy "
+            "mind_mem_causal_lm_loader.py beside the training script"
+        ) from exc
 
 
 def load_causal_lm(source: str, **kwargs: Any) -> Any:
     """Delegate to the canonical loader found by :func:`_load_module`."""
 
     return _load_module().load_causal_lm(source, **kwargs)
-

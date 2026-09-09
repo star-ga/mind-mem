@@ -23,7 +23,9 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAn
 
 try:
     from train._causal_lm_import import load_causal_lm
-except ModuleNotFoundError:
+except ModuleNotFoundError as exc:
+    if exc.name not in {"train", "train._causal_lm_import"}:
+        raise
     from _causal_lm_import import load_causal_lm
 
 BASE = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
