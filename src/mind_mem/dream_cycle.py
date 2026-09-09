@@ -22,13 +22,28 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .enums import INITIAL_STATUS, IngestTier
 from .observability import get_logger, metrics, timed
 
 _log = get_logger("dream_cycle")
+
+
+def _utc_now() -> datetime:
+    """Return an aware UTC instant for durable promotion timestamps."""
+    return datetime.now(timezone.utc)
+
+
+def _utc_stamp(now: datetime | None = None) -> str:
+    """Format an injected or current instant as a UTC promotion timestamp."""
+    moment = _utc_now() if now is None else now
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    else:
+        moment = moment.astimezone(timezone.utc)
+    return moment.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
 
 # --- Backend-aware block enumeration (audit bug 11) ---
@@ -1077,7 +1092,7 @@ def _promote_to_compiled_truth(
     entity_id = f"TOPIC-{'-'.join(significant)}"
 
     existing = load_truth_page(workspace, entity_id)
-    now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    now_iso = _utc_stamp()
 
     if existing is None:
         page = CompiledTruthPage(

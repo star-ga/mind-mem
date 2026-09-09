@@ -3,10 +3,12 @@
 
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
+import mind_mem.compiled_truth as compiled_truth
+import mind_mem.dream_cycle as dream_cycle
 from mind_mem.dream_cycle import (
     BrokenCitation,
     ConsolidationCandidate,
@@ -15,6 +17,8 @@ from mind_mem.dream_cycle import (
     StaleBlock,
     _format_report_markdown,
     _normalize_line,
+    _promote_to_compiled_truth,
+    _utc_stamp,
     pass_citation_repair,
     pass_consolidation,
     pass_entity_discovery,
@@ -287,6 +291,34 @@ class TestConsolidation:
         ws = str(tmp_path)
         candidates = pass_consolidation(ws)
         assert candidates == []
+
+    def test_truth_promotion_formats_an_injected_non_utc_instant_as_utc(self, tmp_path, monkeypatch):
+        """The durable promotion stamp does not label local wall time as UTC."""
+        local = datetime(2026, 9, 9, 17, 0, tzinfo=timezone(timedelta(hours=-7)))
+        utc = datetime(2026, 9, 10, 0, 0, tzinfo=timezone.utc)
+        assert _utc_stamp(local) == "2026-09-10T00:00:00+00:00"
+        assert _utc_stamp(utc) == "2026-09-10T00:00:00+00:00"
+        monkeypatch.setattr(dream_cycle, "_utc_now", lambda: local)
+
+        captured = {}
+        monkeypatch.setattr(compiled_truth, "load_truth_page", lambda *_args: None)
+
+        def capture_entry(page, entry):
+            captured["entry"] = entry
+            return page
+
+        monkeypatch.setattr(compiled_truth, "add_evidence", capture_entry)
+        monkeypatch.setattr(compiled_truth, "recompile_truth", lambda page: page)
+        monkeypatch.setattr(compiled_truth, "save_truth_page", lambda _ws, page: captured.setdefault("page", page))
+
+        candidate = ConsolidationCandidate(
+            "Compiler promotion timestamps are durable UTC facts.",
+            3,
+            ("memory/2026-09-09.md",),
+        )
+        assert _promote_to_compiled_truth(str(tmp_path), candidate) == "TOPIC-compiler-promotion-timestamps"
+        assert captured["entry"].timestamp == "2026-09-10T00:00:00+00:00"
+        assert captured["page"].last_compiled == "2026-09-10T00:00:00+00:00"
 
 
 # ---------------------------------------------------------------------------

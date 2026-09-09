@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1533 | **Est. tokens:** ~4563406
-**Generated:** 2026-09-09 11:49 UTC
+**Files:** 1533 | **Est. tokens:** ~4563927
+**Generated:** 2026-09-09 11:54 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1079707 |
+| `src/mind_mem/` | 231 | ~1079829 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 656 | ~1990478 |
+| `tests/` | 656 | ~1990877 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -786,7 +786,7 @@
 - `data_marking.py` (~1133 tok, large) — # Copyright 2026 STARGA, Inc.
 - `dead_ends.py` (~3855 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
-- `dream_cycle.py` (~13342 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
+- `dream_cycle.py` (~13464 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~5752 tok, huge) — mind-mem Semantic Belief Drift Detection.
 - `edge_grounded_answer.py` (~5493 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
@@ -1302,7 +1302,7 @@
 - `test_docs_claims.py` (~818 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_documented_surfaces_exist.py` (~2128 tok, huge) — Documentation that names a symbol, a backend or an installable extra has
 - `test_downgrade_mitigation.py` (~1016 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_dream_cycle.py` (~4665 tok, huge) — Tests for dream_cycle.py — autonomous memory enrichment passes."""
+- `test_dream_cycle.py` (~5064 tok, huge) — Tests for dream_cycle.py — autonomous memory enrichment passes."""
 - `test_dream_cycle_backends.py` (~2824 tok, huge) — Backend-aware dream-cycle maintenance passes (audit bug 11).
 - `test_dream_cycle_governed_entities.py` (~3249 tok, huge) — The dream cycle's auto-created entities are governed blocks (AUD-06).
 - `test_drift_detector.py` (~3914 tok, huge) — Tests for mind-mem semantic belief drift detection (drift_detector.py)."""
