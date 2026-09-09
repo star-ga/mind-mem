@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1537 | **Est. tokens:** ~4555625
-**Generated:** 2026-09-09 16:08 UTC
+**Files:** 1538 | **Est. tokens:** ~4558464
+**Generated:** 2026-09-09 16:12 UTC
 
 ## Token Budget Guide
 
@@ -80,14 +80,14 @@
 | `src/mind_mem/importers/` | 9 | ~26660 |
 | `src/mind_mem/mcp/` | 3 | ~6512 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13249 |
-| `src/mind_mem/mcp/tools/` | 29 | ~112650 |
+| `src/mind_mem/mcp/tools/` | 29 | ~113684 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11368 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 661 | ~2004087 |
+| `tests/` | 662 | ~2005892 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -881,7 +881,7 @@
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~13751 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~14785 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~7091 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1811 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
@@ -1683,6 +1683,7 @@
 - `test_sdk_route_conformance.py` (~1778 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_live_request_parity.py` (~3259 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_route_scope_parity.py` (~2287 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_sec03_scan_bounded.py` (~1805 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_security_scanning_alerts.py` (~1395 tok, large) — Regression tests for code-scanning alerts #189 and #192.
 - `test_self_editing_old_content.py` (~980 tok, large) — ``propose_edit`` must snapshot the block's real current content.
 - `test_self_update.py` (~2727 tok, huge) — # Copyright 2026 STARGA, Inc.

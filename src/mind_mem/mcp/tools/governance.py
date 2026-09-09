@@ -660,6 +660,23 @@ def _content_tokens(text: str) -> set[str]:
     return {t for t in tokens if not _NEGATION_RE.fullmatch(t)}
 
 
+#: Hard ceiling on unordered block pairs one scan will compare.
+#:
+#: SEC03. The comparison below is a full pairwise loop over every active block,
+#: pure Python and GIL-holding, and ``scan`` is USER scope on the MCP side and
+#: sits behind ``_require_auth`` (not ``_require_admin``) at ``/v1/scan``. So a
+#: semi-trusted caller could buy an unbounded N-squared burn with a
+#: zero-argument call. The caller cannot grow the corpus -- every write is admin
+#: -- so this is amplification against an existing one, and the fix is to bound
+#: the work rather than to trust the caller.
+#:
+#: 200_000 pairs is ~630 blocks scanned exhaustively, and costs well under a
+#: second here. Above that the scan stops and SAYS SO: a silent cap would turn a
+#: denial-of-service into a correctness bug, reporting "no contradictions" over
+#: a corpus it never finished comparing.
+MAX_SCAN_PAIRS = 200_000
+
+
 def _detect_statement_contradictions(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Find pairwise statement-level contradictions among *blocks*.
 
@@ -679,7 +696,8 @@ def _detect_statement_contradictions(blocks: list[dict[str, Any]]) -> list[dict[
     Deterministic, zero-dependency, and owned entirely by this module
     (no dependence on another component's tunable thresholds). Returns a
     list of ``{"block_a", "block_b", "reason"}`` dicts, deduplicated by
-    unordered id pair.
+    unordered id pair. If the pair budget is reached, the final row is a
+    ``truncated`` coverage marker rather than a contradiction finding.
     """
     entries: list[tuple[str, str, set[str]]] = []
     for b in blocks:
@@ -692,9 +710,21 @@ def _detect_statement_contradictions(blocks: list[dict[str, Any]]) -> list[dict[
         entries.append((bid, text, _content_tokens(text)))
 
     contradictions: list[dict[str, Any]] = []
+    # The budget is on PAIRS, not on blocks. Slicing ``entries`` would silently
+    # discard a whole region of the corpus. The pair budget preserves the full
+    # input for an honest coverage marker, while a truncated run may stop before
+    # later blocks participate in a comparison.
+    pairs_examined = 0
+    truncated = False
     for i in range(len(entries)):
+        if truncated:
+            break
         id_a, text_a, tok_a = entries[i]
         for j in range(i + 1, len(entries)):
+            if pairs_examined >= MAX_SCAN_PAIRS:
+                truncated = True
+                break
+            pairs_examined += 1
             id_b, text_b, tok_b = entries[j]
             if not tok_a or not tok_b:
                 continue
@@ -723,7 +753,75 @@ def _detect_statement_contradictions(blocks: list[dict[str, Any]]) -> list[dict[
 
             if reason is not None:
                 contradictions.append({"block_a": id_a, "block_b": id_b, "reason": reason})
+    if truncated:
+        # Disclosed in-band, as a row, so a caller that reads only the result
+        # list cannot miss it. An incomplete scan that looks clean is worse than
+        # a slow one.
+        contradictions.append(
+            {
+                "truncated": True,
+                "pairs_examined": pairs_examined,
+                "blocks_total": len(entries),
+                "reason": (
+                    f"scan stopped after {pairs_examined} block pairs (MAX_SCAN_PAIRS); "
+                    f"{len(entries)} blocks would need {len(entries) * (len(entries) - 1) // 2} "
+                    "pairs. Results are PARTIAL: absence of a contradiction here does not "
+                    "mean there is none."
+                ),
+            }
+        )
     return contradictions
+
+
+def _contradiction_scan_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize detector output without counting its truncation marker.
+
+    Complete results retain the pre-SEC03 public shape. A partial result adds
+    explicit coverage fields so it cannot be mistaken for a clean scan.
+    """
+    findings = [result for result in results if not result.get("truncated")]
+    summary: dict[str, Any] = {"raw": len(findings), "resolvable": 0}
+    marker = next((result for result in results if result.get("truncated") is True), None)
+    if marker is None:
+        return summary
+
+    blocks_total = marker.get("blocks_total")
+    pairs_examined = marker.get("pairs_examined")
+    if not isinstance(blocks_total, int) or blocks_total < 0:
+        blocks_total = None
+    if not isinstance(pairs_examined, int) or pairs_examined < 0:
+        pairs_examined = None
+    pairs_total = (
+        blocks_total * (blocks_total - 1) // 2
+        if blocks_total is not None
+        else None
+    )
+    summary.update(
+        {
+            "complete": False,
+            "truncated": True,
+            "coverage": {
+                "status": "partial",
+                "blocks_total": blocks_total,
+                "pairs_examined": pairs_examined,
+                "pairs_total": pairs_total,
+            },
+            "reason": str(marker.get("reason") or "contradiction scan stopped before completion"),
+        }
+    )
+    return summary
+
+
+def _incomplete_contradiction_summary(reason: str) -> dict[str, Any]:
+    """Return a fail-closed contradiction summary for detector errors."""
+    return {
+        "raw": 0,
+        "resolvable": 0,
+        "complete": False,
+        "truncated": False,
+        "coverage": {"status": "unavailable"},
+        "reason": reason,
+    }
 
 
 def _word_in(word: str, text: str) -> bool:
@@ -883,17 +981,16 @@ def scan() -> str:
         # Non-Markdown backend — detect statement-level contradictions over
         # the store-resident active blocks. ``resolvable`` is 0 here:
         # auto-resolution still flows through the Markdown supersede-proposal
-        # pipeline, but ``raw`` now correctly reflects the store's contents
-        # instead of silently reporting 0 (audit bugs #3 / #10).
+        # pipeline. A truncation marker is summarized separately from real
+        # findings, so partial inspection cannot look like a clean scan.
         try:
             store_contradictions = _detect_statement_contradictions(active_blocks)
-            checks["contradictions"] = {
-                "raw": len(store_contradictions),
-                "resolvable": 0,
-            }
+            checks["contradictions"] = _contradiction_scan_summary(store_contradictions)
         except Exception as exc:  # pragma: no cover - defensive
             _log.warning("scan_store_contradiction_check_failed", error=str(exc))
-            checks["contradictions"] = {"raw": 0, "resolvable": 0}
+            checks["contradictions"] = _incomplete_contradiction_summary(
+                "statement-level contradiction scan failed before completion"
+            )
 
     drift_path = os.path.join(ws, "intelligence", "DRIFT.md")
     if os.path.isfile(drift_path):
