@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1539 | **Est. tokens:** ~4559228
-**Generated:** 2026-09-09 20:38 UTC
+**Files:** 1540 | **Est. tokens:** ~4559625
+**Generated:** 2026-09-09 23:41 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 663 | ~2006568 |
+| `tests/` | 664 | ~2006932 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -100,7 +100,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 31 | ~58107 |
+| `train/` | 31 | ~58140 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -1511,6 +1511,7 @@
 - `test_mm_doctor_postgres_hint.py` (~1128 tok, large) — Regression test: mm doctor must emit a clear hint when backend=postgres
 - `test_model_audit.py` (~3557 tok, huge) — Tests for ``mind_mem.model_audit`` — checkpoint static-security audit.
 - `test_model_audit_unreadable_files.py` (~1411 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_model_card_training_metrics.py` (~364 tok, medium) — Model cards must not replace missing run evidence with invented metrics."""
 - `test_model_gate.py` (~3410 tok, huge) — Tests for ``mind_mem.model_gate`` — load-gate registry."""
 - `test_model_provenance.py` (~2391 tok, huge) — Tests for ``mind_mem.model_provenance`` — base_model allowlist."""
 - `test_model_signing.py` (~2301 tok, huge) — Tests for ``mind_mem.model_signing`` — Ed25519 manifest signing."""
@@ -1829,7 +1830,7 @@
 - `audit_semantic_correctness.json` (~5 tok, tiny) — Keys: findings
 - `audit_semantic_correctness.py` (~1971 tok, huge) — Cross-check every 'file X ships Y' claim in the corpus against src/.
 - `backport_sweep.py` (~1722 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
-- `build_model_card.py` (~4824 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
+- `build_model_card.py` (~4857 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `eval_harness.py` (~8643 tok, huge) — Eval harness for mind-mem-4b.
 - `eval_holdout.py` (~2182 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
