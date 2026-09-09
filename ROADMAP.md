@@ -1215,7 +1215,7 @@ MIND-Mem currently has append-only logs → manual promotion to MEMORY.md. This 
 - [x] **Tier 3 (Procedural)** — learned patterns and strategies (`decisions/`), highest durability, governance-gated
 - [ ] **Ebbinghaus strength decay** — not shipped: the current tier implementation uses TTL/max-idle demotion and eviction. A per-block `strength` field, exponential half-life, and access reset remain open.
 - [ ] **Auto-promotion triggers** — repeated dated observations produce consolidation candidates, but that candidate path is not wired to a governed automatic next-tier trigger. `memory_tiers.run_promotion_cycle` is a separate policy-driven direct API; proposal/approval semantics remain to be reconciled.
-- [x] **Tier-aware retrieval** — higher tiers get retrieval priority boost (Tier 3: 2.0x, Tier 2: 1.5x, Tier 1: 1.0x, Tier 0: 0.7x)
+- [ ] **Tier-aware retrieval** — the historical boosts were removed during the RA.0 tier-axis collapse; no tier currently changes recall ranking. Any future boost needs an explicit governed policy and end-to-end evidence, not just connecting the stores.
 - [ ] **Tier-filtered `consolidate` MCP tool** — the shipped API is `plan_consolidation` with dry-run planning; `consolidate` naming and `--tier` filtering remain open.
 
 ### Agent Hook Auto-Capture
