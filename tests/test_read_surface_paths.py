@@ -79,6 +79,7 @@ ADMITTERS: frozenset[str] = frozenset(
         "admit_leg",
         "admissible",
         "_withhold_inadmissible",
+        "_apply_post_filters",  # starts with _withhold_inadmissible; the public canary sweep exercises it
         "iter_active_blocks",
     }
 )

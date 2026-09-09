@@ -186,6 +186,11 @@ def _record_anticipation_bundle(ws: str, origin: str, raw: str, head: str) -> No
         _log.warning("anticipation_cache_record_failed", origin=origin, error=str(exc))
 
 
+#: How much wider the retrieval legs go when a post-retrieval filter is active,
+#: so the filter selects from a pool rather than subtracting from the top-k.
+_FILTER_WIDEN = 4
+
+
 def _recall_impl(
     query: str,
     limit: int = 10,
@@ -194,6 +199,11 @@ def _recall_impl(
     format: str = "blocks",
     explain: bool = False,
     scoring_instant: date | str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    lifecycle: str | None = None,
+    event_id: str | None = None,
+    min_maturity: float | None = None,
 ) -> str:
     """Claim the serve, then rank. The attesting entry for this surface.
 
@@ -223,6 +233,11 @@ def _recall_impl(
             format=format,
             explain=explain,
             scoring_instant=scoring_instant,
+            since=since,
+            until=until,
+            lifecycle=lifecycle,
+            event_id=event_id,
+            min_maturity=min_maturity,
         )
 
 
@@ -234,6 +249,11 @@ def _recall_impl_ranked(
     format: str = "blocks",
     explain: bool = False,
     scoring_instant: date | str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    lifecycle: str | None = None,
+    event_id: str | None = None,
+    min_maturity: float | None = None,
 ) -> str:
     """Core recall implementation shared by recall() and hybrid_search().
 
@@ -282,6 +302,20 @@ def _recall_impl_ranked(
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    # The post-retrieval filters, collected once. Only the SET ones travel, so a
+    # caller that passes none produces an empty dict and a cache key
+    # byte-identical to the pre-filter one.
+    _active_filters = {
+        k: v
+        for k, v in (
+            ("since", since),
+            ("until", until),
+            ("lifecycle", lifecycle),
+            ("event_id", event_id),
+            ("min_maturity", min_maturity),
+        )
+        if v is not None and v != ""
+    }
     # v3.2.1 — cache wrap. The cache wrapper short-circuits straight
     # to the cached envelope when the key hits, so everything below
     # (limits, timeout, backend selection, telemetry) only fires on
@@ -292,6 +326,10 @@ def _recall_impl_ranked(
     _raw_config = _load_config(ws)
     _cache_cfg = _raw_config.get("cache", {}) if isinstance(_raw_config, dict) else {}
 
+    # ``**kwargs`` carries the post-retrieval filters that ``cached_recall``
+    # forwards. They are passed on rather than dropped: keying a filtered query
+    # separately and then filling that entry with the UNFILTERED answer is the
+    # same bug wearing a different hat.
     def _inner(query, limit, backend, active_only, **kwargs):
         return _recall_impl_uncached(
             query,
@@ -299,6 +337,7 @@ def _recall_impl_ranked(
             active_only=active_only,
             backend=backend,
             scoring_instant=resolved_instant,
+            **kwargs,
         )
 
     # Attribution tracing bypasses the recall cache. A cache HIT runs none of
@@ -324,7 +363,12 @@ def _recall_impl_ranked(
     # answered recall ran none of the retrieval features a trace would claim.
     from mind_mem.prefetch import anticipation_enabled
 
-    _anticipation_on = anticipation_enabled(_raw_config) and not _trace_on
+    # A filtered request never takes the anticipation answer. That path answers
+    # locally, WITHOUT running the retrieval pipeline, so it cannot apply
+    # since / until / lifecycle / event_id / min_maturity -- it would return the
+    # unfiltered local answer and the filter would silently do nothing. Same
+    # exemption, and the same reasoning, as ``format="bundle"`` below.
+    _anticipation_on = anticipation_enabled(_raw_config) and not _trace_on and not _active_filters
     # ``format="bundle"`` never takes the local answer. The early return below
     # skips the post-cache stages, and the bundle re-shaping is one of them, so
     # serving here would hand a bundle client the raw blocks envelope with no
@@ -348,9 +392,10 @@ def _recall_impl_ranked(
             ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
             scoring_instant=instant_iso,
             index_anchor=_index_anchor,
+            filters=_active_filters,
         )
     else:
-        raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend)
+        raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend, **_active_filters)
         raw = str(raw_result) if raw_result is not None else ""
 
     # ``format`` is a PRESENTATION choice over one retrieval, so it is applied
@@ -672,6 +717,11 @@ def _recall_impl_uncached(
     active_only: bool = False,
     backend: str = "auto",
     scoring_instant: date | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    lifecycle: str | None = None,
+    event_id: str | None = None,
+    min_maturity: float | None = None,
 ) -> str:
     """The original recall body, now callable as the cache-miss branch of ``_recall_impl``.
 
@@ -681,6 +731,13 @@ def _recall_impl_uncached(
     ws = _workspace()
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_recall_results"]))
+    # When a filter is active the legs must return a WIDE pool: filtering a list
+    # already cut to ``limit`` makes the filter a subtraction from the top-k
+    # rather than a choice of what the top-k is drawn from -- the distinction
+    # ``_apply_post_filters``' docstring draws, and the reason it wants the wide
+    # pool. The funnel below does the single narrowing cut back to ``limit``.
+    _filtered = any(v is not None for v in (since, until, lifecycle, event_id, min_maturity))
+    _leg_limit = min(limit * _FILTER_WIDEN, limits["max_recall_results"]) if _filtered else limit
     timeout_seconds = limits.get("query_timeout_seconds", QUERY_TIMEOUT_SECONDS)
     recall_start = time.monotonic()
     if backend not in ("auto", "bm25", "hybrid"):
@@ -715,7 +772,7 @@ def _recall_impl_uncached(
             results = hb.search(
                 query,
                 ws,
-                limit=limit,
+                limit=_leg_limit,
                 active_only=active_only,
                 rerank_depth=resolve_rerank_depth(recall_cfg, limit),
                 scoring_instant=scoring_instant,
@@ -746,10 +803,29 @@ def _recall_impl_uncached(
     if used_backend != "hybrid":
         try:
             if os.path.isfile(fts_db_path(ws)):
-                results = fts_query(ws, query, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
+                results = fts_query(
+                    ws,
+                    query,
+                    limit=_leg_limit,
+                    active_only=active_only,
+                    scoring_instant=scoring_instant,
+                    since=since,
+                    until=until,
+                )
                 used_backend = "sqlite"
             else:
-                results = recall_engine(ws, query, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
+                results = recall_engine(
+                    ws,
+                    query,
+                    limit=limit,
+                    active_only=active_only,
+                    scoring_instant=scoring_instant,
+                    since=since,
+                    until=until,
+                    lifecycle=lifecycle,
+                    event_id=event_id,
+                    min_maturity=min_maturity,
+                )
                 used_backend = "scan"
                 warnings.append("FTS5 index not found — using full scan. Run 'reindex' tool for faster queries.")
         except sqlite3.OperationalError as exc:
@@ -757,14 +833,37 @@ def _recall_impl_uncached(
                 return _sqlite_busy_error()
             raise
 
-    # Admissibility: this tool reaches the hybrid / FTS legs directly, so it
-    # does not pass through ``recall._apply_post_filters``. One funnel per
-    # public surface, so no backend leg can be the one that leaks. The legs
-    # themselves filter before fusion; this is the surface-level backstop.
+    # Admissibility AND the post-retrieval filter contract: this tool reaches
+    # the hybrid / FTS legs directly, so it does not pass through
+    # ``recall._apply_post_filters`` on its own. One funnel per public surface,
+    # so no backend leg can be the one that leaks.
+    #
+    # The filters go through the ENGINE's funnel rather than being re-applied
+    # here, because that funnel is the single source of truth for the contract
+    # and its own docstring records what divergence cost last time: "the sqlite
+    # and vector early-returns applied only the date filter, silently ignoring
+    # lifecycle/event_id/min_maturity - a backend-dependent correctness bug".
+    # ``query_index`` still accepts only since/until, so without this the other
+    # three would be accepted at the surface and silently dropped on every
+    # indexed workspace.
+    #
+    # ``_apply_post_filters`` performs the admissibility withhold itself, as its
+    # first step, so it replaces the previous backstop rather than doubling it.
+    # On the scan leg the engine already applied these; re-applying is a no-op
+    # because every step is a subset predicate over an already-cut list.
     if results:
-        from mind_mem._recall_core import _withhold_inadmissible
+        from mind_mem._recall_core import _apply_post_filters
 
-        results = _withhold_inadmissible(list(results), ws, status_key="status", leg="mcp")
+        results = _apply_post_filters(
+            list(results),
+            since=since,
+            until=until,
+            lifecycle=lifecycle,
+            event_id=event_id,
+            min_maturity=min_maturity,
+            limit=limit,
+            workspace=ws,
+        )
 
     recall_elapsed = time.monotonic() - recall_start
     if recall_elapsed > timeout_seconds:

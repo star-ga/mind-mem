@@ -82,6 +82,11 @@ def recall(
     signals: str = "",
     scoring_instant: str = "",
     explain: bool = False,
+    since: str = "",
+    until: str = "",
+    lifecycle: str = "",
+    event_id: str = "",
+    min_maturity: float | None = None,
 ) -> str:
     """Unified retrieval entry point.
 
@@ -124,6 +129,19 @@ def recall(
        caller passing ``mode="vector"`` now gets the standard
        ``unknown mode`` error envelope so the gap is visible.
 
+    The five post-retrieval filters -- ``since``, ``until``, ``lifecycle``,
+    ``event_id`` and ``min_maturity`` -- narrow the ranked result set. The
+    engine has implemented them for some time (``_recall_core._apply_lifecycle_filter``
+    and siblings); until now no surface could express them, so they were
+    unreachable to any caller. They apply to the ranked modes (``auto`` /
+    ``bm25`` / ``hybrid``); the modes that do not rank do not take them.
+
+    ``since`` / ``until`` are ISO-8601 bounds on a block's ``Date``.
+    ``lifecycle`` is ``"durable"`` or ``"ephemeral"``. ``min_maturity`` is a
+    float floor. An empty string (or ``None`` for ``min_maturity``) means the
+    filter is not applied, and a request with no filter set is byte-identical
+    to one made before they existed -- including its cache key.
+
     ``scoring_instant`` is an ISO-8601 UTC date (``"YYYY-MM-DD"``) that pins the
     recency layer. Recall is deterministic given (corpus, config,
     scoring_instant), so replaying a previous run means passing back the instant
@@ -150,12 +168,19 @@ def recall(
             backend=mode,
             explain=explain,
             scoring_instant=scoring_instant or None,
+            since=since or None,
+            until=until or None,
+            lifecycle=lifecycle or None,
+            event_id=event_id or None,
+            min_maturity=min_maturity,
         )
     # Every branch below routes to an implementation that does not produce the
     # ``_explain`` decomposition. Accepting the flag and discarding it is the
     # exact failure this change exists to end, so it is refused explicitly.
     if explain:
         return _err(f"explain=True is not available for mode={mode!r}; supported modes: {', '.join(sorted(EXPLAIN_MODES))}")
+    if any(value not in (None, "") for value in (since, until, lifecycle, event_id, min_maturity)):
+        return _err(f"recall filters are not available for mode={mode!r}; supported modes: {', '.join(sorted(EXPLAIN_MODES))}")
     if mode == "similar":
         if not block_id:
             return _err("mode='similar' requires 'block_id'")

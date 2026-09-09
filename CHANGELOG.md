@@ -6,6 +6,14 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Apply recall lifecycle, event, maturity and date filters through the public
+  MCP surface and cache keys. Preserve filter metadata on indexed hits and
+  apply compound predicates before the final result limit.
+- Honor the query-expansion configuration switch, and reject malformed switch
+  values without crashing retrieval.
+- Refuse anonymous REST access from directly constructed ASGI apps. The
+  official launcher can enable local development access only after validating
+  the loopback bind and absence of configured authentication mechanisms.
 - Admit new audit and evidence payloads into immutable preimage bytes before
   hashing. Reject unsupported structured values, non-string or oversized keys,
   cycles, and resource-limit violations before writing. Existing ledger rows

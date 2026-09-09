@@ -16,6 +16,7 @@ __all__ = [
     "detect_query_type",
     "decompose_query",
     "_QUERY_TYPE_PARAMS",
+    "resolve_expand_mode",
     "_INTENT_TO_QUERY_TYPE",
     "chunk_text",
     "get_excerpt",
@@ -293,6 +294,60 @@ _QUERY_TYPE_PARAMS = {
         "extra_limit_factor": 2.0,  # Retrieve more for diversity
     },
 }
+
+#: Expansion breadth, narrowest first. An override may LOWER a query type's
+#: expansion but never raise it -- see :func:`resolve_expand_mode`.
+_EXPAND_RANK: dict[object, int] = {False: 0, "morph_only": 1, "full": 2, True: 2}
+
+#: The string values ``expand_query`` accepts. Checked explicitly rather than by
+#: membership in ``_EXPAND_RANK``, whose bool keys collide with 0/0.0/1/1.0.
+_EXPAND_MODES: frozenset[str] = frozenset({"morph_only", "full"})
+
+
+def resolve_expand_mode(qparams: dict, recall_cfg: dict | None):
+    """Per-type expansion default, narrowed by ``recall.expand_query`` if set.
+
+    The per-question-type table is the default. A user may narrow it through
+    configuration, which is what makes the measured ``no_expansion`` result
+    reachable outside the benchmark: the gate in
+    ``docs/benchmarks/2026-09-07-no-expansion-gate.md`` disabled expansion by
+    REBINDING ``_QUERY_TYPE_PARAMS`` inside the harness's child process, which
+    no operator can do.
+
+    NARROWING ONLY. ``adversarial`` pins ``"morph_only"`` to suppress semantic
+    drift on distractor-prone queries. If an override could raise expansion,
+    ``expand_query: true`` would silently delete that safeguard, so the result
+    is the NARROWER of the configured value and the type's own value:
+
+        False (no expansion)  <  "morph_only"  <  True / "full"
+
+    An unrecognised value is ignored and the per-type default stands. A typo
+    must not become full expansion, and it must not become none either -- both
+    would be a silent behaviour change from a misspelling.
+    """
+    default = qparams.get("expand_query", True)
+    if not recall_cfg or "expand_query" not in recall_cfg:
+        return default
+    configured = recall_cfg.get("expand_query")
+
+    # STRICT TYPE GATE, and it must come before any dict membership test.
+    # `configured in _EXPAND_RANK` raises TypeError on an unhashable value, so
+    # `expand_query: []` in mind-mem.json crashed the query rather than being
+    # ignored. And because bool is a subclass of int and hash(0.0) == hash(False),
+    # a numeric config value ALIASED a boolean through that same lookup: 0.0
+    # resolved to False's rank and was returned as the mode itself (a float,
+    # leaking into `expand_query(tokens, mode=...)`), and 1.0 resolved to True.
+    # Only a real bool or a known string is a value here.
+    if not isinstance(configured, (bool, str)):
+        return default
+    if isinstance(configured, str):
+        configured = configured.strip().lower()
+        if configured not in _EXPAND_MODES:
+            return default
+    if _EXPAND_RANK[configured] >= _EXPAND_RANK.get(default, 2):
+        return default
+    return configured
+
 
 # IntentRouter -> legacy query type mapping (backward compatible with _QUERY_TYPE_PARAMS)
 _INTENT_TO_QUERY_TYPE = {

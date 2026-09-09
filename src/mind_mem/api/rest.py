@@ -35,8 +35,8 @@ from mind_mem import __version__ as _PACKAGE_VERSION
 from mind_mem import audit_context as _audit_ctx
 from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
 from mind_mem.mcp.infra.http_auth import (
-    ALLOW_UNAUTH_ENV,
     _check_token,
+    auth_is_configured,
     verify_token,
 )
 from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _get_client_rate_limiter
@@ -196,7 +196,11 @@ def _client_id_from_token(token: str | None) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
 
 
-def _verify_bearer(token: str | None) -> tuple[bool, str, tuple[str, ...]]:
+def _verify_bearer(
+    token: str | None,
+    *,
+    allow_unauthenticated: bool = False,
+) -> tuple[bool, str, tuple[str, ...]]:
     """Return (valid, agent_id, oidc_scopes) for a bearer/API-key token.
 
     ``oidc_scopes`` is empty unless the token was validated as an OIDC
@@ -217,7 +221,7 @@ def _verify_bearer(token: str | None) -> tuple[bool, str, tuple[str, ...]]:
     """
     if token is None:
         headers: dict[str, str] = {}
-        return verify_token(headers), "anonymous", ()
+        return verify_token(headers, allow_unauthenticated=allow_unauthenticated), "anonymous", ()
 
     # 1. Admin token — fast path (checks env directly, not ContextVar)
     admin = os.environ.get("MIND_MEM_ADMIN_TOKEN")
@@ -249,7 +253,7 @@ def _verify_bearer(token: str | None) -> tuple[bool, str, tuple[str, ...]]:
 
     # 4. User bearer token
     headers = {"Authorization": f"Bearer {token}"}
-    if verify_token(headers):
+    if verify_token(headers, allow_unauthenticated=allow_unauthenticated):
         return True, "user", ()
     return False, "anonymous", ()
 
@@ -415,7 +419,10 @@ def _require_auth(
     is the authoritative handoff.
     """
     try:
-        valid, agent_id, oidc_scopes = _verify_bearer(token)
+        valid, agent_id, oidc_scopes = _verify_bearer(
+            token,
+            allow_unauthenticated=_request_allows_local_anonymous(request),
+        )
     except APIKeyStoreUnavailable as exc:
         # The credential may well be valid; we cannot tell. 401 would
         # blame the caller for an operator-side failure (and send them
@@ -798,11 +805,10 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 def _auth_is_configured() -> bool:
     """Return True when at least one authentication mechanism is *usable*.
 
-    Every test here is a truthiness test, matching the code that turns
-    these variables into credentials: ``http_auth._build_http_auth_tokens``
-    registers a token only ``if user_token:`` / ``if admin_token:``, and
-    ``verify_token`` treats an empty ``MIND_MEM_TOKEN`` as no token at
-    all.
+    The dependency-light :func:`auth_is_configured` owns the mechanism list
+    and applies truthiness, matching the code that turns these variables into
+    credentials. ``verify_token`` treats an empty ``MIND_MEM_TOKEN`` as no
+    token at all.
 
     This gate used to test *presence* (``is not None``) for the two
     static tokens, so ``MIND_MEM_ADMIN_TOKEN=""`` — exported but empty —
@@ -817,15 +823,7 @@ def _auth_is_configured() -> bool:
     extra ``is not None`` terms: that one is a fail-closed *superset*,
     so present-but-empty must still resolve the admin gate closed.
     """
-    if _check_token():
-        return True
-    if os.environ.get("MIND_MEM_ADMIN_TOKEN"):
-        return True
-    if os.environ.get("MIND_MEM_API_KEY_DB"):
-        return True
-    if os.environ.get("OIDC_ISSUER") and os.environ.get("OIDC_AUDIENCE"):
-        return True
-    return False
+    return auth_is_configured()
 
 
 BIND_HOST_ENV = "MIND_MEM_BIND_HOST"
@@ -859,7 +857,19 @@ def _docs_enabled(host: str | None = None) -> bool:
     return not _auth_is_configured()
 
 
-def create_app(workspace: str | None = None) -> FastAPI:
+_LOCAL_ANONYMOUS_CAPABILITY = object()
+
+
+def _request_allows_local_anonymous(request: Request) -> bool:
+    """Whether the checked launcher granted this application local access."""
+    return getattr(request.app.state, "mindmem_local_anonymous_capability", None) is _LOCAL_ANONYMOUS_CAPABILITY
+
+
+def create_app(
+    workspace: str | None = None,
+    *,
+    _local_anonymous_capability: object | None = None,
+) -> FastAPI:
     """Create and return the configured FastAPI application.
 
     Parameters
@@ -867,6 +877,10 @@ def create_app(workspace: str | None = None) -> FastAPI:
     workspace:
         Absolute path to the mind-mem workspace.  When *None* the
         ``MIND_MEM_WORKSPACE`` environment variable (or cwd) is used.
+
+    A directly constructed application is fail-closed when no authentication
+    is configured. The private capability is supplied only by :func:`run`
+    after it validates an explicitly requested loopback-only deployment.
     """
     resolved_ws = _active_workspace(workspace)
 
@@ -886,6 +900,9 @@ def create_app(workspace: str | None = None) -> FastAPI:
         docs_url="/docs" if _docs_enabled() else None,
         redoc_url="/redoc" if _docs_enabled() else None,
         openapi_url="/openapi.json" if _docs_enabled() else None,
+    )
+    application.state.mindmem_local_anonymous_capability = (
+        _LOCAL_ANONYMOUS_CAPABILITY if _local_anonymous_capability is _LOCAL_ANONYMOUS_CAPABILITY else None
     )
 
     # ------------------------------------------------------------------
@@ -990,6 +1007,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
         dependencies=[Depends(_public_rate_limit)],
     )
     def health(
+        request: Request,
         credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
     ) -> JSONResponse:
         ws = _active_workspace(workspace)
@@ -1006,7 +1024,10 @@ def create_app(workspace: str | None = None) -> FastAPI:
         }
         token = str(credentials.credentials) if credentials is not None else None
         try:
-            authenticated, _agent_id, _scopes = _verify_bearer(token)
+            authenticated, _agent_id, _scopes = _verify_bearer(
+                token,
+                allow_unauthenticated=_request_allows_local_anonymous(request),
+            )
         except APIKeyStoreUnavailable:
             authenticated = False
         if authenticated:
@@ -1311,7 +1332,7 @@ app = create_app()
 # ---------------------------------------------------------------------------
 
 
-def _enforce_fail_closed(host: str, allow_unauthenticated_localhost: bool) -> None:
+def _enforce_fail_closed(host: str, allow_unauthenticated_localhost: bool) -> object | None:
     """v3.7.0 H4: refuse to bind a network port without authentication.
 
     Raises :class:`SystemExit` with a structured message when:
@@ -1320,9 +1341,12 @@ def _enforce_fail_closed(host: str, allow_unauthenticated_localhost: bool) -> No
       is not set → unauthenticated bind is forbidden.
     * ``--allow-unauthenticated-localhost`` is set BUT ``host`` is not
       a loopback interface → routable unauthenticated bind is forbidden.
+
+    Returns the opaque application capability for a validated anonymous-local
+    deployment, or ``None`` when configured authentication will be used.
     """
     if _auth_is_configured():
-        return
+        return None
     if not allow_unauthenticated_localhost:
         raise SystemExit(
             "mind-mem REST: refusing to start without authentication.\n"
@@ -1336,6 +1360,7 @@ def _enforce_fail_closed(host: str, allow_unauthenticated_localhost: bool) -> No
             f"  Refusing to listen on host={host!r} without auth.\n"
             "  Use --host 127.0.0.1 (or localhost / ::1)."
         )
+    return _LOCAL_ANONYMOUS_CAPABILITY
 
 
 def _floored_uvicorn_config(
@@ -1442,13 +1467,14 @@ def run(
     if tls_client_ca and not tls_certfile:
         raise ValueError("tls_client_ca requires tls_certfile: mutual TLS is a property of a TLS listener")
 
-    _enforce_fail_closed(host, allow_unauthenticated_localhost)
-    if allow_unauthenticated_localhost and not _auth_is_configured():
-        os.environ[ALLOW_UNAUTH_ENV] = "1"
+    local_anonymous_capability = _enforce_fail_closed(host, allow_unauthenticated_localhost)
     # N-13: create_app() has no view of the bind, so publish it here.
     os.environ[BIND_HOST_ENV] = host
 
-    server_app = create_app(workspace)
+    server_app = create_app(
+        workspace,
+        _local_anonymous_capability=local_anonymous_capability,
+    )
     if tls_certfile is None:
         uvicorn.run(server_app, host=host, port=port)
         return

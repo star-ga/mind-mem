@@ -41,10 +41,14 @@ Pass the token as a Bearer header:
 curl -H "Authorization: Bearer $MIND_MEM_TOKEN" http://127.0.0.1:8080/v1/health
 ```
 
-When no tokens are configured all endpoints are open (development mode).
+When no authentication is configured, the server refuses to start by default.
+For local development, pass `--allow-unauthenticated-localhost`; the checked
+launcher accepts that mode only on a loopback bind. Importing the ASGI `app`
+directly remains fail-closed.
 
 Admin-scope endpoints (`/v1/propose_update`, `/v1/approve_apply`, `/v1/rollback_proposal`)
-require `MIND_MEM_ADMIN_TOKEN`.
+require an admin credential: `MIND_MEM_ADMIN_TOKEN`, an admin-scoped API key,
+or an OIDC token carrying a configured admin scope.
 
 ## Rate limiting
 

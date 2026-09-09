@@ -52,6 +52,7 @@ from .recall import (
     get_excerpt,
     normalise_tags,
     rerank_hits,
+    resolve_expand_mode,
     tokenize,
 )
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
@@ -1657,7 +1658,12 @@ def query_index(
     # Month normalization
     query_tokens = expand_months(query, query_tokens)
 
-    expand_mode = qparams.get("expand_query", True)
+    # Local import: `_recall_core` imports from this module, so a module-level
+    # import here would close the cycle. `_get_config` is mtime-cached, so this
+    # costs one stat per query, not a parse.
+    from ._recall_core import _get_config
+
+    expand_mode = resolve_expand_mode(qparams, _get_config(workspace).get("recall", {}))
     if expand_mode:
         mode = expand_mode if isinstance(expand_mode, str) else "full"
         query_tokens = expand_query(query_tokens, mode=mode)
@@ -1878,6 +1884,12 @@ def query_index(
             result["DiaID"] = row["dia_id"]
         if row["date"]:
             result["Date"] = row["date"]
+        # These filter fields live in json_blob rather than dedicated SQLite
+        # columns. Keep indexed hits aligned with the scan path so the shared
+        # funnel does not treat known metadata as absent.
+        for _filter_field in ("Lifecycle", "EventId", "Maturity"):
+            if block_data.get(_filter_field):
+                result[_filter_field] = block_data[_filter_field]
         # Pass through provenance fields (Group E) when present
         for _prov_field in PROVENANCE_FIELD_NAMES:
             if block_data.get(_prov_field):

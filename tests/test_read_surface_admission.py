@@ -82,6 +82,7 @@ def _render(block_id: str, status: str, canary: str) -> str:
         f"[{block_id}]\n"
         f"Date: 2026-01-01\n"
         f"Status: {status}\n"
+        "Lifecycle: durable\nEventId: EVT-SWEEP\nMaturity: 0.9\n"
         f"Scope: global\n"
         f"Statement: The {canary} architecture decision governs frost telemetry.\n"
         f"Rationale: {canary} rationale for the frost telemetry architecture rollout.\n"

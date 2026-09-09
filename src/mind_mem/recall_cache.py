@@ -83,6 +83,7 @@ def make_cache_key(
     active_only: bool = False,
     scoring_instant: str = "",
     index_anchor: str = "",
+    filters: dict | None = None,
 ) -> str:
     """Derive a stable cache key for a recall invocation.
 
@@ -122,6 +123,18 @@ def make_cache_key(
         "scoring_instant": str(scoring_instant),
         "index_anchor": str(index_anchor),
     }
+    # Post-retrieval filters (since / until / lifecycle / event_id /
+    # min_maturity) change the ANSWER, so they belong in the key. Omitting them
+    # would let a filtered query be served from the UNFILTERED entry: the filter
+    # would pass a unit test and silently do nothing in a warm process.
+    #
+    # Only non-empty values are folded in and the sub-key is omitted entirely
+    # when nothing is set, so a caller that passes no filter gets a
+    # byte-identical key to before and no warm cache is invalidated by this
+    # field merely existing.
+    active_filters = {k: v for k, v in (filters or {}).items() if v is not None and v != ""}
+    if active_filters:
+        payload["filters"] = {k: str(v) for k, v in sorted(active_filters.items())}
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
     return f"mindmem:recall:{namespace}:{digest[:24]}"
@@ -338,6 +351,7 @@ def cached_recall(
     config: dict[str, Any] | None = None,
     scoring_instant: str = "",
     index_anchor: str = "",
+    filters: dict | None = None,
 ) -> str:
     """Cache-wrapped call to a recall function.
 
@@ -361,12 +375,16 @@ def cached_recall(
         active_only=active_only,
         scoring_instant=scoring_instant,
         index_anchor=index_anchor,
+        filters=filters,
     )
     cache = get_cache(config)
     hit = cache.get(key)
     if hit is not None:
         return hit
-    envelope: str = str(inner(query, limit=limit, active_only=active_only, backend=backend))
+    # Filters are forwarded to `inner` as well as keyed: keying alone would give
+    # every filtered query its own entry and then fill it with the UNFILTERED
+    # answer.
+    envelope: str = str(inner(query, limit=limit, active_only=active_only, backend=backend, **(filters or {})))
     cache.set(key, envelope, ttl_seconds=ttl_seconds)
     return envelope
 

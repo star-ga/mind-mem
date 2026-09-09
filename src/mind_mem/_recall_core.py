@@ -52,6 +52,7 @@ from ._recall_detection import (
     get_excerpt,
     is_skeptical_query,
     normalise_tags,
+    resolve_expand_mode,
 )
 from ._recall_expansion import expand_months, expand_query, rm3_expand
 from ._recall_reranking import llm_rerank, rerank_hits
@@ -767,16 +768,15 @@ def _apply_post_filters(
     caller had already cut to ``limit``, which made a filter a subtraction
     from the top-k rather than a choice of what the top-k is drawn from.
     Callers now push each filter as far up their own leg as it goes and hand
-    this the WIDE pool; the ``[:limit]`` cuts below are the single place the
-    result is narrowed, and they now cut filtered candidates instead of
-    filtering an already-cut list. The funnel itself is unchanged — it is
-    still the only place the contract is stated — and it is still what makes
+    this the WIDE pool. The funnel remains the only place the contract is
+    stated, and it is still what makes
     a leg that can push nothing (a custom ``RecallBackend``) correct. Previously the
     sqlite and vector early-returns applied only the date filter, silently
     ignoring lifecycle/event_id/min_maturity — a backend-dependent
     correctness bug (e.g. a consolidation gate's min_maturity returned
-    unfiltered results on PG/sqlite deployments). ``as_of`` is applied last
-    so it rewinds the content of whatever survives the filters.
+    unfiltered results on PG/sqlite deployments). The result is narrowed once,
+    after the conjunction, and ``as_of`` is applied after that so it rewinds
+    the content of whatever survives the filters.
 
     ``guardrail_context`` runs *after* every filter, never before: a
     guardrail is a constraint on what the caller is about to do, so a
@@ -788,13 +788,18 @@ def _apply_post_filters(
     # a result slot, whatever the other filters decide.
     hits = _withhold_inadmissible(hits, workspace, status_key="status", leg="funnel", allow=admission_allow)
     if since is not None or until is not None:
-        hits = _apply_date_filter(hits, since, until)[:limit]
+        hits = _apply_date_filter(hits, since, until)
     if lifecycle is not None:
-        hits = _apply_lifecycle_filter(hits, lifecycle)[:limit]
+        hits = _apply_lifecycle_filter(hits, lifecycle)
     if event_id is not None:
-        hits = _apply_event_id_filter(hits, event_id)[:limit]
+        hits = _apply_event_id_filter(hits, event_id)
     if min_maturity is not None:
-        hits = _apply_min_maturity_filter(hits, min_maturity)[:limit]
+        hits = _apply_min_maturity_filter(hits, min_maturity)
+    # Apply the full conjunction before making the single result-size decision.
+    # Slicing after each predicate can discard a later hit that satisfies all
+    # filters and makes the answer depend on predicate order.
+    if len(hits) > limit:
+        hits = hits[:limit]
     if as_of is not None and workspace is not None:
         hits = _apply_as_of_projection(hits, workspace, as_of)
     if guardrail_context is not None:
@@ -1209,7 +1214,7 @@ def recall(
 
     # Query expansion: add domain synonyms
     # adversarial/verification queries use morph_only (no semantic synonyms)
-    expand_mode = qparams.get("expand_query", True)
+    expand_mode = resolve_expand_mode(qparams, _get_config(workspace).get("recall", {}))
     if expand_mode:
         mode = expand_mode if isinstance(expand_mode, str) else "full"
         # In skeptical mode, force morph_only to suppress semantic drift

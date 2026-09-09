@@ -270,9 +270,11 @@ def unauthenticated_client(workspace: str, monkeypatch: pytest.MonkeyPatch) -> G
     monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
     monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
     monkeypatch.delenv("MIND_MEM_API_KEY_DB", raising=False)
-    monkeypatch.setenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", "1")
     monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
-    app = create_app(workspace)
+    from mind_mem.api.rest import _enforce_fail_closed
+
+    capability = _enforce_fail_closed("127.0.0.1", True)
+    app = create_app(workspace, _local_anonymous_capability=capability)
     with TestClient(app, raise_server_exceptions=False) as tc:
         yield tc
 

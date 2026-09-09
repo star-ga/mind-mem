@@ -486,6 +486,8 @@ MONTH_TOKEN_SET: frozenset[str] = frozenset(MONTH_NAMES.keys())
 
 _VALID_RECALL_KEYS = frozenset(
     {
+        # Narrows query expansion; see _recall_detection.resolve_expand_mode.
+        "expand_query",
         "backend",
         "limit",
         "rm3",

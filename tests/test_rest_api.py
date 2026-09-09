@@ -49,17 +49,17 @@ def workspace(tmp_path: Any) -> str:
 def client(workspace: str, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
     """TestClient with no auth configured.
 
-    v3.7.0 H4: REST auth fails closed by default. ``TestClient`` runs in
-    process and never binds a real socket, so the loopback opt-in env
-    var is the cleanest way to exercise the unauthenticated code paths
-    that all of these tests still exercise (rate limit, validation,
-    schema envelope, etc).
+    v3.7.0 H4: REST auth fails closed by default. Exercise the same
+    validated loopback capability that the public launcher gives its app;
+    an environment variable alone no longer authorizes a direct ASGI app.
     """
     monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
     monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
-    monkeypatch.setenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", "1")
     monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
-    app = create_app(workspace)
+    from mind_mem.api.rest import _enforce_fail_closed
+
+    capability = _enforce_fail_closed("127.0.0.1", True)
+    app = create_app(workspace, _local_anonymous_capability=capability)
     with TestClient(app, raise_server_exceptions=False) as tc:
         yield tc
 
@@ -327,7 +327,6 @@ class TestRateLimit:
         """429 is returned after exceeding per-client limit."""
         monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
         monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
-        monkeypatch.setenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", "1")
         monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
 
         from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _rate_limiters, _rate_limiters_lock
@@ -341,7 +340,10 @@ class TestRateLimit:
         with _rate_limiters_lock:
             _rate_limiters["10.0.0.7"] = tight_limiter
 
-        app = create_app(workspace)
+        from mind_mem.api.rest import _enforce_fail_closed
+
+        capability = _enforce_fail_closed("127.0.0.1", True)
+        app = create_app(workspace, _local_anonymous_capability=capability)
         with TestClient(app, raise_server_exceptions=False, client=("10.0.0.7", 5000)) as tc:
             resp = tc.post("/v1/recall", json={"query": "test"})
             assert resp.status_code == 429
@@ -360,7 +362,6 @@ class TestRateLimit:
         """
         monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
         monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
-        monkeypatch.setenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", "1")
         monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
 
         from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _rate_limiters, _rate_limiters_lock
@@ -372,7 +373,10 @@ class TestRateLimit:
             _rate_limiters.pop("10.0.0.9", None)
             _rate_limiters["10.0.0.8"] = exhausted
 
-        app = create_app(workspace)
+        from mind_mem.api.rest import _enforce_fail_closed
+
+        capability = _enforce_fail_closed("127.0.0.1", True)
+        app = create_app(workspace, _local_anonymous_capability=capability)
         with TestClient(app, raise_server_exceptions=False, client=("10.0.0.8", 5000)) as noisy:
             assert noisy.post("/v1/recall", json={"query": "test"}).status_code == 429
         with TestClient(app, raise_server_exceptions=False, client=("10.0.0.9", 5000)) as quiet:

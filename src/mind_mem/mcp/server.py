@@ -27,6 +27,7 @@ from mind_mem.mcp.infra.http_auth import (
     ALLOW_UNAUTH_ENV,
     _build_http_auth_tokens,
     _check_token,
+    auth_is_configured,
     check_token_strength,
 )
 from mind_mem.mcp.infra.workspace import _workspace
@@ -218,6 +219,12 @@ def _enforce_http_auth_or_localhost(host: str, allow_unauthenticated_localhost: 
             "mind-mem-mcp: --allow-unauthenticated-localhost requires a loopback bind.\n"
             f"  Refusing to listen on host={host!r} without auth.\n"
             "  Use --host 127.0.0.1 (or localhost / ::1)."
+        )
+    if auth_is_configured():
+        raise SystemExit(
+            "mind-mem-mcp: refusing anonymous HTTP transport with REST-only authentication configured.\n"
+            "  Set a non-empty MIND_MEM_TOKEN or MIND_MEM_ADMIN_TOKEN for MCP,\n"
+            "  or remove the REST credential configuration before opting into anonymous loopback access."
         )
 
 

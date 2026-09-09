@@ -31,6 +31,7 @@ from unittest import mock
 _ENV_KEYS = (
     "MIND_MEM_TOKEN",
     "MIND_MEM_ADMIN_TOKEN",
+    "MIND_MEM_API_KEY_DB",
     "MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST",
     "OIDC_ISSUER",
     "OIDC_AUDIENCE",
@@ -170,6 +171,23 @@ class TestMainNeverBindsUnauthenticated(_EnvIsolated):
                 srv.main()
         run.assert_not_called()
         self.assertIsNone(getattr(srv.mcp, "auth", None))
+
+    def test_rest_only_auth_and_loopback_optin_never_opens_an_anonymous_listener(self) -> None:
+        from mind_mem.mcp import server as srv
+        from mind_mem.mcp.infra.http_auth import verify_token
+
+        for env in (_OIDC_ENV, {"MIND_MEM_API_KEY_DB": "/unused/test-auth.sqlite"}):
+            with self.subTest(mechanisms=tuple(env)):
+                for key in _ENV_KEYS:
+                    os.environ.pop(key, None)
+                os.environ.update(env)
+                os.environ["MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST"] = "1"
+                argv = ["mind-mem-mcp", "--transport", "http", "--host", "127.0.0.1", "--allow-unauthenticated-localhost"]
+                with mock.patch.object(sys, "argv", argv), mock.patch.object(srv.mcp, "run") as run:
+                    with self.assertRaisesRegex(SystemExit, "REST-only authentication"):
+                        srv.main()
+                run.assert_not_called()
+                self.assertFalse(verify_token({}))
 
     def test_loopback_optin_still_starts_and_marks_itself_unauthenticated(self) -> None:
         # Guard against over-fixing: the blessed unauthenticated dev flow

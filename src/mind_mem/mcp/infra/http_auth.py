@@ -28,8 +28,8 @@ from mind_mem.observability import metrics
 
 
 def _check_token() -> str | None:
-    """Get token from environment. Returns None if no auth configured."""
-    return os.environ.get("MIND_MEM_TOKEN")
+    """Get the user token, normalizing unset and empty to no credential."""
+    return os.environ.get("MIND_MEM_TOKEN") or None
 
 
 # Env var name for the explicit "I know there is no auth and I accept that
@@ -39,6 +39,31 @@ def _check_token() -> str | None:
 # it directly because TestClient does not bind a real port. Any other
 # value (or absence) means HTTP/REST auth is fail-CLOSED. v3.7.0 H4.
 ALLOW_UNAUTH_ENV = "MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST"
+
+
+#: One dependency-light declaration of the authentication mechanisms used by
+#: the REST startup and request gates. A tuple is a conjunction; the outer
+#: tuple is a disjunction. Truthiness matches credential construction.
+AUTH_ENV_GROUPS: tuple[tuple[str, ...], ...] = (
+    ("MIND_MEM_TOKEN",),
+    ("MIND_MEM_ADMIN_TOKEN",),
+    ("MIND_MEM_API_KEY_DB",),
+    ("OIDC_ISSUER", "OIDC_AUDIENCE"),
+)
+
+
+def auth_is_configured() -> bool:
+    """Return whether at least one usable REST auth mechanism is configured."""
+    return any(all(os.environ.get(var) for var in group) for group in AUTH_ENV_GROUPS)
+
+
+def _other_auth_configured() -> bool:
+    """True when a usable auth mechanism OTHER than ``MIND_MEM_TOKEN`` is set.
+
+    Truthiness, not presence — matching ``rest._auth_is_configured``, so an
+    exported-but-empty variable is not a credential in either place.
+    """
+    return any(all(os.environ.get(var) for var in group) for group in AUTH_ENV_GROUPS[1:])
 
 
 def _unauthenticated_explicitly_allowed() -> bool:
@@ -81,7 +106,7 @@ def check_token_strength() -> list[str]:
     return warnings
 
 
-def verify_token(headers: dict) -> bool:
+def verify_token(headers: dict, *, allow_unauthenticated: bool | None = None) -> bool:
     """Verify Bearer token from request headers. Constant-time compare.
 
     v3.7.0 H4: fail-CLOSED by default when no token is configured.
@@ -97,6 +122,11 @@ def verify_token(headers: dict) -> bool:
 
     Tokens longer than ``_MAX_TOKEN_LEN`` are rejected before any
     compare to prevent DoS via oversized header values.
+
+    ``allow_unauthenticated=None`` preserves the MCP helper's environment
+    contract. REST always supplies an explicit app-scoped decision produced by
+    its bind validator, so a direct ASGI import cannot gain access from the
+    environment variable alone.
     """
     expected = _check_token()
     if expected is None:
@@ -105,7 +135,22 @@ def verify_token(headers: dict) -> bool:
         # server to loopback when the matching ``--allow-unauthenticated-
         # localhost`` flag is passed; tests set the env var directly
         # because the in-process TestClient skips network binding.
-        if _unauthenticated_explicitly_allowed():
+        # The opt-in asserts "there is NO auth and I accept that because I am on
+        # loopback". If another mechanism IS configured that assertion is false,
+        # and honouring it hands out anonymous access on a server whose operator
+        # configured authentication.
+        #
+        # This was reachable, not theoretical: `rest._auth_is_configured` counts
+        # MIND_MEM_ADMIN_TOKEN, so `_enforce_fail_closed` returned EARLY on it and
+        # never reached its loopback check -- letting `--host 0.0.0.0` bind -- while
+        # `_check_token` reads only MIND_MEM_TOKEN, so every request landed here and
+        # was allowed. Measured on 28b9d7f1: verify_token({}) and a wrong bearer
+        # both returned True.
+        #
+        # The admin token gains no reach from this: it does not become a user
+        # credential, it only revokes the anonymous branch.
+        anonymous_allowed = _unauthenticated_explicitly_allowed() if allow_unauthenticated is None else allow_unauthenticated
+        if anonymous_allowed and not _other_auth_configured():
             return True
         metrics.inc("mcp_http_auth_failures")
         return False

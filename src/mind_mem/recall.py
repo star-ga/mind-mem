@@ -83,6 +83,7 @@ from ._recall_detection import (
     get_excerpt,
     is_skeptical_query,
     normalise_tags,
+    resolve_expand_mode,
 )
 
 # --- Query Expansion (_recall_expansion) ---
@@ -495,6 +496,7 @@ __all__ = [
     "is_skeptical_query",
     "detect_query_type",
     "_QUERY_TYPE_PARAMS",
+    "resolve_expand_mode",
     "_INTENT_TO_QUERY_TYPE",
     "chunk_text",
     "get_excerpt",
