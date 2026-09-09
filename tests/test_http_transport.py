@@ -477,6 +477,47 @@ class TestClearEndpoint:
 
 
 class TestAuth:
+    def test_admin_route_enforcement_follows_operator_configuration(self, workspace, monkeypatch) -> None:
+        """Single-token access stays compatible; configured separation is real."""
+        user_token = "user-token-for-route-scope"
+        admin_token = "admin-token-for-route-scope"
+        monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
+        monkeypatch.delenv("MIND_MEM_TOKENS", raising=False)
+        monkeypatch.setenv("MIND_MEM_HTTP_RATE_MAX_CALLS", "0")
+
+        monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
+        port = _free_port()
+        _thread, stop = serve_http(workspace=workspace, port=port, host="127.0.0.1", token=user_token)
+        try:
+            status, body = _request(port, "POST", PATH_CLEAR, token=user_token, body={})
+        finally:
+            stop()
+        assert status == 400 and "rationale" in body["error"], (
+            "without privilege separation, the legacy single token must reach the admin handler"
+        )
+
+        monkeypatch.setenv("MIND_MEM_ADMIN_TOKEN", admin_token)
+        port = _free_port()
+        _thread, stop = serve_http(workspace=workspace, port=port, host="127.0.0.1", token=user_token)
+        try:
+            denied_status, denied_body = _request(port, "POST", PATH_CLEAR, token=user_token, body={})
+            missing_status, missing_body = _request(port, "POST", "/not-a-route", token=user_token, body={})
+            admitted_status, admitted_body = _request(port, "POST", PATH_CLEAR, token=admin_token, body={})
+        finally:
+            stop()
+
+        assert (
+            (denied_status, denied_body)
+            == (missing_status, missing_body)
+            == (
+                404,
+                {"error": "not found", "status": 404},
+            )
+        )
+        assert admitted_status == 400 and "rationale" in admitted_body["error"], (
+            "the configured admin credential authenticated but did not reach the admin handler"
+        )
+
     def test_request_without_token_rejected(self, server_with_token) -> None:
         port, _token = server_with_token
         status, _ = _request(port, "GET", PATH_STATUS)

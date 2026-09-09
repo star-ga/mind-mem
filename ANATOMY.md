@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1537 | **Est. tokens:** ~4554988
-**Generated:** 2026-09-09 15:39 UTC
+**Files:** 1537 | **Est. tokens:** ~4555625
+**Generated:** 2026-09-09 16:08 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 661 | ~2003450 |
+| `tests/` | 661 | ~2004087 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1395,7 +1395,7 @@
 - `test_http_auth_fail_closed.py` (~1884 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_auth_optin_not_honoured_when_auth_configured.py` (~1049 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_http_read_admission.py` (~10548 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_http_transport.py` (~5409 tok, huge) — Tests for the v3.9 HTTP transport adapter.
+- `test_http_transport.py` (~5899 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_http_transport_audit_headers.py` (~6628 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hybrid_degraded_marker.py` (~4151 tok, huge) — Tests for the in-band recall degradation marker (Task 2).
 - `test_hybrid_expansion_reentrancy.py` (~4145 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1682,7 +1682,7 @@
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_route_conformance.py` (~1778 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_live_request_parity.py` (~3259 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_sec02_route_scope_parity.py` (~2140 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_sec02_route_scope_parity.py` (~2287 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_security_scanning_alerts.py` (~1395 tok, large) — Regression tests for code-scanning alerts #189 and #192.
 - `test_self_editing_old_content.py` (~980 tok, large) — ``propose_edit`` must snapshot the block's real current content.
 - `test_self_update.py` (~2727 tok, huge) — # Copyright 2026 STARGA, Inc.

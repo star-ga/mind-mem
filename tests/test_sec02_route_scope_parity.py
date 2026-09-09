@@ -28,6 +28,10 @@ denies. Never the reverse. No route may become MORE permissive here.
 
 from __future__ import annotations
 
+import ast
+import inspect
+import textwrap
+
 import pytest
 
 from mind_mem.http_transport import ROUTES
@@ -149,14 +153,30 @@ def test_admin_scope_fails_closed_when_admin_identity_is_unavailable():
 # ---------------------------------------------------------------------------
 
 
-def test_enforcement_follows_the_operator_configuration():
-    import inspect
-
+def _admin_scope_guard() -> ast.If:
     from mind_mem import http_transport
 
-    src = inspect.getsource(http_transport)
-    assert "_capture_auth_snapshot(" in src
-    assert 'route.scope == "admin" and auth_snapshot.admin_configured and not _caller_is_admin(' in src, (
+    tree = ast.parse(textwrap.dedent(inspect.getsource(http_transport.build_handler)))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        condition = ast.unparse(node.test)
+        required = (
+            "route.scope == 'admin'",
+            "auth_snapshot.admin_configured",
+            "not _caller_is_admin(",
+        )
+        if all(term in condition for term in required):
+            return node
+    raise AssertionError("the request dispatcher has no structural admin-scope guard")
+
+
+def test_enforcement_follows_the_operator_configuration():
+    from mind_mem import http_transport
+
+    assert "_capture_auth_snapshot(" in inspect.getsource(http_transport.build_handler)
+    guard = _admin_scope_guard()
+    assert "auth_snapshot.admin_configured" in ast.unparse(guard.test), (
         "admin enforcement must be conditional on an admin credential existing, "
         "or every single-token deployment loses its admin routes on upgrade"
     )
@@ -183,11 +203,6 @@ def test_the_admin_reader_is_separate_from_the_authentication_path():
 
 
 def test_denial_does_not_disclose_which_admin_routes_exist():
-    import inspect
-
-    from mind_mem import http_transport
-
-    src = inspect.getsource(http_transport)
-    i = src.index('route.scope == "admin" and auth_snapshot.admin_configured')
-    window = src[i : i + 900]
-    assert "404" in window and "403" not in window, "an admin-route denial should read like an unmatched path, not confirm the route exists"
+    guard_body = ast.dump(ast.Module(body=_admin_scope_guard().body, type_ignores=[]), include_attributes=False)
+    assert "Constant(value=404)" in guard_body
+    assert "Constant(value=403)" not in guard_body, "an admin-route denial should read like an unmatched path, not confirm the route exists"
