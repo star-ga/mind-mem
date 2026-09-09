@@ -141,6 +141,14 @@ from scripts.alignment_authorities import (  # noqa: E402  (path shim above must
 # this gate and the tool-count gate excuse the same files for the same reason.
 _DOC_SURFACES = ("README.md", "CLAUDE.md", "docs/**/*.md", "train/**/*.md")
 
+# A bare ``=======`` is valid Markdown (the setext heading underline), so the
+# gate only treats it as a merge marker while it is between conflict arms.
+# The start/end forms are deliberately line-anchored: prose mentioning the
+# strings is not a conflict, while an incomplete start/end is still refused.
+_CONFLICT_START = re.compile(r"^\s*<<<<<<<(?:\s.*)?\s*$")
+_CONFLICT_SEPARATOR = re.compile(r"^\s*=======\s*$")
+_CONFLICT_END = re.compile(r"^\s*>>>>>>>(?:\s.*)?\s*$")
+
 
 # --------------------------------------------------------------------------
 # Authorities -- the values live in scripts/alignment_authorities.py; the
@@ -491,6 +499,37 @@ def _doc_files(root: Path) -> list[Path]:
     return keep
 
 
+def scan_conflict_markers(root: Path | None = None) -> list[Finding]:
+    """Reject unresolved merge markers in the public documentation surfaces.
+
+    The scan is restricted to :func:`_doc_files`, so marker-shaped fixtures
+    under ``tests/`` are not public claims. A standalone ``=======`` remains
+    valid Markdown; it is reported only inside a conflict arm. An unmatched
+    start or end marker is still an error because a partial conflict is not a
+    clean document.
+    """
+    root = root or _project_root()
+    out: list[Finding] = []
+    for path in _doc_files(root):
+        rel = path.relative_to(root).as_posix()
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:  # pragma: no cover - defensive
+            print(f"WARN: could not read {rel}: {exc}", file=sys.stderr)
+            continue
+        in_conflict = False
+        for lineno, line in enumerate(lines, 1):
+            if _CONFLICT_START.match(line):
+                in_conflict = True
+                out.append(Finding(rel, lineno, "merge_conflict", line.strip(), "no merge markers", line.strip(), 0, len(line)))
+            elif _CONFLICT_END.match(line):
+                out.append(Finding(rel, lineno, "merge_conflict", line.strip(), "no merge markers", line.strip(), 0, len(line)))
+                in_conflict = False
+            elif in_conflict and _CONFLICT_SEPARATOR.match(line):
+                out.append(Finding(rel, lineno, "merge_conflict", line.strip(), "no merge markers", line.strip(), 0, len(line)))
+    return out
+
+
 _nearest_span = cmt.nearest_span
 
 
@@ -783,6 +822,7 @@ def scan_text(rel: str, lines: list[str], auth: Authorities) -> list[Finding]:
 def scan_docs(auth: Authorities, root: Path | None = None) -> list[Finding]:
     root = root or _project_root()
     findings: list[Finding] = []
+    findings.extend(scan_conflict_markers(root))
     for path in _doc_files(root):
         rel = path.relative_to(root).as_posix()
         try:

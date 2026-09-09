@@ -580,13 +580,35 @@ class TestRepositoryIsAligned:
         assert "tests_collected" not in inspect.signature(cda.resolve_authorities).parameters
         assert "--tests-collected" not in inspect.getsource(cda.main)
 
-    def test_the_scan_actually_read_something(self):
+    def test_the_scan_actually_read_something(self, tmp_path):
         """An empty finding list is only evidence when the search happened."""
         files = cda._doc_files(ROOT)
         rels = {p.relative_to(ROOT).as_posix() for p in files}
         assert len(files) > 40, f"only {len(files)} surfaces scanned"
         for required in ("README.md", "docs/governance.md", "train/HF_MODEL_CARD_v4.md"):
             assert required in rels, f"{required} must be scanned"
+
+        # A setext heading underline is legitimate Markdown and must not be
+        # confused with the separator inside an actual merge conflict.
+        fixture = tmp_path / "docs" / "fixture.md"
+        fixture.parent.mkdir()
+        fixture.write_text(
+            "Title\n=======\n\n<<<<<<< HEAD\nleft\n=======\nright\n>>>>>>> branch\n",
+            encoding="utf-8",
+        )
+        findings = cda.scan_docs(make_authorities(), tmp_path)
+        conflict = [f for f in findings if f.kind == "merge_conflict"]
+        assert [f.lineno for f in conflict] == [4, 6, 8]
+
+        fixture.write_text("Title\n=======\n\nordinary Markdown\n", encoding="utf-8")
+        assert cda.scan_docs(make_authorities(), tmp_path) == []
+
+        # Marker-shaped test fixtures are outside the public documentation
+        # surfaces and must remain available to tests without tripping CI.
+        test_fixture = tmp_path / "tests" / "fixture.md"
+        test_fixture.parent.mkdir()
+        test_fixture.write_text("<<<<<<< fixture\n=======\n>>>>>>> fixture\n", encoding="utf-8")
+        assert cda.scan_conflict_markers(tmp_path) == []
 
     def test_the_cli_exits_zero_on_an_aligned_tree(self):
         proc = subprocess.run(  # nosec B603

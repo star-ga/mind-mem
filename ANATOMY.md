@@ -4,9 +4,9 @@
 > estimates to decide whether you need the full file or the summary is enough.
 > Re-generate with: `anatomy .`
 
-**Project:** `mm-ledger-alias-publication-20260909`
-**Files:** 1540 | **Est. tokens:** ~4584310
-**Generated:** 2026-09-09 14:14 UTC
+**Project:** `mind-mem`
+**Files:** 1536 | **Est. tokens:** ~4572672
+**Generated:** 2026-09-09 14:32 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 38 | ~59236 |
+| `./` | 36 | ~50140 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~211015 |
+| `docs/` | 93 | ~207667 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -61,7 +61,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2170 |
 | `mind/` | 27 | ~9687 |
-| `scripts/` | 21 | ~64748 |
+| `scripts/` | 21 | ~65271 |
 | `sdk/go/` | 10 | ~9098 |
 | `sdk/js/` | 6 | ~4864 |
 | `sdk/js/src/` | 5 | ~3178 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 659 | ~1997429 |
+| `tests/` | 659 | ~1997712 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -124,9 +124,7 @@
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 - `AGENTS.md` (~995 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~4503 tok, huge) — MIND-Mem — Persistent AI Memory System
-- `CLAUDE.md` (~4503 tok, huge) — MIND-Mem — Persistent AI Memory System
-- `CLAUDE.md` (~4503 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~4413 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `CONTRIBUTING.md` (~753 tok, large) — Contributing to MIND-Mem
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
 - `EVIDENCE.md` (~1913 tok, huge) — Evidence Matrix
@@ -462,9 +460,7 @@
 - `federation-setup.md` (~2332 tok, huge) — mind-mem federation & multi-machine setup
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `governance.md` (~1640 tok, huge) — MIND-Mem — governance design (5 layers)
-- `governance.md` (~1640 tok, huge) — MIND-Mem — governance design (5 layers)
-- `governance.md` (~1640 tok, huge) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~1572 tok, huge) — MIND-Mem — governance design (5 layers)
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
@@ -599,7 +595,7 @@
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
-- `check_docs_alignment.py` (~15109 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
+- `check_docs_alignment.py` (~15632 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1302,7 +1298,7 @@
 - `test_dependency_audit_closure.py` (~1464 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
-- `test_docs_alignment.py` (~24506 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_docs_alignment.py` (~24789 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_docs_claims.py` (~818 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_documented_surfaces_exist.py` (~2128 tok, huge) — Documentation that names a symbol, a backend or an installable extra has
 - `test_downgrade_mitigation.py` (~1016 tok, large) — # Copyright 2026 STARGA, Inc.

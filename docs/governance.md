@@ -49,11 +49,7 @@ The load-bearing layer. Every `recall` (read) or `propose_update` (write) flows 
 
 The drift-detection layer:
 
-<<<<<<< HEAD
 - **CI** on every push and PR — full pytest matrix (11,752 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
-=======
-- **CI** on every push and PR — full pytest matrix (11,752 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
->>>>>>> c0f0baa (fix(storage): protect ledger identities across backup and restore)
 - **PyPI release** on tag push via OIDC trusted publishing (no long-lived tokens).
 - **LoCoMo benchmark snapshot** per release; regression on any axis (mean / adversarial / temporal) is documented in CHANGELOG.
 
