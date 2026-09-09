@@ -273,9 +273,7 @@ def _active_tokens(fallback: str | None = None) -> list[str]:
     return _active_tokens_with_admin(fallback=fallback, admin=admin)
 
 
-def _active_tokens_with_admin(
-    *, fallback: str | None, admin: Sequence[str]
-) -> list[str]:
+def _active_tokens_with_admin(*, fallback: str | None, admin: Sequence[str]) -> list[str]:
     """Build the active bearer set from one already-captured admin state."""
 
     multi = os.environ.get("MIND_MEM_TOKENS", "").strip()
@@ -2201,8 +2199,10 @@ def build_handler(
             # deployments do not have.
             auth_snapshot = self._auth_snapshot()
             _admin_tokens = auth_snapshot.admin_tokens
-            if route.scope == "admin" and auth_snapshot.admin_configured and not _caller_is_admin(
-                self.headers.get(AUTH_HEADER, ""), _admin_tokens
+            if (
+                route.scope == "admin"
+                and auth_snapshot.admin_configured
+                and not _caller_is_admin(self.headers.get(AUTH_HEADER, ""), _admin_tokens)
             ):
                 _log.warning(
                     "http_admin_route_denied",

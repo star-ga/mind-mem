@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1537 | **Est. tokens:** ~4554864
-**Generated:** 2026-09-09 15:29 UTC
+**Files:** 1537 | **Est. tokens:** ~4554988
+**Generated:** 2026-09-09 15:39 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 661 | ~2003326 |
+| `tests/` | 661 | ~2003450 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1363,7 +1363,7 @@
 - `test_governed_delete_clear_enumeration.py` (~4272 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_compaction.py` (~5793 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_forward_compat.py` (~3018 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_governed_delete_http.py` (~9926 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_governed_delete_http.py` (~9979 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_mcp_tool.py` (~6382 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_stores.py` (~8439 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_unmapped_prefix.py` (~2991 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1394,7 +1394,7 @@
 - `test_hook_installer_registry.py` (~4945 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1884 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_auth_optin_not_honoured_when_auth_configured.py` (~1049 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_http_read_admission.py` (~10477 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_http_read_admission.py` (~10548 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_transport.py` (~5409 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_http_transport_audit_headers.py` (~6628 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hybrid_degraded_marker.py` (~4151 tok, huge) — Tests for the in-band recall degradation marker (Task 2).

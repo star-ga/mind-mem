@@ -685,7 +685,16 @@ def test_a_mutating_route_whose_handler_cannot_take_an_actor_is_refused_at_impor
         return (200, {})  # pragma: no cover - never routed
 
     with pytest.raises(ValueError, match="no keyword-only 'actor'"):
-        Route("POST", "/wipe-everything", _handler_without_actor, "body", NO_CONTENT, mutates=True, scope="admin", scope_reason="synthetic route built by a control; scope is incidental to what it probes")
+        Route(
+            "POST",
+            "/wipe-everything",
+            _handler_without_actor,
+            "body",
+            NO_CONTENT,
+            mutates=True,
+            scope="admin",
+            scope_reason="synthetic route built by a control; scope is incidental to what it probes",
+        )
 
 
 def test_a_handler_that_takes_an_actor_cannot_be_declared_read_only() -> None:
@@ -695,7 +704,16 @@ def test_a_handler_that_takes_an_actor_cannot_be_declared_read_only() -> None:
     row — the mutation cannot be expressed as a ``Route``.
     """
     with pytest.raises(ValueError, match="declared read-only"):
-        Route("DELETE", _MEMORY_ID_PREFIX, _handle_delete_memory, "tail", NO_CONTENT, mutates=False, scope="admin", scope_reason="synthetic route built by a control; scope is incidental to what it probes")
+        Route(
+            "DELETE",
+            _MEMORY_ID_PREFIX,
+            _handle_delete_memory,
+            "tail",
+            NO_CONTENT,
+            mutates=False,
+            scope="admin",
+            scope_reason="synthetic route built by a control; scope is incidental to what it probes",
+        )
 
 
 # ---------------------------------------------------------------------------
