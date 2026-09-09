@@ -663,17 +663,16 @@ def _content_tokens(text: str) -> set[str]:
 #: Hard ceiling on unordered block pairs one scan will compare.
 #:
 #: SEC03. The comparison below is a full pairwise loop over every active block,
-#: pure Python and GIL-holding, and ``scan`` is USER scope on the MCP side and
-#: sits behind ``_require_auth`` (not ``_require_admin``) at ``/v1/scan``. So a
-#: semi-trusted caller could buy an unbounded N-squared burn with a
-#: zero-argument call. The caller cannot grow the corpus -- every write is admin
-#: -- so this is amplification against an existing one, and the fix is to bound
-#: the work rather than to trust the caller.
+#: and ``scan`` is USER scope on the MCP side and sits behind ``_require_auth``
+#: (not ``_require_admin``) at ``/v1/scan``. An authenticated caller can trigger
+#: that loop repeatedly, so one request must not perform an unbounded number of
+#: pair comparisons.
 #:
-#: 200_000 pairs is ~630 blocks scanned exhaustively, and costs well under a
-#: second here. Above that the scan stops and SAYS SO: a silent cap would turn a
-#: denial-of-service into a correctness bug, reporting "no contradictions" over
-#: a corpus it never finished comparing.
+#: 200_000 pairs is ~630 blocks scanned exhaustively. Above that the comparison
+#: stops and SAYS SO: a silent cap would report "no contradictions" over a
+#: corpus it never finished comparing. This bounds pair comparisons only; block
+#: enumeration, statement preprocessing, and source reads retain their prior
+#: size characteristics.
 MAX_SCAN_PAIRS = 200_000
 
 
@@ -754,9 +753,9 @@ def _detect_statement_contradictions(blocks: list[dict[str, Any]]) -> list[dict[
             if reason is not None:
                 contradictions.append({"block_a": id_a, "block_b": id_b, "reason": reason})
     if truncated:
-        # Disclosed in-band, as a row, so a caller that reads only the result
-        # list cannot miss it. An incomplete scan that looks clean is worse than
-        # a slow one.
+        # Disclosed in-band to the one product caller. This row is coverage
+        # metadata, never a contradiction finding: _contradiction_scan_summary
+        # removes it before computing the public `raw` count.
         contradictions.append(
             {
                 "truncated": True,
@@ -791,11 +790,7 @@ def _contradiction_scan_summary(results: list[dict[str, Any]]) -> dict[str, Any]
         blocks_total = None
     if not isinstance(pairs_examined, int) or pairs_examined < 0:
         pairs_examined = None
-    pairs_total = (
-        blocks_total * (blocks_total - 1) // 2
-        if blocks_total is not None
-        else None
-    )
+    pairs_total = blocks_total * (blocks_total - 1) // 2 if blocks_total is not None else None
     summary.update(
         {
             "complete": False,
@@ -988,9 +983,7 @@ def scan() -> str:
             checks["contradictions"] = _contradiction_scan_summary(store_contradictions)
         except Exception as exc:  # pragma: no cover - defensive
             _log.warning("scan_store_contradiction_check_failed", error=str(exc))
-            checks["contradictions"] = _incomplete_contradiction_summary(
-                "statement-level contradiction scan failed before completion"
-            )
+            checks["contradictions"] = _incomplete_contradiction_summary("statement-level contradiction scan failed before completion")
 
     drift_path = os.path.join(ws, "intelligence", "DRIFT.md")
     if os.path.isfile(drift_path):

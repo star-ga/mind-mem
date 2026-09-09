@@ -7,21 +7,20 @@ MEASURED at 97fd765 before this change:
     rest.py:1165 "/v1/scan" ... :1170 Depends(_require_auth)   # not _require_admin
     grep -c timeout src/mind_mem/mcp/tools/governance.py  ->  0
 
-``_detect_statement_contradictions`` runs a full pairwise loop --
+``_detect_statement_contradictions`` ran a full pairwise loop --
 ``for i in range(len(entries)): for j in range(i + 1, len(entries))`` -- with no
-cap and no time budget, over every active block. On a Postgres store the whole
-table is enumerated first. It is pure Python and holds the GIL, so it starves
-the process rather than just its own request.
+pair cap, over every active block. On a Postgres store the whole table is
+enumerated first.
 
-A semi-trusted MCP agent, or any authenticated REST bearer, gets that for the
-cost of a zero-argument call. The caller cannot grow the corpus (every write is
-admin), so this is AMPLIFICATION against an existing one: negligible at a few
-thousand blocks, minutes at ~20k, effectively permanent above ~100k.
+An authenticated MCP or REST caller can trigger the comparison loop with a
+zero-argument call. The cap bounds pair comparisons; it does not newly bound
+store enumeration, source reads, or statement preprocessing.
 
 THE BOUND MUST DISCLOSE ITSELF. A cap that silently drops pairs turns a DoS into
 a correctness bug: the scan would report "no contradictions" over a corpus it
 never finished reading, and an operator cannot tell that from a clean result.
 """
+
 from __future__ import annotations
 
 import json
@@ -38,6 +37,17 @@ def _blocks(n: int) -> list[dict]:
         polarity = "enable" if i % 2 == 0 else "disable"
         out.append({"_id": f"D-{i:05d}", "Statement": f"the vendor contract should {polarity} renewal terms"})
     return out
+
+
+def _non_conflicting_blocks(n: int) -> list[dict]:
+    """n comparable statements with no antonym, assignment, or negation conflict."""
+    return [
+        {
+            "_id": f"D-N-{i:05d}",
+            "Statement": "the vendor contract documents renewal terms",
+        }
+        for i in range(n)
+    ]
 
 
 def test_the_pair_budget_exists_and_is_finite():
@@ -67,9 +77,25 @@ def test_a_corpus_over_the_budget_is_bounded_not_unbounded(monkeypatch):
     found = _detect_statement_contradictions(_blocks(n))
     # It returns rather than running to completion, and it is honest about it.
     assert any(f.get("truncated") for f in found), (
-        "an over-budget scan reported no truncation marker; a silent cap makes an "
-        "incomplete scan indistinguishable from a clean one"
+        "an over-budget scan reported no truncation marker; a silent cap makes an incomplete scan indistinguishable from a clean one"
     )
+
+
+def test_pair_cap_boundary_is_complete_at_three_and_partial_at_two(monkeypatch):
+    from mind_mem.mcp.tools import governance
+
+    blocks = _non_conflicting_blocks(3)  # exactly 3 unordered pairs
+
+    monkeypatch.setattr(governance, "MAX_SCAN_PAIRS", 3)
+    complete = _detect_statement_contradictions(blocks)
+    assert complete == []
+
+    monkeypatch.setattr(governance, "MAX_SCAN_PAIRS", 2)
+    partial = _detect_statement_contradictions(blocks)
+    assert len(partial) == 1
+    assert partial[0]["truncated"] is True
+    assert partial[0]["pairs_examined"] == 2
+    assert partial[0]["blocks_total"] == 3
 
 
 def test_the_truncation_marker_names_the_budget_and_what_was_skipped(monkeypatch):
@@ -118,9 +144,10 @@ def test_public_scan_surfaces_partial_coverage_without_counting_marker(monkeypat
         payload = json.loads(scan())
 
     summary = payload["checks"]["contradictions"]
-    assert summary["raw"] == len(
-        [row for row in _detect_statement_contradictions(_blocks(120)) if not row.get("truncated")]
-    )
+    # The first 50 pairs are (block 0, blocks 1..50). Exactly the 25 odd
+    # partners carry "disable", so this count is derived independently of the
+    # detector under test. The coverage marker is not a twenty-sixth finding.
+    assert summary["raw"] == 25
     assert summary["truncated"] is True
     assert summary["complete"] is False
     assert summary["coverage"] == {
@@ -130,6 +157,29 @@ def test_public_scan_surfaces_partial_coverage_without_counting_marker(monkeypat
         "pairs_total": 7140,
     }
     assert "absence of a contradiction" in summary["reason"]
+
+
+def test_public_partial_scan_with_zero_findings_is_not_reported_clean(monkeypatch, tmp_path: Path):
+    from mind_mem.mcp.tools import governance
+
+    ws = tmp_path / "partial-zero"
+    _store_workspace(ws)
+    monkeypatch.setattr(governance, "_resolve_backend", lambda _ws: "postgres")
+    monkeypatch.setattr(governance, "iter_active_blocks", lambda _ws: _non_conflicting_blocks(3))
+    monkeypatch.setattr(governance, "MAX_SCAN_PAIRS", 2)
+
+    with use_workspace(str(ws)):
+        summary = json.loads(scan())["checks"]["contradictions"]
+
+    assert summary["raw"] == 0
+    assert summary["complete"] is False
+    assert summary["truncated"] is True
+    assert summary["coverage"] == {
+        "status": "partial",
+        "blocks_total": 3,
+        "pairs_examined": 2,
+        "pairs_total": 3,
+    }
 
 
 def test_public_complete_store_scan_keeps_legacy_summary_shape(monkeypatch, tmp_path: Path):
@@ -146,6 +196,21 @@ def test_public_complete_store_scan_keeps_legacy_summary_shape(monkeypatch, tmp_
         payload = json.loads(scan())
 
     assert payload["checks"]["contradictions"] == {"raw": 1, "resolvable": 0}
+
+
+def test_public_complete_zero_findings_keeps_legacy_summary_shape(monkeypatch, tmp_path: Path):
+    from mind_mem.mcp.tools import governance
+
+    ws = tmp_path / "complete-zero"
+    _store_workspace(ws)
+    monkeypatch.setattr(governance, "_resolve_backend", lambda _ws: "postgres")
+    monkeypatch.setattr(governance, "iter_active_blocks", lambda _ws: _non_conflicting_blocks(3))
+    monkeypatch.setattr(governance, "MAX_SCAN_PAIRS", 3)
+
+    with use_workspace(str(ws)):
+        payload = json.loads(scan())
+
+    assert payload["checks"]["contradictions"] == {"raw": 0, "resolvable": 0}
 
 
 def test_public_detector_failure_is_incomplete_instead_of_clean(monkeypatch, tmp_path: Path):
