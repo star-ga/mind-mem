@@ -156,6 +156,12 @@ def test_version_gate_reads_the_exported_symbol_and_keeps_the_verdict(monkeypatc
 
     from mind_mem.mind_ffi import MindMemKernel
 
+    # deferred: this skip is why EVIDENCE.md row 5 was WITHDRAWN on 2026-09-09.
+    # The claim it backed ("MIND kernels equivalent to the Python baseline")
+    # was verified by a command that skips on every clone and every CI row, so
+    # it was unfalsifiable rather than checked. Upgrade path: a CI job that
+    # builds lib/kernels.c from source, places it on a probed path, and turns
+    # this skip into a hard failure -- then restore the row.
     lib = _kernel_lib_path()
     if lib is None:
         pytest.skip("no compiled MIND kernel in the search path")

@@ -1,0 +1,34 @@
+# Claim -> test binding for the evidence gate.
+#
+# Every row here names a public claim and the test(s) that verify it. The gate
+# (scripts/check_evidence_executes.py) asserts those tests are COLLECTED and
+# EXECUTE -- a skip is a red build, because a claim whose test skips is
+# unfalsifiable rather than verified.
+#
+# Only pytest-backed claims belong here. EVIDENCE.md rows verified by `make
+# repro-verify` or a benchmark script are gated by their own targets; a row
+# that has NO executing check must say so in EVIDENCE.md rather than appear
+# here with a test that does not run.
+
+[claim.governed_write]
+claim = "Governed write prevents silent mutation (propose -> review -> apply, never direct)"
+evidence_row = 4
+tests = [
+  "tests/test_apply_engine.py",
+  "tests/test_apply_double_apply_guard.py",
+  "tests/test_apply_abort_is_recorded.py",
+]
+
+# DELIBERATELY ABSENT: EVIDENCE.md row 5, "MIND kernels equivalent to the
+# Python baseline". Its cited command (`pytest tests/test_mind_ffi.py -q`)
+# SKIPS on every fresh clone and every CI row: the probed library path is
+# gitignored, the committed library sits outside every probe path, and the
+# wheel ships no library at all. Where it does run, the bound library is four
+# major versions stale (1.5.0 against 5.0.2) and the code only warns.
+#
+# Per the architecture ruling, the claim is WITHDRAWN rather than propped up by
+# committing a prebuilt binary: a platform-specific blob in the source tree
+# makes the wheel wrong on any host it was not built for, is opaque to review,
+# and rots -- the staleness above is what committing a binary guarantees over
+# time. It returns to EVIDENCE.md when a CI job builds the kernel from source
+# and runs equivalence as a hard gate.
