@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1529 | **Est. tokens:** ~4,545,946
-**Generated:** 2026-09-10 10:39 UTC
+**Files:** 1530 | **Est. tokens:** ~4,547,206
+**Generated:** 2026-09-10 21:24 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 651 | ~1,977,552 |
+| `tests/` | 652 | ~1,978,812 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1518,6 +1518,7 @@
 - `test_mrs_wiring.py` (~6750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""
 - `test_multi_modal_wiring.py` (~8022 tok, huge) — ``multi_modal`` is actually reachable — and the door it opens quarantines.
+- `test_namespace_retrieval_reachability.py` (~1260 tok, large) — M2 — namespace retrieval reachability, asserted EMPIRICALLY.
 - `test_namespaces.py` (~5844 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
 - `test_network_audit_headers.py` (~5723 tok, huge) — Audit headers propagate end-to-end — roadmap v4.0.0 Group D (RM-2291).
 - `test_network_cert_pinning.py` (~5212 tok, huge) — Certificate pinning is opt-in, and when it is on it refuses — RM-2290 / RM-2382.
