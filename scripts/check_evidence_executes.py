@@ -110,6 +110,18 @@ def check(claims: dict, canary: bool = False) -> int:
         print("FAIL: the manifest names no tests. A gate over nothing is not a gate.")
         return 1
 
+    # A manifest entry pointing at a file that no longer exists makes pytest
+    # exit before collecting ANYTHING ("no tests ran"), so one stale path hides
+    # the status of every other claim. Report those as failed claims and run the
+    # rest, rather than letting a stale path blind the gate.
+    missing = [n for n in node_ids if not (ROOT / n.split("::")[0]).exists()]
+    node_ids = [n for n in node_ids if n not in missing]
+    if missing and not node_ids:
+        print("EVIDENCE GATE FAILED — every claimed test path is missing:")
+        for m in missing:
+            print(f"  MISSING PATH  {m}")
+        return 1
+
     rc, res = run_pytest(node_ids)
     outcomes = parse_junit((ROOT / ".evidence-report").with_suffix(".xml"))
 
@@ -124,7 +136,7 @@ def check(claims: dict, canary: bool = False) -> int:
     for key in outcomes:
         collected.add(key.replace(".", "/", key.count(".") - 1) if "::" not in key else key)
 
-    problems: list[str] = []
+    problems: list[str] = [f"  MISSING PATH   {m}  (claim points at a file that does not exist)" for m in missing]
     executed = 0
     for cid, entry in claims.items():
         for t in entry["tests"]:

@@ -32,3 +32,22 @@ tests = [
 # and rots -- the staleness above is what committing a binary guarantees over
 # time. It returns to EVIDENCE.md when a CI job builds the kernel from source
 # and runs equivalence as a hard gate.
+
+[claim.tool_surface_documented]
+claim = "Every documented MCP tool name exists in the registry, and every registered tool is documented and tested (README/CLAUDE.md tool-surface claims)"
+evidence_row = "README + CLAUDE.md — MCP tool surface"
+# scripts/check_tool_surface.py --check-doc-names is the enforcing gate and it
+# passes (untested 0, undocumented 0, UNSUPPORTED 0). Binding its TEST here puts
+# that gate under the executes-invariant too: a gate whose test silently stops
+# running is the same defect one level up, and it is how the doc list previously
+# carried 11 ghost tool names.
+tests = [
+  "tests/test_documented_surfaces_exist.py",
+]
+
+[claim.docs_alignment]
+claim = "Every gated numeric claim in README/CLAUDE.md/docs agrees with its authority (test counts, tool counts, Python floor, storage backends)"
+evidence_row = "README + CLAUDE.md — gated numbers"
+tests = [
+  "tests/test_docs_alignment.py",
+]

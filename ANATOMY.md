@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1529 | **Est. tokens:** ~4,545,535
-**Generated:** 2026-09-10 09:05 UTC
+**Files:** 1529 | **Est. tokens:** ~4,545,946
+**Generated:** 2026-09-10 10:39 UTC
 
 ## Token Budget Guide
 
@@ -61,7 +61,7 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 22 | ~66,817 |
+| `scripts/` | 22 | ~66,997 |
 | `sdk/go/` | 10 | ~9,098 |
 | `sdk/js/` | 6 | ~4,864 |
 | `sdk/js/src/` | 5 | ~3,178 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 651 | ~1,977,321 |
+| `tests/` | 651 | ~1,977,552 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -602,7 +602,7 @@
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
 - `check_docs_alignment.py` (~15109 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
-- `check_evidence_executes.py` (~2069 tok, huge) — Gate: every EVIDENCE.md claim's test must EXECUTE. A skip is a red build.
+- `check_evidence_executes.py` (~2249 tok, huge) — Gate: every EVIDENCE.md claim's test must EXECUTE. A skip is a red build.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1099,7 +1099,7 @@
 ### `tests/`
 
 - `conftest.py` (~4070 tok, huge) — Shared test fixtures.
-- `evidence_manifest.toml` (~432 tok, medium) — [claim.governed_write]
+- `evidence_manifest.toml` (~663 tok, large) — [claim.governed_write]
 ### `tests/fixtures/`
 
 - `ci_jobs_advisory_red.json` (~2657 tok, huge) — Keys: _provenance, workflow_runs, 90000000001
