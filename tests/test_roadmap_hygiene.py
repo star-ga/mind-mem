@@ -278,6 +278,31 @@ class TestRetractedItemsStayRetracted:
                 "Compliance export pipeline",
                 "no `mm export` verb, no --policy option anywhere in src/, flag has zero consumers",
             ),
+            # Added 2026-09-10. Four more ticks that no mechanical rule can
+            # refute, each retired by running the code rather than reading the
+            # sentence beside it.
+            (
+                "Prefetch hit rate tracked in calibration feedback loop",
+                "grep -c prefetch src/mind_mem/calibration.py == 0; prefetch.py:619 computes a "
+                "hit_rate but no prefetch signal reaches the calibration loop",
+            ),
+            (
+                "SHA3-512 hash chain verification",
+                "no .mind source mentions sha3/keccak anywhere in the tree, and mind_ffi.py has "
+                "no GPU dispatch path -- neither half of the arrow exists. GPU/CUDA is a private "
+                "mind-runtime deliverable and cannot be closed in this public repo",
+            ),
+            (
+                "Vector similarity (cosine/dot)",
+                "the .mind half is real (mind/hybrid.mind, mind/trajectory.mind) but the GPU "
+                "kernel half is not: no GPU code, no GPU dispatch in mind_ffi.py",
+            ),
+            (
+                "Merkle root periodically anchored to external ledger",
+                "mcp/tools/audit.py has no poster and no scheduler (0 hits for "
+                "ethereum/l2/post_anchor/scheduler); anchor_root appends a local pending journal "
+                "row and nothing publishes it, so neither 'periodically' nor 'external' holds",
+            ),
             # "Provenance-rich blocks" was retracted here on the basis that
             # "the off|recommended|required policy has zero occurrences in
             # src/". That premise is FALSE as of 2026-09-07 and the item is

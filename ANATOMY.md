@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1529 | **Est. tokens:** ~4,545,029
-**Generated:** 2026-09-10 03:56 UTC
+**Files:** 1529 | **Est. tokens:** ~4,545,395
+**Generated:** 2026-09-10 07:37 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 651 | ~1,976,815 |
+| `tests/` | 651 | ~1,977,181 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1671,7 +1671,7 @@
 - `test_review_queue.py` (~2038 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_review_render.py` (~2348 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
-- `test_roadmap_hygiene.py` (~4292 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_roadmap_hygiene.py` (~4658 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_roadmap_ticks_gate.py` (~2911 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.

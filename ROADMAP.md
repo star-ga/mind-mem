@@ -978,15 +978,27 @@ pin a state the toolchain cannot yet satisfy.
 - [x] Predict next-needed blocks based on query pattern + access history
 - [x] Automatic prefetch during multi-hop decomposition (warm blocks before sub-query executes)
 - [x] Existing `prefetch` MCP tool becomes automatic (opt-in via config)
-- [x] Prefetch hit rate tracked in calibration feedback loop
+- [ ] Prefetch hit rate tracked in calibration feedback loop
+  - **UNTICKED 2026-09-10.** MEASURED: `grep -c prefetch src/mind_mem/calibration.py`
+    returns **0**. `prefetch.py:619` computes a `hit_rate`, but no prefetch signal
+    reaches the calibration loop, so nothing tracks it there.
 
 ### MIND-Compiled Hot Paths
 - [x] BM25F scoring kernel → `.mind` → native ELF via `mindc`
   - Porter stemming + term frequency + field weights in single compiled pass
   - Target: 1K blocks scored in <0.5ms (vs ~15ms Python)
-- [x] SHA3-512 hash chain verification → `.mind` → GPU kernel
+- [ ] SHA3-512 hash chain verification → `.mind` → GPU kernel
+  - **UNTICKED 2026-09-10.** MEASURED: no `.mind` source mentions sha3/keccak
+    anywhere in the tree, and `mind_ffi.py` has no GPU dispatch path. Neither
+    half of the arrow exists. GPU/CUDA also belongs to private mind-runtime,
+    not to this public repo, so this cannot be closed here — it is a
+    mind-runtime deliverable referenced from here at most.
   - Target: 81ns/hash (verified in mind-runtime benchmarks)
-- [x] Vector similarity (cosine/dot) → `.mind` → GPU kernel
+- [ ] Vector similarity (cosine/dot) → `.mind` → GPU kernel
+  - **PARTIALLY UNTICKED 2026-09-10.** The `.mind` half is real
+    (`mind/hybrid.mind`, `mind/trajectory.mind`). The **GPU kernel half is not**:
+    there is no GPU code and no GPU dispatch in `mind_ffi.py`. Same
+    mind-runtime boundary as above.
   - Target: 1K vectors in <0.1ms (vs ~8ms Python)
 - [x] RRF fusion → `.mind` → native
   - Target: <0.01ms for 1K candidates
@@ -1014,7 +1026,11 @@ pin a state the toolchain cannot yet satisfy.
 - [x] No database access required — works from snapshot alone
 
 ### Optional Ledger Anchoring
-- [x] Merkle root periodically anchored to external ledger (Ethereum L2 or similar)
+- [ ] Merkle root periodically anchored to external ledger (Ethereum L2 or similar)
+  - **UNTICKED 2026-09-10.** MEASURED: `mcp/tools/audit.py` contains no poster
+    and no scheduler (0 hits for ethereum/l2/post_anchor/scheduler). `anchor_root`
+    appends a local pending journal row; nothing publishes it anywhere, so
+    neither 'periodically' nor 'external ledger' is implemented.
 - [x] Anchoring is opt-in, not required for local verification
 - [x] `anchor_history` MCP tool shows all published roots + block heights
 
