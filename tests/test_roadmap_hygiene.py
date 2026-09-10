@@ -298,6 +298,14 @@ class TestRetractedItemsStayRetracted:
                 "kernel half is not: no GPU code, no GPU dispatch in mind_ffi.py",
             ),
             (
+                "FFI bridge: Python calls compiled",
+                "the bridge CODE works (load_kernels returns backend='native' when a library is "
+                "present -- an audit note saying it binds pure Python unconditionally is FALSE); "
+                "the TICK is unbacked because no install gets a library: lib/ is gitignored, the "
+                "committed .so sits outside every probe path, and pyproject declares no "
+                "package_data, so test_mind_ffi.py skips its native leg on a fresh clone",
+            ),
+            (
                 "Merkle root periodically anchored to external ledger",
                 "mcp/tools/audit.py has no poster and no scheduler (0 hits for "
                 "ethereum/l2/post_anchor/scheduler); anchor_root appends a local pending journal "

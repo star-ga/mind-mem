@@ -1002,7 +1002,23 @@ pin a state the toolchain cannot yet satisfy.
   - Target: 1K vectors in <0.1ms (vs ~8ms Python)
 - [x] RRF fusion → `.mind` → native
   - Target: <0.01ms for 1K candidates
-- [x] FFI bridge: Python calls compiled `.mind` kernels via existing FFI path
+- [ ] FFI bridge: Python calls compiled `.mind` kernels via existing FFI path
+  - **UNTICKED 2026-09-10, with a correction to the finding that raised it.**
+    The bridge CODE works: `load_kernels()` returns `backend='native'` when a
+    library is present (measured), so an audit note claiming it "binds pure
+    Python unconditionally" is FALSE and should not be acted on.
+  - What is false is the tick, for a different reason: **no install ever gets a
+    library**. The path the loader probes (`lib/`) is gitignored, the committed
+    `libmindmem.so` sits at the repo root which is outside every probe path, and
+    `pyproject.toml` declares no `package_data`, so the wheel ships nothing.
+    Measured on a fresh worktree: `tests/test_mind_ffi.py` SKIPS its native leg.
+    Where it does bind, the library is four major versions stale
+    (`so_version 1.5.0` vs `py_version 5.0.2`) and the code only warns.
+  - Re-tick when a CI job builds the kernel from source onto a probed path and
+    the wheel ships it. Per the architecture ruling, a prebuilt binary is NOT
+    committed: it makes the wheel wrong on any host it was not built for, is
+    opaque to review, and rots — the staleness above is what committing one
+    guarantees.
 - [x] Automatic fallback to Python if compiled kernels unavailable
 
 **Estimated:** ~1200 lines (MIND kernels) + ~400 lines (Python FFI bridge). Performance gains are opt-in — pure Python path remains default.
