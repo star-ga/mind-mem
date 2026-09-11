@@ -1846,7 +1846,20 @@ file.
 - [x] **Two config keys documented in `docs/configuration.md`** —
   `cache.redis_url` and `retrieval.tier_boost` appear in the
   v3.2.0 docs; verified as part of the v3.2.1 release checklist.
-- [ ] **Dependency CVE bumps** — **THE TRACKING CONDITION FIRED; measured
+- [x] **Dependency CVE bumps** — **CLOSED 2026-09-11.** All eight
+  advisory-bearing packages now carry explicit security floors in
+  `pyproject.toml` (`authlib>=1.6.12`, `PyJWT[crypto]>=2.13.0`,
+  `cryptography>=49.0.0`, `starlette>=1.3.1`, `python-multipart>=0.0.31`,
+  `mcp>=1.28.1`, `transformers>=5.10.0`; `setuptools` build-only), and
+  `gh api .../dependabot/alerts` reports **0 open security alerts**.
+  Floors are now PINNED by `tests/test_security_floors_pinned.py`, which
+  fails if any is lowered or removed — a floor is a line in a file, and
+  nothing stopped a bump or a merge from quietly lowering one. That test is
+  offline, so it cannot go vacuous the way `pip-audit .` did against an
+  empty dependency set. It also asserts `aiohttp` stays absent, so its
+  arrival forces a floor decision instead of inheriting a resolver's pick.
+  Historical detail retained below.
+- [x] **Dependency CVE bumps (history)** — **THE TRACKING CONDITION FIRED; measured
   2026-09-07.** This item was kept "in case a future ``fastmcp`` release
   reintroduces either", and one did: ``fastmcp`` 3.4.7 requires
   ``fastmcp-slim[client,server]==3.4.7`` *unconditionally*, and both of those
@@ -3686,7 +3699,17 @@ mislabelled eval set still produces confident numbers.
   *store's own API shape*, not a 512-mind bug: nothing in the surface offers an
   embed-vs-store split for a caller to use.
 
-- [ ] **M2 — Namespace-property round-trip test.** Assert *empirically*, per
+- [x] **M2 — Namespace-property round-trip test.** **DONE 2026-09-10** —
+  `tests/test_namespace_retrieval_reachability.py` asserts reachability per
+  namespace through the real `recall()` entry point, with the scores printed:
+  shared -> D-SHARED-001 0.3843, agents/alpha-1 -> 0.3843, agents/beta-1 ->
+  0.3843, and alpha-1 searching beta's marker -> [] (isolation). Includes a
+  MUTATION CONTROL: removing the namespace's only corpus file must turn the
+  same search empty (measured 0.3843 -> []), so the assertions are known to be
+  able to fail. `can_read` is an ACL predicate and was never evidence about
+  what recall RETURNS — that gap is what this closes.
+  <!-- superseded heading kept below for provenance -->
+- [x] **M2 (original wording) — Namespace-property round-trip test.** Assert *empirically*, per
   namespace, what is reachable by search versus only by direct get, with the
   retrieval scores printed. The external work does this as three probes with
   visible output rather than as a README claim, which is the right instinct: an

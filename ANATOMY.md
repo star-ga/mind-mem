@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1530 | **Est. tokens:** ~4,547,206
-**Generated:** 2026-09-10 21:24 UTC
+**Files:** 1531 | **Est. tokens:** ~4,548,265
+**Generated:** 2026-09-11 18:57 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 652 | ~1,978,812 |
+| `tests/` | 653 | ~1,979,871 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1682,6 +1682,7 @@
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_route_conformance.py` (~1778 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_security_floors_pinned.py` (~1059 tok, large) — Every advisory-bearing dependency keeps its declared security floor.
 - `test_security_scanning_alerts.py` (~1395 tok, large) — Regression tests for code-scanning alerts #189 and #192.
 - `test_self_editing_old_content.py` (~980 tok, large) — ``propose_edit`` must snapshot the block's real current content.
 - `test_self_update.py` (~2727 tok, huge) — # Copyright 2026 STARGA, Inc.
