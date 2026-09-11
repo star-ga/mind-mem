@@ -92,7 +92,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Final, Mapping, Optional, Union
 
 from .evidence_objects import EvidenceAction
 from .observability import get_logger, metrics
@@ -172,6 +172,44 @@ SUBJECT_TIER_ASSIGNMENT = "tier_assignment"
 #: admission gate, so a receipt that quoted a block would be a content
 #: egress the quarantine cannot see.
 DetailValue = Union[str, int, float, bool]
+
+
+#: Detail key carrying the retention class of whatever the verb destroyed.
+#: RA.4's fold-in for ROADMAP item 3: a replay can already say THAT D-123 was
+#: forgotten; without this it cannot say whether D-123 was a block the system had
+#: promised to keep. A FORGET row that cannot tell an EPHEMERAL scratch note from
+#: a PROTECTED guardrail is evidence of the act with no evidence of its gravity.
+RETENTION_DETAIL_KEY: Final = "retention_class"
+
+#: What to record when the block is no longer available to classify. An explicit
+#: UNKNOWN rather than a guess: a FORGET can fire after the block has left the
+#: corpus, and putting a confident PROTECTED or EPHEMERAL on a row with no
+#: evidence for either would be worse than admitting the gap.
+RETENTION_UNKNOWN: Final = "UNKNOWN"
+
+
+def retention_detail(block: Optional[Mapping[str, Any]]) -> dict[str, str]:
+    """``{retention_class: PROTECTED|GOVERNED|EPHEMERAL|UNKNOWN}`` for *block*.
+
+    Delegates to :func:`~mind_mem.retention_class.retention_class`, which is a
+    pure function of the block's own fields and reads no clock -- so replaying an
+    old row yields the class it had when written, which is what makes the row
+    evidence rather than a snapshot of today's opinion.
+
+    A flat ``str`` value, because the ledgers accept ``Mapping[str, DetailValue]``
+    and a nested structure would not survive the append.
+    """
+    if not block:
+        return {RETENTION_DETAIL_KEY: RETENTION_UNKNOWN}
+    try:
+        from .retention_class import retention_class
+
+        return {RETENTION_DETAIL_KEY: str(retention_class(block))}
+    except Exception:          # noqa: BLE001
+        # Classification must never be the reason a lifecycle loss goes
+        # unrecorded. An unclassifiable block still gets its row, marked
+        # UNKNOWN, rather than the whole receipt being dropped.
+        return {RETENTION_DETAIL_KEY: RETENTION_UNKNOWN}
 
 
 def lifecycle_evidence_enabled(workspace: Union[str, Path]) -> bool:

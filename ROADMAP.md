@@ -4563,7 +4563,29 @@ evidence.
   record. Absorbs Group M's enum-keyed upsert slots: building those without the
   embed split wires slots into writes while leaving reads broken.
 
-- [ ] **3. Lifecycle deaths in the evidence chain** — `DEMOTE`/`ARCHIVE`/`FORGET`
+- [x] **3. Lifecycle deaths in the evidence chain** — **CLOSED 2026-09-11.**
+  The chained/replayable half already held: `lifecycle_evidence.LifecycleRecorder`
+  writes DEMOTE/ARCHIVE/FORGET into BOTH ledgers, `audit_chain.VALID_OPERATIONS`
+  carries the three verbs, `tests/test_lifecycle_evidence.py` (18 tests) verifies
+  the chain, and the recorder is reached from two real call paths
+  (`memory_tiers.TierManager.demote`, `compaction.archive_completed_blocks`).
+  **RA.4's retention class was the genuine gap** — `grep -c retention
+  lifecycle_evidence.py` returned **0**, so a replay could say THAT a block died
+  but not whether it was one the system had promised to keep. A FORGET row that
+  cannot tell an EPHEMERAL scratch note from a PROTECTED guardrail is evidence of
+  the act without evidence of its gravity.
+  Added `retention_detail()` (delegating to the existing `retention_class`, a pure
+  function of the block's own fields — no clock, so a replay yields the class the
+  row had when written) and wired it into the archive path, classifying **while
+  the block object is still in hand**: by the time the row is written the block is
+  out of the file of record, so a later lookup could only answer UNKNOWN. A
+  missing block records an explicit UNKNOWN rather than a guess.
+  `tests/test_lifecycle_retention_class.py` — 7 tests including one that drives
+  the real compaction path and reads the class off the resulting evidence row,
+  because a helper nobody calls is the marker-with-no-reader defect.
+  **Still open, tracked under RA.4 itself:** the governed `entities.merge` that
+  re-points edges, and `Rationale` required beyond decisions.
+- [x] **3. Lifecycle deaths (original wording)** — `DEMOTE`/`ARCHIVE`/`FORGET`
   as chained, replayable events, folding in RA.4's retention class. A governed
   memory whose FORGET path is un-evidenced has a hole exactly where the
   differentiator lives.

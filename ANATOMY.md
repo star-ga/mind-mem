@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1532 | **Est. tokens:** ~4,549,443
-**Generated:** 2026-09-11 22:57 UTC
+**Files:** 1533 | **Est. tokens:** ~4,551,878
+**Generated:** 2026-09-11 23:04 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1,076,280 |
+| `src/mind_mem/` | 231 | ~1,076,964 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 654 | ~1,981,018 |
+| `tests/` | 655 | ~1,982,769 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -751,7 +751,7 @@
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `cognitive_forget.py` (~3179 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `compaction.py` (~6617 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
+- `compaction.py` (~6823 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
 - `compiled_truth.py` (~8420 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
 ### `src/mind_mem/compliance/`
 
@@ -838,7 +838,7 @@
 - `kg_fusion.py` (~2054 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
 - `knowledge_graph.py` (~17602 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `lifecycle_evidence.py` (~4750 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `lifecycle_evidence.py` (~5228 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `lint_autofix.py` (~2148 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lint.py` (~3856 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1441,6 +1441,7 @@
 - `test_legacy_restore_symlink_confinement.py` (~1152 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_evidence.py` (~5244 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_filter.py` (~1781 tok, huge) — Unit tests for the optional lifecycle block field and recall filter.
+- `test_lifecycle_retention_class.py` (~1751 tok, huge) — A lifecycle loss records the RETENTION CLASS of what was lost (RA.4 fold-in).
 - `test_lineage_staleness.py` (~2161 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
 - `test_lint_autofix.py` (~3142 tok, huge) — Tests for the lint -> repair-proposal path (mind_mem.lint / lint_autofix).
 - `test_lint_wiring.py` (~4237 tok, huge) — ``lint`` is actually reachable — from ``mm lint`` and from the MCP surface.

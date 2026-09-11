@@ -51,7 +51,13 @@ from .enums import IngestTier, TaskStatus
 # shadowed by it -- which sent "MIGRATE" to the lifecycle recorder and got
 # every archive receipt dropped as an unknown verb.
 from .lifecycle_evidence import ARCHIVE_VERB as LIFECYCLE_ARCHIVE_VERB
-from .lifecycle_evidence import SUBJECT_BLOCK, LifecycleRecorder
+from .lifecycle_evidence import (
+    RETENTION_DETAIL_KEY,
+    RETENTION_UNKNOWN,
+    SUBJECT_BLOCK,
+    LifecycleRecorder,
+    retention_detail,
+)
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
@@ -245,6 +251,7 @@ def _archive_one_file(
     #: A block the extractor could not find moved nothing, so it earns no
     #: receipt — a row for it would claim a relocation that never happened.
     relocated: list[str] = []
+    relocated_retention: dict[str, str] = {}
     archive_path = os.path.join(ws, archive_rel)
 
     with FileLock(path):
@@ -260,6 +267,12 @@ def _archive_one_file(
             if block_text:
                 archive_lines.append(block_text)
                 relocated.append(str(b["_id"]))
+                # Classify HERE, while the block object exists. By the time the
+                # lifecycle row is written the block is out of the file of
+                # record, so a later lookup would have to answer UNKNOWN -- and a
+                # FORGET/ARCHIVE row that cannot distinguish an EPHEMERAL note
+                # from a PROTECTED guardrail records the act without its gravity.
+                relocated_retention[str(b["_id"])] = retention_detail(b)[RETENTION_DETAIL_KEY]
 
         if not archive_lines:
             return moved
@@ -296,7 +309,13 @@ def _archive_one_file(
                 door="compaction.archive_completed_blocks",
                 target_file=archive_rel,
                 reason=f"retention archive: moved out of {source_rel}",
-                detail={"from_file": source_rel, "to_file": archive_rel},
+                detail={
+                    "from_file": source_rel,
+                    "to_file": archive_rel,
+                    RETENTION_DETAIL_KEY: relocated_retention.get(
+                        block_id, RETENTION_UNKNOWN
+                    ),
+                },
             )
 
     for b in to_archive:
