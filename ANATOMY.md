@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1533 | **Est. tokens:** ~4,551,878
-**Generated:** 2026-09-11 23:04 UTC
+**Files:** 1534 | **Est. tokens:** ~4,553,523
+**Generated:** 2026-09-11 23:08 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 655 | ~1,982,769 |
+| `tests/` | 656 | ~1,984,414 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1520,6 +1520,7 @@
 - `test_mrs_wiring.py` (~6750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""
 - `test_multi_modal_wiring.py` (~8022 tok, huge) — ``multi_modal`` is actually reachable — and the door it opens quarantines.
+- `test_namespace_relevance_floors.py` (~1645 tok, huge) — M3 — a relevance floor is a PER-NAMESPACE property, measured not chosen.
 - `test_namespace_retrieval_reachability.py` (~1260 tok, large) — M2 — namespace retrieval reachability, asserted EMPIRICALLY.
 - `test_namespaces.py` (~5844 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
 - `test_network_audit_headers.py` (~5723 tok, huge) — Audit headers propagate end-to-end — roadmap v4.0.0 Group D (RM-2291).

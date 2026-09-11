@@ -3718,7 +3718,31 @@ mislabelled eval set still produces confident numbers.
   but nothing asserts retrieval reachability as a *tested property*. Cheap: a few
   lines per namespace, and it belongs in CI next to the existing quality gate.
 
-- [ ] **M3 — Per-namespace relevance floors.** A single similarity threshold
+- [~] **M3 — Per-namespace relevance floors.** **MEASURED 2026-09-11; the
+  measurement argues AGAINST the feature as scoped, and the knob it presupposes
+  does not exist.** M2's surface landed, so this is the evidence M3 asked for,
+  same workspace and same `recall()` entry point:
+  - entity namespace, one true positive among **59 decoys** -> **14.17, and
+    nothing else surfaced at all**
+  - entity namespace, query using none of the record's vocabulary -> 12.36
+  - unbounded corpus, 60 near-identical blocks -> 0.1516 … 0.1481, i.e. **a
+    1.0x spread across 8 hits**
+  Both halves of M3's thesis hold, and they point opposite ways. The entity
+  namespace needs **no** floor: the ranker already separates, so a floor there
+  can only delete the one durable fact. The noisy corpus cannot be *helped* by a
+  floor: with a 1.0x spread any cut keeps all 8 or drops all 8, because on that
+  query none of them is good. So the honest deliverable is not a table of tuned
+  numbers.
+  **STRUCTURAL FINDING:** `min_score` belongs to `knee_cutoff`, an internal
+  truncation helper — **not to `recall()`**, which raises
+  `TypeError: unexpected keyword argument 'min_score'`. There is no public
+  per-namespace floor to configure, so M3 cannot be closed by tuning.
+  **Remaining, in order:** (1) resolve a floor per namespace at the recall
+  boundary, default NONE; (2) grant a namespace a floor only on a measured gap
+  like the contrast above. `tests/test_namespace_relevance_floors.py` pins the
+  measurement and the no-floor default, so a global floor cannot be introduced
+  later without contradicting recorded evidence.
+- [ ] **M3 (original wording) — Per-namespace relevance floors.** A single similarity threshold
   across differently-shaped namespaces is wrong in both directions. An unbounded,
   mostly-irrelevant corpus needs a floor to suppress noise; a small bounded
   per-entity record needs *no* floor, because a floor drops the one durable fact
