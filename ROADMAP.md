@@ -3752,7 +3752,37 @@ mislabelled eval set still produces confident numbers.
   rather than a vibe, and any floor we set should carry the same kind of
   measurement. Depends on M2 for the measurement surface.
 
-- [ ] **M4 — Enum-keyed upsert slots inside the governed path (best product
+- [~] **M4 — Enum-keyed upsert slots inside the governed path (best product
+  value).** **MECHANISM LANDED 2026-09-11; adoption by the governed door is the
+  remaining half.** `src/mind_mem/upsert_slots.py` — pure (AST-asserted: no os,
+  time, random, datetime, json, pathlib, and no `open` call), so a slot decision
+  replays identically, which matters because it gates a governed write.
+  - `Slot` is a CLOSED enum (plan / owner / state / deadline / verdict /
+    version) and `normalise_slot` REFUSES anything outside it. That refusal is
+    the load-bearing part: an open string lets an extractor file `plan` on
+    Monday and `plan_tier` on Friday and the two contradicting facts never
+    collide. Case and whitespace normalise, so `Plan` and `plan` are ONE key —
+    two spellings of one topic is the same failure in disguise.
+  - `collides` is exact and symmetric, with no similarity scoring: same slot
+    collides however differently worded, different slots do not collide however
+    alike they read. A block never collides with itself, so an upsert cannot
+    propose superseding the block it is updating.
+  - `upsert_plan` returns `{action: create|supersede, supersedes: <id>}` and
+    **performs nothing**. The silent overwrite is exactly what M4 says not to
+    copy, so the caller stays the one governed door and routes the supersession
+    through `propose_update` -> `approve_apply`. A test asserts the plan does
+    not mutate its input.
+  - Fails closed on an invented slug rather than degrading to "create", which
+    would file a fact nothing can ever collide with.
+  22 tests. **RESIDUAL RISK, as M4 requires be stated:** the model still picks
+  the slug, so the failure moves from "forgets what it wrote" to "picks the
+  WRONG slot" — narrower and validatable, **not eliminated**; contradiction is
+  not solved. And free-form facts still have nothing to collide on, so they
+  accumulate (accepted; what is refused is 32-bit content-hash keying).
+  **Remaining:** `propose_update` calling `upsert_plan` and emitting the
+  supersession proposal. Deliberately not done here — that is root's
+  publication surface and the hot path for every governed write.
+- [ ] **M4 (original wording) — Enum-keyed upsert slots inside the governed path (best product
   value).** For *bounded* fact spaces, prevent contradiction structurally instead
   of detecting it after the fact. File each fact under a topic slug drawn from a
   **closed set**, so a second statement on the same topic collides by

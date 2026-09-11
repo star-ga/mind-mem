@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1534 | **Est. tokens:** ~4,553,523
-**Generated:** 2026-09-11 23:08 UTC
+**Files:** 1536 | **Est. tokens:** ~4,558,436
+**Generated:** 2026-09-11 23:23 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1,076,964 |
+| `src/mind_mem/` | 232 | ~1,079,435 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 656 | ~1,984,414 |
+| `tests/` | 657 | ~1,986,856 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1054,6 +1054,7 @@
 - `turbo_quant.py` (~1295 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
 - `union_recall.py` (~1310 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
+- `upsert_slots.py` (~2471 tok, huge) — Enum-keyed upsert slots: make contradiction structurally impossible (M4).
 - `usage_meter.py` (~5249 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/v4/`
 
@@ -1752,6 +1753,7 @@
 - `test_uncertainty_propagation.py` (~2158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_uncertainty_propagation_wiring.py` (~5002 tok, huge) — ``uncertainty_propagation`` wired into the two multi-hop walks that need it.
 - `test_unicode_edge_cases.py` (~2155 tok, huge) — Tests for Unicode and edge case handling across mind-mem modules."""
+- `test_upsert_slots.py` (~2442 tok, huge) — M4 — enum-keyed upsert slots: prevent contradiction STRUCTURALLY.
 - `test_usage_meter.py` (~4753 tok, huge) — Tests for `mm usage` — local per-day model-call token counter (Group G).
 - `test_usage_meter_wiring.py` (~4878 tok, huge) — Model-call token metering AT THE CALL SITES (Group G — `mm usage` wiring).
 - `test_v28_completion.py` (~4803 tok, huge) — # Copyright 2026 STARGA, Inc.
