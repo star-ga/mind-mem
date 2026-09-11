@@ -4607,7 +4607,42 @@ evidence.
   are enumerated from the tool registry, so a new recall-shaped tool that forgets
   the admissibility funnel trips the tripwire.
 
-- [ ] **1b. Store/embed/slot split** — the actual fix behind the gauge. Keep the
+- [~] **1b. Store/embed/slot split** — **DERIVATION LANDED 2026-09-11; the
+  embedding + propose-time extraction are the remaining half.**
+  `src/mind_mem/gist.py`, pure (AST-asserted), paired with M4's
+  `upsert_slots.py`: that is the write half, this is the read half, and 1b is
+  explicit that one without the other "wires slots into writes while leaving
+  reads broken".
+  The concrete failure it addresses, measured: "Ship date is Tuesday" and
+  "Ship date is Friday" are near-identical as text, so a full-statement
+  embedding scores them as one fact and similarity cannot separate them — the
+  contradiction lives in the value, which is exactly the part a semantic match
+  discards. Strip the slot value and both yield gist `'ship date'`; that
+  identity IS the signal. `'Ada owns the compiler'` yields `'ada owns'`, so the
+  gist discriminates rather than collapsing everything (pinned by a control —
+  a `gist_of` returning `""` would otherwise pass).
+  - `gist_of` = statement minus slot value minus a SMALL closed boilerplate
+    set. Only the value is removed, never the key phrase: removing both would
+    collapse "date is X" and "owner is X" — different topics sharing a value.
+  - `extract_slots` returns typed key->value; one pattern per slot rather than
+    a general parser, because a general one guesses and a wrong guess files a
+    fact under the right key with the wrong value.
+  - `is_slot_delta` is True only for same-slot + same-gist + different value.
+    An identical restatement is not a delta (nothing to supersede); a
+    different gist is a new fact; a free-form block is never a delta.
+  **THE CANONICAL `Statement` IS NEVER TOUCHED** — the evidence chain and MIC
+  preimages hash it, so a rewrite would silently invalidate every receipt
+  already issued. A test asserts no derivation mutates its input.
+  A further test pins that the two halves AGREE (`collides` <-> `is_slot_delta`,
+  and the plan naming the incumbent): a read half that disagreed with the write
+  half would be worse than having neither.
+  **RESIDUAL LIMIT:** the gist is a lexical derivation, not understanding. Two
+  facts on one topic phrased with entirely different vocabulary will not share a
+  gist and will be called distinct. It narrows the flat-string failure; it does
+  **not** solve paraphrase.
+  **Remaining:** embed the gist on the indexing path, and extract slots at
+  propose time so a human approves them. Both touch root's publication surface.
+- [ ] **1b (original wording). Store/embed/slot split** — the actual fix behind the gauge. Keep the
   canonical `statement` untouched (evidence chain and MIC preimages must not
   move); add versioned `slots` (typed key→value, extracted at propose time so a
   human approves them) and `gist` (statement minus slot values and template

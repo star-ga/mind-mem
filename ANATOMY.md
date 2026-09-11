@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1536 | **Est. tokens:** ~4,558,436
-**Generated:** 2026-09-11 23:23 UTC
+**Files:** 1538 | **Est. tokens:** ~4,561,918
+**Generated:** 2026-09-11 23:26 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 232 | ~1,079,435 |
+| `src/mind_mem/` | 233 | ~1,081,090 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 657 | ~1,986,856 |
+| `tests/` | 658 | ~1,988,683 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -799,6 +799,7 @@
 - `federation_connect.py` (~3549 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `frame_fields.py` (~2143 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `gist.py` (~1655 tok, huge) — The gist/slot split: what gets EMBEDDED versus what FILTERS (item 1b).
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~21316 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `governance_raft.py` (~2474 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
@@ -1363,6 +1364,7 @@
 - `test_frames_disclosure.py` (~3138 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_fts5_bm25_weights.py` (~391 tok, medium) — bm25() weights must align 1:1 with the indexed blocks_fts columns.
 - `test_fts_fallback.py` (~4472 tok, huge) — Tests for FTS fallback behavior, recall envelope structure, block size cap,
+- `test_gist_split.py` (~1827 tok, huge) — Item 1b — the gist/slot split: what gets EMBEDDED vs what FILTERS.
 - `test_governance_bench.py` (~815 tok, large) — Tests for mind-mem governance benchmark suite."""
 - `test_governance_concurrency.py` (~1368 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_governance_raft.py` (~1398 tok, large) — v4.0 prep — Raft-style consensus wrapper for governance writes."""
