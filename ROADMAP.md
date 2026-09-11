@@ -4568,7 +4568,24 @@ evidence.
   memory whose FORGET path is un-evidenced has a hole exactly where the
   differentiator lives.
 
-- [ ] **4. Enforcement-in-code audit** — every claim in README/CLAUDE.md mapped to
+- [x] **4. Enforcement-in-code audit** — **CLOSED 2026-09-11.** Both halves are
+  now enforced by executing gates, and the gates are themselves under the
+  executes-invariant so one going quiet is a red build rather than a silence.
+  - claims -> tests: `scripts/check_evidence_executes.py` + 
+    `tests/evidence_manifest.toml` bind each public claim to the test that
+    verifies it and FAIL on a skip, a not-collected node or a stale path. An
+    evidence test may not skip. Measured: 289 tests across 4 claims, 0 skipped,
+    with a mutation self-test that a deliberately-skipping canary turns it red.
+  - tool surface: `check_tool_surface.py --check-doc-names` (docs vs registry:
+    102 registered, 0 untested, 0 undocumented, 0 unsupported) AND the new
+    `tests/test_acl_surface_complete.py` (registry vs ACL: 26 admin + 76 user =
+    102, disjoint). That second gate closes a THIRD-LIST gap neither of the
+    others could see: `mcp_tool_observe` rejects an unclassified tool *before its
+    body runs*, so registration without classification ships a DEAD tool while
+    the docs gate stays green.
+  Institutional, not a sweep: a new tool that nobody classifies, or a claim
+  whose test stops executing, now fails CI instead of passing quietly.
+- [x] **4. Enforcement-in-code audit (original wording)** — every claim in README/CLAUDE.md mapped to
   a test that enforces it, plus the same reachability pass applied to the 98-tool
   MCP surface. Fable's addition: the tool list is the most public instance of
   shipping surface before consumers, and a major version is the one licence to

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1531 | **Est. tokens:** ~4,548,265
-**Generated:** 2026-09-11 18:57 UTC
+**Files:** 1533 | **Est. tokens:** ~4,559,277
+**Generated:** 2026-09-11 22:56 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~50,393 |
+| `./` | 37 | ~60,258 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 653 | ~1,979,871 |
+| `tests/` | 654 | ~1,981,018 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -124,6 +124,7 @@
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `EVIDENCE.md` (~2166 tok, huge) — Evidence Matrix
+- `.evidence-report.xml` (~9865 tok, huge) — <?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite
 - `generate_mind7b_training.py` (~5567 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~243 tok, medium) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~494 tok, medium) — *.pyc
@@ -1099,7 +1100,7 @@
 ### `tests/`
 
 - `conftest.py` (~4070 tok, huge) — Shared test fixtures.
-- `evidence_manifest.toml` (~663 tok, large) — [claim.governed_write]
+- `evidence_manifest.toml` (~790 tok, large) — [claim.governed_write]
 ### `tests/fixtures/`
 
 - `ci_jobs_advisory_red.json` (~2657 tok, huge) — Keys: _provenance, workflow_runs, 90000000001
@@ -1171,6 +1172,7 @@
 - `test_abstention_classifier.py` (~3963 tok, huge) — Tests for the adversarial abstention classifier."""
 - `test_accountability_dashboard.py` (~6883 tok, huge) — RA.5 — the lifecycle-tier dashboard, and the four refusals it inherits.
 - `test_accountability_views.py` (~6320 tok, huge) — RA.2 — precision and waste as derived views, and the four refusals that shape them.
+- `test_acl_surface_complete.py` (~1020 tok, large) — Every registered MCP tool is ACL-classified. No tool is unreachable.
 - `test_acl_tool_coverage.py` (~2384 tok, huge) — ACL coverage invariant for the MCP tool surface.
 - `test_active_only_filter.py` (~312 tok, medium) — Tests for active_only recall filter."""
 - `test_admissibility_unreadable_status.py` (~1104 tok, large) — An unreadable ``Status`` must be withheld on the stale-index path too.

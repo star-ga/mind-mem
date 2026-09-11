@@ -51,3 +51,13 @@ evidence_row = "README + CLAUDE.md — gated numbers"
 tests = [
   "tests/test_docs_alignment.py",
 ]
+
+[claim.acl_surface_complete]
+claim = "Every registered MCP tool is ACL-classified, so no tool is silently unreachable (README/CLAUDE.md 102-tool surface)"
+evidence_row = "README + CLAUDE.md — MCP tool surface reachability"
+# The third list problem: docs vs registry is check_tool_surface's job; registry
+# vs ACL is this one. mcp_tool_observe rejects an unclassified tool BEFORE its
+# body runs, so registration without classification ships a dead tool.
+tests = [
+  "tests/test_acl_surface_complete.py",
+]
