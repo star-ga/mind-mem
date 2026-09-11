@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1533 | **Est. tokens:** ~4,559,277
-**Generated:** 2026-09-11 22:56 UTC
+**Files:** 1532 | **Est. tokens:** ~4,549,443
+**Generated:** 2026-09-11 22:57 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~60,258 |
+| `./` | 36 | ~50,424 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -124,10 +124,9 @@
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `EVIDENCE.md` (~2166 tok, huge) — Evidence Matrix
-- `.evidence-report.xml` (~9865 tok, huge) — <?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite
 - `generate_mind7b_training.py` (~5567 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~243 tok, medium) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~494 tok, medium) — *.pyc
+- `.gitignore` (~525 tok, large) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~5444 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients

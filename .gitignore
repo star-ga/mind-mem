@@ -78,3 +78,7 @@ evidence_chain.jsonl.*
 hash_chain_v2.db
 hash_chain_v2.db-*
 audit_chain.jsonl
+
+# Output of scripts/check_evidence_executes.py — a gate artifact, never source.
+.evidence-report.xml
+.evidence-report.json
