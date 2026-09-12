@@ -265,6 +265,21 @@ def test_all_expired_configuration_cannot_enable_loopback_anonymous_access(tmp_p
         assert _get(port, PATH_STATUS, None) == 401
 
 
+def test_handler_fallback_token_expiry_is_enforced(separated, monkeypatch):
+    """An explicit handler fallback follows the same expiry contract as env tokens."""
+    from mind_mem import http_transport
+
+    monkeypatch.delenv("MIND_MEM_TOKENS", raising=False)
+    monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
+    monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
+    current = [50.0]
+    monkeypatch.setattr(http_transport.time, "time", lambda: current[0])
+    with _serve(separated, token="fallback|exp=50") as port:
+        assert _get(port, PATH_STATUS, "fallback") == 200
+        current[0] = 51.0
+        assert _get(port, PATH_STATUS, "fallback") == 401
+
+
 def test_expiry_uses_one_clock_and_preserves_admin_scope(separated, monkeypatch):
     """Auth and admin authorization must use one request timestamp/snapshot."""
     from mind_mem import http_transport
@@ -326,6 +341,57 @@ def test_expiry_refreshes_on_each_keepalive_request(separated, monkeypatch):
             new = conn.getresponse()
             assert new.status == 200
             new.read()
+        finally:
+            conn.close()
+
+
+def test_loopback_anonymous_mode_tracks_credentials_per_keepalive_request(tmp_path, monkeypatch):
+    """Adding then expiring process-env credentials changes the next request."""
+    from mind_mem import http_transport
+
+    for name in ("MIND_MEM_TOKENS", "MIND_MEM_TOKEN", "MIND_MEM_ADMIN_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    current = [100.0]
+    monkeypatch.setattr(http_transport.time, "time", lambda: current[0])
+    original_build_handler = http_transport.build_handler
+
+    def build_http11_handler(*args, **kwargs):
+        handler = original_build_handler(*args, **kwargs)
+        handler.protocol_version = "HTTP/1.1"
+        return handler
+
+    monkeypatch.setattr(http_transport, "build_handler", build_http11_handler)
+    with _serve(str(tmp_path), token=None) as port:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        try:
+            headers = {"Connection": "keep-alive"}
+            conn.request("GET", PATH_STATUS, headers=headers)
+            anonymous = conn.getresponse()
+            assert anonymous.status == 200
+            anonymous.read()
+
+            monkeypatch.setenv("MIND_MEM_TOKENS", "live-token")
+            conn.request("GET", PATH_STATUS, headers=headers)
+            configured = conn.getresponse()
+            assert configured.status == 401
+            configured.read()
+
+            conn.request("GET", PATH_STATUS, headers={**headers, AUTH_HEADER: "live-token"})
+            authenticated = conn.getresponse()
+            assert authenticated.status == 200
+            authenticated.read()
+
+            monkeypatch.setenv("MIND_MEM_TOKENS", "live-token|exp=100")
+            current[0] = 101.0
+            conn.request("GET", PATH_STATUS, headers={**headers, AUTH_HEADER: "live-token"})
+            expired = conn.getresponse()
+            assert expired.status == 401
+            expired.read()
+
+            conn.request("GET", PATH_STATUS, headers=headers)
+            no_longer_anonymous = conn.getresponse()
+            assert no_longer_anonymous.status == 401
+            no_longer_anonymous.read()
         finally:
             conn.close()
 

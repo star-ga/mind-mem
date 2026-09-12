@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import time
+from collections.abc import MutableMapping
 
 import pytest
 
@@ -90,6 +91,39 @@ def test_huge_expiry_is_compared_without_float_overflow(monkeypatch: pytest.Monk
     huge_expiry = 10**1000
     monkeypatch.setenv("MIND_MEM_TOKENS", f"long-lived|exp={huge_expiry}")
     assert http_transport._active_tokens(fallback=None, now=huge_expiry - 1) == ["long-lived"]
+
+
+def test_auth_snapshot_reads_each_environment_source_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    reads: list[str] = []
+    values = {"MIND_MEM_ADMIN_TOKEN": None, "MIND_MEM_TOKENS": None, "MIND_MEM_TOKEN": None}
+
+    class SnapshotEnvironment(MutableMapping[str, str]):
+        def __init__(self) -> None:
+            self._values = {key: value for key, value in os.environ.items()}
+
+        def get(self, name: str, default: str | None = None) -> str | None:
+            reads.append(name)
+            return values.get(name, default)
+
+        def __getitem__(self, name: str) -> str:
+            return self._values[name]
+
+        def __setitem__(self, name: str, value: str) -> None:
+            self._values[name] = value
+
+        def __delitem__(self, name: str) -> None:
+            del self._values[name]
+
+        def __iter__(self):
+            return iter(self._values)
+
+        def __len__(self) -> int:
+            return len(self._values)
+
+    monkeypatch.setattr(http_transport.os, "environ", SnapshotEnvironment())
+    snapshot = http_transport._capture_auth_snapshot(fallback="fallback|exp=50")
+    assert reads == ["MIND_MEM_ADMIN_TOKEN", "MIND_MEM_TOKENS", "MIND_MEM_TOKEN"]
+    assert snapshot.auth_configured is True
 
 
 # ---------------------------------------------------------------------------

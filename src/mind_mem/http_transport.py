@@ -179,6 +179,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_RATE_MAX_CALLS = 120
 DEFAULT_RATE_WINDOW_SECS = 60
 MAX_TRACKED_CLIENTS = 1024  # LRU cap to bound limiter memory under attack
+_AUTH_ENV_UNSET = object()
 
 
 # -- Token rotation primitive (roadmap v4.0.x) -----------------------------
@@ -210,6 +211,7 @@ class _RequestAuthSnapshot:
     active_tokens: tuple[str, ...]
     admin_tokens: tuple[str, ...]
     admin_configured: bool
+    auth_configured: bool = True
 
 
 def _read_admin_auth_state() -> _AdminAuthState:
@@ -274,18 +276,27 @@ def _active_tokens(fallback: str | None = None, *, now: float | int | None = Non
     return _active_tokens_with_admin(fallback=fallback, admin=admin, now=now)
 
 
-def _active_tokens_with_admin(*, fallback: str | None, admin: Sequence[str], now: float | int | None = None) -> list[str]:
+def _active_tokens_with_admin(
+    *,
+    fallback: str | None,
+    admin: Sequence[str],
+    now: float | int | None = None,
+    raw_multi: str | None | object = _AUTH_ENV_UNSET,
+    raw_single: str | None | object = _AUTH_ENV_UNSET,
+) -> list[str]:
     """Build the active bearer set from one already-captured admin state."""
 
     observed_at = time.time() if now is None else now
-    raw_multi = os.environ.get("MIND_MEM_TOKENS")
+    if raw_multi is _AUTH_ENV_UNSET:
+        raw_multi = os.environ.get("MIND_MEM_TOKENS")
     if raw_multi is not None and raw_multi.strip():
         # A configured list is authoritative even when every entry has
         # expired. Falling through here would resurrect a retired token.
         user_tokens = active_token_values(raw_multi, now=observed_at)
         return _merge_admin(user_tokens, admin, now=observed_at)
 
-    raw_single = os.environ.get("MIND_MEM_TOKEN")
+    if raw_single is _AUTH_ENV_UNSET:
+        raw_single = os.environ.get("MIND_MEM_TOKEN")
     if raw_single is not None and raw_single.strip():
         # The configured singular source is authoritative after parsing too;
         # an expired entry must not fall back to the handler-bound credential.
@@ -293,7 +304,7 @@ def _active_tokens_with_admin(*, fallback: str | None, admin: Sequence[str], now
         return _merge_admin(user_tokens, admin, now=observed_at)
 
     if fallback:
-        return _merge_admin([fallback], admin, now=observed_at)
+        return _merge_admin(active_token_values(fallback, now=observed_at), admin, now=observed_at)
     # No user credential configured. An admin credential alone is still a
     # credential, and refusing it here would make an admin-only deployment
     # unauthenticable.
@@ -305,11 +316,22 @@ def _capture_auth_snapshot(*, fallback: str | None) -> _RequestAuthSnapshot:
 
     observed_at = time.time()
     admin_state = _read_admin_auth_state()
-    active = _active_tokens_with_admin(fallback=fallback, admin=admin_state.tokens, now=observed_at)
+    raw_multi = os.environ.get("MIND_MEM_TOKENS")
+    raw_single = os.environ.get("MIND_MEM_TOKEN")
+    active = _active_tokens_with_admin(
+        fallback=fallback,
+        admin=admin_state.tokens,
+        now=observed_at,
+        raw_multi=raw_multi,
+        raw_single=raw_single,
+    )
     admin = active_token_values(",".join(admin_state.tokens), now=observed_at)
     # The admin subset is derived from the same raw read and timestamp as the
     # general bearer set. It remains a separate authorization input.
-    return _RequestAuthSnapshot(tuple(active), tuple(admin), admin_state.configured)
+    auth_configured = (
+        bool(fallback) or bool(raw_multi and raw_multi.strip()) or bool(raw_single and raw_single.strip()) or admin_state.configured
+    )
+    return _RequestAuthSnapshot(tuple(active), tuple(admin), admin_state.configured, auth_configured)
 
 
 def _merge_admin(user_tokens: list[str], admin_tokens: Sequence[str], *, now: float | int | None = None) -> list[str]:
@@ -1934,13 +1956,7 @@ def build_handler(
     # The explicit loopback opt-in only disables auth when no credential
     # source is configured. In particular, an all-expired configured list is
     # still an authenticated (closed) server, never an anonymous fallback.
-    auth_configured = bool(token)
-    for _name in ("MIND_MEM_TOKENS", "MIND_MEM_TOKEN"):
-        if os.environ.get(_name, "").strip():
-            auth_configured = True
-    if os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None:
-        auth_configured = True
-    auth_required = not (allow_unauthenticated_localhost and _is_loopback(bind_host) and not auth_configured)
+    loopback_anonymous_opt_in = allow_unauthenticated_localhost and _is_loopback(bind_host)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "mind-mem-http/0.1"
@@ -2020,6 +2036,8 @@ def build_handler(
             return snapshot
 
         def _authenticated(self) -> bool:
+            snapshot = self._auth_snapshot()
+            auth_required = not (loopback_anonymous_opt_in and not snapshot.auth_configured)
             if not auth_required:
                 return True
             sent = self.headers.get(AUTH_HEADER, "")
@@ -2027,14 +2045,14 @@ def build_handler(
                 return False
             # Token rotation (roadmap v4.0.x): accept any of an N-of-K
             # active-tokens set. ``MIND_MEM_TOKENS`` (comma-separated)
-            # is preferred when set — supports grace-window rotation
-            # without restart. Falls back to the single ``token`` value
+            # is preferred when set — supports grace-window rotation after
+            # the server process environment is updated. Falls back to the single ``token`` value
             # the handler was built with for backwards compat.
             #
             # Read at request time so an expiry-bearing environment update
             # takes effect for the next request. A separate CLI process cannot
             # mutate this server process's environment.
-            active = self._auth_snapshot().active_tokens
+            active = snapshot.active_tokens
             if not active:
                 return False
             # Constant-time comparison against EVERY active token (audit
@@ -2104,7 +2122,8 @@ def build_handler(
             Only ever called after :meth:`_guards_passed`, so the header
             read here is the one that passed the constant-time compare.
             """
-            if not auth_required:
+            snapshot = self._auth_snapshot()
+            if loopback_anonymous_opt_in and not snapshot.auth_configured:
                 return HTTP_UNAUTHENTICATED_ACTOR
             return _token_actor(self.headers.get(AUTH_HEADER, ""))
 
