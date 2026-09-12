@@ -87,6 +87,34 @@ to `127.0.0.1` by default.
 | Credential material in rate-limit bucket keys | Bucket key is `sha256(token)[:16]`, never a slice of the token | Active (N-12) |
 | API surface disclosure to unauthenticated scanners | `/docs`, `/redoc`, `/openapi.json` are dropped on an authenticated, non-loopback bind (`MIND_MEM_API_DOCS` overrides) | Active (N-13) |
 | Network-exposed gRPC defeating the HITL gate | `_enforce_grpc_bind()` refuses a non-loopback bind on the unauthenticated gRPC transport unless explicitly acknowledged | Active (gRPC audit) |
+| Prompt injection via recalled block content | `recall`/`hybrid_search`/`find_similar` docstrings state that returned block text is corpus data, not instructions for the calling agent; governed-write means every block reached the store through `propose → review → approve_apply`, which narrows (does not eliminate) the injection surface to content a human already approved | Partial — see "Prompt Injection via Recalled Content" below |
+
+### Prompt Injection via Recalled Content
+
+A survey on long-term memory security in LLM agents (arXiv:2604.16548)
+identifies memory content itself as an attack surface: text written into
+a memory store earlier can carry instructions that, when recalled and
+placed back into an LLM's context, get followed as if the calling agent
+had written them. MIND-Mem's governed-write model narrows this compared
+to memory layers that write directly from LLM extraction — a block only
+reaches the store after `propose_update` → human `approve_apply` — but a
+human reviewer approving a plausible-looking proposal that also happens
+to carry a hidden instruction is not defended against by the gate itself.
+Mitigations:
+
+- Every MCP read tool that returns block content (`recall`,
+  `hybrid_search`, `find_similar`, `prefetch`, `pack_recall_budget`)
+  documents in its docstring that the returned text is untrusted corpus
+  data, not directives, so a calling agent's own system prompt can carry
+  that framing forward.
+- Governed-write means recalled content was, at minimum, deliberately
+  approved by a human at some point — it is not raw, unreviewed
+  third-party input the way a naive RAG-over-the-web pipeline's context
+  would be.
+- This is **not** a content filter or an instruction-detection scanner —
+  MIND-Mem does not attempt to detect or strip adversarial phrasing from
+  approved blocks. That remains the reviewer's and the calling agent's
+  responsibility.
 
 ### Dependencies
 

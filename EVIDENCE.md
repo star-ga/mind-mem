@@ -46,6 +46,15 @@ package that passes this is not evidence, whoever published it.
 | 7 | **LoCoMo, full 10-conv 1986Q** (Acc>=50 73.8% / mean 70.5; canonical — see `docs/benchmarks.md`) | `benchmarks/locomo_judge.py` + `benchmarks/locomo_v1.1.0_mistral_large_full.json` (raw, 1986 rows) | `python benchmarks/locomo_judge.py --answerer-model <model> --judge-model <model> --top-k 18` (needs a judge LLM) | 2026-02-23 (`benchmarks/REPORT.md`) | ❌ **self-published** — repro harness exists; raw outputs checked in; independent rerun wanted |
 | 8 | **LongMemEval-S** — measured runs, both arms same box same day | `docs/benchmarks/head-20260907/*.{ndjson,md}` (raw per-question rows beside each scorecard) with the write-up in `docs/benchmarks/2026-09-07-longmemeval-s-HEAD.md`; the 2026-09-03 artifacts remain committed and are superseded, not deleted | `python3 benchmarks/lme_ablation_report.py --dir docs/benchmarks/head-20260907 --floor docs/benchmarks/head-20260907/lme-floor-head.ndjson` | 2026-09-07 — HEAD 0.9745 / 0.8447 / 0.8954 against a floor of 0.9702 / 0.8298 / 0.9081; all three paired comparisons not significant (0.7905 / 0.3240 / 0.0929), where on 09-03 two of them were. The floor arm reproduces its 09-03 committed values to every digit, which is the determinism control | ❌ not yet — first-party. `chroma_baseline` (2026-09-07) adds an EXTERNAL SYSTEM to compare against, which is not the same thing as an external PARTY verifying us, and this row stays ❌ until someone outside STARGA reruns it. The prior `R@5 = 85.3` stays **RETRACTED** |
 | 9 | **Published numbers are recomputable from committed raw rows** | `benchmarks/repro_verify.py` + `tests/test_repro_package.py` (which proves the verifier fails on a tampered row, metric, counter or scorecard cell) | `make repro-verify` | 2026-09-05 (7 targets, 160 checks) | ❌ not yet — the check anyone outside STARGA can run first |
+| 10 | **`supersedes` edges demote their target at least as fast as `contradicts`** (bi-temporal supersession, arXiv:2501.13956) | `tests/test_block_lineage.py::TestKindDecay`, `tests/test_typed_edges_group_h.py`, `tests/test_lineage_staleness.py` — new tests added this pass | `pytest tests/test_block_lineage.py tests/test_lineage_staleness.py tests/test_typed_edges_group_h.py -q` | see `CHANGELOG.md` | ❌ not yet — covered by repo tests, not independently reproduced |
+
+**Deliberately not closed this pass:** a content-category decay policy (infra/status facts on a short fixed
+TTL regardless of recall frequency, decision/architecture facts long-or-no TTL, credential blocks never
+auto-decay) per arXiv:2603.18330 (MemArchitect) and arXiv:2603.11768 (SSGM) — see `ROADMAP.md`, "Governance
+— content-category decay policy". `memory_tiers.py` already does recency-based TTL/LRU decay, which is a
+different axis; the category taxonomy and its default TTL values are a product decision that risks silently
+mis-flagging real users' data if guessed wrong, so it is left open for the maintainer rather than implemented
+speculatively.
 
 ## What "10/10" requires (and what we are NOT claiming yet)
 

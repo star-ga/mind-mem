@@ -4,6 +4,28 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- Document the recall-path prompt-injection surface identified in
+  arXiv:2604.16548 (long-term memory security survey): text returned by
+  `recall`, `hybrid_search`, `find_similar` and `prefetch` is corpus data
+  approved through `propose_update` -> `approve_apply`, not an instruction
+  for the calling agent. Added a docstring note to each of those tools, a
+  new SECURITY.md threat-model row, and a "Prompt Injection via Recalled
+  Content" subsection explaining the mitigation (governed-write narrows,
+  does not eliminate, the surface) and its limit (no content filtering or
+  instruction-detection is performed on approved blocks). Docs-only; no
+  behavior change.
+
+### Roadmap
+
+- Recorded content-category decay policy (per arXiv:2603.18330
+  MemArchitect and arXiv:2603.11768 SSGM) as a genuinely open item in
+  `ROADMAP.md` / `EVIDENCE.md` rather than guessing at a taxonomy and
+  default TTLs: `memory_tiers.py`'s existing TTL/LRU decay is
+  recency-based, not content-category-based, and picking wrong defaults
+  for the latter risks silently mis-flagging real users' data.
+
 ### Added
 
 - `supersedes` typed lineage edge kind (`block_lineage.ALLOWED_KINDS`),
