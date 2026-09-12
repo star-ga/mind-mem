@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1560 | **Est. tokens:** ~4,590,948
-**Generated:** 2026-09-12 02:00 UTC
+**Files:** 1560 | **Est. tokens:** ~4,591,157
+**Generated:** 2026-09-12 02:13 UTC
 
 ## Token Budget Guide
 
@@ -61,7 +61,8 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 22 | ~66,997 |
+| `scripts/` | 22 | ~67,002 |
+| `scripts/evidence_gate_canary/` | 1 | ~348 |
 | `sdk/go/` | 10 | ~9,098 |
 | `sdk/js/` | 6 | ~4,864 |
 | `sdk/js/src/` | 5 | ~3,178 |
@@ -87,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 671 | ~2,004,354 |
+| `tests/` | 670 | ~2,004,210 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -602,13 +603,18 @@
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
 - `check_docs_alignment.py` (~15109 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
-- `check_evidence_executes.py` (~2249 tok, huge) — Gate: every EVIDENCE.md claim's test must EXECUTE. A skip is a red build.
+- `check_evidence_executes.py` (~2254 tok, huge) — Gate: every EVIDENCE.md claim's test must EXECUTE. A skip is a red build.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_tool_surface.py` (~2214 tok, huge) — Reachability, applied to the MCP tool surface.
 - `count_mcp_tools.py` (~5216 tok, huge) — Count registered MCP tools and assert the count matches CLAUDE.md.
 - `docs-alignment-hook.sh` (~454 tok, medium) — docs-alignment-hook.sh — Git pre-commit step to refresh derived doc counts.
+### `scripts/evidence_gate_canary/`
+
+- `test_evidence_gate_canary.py` (~348 tok, medium) — A deliberately skipping test, used only by the evidence gate's self-test.
+### `scripts/`
+
 - `pre-commit-hook.sh` (~489 tok, medium) — STARGA author guard (chained first: a wrong-identity commit must never be created).
 - `pre-push-hook.sh` (~460 tok, medium) — pre-push-hook.sh — the last LOCAL gate before an identity becomes public.
 - `reachability_baseline.txt` (~366 tok, medium) — api.grpc_server  # waiting: a named client integration that requires gRPC (strea
@@ -1351,7 +1357,6 @@
 - `test_evidence_chain_fork_refusal.py` (~2849 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_evidence_chain_recovery.py` (~9797 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_evidence_forward_compat.py` (~2819 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_evidence_gate_canary.py` (~144 tok, small) — A deliberately skipping test, used only by the evidence gate's self-test.
 - `test_evidence_objects.py` (~4263 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_evidence_packer.py` (~5180 tok, huge) — Tests for the evidence packer module."""
 - `test_excerpt.py` (~248 tok, medium) — Tests for excerpt generation."""

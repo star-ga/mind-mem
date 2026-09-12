@@ -99,7 +99,7 @@ def check(claims: dict, canary: bool = False) -> int:
         claims = dict(claims)
         claims["__canary__"] = {
             "claim": "canary: a deliberately skipping evidence test",
-            "tests": ["tests/test_evidence_gate_canary.py::test_canary_evidence_test_that_skips"],
+            "tests": ["scripts/evidence_gate_canary/test_evidence_gate_canary.py::test_canary_evidence_test_that_skips"],
         }
 
     node_ids: list[str] = []
