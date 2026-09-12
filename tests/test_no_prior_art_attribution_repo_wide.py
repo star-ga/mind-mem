@@ -45,7 +45,17 @@ SCANNED_SUFFIXES = {".py", ".md", ".txt", ".toml", ".yml", ".yaml", ".ts", ".tsx
 
 def _tracked_files() -> list[pathlib.Path]:
     root = pathlib.Path(__file__).resolve().parent.parent
-    out = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True, check=True).stdout.splitlines()
+    out = subprocess.run(
+        ["git", "ls-files"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        # Explicit, because `text=True` alone decodes with the LOCALE codec — cp1252 on
+        # Windows — so a path carrying a non-ASCII byte decodes wrong or raises. The repo
+        # gates this in `test_text_io_is_utf8.py`, and that gate caught this very file.
+        encoding="utf-8",
+        check=True,
+    ).stdout.splitlines()
     return [root / p for p in out if pathlib.Path(p).suffix in SCANNED_SUFFIXES]
 
 
