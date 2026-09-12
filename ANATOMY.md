@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1558 | **Est. tokens:** ~4,587,666
-**Generated:** 2026-09-12 01:56 UTC
+**Files:** 1560 | **Est. tokens:** ~4,590,948
+**Generated:** 2026-09-12 02:00 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 241 | ~1,092,681 |
+| `src/mind_mem/` | 242 | ~1,094,436 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 670 | ~2,002,827 |
+| `tests/` | 671 | ~2,004,354 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -907,6 +907,7 @@
 - `memory_index.py` (~2925 tok, huge) — Auto-generated hierarchical index — ``index.md`` + ``log.md`` (Group C).
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `memory_tiers.py` (~6427 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `merge_guard.py` (~1755 tok, huge) — Description-grounded over-merge guard for entity resolution.
 - `merkle_tree.py` (~3673 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_mic_map_accel.pyx` (~1136 tok, large) — # cython: language_level=3, boundscheck=False, wraparound=False, cdivision=True
 - `mic_map.py` (~8384 tok, huge) — MIC/MAP — STARGA-native serialization for MIND IR graphs.
@@ -1509,6 +1510,7 @@
 - `test_memory_ops_postgres_backend.py` (~3255 tok, huge) — Backend-aware memory_ops tools — Postgres parity (audit bug 5).
 - `test_memory_practical_e2e.py` (~2401 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_memory_tiers.py` (~3479 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_merge_guard.py` (~1527 tok, huge) — Description-grounded over-merge guard.
 - `test_merkle_tree.py` (~3837 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mic_map_accel.py` (~1848 tok, huge) — Regression tests for the optional Cython accelerator at
 - `test_mic_map_adversarial.py` (~3397 tok, huge) — Adversarial corpus for ``mind_mem.mic_map`` parsers.

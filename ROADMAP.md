@@ -594,7 +594,36 @@ wedge (the model call is an injected `Callable`, so the loop / digest /
 retention floor prove out with zero API calls in CI, same discipline as
 Group H recompaction).
 
-- [ ] **Description-grounded entity resolution** — canonicalize
+- [~] **Description-grounded entity resolution** — **THE OVER-MERGE GUARD
+      LANDED 2026-09-11** (`src/mind_mem/merge_guard.py`, pure, 11 tests).
+      Of this item's two enforced failure modes, the first (unmatched name ->
+      single-element cluster) landed with `entity_blocking`; this is the second,
+      and it is the one with teeth. A wrongly-SPLIT entity is cheap to fix
+      later; a wrongly-MERGED one is not — the two descriptions become one and
+      nothing records that a choice was made. That asymmetry sets the shape.
+      **The guard never authorises a merge.** Closed verdict set
+      (`REFUSED_KIND_CONFLICT`, `REFUSED_NO_SHARED_CONTEXT`,
+      `REVIEW_REQUIRED`), every arm withholding automatic action, and
+      `auto_merge` is a FIELD on the result so "no path merges" is something a
+      test asserts about every output rather than a convention to trust. A test
+      walks a matrix of inputs — including the strongest same-entity signal —
+      and pins `auto_merge is False` throughout, so a later "obviously the same
+      person" fast path has to argue with the HITL requirement instead of
+      quietly bypassing it. `REVIEW_REQUIRED` is not a pass.
+      A missing or blank description reaches `REVIEW_REQUIRED` with a reason
+      naming the absence: a check that could not run must never return what a
+      passing check returns.
+      The kind set is CLOSED — with an open set an unrecognised noun becomes a
+      new kind and two entities of the same kind read as a conflict. Markers are
+      restricted to words naming what the SUBJECT is; a word that commonly names
+      an object (`engine`) is deliberately absent, because a bag of words cannot
+      separate subject from object and an ambiguous match must fail toward
+      review, never toward a refusal a reviewer cannot check. A test pins that
+      direction.
+      **Remaining:** the description-similarity judgement itself (needs a
+      model), cross-lingual transliteration, and wiring the guard into the
+      `capture.py` merge path.
+- [ ] **Description-grounded resolution body (original wording)** — canonicalize
       surface-form variants (nicknames, abbreviations, cross-lingual
       transliterations) that string-similarity dedup misses, using a
       one-line per-entity description as disambiguation context rather
