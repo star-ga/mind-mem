@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1568 | **Est. tokens:** ~4,594,656
-**Generated:** 2026-09-12 03:41 UTC
+**Files:** 1570 | **Est. tokens:** ~4,597,358
+**Generated:** 2026-09-12 03:47 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 244 | ~1,077,813 |
+| `src/mind_mem/` | 244 | ~1,078,162 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,924 |
-| `tests/` | 678 | ~2,023,143 |
+| `tests/` | 680 | ~2,025,496 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -770,7 +770,7 @@
 - `consensus_vote.py` (~2067 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
 - `consolidation_maturity_gate.py` (~2589 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `contradiction_detector.py` (~4893 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
+- `contradiction_detector.py` (~5242 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `core_export.py` (~8336 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `corpus_registry.py` (~5127 tok, huge) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~3583 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
@@ -1304,6 +1304,7 @@
 - `test_context_pack.py` (~2584 tok, huge) — Tests for context_pack rules: adjacency, diversity, pronoun rescue."""
 - `test_context_pack_scripts.py` (~673 tok, large) — Tests for context packing via scripts._recall_context."""
 - `test_contradiction_detector.py` (~5871 tok, huge) — Tests for contradiction_detector.py — Contradiction detection at governance gate (#432).
+- `test_contradiction_inflected_reversals.py` (~915 tok, large) — Status-reversal detection missed every INFLECTED form.
 - `test_core_export_wiring.py` (~4543 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_core_v140.py` (~2707 tok, huge) — Tests for v1.4.0 core hardening: issues #28, #30, #32, #34."""
 - `test_cron_runner_config_fail_closed.py` (~1159 tok, large) — An unreadable toggle file must mean "run nothing", never "run everything".
@@ -1457,6 +1458,7 @@
 - `test_kalman_belief.py` (~3728 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_kg_fusion.py` (~2013 tok, huge) — Typed-knowledge-graph fusion into recall (opt-in, default OFF).
 - `test_knowledge_graph.py` (~3753 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_l2_prescriptive_blocks_evaluation.py` (~1438 tok, large) — L2 evaluation: should a PRESCRIPTIVE block kind exist? Measured answer: no.
 - `test_ledger_hierarchy.py` (~8001 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_legacy_restore_symlink_confinement.py` (~1152 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_evidence.py` (~5244 tok, huge) — # Copyright 2026 STARGA, Inc.

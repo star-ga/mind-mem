@@ -225,14 +225,38 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
         return "contradiction"
 
     # Check for status change patterns (e.g., "active" → "deprecated")
+    # Bare stems AND their inflections. The list originally held only bare verb forms
+    # matched with a word boundary (``\benable\b``), so every form that actually appears
+    # in a written decision was invisible: "tier decay is ENABLED" vs "... is DISABLED"
+    # scored 0.875 similarity and came back "refinement", not "contradiction". A decision
+    # block says "is enabled", not "enable" -- the inflected form is the common case and
+    # the bare imperative the rare one, so the check was missing most of what it was
+    # written to catch. (Found 2026-09-11 by a positive control in the L2 evaluation that
+    # asserted enabled/disabled WAS a contradiction and failed.)
+    #
+    # The PAIRS are extended, never the thresholds: nothing that was already a
+    # contradiction stops being one, and the change can only move pairs from
+    # "refinement" to "contradiction" -- the direction a contradiction-detection product
+    # should err in, since a missed contradiction is a corpus quietly holding both
+    # answers with the reviewer never asked.
     status_reversal_pairs = [
         ("active", "deprecated"),
         ("enable", "disable"),
+        ("enabled", "disabled"),
+        ("enabling", "disabling"),
         ("allow", "deny"),
+        ("allowed", "denied"),
         ("accept", "reject"),
+        ("accepted", "rejected"),
         ("start", "stop"),
+        ("started", "stopped"),
+        ("starting", "stopping"),
         ("add", "remove"),
+        ("added", "removed"),
+        ("adding", "removing"),
         ("increase", "decrease"),
+        ("increased", "decreased"),
+        ("increasing", "decreasing"),
         ("true", "false"),
     ]
 

@@ -70,10 +70,19 @@ planned against.
 - `N2 — Chunk-provenance anchoring` — Group N has no subject after the sweep.
 - `Compliance export pipeline` — already `[~]` with behaviour verified.
 
-**D — WORK I CAN DO (4 boxes, 1 already done).** This is the real remaining surface:
+**D — WORK I CAN DO (4 boxes, 2 already done).** This is the real remaining surface:
 1. `Local visual viewer` (`mm view`) — stdlib HTTP + minimal JS/D3, self-contained.
-2. `L2 — Prescriptive blocks` — an EVALUATION, explicitly "not committed"; the
-   deliverable is a recommendation with evidence, not a feature.
+2. ~~`L2 — Prescriptive blocks`~~ — **EVALUATED 2026-09-11; recommendation is NO, with
+   the measurements pinned as tests so it cannot rot.** Demand is ~0.1% of the corpus (2
+   of 2,726 blocks have conditional-strategy shape; the 10.9% carrying "always/never" are
+   standing RULES already held well by decision blocks). And the governance surface is not
+   merely weaker for strategies, it is MISLEADING: "run the gate before the benchmark" and
+   "run the benchmark before the gate" are token-identical, so cosine similarity is
+   **1.000** and the verdict is **"duplicate"** — a reviewer told "you already have this"
+   would reject the new block as redundant when it is the OPPOSITE. For a fact the same
+   surface says "refinement", which invites comparison. The prerequisite, if ever wanted,
+   is an ORDER-SENSITIVE comparator, and a test goes red the day one appears so the
+   recommendation is re-derived rather than inherited.
 3. ~~`Prefetch hit rate tracked in calibration feedback loop`~~ — **DONE the same day
    this list was written.** Landed as a reported sidecar rather than as feedback: the
    obvious wiring would have fed cache-warmth into the weights that move retrieval
@@ -4078,7 +4087,32 @@ much context it consumed and cannot say what the consumption was worth.
       the knee. A result showing no headroom closes this as a negative finding and is a
       valid outcome — the point is to make the claim measurable, not to make it flattering.
 
-- [ ] **L2 — Prescriptive blocks (EVALUATE, not committed).** Assess whether a
+- [x] **L2 — Prescriptive blocks (EVALUATED 2026-09-11 — recommendation: NO).**
+  `tests/test_l2_prescriptive_blocks_evaluation.py` is the evidence, pinned as
+  tests rather than prose so a conditional "no" cannot outlive its condition.
+  **Demand:** over the live 2,726-block corpus, 297 (10.9%) carry imperative
+  language but only **2 (0.1%)** have conditional-strategy shape, and the single
+  block matching both signals is a false positive. The 10.9% are standing RULES —
+  propositional claims about policy — which decision blocks already hold.
+  **Governance:** the item feared a strategy's staleness would be *harder* to
+  detect. Measured, it is worse than that. "Always run the byte-identity gate
+  before the benchmark" and the same sentence with the order reversed are
+  TOKEN-IDENTICAL — order is the only difference and a bag-of-words comparator
+  cannot see order — so similarity is **1.000** and the verdict is **"duplicate"**,
+  surfaced as "near-duplicate found". A reviewer told they already have it would
+  reasonably reject the new block as redundant when it contradicts the stored one.
+  A conflicting FACT gets "refinement", a label that invites comparison. So the
+  failure for strategies is an actively WRONG label, not a missed detection.
+  **Prerequisite if ever revisited:** an order-sensitive comparator, since order is
+  most of what a procedure asserts. A test asserts the comparator is still
+  order-blind and goes RED the day that changes, forcing a re-derivation.
+  **Side finding, fixed separately:** the positive control for this evaluation
+  asserted `enabled`/`disabled` was a contradiction and FAILED — the
+  status-reversal list held only bare verb forms matched on word boundaries, so
+  every inflected form (the common case in a written decision) was invisible.
+  Extended with 14 inflections; **111 of 2,726 live blocks carry one**, and the
+  thresholds were left untouched so nothing stops being a contradiction.
+  Original text: Assess whether a
   procedural/prescriptive block kind — recall returns *a strategy*, not *a fact* —
   earns a place in the governed store. The corpus today is overwhelmingly
   propositional (decisions, entities, projects, references). Note that `skill_opt/`
