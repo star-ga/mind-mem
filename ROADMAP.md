@@ -3966,7 +3966,40 @@ mislabelled eval set still produces confident numbers.
   one-off. So M4 should cite `drift.mind` as its precedent; the external tutorial
   contributed the framing and none of the mechanism.
 
-- [ ] **M5 — Enforcement-in-code audit, closing with capability flags
+- [~] **M5 — Enforcement-in-code audit, closing with capability flags** —
+  **THE MECHANISM LANDED 2026-09-11** (`src/mind_mem/capabilities.py`, pure, 8
+  tests). M5 insists the close condition is a mechanism, not a document, and that
+  the audit and remediation stay separate passes. This is the mechanism; the
+  audit result is now QUERYABLE rather than written down:
+
+  | capability | enforced | why |
+  |---|---|---|
+  | prewrite_redaction | **yes** | `prewrite.py:143` calls `redact()`, `governance.py:345` calls `screen()` |
+  | provenance_required | **yes** | `policy=required` refuses (measured `provenance_required`) |
+  | export_redaction | **yes** | `full` carries an email, `redacted`/`metadata-only` do not |
+  | canary_tripwire | **yes** | edited / status-changed / VANISHED all reported |
+  | lifecycle_evidence | **yes** | both ledgers, reached from two call paths |
+  | slot_upsert | **yes** | closed enum refuses an invented slug |
+  | actor_anomaly_detection | **no** | needs learned per-actor scoring — determinism wedge forbids it |
+  | semantic_duplicate_detection | **no** | `gist.py` is LEXICAL; paraphrase is not covered |
+  | signed_corpus_manifest | **no** | Sigstore covers release artifacts, not the corpus |
+
+  **FORGERY BY ABSENCE is closed structurally:** `verdict_for()` returns
+  `ok=False` whenever the capability is unsupported, *whatever was observed*, so
+  a check that could not run can never return what a passing check returns —
+  the precise failure `512-mind`'s `drift.mind` names ("an undefined/empty
+  mutation list must NEVER make `equivalent` true"). `require()` RAISES rather
+  than returning falsy, so a caller who forgets to check fails loudly instead of
+  proceeding on an assumption. An enum member with no flag entry answers False,
+  because inheriting a passing default is the gap M5 is about.
+  **CORRECTION to this item's stated precondition:** it says the `scrub`/`redact`
+  vocabulary "occurs in essentially one CLI file — not the write path". That is
+  now FALSE: `redact()` is called at `compliance/prewrite.py:143` and `screen()`
+  on the governed door. There IS an enforcement layer to point at, so the
+  condition M5 was written under no longer holds.
+  **Remaining:** gate the three unenforced paths on their flags at their call
+  sites, so a caller relying on them refuses rather than assumes.
+- [ ] **M5 (original wording) — Enforcement-in-code audit, closing with capability flags
   (rescoped 2026-08-17).** Sweep for every place a governance or privacy property
   in this project rests on an *instruction to a model* rather than on code that
   executes. The principle in one line: a summarizer is *told* not to include
