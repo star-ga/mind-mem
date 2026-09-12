@@ -756,6 +756,26 @@ HITL gate deliberately refuses.
 - [x] **Operator-side peer allowlist** (`MIND_MEM_FED_PEERS=10.0.0.5,…`) — **shipped v4.0.14**
 - [x] **Token rotation primitive** (N-of-K active tokens, `mm token rotate`)
   - Residual: the grace window is ADVISORY. `grace_seconds` is printed and the operator must run the emitted `shell_final` export; the server never timestamps or auto-expires an old token, so the "then expires" half of the original line is not implemented.
+  - **MECHANISM LANDED 2026-09-11** (`src/mind_mem/token_expiry.py`, pure, 15
+    tests). MEASURED first: `MIND_MEM_TOKENS="old,new"` returned both tokens
+    active with no expiry on either, so a retired credential stayed valid until a
+    human edited an env var. Rotation without expiry is accumulation, not
+    rotation.
+    Grammar is ADDITIVE so every existing deployment keeps working forever:
+    `<token>` means no expiry exactly as today; `<token>|exp=<epoch>` expires.
+    **Fails closed on a malformed expiry** — an unparseable timestamp, a negative
+    one, or an unknown suffix key (`|ttl=`) is treated as EXPIRED, never as
+    never-expiring. A typo must not silently grant a permanent credential; with
+    authentication, a mistake should cost availability rather than security.
+    **An all-expired set returns EMPTY**, and a caller must read that as "refuse
+    everything". The tempting fallback to the raw list would turn a fully-rotated
+    deployment into an open one — a check that cannot pass returning what a
+    passing check returns.
+    Pure: the caller passes `now`, so a token decision is replayable and a test
+    cannot pass merely because it ran fast.
+    **Remaining:** `http_transport._active_tokens` calling
+    `active_token_values`, and `mm token rotate` emitting `|exp=`. Both are on
+    the live auth path, so they land with root rather than here.
 
 ### Cross-cutting (deferred infrastructure)
 

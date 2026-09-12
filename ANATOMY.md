@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1552 | **Est. tokens:** ~4,580,910
-**Generated:** 2026-09-12 01:47 UTC
+**Files:** 1554 | **Est. tokens:** ~4,583,362
+**Generated:** 2026-09-12 01:50 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 238 | ~1,089,361 |
+| `src/mind_mem/` | 239 | ~1,090,550 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 667 | ~1,999,391 |
+| `tests/` | 668 | ~2,000,654 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1043,6 +1043,7 @@
 - `temporal_metadata.py` (~1938 tok, huge) — Temporal metadata injection for retrieved blocks (v3.4.0).
 - `tenant_audit.py` (~2355 tok, huge) — Per-tenant audit chain isolation (v4.0 prep).
 - `tenant_kms.py` (~3010 tok, huge) — Per-tenant key management + envelope encryption (v4.0 prep).
+- `token_expiry.py` (~1189 tok, large) — Server-side expiry for rotated auth tokens. The grace window stops being advisory.
 ### `src/mind_mem/tool_output/`
 
 - `__init__.py` (~200 tok, medium) — mind_mem.tool_output — context-offload for large command/tool output (§5).
@@ -1749,6 +1750,7 @@
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tier_manager_releases_descriptors.py` (~754 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tmpdir_containment.py` (~702 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_token_expiry.py` (~1263 tok, large) — Token rotation: the grace window must EXPIRE server-side, not advisorily.
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
 - `test_token_rotation.py` (~1766 tok, huge) — Regression tests for the token rotation primitive (roadmap v4.0.x).
 - `test_tool_output_postgres_backend.py` (~1615 tok, huge) — ``ToolOutputStore`` on the Postgres backend the module advertises.
