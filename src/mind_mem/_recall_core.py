@@ -1327,12 +1327,24 @@ def recall(
     # invisible to recall; the table half comes first and whole, so an
     # existing workspace's result order does not move.
     all_blocks = []
+    workspace_real = os.path.realpath(workspace)
+    workspace_prefix = workspace_real + os.sep
+    seen_corpus_realpaths: set[str] = set()
     for label, rel_path in discover_corpus_files(workspace):
         # ACL check: skip files the agent cannot read
         if ns_manager and not ns_manager.can_read(rel_path):
             continue
 
-        path = os.path.join(workspace, rel_path)
+        candidate_real = os.path.realpath(os.path.join(workspace_real, rel_path))
+        if not candidate_real.startswith(workspace_prefix):
+            _log.warning("corpus_path_escaped", rel_path=rel_path)
+            continue
+        if ns_manager and not ns_manager.can_read(os.path.relpath(candidate_real, workspace_real)):
+            continue
+        if candidate_real in seen_corpus_realpaths:
+            continue
+        seen_corpus_realpaths.add(candidate_real)
+        path = candidate_real
         if not os.path.isfile(path):
             continue
         try:
@@ -1347,6 +1359,48 @@ def recall(
             b["_source_label"] = label
             all_blocks.append(b)
 
+    # If agent has namespace, search the ACL-visible shared corpus first.
+    # ``discover_corpus_files`` describes the workspace-root corpus only; the
+    # documented namespace layout stores the shared copy under
+    # ``shared/<corpus-file>``.  Keep this loop table-shaped and deterministic:
+    # it must not enumerate other agents, and each logical shared file is read
+    # at most once.
+    if ns_manager and agent_id:
+        seen_shared_paths: set[str] = set()
+        for label, rel_path in CORPUS_FILES.items():
+            ns_path = os.path.join("shared", rel_path)
+            if ns_path in seen_shared_paths:
+                continue
+            seen_shared_paths.add(ns_path)
+            if not ns_manager.can_read(ns_path):
+                continue
+            candidate_real = os.path.realpath(os.path.join(workspace_real, ns_path))
+            if not candidate_real.startswith(workspace_prefix):
+                _log.warning("shared_corpus_path_escaped", ns_path=ns_path)
+                continue
+            # The logical path may be an intra-workspace alias.  The resolved
+            # target must be ACL-readable too, or ``shared/x -> agents/other``
+            # would turn a shared-only grant into another agent's disclosure.
+            resolved_rel_path = os.path.relpath(candidate_real, workspace_real)
+            if not ns_manager.can_read(resolved_rel_path):
+                continue
+            if candidate_real in seen_corpus_realpaths:
+                continue
+            seen_corpus_realpaths.add(candidate_real)
+            if not os.path.isfile(candidate_real):
+                continue
+            try:
+                blocks = parse_file(candidate_real)
+            except (OSError, UnicodeDecodeError, ValueError) as e:
+                _log.debug("corpus_parse_failed", file=ns_path, error=str(e))
+                continue
+            if active_only:
+                blocks = get_active(blocks)
+            for b in blocks:
+                b["_source_file"] = ns_path
+                b["_source_label"] = f"{label}@shared"
+                all_blocks.append(b)
+
     # If agent has namespace, also search agent-private corpus files.
     # CodeQL py/path-injection cleansing pattern: resolve to absolute
     # realpath, then verify the result is contained within the trusted
@@ -1355,8 +1409,6 @@ def recall(
     # makes this branch unreachable, but the static check is required
     # for CodeQL to mark the path as cleansed.
     if ns_manager and agent_id:
-        workspace_real = os.path.realpath(workspace)
-        workspace_prefix = workspace_real + os.sep
         agent_ns = f"agents/{agent_id}"
         # The TABLE, deliberately, not ``discover_corpus_files``: this loop
         # mirrors the table's relpath *shapes* under ``agents/<id>/``, a
@@ -1369,6 +1421,12 @@ def recall(
             if not candidate_real.startswith(workspace_prefix):
                 _log.warning("agent_corpus_path_escaped", agent_id=agent_id, ns_path=ns_path)
                 continue
+            resolved_rel_path = os.path.relpath(candidate_real, workspace_real)
+            if not ns_manager.can_read(resolved_rel_path):
+                continue
+            if candidate_real in seen_corpus_realpaths:
+                continue
+            seen_corpus_realpaths.add(candidate_real)
             safe_path = candidate_real
             if not os.path.isfile(safe_path):
                 continue
