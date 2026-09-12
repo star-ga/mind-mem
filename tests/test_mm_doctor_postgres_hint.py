@@ -117,3 +117,47 @@ def test_doctor_no_hint_for_unrelated_import_error(
     # Error should be reported, but no postgres install hint should appear.
     assert "block_store_error" in report
     assert "install_hint" not in report
+
+
+def test_doctor_reports_in_sync_on_the_single_store_default(tmp_path, monkeypatch, capsys) -> None:
+    """Parity is a Postgres question; the markdown default has no peer.
+
+    ``in_sync`` was computed by diffing the SQLite recall cache against
+    ``pg_ids``, which stays empty unless the backend IS Postgres. So on
+    the shipped markdown/SQLite default every indexed block counted as
+    "sqlite-only" and ``in_sync`` went false as soon as the workspace
+    had any content -- dragging ``mm doctor``'s ``healthy`` verdict
+    false with it. An empty index hid it, which is why it survived.
+    """
+    import json
+    import sqlite3
+
+    from mind_mem.mm_cli import main as mm_main
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    index_dir = ws / ".mind-mem-index"
+    index_dir.mkdir()
+    conn = sqlite3.connect(index_dir / "recall.db")
+    conn.execute("CREATE TABLE IF NOT EXISTS blocks (id TEXT PRIMARY KEY)")
+    conn.executemany(
+        "INSERT OR IGNORE INTO blocks (id) VALUES (?)",
+        [("D-20260912-001",), ("D-20260912-002",)],
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.chdir(ws)
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
+    monkeypatch.setattr("sys.argv", ["mm", "doctor"])
+    try:
+        mm_main()
+    except SystemExit:
+        pass
+
+    out = capsys.readouterr().out
+    report = json.loads(out[out.index("{") : out.rindex("}") + 1])
+
+    assert report["in_sync"] is True, report
+    # The Postgres-only counter must not be reported at all here.
+    assert "sqlite_only_count" not in report, report
