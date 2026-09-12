@@ -268,7 +268,30 @@ self-modifies. We adopt the connectivity model, not the autonomy.
         gated evaluator: lint/type → test suites → echo-control-must-be-1.0 →
         measure) drives it against the real ~1469-block corpus to optimize the
         loop + compressor prompt.
-      - [ ] a `mm recompact` / dream-cycle pass 6 that clusters via `find_similar`
+      - [~] **CLI VERB LANDED 2026-09-11** as `mind-mem-recompact`
+        (`recompact_cli.py`, registered in `pyproject.toml`). The engine had
+        shipped UNREACHABLE — `recompaction.recompact_cluster` already refused to
+        mutate its input and already called its output "a proposal for the HITL
+        gate", but no verb ever called it.
+        **DRY-RUN IS THE DEFAULT**, load-bearing rather than polite: a
+        recompaction rewrites several blocks' text into one summary, so a verb
+        doing that by default would be the silent-overwrite failure with a
+        helpful name. It refuses a cluster of one (a rewrite with no
+        consolidation, losing the original wording for nothing) and refuses an
+        unknown seed id rather than reporting an empty cluster — "you typed it
+        wrong" and "nothing to consolidate" must not look the same.
+        **MEASURED CONSTRAINT ON THIS ITEM'S PREMISE:** `find_similar` ranks by
+        `block_meta.db` **co-occurrence**, not embeddings — its own docstring
+        says "a block that has never been co-retrieved returns an empty list even
+        when semantically near neighbours exist", and that reproduced: `[]` for
+        blocks sharing both entity ids on a fresh workspace. So "clusters via
+        find_similar" only yields clusters on a corpus with retrieval history,
+        and a nightly scheduler over a quiet corpus would find nothing forever
+        while exiting 0. The verb REFUSES an empty cluster so that is visible.
+        7 tests. **Remaining:** the `propose_update` call and the scheduler
+        hookup, deliberately landed together so the proposal shape (what is
+        proposed, in what form, under whose actor id) is decided once.
+      - [ ] a `mm recompact` (original wording) / dream-cycle pass 6 that clusters via `find_similar`
         and routes results through `propose_update` (engine + bench shipped; the
         CLI verb and scheduler wiring are not yet built).
       - [ ] a **before/after recall benchmark on our own corpus** (gate on the
