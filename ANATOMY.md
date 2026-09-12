@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1540 | **Est. tokens:** ~4,562,581
-**Generated:** 2026-09-12 17:56 UTC
+**Files:** 1541 | **Est. tokens:** ~4,562,978
+**Generated:** 2026-09-12 17:58 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 664 | ~2,008,930 |
+| `tests/` | 665 | ~2,009,294 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -100,7 +100,7 @@
 | `tests/integration/` | 2 | ~1,982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 31 | ~58,107 |
+| `train/` | 31 | ~58,140 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -1516,6 +1516,7 @@
 - `test_mm_doctor_postgres_hint.py` (~1128 tok, large) — Regression test: mm doctor must emit a clear hint when backend=postgres
 - `test_model_audit.py` (~3557 tok, huge) — Tests for ``mind_mem.model_audit`` — checkpoint static-security audit.
 - `test_model_audit_unreadable_files.py` (~1411 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_model_card_training_metrics.py` (~364 tok, medium) — Model cards must not replace missing run evidence with invented metrics."""
 - `test_model_gate.py` (~3410 tok, huge) — Tests for ``mind_mem.model_gate`` — load-gate registry."""
 - `test_model_provenance.py` (~2391 tok, huge) — Tests for ``mind_mem.model_provenance`` — base_model allowlist."""
 - `test_model_signing.py` (~2301 tok, huge) — Tests for ``mind_mem.model_signing`` — Ed25519 manifest signing."""
@@ -1828,7 +1829,7 @@
 - `audit_semantic_correctness.json` (~5 tok, tiny) — Keys: findings
 - `audit_semantic_correctness.py` (~1971 tok, huge) — Cross-check every 'file X ships Y' claim in the corpus against src/.
 - `backport_sweep.py` (~1722 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
-- `build_model_card.py` (~4824 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
+- `build_model_card.py` (~4857 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `CORPUS_HASH_v3.11.0` (~21 tok, tiny) — 02b3ba6a1433e25bdbefe3cebf992ca961734850d1e3550e9496905abbadb3b7  build_corpus.p
 - `CORPUS_HASH_v3.12.0-fullft` (~21 tok, tiny) — 568d1559631a590e44eeec6716081b4534a40ab5f3047feb622cc225ead9ad01  build_corpus.p
 - `eval_harness.py` (~8643 tok, huge) — Eval harness for mind-mem-4b.
