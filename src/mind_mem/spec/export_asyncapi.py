@@ -19,7 +19,14 @@ Only alerts that are genuinely FIRED somewhere in ``src/`` are documented. The a
 module can carry any event string; documenting its capacity rather than its emissions
 would be the same over-report in a different place.
 
-Run: ``python3 sdk/spec/gen_asyncapi.py`` (writes next to this file).
+LIVES INSIDE THE PACKAGE, not under ``sdk/``, and that placement is load-bearing:
+``sdk`` must not depend on ``mind_mem`` (arch-mind rule ``NO_CROSS_PKG``), and this
+generator necessarily imports the taxonomy it documents. The first version sat in
+``sdk/spec/`` and the rules gate caught three forbidden edges. The ARTIFACT still lands
+under ``sdk/spec/`` where a consumer looks for it -- same split ``export_openapi`` already
+uses.
+
+Run: ``python3 -m mind_mem.spec.export_asyncapi``.
 Checked by ``tests/test_sdk_asyncapi_drift.py`` in BOTH directions.
 """
 
@@ -29,15 +36,16 @@ import ast
 import dataclasses
 import json
 import pathlib
-import sys
 
-HERE = pathlib.Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
+from mind_mem import __version__
+from mind_mem.alerting import Alert
+from mind_mem.event_fanout import _CANONICAL_EVENTS, Event
 
-from mind_mem import __version__  # noqa: E402
-from mind_mem.alerting import Alert  # noqa: E402
-from mind_mem.event_fanout import _CANONICAL_EVENTS, Event  # noqa: E402
+# src/mind_mem/spec/ -> repo root is three parents up.
+REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+#: The artifact lives under sdk/ where an SDK consumer looks for it, even though the
+#: generator lives in the package -- the same split export_openapi uses.
+OUT_PATH = REPO_ROOT / "sdk" / "spec" / "asyncapi.json"
 
 #: Envelope fields that exist on the dataclass but are NOT part of the wire contract:
 #: internal timing captured for ordering, never promised to a consumer. Named here so
@@ -160,7 +168,8 @@ def build() -> dict:
 
 
 def main() -> int:
-    out = HERE / "asyncapi.json"
+    out = OUT_PATH
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(build(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     spec = build()
     print(f"wrote {out}")

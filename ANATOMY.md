@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1570 | **Est. tokens:** ~4,597,358
-**Generated:** 2026-09-12 03:47 UTC
+**Files:** 1570 | **Est. tokens:** ~4,598,273
+**Generated:** 2026-09-12 03:53 UTC
 
 ## Token Budget Guide
 
@@ -67,7 +67,7 @@
 | `sdk/js/src/` | 5 | ~3,178 |
 | `sdk/js/test/` | 1 | ~3,096 |
 | `sdk/release/` | 3 | ~4,922 |
-| `sdk/spec/` | 4 | ~8,662 |
+| `sdk/spec/` | 3 | ~6,952 |
 | `security/` | 5 | ~24,696 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
@@ -82,12 +82,12 @@
 | `src/mind_mem/mcp/infra/` | 8 | ~12,671 |
 | `src/mind_mem/mcp/tools/` | 29 | ~111,146 |
 | `src/mind_mem/skill_opt/` | 11 | ~20,899 |
-| `src/mind_mem/spec/` | 2 | ~2,005 |
+| `src/mind_mem/spec/` | 3 | ~3,870 |
 | `src/mind_mem/storage/` | 2 | ~11,368 |
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,924 |
-| `tests/` | 680 | ~2,025,496 |
+| `tests/` | 680 | ~2,026,256 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -651,7 +651,6 @@
 ### `sdk/spec/`
 
 - `asyncapi.json` (~1250 tok, large) — Keys: asyncapi, channels, components, defaultContentType, info
-- `gen_asyncapi.py` (~1710 tok, huge) — Generate ``sdk/spec/asyncapi.json`` FROM THE CODE.
 - `openapi.json` (~5030 tok, huge) — Keys: components, info, openapi, paths
 - `README.md` (~672 tok, large) — API specifications
 ### `security/`
@@ -1004,6 +1003,7 @@
 - `spec_binding.py` (~2883 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/spec/`
 
+- `export_asyncapi.py` (~1865 tok, huge) — Generate ``sdk/spec/asyncapi.json`` FROM THE CODE.
 - `export_openapi.py` (~1790 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~215 tok, medium) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
@@ -1410,7 +1410,7 @@
 - `test_graph_schema_versioning.py` (~5941 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_group_h_robustness.py` (~7219 tok, huge) — Robustness tests for Group-H modules: edge-cases, error-paths, boundary values.
-- `test_group_s_corroboration_breadth.py` (~6857 tok, huge) — Group S — cross-project corroboration as a maturity component.
+- `test_group_s_corroboration_breadth.py` (~7617 tok, huge) — Group S — cross-project corroboration as a maturity component.
 - `test_grpc_server.py` (~2246 tok, huge) — v4.0 prep — gRPC wire protocol (tests for the grpcio-free handlers)."""
 - `test_guardrail_blocks.py` (~10742 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_guardrail_status_and_sources.py` (~1989 tok, huge) — # Copyright 2026 STARGA, Inc.

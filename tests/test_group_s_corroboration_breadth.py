@@ -165,12 +165,60 @@ class TestProjectKeyIndependence:
         assert key.endswith(os.path.realpath(str(repo / ".git")))
 
 
+@pytest.fixture
+def non_repo_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A directory that is genuinely OUTSIDE any git repository.
+
+    These tests assert the NON-repository fallback, and `tmp_path` alone does not
+    guarantee one: `resolve_project_key` walks up to find a git root, so whenever
+    TMPDIR happens to sit inside a checkout every "plain directory" resolves to that
+    enclosing repo instead.
+
+    MEASURED 2026-09-11: running the suite with `TMPDIR=/home/n/tmp-pytest` — and
+    `/home/n` is itself a repo — turned three of these red, with two distinct temp
+    directories both resolving to `git:/home/n/.git`. The product was not wrong; the
+    tests were assuming something about the environment that they can simply enforce,
+    so they enforce it. The git probe is stubbed out rather than the path relocated,
+    because a relocated path can wander back inside a repo on someone else's machine
+    while a stubbed probe cannot.
+    """
+    import mind_mem.project_key as pk
+
+    # `_git_common_dir` is the function that answers "which repo is this in"; stubbing
+    # it to None is exactly "this directory is in no repository", while leaving
+    # `_probe_directory` alone so the path fallback still runs (stubbing THAT yields the
+    # UNKNOWN bucket instead, which is a different case another test already covers).
+    # BOTH git probes. `_resolve_cached` asks twice -- once via the binary
+    # (`_git_common_dir`) and once by walking the filesystem for a .git
+    # (`_git_common_dir_from_filesystem`), deliberately: "same question, asked of the
+    # filesystem rather than the binary". Stubbing only the first leaves the walk to
+    # find the enclosing repo, which is exactly what it did.
+    monkeypatch.setattr(pk, "_git_common_dir", lambda _directory: None)
+    monkeypatch.setattr(pk, "_git_common_dir_from_filesystem", lambda _directory: None)
+    # And the third layer. `_resolve_cached` tries git-binary, then git-filesystem, then
+    # a PROJECT MARKER walk (pyproject.toml, CLAUDE.md and friends) before falling back
+    # to `path:<directory>`. With only the git probes stubbed, both temp dirs resolved to
+    # `path:/home/n` -- the marker root -- and were still pooled together.
+    #
+    # Neutralising all three is what "this directory is in no project at all" actually
+    # means, and saying so in one fixture is clearer than three tests each assuming it.
+    monkeypatch.setattr(pk, "_project_marker_root", lambda _directory: None)
+    # AND clear the memo. `resolve_project_key` routes through an lru_cache
+    # (`_resolve_cached`), so a stub installed after something already resolved a path
+    # under this tmp root has no effect at all -- which is ALSO the true source of the
+    # cross-test order dependency here: whichever test resolves a directory first fixes
+    # the answer for every later one. `clear_project_key_cache` exists for exactly this.
+    pk.clear_project_key_cache()
+    yield tmp_path
+    pk.clear_project_key_cache()
+
+
 @pytest.mark.unit
 class TestProjectKeyFallback:
-    def test_non_repositories_are_not_pooled_together(self, tmp_path: Path) -> None:
+    def test_non_repositories_are_not_pooled_together(self, non_repo_dir: Path) -> None:
         """Two non-repository directories are two projects, not one bucket."""
-        a = tmp_path / "plain-a"
-        b = tmp_path / "plain-b"
+        a = non_repo_dir / "plain-a"
+        b = non_repo_dir / "plain-b"
         a.mkdir()
         b.mkdir()
         key_a = resolve_project_key(str(a))
@@ -194,16 +242,16 @@ class TestProjectKeyFallback:
         monkeypatch.setattr(pk, "_probe_directory", lambda _path: None)
         assert resolve_project_key("/anywhere") == PROJECT_KEY_UNKNOWN
 
-    def test_absent_git_degrades_to_the_path_form(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_absent_git_degrades_to_the_path_form(self, non_repo_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """No git binary is a failed probe, not an exception."""
-        repo_like = tmp_path / "repo"
+        repo_like = non_repo_dir / "repo"
         repo_like.mkdir()
         monkeypatch.setattr("mind_mem.project_key.shutil.which", lambda _name: None)
         key = resolve_project_key(str(repo_like))
         assert key.startswith("path:")
 
-    def test_key_length_is_bounded(self, tmp_path: Path) -> None:
-        deep = tmp_path
+    def test_key_length_is_bounded(self, non_repo_dir: Path) -> None:
+        deep = non_repo_dir
         while len(str(deep)) <= PROJECT_KEY_MAX_LEN + 40:
             deep = deep / ("segment" * 4)
         deep.mkdir(parents=True)
