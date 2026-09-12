@@ -4,6 +4,21 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `supersedes` typed lineage edge kind (`block_lineage.ALLOWED_KINDS`),
+  motivated by the bi-temporal validity-window model in Zep/Graphiti
+  (arXiv:2501.13956): a `supersedes(new, old)` edge marks `old` as fully
+  replaced by `new`, distinct from `contradicts` (an unresolved conflict
+  between two blocks that both still claim to be current). Wired into
+  `KIND_DECAY` (1.0 — decays its target at least as fast as
+  `contradicts`) and `EDGE_BOOST_WEIGHT` (0.0 — a superseded block's
+  score is not inflated by the edge that replaces it), so
+  `lineage_staleness.propagate_lineage_staleness` demotes the superseded
+  block and its dependents with no changes to that propagator. Additive
+  and backward-compatible: existing workspaces with no `supersedes`
+  edges are unaffected.
+
 ### Fixed
 
 - Sync `EVIDENCE.md` row 1, the README NIAH badge/provenance note, and
