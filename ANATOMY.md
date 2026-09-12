@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1563 | **Est. tokens:** ~4,574,708
-**Generated:** 2026-09-12 02:52 UTC
+**Files:** 1564 | **Est. tokens:** ~4,577,733
+**Generated:** 2026-09-12 02:59 UTC
 
 ## Token Budget Guide
 
@@ -74,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 242 | ~1,071,786 |
+| `src/mind_mem/` | 242 | ~1,072,692 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,886 |
-| `tests/` | 673 | ~2,010,323 |
+| `tests/` | 674 | ~2,012,442 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -964,7 +964,7 @@
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `_recall_temporal.py` (~2214 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~22639 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~23545 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1990 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompact_cli.py` (~1402 tok, large) — ``mind-mem-recompact`` — cluster, recompact, PROPOSE. Never apply.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
@@ -1565,6 +1565,7 @@
 - `test_oidc_pyjwt_security.py` (~2178 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_okf_bundle_round_trip_fidelity.py` (~1605 tok, huge) — An OKF bundle must survive its own writer, and a dropped concept must be loud.
 - `test_okf_export.py` (~3745 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_ollama_embed_leg_is_reachable.py` (~2119 tok, huge) — The ollama (GPU) embed leg must be tried only when ollama can serve the model.
 - `test_ollama_host_resolver.py` (~2781 tok, huge) — Tests for the shared ollama base-URL resolver (v4.3.1).
 - `test_one_corpus_definition.py` (~9425 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_online_trainer_wiring.py` (~8382 tok, huge) — # Copyright 2026 STARGA, Inc.

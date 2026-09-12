@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import math
@@ -289,6 +290,64 @@ def load_local_index(workspace: str, index_path: str) -> tuple[dict[str, Any] | 
 # ---------------------------------------------------------------------------
 # Vector Backend Implementation
 # ---------------------------------------------------------------------------
+
+
+@functools.lru_cache(maxsize=8)
+def _ollama_served_models(base_url: str) -> frozenset[str]:
+    """Model names ollama currently serves, read from its own ``/api/tags``.
+
+    DERIVED from ollama rather than restated as a list of known embedding-model names:
+    a hand-maintained copy of another service's capability set drifts, and it drifts in
+    the unsafe direction -- a model that works gets reported unsupported.
+
+    Cached, because an OFF path must add no per-item work: probing tags on every batch
+    would replace one wasted round-trip with another.
+    """
+    import urllib.request as _r
+
+    req = _r.Request(base_url.rstrip("/") + "/api/tags", method="GET")
+    with _r.urlopen(req, timeout=3) as resp:  # nosec B310 — loopback/operator-configured base URL
+        payload = json.loads(resp.read().decode("utf-8", "replace"))
+    return frozenset(
+        str(m.get("name") or "").strip()
+        for m in (payload.get("models") or [])
+        if str(m.get("name") or "").strip()
+    )
+
+
+def ollama_model_for(config: Any, default_model: str) -> str:
+    """The model name the ollama leg would request: the explicit key wins.
+
+    ``ollama_embed_model`` names the OLLAMA model; ``model`` names the ONNX /
+    sentence-transformers one. Reading the wrong one refuses an operator who
+    configured the GPU path correctly.
+    """
+    return str((config or {}).get("ollama_embed_model") or default_model or "").strip()
+
+
+def ollama_can_serve(model: str, config: Any) -> bool:
+    """True when ollama serves *model*. QUIET, and False on any doubt.
+
+    Silent by design: a probe on an unavailable path must not log, or a build that
+    simply has no ollama becomes noisier than one without the feature at all. The
+    caller's fall-through logging still reports a real failure once the leg is actually
+    attempted.
+    """
+    if not model:
+        return False
+    try:
+        from .ollama_host import ollama_base_url
+
+        served = _ollama_served_models(ollama_base_url(config))
+    except Exception:  # noqa: BLE001 — unreachable/ill-formed ollama is a quiet "no"
+        return False
+    if model in served:
+        return True
+    # Ollama reports `name:tag` (mxbai-embed-large:latest) while an operator writes the
+    # bare name. Treating those as different models would make the GPU path unreachable
+    # for the most common spelling -- the same bug in a new place.
+    bare = model.split(":", 1)[0]
+    return any(s == model or s.split(":", 1)[0] == bare for s in served)
 
 
 class EmbeddingProvidersExhausted(RuntimeError):
@@ -774,10 +833,25 @@ class VectorBackend(RecallBackend):
                 )
                 return None
 
-        # Try Ollama first (GPU-accelerated, fastest for local)
-        result = _try("ollama", self.embed_ollama)
-        if result is not None:
-            return result
+        # Try Ollama first (GPU-accelerated, fastest for local) -- but ONLY when
+        # ollama actually serves the model being asked for.
+        #
+        # MEASURED 2026-09-11 during the full NIAH repro run: every case logged
+        # "embed_provider_failed_fallback provider=ollama error=HTTP Error 404" while
+        # ollama was healthy and serving mxbai-embed-large the whole time. The 404 was
+        # the MODEL NAME -- `model` defaults to `all-MiniLM-L6-v2`, a
+        # sentence-transformers/fastembed name, and embed_ollama falls back to it when
+        # `ollama_embed_model` is unset -- so the chain's FIRST leg asked ollama for a
+        # model belonging to a different backend, on every call.
+        #
+        # Two costs, the second being the expensive one: a wasted round-trip per batch
+        # until the breaker trips, in every fresh process; and the GPU path UNREACHABLE
+        # BY DEFAULT, so a box with ollama serving a real embedding model silently
+        # embeds on CPU while the log makes a correct configuration look broken.
+        if ollama_can_serve(ollama_model_for(self.config, self.model_name), self.config):
+            result = _try("ollama", self.embed_ollama)
+            if result is not None:
+                return result
 
         # Try llama_cpp if configured -- by EITHER signal.
         #
