@@ -81,7 +81,21 @@ by its full description below.
 
 - [~] **Pluggable redaction layer** — the stated blocker is GONE but completeness is unverified. `compliance/detectors.py` + `compliance/prewrite.py` exist and `screen(...)` IS called on the governed door (`mcp/tools/governance.py:328`, fail-closed on a malformed policy), so "no pre-write detector chain in-tree; the redaction flag is a name with no consumer" is false as written. **Not ticked:** this item is on the retracted-ticks lock from the 2026-09-01 audit (`tests/test_roadmap_ticks_gate.py`), which exists because it previously carried a confidently-worded false tick. Verified 2026-09-06 that the chain is wired; whether it is *pluggable* to the item's full intent is NOT verified, and that is the half the lock is about.
 - [~] **Compliance export pipeline** — the stated blocker is GONE but completeness is unverified. `mm export --policy {full|redacted|metadata-only} --since --format --out` runs (`compliance/export.py`), so "no `mm export` verb and no `--policy` option anywhere in `src/`" is false as written. **Not ticked** — retracted-ticks lock, see above. The surface exists; its behaviour against the full item text is NOT verified.
-- [~] **Provenance-rich blocks** — the stated blocker is GONE but enforcement is unverified. `compliance/provenance_policy.py` carries the `off | recommended | required` policy, so "zero occurrences in `src/`" is false as written. **Not ticked** — retracted-ticks lock, see above. That the policy EXISTS is verified; that it actually makes the fields required is NOT.
+- [~] **Provenance-rich blocks** — **ENFORCEMENT NOW VERIFIED 2026-09-11; still
+  not ticked, because the retracted-ticks lock is the authority on that.**
+  Measured through the real governed door (`mcp.tools.governance.propose_update`):
+  policy unset -> accepted; `recommended` -> accepted; **`required` -> REFUSED
+  with `provenance_required`**; a fully-provenanced write under `required` ->
+  accepted (the control, without which a door that refused everything would
+  look correct); a malformed policy value -> REFUSED, so a config typo cannot
+  silently disable enforcement. Config key is `v4.provenance.{enabled,policy}`.
+  `tests/test_provenance_policy_enforces.py`, 5 tests.
+  So "that it actually makes the fields required is NOT verified" is now false —
+  it is verified. The box stays unticked deliberately: this item carries the
+  2026-09-01 retracted-ticks lock because it previously held a confidently-worded
+  FALSE tick, and clearing that lock is a decision for whoever owns the audit,
+  not something a passing test should silently undo.
+- [~] **Provenance-rich blocks (original wording)** — the stated blocker is GONE but enforcement is unverified. `compliance/provenance_policy.py` carries the `off | recommended | required` policy, so "zero occurrences in `src/`" is false as written. **Not ticked** — retracted-ticks lock, see above. That the policy EXISTS is verified; that it actually makes the fields required is NOT.
 - [x] **Time-bounded and event-bounded recall** — **shipped** (`since` / `until` / `event_id` on `recall(...)`, applied in `_apply_post_filters`)
 - [x] **Vocabulary-bound fields** — **shipped** (`v4/vocabulary.py`, enforced by `v4/block_metadata.validate_block` on the `propose_update` door; opt-in behind both `v4.block_metadata` and `v4.vocabulary`)
 

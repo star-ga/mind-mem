@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1539 | **Est. tokens:** ~4,563,326
-**Generated:** 2026-09-12 01:22 UTC
+**Files:** 1540 | **Est. tokens:** ~4,564,386
+**Generated:** 2026-09-12 01:24 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 659 | ~1,990,091 |
+| `tests/` | 660 | ~1,991,151 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1564,6 +1564,7 @@
 - `test_prefetch_context.py` (~1496 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_protection.py` (~2068 tok, huge) — Tests for mind_mem.protection (v3.3.0+)."""
+- `test_provenance_policy_enforces.py` (~1060 tok, large) — Group E — the provenance policy does not merely EXIST, it refuses (verified).
 - `test_q1616_preimage.py` (~1496 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_quality_gate.py` (~1971 tok, huge) — Tests for the v3.11.0 deterministic block quality gate.
 - `test_quality_gate_recent_window.py` (~2480 tok, huge) — quality_gate rule 6 (``near_duplicate``) must actually execute in the product.
