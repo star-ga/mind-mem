@@ -652,7 +652,27 @@ Group H recompaction).
       extracted under an old schema are distinguishable, comparable, and
       re-extractable; a hard prerequisite before scaling ingestion.
       Aligns with the existing spec-hash-binding (I-5) discipline.
-- [ ] **Hub-node profile synthesis (degree-gated)** — for high-degree
+- [~] **Hub-node profile synthesis (degree-gated)** — **THE DEGREE GATE
+      LANDED 2026-09-11** (`src/mind_mem/hub_nodes.py`, pure, 10 tests).
+      The gate ships before the synthesis because the gate is what gives the
+      step a defensible scope: without it, "synthesise profiles" runs over
+      every node (most have nothing to pool) or over a hand-written list.
+      The threshold is `>= 3` INCLUSIVE, pinned by its own test — an exclusive
+      comparison would drop every 3-neighbour node, which is most of the real
+      hub population, and would look like a working gate while doing so.
+      Degree counts DISTINCT neighbours: ten edges to one neighbour is degree
+      1, not 10, because a repeated mention is not a neighbourhood and pooling
+      it would hand the compressor one fact restated. Direction is ignored
+      (referenced-by-three pools as much as references-three) and self-edges do
+      not count.
+      Malformed edge rows are skipped rather than fatal — a graph row read
+      short must not kill a sweep over thousands of nodes — and the result is
+      sorted so two runs are diffable.
+      **Remaining:** the pooling + compressor call (summary, 3–5 traceable
+      atomic facts, structured time range), the most-specific-claim
+      contradiction rule, and emitting as `propose_update` never a direct
+      write.
+- [ ] **Hub-node synthesis body (original wording)** — for high-degree
       nodes only (degree ≥ 3), pool every mention + graph neighborhood
       into a synthesized profile (summary + 3–5 traceable atomic facts +
       structured time range), "resolve contradictions by preferring the
