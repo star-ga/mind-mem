@@ -70,6 +70,12 @@ class TestNewKindsInVocabulary:
     def test_contradicts_boost_is_zero(self) -> None:
         assert EDGE_BOOST_WEIGHT["contradicts"] == 0.0
 
+    def test_supersedes_boost_is_zero(self) -> None:
+        # A superseded block should not get its retrieval score inflated
+        # by the very edge that says it's been replaced.
+        assert "supersedes" in EDGE_BOOST_WEIGHT
+        assert EDGE_BOOST_WEIGHT["supersedes"] == 0.0
+
 
 # ---------------------------------------------------------------------------
 # Decay ordering for new kinds

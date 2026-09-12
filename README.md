@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/test_functions-11%2C783-brightgreen?style=flat-square" alt="Test functions: 11,783">
+  <img src="https://img.shields.io/badge/test_functions-11%2C819-brightgreen?style=flat-square" alt="Test functions: 11,819">
   <img src="https://img.shields.io/badge/MCP_tools-102-blue?style=flat-square" alt="MCP Tools: 102">
   <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
@@ -78,7 +78,7 @@ Output:
 | **Local-first**         | All data stays on disk. No cloud calls, no telemetry, no phoning home.            |
 | **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
 | **Zero infrastructure** | Core requires only Python 3.10+ stdlib. Postgres, Redis, Docker, and GPU are opt-in extras. |
-| **100% NIAH**           | 250/250 Needle In A Haystack retrieval, every needle/depth/size — a test-suite result; no full-matrix artifact is committed yet ([EVIDENCE.md](EVIDENCE.md) row 1). |
+| **100% NIAH**           | 250/250 Needle In A Haystack retrieval, every needle/depth/size — full-matrix repro package committed, first-party verified; no independent reproduction yet ([EVIDENCE.md](EVIDENCE.md) row 1). |
 
 ---
 
@@ -376,14 +376,15 @@ MIND-Mem's recall engine evaluated on standard long-term memory benchmarks using
 
 **250/250 — 100% retrieval** across all haystack sizes, burial depths, and needle types.
 
-> **Provenance.** This is a **test-suite result**, not an artifact-backed one. No
-> full-matrix repro package has ever been committed to this repository, and
-> earlier revisions of `EVIDENCE.md` cited `benchmarks/repro/niah/` files that did
-> not exist. The harness and its verifier are committed, and a 7-cell subset
-> package spanning every size and depth is committed at
-> `benchmarks/repro/niah-smoke/`, but the 250-cell package that would make this
-> number checkable end-to-end has not been produced. Until it is, read this as
-> "our tests pass 250/250", not as "here is the evidence".
+> **Provenance.** The full-matrix repro package is committed at
+> `benchmarks/repro/niah/` (raw per-case rows, recomputed metrics, and a
+> manifest pinning the commit, config, seeds and hardware — produced on a
+> clean tree, `repo_tracked_files_dirty_at_run: false`). `make repro-verify`
+> recomputes the 250/250 headline from those raw rows rather than trusting
+> the manifest's summary. This is **first-party** evidence: nobody outside
+> STARGA has re-run it yet and reported the same
+> `metrics.determinism.decision_fingerprint` — see [EVIDENCE.md](EVIDENCE.md)
+> row 1 for exactly what "verified" does and does not mean here.
 
 A single fact is planted at a controlled depth within a haystack of semantically diverse filler blocks. The system must retrieve the needle in its top-5 results using only a natural-language query.
 
@@ -395,7 +396,7 @@ A single fact is planted at a controlled depth within a haystack of semantically
 | 250 blocks | 0/25/50/75/100% | 10 | 50/50 | 100% |
 | 500 blocks | 0/25/50/75/100% | 10 | 50/50 | 100% |
 
-**Config:** Hybrid BM25 + BAAI/bge-large-en-v1.5 + RRF (k=60) + sqlite-vec. Full details: [benchmarks/NIAH.md](benchmarks/NIAH.md)
+**Config:** Hybrid BM25 + all-MiniLM-L6-v2 + RRF (k=60) + sqlite-vec. Full details: [benchmarks/NIAH.md](benchmarks/NIAH.md)
 
 ### LoCoMo LLM-as-Judge
 

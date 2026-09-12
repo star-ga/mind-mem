@@ -46,6 +46,11 @@ _log = logging.getLogger("mind_mem.llm_extractor")
 #: two stay equal by reading the ledger a real call writes.
 _USAGE_OPERATION = "extraction"
 
+#: Bytes read from a ``/v1/models`` probe response. A real model list is
+#: small; the cap keeps a misconfigured endpoint from streaming into the
+#: availability check.
+_PROBE_READ_LIMIT = 64 * 1024
+
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
@@ -214,9 +219,19 @@ def _openai_compatible_available(base_url: str) -> bool:
     try:
         req = urllib.request.Request(f"{base_url}/models", method="GET")
         with urllib.request.urlopen(req, timeout=2) as resp:  # nosec B310 — scheme validated above to http/https only
-            return bool(resp.status == 200)
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError):
+            if resp.status != 200:
+                return False
+            # A bare 200 is not proof of an OpenAI-compatible server. The
+            # default vLLM port (8000) is a popular port generally, and any
+            # unrelated web app there answers /v1/models with 200 and HTML --
+            # which used to select this backend under `backend: "auto"` and
+            # POST prompts carrying memory content to whatever was listening.
+            # Require the documented shape instead: JSON with a "data" list.
+            body = resp.read(_PROBE_READ_LIMIT)
+        payload = json.loads(body)
+    except (OSError, ValueError, urllib.error.URLError, urllib.error.HTTPError):
         return False
+    return isinstance(payload, dict) and isinstance(payload.get("data"), list)
 
 
 def _transformers_available() -> bool:
@@ -439,7 +454,9 @@ def _transformers_call(prompt: str, model: str) -> _ModelResponse:
     the char estimator.
     """
     import torch  # type: ignore[import-not-found]
-    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
+
+    from mind_mem.causal_lm_loader import load_causal_lm
 
     cache = getattr(_transformers_call, "_cache", None)
     if cache is None:
@@ -450,8 +467,11 @@ def _transformers_call(prompt: str, model: str) -> _ModelResponse:
         tok = AutoTokenizer.from_pretrained(model, trust_remote_code=True)  # nosec B615 — model path is from operator-controlled mind-mem.json config, not user input; revision pinning is the operator's responsibility
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token
-        m = AutoModelForCausalLM.from_pretrained(  # nosec B615 — same justification as above
+        m = load_causal_lm(  # nosec B615 — same justification as above
             model,
+            auto_config=AutoConfig,
+            auto_model=AutoModelForCausalLM,
+            config_kwargs={"trust_remote_code": True},
             dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,

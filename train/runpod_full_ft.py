@@ -36,10 +36,20 @@ from pathlib import Path
 import torch
 from datasets import load_dataset
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer,
 )
 from trl import SFTConfig, SFTTrainer
+
+try:
+    from train._causal_lm_import import load_causal_lm
+except ModuleNotFoundError as exc:
+    if exc.name not in {"train", "train._causal_lm_import"}:
+        raise
+    # RunPod receives this script and the helper beside it, without an
+    # installed mind-mem checkout or package on PYTHONPATH.
+    from _causal_lm_import import load_causal_lm
 
 BASE_MODEL = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
 TRAIN_ROOT = Path(os.environ.get("MM_TRAIN_ROOT", "/workspace/train-output"))
@@ -69,8 +79,11 @@ def main() -> None:
         tokenizer.pad_token = tokenizer.eos_token
 
     # Full bf16 load — no quantization. H100/H200 have plenty of room.
-    model = AutoModelForCausalLM.from_pretrained(
+    model = load_causal_lm(
         BASE_MODEL,
+        auto_config=AutoConfig,
+        auto_model=AutoModelForCausalLM,
+        config_kwargs={"trust_remote_code": True},
         torch_dtype=torch.bfloat16,
         device_map="auto",
         trust_remote_code=True,

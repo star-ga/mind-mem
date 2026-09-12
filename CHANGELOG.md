@@ -4,8 +4,56 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- Document the recall-path prompt-injection surface identified in
+  recent long-term-memory security research: text returned by
+  `recall`, `hybrid_search`, `find_similar` and `prefetch` is corpus data
+  approved through `propose_update` -> `approve_apply`, not an instruction
+  for the calling agent. Added a docstring note to each of those tools, a
+  new SECURITY.md threat-model row, and a "Prompt Injection via Recalled
+  Content" subsection explaining the mitigation (governed-write narrows,
+  does not eliminate, the surface) and its limit (no content filtering or
+  instruction-detection is performed on approved blocks). Docs-only; no
+  behavior change.
+
+### Roadmap
+
+- Recorded content-category decay policy (per recent research on
+  memory decay and consistency) as a genuinely open item in
+  `ROADMAP.md` / `EVIDENCE.md` rather than guessing at a taxonomy and
+  default TTLs: `memory_tiers.py`'s existing TTL/LRU decay is
+  recency-based, not content-category-based, and picking wrong defaults
+  for the latter risks silently mis-flagging real users' data.
+
+### Added
+
+- `supersedes` typed lineage edge kind (`block_lineage.ALLOWED_KINDS`),
+  motivated by the bi-temporal validity-window model described in recent research
+  (bi-temporal supersession): a `supersedes(new, old)` edge marks `old` as fully
+  replaced by `new`, distinct from `contradicts` (an unresolved conflict
+  between two blocks that both still claim to be current). Wired into
+  `KIND_DECAY` (1.0 — decays its target at least as fast as
+  `contradicts`) and `EDGE_BOOST_WEIGHT` (0.0 — a superseded block's
+  score is not inflated by the edge that replaces it), so
+  `lineage_staleness.propagate_lineage_staleness` demotes the superseded
+  block and its dependents with no changes to that propagator. Additive
+  and backward-compatible: existing workspaces with no `supersedes`
+  edges are unaffected.
+
 ### Fixed
 
+- Sync `EVIDENCE.md` row 1, the README NIAH badge/provenance note, and
+  `docs/integrations.md` with reality: `benchmarks/repro/niah/` has carried
+  the committed, first-party-verified 250/250 package since b36ff3a
+  (2026-09-05), but the surrounding prose still said "none committed" /
+  "no full-matrix artifact is committed yet". Also corrected the NIAH
+  embedder in `README.md`, `benchmarks/NIAH.md` and `docs/integrations.md`
+  from `BAAI/bge-large-en-v1.5` to `all-MiniLM-L6-v2` — the model the
+  committed harness (`tests/test_niah.py`) actually uses ("lighter model
+  to avoid OOM on large matrices"); the docs had never been updated after
+  that swap. No code change; independent reproduction of row 1 is still
+  outstanding.
 - Isolate recall cache entries by workspace, schema, request filters and a
   versioned configuration fingerprint, including workspaces with empty governed
   anchors. Keep provider-degradation evidence through filtering and cache replay.

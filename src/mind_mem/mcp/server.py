@@ -329,7 +329,13 @@ def main() -> None:
 
             mcp.auth = StaticTokenVerifier(tokens=auth_tokens)
             _log.info("mcp_auth_enforced", mode="static_token", token_count=len(auth_tokens))
-        mcp.run(transport="sse", host=args.host, port=args.port)
+        # ``--transport http`` must actually serve Streamable HTTP. It used
+        # to hand FastMCP the deprecated ``sse`` transport, which serves a
+        # GET-only /sse stream: every client that speaks only Streamable
+        # HTTP (Codex's ``--url``, among others) got 405 on POST /sse and
+        # 404 on /mcp, so a remote mind-mem was reachable from Claude Code
+        # and from nothing else.
+        mcp.run(transport="http", host=args.host, port=args.port)
     else:
         mcp.run()
 

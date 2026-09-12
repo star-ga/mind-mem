@@ -2,8 +2,8 @@
 
 Exposes the :mod:`mind_mem.block_lineage` write+read primitives as MCP
 tools so AI clients can record explicit semantic lineage between
-blocks (cites / implements / refines / contradicts) and traverse the
-result with a bounded BFS.
+blocks (cites / implements / refines / contradicts / supersedes) and
+traverse the result with a bounded BFS.
 
 Two tools:
 
@@ -40,7 +40,7 @@ def block_lineage(
         max_depth: Maximum hop distance, clamped to ``[1, 3]``.
         kind_filter: Optional restriction to a single edge kind
             (``cites`` / ``implements`` / ``refines`` / ``contradicts``
-            / ``cooccurrence``); ``None`` returns every kind.
+            / ``cooccurrence`` / ``supersedes``); ``None`` returns every kind.
         node_cap: Total-node cap; reaching this sets ``truncated``
             in the response.
 

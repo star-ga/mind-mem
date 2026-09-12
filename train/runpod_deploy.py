@@ -340,6 +340,16 @@ def main() -> None:
         _scp_to(ip, port, str(CORPUS), "/workspace/train-output/corpus.jsonl")
         _train_dir = Path(__file__).resolve().parent
         _scp_to(ip, port, str(_train_dir / "runpod_full_ft.py"), "/workspace/runpod_full_ft.py")
+        # The pod runs a bare script bundle rather than an installed
+        # mind-mem checkout.  Ship the canonical loader and its import shim
+        # explicitly so composite Qwen3.5 configs are normalized there too.
+        _scp_to(ip, port, str(_train_dir / "_causal_lm_import.py"), "/workspace/_causal_lm_import.py")
+        _scp_to(
+            ip,
+            port,
+            str(_train_dir.parent / "src" / "mind_mem" / "causal_lm_loader.py"),
+            "/workspace/mind_mem_causal_lm_loader.py",
+        )
         _scp_to(ip, port, str(_train_dir / "upload_to_hf.py"), "/workspace/upload_to_hf.py")
         _scp_to(ip, port, str(_train_dir / "build_model_card.py"), "/workspace/build_model_card.py")
 

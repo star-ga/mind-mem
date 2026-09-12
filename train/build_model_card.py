@@ -300,7 +300,12 @@ def _load_eval_scores() -> dict[str, str]:
 def _load_train_metrics() -> dict[str, str]:
     """Pull the final loss / mean train loss / token-accuracy from the trainer state."""
     state_path = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")) / "adapter" / "trainer_state.json"
-    placeholders = {"final_loss": "0.086", "train_loss_mean": "0.36", "token_accuracy": "97.8 %"}
+    # Missing run evidence must stay missing on the generated model card.
+    placeholders = {
+        "final_loss": "_not available_",
+        "train_loss_mean": "_not available_",
+        "token_accuracy": "_not available_",
+    }
     if not state_path.is_file():
         return placeholders
     try:

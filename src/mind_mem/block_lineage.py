@@ -94,10 +94,20 @@ __all__ = [
 #: the block store.
 EDGE_ID_PREFIX = "LE-"
 
-ALLOWED_KINDS: frozenset[str] = frozenset({"cites", "implements", "refines", "contradicts", "cooccurrence", "supports", "derived_from"})
+ALLOWED_KINDS: frozenset[str] = frozenset(
+    {"cites", "implements", "refines", "contradicts", "cooccurrence", "supports", "derived_from", "supersedes"}
+)
 
+#: ``supersedes(new, old)``: ``new`` fully replaces ``old`` as of the edge's
+#: write time — the bi-temporal case (a "validity window"),
+#: as distinct from ``contradicts``, which flags an unresolved conflict
+#: between two blocks that both still claim to be current. ``old`` should be
+#: read as no longer live; :mod:`mind_mem.lineage_staleness` decays it (and
+#: its dependents) at the same 1.0 seed weight as ``contradicts`` — a
+#: superseded fact is not "somewhat less reliable", it is replaced.
 KIND_DECAY: dict[str, float] = {
     "contradicts": 1.0,
+    "supersedes": 1.0,
     "cites": 0.8,
     "supports": 0.7,
     "implements": 0.6,
@@ -539,8 +549,9 @@ def lineage_adjacency(
 
 #: Per-kind boost multipliers applied inside :func:`edge_aware_boost`.
 #: ``supports`` and ``derived_from`` receive positive (but modest) boosts;
-#: ``contradicts`` receives zero so contradiction edges do not inflate
-#: the score of the target block.
+#: ``contradicts`` and ``supersedes`` receive zero so a target that is
+#: disputed — or fully replaced — does not get its retrieval score
+#: inflated by the edge pointing at it.
 EDGE_BOOST_WEIGHT: dict[str, float] = {
     "supports": 1.0,
     "cites": 0.8,
@@ -549,6 +560,7 @@ EDGE_BOOST_WEIGHT: dict[str, float] = {
     "refines": 0.4,
     "cooccurrence": 0.2,
     "contradicts": 0.0,
+    "supersedes": 0.0,
 }
 
 

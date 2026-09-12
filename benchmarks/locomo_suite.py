@@ -13,8 +13,7 @@ pluggable adapter contract, the **same** dual-protocol scorer
 *number* produced by exactly one measured code path, next to the BM25 honesty
 floor, not a vibe.
 
-LoCoMo (Maharana et al., *Evaluating Very Long-Term Conversational Memory of
-LLM Agents*) is a long-term, multi-session, two-speaker conversational
+LoCoMo is a long-term, multi-session, two-speaker conversational
 dataset. Its JSON is a list of **samples**; each sample carries a
 ``conversation`` (``session_1``, ``session_2``, … turn lists) and a ``qa``
 list of questions whose ``evidence`` cites dialogue ids of the form

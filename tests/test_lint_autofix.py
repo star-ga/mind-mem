@@ -354,3 +354,163 @@ class TestApproveApplyRoundTrip(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+# One defect, everything else schema-complete: isolates a repair from the
+# precondition gate so the apply path itself can be measured.
+DECISIONS_STALE_ONLY = """
+[D-20260201-001]
+Date: 2026-07-15
+Status: active
+Scope: global
+Statement: Recall ranks with BM25F before any vector leg.
+Rationale: Deterministic core.
+Supersedes: none
+Tags: recall
+Sources:
+- decisions/DECISIONS.md
+"""
+
+DECISIONS_DUPLICATE_ONLY = """
+[D-20260301-001]
+Date: 2026-03-01
+Status: active
+Scope: global
+Statement: Proposals are staged before they are applied.
+Rationale: Human review is the gate.
+Supersedes: none
+Tags: governance
+Sources:
+- decisions/DECISIONS.md
+
+[D-20260301-002]
+Date: 2026-03-01
+Status: active
+Scope: global
+Statement: Proposals are staged before they are applied.
+Rationale: Restated during onboarding.
+Supersedes: none
+Tags: governance
+Sources:
+- decisions/DECISIONS.md
+"""
+
+
+def mind_mem_file() -> str:
+    """Path to the installed/checked-out ``mind_mem`` package file."""
+    import mind_mem
+
+    return mind_mem.__file__
+
+
+class TestLintRepairsReachTheCorpus(unittest.TestCase):
+    """Staging a repair is half the path; it has to be appliable too.
+
+    Every test above stops at the staged proposal, which is why the
+    deadlock documented here survived: the surface was never exercised
+    past ``lint_autofix``.
+    """
+
+    def _stage_and_apply(self, decisions: str, rule: str) -> tuple[bool, str]:
+        from mind_mem.apply_engine import apply_proposal
+
+        ws = _make_ws(decisions, mode="governed")
+        finding = _by_rule(ws)[rule]
+        proposal_id = lint_autofix(ws, finding.finding_id, now=FIXED_NOW)
+        # ``check_preconditions`` runs the validator in a subprocess and
+        # points PYTHONPATH at the package's grandparent, which is the repo
+        # root in a source checkout -- where ``mind_mem`` is not importable
+        # because it lives under ``src/``. Without this the gate fails on
+        # ModuleNotFoundError and every assertion here would be measuring
+        # the harness instead of the gate.
+        src_dir = os.path.dirname(os.path.dirname(os.path.abspath(mind_mem_file())))
+        prior = os.environ.get("PYTHONPATH", "")
+        os.environ["PYTHONPATH"] = src_dir if not prior else src_dir + os.pathsep + prior
+        os.environ["MIND_MEM_SCOPE"] = "admin"
+        try:
+            return apply_proposal(ws, proposal_id)
+        finally:
+            os.environ.pop("MIND_MEM_SCOPE", None)
+            if prior:
+                os.environ["PYTHONPATH"] = prior
+            else:
+                os.environ.pop("PYTHONPATH", None)
+
+    def test_a_stale_date_repair_applies_to_an_otherwise_valid_corpus(self):
+        ok, message = self._stage_and_apply(DECISIONS_STALE_ONLY, RULE_STALE_DATE)
+        self.assertTrue(ok, message)
+
+    def test_a_duplicate_block_repair_applies_to_an_otherwise_valid_corpus(self):
+        ok, message = self._stage_and_apply(DECISIONS_DUPLICATE_ONLY, RULE_DUPLICATE_BLOCK)
+        self.assertTrue(ok, message)
+
+    def test_a_missing_metadata_repair_is_REFUSED_by_the_precondition_gate(self):
+        """The rule whose repair the apply gate can never accept — asserted, not xfailed.
+
+        INVERTED FROM `@unittest.expectedFailure` DELIBERATELY. The knowledge below is
+        real and measured, but an unconditional xfail runs on no matrix row: the
+        assertion never executes, the summary counts it beside the passes, and
+        `test_no_vacuous_skips.py::test_no_unconditional_skip_or_xfail` fails the build
+        for exactly that reason. So this asserts the CURRENT behaviour — the apply is
+        REFUSED — which makes the test execute and turns it into a tripwire: the day the
+        deadlock below is fixed this test goes red and someone updates it on purpose,
+        rather than a silent xfail flipping to a silent pass.
+
+        ``missing_metadata`` fires on an empty schema-required field, and
+        ``_FIELD_DEFAULTS`` offers a repair for exactly two of them --
+        ``Scope`` and ``Supersedes`` -- both in
+        ``DECISION_REQUIRED_FIELDS``. So the defect the repair targets is
+        precisely what ``validate_py`` fails the corpus for, while
+        ``apply_proposal`` runs ``check_preconditions`` (validate +
+        intel_scan) BEFORE applying and refuses on any issue. Measured on
+        a real workspace:
+
+            FAIL approve: Precondition check failed: validate: FAIL
+            (37 checks | 36 passed | 1 issues) -- "Decisions: Scope:
+            missing in 1/2 blocks"
+        """
+        ok, message = self._stage_and_apply(DECISIONS, RULE_MISSING_METADATA)
+        self.assertFalse(
+            ok,
+            "the missing_metadata repair was ACCEPTED. That is the deadlock described "
+            "above being fixed, which is good news and makes this test obsolete -- "
+            "delete it and tick the roadmap item, do not weaken it. Message was: "
+            f"{message}",
+        )
+        # AND for the RIGHT REASON. `assertFalse(ok)` alone passes on any refusal at all --
+        # an authorization failure, a missing workspace, a harness error -- so it would keep
+        # passing while the deadlock was fixed and something unrelated broke instead.
+        # Verified by mutation: substituting `(False, "Unrelated authorization failure")`
+        # satisfied the bare assertion.
+        self.assertIn(
+            "Precondition check failed",
+            message,
+            "the repair was refused, but not by the precondition gate this test is about -- "
+            f"so the refusal says nothing about the deadlock. Message was: {message}",
+        )
+
+    def test_an_unfixable_defect_DOES_block_an_unrelated_repair(self):
+        """A validator-failing defect anywhere blocks every other repair.
+
+        The gate is corpus-wide, not proposal-scoped, so the empty
+        ``Scope`` on ``D-20260103-003`` in the shared fixture also blocks
+        the unrelated ``stale_date`` repair on ``D-20260101-001`` -- which
+        applies cleanly when it is the only defect present (see above).
+        A corpus that has lint findings at all is the normal case for a
+        repair, so this is the broader half of the deadlock.
+        """
+        ok, message = self._stage_and_apply(DECISIONS, RULE_STALE_DATE)
+        self.assertFalse(
+            ok,
+            "an unrelated repair applied despite a validator-failing defect elsewhere in "
+            "the corpus, so the gate became proposal-scoped rather than corpus-wide -- "
+            "the fix this test waits for. Delete this test and tick the roadmap item "
+            f"rather than weakening it. Message was: {message}",
+        )
+        # Same reasoning as above: pin the CAUSE, not merely the refusal.
+        self.assertIn(
+            "Precondition check failed",
+            message,
+            "refused, but not by the corpus-wide precondition gate this test is about -- "
+            f"the refusal is therefore not evidence about it. Message was: {message}",
+        )

@@ -19,7 +19,14 @@ import sys
 from pathlib import Path
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+try:
+    from train._causal_lm_import import load_causal_lm
+except ModuleNotFoundError as exc:
+    if exc.name not in {"train", "train._causal_lm_import"}:
+        raise
+    from _causal_lm_import import load_causal_lm
 
 BASE = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
 _BASE_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
@@ -501,8 +508,11 @@ def _load_model():
     if use_fullft:
         print(f"loading full-FT weights from {fullft_dir}")
         tokenizer = AutoTokenizer.from_pretrained(str(fullft_dir), trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(
+        model = load_causal_lm(
             str(fullft_dir),
+            auto_config=AutoConfig,
+            auto_model=AutoModelForCausalLM,
+            config_kwargs={"trust_remote_code": True},
             quantization_config=bnb,
             device_map="auto",
             torch_dtype=torch.bfloat16,
@@ -514,8 +524,11 @@ def _load_model():
     if not ADAPTER.is_dir():
         sys.exit(f"no weights found — checked full-FT dir {fullft_dir} and adapter {ADAPTER}. Train first.")
     tokenizer = AutoTokenizer.from_pretrained(BASE, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
+    model = load_causal_lm(
         BASE,
+        auto_config=AutoConfig,
+        auto_model=AutoModelForCausalLM,
+        config_kwargs={"trust_remote_code": True},
         quantization_config=bnb,
         device_map="auto",
         torch_dtype=torch.bfloat16,

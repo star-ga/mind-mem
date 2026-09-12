@@ -36,7 +36,7 @@ export default function FactList({ facts }: Props) {
             <span>
               source: <code>{f.source_id}</code>
             </span>
-            <span>confidence: {(f.confidence * 100).toFixed(0)}%</span>
+            <span>score: {f.score.toFixed(3)}</span>
           </div>
         </li>
       ))}

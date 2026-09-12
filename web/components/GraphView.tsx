@@ -63,7 +63,9 @@ export default function GraphView({ bundle, width = 960, height = 600, onSelect 
 
     const nodes: SimNode[] = bundle.source_blocks.map((b) => ({ ...b }));
     const byId = new Map(nodes.map((n) => [n._id, n]));
-    const links: SimLink[] = bundle.relations
+    // `relations` is null when the source did not compute them — render nothing rather
+    // than treating "not computed" as "no edges".
+    const links: SimLink[] = (bundle.relations ?? [])
       .filter((r) => byId.has(r.subject) && byId.has(r.object))
       .map((r) => ({ source: r.subject, target: r.object, predicate: r.predicate }));
 

@@ -64,7 +64,7 @@ Continuation  ::= Space Space { AnyChar }           (* appends to previous Value
 
 A `Resource` value SHOULD be a dereferenceable or canonical URI
 (`https://github.com/star-ga/mind`, `git+sha:abc123`, `file:///…`,
-`urn:arxiv:2401.00001`, `urn:person:polo`). Multiple blocks MAY share a
+`urn:isbn:9780262033848`, `urn:team:platform`). Multiple blocks MAY share a
 `Resource` (they describe the same subject from different angles).
 
 ### OKF Conformance (interop) — v0.2

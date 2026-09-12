@@ -46,6 +46,32 @@ by its full description below.
   (they are measurements of the *current* weights), and re-verify `mm install-model`.
   Requires rented GPU — a 4B full fine-tune does not fit local hardware.
 
+### Governance — content-category decay policy (1 item, not started — needs a maintainer decision)
+
+- [ ] **Category-based (not just recency-based) TTL for governed facts.**
+  `memory_tiers.py` already decays/evicts blocks by *access recency*
+  (`TierPolicy.ttl_hours`, LRU-style demotion between `MemoryTier` levels) —
+  a block nobody has touched in a while ages out regardless of what kind of
+  fact it is. What's still missing, per the governance frameworks in
+  recent research treating memory decay / conflict resolution /
+  privacy as explicit *policies*, and related work on consistency
+  verification + temporal decay + access control as three separate
+  safeguards), is decay keyed to *what kind of fact it is*, independent of
+  how often it gets recalled: an infra/status-type fact (e.g. "service X is
+  healthy") should go stale on a short fixed clock even if it keeps getting
+  recalled and re-confirming itself, a decision/architecture-type fact
+  should not decay just because nobody looked at it for a month, and a
+  credential-type block should never auto-decay but must support an
+  explicit revoke. `v4/block_kinds.py` (`BlockKind`) already classifies
+  blocks by kind and could carry the category; `lineage_staleness.py`'s
+  generic `KIND_DECAY`-driven propagator (see the new `supersedes` edge,
+  this release) is the natural place to consume a per-category TTL once one
+  exists. **Not implemented this pass**: the category taxonomy and its
+  default TTLs are a product decision (wrong defaults silently
+  over-flag or under-flag real users' facts as stale), not a mechanical
+  wiring task, so it needs the maintainer's call rather than an agent's
+  guess. See `EVIDENCE.md` for the same caveat recorded against this item.
+
 ### Group D — Network hardening (3 items; +1 shipped in v4.0.14)
 
 - *(tracked below — see “TLS 1.3 minimum + cert pinning” in the status section; listed twice, counted once)*

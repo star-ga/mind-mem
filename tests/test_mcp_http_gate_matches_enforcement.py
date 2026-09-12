@@ -233,3 +233,34 @@ class TestMainNeverBindsUnauthenticated(_EnvIsolated):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_http_transport_serves_streamable_http_not_deprecated_sse(monkeypatch) -> None:
+    """``--transport http`` must hand FastMCP the Streamable HTTP transport.
+
+    It used to pass ``transport="sse"``, so the listener served a GET-only
+    /sse stream: POST /sse answered 405 and /mcp answered 404. Clients that
+    speak only Streamable HTTP -- Codex's ``--url`` among them -- could not
+    connect at all, while Claude Code worked because it still supports the
+    deprecated SSE transport. The advertised choice and the served protocol
+    have to be the same thing.
+    """
+    import sys
+
+    from mind_mem.mcp import server as mcp_server
+
+    seen: dict[str, object] = {}
+
+    def _capture(transport=None, **kwargs):
+        seen["transport"] = transport
+        seen.update(kwargs)
+
+    monkeypatch.setattr(mcp_server.mcp, "run", _capture)
+    monkeypatch.setenv("MIND_MEM_TOKEN", "t0ken-for-the-verifier")
+    monkeypatch.setattr(sys, "argv", ["mind-mem-mcp", "--transport", "http", "--port", "18999"])
+
+    mcp_server.main()
+
+    assert seen["transport"] == "http", seen
+    assert seen["transport"] != "sse"
+    assert seen.get("port") == 18999
