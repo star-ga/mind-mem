@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1581 | **Est. tokens:** ~4,616,775
-**Generated:** 2026-09-12 07:58 UTC
+**Files:** 1581 | **Est. tokens:** ~4,617,293
+**Generated:** 2026-09-12 11:13 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~53,195 |
+| `./` | 37 | ~53,713 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -135,7 +135,7 @@
 - `Makefile` (~1097 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
-- `PERF-PLAN.md` (~2758 tok, huge) — Performance plan of record — 2026-09-11
+- `PERF-PLAN.md` (~3276 tok, huge) — Performance plan of record — 2026-09-11
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~3746 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12

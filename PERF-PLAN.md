@@ -164,12 +164,54 @@ does not call `parse_file` or `_load_corpus` at all, so the 7.9ms attributed to 
 belongs to some other layer — the MCP wrapper or index load. **Locate it before optimising it.**
 
 **What a safe version would have to look like.** Any scheme that avoids the read is using a
-weaker key than the content, so it cannot be the default. The honest directions are:
-reduce the NUMBER of reads per operation (53 `parse_file` call sites exist across the package —
-if one operation reaches several, that is a real and correctness-free win); or treat the 7.9ms as
-the price of the guarantee and take the remaining ~27ms elsewhere. A stat gate is only admissible
-as an explicit opt-in with the weaker guarantee named at the call site, and an opt-in that is off
-by default buys nothing by default.
+weaker key than the content, so it cannot be the default. Two directions were open; **the first is
+now closed by measurement.**
+
+*Measured 2026-09-12* — instrumented `builtins.open` across one real `recall()` on the live
+workspace (2,772 blocks):
+
+```
+recall: 637.5ms (cold — includes import + postgres/mxbai vector backend init)
+distinct .md files opened: 19    total opens: 19
+files opened MORE THAN ONCE: 0
+```
+
+**Zero re-reads.** Each corpus file is opened exactly once per recall, so "reduce the NUMBER of
+reads per operation" is not available — there is no redundancy to remove. That was the only
+correctness-free win on the table, and it does not exist.
+
+What remains is therefore the honest position: **the read is the price of the content-hash
+guarantee, and the latency has to come from somewhere else.** A stat gate is admissible only as an
+explicit opt-in with the weaker guarantee named at the call site, and an opt-in that is off by
+default buys nothing by default.
+
+Note also that the 637ms cold figure is not comparable to the 35ms this plan quotes — it includes
+interpreter import and vector-backend init. Any future number here must say which it is.
+
+### A wording conflict worth resolving before it misleads someone (same profiling pass)
+
+Every recall logs, twice:
+
+```
+warning unknown_recall_backend {"backend": "hybrid", "known": ["scan","sqlite","tfidf","vector"],
+                                "fallback": "bm25_scan"}
+```
+
+…and then the attestation for the same call records `legs_ran: "bm25,hybrid,vector"`.
+
+Both are accurate in their own scope and they read as contradictory. `_load_backend` genuinely has
+no case for `"hybrid"` and falls through to the Markdown scan — and that warning is DELIBERATE:
+its comment records that a workspace configured `"backend": "hybrid"` was previously "served the
+scan with nothing said". Meanwhile the hybrid layer above the loader runs BM25 and vector and
+fuses them, which is why `hybrid` appears in `legs_ran`.
+
+So a reader of the log concludes hybrid did not run; a reader of the attestation concludes it did.
+**Do not "fix" this by adding `"hybrid"` to `_KNOWN_RECALL_BACKENDS`** — that silences a warning
+someone added on purpose and restores exactly the silence its comment complains about. The fix is
+to the MESSAGE: say that this loader has no case for the value and that a higher layer may still
+serve it, so "fallback" describes the loader rather than the recall. Left unfixed here because
+changing a deliberate warning deserves its own slice rather than a drive-by edit during a
+profiling pass.
 
 Not guesses. `cProfile` over a realistic recall on the 2,726-block live corpus, ranked by
 cumulative time. Candidates already visible from today's reading, to be confirmed or
