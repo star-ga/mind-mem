@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1538 | **Est. tokens:** ~4,561,918
-**Generated:** 2026-09-11 23:26 UTC
+**Files:** 1539 | **Est. tokens:** ~4,563,326
+**Generated:** 2026-09-12 01:22 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 658 | ~1,988,683 |
+| `tests/` | 659 | ~1,990,091 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1588,6 +1588,7 @@
 - `test_recall_attestation_served_backend.py` (~3590 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_attestation_unrequested_leg.py` (~789 tok, large) — An unrequested vector leg must not be attested as degraded.
 - `test_recall_attestation_v2.py` (~8107 tok, huge) — Acceptance gate for the ``RECALL_ATTEST_v2`` preimage.
+- `test_recall_budget_utility_curve.py` (~1408 tok, large) — L1 — recall utility per context token, measured on our own corpus.
 - `test_recall_cache_chain_head.py` (~2442 tok, huge) — The recall cache belongs to a corpus state, not to a clock.
 - `test_recall_cache.py` (~1916 tok, huge) — Tests for v3.2.0 distributed recall cache (LRU + Redis)."""
 - `test_recall_cli_workspace.py` (~2346 tok, huge) — # Copyright 2026 STARGA, Inc.

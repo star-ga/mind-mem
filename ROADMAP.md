@@ -3539,7 +3539,33 @@ budget exists — `pack_recall_budget(query, max_tokens=2000, limit=20)`
 reporting nothing about yield. That asymmetry is the gap: the project can say how
 much context it consumed and cannot say what the consumption was worth.
 
-- [ ] **L1 — Recall utility per context token.** Define and publish a utility-against-
+- [~] **L1 — Recall utility per context token.** **MEASURED 2026-09-11 — a
+  NEGATIVE finding, which L1 states is a valid outcome.** Curve taken through the
+  real `pack_recall_budget` tool, 6 relevant blocks among 54 decoys:
+
+  | max_tokens | included | relevant | spent | relevant/1k |
+  |---|---|---|---|---|
+  | 100 | 3 | 3 | 66 | 45.45 |
+  | 250 | 6 | **6** | **132** | 45.45 |
+  | 500 | 6 | 6 | 132 | 45.45 |
+  | **2000** (default) | 6 | 6 | **132** | 45.45 |
+  | 8000 | 6 | 6 | 132 | 45.45 |
+
+  **The knee is at ~250 tokens; the shipped default of 2000 is ~8x past it.**
+  Every relevant block is delivered by 250 and the remaining 1,750 buy nothing on
+  this query shape. Utility per token is FLAT rather than declining above the
+  knee, because the packer stops when the ranked list is exhausted — it does not
+  pad to the budget. So the default wastes *allowance*, not context: a caller
+  sizing a window around 2000 reserves 8x what the packer will spend.
+  **What this does NOT license: lowering the default.** One query shape on a
+  synthetic corpus; a query with a genuinely larger relevant set would need the
+  headroom. The honest next step is the same measurement against real traffic,
+  which needs the ground-truth set in `docs/design/eval-set-ground-truth.md`.
+  `tests/test_recall_budget_utility_curve.py` pins the curve — including a
+  control that a 100-token budget DOES bind, since "more budget adds nothing"
+  and "the budget is ignored entirely" otherwise look identical, and one that
+  the packer never pads.
+- [ ] **L1 (original wording) — Recall utility per context token.** Define and publish a utility-against-
   consumption measure for `pack_recall_budget` and the recall path generally:
   decision-relevant content delivered per token of context spent. Requires a
   ground-truth set on our own corpus, not a borrowed benchmark — now specified in
