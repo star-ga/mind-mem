@@ -1436,6 +1436,27 @@ def _handle_fed_write(workspace: str, body: dict[str, Any], *, actor: str) -> tu
         "fed_write_requested",
         extra={"actor": _safe_log(actor), "block_id": _safe_log(block_id), "claimed_agent_id": _safe_log(agent_id)},
     )
+    # PER-PEER IDENTITY, stage (a). Until now this door LOGGED a peer writing under
+    # someone else's agent_id -- the docstring above says so -- and allowed it, so a
+    # leaked token carried write authority over every agent in the federation. The
+    # binding table refuses the mismatch.
+    #
+    # Placed AFTER validation and BEFORE any write, so a refused claim mutates nothing;
+    # and the refusal reason is token-free by construction (peer_identity never holds a
+    # raw token), because a 403 body is read by whoever can read the log.
+    from mind_mem.peer_identity import check_agent_claim
+
+    _claim = check_agent_claim(actor, agent_id)
+    if not _claim.allowed:
+        _log.warning(
+            "fed_write_identity_refused",
+            extra={
+                "actor": _safe_log(actor),
+                "claimed_agent_id": _safe_log(agent_id),
+                "verdict": _claim.verdict.value,
+            },
+        )
+        return (403, {"ok": False, "error": _claim.reason, "verdict": _claim.verdict.value})
     try:
         new_version = fed.record_agent_write(workspace, block_id, agent_id)
         report = fed.detect_conflict(workspace, block_id)
@@ -1445,6 +1466,10 @@ def _handle_fed_write(workspace: str, body: dict[str, Any], *, actor: str) -> tu
         "ok": True,
         "block_id": block_id,
         "agent_id": agent_id,
+        # STATED, never inferred from a missing key: "binding was checked and passed"
+        # and "binding is not enforced here" are different facts, and an operator who
+        # cannot tell them apart does not know whether the control is on.
+        "identity_bound": _claim.verdict.value == "match",
         "version": new_version,
     }
     if report is not None:

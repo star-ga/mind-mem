@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1565 | **Est. tokens:** ~4,586,528
-**Generated:** 2026-09-12 03:25 UTC
+**Files:** 1567 | **Est. tokens:** ~4,592,057
+**Generated:** 2026-09-12 03:33 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 243 | ~1,075,432 |
+| `src/mind_mem/` | 244 | ~1,077,813 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,924 |
-| `tests/` | 676 | ~2,017,926 |
+| `tests/` | 677 | ~2,021,074 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -814,7 +814,7 @@
 - `guardrail_surface.py` (~1704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10904 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `http_transport.py` (~23483 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
+- `http_transport.py` (~23817 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hub_nodes.py` (~802 tok, large) — Degree-gated hub-node selection.
 - `hybrid_recall.py` (~24311 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 ### `src/mind_mem/importers/`
@@ -929,6 +929,7 @@
 - `outcome_attribution.py` (~4914 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
 - `outcome_store.py` (~4094 tok, huge) — Outcome-attribution persistence over the calibration store.
 - `payload_admission.py` (~3614 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `peer_identity.py` (~2047 tok, huge) — Per-peer identity, stage (a): bind a token to the agent it may write as.
 - `personas.py` (~1256 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
 - `pipeline_hash.py` (~3314 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
 - `prefetch.py` (~6830 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1569,6 +1570,7 @@
 - `test_outcome_attribution.py` (~4120 tok, huge) — Regression gate for outcome attribution — did the memory actually help?
 - `test_paired_scorecard_gate.py` (~6587 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_payload_admission.py` (~5425 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_peer_identity_binding.py` (~3148 tok, huge) — Per-peer identity, stage (a): a token may only write as the agent it is bound to.
 - `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""
 - `test_pg_block_store_ping.py` (~738 tok, large) — Tests for ``PostgresBlockStore.ping()`` — active backend health probe.
 - `test_pg_pool_autocommit_isolation.py` (~3285 tok, huge) — # Copyright 2026 STARGA, Inc.

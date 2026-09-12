@@ -2926,7 +2926,36 @@ The bigger v4.0.0 Group-D items (mTLS, OAuth2/OIDC, DID/VC, workspace
 ACLs, cross-instance federation protocol) sit above this section.
 These are the smaller, surgical gaps that should land first.
 
-- [ ] **Per-peer identity beyond bearer token.** Today any holder of the
+- [~] **Per-peer identity beyond bearer token** — **STAGE (a) LANDED 2026-09-11**
+  (`src/mind_mem/peer_identity.py`, refusal wired into the federation write door,
+  16 tests, mutation-verified). Stage (b) — Ed25519 signed-write envelopes — is
+  NOT attempted and remains the prerequisite for the Group-D DID item.
+  The groundwork was already right: the handler took `actor` (the credential that
+  passed auth) separately from the body's `agent_id` (a CLAIM), and its own
+  docstring said "a peer writing under someone else's `agent_id` is exactly the
+  thing an operator would want to be able to see afterwards". It could SEE it and
+  allowed it. Now it refuses it, before any write, so a refused claim mutates
+  nothing.
+  **The table never holds a raw token:** bindings are keyed on the same truncated
+  digest `_token_actor` already derives, and that function is IMPORTED rather than
+  re-implemented — two derivations of one identity drift, and the drift would
+  silently unbind every peer while the logs kept reporting success. Pinned by an
+  import-graph assertion (absence of `hashlib`), not a substring match.
+  **A MALFORMED TABLE FAILS CLOSED** — the property most easily got backwards. A
+  bad entry degrading to "unbound" would let a typo silently reopen the
+  impersonation this closes, as a fail-OPEN caused by a config error and invisible
+  in any log that records only successes. A token bound to two agents is likewise
+  invalid: an ambiguous identity resolved either way invents authority nobody
+  granted. And a partially-parsed table is never returned.
+  **Once a table exists, an unlisted credential is an UNKNOWN peer, not a legacy
+  one** — otherwise adding a table would leave the hole open for exactly the
+  population an attacker would use. An unbound DEPLOYMENT still works (most have
+  no table) and the response states `identity_bound`, because "checked and
+  passed" and "not enforced here" are different facts.
+  Read on every call, uncached, matching `_active_tokens`' convention so a rotated
+  binding lands without a restart — it was cached for one revision and the
+  staleness surfaced immediately as 8 cross-test failures.
+  Original text: Today any holder of the
   shared `X-MindMem-Token` can call any federation endpoint as any
   `agent_id`. There is no cryptographic binding between the token and
   the agent identity the caller claims. A leaked token gives full
