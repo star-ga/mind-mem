@@ -2772,7 +2772,7 @@ default story is two laptops talking to each other.
 **Open (genuine network-hardening gaps):**
 - [ ] **Rust hot path for hybrid search** — PyO3 BM25+RRF port — pure-MIND port (separate roadmap section below) is the chosen path instead. Marking as ⊘ superseded by Pure-MIND Core Port.
 
-### E. Compliance-sensitive opt-in extensions (partial — 5 shipped, 3 open)
+### E. Compliance-sensitive opt-in extensions (partial — 6 shipped, 2 open)
 
 **Shipped:**
 
@@ -2783,9 +2783,47 @@ default story is two laptops talking to each other.
 - [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies ship in `src/mind_mem/v4/vocabulary.py` and are enforced by `v4/block_metadata.validate_block(..., workspace=...)`, which `propose_update` calls on every proposal (`mcp/tools/governance.py`); reject-mode violations refuse the write, flag-mode violations warn and pass. Opt-in behind **two** flags — `v4.block_metadata` owns the door probe and `v4.vocabulary` owns the check, so the surface is inert unless both are on. `tests/test_v4_vocabulary.py` + `tests/test_vocabulary_wiring.py` collect 49 tests and `tests/test_block_metadata_wiring.py` adds 15 that pin the door itself. Was filed under **Open** with a sentence that denied its own wiring; settled 2026-09-01 by refusal rather than by grep — a proposal whose `confidence` value is outside a reject-mode workspace vocabulary comes back `error: schema_validation_rejection` and SIGNALS.md is byte-for-byte unchanged, against two controls (same proposal with both flags off is accepted, and an in-vocabulary value with both flags on is accepted).
 - [x] **Provenance-rich blocks** — the five fields and the off/recommended/required policy both ship. **SHIPPED — verified at HEAD 2026-09-07.** This line said the policy has "zero occurrences in `src/`"; that is no longer true. `src/mind_mem/compliance/provenance_policy.py` (193 lines) ships `POLICY_OFF`/`POLICY_RECOMMENDED`/`POLICY_REQUIRED` over the five fields, and a configured field outside the known five is a refusal rather than a quiet no-op.
 
+- [x] **Pluggable redaction layer** — **COMPLETENESS CHECK DONE 2026-09-11; the
+      layer is complete AND is a control on the governed path.** The item was held
+      unticked pending exactly this, and the check was not a re-read: the missing
+      evidence was written and mutation-verified.
+
+      The layer was already real — 4 modes (`off` / `flag` / `redact` / `reject`),
+      a detector registry with metaclass validation that refuses a malformed
+      detector at class creation, and 58 passing tests across
+      `test_compliance_redaction.py`, `test_redaction_layer_is_pluggable.py` and
+      `test_dsn_redaction.py`.
+
+      **What no test covered was the only thing that decides control-vs-feature:
+      that `redact` is reached when a block is written through the governed door.**
+      `test_governed_write_is_screened.py` drives `propose_update` thoroughly for
+      PROVENANCE and pins `redaction: {"enabled": false}` in its own fixture
+      throughout — so no test had ever written through that door with redaction ON.
+      The compliance code carries the lesson in its own comment: "a compliance
+      control the governed path does not run is a feature, not a control."
+
+      `tests/test_governed_write_is_redacted.py` (new, 7 tests) closes it, every
+      assertion paired with a control because each failure mode is a way to pass
+      while doing nothing:
+      - a POSITIVE CONTROL that the secret lands **verbatim** with redaction off —
+        without it, "the secret is not in SIGNALS.md" is satisfied by a write that
+        never happened, which is the most common way a security test proves
+        nothing;
+      - `reject` refuses through the door AND leaves nothing on disk — a refused
+        secret that is still written is worse than no redaction, because the
+        operator believes it was caught;
+      - a control that `reject` still ADMITS a clean statement, so the refusal is
+        not a door that refuses everything;
+      - `redact` writes the block without the secret AND keeps the surrounding
+        content, so a mode that dropped the whole block cannot pass;
+      - `flag` admits and does NOT alter the text, so it can never be mistaken for
+        `redact` — conflating them would make the configured mode a lie.
+
+      **Mutation-verified:** neutralising the mode at the single `redact(...)` call
+      in `compliance/prewrite.py` turns 3 of the 7 red while the rest stay green.
+
 **Open:**
 
-- [ ] **Pluggable redaction layer** — the `redaction` name is registered in `v4/feature_flags.py` and HAD zero consumers when written; **CORRECTED 2026-09-06:** `compliance/prewrite.screen(...)` is now called on the governed door at `mcp/tools/governance.py:328`. Left unticked pending a completeness check -- retracted-ticks lock. Original text: has zero consumers: there is no `v4/redaction.py` (`import mind_mem.v4.redaction` raises `ModuleNotFoundError`), no pre-write detector chain anywhere in `src/`, and nothing routes detector events to the audit chain. The only redaction code in-tree is DSN password masking (`mm_cli._redact_dsn`) and hook-transcript credential scrubbing (`hook_installer`), neither of which is this item. Carried a false shipped tick until 2026-09-01. Tracked. **PARTIALLY SHIPPED — verified 2026-09-07, and the title word is the open half.** The redaction layer itself ships: `src/mind_mem/compliance/` is 7 modules / ~1530 lines, `_DetectorMeta` registers every concrete `Detector` subclass at class-creation time so a detector that is written but never added to a list is impossible, and 8 detectors ship. But *pluggable* was never tested by the audit that called this done: `compliance/*.py` has zero hits for `entry_point|entry-points|plugin|importlib`, so a THIRD-PARTY detector still cannot register. Subclass registration is not the same capability as an extension point.
 - [ ] **Compliance export pipeline** — **CORRECTED 2026-09-06:** the `mm export` verb and its `--policy` option ship and run (`compliance/export.py`); the assertion that it exits 2 was true when written and is false now. Left unticked pending a completeness check -- this item is on the retracted-ticks lock, no `--policy` option anywhere in `src/`, no `v4/compliance_export.py`, and the `compliance_export` flag has zero consumers. `mind-mem-backup export <workspace>` does exist but writes unsigned, unfiltered JSONL with no policy and no `--since`, which is a different capability. Carried a false shipped tick until 2026-09-01. Tracked.
 
 ### G. Observability, reliability, ecosystem (partial — 7 open)

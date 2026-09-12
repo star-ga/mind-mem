@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1562 | **Est. tokens:** ~4,573,130
-**Generated:** 2026-09-12 02:42 UTC
+**Files:** 1563 | **Est. tokens:** ~4,574,708
+**Generated:** 2026-09-12 02:52 UTC
 
 ## Token Budget Guide
 
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,886 |
-| `tests/` | 672 | ~2,008,745 |
+| `tests/` | 673 | ~2,010,323 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1402,6 +1402,7 @@
 - `test_governed_edge_scope.py` (~3361 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_restore_seam.py` (~5688 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_signal_and_edge.py` (~9813 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_governed_write_is_redacted.py` (~1578 tok, huge) — Redaction must fire on the GOVERNED PROPOSE DOOR, not only in the CLI.
 - `test_governed_write_is_screened.py` (~1252 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_governed_write_paths.py` (~10704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_granularity_align.py` (~3310 tok, huge) — Tests for granularity_align — named merge operation (Group H, v4.0.x).
