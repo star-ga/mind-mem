@@ -2004,10 +2004,50 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     _mark_proposal_status(source_file, proposal_id, "applied")
     update_last_apply_ts(ws)
     _record_belief_update(ws, proposal.get("TargetBlock", ""), 1.0, "approve_apply")
+    _stage_write_path_edges(ws, proposal.get("TargetBlock", ""))
 
     print(f"\n═══ APPLIED: {proposal_id} ═══")
     print(f"Receipt: {receipt_path}")
     return True, f"Applied successfully. Receipt: {receipt_path}"
+
+
+def _stage_write_path_edges(ws: str, block_id: str) -> None:
+    """Stage typed-KG edge PROPOSALS for the block this apply just committed.
+
+    ROADMAP ("Auto-extract edges on the write path (HITL-gated)"): writing a block
+    should PROPOSE typed KG edges, and those "land as proposals, never
+    auto-committed -- same approval gate as blocks, honoring the Group H wedge
+    guardrail (source-of-truth graph never self-modifies)".
+
+    Placed HERE, after the receipt is committed, and not in ``propose_update``, for a
+    provenance reason: ``RelationTriple`` requires a ``source_block_id``, and a
+    proposal has no block id yet. Staging at propose time would mean inventing an id
+    for a block that may never exist -- and if the block proposal were then rejected,
+    the edge proposal would survive citing a block that was never written, approvable
+    by an operator who cannot see that.
+
+    Flag-gated OFF by default (``v4.auto_edges_on_write``) and probed silently, so a
+    build with the flag off is indistinguishable from one without the feature.
+
+    Never raises. The apply has already succeeded; an exception here would report
+    failure for completed work. The outcome is still not swallowed -- the helper
+    returns a closed outcome and logs -- because a silent failure would make the
+    roadmap's claim unfalsifiable.
+    """
+    if not block_id:
+        return
+    try:
+        from .write_path_edges import StageOutcome, stage_edges_for_block
+
+        result = stage_edges_for_block(ws, block_id)
+        if result.outcome is StageOutcome.STAGED:
+            print(f"  KG: staged {result.signals_written} edge proposal(s) for {block_id} "
+                  f"(pending review — nothing was written to the graph)")
+        elif result.outcome in (StageOutcome.ERROR, StageOutcome.BLOCK_NOT_FOUND):
+            _log.warning("write_path_edges_not_staged", block_id=block_id,
+                         outcome=result.outcome.value, detail=result.detail)
+    except Exception as exc:  # pragma: no cover — defensive: import/flag failure
+        _log.warning("write_path_edges_hook_failed", block_id=block_id, error=str(exc))
 
 
 def _record_belief_update(ws: str, block_id: str, observation: float, source: str) -> None:

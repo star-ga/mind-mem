@@ -98,6 +98,11 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "embedding_pipeline",  # auto-derive embeddings (round 2 audit 4/4)
     "kind_summaries",  # GraphRAG-style per-kind summaries (round 2 audit 3/4)
     "self_editing",  # MemGPT-style propose_edit / approve_edit (round 2 audit 2/4)
+    # 5.0.2: deterministic entity/relation extraction on the WRITE path -- an
+    # applied block stages typed-KG edge PROPOSALS for itself, through the same
+    # graph_ingest staging path and the same approve_relation_signals operator gate
+    # a corpus backfill uses. Never a direct graph write (Group H wedge guardrail).
+    "auto_edges_on_write",
     "granularity_align",  # named merge operation surfaced in plan_consolidation (proposal-only)
     "multi_modal",  # sidecar-described image/audio inbox drops + modality-aware pack cost
     "observability",  # counters / gauges / histograms (round 3 audit 4/4)

@@ -374,7 +374,40 @@ below, no code, no attribution in public artifacts.)
       reviewer must know.
       **Remaining:** `propose_update` calling `candidate_edges` and staging the
       results through `propose_edge`. Root's publication surface.
-- [ ] **Auto-extract edges (original wording) on the write path (HITL-gated)** — wire
+- [~] **Auto-extract edges on the write path (HITL-gated)** — **LANDED
+      2026-09-11** (`src/mind_mem/write_path_edges.py`, wired at the apply seam in
+      `apply_engine._apply_proposal_locked`, 17 tests, wiring mutation-verified).
+      **Staged at APPLY, not at `propose_update`** — a deliberate departure from
+      this item's own wording, for a provenance reason: `RelationTriple` requires
+      a `source_block_id`, and a proposal has no block id yet. Staging at propose
+      time would invent an id for a block that may never exist, and if the block
+      proposal were rejected the edge proposal would survive citing a block that
+      was never written — approvable by an operator who cannot see that.
+      **Reuses `graph_ingest.backfill` rather than adding staging code.** It
+      already takes an injected `extract_fn`, already has `restrict_to_blocks`,
+      already stages to SIGNALS.md, and its output already flows through
+      `approve_relation_signals` — the operator gate that commits an edge inside
+      an `admit_edge` scope. Restricting it to one block id IS the feature; a
+      second staging path would be a second thing to keep in step with that gate.
+      The injected extractor is `edge_extraction.candidate_edges`
+      (deterministic), because backfill's DEFAULT extract_fn is the configured
+      extraction MODEL — leaving it defaulted would put a network round-trip on
+      every apply.
+      A real interface mismatch was found and closed honestly: `candidate_edges`
+      is block-centric (the block's `_id` IS the subject) while backfill hands an
+      extractor only text, so `{"Statement": text}` returns `[]` for every input
+      — it would have staged nothing while every metric read clean. The adapter
+      closes over the id, sound only because staging is one block at a time.
+      **Outcomes are a closed enum and absence is never ambiguous:** `DISABLED`,
+      `NO_BLOCK_ID`, `BLOCK_NOT_FOUND`, `NO_CANDIDATES`, `STAGED`, `ERROR`. In
+      particular "scanned zero blocks" is NOT reported as "found no edges" —
+      they produce the same zero and only one is healthy. Flag-gated OFF
+      (`v4.auto_edges_on_write`, declared in `ALL_V4_FLAGS` so it is reachable at
+      all) and probed with `is_enabled_quiet`, so a flag-off build is
+      indistinguishable from one without the feature.
+      **Remaining:** generalising `_ENTITY_ID_RE` further for cross-lingual
+      surface forms, and the same hook on the direct `write_block` path.
+- [ ] **Edge extraction body (original wording)** — wire
       lightweight entity/relation extraction (generalize the
       `block_parser.py:60-64` `_ENTITY_ID_RE` beyond canonical IDs to
       named entities) into `propose_update`, so writing a block *proposes*

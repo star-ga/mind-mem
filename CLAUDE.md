@@ -199,8 +199,8 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   self_editing.py       — block_edits + propose/approve/reject (v4.0.0)
   block_versioning.py   — block version history
   circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
-  feature_flags.py      — 52 flags + is_enabled/require_enabled
-tests/                  — pytest suite (11,825 test functions incl. 376 v4 unit
+  feature_flags.py      — 53 flags + is_enabled/require_enabled
+tests/                  — pytest suite (11,842 test functions incl. 376 v4 unit
                           + 38 concurrency + 22 paraphrase probes)
 mind/                   — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
@@ -265,7 +265,7 @@ name that no longer exists -- this list previously carried 11 ghosts
 
 ## Testing
 ```bash
-pytest                           # full suite (11,825 test functions)
+pytest                           # full suite (11,842 test functions)
 pytest tests/test_retrieval.py   # specific module
 pytest -x --tb=short             # stop on first failure
 python3 scripts/check_docs_alignment.py --print  # the test-function count (static; a run's count is machine-dependent)

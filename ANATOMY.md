@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1560 | **Est. tokens:** ~4,591,157
-**Generated:** 2026-09-12 02:13 UTC
+**Files:** 1561 | **Est. tokens:** ~4,571,283
+**Generated:** 2026-09-12 02:35 UTC
 
 ## Token Budget Guide
 
@@ -74,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 242 | ~1,094,436 |
+| `src/mind_mem/` | 242 | ~1,071,175 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,8 +87,8 @@
 | `src/mind_mem/storage/` | 2 | ~11,368 |
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
-| `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 670 | ~2,004,210 |
+| `src/mind_mem/v4/` | 24 | ~92,886 |
+| `tests/` | 671 | ~2,007,509 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -703,7 +703,6 @@
 ### `src/mind_mem/`
 
 - `append_only.py` (~3657 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~25378 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~6665 tok, huge) — mind-mem field-level audit sidecar — tamper-evident append-only ledger.
 - `audit_context.py` (~4198 tok, huge) — Request-scoped audit attribution for mind-mem's network transports.
 - `audit_pinned.py` (~3194 tok, huge) — Pinned-model audit pipeline — release-CI gate for ``mind-mem.json``.
@@ -1080,7 +1079,7 @@
 - `circuit_breaker.py` (~4577 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 - `cognitive_kernel.py` (~2576 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `embedding_pipeline.py` (~2377 tok, huge) — v4 embedding auto-derivation pipeline (Group A — closes the
-- `feature_flags.py` (~6166 tok, huge) — v4.0 feature-flag registry.
+- `feature_flags.py` (~6254 tok, huge) — v4.0 feature-flag registry.
 - `federation_client.py` (~5276 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `federation.py` (~7339 tok, huge) — v4 federated cross-agent consistency (Group D).
 - `flag_registry.py` (~8516 tok, huge) — Three-state registry for every declared v4 feature flag.
@@ -1113,6 +1112,7 @@
 - `world_staleness_config.py` (~1676 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `world_staleness.py` (~3891 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `world_symbol_probe.py` (~1454 tok, large) — # Copyright 2026 STARGA, Inc.
+- `write_path_edges.py` (~2117 tok, huge) — Stage typed-KG edge proposals from a block at the moment it is applied.
 ### `tests/`
 
 - `conftest.py` (~4070 tok, huge) — Shared test fixtures.
@@ -1842,6 +1842,7 @@
 - `test_workspace_structure.py` (~550 tok, large) — Tests for workspace directory structure."""
 - `test_world_staleness_config_fallbacks.py` (~1465 tok, large) — A silent fallback is a config the operator thinks is in force and is not.
 - `test_world_staleness.py` (~5183 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_write_path_edges.py` (~3299 tok, huge) — Edge extraction on the write path — the block's OWN apply stages its edges.
 - `test_write_path_guarantee.py` (~1559 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_tls_certs.py` (~1957 tok, huge) — Throwaway CA, leaf certificates and a recording TLS peer for the TLS tests.
 - `_toml_compat.py` (~462 tok, medium) — # Copyright 2026 STARGA, Inc.
