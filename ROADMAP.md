@@ -70,7 +70,7 @@ planned against.
 - `N2 — Chunk-provenance anchoring` — Group N has no subject after the sweep.
 - `Compliance export pipeline` — already `[~]` with behaviour verified.
 
-**D — WORK I CAN DO (4 boxes, 2 already done).** This is the real remaining surface:
+**D — WORK I CAN DO (originally 4 boxes; 2 done, 1 reclassified to C, so ONE remains).**
 1. `Local visual viewer` (`mm view`) — stdlib HTTP + minimal JS/D3, self-contained.
 2. ~~`L2 — Prescriptive blocks`~~ — **EVALUATED 2026-09-11; recommendation is NO, with
    the measurements pinned as tests so it cannot rot.** Demand is ~0.1% of the corpus (2
@@ -87,11 +87,20 @@ planned against.
    this list was written.** Landed as a reported sidecar rather than as feedback: the
    obvious wiring would have fed cache-warmth into the weights that move retrieval
    scores. Lock removed with the evidence recorded beside it.
-4. `Quantized prefix cache` — also on the lock; `prefix_cache` caches responses, not
-   embeddings, and `turbo_quant` is a placeholder with no consumers.
+4. `Quantized prefix cache` — **RECLASSIFIED to C on 2026-09-11; putting it in D was my
+   error.** The item states its own blocker ("the codec upgrade must land first"), so it
+   was never mine to pick up. Worse, its stated unblocking step — "give the prefix cache
+   an embedding-valued tier to compress" — CONTRADICTS `turbo_quant`'s own invariant:
+   "this module never touches the recall path. Two quantisers on one retrieval path would
+   be a fork." `v4/pq` is the quantiser already designated for retrieval. And
+   `PrefixCache` has no instantiation anywhere outside its own module, so there is no
+   embedding tier to compress and no caller to benefit. What this item needs first is a
+   DECISION — which quantiser owns the retrieval path — not code.
 
-**So the honest answer to "how long to 100%":** the D items are days, not weeks —
-one of the four landed within hours of this list being written.
+**So the honest answer to "how long to 100%":** of the four I claimed I could do, two
+landed within hours, one turned out to be blocked by its own stated prerequisite (my
+classification error, corrected above), and ONE remains — the `mm view` viewer. That is
+the actual remaining surface for me.
 Everything else needs a decision or a purchase from you, or a prerequisite that lives in
 another repo. A "100%" that counted A and C as done would be a number, not a product.
 
@@ -1341,6 +1350,19 @@ pin a state the toolchain cannot yet satisfy.
   research notes, not cited here); unblocking step = swap `turbo_quant`'s channel
   encoder behind its existing format byte, then give the prefix cache an
   embedding-valued tier to compress. Tracked.
+  **AUDITED 2026-09-11 — THE UNBLOCKING STEP AS WRITTEN CONTRADICTS AN INVARIANT,
+  so a decision is needed before any code.** `turbo_quant`'s own docstring states:
+  "this module never touches the recall path. Two quantisers on one retrieval path
+  would be a fork; keeping this one at the codec layer is what stops that." Giving
+  the prefix cache an embedding-valued tier compressed by `turbo_quant` puts it
+  exactly where `v4/pq` — the quantiser already designated for retrieval — lives,
+  which is the fork that invariant exists to prevent.
+  Also measured: `PrefixCache` has **no instantiation anywhere outside its own
+  module**, so today there is no embedding tier to compress and no caller to
+  benefit; the ~6x figure would be a saving on a cache nothing uses.
+  **So the first deliverable here is a DECISION, not code:** which quantiser owns
+  the retrieval path, and whether the prefix cache is wired at all. Building the
+  tier first would ship a fork and call it an optimisation.
 
 ### Speculative Prefetch
 - [x] Predict next-needed blocks based on query pattern + access history
