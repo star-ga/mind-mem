@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1541 | **Est. tokens:** ~4,565,238
-**Generated:** 2026-09-12 01:26 UTC
+**Files:** 1542 | **Est. tokens:** ~4,566,026
+**Generated:** 2026-09-12 01:28 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 661 | ~1,992,003 |
+| `tests/` | 662 | ~1,992,791 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1640,6 +1640,7 @@
 - `test_recall_workspace_zero_index_probe.py` (~917 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
+- `test_redaction_layer_is_pluggable.py` (~788 tok, large) — Group E — the redaction layer really is PLUGGABLE (verified).
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
 - `test_release_preflight_gates.py` (~5444 tok, huge) — Tests for the release-preflight gates.
 - `test_replay_check.py` (~4122 tok, huge) — Replay — does the ledger corroborate what one recall attestation claims?

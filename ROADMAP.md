@@ -79,7 +79,19 @@ by its full description below.
 
 ### Group E — Compliance (5 items — 2 shipped, 3 open)
 
-- [~] **Pluggable redaction layer** — the stated blocker is GONE but completeness is unverified. `compliance/detectors.py` + `compliance/prewrite.py` exist and `screen(...)` IS called on the governed door (`mcp/tools/governance.py:328`, fail-closed on a malformed policy), so "no pre-write detector chain in-tree; the redaction flag is a name with no consumer" is false as written. **Not ticked:** this item is on the retracted-ticks lock from the 2026-09-01 audit (`tests/test_roadmap_ticks_gate.py`), which exists because it previously carried a confidently-worded false tick. Verified 2026-09-06 that the chain is wired; whether it is *pluggable* to the item's full intent is NOT verified, and that is the half the lock is about.
+- [~] **Pluggable redaction layer** — **THE PLUGGABLE HALF IS NOW VERIFIED
+  2026-09-11; still not ticked (retracted-ticks lock).** That was the exact half
+  the lock was about. Measured: defining a `Detector` subclass in a caller's own
+  module took the registry from **8 to 9** at the class statement — no decorator,
+  no registry edit, no plugin list to import ("the class is registered by
+  existing") — and the new detector fires. Registration also VALIDATES: a
+  detector declaring no category raised `DetectorSpecError` at class-creation
+  time, naming the legal categories. That distinction is the point — an
+  extension mechanism that accepted anything would let a malformed detector into
+  the pre-write chain that screens governed writes, so "pluggable" holds in the
+  strong sense: extensible by a third party AND fail-closed against a malformed
+  extension. `tests/test_redaction_layer_is_pluggable.py`, 5 tests.
+- [~] **Pluggable redaction layer (original wording)** — the stated blocker is GONE but completeness is unverified. `compliance/detectors.py` + `compliance/prewrite.py` exist and `screen(...)` IS called on the governed door (`mcp/tools/governance.py:328`, fail-closed on a malformed policy), so "no pre-write detector chain in-tree; the redaction flag is a name with no consumer" is false as written. **Not ticked:** this item is on the retracted-ticks lock from the 2026-09-01 audit (`tests/test_roadmap_ticks_gate.py`), which exists because it previously carried a confidently-worded false tick. Verified 2026-09-06 that the chain is wired; whether it is *pluggable* to the item's full intent is NOT verified, and that is the half the lock is about.
 - [~] **Compliance export pipeline** — **BEHAVIOUR NOW VERIFIED 2026-09-11; still
   not ticked (retracted-ticks lock).** A `--policy` flag that accepted three
   values and produced identical bundles would pass every existing test while
