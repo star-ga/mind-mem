@@ -848,10 +848,39 @@ measure. Wiring comes first, with the yield measurement built into the wiring:
       deterministic extractor's place is the free fast path on the write path,
       where being silent is the right behaviour when nothing is certain.
 
-      **Remaining:** a bounded model-extractor run over the corpus (cost-capped,
-      dry-run first, yield read before anything stages), then review/approve, then
-      `retrieval.kg_fusion` once there is a graph worth walking. Enabling fusion
-      over an empty graph would add a hop that returns nothing on every recall.
+      **AND THEN THE FINDING THAT REFRAMES THE ITEM: the corpus is the
+      constraint, not the extractor.** Measured the upper bound any extractor
+      could reach, by counting canonical block ids referenced from one block's
+      fields to a DIFFERENT block — a cross-reference is the highest-precision
+      relation signal available, because the id is exact and the field name
+      states the relation:
+
+      | | refs | note |
+      |---|---|---|
+      | total cross-block refs | **109** | across all 2776 blocks |
+      | briefing roll-ups | 59 | `DecisionsThisWeek`, `Wins`, `Risks`, … |
+      | semantically meaningful | **50** | `Evidence` 17, `Resolution` 8, `ConstraintSignatures` 7, `Decision` 5, `Affects` 5, `Objects` 4, `AppliedTo` 2, `Rationale` 1, `SupersededBy` 1 |
+
+      The roll-up half is not a relation worth approving: a weekly briefing that
+      lists the week's decisions is an index, not a typed claim about them, and
+      staging 59 of those would train an operator to approve noise.
+
+      **So the ceiling is ~50 edges over 2776 blocks — 0.018 per block.** That
+      number does not depend on the extractor: it is how much typed relation this
+      corpus actually encodes. A model extractor would raise recall against
+      *prose*, but prose relations are exactly the ones it cannot verify, and the
+      exact-id ones are already countable at 50.
+
+      **Therefore: do NOT invest further in extraction, and do NOT enable
+      `retrieval.kg_fusion` on this corpus.** Fusion over a ~50-edge graph adds a
+      hop to every recall that almost never returns anything — a permanent cost
+      for a rounding error of benefit. The honest precondition for fusion is a
+      corpus that encodes relations, not a better reader of one that does not.
+      **Remaining:** either accept the graph is not a retrieval surface for this
+      corpus and say so in the docs, or change how blocks are WRITTEN so relations
+      are declared at capture time (which is what the write-path hook is already
+      positioned to serve — it stages whatever an extractor finds, and a declared
+      relation needs no extraction at all).
 - [x] **Widen the predicate vocabulary beyond repo topology** — **SHIPPED
       2026-09-07.** The four named relation classes now have predicates:
       `member_of` (person ↔ organization), `justified_by` (decision ↔
