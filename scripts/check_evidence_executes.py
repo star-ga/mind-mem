@@ -65,7 +65,16 @@ def run_pytest(node_ids: list[str], extra: list[str] | None = None) -> tuple[int
         "-p", "no:randomly", "-q", "-rs",
         f"--junitxml={report.with_suffix('.xml')}",
     ] + (extra or [])
-    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=1800)
+    # encoding + errors are explicit: `text=True` alone decodes the child's output with
+    # the LOCALE codec, which is cp1252 on Windows, so a non-ASCII test name or a
+    # UnicodeDecodeError could make this gate crash or mis-read a report on exactly the
+    # matrix rows it is supposed to protect. Pinned by
+    # tests/test_text_io_is_utf8.py::test_no_subprocess_decodes_with_the_locale_codec,
+    # which caught this script the day after it was written.
+    proc = subprocess.run(
+        cmd, cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=1800,
+    )
     return proc.returncode, {"stdout": proc.stdout, "stderr": proc.stderr}
 
 

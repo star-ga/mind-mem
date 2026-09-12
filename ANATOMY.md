@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1562 | **Est. tokens:** ~4,580,167
-**Generated:** 2026-09-12 03:13 UTC
+**Files:** 1565 | **Est. tokens:** ~4,586,528
+**Generated:** 2026-09-12 03:23 UTC
 
 ## Token Budget Guide
 
@@ -60,20 +60,20 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 22 | ~67,002 |
+| `scripts/` | 22 | ~67,132 |
 | `scripts/evidence_gate_canary/` | 1 | ~348 |
 | `sdk/go/` | 10 | ~9,098 |
 | `sdk/js/` | 6 | ~4,864 |
 | `sdk/js/src/` | 5 | ~3,178 |
 | `sdk/js/test/` | 1 | ~3,096 |
 | `sdk/release/` | 3 | ~4,922 |
-| `sdk/spec/` | 2 | ~5,702 |
+| `sdk/spec/` | 4 | ~8,662 |
 | `security/` | 5 | ~24,696 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 243 | ~1,075,114 |
+| `src/mind_mem/` | 243 | ~1,075,432 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -86,8 +86,8 @@
 | `src/mind_mem/storage/` | 2 | ~11,368 |
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
-| `src/mind_mem/v4/` | 24 | ~92,886 |
-| `tests/` | 675 | ~2,015,011 |
+| `src/mind_mem/v4/` | 24 | ~92,924 |
+| `tests/` | 676 | ~2,017,926 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -594,7 +594,7 @@
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
 - `check_docs_alignment.py` (~15109 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
-- `check_evidence_executes.py` (~2254 tok, huge) — Gate: every EVIDENCE.md claim's test must EXECUTE. A skip is a red build.
+- `check_evidence_executes.py` (~2384 tok, huge) — Gate: every EVIDENCE.md claim's test must EXECUTE. A skip is a red build.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -650,6 +650,8 @@
 - `version.py` (~1702 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `sdk/spec/`
 
+- `asyncapi.json` (~1250 tok, large) — Keys: asyncapi, channels, components, defaultContentType, info
+- `gen_asyncapi.py` (~1710 tok, huge) — Generate ``sdk/spec/asyncapi.json`` FROM THE CODE.
 - `openapi.json` (~5030 tok, huge) — Keys: components, info, openapi, paths
 - `README.md` (~672 tok, large) — API specifications
 ### `security/`
@@ -955,7 +957,7 @@
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `_recall_temporal.py` (~2214 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~23545 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~23703 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1990 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompact_cli.py` (~1402 tok, large) — ``mind-mem-recompact`` — cluster, recompact, PROPOSE. Never apply.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
@@ -1074,7 +1076,7 @@
 - `feature_flags.py` (~6254 tok, huge) — v4.0 feature-flag registry.
 - `federation_client.py` (~5276 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `federation.py` (~7339 tok, huge) — v4 federated cross-agent consistency (Group D).
-- `flag_registry.py` (~8516 tok, huge) — Three-state registry for every declared v4 feature flag.
+- `flag_registry.py` (~8554 tok, huge) — Three-state registry for every declared v4 feature flag.
 - `health.py` (~2475 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~1010 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
@@ -1104,7 +1106,7 @@
 - `world_staleness_config.py` (~1676 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `world_staleness.py` (~3891 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `world_symbol_probe.py` (~1454 tok, large) — # Copyright 2026 STARGA, Inc.
-- `write_path_edges.py` (~2117 tok, huge) — Stage typed-KG edge proposals from a block at the moment it is applied.
+- `write_path_edges.py` (~2277 tok, huge) — Stage typed-KG edge proposals from a block at the moment it is applied.
 ### `tests/`
 
 - `conftest.py` (~4070 tok, huge) — Shared test fixtures.
@@ -1594,7 +1596,7 @@
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
 - `test_query_term_stemming.py` (~1052 tok, large) — The query and the index must agree on what a word stems to.
 - `test_read_surface_admission.py` (~6315 tok, huge) — Every read surface, swept with a three-status canary.
-- `test_read_surface_classification.py` (~8832 tok, huge) — The registry-wide read-surface classification — the committed table.
+- `test_read_surface_classification.py` (~8839 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~3776 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_resources.py` (~7355 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_admissibility.py` (~8772 tok, huge) — Acceptance gate for recall admissibility — the servability allow-list.
@@ -1698,12 +1700,13 @@
 - `test_review_queue.py` (~2038 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_review_render.py` (~2348 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
-- `test_roadmap_hygiene.py` (~4798 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_roadmap_ticks_gate.py` (~2911 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_roadmap_hygiene.py` (~5376 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_roadmap_ticks_gate.py` (~3338 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
+- `test_sdk_asyncapi_drift.py` (~1903 tok, huge) — The AsyncAPI spec must describe the events mind-mem ACTUALLY publishes.
 - `test_sdk_js_packaging.py` (~2404 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.

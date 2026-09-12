@@ -848,7 +848,15 @@ class VectorBackend(RecallBackend):
         # until the breaker trips, in every fresh process; and the GPU path UNREACHABLE
         # BY DEFAULT, so a box with ollama serving a real embedding model silently
         # embeds on CPU while the log makes a correct configuration look broken.
-        if ollama_can_serve(ollama_model_for(self.config, self.model_name), self.config):
+        # `getattr`, not `self.model_name`: the old code reached ollama only through
+        # `_try`, which CATCHES, so a minimal backend without `model_name` fell through
+        # harmlessly. This guard runs OUTSIDE that try, so a bare attribute access
+        # turned a graceful fall-through into an AttributeError -- caught by
+        # test_llama_cpp_provider_contract's deliberately minimal stub. With no model
+        # name and no `ollama_embed_model`, the guard answers False and the leg is
+        # skipped, which is what `embed_ollama` would have had to do anyway.
+        _ollama_model = ollama_model_for(self.config, getattr(self, "model_name", ""))
+        if ollama_can_serve(_ollama_model, self.config):
             result = _try("ollama", self.embed_ollama)
             if result is not None:
                 return result

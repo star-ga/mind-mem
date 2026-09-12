@@ -1,0 +1,166 @@
+{
+  "asyncapi": "3.0.0",
+  "channels": {
+    "governanceEvents": {
+      "address": "mind-mem/governance",
+      "description": "Emitted through event_fanout.emit_event to the configured publisher (logging or Redis stream). Envelope is event_fanout.Event; ts_monotonic/ts_wall are internal ordering fields and are not part of the wire contract.",
+      "messages": {
+        "audit_chain_verified": {
+          "name": "audit_chain_verified",
+          "payload": {
+            "$ref": "#/components/schemas/GovernanceEvent"
+          },
+          "title": "audit chain verified"
+        },
+        "block_promoted": {
+          "name": "block_promoted",
+          "payload": {
+            "$ref": "#/components/schemas/GovernanceEvent"
+          },
+          "title": "block promoted"
+        },
+        "contradiction_detected": {
+          "name": "contradiction_detected",
+          "payload": {
+            "$ref": "#/components/schemas/GovernanceEvent"
+          },
+          "title": "contradiction detected"
+        },
+        "proposal_applied": {
+          "name": "proposal_applied",
+          "payload": {
+            "$ref": "#/components/schemas/GovernanceEvent"
+          },
+          "title": "proposal applied"
+        },
+        "rollback_executed": {
+          "name": "rollback_executed",
+          "payload": {
+            "$ref": "#/components/schemas/GovernanceEvent"
+          },
+          "title": "rollback executed"
+        },
+        "snapshot_created": {
+          "name": "snapshot_created",
+          "payload": {
+            "$ref": "#/components/schemas/GovernanceEvent"
+          },
+          "title": "snapshot created"
+        },
+        "tier_demoted": {
+          "name": "tier_demoted",
+          "payload": {
+            "$ref": "#/components/schemas/GovernanceEvent"
+          },
+          "title": "tier demoted"
+        },
+        "tier_promoted": {
+          "name": "tier_promoted",
+          "payload": {
+            "$ref": "#/components/schemas/GovernanceEvent"
+          },
+          "title": "tier promoted"
+        }
+      },
+      "title": "Governance events"
+    },
+    "operatorAlerts": {
+      "address": "mind-mem/alerts",
+      "description": "Delivered by alerting.WebhookSink as an HTTP POST of Alert.as_dict(), or by SlackSink in Slack's own attachment shape. Only alerts actually fired in src/ are listed; the router accepts any event string, and documenting that capacity rather than the real emissions would over-report the surface.",
+      "messages": {
+        "contradictions_detected": {
+          "name": "contradictions_detected",
+          "payload": {
+            "$ref": "#/components/schemas/OperatorAlert"
+          },
+          "title": "contradictions detected"
+        },
+        "drift_spike": {
+          "name": "drift_spike",
+          "payload": {
+            "$ref": "#/components/schemas/OperatorAlert"
+          },
+          "title": "drift spike"
+        },
+        "mrs_degraded": {
+          "name": "mrs_degraded",
+          "payload": {
+            "$ref": "#/components/schemas/OperatorAlert"
+          },
+          "title": "mrs degraded"
+        }
+      },
+      "title": "Operator alerts"
+    }
+  },
+  "components": {
+    "schemas": {
+      "GovernanceEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "workspace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "OperatorAlert": {
+        "additionalProperties": false,
+        "properties": {
+          "event": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "workspace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "event",
+          "payload",
+          "workspace"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "defaultContentType": "application/json",
+  "info": {
+    "description": "Events mind-mem publishes. GENERATED from the source taxonomy by sdk/spec/gen_asyncapi.py and gated in both directions by tests/test_sdk_asyncapi_drift.py: every canonical event is documented, and every documented event exists in the code. An advertised event nothing emits would make a client wait forever for a message that is never sent.",
+    "title": "mind-mem event surface",
+    "version": "5.0.2"
+  },
+  "operations": {
+    "receiveGovernanceEvent": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/governanceEvents"
+      }
+    },
+    "receiveOperatorAlert": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/operatorAlerts"
+      }
+    }
+  }
+}

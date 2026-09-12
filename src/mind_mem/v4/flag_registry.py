@@ -213,6 +213,7 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
         _wired("kind_summaries", "v4/kind_summaries.py refuses at five entry points; benchmark and backfill probe it."),
         _wired("self_editing", "v4/self_editing.py and v4/block_versioning.py refuse at ten entry points."),
         _wired("granularity_align", "mcp/tools/consolidation.py reads the section workspace-first, then ambient."),
+        _wired("auto_edges_on_write", "write_path_edges.stage_edges_for_block probes it silently; apply_engine calls it on the apply success route."),
         _wired("multi_modal", "multi_modal.flag_enabled probes it workspace-first before the ingest door."),
         _wired("observability", "v4/observability.py refuses and reads its tunables; v4/health.py probes it."),
         _wired("logging_context", "observability.py reads the v4 block directly to install the context filter."),

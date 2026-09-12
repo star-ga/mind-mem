@@ -227,6 +227,7 @@ WS = "$WS"
 #: longer registered is harmless (it sets a config key nobody reads) rather than
 #: a failure, so a flag deleted elsewhere cannot red-light this file.
 SWEEP_FLAGS: tuple[str, ...] = (
+    "auto_edges_on_write",
     "backpressure",
     "block_kinds",
     "block_metadata",

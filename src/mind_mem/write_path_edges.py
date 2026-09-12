@@ -50,8 +50,10 @@ __all__ = [
 
 _log = get_logger("write_path_edges")
 
-#: Flag name as an operator writes it in ``mind-mem.json`` (``v4.<flag>``). The bare
-#: suffix must appear in ``ALL_V4_FLAGS``: ``is_enabled_quiet`` returns False for any
+#: Flag name as an operator writes it in ``mind-mem.json`` (``v4.<flag>``); the probe
+#: below passes the bare suffix as a LITERAL rather than deriving it from this constant,
+#: so the flag registry's consumer scan can see it. The bare suffix must appear in
+#: ``ALL_V4_FLAGS``: ``is_enabled_quiet`` returns False for any
 #: flag outside that tuple, so an undeclared flag is not "off by default" -- it is
 #: permanently unreachable, and the feature would look shipped while never running.
 EDGE_FLAG = "v4.auto_edges_on_write"
@@ -81,7 +83,14 @@ def _flag_on() -> bool:
     try:
         from .v4.feature_flags import is_enabled_quiet
 
-        return bool(is_enabled_quiet(EDGE_FLAG.split(".", 1)[-1]))
+        # The flag name is a LITERAL here on purpose. Computing it
+        # (`EDGE_FLAG.split(".", 1)[-1]`) worked at runtime and defeated
+        # `v4/flag_registry.py`'s consumer scan, which reads the source for the
+        # name -- so the flag was declared WIRED with "0 consumer(s): none" and
+        # the registry's own mutation twin caught it. A flag whose consumer no
+        # tool can find is indistinguishable from an unwired one, to the
+        # registry and to anyone grepping.
+        return bool(is_enabled_quiet("auto_edges_on_write"))
     except Exception:  # pragma: no cover — a probe must never raise
         return False
 

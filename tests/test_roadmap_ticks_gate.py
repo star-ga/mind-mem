@@ -202,9 +202,11 @@ class TestTheGateHasTeeth:
     def test_the_five_retracted_items_stay_retracted(self) -> None:
         """Regression lock on the 2026-09-01 audit.
 
-        Two items carried a confidently-worded false tick that no mechanical
-        rule can catch -- the gate above would not notice them coming back, so
-        they are pinned here by name.
+        Items that carried a confidently-worded false tick no mechanical rule can
+        catch -- the gate above would not notice them coming back, so they are
+        pinned here by name. Two have since been unpinned on traced, mutation-
+        verified evidence (see the notes below); the NAME of this test is kept so
+        its history stays greppable rather than renamed to match the current count.
         """
         text = ROADMAP.read_text(encoding="utf-8")
         # "Provenance-rich blocks" was removed from this lock on 2026-09-07 and
@@ -218,7 +220,28 @@ class TestTheGateHasTeeth:
         # resolve_policy; and prewrite.screen is reached from TWO real entry
         # points, mm_cli.py:3750 and mcp/tools/governance.py:328. An import
         # alone would not have justified unpinning a deliberate lock.
-        for label in ("Pluggable redaction layer", "Compliance export pipeline"):
+        # "Pluggable redaction layer" was removed from this lock on 2026-09-11 and
+        # from the twin lock in tests/test_roadmap_hygiene.py in the same commit —
+        # two guards that disagree about the same item are worse than one.
+        #
+        # Its retraction rested on three clauses; two are now false. Traced rather
+        # than grepped: compliance/detectors.py (12,543 bytes) is the pre-write
+        # detector chain with a metaclass that refuses a malformed detector at class
+        # creation, compliance/redaction.py (8,254 bytes) exposes
+        # redaction_chain_for_workspace + redact over off/flag/redact/reject, and the
+        # flag has 4 consumers, not zero. ("no v4/redaction.py" is still literally
+        # true; the capability lives at compliance/redaction.py, and saying so
+        # matters because a removal justified on a clause that still holds would be
+        # the same false tick in a new coat.)
+        #
+        # What earned it: tests/test_governed_write_is_redacted.py drives
+        # propose_update with redaction ON in every mode — no prior test did, the
+        # existing governed-write file pins it DISABLED in its own fixture — with a
+        # positive control that the secret lands verbatim when the mode is off, and
+        # MUTATION-VERIFIED, since neutralising the mode at the single redact(...)
+        # call turns 3 of its 7 red. An import alone would not have justified
+        # unpinning a deliberate lock, and neither would a test that cannot fail.
+        for label in ("Compliance export pipeline",):
             ticked = [ln for ln in text.splitlines() if label in ln and ln.lstrip().startswith("- [x]")]
             assert ticked == [], f"{label} is ticked again: {ticked}"
 

@@ -270,10 +270,39 @@ class TestRetractedItemsStayRetracted:
     @pytest.mark.parametrize(
         ("label", "why"),
         [
-            (
-                "Pluggable redaction layer",
-                "no v4/redaction.py, no pre-write detector chain in src/, flag has zero consumers",
-            ),
+            # "Pluggable redaction layer" was retracted here on the premise:
+            # "no v4/redaction.py, no pre-write detector chain in src/, flag has
+            # zero consumers". TWO OF THOSE THREE CLAUSES ARE NOW FALSE and the
+            # item is ticked, so it is removed from this guard rather than left
+            # to fail -- the same treatment "Provenance-rich blocks" got below,
+            # and for the same reason.
+            #
+            # Traced and RUN, not grepped, and stated clause by clause because
+            # the third one is subtler than the others:
+            #  * "no pre-write detector chain in src/" is FALSE:
+            #    compliance/detectors.py (12,543 bytes) defines the registry and
+            #    a metaclass that REFUSES a malformed detector at class
+            #    creation, and compliance/redaction.py (8,254 bytes) exposes
+            #    redaction_chain_for_workspace + redact over 4 modes
+            #    (off/flag/redact/reject).
+            #  * "flag has zero consumers" is FALSE: 4 consumers across
+            #    mm_cli.py and compliance/prewrite.py, and prewrite.screen is
+            #    reached from the GOVERNED door at mcp/tools/governance.py:345.
+            #  * "no v4/redaction.py" is still LITERALLY TRUE -- that path does
+            #    not exist -- but the capability it stood for lives at
+            #    compliance/redaction.py. Said plainly rather than glossed,
+            #    because a removal justified on a clause that still holds would
+            #    be the same false tick in a new coat.
+            #
+            # What earned the removal is evidence the earlier tick never had:
+            # tests/test_governed_write_is_redacted.py drives propose_update
+            # with redaction ON in each mode -- no prior test did, the existing
+            # governed-write file pins redaction DISABLED in its own fixture --
+            # with a positive control that the secret lands verbatim when the
+            # mode is off, and it is MUTATION-VERIFIED: neutralising the mode at
+            # the single redact(...) call in compliance/prewrite.py turns 3 of
+            # its 7 red. Import alone would not have justified this removal,
+            # and neither would a passing test that could not fail.
             (
                 "Compliance export pipeline",
                 "no `mm export` verb, no --policy option anywhere in src/, flag has zero consumers",
@@ -334,7 +363,9 @@ class TestRetractedItemsStayRetracted:
     @pytest.mark.parametrize(
         "label",
         [
-            "Pluggable redaction layer",
+            # "Pluggable redaction layer" removed with the entry above — it ships,
+            # it is wired to the governed door, and the wiring is
+            # mutation-verified; see that note for the clause-by-clause trace.
             "Compliance export pipeline",
             # "Provenance-rich blocks" removed with the entry above — it ships
             # and is wired; see the note there for the call path.
