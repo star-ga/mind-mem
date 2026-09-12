@@ -181,10 +181,12 @@ FLAG_STATES: Final[Mapping[str, FlagRecord]] = {
             "No self-heal pass exists. Wiring question: auto_resolver.py is the closest shipped surface and "
             "is governed by proposals, which may be the honest answer instead of a flag.",
         ),
-        _unimplemented(
+        _wired(
             "viewer",
-            "No viewer surface ships in this package. Wiring question: the flag may belong to a client, not "
-            "to mind-mem; if so it should move rather than be deleted.",
+            "viewer.serve refuses to start with the flag off (is_enabled_quiet probe); `mm view` is the door. "
+            "The registry's old note asked whether the flag belonged to a client rather than to mind-mem — it "
+            "belongs here, because the viewer reads the governed corpus and the rules deciding what is "
+            "SERVABLE (admissibility.admit_corpus) live here.",
         ),
         _unimplemented(
             "contradiction_stream",

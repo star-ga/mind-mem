@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1570 | **Est. tokens:** ~4,598,273
-**Generated:** 2026-09-12 03:56 UTC
+**Files:** 1576 | **Est. tokens:** ~4,605,143
+**Generated:** 2026-09-12 04:01 UTC
 
 ## Token Budget Guide
 
@@ -28,6 +28,7 @@
 | `audits/` | 5 | ~24,039 |
 | `benchmarks/` | 66 | ~181,940 |
 | `benchmarks/repro/` | 1 | ~689 |
+| `benchmarks/repro/niah/` | 4 | ~2,558 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
 | `bin/` | 1 | ~526 |
 | `deploy/` | 2 | ~772 |
@@ -73,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 244 | ~1,078,162 |
+| `src/mind_mem/` | 245 | ~1,080,652 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -86,8 +87,8 @@
 | `src/mind_mem/storage/` | 2 | ~11,368 |
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
-| `src/mind_mem/v4/` | 24 | ~92,924 |
-| `tests/` | 680 | ~2,026,256 |
+| `src/mind_mem/v4/` | 24 | ~92,975 |
+| `tests/` | 681 | ~2,028,027 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -225,6 +226,14 @@
 - `REPORT.md` (~5281 tok, huge) — MIND-Mem Benchmark Report
 - `repro_manifest.py` (~2145 tok, huge) — Write a repro package: raw rows, recomputed metrics, and a manifest that pins
 - `repro_metrics.py` (~2213 tok, huge) — Recompute every headline metric from RAW per-unit rows, and nothing else.
+### `benchmarks/repro/niah/`
+
+- `dataset.json` (~792 tok, large) — Keys: content_sha256, depth_percentages, generated_by, generator_sha256, haystack_sizes
+- `environment.json` (~95 tok, small) — Keys: captured_utc, cpu_count, machine, mind_mem_version, packages
+- `manifest.json` (~1430 tok, large) — Keys: artifacts, benchmark, commands, headline, headline_claim
+- `metrics.json` (~241 tok, medium) — Keys: benchmark, breakdown, determinism, headline, integrity
+### `benchmarks/`
+
 - `repro_niah.py` (~3976 tok, huge) — Reproducible NIAH benchmark harness -- emits an independently-verifiable package.
 ### `benchmarks/repro/niah-smoke/`
 
@@ -1077,7 +1086,7 @@
 - `feature_flags.py` (~6254 tok, huge) — v4.0 feature-flag registry.
 - `federation_client.py` (~5276 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `federation.py` (~7339 tok, huge) — v4 federated cross-agent consistency (Group D).
-- `flag_registry.py` (~8554 tok, huge) — Three-state registry for every declared v4 feature flag.
+- `flag_registry.py` (~8605 tok, huge) — Three-state registry for every declared v4 feature flag.
 - `health.py` (~2475 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~1010 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
@@ -1100,6 +1109,7 @@
 - `validity_gate.py` (~3906 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
 - `vector_inertness.py` (~3125 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `verify_cli.py` (~10537 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `viewer.py` (~2490 tok, huge) — ``mm view`` — a read-only local viewer over the governed corpus.
 - `walkthrough.py` (~2449 tok, huge) — Dependency-ordered walkthrough — `compile_walkthrough` (v3.9.0 candidate).
 - `watcher.py` (~1453 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
 - `world_anchors.py` (~2986 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1472,6 +1482,7 @@
 - `test_llm_extractor.py` (~1842 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2359 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_llm_noise_profile_wiring.py` (~7741 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_local_viewer.py` (~1771 tok, huge) — `mm view` — a read-only local viewer that cannot serve withheld content.
 - `test_locomo_suite.py` (~2743 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""

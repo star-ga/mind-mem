@@ -709,6 +709,26 @@ def _cmd_lineage_flag(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_view(args: argparse.Namespace) -> int:
+    """Serve the read-only viewer. Refusals are printed, never downgraded.
+
+    ``ViewerRefused`` covers both the disabled flag and a non-loopback bind; both are
+    operator-fixable, so the message is the whole output and the exit code is non-zero.
+    """
+    from .viewer import ViewerRefused, serve
+
+    ws = _workspace()
+    try:
+        serve(ws, host=args.host, port=args.port)
+    except ViewerRefused as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        print("\nviewer stopped")
+        return 0
+    return 0
+
+
 def _cmd_install_model(args: argparse.Namespace) -> int:
     """Download mind-mem-4b GGUF from HF and import into Ollama.
 
@@ -4481,6 +4501,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_install_model.add_argument("--dry-run", action="store_true")
     p_install_model.set_defaults(func=_cmd_install_model)
+
+    # view — read-only local viewer over the ADMITTED corpus.
+    #
+    # Loopback-only and flag-gated OFF by default, both enforced in mind_mem.viewer
+    # rather than here: a second copy of that policy at the CLI would be a second thing
+    # to keep in step, and the library is reachable without the CLI.
+    p_view = sub.add_parser(
+        "view",
+        help=(
+            "Serve a read-only local web page showing the ADMITTED corpus "
+            "(pending/quarantined blocks are never shown). Loopback only; "
+            'requires "v4": {"viewer": {"enabled": true}}.'
+        ),
+    )
+    p_view.add_argument("--host", default="127.0.0.1", help="Loopback address to bind (default 127.0.0.1).")
+    p_view.add_argument("--port", type=int, default=8900, help="Port to bind (1024-65535, default 8900).")
+    p_view.set_defaults(func=_cmd_view)
 
     # doctor — diagnose + repair common workspace drifts
     p_doctor = sub.add_parser(

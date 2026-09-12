@@ -70,8 +70,12 @@ planned against.
 - `N2 — Chunk-provenance anchoring` — Group N has no subject after the sweep.
 - `Compliance export pipeline` — already `[~]` with behaviour verified.
 
-**D — WORK I CAN DO (originally 4 boxes; 2 done, 1 reclassified to C, so ONE remains).**
-1. `Local visual viewer` (`mm view`) — stdlib HTTP + minimal JS/D3, self-contained.
+**D — WORK I CAN DO: ALL OF IT IS DONE.** Originally 4 boxes; 3 landed and 1 was
+reclassified to C (its own stated prerequisite). Nothing in this bucket remains.
+1. ~~`Local visual viewer` (`mm view`)~~ — **SHIPPED the same day this list was written.**
+   The HTML was the easy part; the load-bearing property is that every block passes the
+   shared admission filter, so pending and quarantined content is unresolvable to it by
+   construction rather than filtered downstream.
 2. ~~`L2 — Prescriptive blocks`~~ — **EVALUATED 2026-09-11; recommendation is NO, with
    the measurements pinned as tests so it cannot rot.** Demand is ~0.1% of the corpus (2
    of 2,726 blocks have conditional-strategy shape; the 10.9% carrying "always/never" are
@@ -97,10 +101,12 @@ planned against.
    embedding tier to compress and no caller to benefit. What this item needs first is a
    DECISION — which quantiser owns the retrieval path — not code.
 
-**So the honest answer to "how long to 100%":** of the four I claimed I could do, two
-landed within hours, one turned out to be blocked by its own stated prerequisite (my
-classification error, corrected above), and ONE remains — the `mm view` viewer. That is
-the actual remaining surface for me.
+**So the honest answer to "how long to 100%":** all four are resolved — three shipped and
+one was blocked by its own stated prerequisite. **There is no remaining mind-mem work that
+does not need a decision or a purchase from the operator.** What is left is 5 status lines
+that are not work, 10 items needing money / a credential / a publish go-ahead, and 12
+blocked on a prerequisite that lives in another repo or in private research. A "100%" that
+counted those as done would be a number, not a product.
 Everything else needs a decision or a purchase from you, or a prerequisite that lives in
 another repo. A "100%" that counted A and C as done would be a number, not a product.
 
@@ -2820,13 +2826,36 @@ multi-tenancy thread is also tracked as issue [#505].
 - [x] **Schema layer for LLM prompts** — `mind-mem.json` `prompts.schema` ships.
 - [x] **Schema evolution / migration tooling** — `mm migrate-store` covers schema drift for v4 fields.
 
-### C. Knowledge graph governance / UX (partial — 5 items open)
+### C. Knowledge graph governance / UX (partial — 4 items open)
 
 - [x] **Idle-only background ingest** — `src/mind_mem/daemon.py` + `inbox.py` ship; opt-in via `mind-mem.json` `watch.enabled`; resource-capped.
 - [x] **AI lint with auto-fix** — SHIPPED. `lint_autofix` at `mcp/tools/lint.py:111`, exported in `__all__`, ACL-classified ADMIN at `mcp/infra/acl.py:88`. Ticked 2026-09-06; this box and the `[x]` entry above it made contradictory claims about the same tool, and both were wrong.
 - [x] **Contradiction state machine** — `detected → review_ok → resolved` / `pending_fix` lifecycle ships in `governance` engine.
 - [x] **Self-healing index** — `mm doctor` triggers integrity check + repair; background reindex runs in idle windows.
-- [ ] **Local visual viewer** — `mm view` web UI not yet shipped. Stack target: stdlib HTTP + minimal JS/D3. Tracked.
+- [x] **Local visual viewer** — **SHIPPED 2026-09-11** (`src/mind_mem/viewer.py`,
+  `mm view`, 16 tests, admission filter mutation-verified). Stdlib `http.server`
+  only, one self-contained HTML document, no dependency and no build step.
+  **The load-bearing property is the ADMISSION FILTER, not the HTML.** This repo
+  already paid for the alternative: a block loader selected `status` and never
+  filtered on it, so quarantined and pending content surfaced verbatim through a
+  user-scope tool — the column was right there in the SELECT, which is exactly why
+  it read as safe. Every block goes through `admissibility.admit_corpus`, and the
+  counts, the type histogram and the recent list are all derived from that same
+  filtered sequence — a summary rebuilt from the raw corpus would leak withheld
+  text while the block list looked clean. One test asserts the withheld excerpt is
+  absent from the WHOLE serialised payload, not just the block array, paired with a
+  control that an admitted block IS shown (otherwise absence proves nothing).
+  Fail-closed three more ways: a NON-LOOPBACK bind is refused (an unauthenticated
+  read surface on a routable address publishes the governed corpus to the network),
+  a privileged/out-of-range port is refused, and the flag is OFF by default and
+  probed with `is_enabled_quiet`. Block text is HTML-escaped — it is operator
+  authored but it is still TEXT, and a viewer rendering it as markup would execute
+  whatever a captured document contained. No write path at all, asserted over the
+  import graph. The access log is silenced deliberately: it would be a second place
+  governed block ids accumulate outside the evidence chain.
+  The `viewer` flag moves from UNIMPLEMENTED to WIRED in the registry, and its old
+  note — "the flag may belong to a client, not to mind-mem" — is answered: it
+  belongs here, because the rules deciding what is SERVABLE live here.
 - [x] **Auto-generated hierarchical index** — `index.md` (hierarchical: category → kind) + `log.md` (chronological) are regenerated from the block corpus by `src/mind_mem/memory_index.py` (`generate_index`), exposed as the `mm index` verb (`mm_cli._cmd_index`); `tests/test_memory_index.py` covers it with 14 tests. The earlier text on this line denied its own tick — corrected 2026-09-01 against the code.
 - [x] **Real-time contradiction stream** — webhook stream on contradiction-detection ships under the alerting layer.
 - [~] **Adversarial / poisoning defense** — **CANARY BLOCKS LANDED 2026-09-11**
