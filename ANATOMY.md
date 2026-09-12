@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1576 | **Est. tokens:** ~4,605,143
-**Generated:** 2026-09-12 04:01 UTC
+**Files:** 1578 | **Est. tokens:** ~4,608,989
+**Generated:** 2026-09-12 04:08 UTC
 
 ## Token Budget Guide
 
@@ -74,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 245 | ~1,080,652 |
+| `src/mind_mem/` | 246 | ~1,082,443 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,8 +87,8 @@
 | `src/mind_mem/storage/` | 2 | ~11,368 |
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
-| `src/mind_mem/v4/` | 24 | ~92,975 |
-| `tests/` | 681 | ~2,028,027 |
+| `src/mind_mem/v4/` | 24 | ~93,116 |
+| `tests/` | 682 | ~2,029,941 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -795,6 +795,7 @@
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
 - `entity_blocking.py` (~1329 tok, large) — Deterministic blocking for entity resolution: keep the model off easy cases.
 - `entity_ingest.py` (~3309 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
+- `entity_merge_candidates.py` (~1415 tok, large) — Record entity MERGE CANDIDATES at mint time. Never merge.
 - `entity_prefetch.py` (~3059 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
 - `enums.py` (~3698 tok, huge) — Centralised enum definitions for mind-mem.
 - `error_codes.py` (~1918 tok, huge) — mind-mem Error Codes — structured error classification.
@@ -848,7 +849,7 @@
 - `iterative_recall.py` (~2856 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4672 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kg_fusion.py` (~2054 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
-- `knowledge_graph.py` (~17602 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~17978 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lifecycle_evidence.py` (~5228 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
@@ -1083,10 +1084,10 @@
 - `circuit_breaker.py` (~4577 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 - `cognitive_kernel.py` (~2576 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `embedding_pipeline.py` (~2377 tok, huge) — v4 embedding auto-derivation pipeline (Group A — closes the
-- `feature_flags.py` (~6254 tok, huge) — v4.0 feature-flag registry.
+- `feature_flags.py` (~6341 tok, huge) — v4.0 feature-flag registry.
 - `federation_client.py` (~5276 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `federation.py` (~7339 tok, huge) — v4 federated cross-agent consistency (Group D).
-- `flag_registry.py` (~8605 tok, huge) — Three-state registry for every declared v4 feature flag.
+- `flag_registry.py` (~8659 tok, huge) — Three-state registry for every declared v4 feature flag.
 - `health.py` (~2475 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~1010 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
@@ -1350,6 +1351,7 @@
 - `test_encryption.py` (~2848 tok, huge) — Tests for mind-mem encryption at rest."""
 - `test_entity_blocking.py` (~1249 tok, large) — Deterministic blocking for entity resolution — keep the model off easy cases.
 - `test_entity_ingest.py` (~4122 tok, huge) — Tests for the entity_ingest module — extraction, filtering, signal generation."""
+- `test_entity_merge_candidates.py` (~1908 tok, huge) — Minting a new entity records a MERGE CANDIDATE. It never merges.
 - `test_entity_observations.py` (~1975 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_entity_prefetch.py` (~1674 tok, huge) — v3.3.0 Tier 3 #8 — entity-graph prefetch.
 - `test_enums.py` (~534 tok, large) — Tests for centralised enums (mind_mem.enums)."""
@@ -1612,7 +1614,7 @@
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
 - `test_query_term_stemming.py` (~1052 tok, large) — The query and the index must agree on what a word stems to.
 - `test_read_surface_admission.py` (~6315 tok, huge) — Every read surface, swept with a three-status canary.
-- `test_read_surface_classification.py` (~8839 tok, huge) — The registry-wide read-surface classification — the committed table.
+- `test_read_surface_classification.py` (~8845 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~3776 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_resources.py` (~7355 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_admissibility.py` (~8772 tok, huge) — Acceptance gate for recall admissibility — the servability allow-list.

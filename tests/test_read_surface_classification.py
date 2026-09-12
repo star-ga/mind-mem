@@ -228,6 +228,7 @@ WS = "$WS"
 #: a failure, so a flag deleted elsewhere cannot red-light this file.
 SWEEP_FLAGS: tuple[str, ...] = (
     "auto_edges_on_write",
+    "merge_candidates",
     "backpressure",
     "block_kinds",
     "block_metadata",

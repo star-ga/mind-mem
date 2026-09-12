@@ -370,7 +370,37 @@ class EntityRegistry:
                 (canon, entity_id),
             )
             self._conn.commit()
-            return entity_id
+        # MERGE CANDIDATES, recorded AFTER the mint and outside the lock the mint held.
+        #
+        # This create is the exact moment two spellings of one person become two
+        # entities, so it is the only place a candidate can be noticed. The return value
+        # is DELIBERATELY UNCHANGED -- a new surface still gets its own id. Redirecting
+        # the caller to a blocking match would BE the silent auto-merge, and unmerging is
+        # the operation this store cannot offer.
+        #
+        # Flag-gated OFF and never fatal: `resolve` is on the ingestion path, and a
+        # candidate queue is a convenience. Losing an entity write because the
+        # convenience failed would be a bad trade.
+        self._note_merge_candidate(canon)
+        return entity_id
+
+    def _note_merge_candidate(self, canon: str) -> None:
+        """Queue review candidates for a just-minted entity. Never raises, never merges."""
+        try:
+            from .entity_merge_candidates import _flag_on, note_candidates_for
+
+            if not _flag_on():
+                return
+            with self._lock:
+                existing = [
+                    str(r[0])
+                    for r in self._conn.execute(
+                        "SELECT canonical FROM entities WHERE canonical <> ?", (canon,)
+                    ).fetchall()
+                ]
+            note_candidates_for(self._conn, self._lock, canon, existing)
+        except Exception:  # noqa: BLE001 — the entity write already succeeded
+            return
 
     def lookup(self, surface: str) -> Optional[str]:
         """Read-only alias resolution: return the entity id for

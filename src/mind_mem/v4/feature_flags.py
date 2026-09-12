@@ -103,6 +103,11 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     # graph_ingest staging path and the same approve_relation_signals operator gate
     # a corpus backfill uses. Never a direct graph write (Group H wedge guardrail).
     "auto_edges_on_write",
+    # 5.0.2: at entity-mint time, record a MERGE CANDIDATE for any existing name that
+    # blocks with the new one, carrying the over-merge guard's verdict. Never merges --
+    # `resolve` keeps returning a fresh id for a new surface -- so the queue is advisory
+    # and a human decides. Writes rows, hence off by default.
+    "merge_candidates",
     "granularity_align",  # named merge operation surfaced in plan_consolidation (proposal-only)
     "multi_modal",  # sidecar-described image/audio inbox drops + modality-aware pack cost
     "observability",  # counters / gauges / histograms (round 3 audit 4/4)

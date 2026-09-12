@@ -746,8 +746,9 @@ Group H recompaction).
       review, never toward a refusal a reviewer cannot check. A test pins that
       direction.
       **Remaining:** the description-similarity judgement itself (needs a
-      model), cross-lingual transliteration, and wiring the guard into the
-      `capture.py` merge path.
+      model) and cross-lingual transliteration. **The guard IS wired** — at
+      `EntityRegistry.resolve`, not `capture.py` (which has no merge path); see
+      the blocking item for the trace.
       **Original text, preserved verbatim rather than rewritten — this is
       the SAME item as the entry above, not additional open work; it
       carried its own checkbox until 2026-09-11, which inflated the open
@@ -781,8 +782,30 @@ Group H recompaction).
       that coverage survives: a cap implemented by truncation would silently
       reintroduce the dropped-entity failure the single-element rule exists to
       prevent.
-      **Remaining:** the LLM arbitration within a block, and wiring blocking into
-      the `capture.py` merge path.
+      **Remaining:** the LLM arbitration within a block.
+      **WIRED 2026-09-11 — and the pointer in the line above is WRONG.** `capture.py`
+      has no merge path: no merge function, no entity resolution, no
+      `EntityRegistry` reference. The real door is `EntityRegistry.resolve`, which
+      canonicalises a surface form and CREATES the entity when it is new — that
+      create is the exact moment two spellings of one person become two entities,
+      and the only place a candidate can be noticed. Recorded rather than quietly
+      worked around, because the next person will follow the same wrong pointer.
+      `src/mind_mem/entity_merge_candidates.py` (12 tests, mutation-verified): on a
+      mint, every existing name that BLOCKS with the new one is queued as a merge
+      candidate carrying the over-merge guard's verdict and reason — without the
+      verdict the queue is a list of coincidences.
+      **NOTHING IS MERGED, BY CONSTRUCTION.** `resolve` keeps its exact behaviour:
+      a new surface still gets its own id and every caller sees the same return
+      value. Redirecting the caller to a blocking match would BE the silent
+      auto-merge — it would fuse "Ada Lovelace" and "Alan Lovelace" on a shared
+      token — and unmerging is the operation this store cannot offer. A test
+      asserts the two ids differ. The module is also structurally incapable of
+      merging: a test greps its source for `UPDATE entities` / `DELETE FROM
+      aliases` and friends, with a positive control that it contains SQL at all.
+      Flag-gated OFF (`v4.merge_candidates`) because it WRITES ROWS — with the flag
+      off the table is never created, so a flag-off build is indistinguishable from
+      one without the feature even on disk. Never fatal: `resolve` is on the
+      ingestion path and losing an entity write to a queue failure is a bad trade.
       **Original text, preserved verbatim rather than rewritten — this is
       the SAME item as the entry above, not additional open work; it
       carried its own checkbox until 2026-09-11, which inflated the open
