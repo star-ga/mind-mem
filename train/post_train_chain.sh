@@ -11,6 +11,62 @@ EVAL_LOG=/data/checkpoints/mm-workspace/train-output/eval.retry2f.log
 HOLDOUT_LOG=/data/checkpoints/mm-workspace/train-output/eval_holdout.retry2f.log
 WEIGHTS_DIR=/data/checkpoints/mm-workspace/full-ft
 DEPLOY_PID="${1:-}"
+EVAL_REPORT_PATH="${MM_POST_TRAIN_EVAL_REPORT:-/data/checkpoints/mm-workspace/train-output/eval_report.json}"
+HOLDOUT_REPORT_PATH="${MM_POST_TRAIN_HOLDOUT_REPORT:-/data/checkpoints/mm-workspace/full-ft/eval_holdout_report.json}"
+
+# A narrow offline entrypoint for the exact receipt comparison below.  It is
+# used by the release regression test and lets an operator re-run this final
+# check against already-written reports without waiting on a deploy process.
+validate_receipts() {
+    EVAL_REPORT="$EVAL_REPORT_PATH" \
+    HOLDOUT_REPORT="$HOLDOUT_REPORT_PATH" \
+    python3 - <<'PY'
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.getcwd(), "train"))
+from eval_receipt import bindings_match, receipt_is_valid, report_matches_receipt
+
+selections = {}
+for name, suite in (("EVAL_REPORT", "main"), ("HOLDOUT_REPORT", "holdout")):
+    path = os.environ[name]
+    try:
+        report = json.loads(open(path, encoding="utf-8").read())
+        receipt = report["receipt"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"[chain] FAIL: {name} has no usable receipt: {exc}")
+        sys.exit(1)
+    if receipt.get("suite") != suite or not receipt.get("complete"):
+        print(f"[chain] FAIL: {name} receipt is incomplete or attests the wrong suite")
+        sys.exit(1)
+    if not receipt_is_valid(receipt) or not report_matches_receipt(report):
+        print(f"[chain] FAIL: {name} receipt or report payload was modified after evaluation")
+        sys.exit(1)
+    ok, reason = bindings_match(receipt)
+    if not ok:
+        print(f"[chain] FAIL: {name} binding check: {reason}")
+        sys.exit(1)
+    selections[name] = receipt["selection"]
+main_sel, holdout_sel = selections["EVAL_REPORT"], selections["HOLDOUT_REPORT"]
+if main_sel["model"] != holdout_sel["model"] or main_sel["kind"] != holdout_sel["kind"]:
+    print("[chain] FAIL: the two suites attest different checkpoints")
+    sys.exit(1)
+if main_sel.get("tokenizer") != holdout_sel.get("tokenizer"):
+    print("[chain] FAIL: the two suites attest different tokenizers")
+    sys.exit(1)
+if (main_sel.get("base") or {}) != (holdout_sel.get("base") or {}):
+    print("[chain] FAIL: the two suites attest different base checkpoints")
+    sys.exit(1)
+print("[chain] evaluation receipts complete, self-consistent, same checkpoint")
+print("[chain] scope: recorded bytes/results are consistent; not proof of execution or origin")
+PY
+}
+
+if [[ "${1:-}" == "--validate-receipts" ]]; then
+    validate_receipts
+    exit $?
+fi
 
 if [[ -z "$DEPLOY_PID" ]]; then
     DEPLOY_PID=$(pgrep -f "runpod_deploy.py" | head -1)
@@ -57,46 +113,7 @@ echo "[chain] eval_holdout exit=$HOLDOUT_RC"
 
 RECEIPT_RC=1
 if [[ "$EVAL_RC" -eq 0 && "$HOLDOUT_RC" -eq 0 ]]; then
-    EVAL_REPORT=/data/checkpoints/mm-workspace/train-output/eval_report.json \
-    HOLDOUT_REPORT=/data/checkpoints/mm-workspace/full-ft/eval_holdout_report.json \
-    python3 - <<'PY'
-import json
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.getcwd(), "train"))
-from eval_receipt import bindings_match, receipt_is_valid, report_matches_receipt
-
-selections = {}
-for name, suite in (("EVAL_REPORT", "main"), ("HOLDOUT_REPORT", "holdout")):
-    path = os.environ[name]
-    try:
-        report = json.loads(open(path, encoding="utf-8").read())
-        receipt = report["receipt"]
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(f"[chain] FAIL: {name} has no usable receipt: {exc}")
-        sys.exit(1)
-    if receipt.get("suite") != suite or not receipt.get("complete"):
-        print(f"[chain] FAIL: {name} receipt is incomplete or attests the wrong suite")
-        sys.exit(1)
-    if not receipt_is_valid(receipt) or not report_matches_receipt(report):
-        print(f"[chain] FAIL: {name} receipt or report payload was modified after evaluation")
-        sys.exit(1)
-    ok, reason = bindings_match(receipt)
-    if not ok:
-        print(f"[chain] FAIL: {name} binding check: {reason}")
-        sys.exit(1)
-    selections[name] = receipt["selection"]
-main_sel, holdout_sel = selections["EVAL_REPORT"], selections["HOLDOUT_REPORT"]
-if main_sel["model"] != holdout_sel["model"] or main_sel["kind"] != holdout_sel["kind"]:
-    print("[chain] FAIL: the two suites attest different checkpoints")
-    sys.exit(1)
-if (main_sel.get("base") or {}) != (holdout_sel.get("base") or {}):
-    print("[chain] FAIL: the two suites attest different base checkpoints")
-    sys.exit(1)
-print("[chain] evaluation receipts complete, self-consistent, same checkpoint")
-print("[chain] scope: recorded bytes/results are consistent; not proof of execution or origin")
-PY
+    validate_receipts
     RECEIPT_RC=$?
 fi
 if [[ "$RECEIPT_RC" -ne 0 ]]; then

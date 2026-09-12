@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1553 | **Est. tokens:** ~4611666
-**Generated:** 2026-09-12 23:37 UTC
+**Files:** 1556 | **Est. tokens:** ~4616585
+**Generated:** 2026-09-12 23:44 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~207672 |
+| `docs/` | 93 | ~207746 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1059825 |
+| `src/mind_mem/` | 232 | ~1060442 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 672 | ~2035075 |
+| `tests/` | 674 | ~2039138 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -100,7 +100,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 34 | ~75151 |
+| `train/` | 34 | ~75316 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -458,7 +458,7 @@
 ### `docs/`
 
 - `faq.md` (~383 tok, medium) — FAQ
-- `federation-setup.md` (~2332 tok, huge) — mind-mem federation & multi-machine setup
+- `federation-setup.md` (~2406 tok, huge) — mind-mem federation & multi-machine setup
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
 - `governance.md` (~1572 tok, huge) — MIND-Mem — governance design (5 layers)
@@ -1032,6 +1032,7 @@
 - `temporal_metadata.py` (~1938 tok, huge) — Temporal metadata injection for retrieved blocks (v3.4.0).
 - `tenant_audit.py` (~2355 tok, huge) — Per-tenant audit chain isolation (v4.0 prep).
 - `tenant_kms.py` (~3010 tok, huge) — Per-tenant key management + envelope encryption (v4.0 prep).
+- `token_expiry.py` (~617 tok, large) — Pure parsing and filtering for optional bearer-token expiries.
 ### `src/mind_mem/tool_output/`
 
 - `__init__.py` (~200 tok, medium) — mind_mem.tool_output — context-offload for large command/tool output (§5).
@@ -1555,6 +1556,7 @@
 - `test_pg_pool_autocommit_isolation.py` (~3285 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_pg_restore_file_path.py` (~1187 tok, large) — restore() must preserve each block's file_path (routing metadata).
 - `test_pipeline_hash.py` (~3381 tok, huge) — Tests for v3.9 hash-of-code pipeline invalidation."""
+- `test_post_train_chain_receipts.py` (~831 tok, large) — Regression controls for the post-training receipt comparison shell path."""
 - `test_postgres_active_admission.py` (~6670 tok, huge) — R2-06 — on Postgres, ``blocks.active`` must mean what admission means.
 - `test_postgres_block_store.py` (~8589 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_postgres_partial_import.py` (~992 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1691,7 +1693,7 @@
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_route_conformance.py` (~1778 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_sec02_live_request_parity.py` (~3259 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_sec02_live_request_parity.py` (~5192 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_route_scope_parity.py` (~2287 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec03_scan_bounded.py` (~2362 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_security_scanning_alerts.py` (~1395 tok, large) — Regression tests for code-scanning alerts #189 and #192.
@@ -1741,7 +1743,8 @@
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tier_manager_releases_descriptors.py` (~754 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tmpdir_containment.py` (~702 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_token_rotation.py` (~1766 tok, huge) — Regression tests for the token rotation primitive (roadmap v4.0.x).
+- `test_token_expiry.py` (~341 tok, medium) — Pure token-expiry grammar and boundary tests."""
+- `test_token_rotation.py` (~2724 tok, huge) — Regression tests for the token rotation primitive (roadmap v4.0.x).
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
 - `test_tool_output.py` (~2168 tok, huge) — Tests for mind_mem.tool_output — the context-offload store (§5).
 - `test_tool_output_postgres_backend.py` (~1615 tok, huge) — ``ToolOutputStore`` on the Postgres backend the module advertises.
@@ -1847,7 +1850,7 @@
 - `eval_receipt.py` (~6560 tok, huge) — Content-addressed receipts binding a 4B evaluation report to its inputs.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `merge_and_eval_v4.1.0.py` (~1488 tok, large) — Post-Kaggle: pull LoRA adapter, merge with v4.0.0-base, eval 131 probes.
-- `post_train_chain.sh` (~1160 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
+- `post_train_chain.sh` (~1325 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
 - `post_train_pipeline.sh` (~592 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
 - `qlora_local_3080.py` (~1182 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
 - `qwen35_text_config_control.py` (~1075 tok, large) — Offline smoke control for the Qwen3.5 composite-config adapter.

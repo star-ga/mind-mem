@@ -3240,9 +3240,10 @@ def _cmd_token_rotate(args: argparse.Namespace) -> int:
 
     Token rotation primitive (roadmap v4.0.x federation hardening). The
     HTTP transport reads ``MIND_MEM_TOKENS`` (comma-separated) on every
-    request, so appending a new token gives an immediate grace window
-    where both old and new tokens authenticate. After the grace window
-    closes the operator removes the old entry.
+    request after the server process receives an environment update. This
+    command emits expiry-bearing entries for retiring credentials, so the
+    grace window is enforced server-side. The command itself cannot update an
+    already-running server's process environment.
 
     Output:
         ``new_token``  — the freshly minted token (192-bit url-safe)
@@ -3251,6 +3252,8 @@ def _cmd_token_rotate(args: argparse.Namespace) -> int:
                           for the grace window)
         ``shell_final`` — the export statement after the grace window
                           (drops the previous tokens)
+        ``configured_tokens_after_rotate`` — raw expiry-bearing entries used
+                          by ``shell``
         ``grace_seconds`` — the configured / default grace window
 
     The token itself is generated via ``secrets.token_urlsafe(24)`` —
@@ -3260,9 +3263,18 @@ def _cmd_token_rotate(args: argparse.Namespace) -> int:
     import json as _json
     import os as _os
     import secrets as _secrets
+    import shlex as _shlex
+    import time as _time
+
+    from .token_expiry import is_expired, parse_token_entry
 
     length = max(16, int(args.length))
     grace_seconds = int(args.grace_seconds)
+    if grace_seconds < 0:
+        print("mm token rotate: --grace-seconds must be non-negative", file=sys.stderr)
+        return 2
+    now = _time.time()
+    deadline = int(now) + grace_seconds
     new_token = _secrets.token_urlsafe(length)
 
     current_multi = _os.environ.get("MIND_MEM_TOKENS", "").strip()
@@ -3274,25 +3286,51 @@ def _cmd_token_rotate(args: argparse.Namespace) -> int:
     elif current_single:
         existing = [current_single]
 
-    # Rotation set: new token canonical FIRST (clients minted after
-    # rotation use it; the old set stays valid through grace).
-    rotated_set = [new_token, *[t for t in existing if t != new_token]]
+    # Rotation set: new token canonical FIRST. Retiring credentials receive a
+    # deadline no later than the requested grace period. Existing earlier
+    # deadlines are preserved, and expired/malformed entries are discarded so
+    # the command cannot resurrect a credential that has already died.
+    configured_old: list[str] = []
+    active_old: list[str] = []
+    seen_values: set[str] = {new_token}
+    for entry in existing:
+        value, previous_expiry = parse_token_entry(entry)
+        if not value or is_expired(entry, now=now):
+            continue
+        if value in seen_values:
+            continue
+        seen_values.add(value)
+        if previous_expiry is None:
+            expiry = deadline
+        else:
+            expiry = min(previous_expiry, deadline)
+        configured_old.append(f"{value}|exp={expiry}")
+        active_old.append(value)
+
+    configured_set = [new_token, *configured_old]
+    rotated_set = [new_token, *active_old]
     final_set = [new_token]
 
     report = {
         "new_token": new_token,
         "active_tokens_after_rotate": rotated_set,
         "active_tokens_after_grace": final_set,
+        "configured_tokens_after_rotate": configured_set,
         "grace_seconds": grace_seconds,
-        "shell": f"export MIND_MEM_TOKENS={','.join(rotated_set)}",
-        "shell_final": f"export MIND_MEM_TOKENS={','.join(final_set)}",
+        "shell": f"export MIND_MEM_TOKENS={_shlex.quote(','.join(configured_set))}",
+        "shell_final": f"export MIND_MEM_TOKENS={_shlex.quote(','.join(final_set))}",
         "instructions": (
-            "1. Run the 'shell' export now to authorise the new token "
+            "1. Apply the 'shell' export in the server process environment "
+            "to authorise the new token "
             "while old tokens stay valid through the grace window.  "
             "2. Distribute the new_token to clients.  "
-            "3. After grace_seconds, run 'shell_final' to drop the old "
-            "tokens.  The HTTP transport reads MIND_MEM_TOKENS at each "
-            "request so no restart is required."
+            "3. After grace_seconds, apply 'shell_final' in that same "
+            "server environment to drop the old tokens.  A child `mm "
+            "token rotate` process cannot update an already-running "
+            "server's environment; reconfigure or restart the server "
+            "process as required.  The HTTP transport reads "
+            "MIND_MEM_TOKENS on each request after the process receives "
+            "the change."
         ),
     }
     print(_json.dumps(report, indent=2))
@@ -4527,7 +4565,7 @@ def build_parser() -> argparse.ArgumentParser:
     tsub = p_token.add_subparsers(dest="token_cmd", required=True)
     t_rotate = tsub.add_parser(
         "rotate",
-        help="Mint a new token and emit the rotation hint (N-of-K active tokens with grace window; no server restart required).",
+        help="Mint a new token and emit expiry-bearing exports (apply them to the server process environment).",
     )
     t_rotate.add_argument(
         "--length",

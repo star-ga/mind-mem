@@ -93,6 +93,7 @@ from typing import Any, Callable
 from . import audit_context as _audit_ctx
 from .admission import admit_read
 from .protection import AUTH_HEADER
+from .token_expiry import active_token_values
 
 
 def _corpus_encoding_response(exc: Any, workspace: str, **extra: Any) -> tuple[int, dict[str, Any]]:
@@ -178,6 +179,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_RATE_MAX_CALLS = 120
 DEFAULT_RATE_WINDOW_SECS = 60
 MAX_TRACKED_CLIENTS = 1024  # LRU cap to bound limiter memory under attack
+_AUTH_ENV_UNSET = object()
 
 
 # -- Token rotation primitive (roadmap v4.0.x) -----------------------------
@@ -185,11 +187,10 @@ MAX_TRACKED_CLIENTS = 1024  # LRU cap to bound limiter memory under attack
 # a grace window during rotation. Old single-token deployments keep using
 # ``MIND_MEM_TOKEN``; setting ``MIND_MEM_TOKENS`` overrides + extends.
 #
-# Rotation flow: operator runs ``mm token rotate``, which appends a new
-# token to ``MIND_MEM_TOKENS`` (the new one becomes the canonical write
-# token); old tokens stay valid through the grace window so in-flight
-# clients don't break, then the operator removes the old entry. Server
-# reads on every request (no restart needed).
+# Rotation flow: operator runs ``mm token rotate`` and applies its
+# expiry-bearing export to the server process environment. The new token is
+# canonical; old tokens remain valid until their recorded deadlines. The
+# server rereads that process environment on every request after it changes.
 @dataclass(frozen=True, slots=True)
 class _AdminAuthState:
     """One read of the optional privilege-separation configuration.
@@ -210,6 +211,7 @@ class _RequestAuthSnapshot:
     active_tokens: tuple[str, ...]
     admin_tokens: tuple[str, ...]
     admin_configured: bool
+    auth_configured: bool = True
 
 
 def _read_admin_auth_state() -> _AdminAuthState:
@@ -238,7 +240,8 @@ def _active_admin_tokens() -> list[str]:
     already counts, so an operator configures one admin credential rather than
     two spellings of it.
     """
-    return list(_read_admin_auth_state().tokens)
+    state = _read_admin_auth_state()
+    return active_token_values(",".join(state.tokens), now=time.time())
 
 
 def _caller_is_admin(presented: str | None, active_admin: Sequence[str]) -> bool:
@@ -260,47 +263,78 @@ def _caller_is_admin(presented: str | None, active_admin: Sequence[str]) -> bool
     return any(results)
 
 
-def _active_tokens(fallback: str | None = None) -> list[str]:
+def _active_tokens(fallback: str | None = None, *, now: float | int | None = None) -> list[str]:
     """Return the set of currently-active tokens.
 
     Reads ``MIND_MEM_TOKENS`` (comma-separated) on every call so a
-    rotation via ``mm token rotate`` lands without restart. Falls
+    rotation applied to the server process lands on its next request. Falls
     back to ``MIND_MEM_TOKEN`` (single-token deployments) and then
     to the handler-bound *fallback* (the server's startup-time token).
     Whitespace + empty entries are stripped.
     """
     admin = _read_admin_auth_state().tokens
-    return _active_tokens_with_admin(fallback=fallback, admin=admin)
+    return _active_tokens_with_admin(fallback=fallback, admin=admin, now=now)
 
 
-def _active_tokens_with_admin(*, fallback: str | None, admin: Sequence[str]) -> list[str]:
+def _active_tokens_with_admin(
+    *,
+    fallback: str | None,
+    admin: Sequence[str],
+    now: float | int | None = None,
+    raw_multi: str | None | object = _AUTH_ENV_UNSET,
+    raw_single: str | None | object = _AUTH_ENV_UNSET,
+) -> list[str]:
     """Build the active bearer set from one already-captured admin state."""
 
-    multi = os.environ.get("MIND_MEM_TOKENS", "").strip()
-    if multi:
-        toks = [t.strip() for t in multi.split(",") if t.strip()]
-        if toks:
-            return _merge_admin(toks, admin)
-    single = os.environ.get("MIND_MEM_TOKEN", "").strip()
-    if single:
-        return _merge_admin([single], admin)
+    observed_at = time.time() if now is None else now
+    if raw_multi is _AUTH_ENV_UNSET:
+        raw_multi = os.environ.get("MIND_MEM_TOKENS")
+    if raw_multi is not None and raw_multi.strip():
+        # A configured list is authoritative even when every entry has
+        # expired. Falling through here would resurrect a retired token.
+        user_tokens = active_token_values(raw_multi, now=observed_at)
+        return _merge_admin(user_tokens, admin, now=observed_at)
+
+    if raw_single is _AUTH_ENV_UNSET:
+        raw_single = os.environ.get("MIND_MEM_TOKEN")
+    if raw_single is not None and raw_single.strip():
+        # The configured singular source is authoritative after parsing too;
+        # an expired entry must not fall back to the handler-bound credential.
+        user_tokens = active_token_values(raw_single, now=observed_at)
+        return _merge_admin(user_tokens, admin, now=observed_at)
+
     if fallback:
-        return _merge_admin([fallback], admin)
+        return _merge_admin(active_token_values(fallback, now=observed_at), admin, now=observed_at)
     # No user credential configured. An admin credential alone is still a
     # credential, and refusing it here would make an admin-only deployment
     # unauthenticable.
-    return list(admin)
+    return _merge_admin([], admin, now=observed_at)
 
 
 def _capture_auth_snapshot(*, fallback: str | None) -> _RequestAuthSnapshot:
     """Capture all environment-backed auth inputs exactly once."""
 
+    observed_at = time.time()
     admin_state = _read_admin_auth_state()
-    active = _active_tokens_with_admin(fallback=fallback, admin=admin_state.tokens)
-    return _RequestAuthSnapshot(tuple(active), admin_state.tokens, admin_state.configured)
+    raw_multi = os.environ.get("MIND_MEM_TOKENS")
+    raw_single = os.environ.get("MIND_MEM_TOKEN")
+    active = _active_tokens_with_admin(
+        fallback=fallback,
+        admin=admin_state.tokens,
+        now=observed_at,
+        raw_multi=raw_multi,
+        raw_single=raw_single,
+    )
+    admin = active_token_values(",".join(admin_state.tokens), now=observed_at)
+    # The admin subset is derived from the same raw read and timestamp as the
+    # general bearer set. It remains a separate authorization input.
+    auth_configured = (
+        bool(fallback) or bool(raw_multi and raw_multi.strip()) or bool(raw_single and raw_single.strip()) or admin_state.configured
+    )
+    return _RequestAuthSnapshot(tuple(active), tuple(admin), admin_state.configured, auth_configured)
 
 
-def _merge_admin(user_tokens: list[str], admin_tokens: Sequence[str]) -> list[str]:
+def _merge_admin(user_tokens: list[str], admin_tokens: Sequence[str], *, now: float | int | None = None) -> list[str]:
     """User credentials plus admin credentials, de-duplicated, order preserved.
 
     THE DEFECT THIS CLOSES. Authorisation was added to this transport on top of
@@ -318,8 +352,10 @@ def _merge_admin(user_tokens: list[str], admin_tokens: Sequence[str]) -> list[st
     grant a user token any authority, and does not let an admin token skip the
     scope check.
     """
+    observed_at = time.time() if now is None else now
+    active_admin = active_token_values(",".join(admin_tokens), now=observed_at)
     seen = set(user_tokens)
-    return list(user_tokens) + [t for t in admin_tokens if t not in seen]
+    return list(user_tokens) + [t for t in active_admin if t not in seen]
 
 
 # Endpoint paths — kept as constants so tests can import them.
@@ -1917,7 +1953,10 @@ def build_handler(
 ) -> type[BaseHTTPRequestHandler]:
     """Construct a handler class bound to *workspace* + auth settings."""
 
-    auth_required = not (allow_unauthenticated_localhost and _is_loopback(bind_host))
+    # The explicit loopback opt-in only disables auth when no credential
+    # source is configured. In particular, an all-expired configured list is
+    # still an authenticated (closed) server, never an anonymous fallback.
+    loopback_anonymous_opt_in = allow_unauthenticated_localhost and _is_loopback(bind_host)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "mind-mem-http/0.1"
@@ -1997,6 +2036,8 @@ def build_handler(
             return snapshot
 
         def _authenticated(self) -> bool:
+            snapshot = self._auth_snapshot()
+            auth_required = not (loopback_anonymous_opt_in and not snapshot.auth_configured)
             if not auth_required:
                 return True
             sent = self.headers.get(AUTH_HEADER, "")
@@ -2004,14 +2045,14 @@ def build_handler(
                 return False
             # Token rotation (roadmap v4.0.x): accept any of an N-of-K
             # active-tokens set. ``MIND_MEM_TOKENS`` (comma-separated)
-            # is preferred when set — supports grace-window rotation
-            # without restart. Falls back to the single ``token`` value
+            # is preferred when set — supports grace-window rotation after
+            # the server process environment is updated. Falls back to the single ``token`` value
             # the handler was built with for backwards compat.
             #
-            # Read at request time so ``mm token rotate`` (which appends
-            # to MIND_MEM_TOKENS) takes effect for the next request
-            # without restarting the server.
-            active = self._auth_snapshot().active_tokens
+            # Read at request time so an expiry-bearing environment update
+            # takes effect for the next request. A separate CLI process cannot
+            # mutate this server process's environment.
+            active = snapshot.active_tokens
             if not active:
                 return False
             # Constant-time comparison against EVERY active token (audit
@@ -2081,7 +2122,8 @@ def build_handler(
             Only ever called after :meth:`_guards_passed`, so the header
             read here is the one that passed the constant-time compare.
             """
-            if not auth_required:
+            snapshot = self._auth_snapshot()
+            if loopback_anonymous_opt_in and not snapshot.auth_configured:
                 return HTTP_UNAUTHENTICATED_ACTOR
             return _token_actor(self.headers.get(AUTH_HEADER, ""))
 
@@ -2307,10 +2349,11 @@ def serve_http(
     """Start the v3.9 HTTP transport in a background thread.
 
     Returns ``(server_thread, stop_fn)``. Call ``stop_fn()`` to shut
-    the server down cleanly. Token is read from ``MIND_MEM_TOKEN`` if
-    not given explicitly. When binding to a loopback address the
-    operator may pass ``allow_unauthenticated_localhost=True`` to
-    bypass auth (matches the existing MCP HTTP transport posture).
+    the server down cleanly. The explicit *token* is the handler fallback;
+    requests may also authenticate with configured ``MIND_MEM_TOKENS`` or
+    ``MIND_MEM_ADMIN_TOKEN`` entries. When binding to a loopback address the
+    operator may pass ``allow_unauthenticated_localhost=True`` only when no
+    credential source is configured.
 
     Args:
         tls_certfile, tls_keyfile, tls_keyfile_password: serve HTTPS
@@ -2339,8 +2382,12 @@ def serve_http(
         raise ValueError("tls_client_ca requires tls_certfile: mutual TLS is a property of a TLS listener")
     if token is None:
         token = os.environ.get("MIND_MEM_TOKEN", "").strip() or None
-    if not allow_unauthenticated_localhost and not token:
-        raise ValueError("no MIND_MEM_TOKEN configured and --allow-unauthenticated-localhost not set; refusing to start")
+    configured_auth = token or os.environ.get("MIND_MEM_TOKENS", "").strip() or os.environ.get("MIND_MEM_ADMIN_TOKEN", "").strip()
+    if not allow_unauthenticated_localhost and not configured_auth:
+        raise ValueError(
+            "no MIND_MEM_TOKEN, MIND_MEM_TOKENS, or MIND_MEM_ADMIN_TOKEN configured "
+            "and --allow-unauthenticated-localhost not set; refusing to start"
+        )
 
     # Audit S-2: per-IP sliding-window rate limit. Operators can tune via
     # MIND_MEM_HTTP_RATE_MAX_CALLS / MIND_MEM_HTTP_RATE_WINDOW_SECS, or
@@ -2408,6 +2455,6 @@ def serve_http(
 
     _log.info(
         "http_transport_started",
-        extra={"host": host, "port": port, "auth": "token" if token else "none"},
+        extra={"host": host, "port": port, "auth": "token" if configured_auth else "none"},
     )
     return thread, _stop
