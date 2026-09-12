@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import time
 
 import pytest
 
@@ -66,6 +68,28 @@ def test_active_tokens_strips_empty_entries(
     """Empty entries (',,,', trailing comma) are stripped, not counted."""
     monkeypatch.setenv("MIND_MEM_TOKENS", ",,real-token,,")
     assert http_transport._active_tokens(fallback=None) == ["real-token"]
+
+
+def test_expiry_filters_entries_and_does_not_fall_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MIND_MEM_TOKENS", "old-token|exp=99")
+    monkeypatch.setenv("MIND_MEM_TOKEN", "stale-fallback")
+    assert http_transport._active_tokens(fallback="handler-token", now=100) == []
+
+
+def test_expiry_keeps_deadline_boundary_live(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MIND_MEM_TOKENS", "old-token|exp=100")
+    assert http_transport._active_tokens(fallback=None, now=100) == ["old-token"]
+
+
+def test_malformed_expiry_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MIND_MEM_TOKENS", "bad-token|ttl=100")
+    assert http_transport._active_tokens(fallback=None, now=0) == []
+
+
+def test_huge_expiry_is_compared_without_float_overflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    huge_expiry = 10**1000
+    monkeypatch.setenv("MIND_MEM_TOKENS", f"long-lived|exp={huge_expiry}")
+    assert http_transport._active_tokens(fallback=None, now=huge_expiry - 1) == ["long-lived"]
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +165,38 @@ def test_token_rotate_falls_back_to_single_token(
     out = capsys.readouterr().out
     report = json.loads(out)
     assert "legacy-single" in report["active_tokens_after_rotate"]
+
+
+def test_token_rotate_preserves_earlier_deadline_and_drops_expired(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(time, "time", lambda: 1_000.0)
+    monkeypatch.setenv("MIND_MEM_TOKENS", "early|exp=1050,dead|exp=999")
+    ns = argparse.Namespace(length=24, grace_seconds=200)
+    mm_cli._cmd_token_rotate(ns)
+    report = json.loads(capsys.readouterr().out)
+    assert "early" in report["active_tokens_after_rotate"]
+    assert all("dead" not in item for item in report["active_tokens_after_rotate"])
+    assert any(item == "early|exp=1050" for item in report["configured_tokens_after_rotate"])
+    assert "dead" not in ",".join(report["configured_tokens_after_rotate"])
+    assert report["shell"].startswith("export MIND_MEM_TOKENS='")
+
+
+def test_token_rotate_rejects_negative_grace(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    ns = argparse.Namespace(length=24, grace_seconds=-1)
+    assert mm_cli._cmd_token_rotate(ns) == 2
+    assert "non-negative" in capsys.readouterr().err
+
+
+def test_token_rotate_only_prints_exports_and_does_not_change_environment(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("MIND_MEM_TOKENS", "current")
+    before = "current"
+    mm_cli._cmd_token_rotate(argparse.Namespace(length=24, grace_seconds=60))
+    capsys.readouterr()
+    assert os.environ["MIND_MEM_TOKENS"] == before
 
 
 # ---------------------------------------------------------------------------

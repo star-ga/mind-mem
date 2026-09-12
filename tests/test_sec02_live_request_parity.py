@@ -243,6 +243,118 @@ def test_auth_snapshot_rotates_per_keepalive_request(separated, monkeypatch):
             conn.close()
 
 
+def test_all_expired_plural_set_cannot_fall_back_to_singular(separated, monkeypatch):
+    """An expired configured list closes the door rather than reviving fallback."""
+    from mind_mem import http_transport
+
+    monkeypatch.setenv("MIND_MEM_TOKENS", "retired|exp=100")
+    monkeypatch.setattr(http_transport.time, "time", lambda: 101.0)
+    with _serve(separated, token=USER) as port:
+        assert _get(port, PATH_STATUS, USER) == 401
+
+
+def test_all_expired_configuration_cannot_enable_loopback_anonymous_access(tmp_path, monkeypatch):
+    """The loopback opt-in must not bypass a configured but expired set."""
+    monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
+    monkeypatch.setenv("MIND_MEM_TOKENS", "retired|exp=100")
+    monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
+    from mind_mem import http_transport
+
+    monkeypatch.setattr(http_transport.time, "time", lambda: 101.0)
+    with _serve(str(tmp_path), token=None) as port:
+        assert _get(port, PATH_STATUS, None) == 401
+
+
+def test_expiry_uses_one_clock_and_preserves_admin_scope(separated, monkeypatch):
+    """Auth and admin authorization must use one request timestamp/snapshot."""
+    from mind_mem import http_transport
+
+    monkeypatch.setenv("MIND_MEM_ADMIN_TOKEN", f"{ADMIN}|exp=1000000000000")
+    captures: list[int] = []
+    original_capture = http_transport._capture_auth_snapshot
+
+    def capture(*, fallback):
+        captures.append(1)
+        return original_capture(fallback=fallback)
+
+    monkeypatch.setattr(http_transport, "_capture_auth_snapshot", capture)
+    with _serve(separated, token=USER) as port:
+        code = _post(port, PATH_CLEAR, ADMIN, {"confirm": "wrong-confirm-string", "rationale": "expiry snapshot"})
+    assert code == 400, "admin token valid at the inclusive deadline must reach the handler"
+    assert captures == [1], f"request captured authentication {len(captures)} times"
+
+
+def test_malformed_admin_expiry_keeps_admin_route_closed(separated, monkeypatch):
+    """A malformed admin entry is not a reason to disable privilege separation."""
+    monkeypatch.setenv("MIND_MEM_ADMIN_TOKEN", f"{ADMIN}|ttl=1000")
+    with _serve(separated, token=USER) as port:
+        assert _get(port, PATH_STATUS, USER) == 200
+        assert _post(port, PATH_CLEAR, USER, {"confirm": "wrong-confirm-string", "rationale": "malformed admin"}) == 404
+
+
+def test_expiry_refreshes_on_each_keepalive_request(separated, monkeypatch):
+    """Expiry changes must take effect on the next request on a reused socket."""
+    from mind_mem import http_transport
+
+    monkeypatch.setenv("MIND_MEM_TOKENS", "old|exp=100,new-token")
+    current = [100.0]
+    monkeypatch.setattr(http_transport.time, "time", lambda: current[0])
+    original_build_handler = http_transport.build_handler
+
+    def build_http11_handler(*args, **kwargs):
+        handler = original_build_handler(*args, **kwargs)
+        handler.protocol_version = "HTTP/1.1"
+        return handler
+
+    monkeypatch.setattr(http_transport, "build_handler", build_http11_handler)
+    with _serve(separated, token=USER) as port:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        try:
+            headers = {AUTH_HEADER: "old", "Connection": "keep-alive"}
+            conn.request("GET", PATH_STATUS, headers=headers)
+            first = conn.getresponse()
+            assert first.status == 200
+            first.read()
+
+            current[0] = 101.0
+            conn.request("GET", PATH_STATUS, headers=headers)
+            expired = conn.getresponse()
+            assert expired.status == 401
+            expired.read()
+
+            conn.request("GET", PATH_STATUS, headers={AUTH_HEADER: "new-token", "Connection": "keep-alive"})
+            new = conn.getresponse()
+            assert new.status == 200
+            new.read()
+        finally:
+            conn.close()
+
+
+def test_startup_accepts_plural_and_admin_only_credentials(tmp_path, monkeypatch):
+    """The startup gate must recognize every transport credential source."""
+    from mind_mem import http_transport
+
+    monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
+    monkeypatch.setenv("MIND_MEM_TOKENS", "plural-token")
+    monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
+    port = _free_port()
+    _thread, stop = http_transport.serve_http(workspace=str(tmp_path), port=port, token=None, allow_unauthenticated_localhost=False)
+    try:
+        assert _get(port, PATH_STATUS, "plural-token") == 200
+    finally:
+        stop()
+
+    monkeypatch.delenv("MIND_MEM_TOKENS", raising=False)
+    monkeypatch.setenv("MIND_MEM_ADMIN_TOKEN", ADMIN)
+    port = _free_port()
+    _thread, stop = http_transport.serve_http(workspace=str(tmp_path), port=port, token=None, allow_unauthenticated_localhost=False)
+    try:
+        assert _get(port, PATH_STATUS, ADMIN) == 200
+        assert _get(port, PATH_STATUS, USER) == 401
+    finally:
+        stop()
+
+
 # ---------------------------------------------------------------------------
 # MUTATION CONTROLS. Root's finding was that source-inspection controls "would
 # survive a dispatcher early bypass" -- i.e. they could not tell an enforced

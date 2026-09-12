@@ -66,10 +66,14 @@ Notes worth knowing before you run it:
    configured `block_store` backend. → **Fix candidate:** `serve_http` should build the
    store from the same config path the CLI uses (`block_store.backend`), or the docs must
    say plainly "HTTP transport = file store; use direct Postgres for a DB-backed corpus."
-2. **Token env var is inconsistent.** `mm token rotate` emits `export MIND_MEM_TOKENS=…`
-   (plural), but `serve_http`'s startup guard checks **`MIND_MEM_TOKEN`** (singular) and
-   refuses to bind a non-loopback host without it. Set **both** until unified.
-   → **Fix candidate:** accept either; document the one canonical name.
+2. **Token rotation is process-local.** `mm token rotate` emits a quoted
+   `MIND_MEM_TOKENS` export with absolute `|exp=<epoch>` deadlines for retiring
+   credentials. Apply that export to the environment of the server process (or
+   reconfigure/restart the service); running the CLI as a child cannot mutate an
+   already-running server's environment. The HTTP transport rereads the process
+   environment on each request after the change. `serve_http` accepts plural and
+   admin-only credential sources at startup; an all-expired configured set still
+   starts only to reject requests, never to fall back to an older token.
 3. **Auth header is non-obvious:** the HTTP transport expects **`X-MindMem-Token`**
    (no hyphens between Mind/Mem), not `Authorization: Bearer` or `X-Mind-Mem-Token`.
    Worth a one-line note in the serve help text.
