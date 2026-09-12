@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1550 | **Est. tokens:** ~4,578,195
-**Generated:** 2026-09-12 01:44 UTC
+**Files:** 1552 | **Est. tokens:** ~4,580,910
+**Generated:** 2026-09-12 01:47 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1,087,971 |
+| `src/mind_mem/` | 238 | ~1,089,361 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 666 | ~1,998,066 |
+| `tests/` | 667 | ~1,999,391 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1092,6 +1092,7 @@
 - `validate_py.py` (~5676 tok, huge) — Mind Mem Integrity Validator — canonical engine.
 - `validate.sh` (~1350 tok, large) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
+- `validator_mode.py` (~1390 tok, large) — dry-run / enforce, so a correct validation rule can actually ship.
 - `validity_gate.py` (~3906 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
 - `vector_inertness.py` (~3125 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `verify_cli.py` (~10537 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1804,6 +1805,7 @@
 - `test_validate_py.py` (~3560 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_py_vacuous_crossrefs.py` (~806 tok, large) — ``_check_cross_refs`` must not report an integrity property it never tested.
 - `test_validate_sh_deprecation.py` (~573 tok, large) — Pin the runtime deprecation warning on validate.sh.
+- `test_validator_modes.py` (~1325 tok, large) — dry-run / enforce validator modes — so a correct rule can actually ship.
 - `test_validity_gate_contradiction_list_fields.py` (~1553 tok, huge) — Regression gate: c3 must debit blocks named in a *real* CONTRADICTIONS.md.
 - `test_validity_gate_extension_composition.py` (~1858 tok, huge) — Regression gate for the INDEPENDENCE of the validity gate's two opt-in
 - `test_validity_gate.py` (~1253 tok, large) — Regression gate for the Phase-2 recall validity gate (Stage 2.65).
