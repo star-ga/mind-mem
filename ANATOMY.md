@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1549 | **Est. tokens:** ~4,577,284
-**Generated:** 2026-09-12 18:44 UTC
+**Files:** 1549 | **Est. tokens:** ~4,578,897
+**Generated:** 2026-09-12 18:52 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1,059,633 |
+| `src/mind_mem/` | 231 | ~1,059,825 |
 | `src/mind_mem/api/` | 5 | ~27,043 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 669 | ~2,016,746 |
+| `tests/` | 669 | ~2,018,021 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -104,7 +104,7 @@
 | `web/` | 5 | ~1,310 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
-| `web/app/v1/[...path]/` | 1 | ~1,943 |
+| `web/app/v1/[...path]/` | 1 | ~2,089 |
 | `web/components/` | 4 | ~2,477 |
 | `web/lib/` | 1 | ~775 |
 
@@ -839,7 +839,7 @@
 - `knowledge_graph.py` (~17602 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lifecycle_evidence.py` (~4750 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
+- `lineage_staleness.py` (~2108 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `lint_autofix.py` (~2148 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lint.py` (~3856 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `llm_extractor.py` (~9071 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
@@ -1308,7 +1308,7 @@
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
 - `test_docs_alignment.py` (~24789 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_docs_claims.py` (~818 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_doctor_rebuild_cache_default_backend.py` (~1242 tok, large) — ``mm doctor --rebuild-cache`` must not crash on the DEFAULT markdown backend.
+- `test_doctor_rebuild_cache_default_backend.py` (~1338 tok, large) — ``mm doctor --rebuild-cache`` must not crash on the DEFAULT markdown backend.
 - `test_documented_surfaces_exist.py` (~2128 tok, huge) — Documentation that names a symbol, a backend or an installable extra has
 - `test_downgrade_mitigation.py` (~1016 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_dream_cycle_backends.py` (~2824 tok, huge) — Backend-aware dream-cycle maintenance passes (audit bug 11).
@@ -1449,8 +1449,8 @@
 - `test_legacy_restore_symlink_confinement.py` (~1152 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_evidence.py` (~5244 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_filter.py` (~1781 tok, huge) — Unit tests for the optional lifecycle block field and recall filter.
-- `test_lineage_staleness.py` (~2352 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
-- `test_lint_autofix.py` (~4635 tok, huge) — Tests for the lint -> repair-proposal path (mind_mem.lint / lint_autofix).
+- `test_lineage_staleness.py` (~2990 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
+- `test_lint_autofix.py` (~4891 tok, huge) — Tests for the lint -> repair-proposal path (mind_mem.lint / lint_autofix).
 - `test_lint_wiring.py` (~4397 tok, huge) — ``lint`` is actually reachable — from ``mm lint`` and from the MCP surface.
 - `test_llama_cpp_provider_contract.py` (~1294 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_llm_extractor_gate.py` (~2248 tok, huge) — Backend wiring — :func:`mind_mem.llm_extractor._gate_check_local`.
@@ -1533,7 +1533,7 @@
 - `test_network_cert_pinning.py` (~5212 tok, huge) — Certificate pinning is opt-in, and when it is on it refuses — RM-2290 / RM-2382.
 - `test_network_tls_floor.py` (~3100 tok, huge) — The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).
 - `test_niah.py` (~5014 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
-- `test_no_prior_art_attribution_repo_wide.py` (~1427 tok, large) — No prior-art identifier may appear in a tracked file, anywhere in the repository.
+- `test_no_prior_art_attribution_repo_wide.py` (~1712 tok, huge) — No prior-art identifier may appear in a tracked file, anywhere in the repository.
 - `test_no_silent_success_paths.py` (~3801 tok, huge) — Regressions for paths that used to report success while doing the wrong thing.
 - `test_no_vacuous_skips.py` (~7101 tok, huge) — A skipped test reads as a pass — so the skip surface itself needs a gate.
 - `test_novel_term_gate.py` (~2202 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1872,7 +1872,7 @@
 - `page.tsx` (~1036 tok, large)
 ### `web/app/v1/[...path]/`
 
-- `route.ts` (~1943 tok, huge) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
+- `route.ts` (~2089 tok, huge) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
 ### `web/components/`
 
 - `FactList.tsx` (~276 tok, medium)

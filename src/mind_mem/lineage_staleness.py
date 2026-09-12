@@ -90,10 +90,22 @@ def _classify_seed_neighbours(workspace: str, source_id: str) -> dict[str, str]:
     ensure_lineage_schema(workspace)
     conn = _connect(workspace)
     try:
+        # The second arm walks edges BACKWARDS, and that is right for a MUTUAL relation and
+        # wrong for a DIRECTIONAL one.
+        #
+        # `contradicts` is mutual: two blocks both claiming to be current are both in doubt,
+        # so seeding either from the other is correct.
+        #
+        # `supersedes(new, old)` is not. Only `old` is replaced. Following it backwards
+        # penalised the NEWER block: with `A supersedes B`, propagating from B found A
+        # through this arm and charged it 1.0 — demoting the replacement instead of the
+        # replaced. `supersedes` therefore joins `cooccurrence` in being excluded here,
+        # while the forward arm above still decays the block that was superseded.
         rows = conn.execute(
             "SELECT mem2_id, kind FROM co_retrieval WHERE mem1_id = ? "
             "UNION ALL "
-            "SELECT mem1_id, kind FROM co_retrieval WHERE mem2_id = ? AND kind != 'cooccurrence'",
+            "SELECT mem1_id, kind FROM co_retrieval WHERE mem2_id = ? "
+            "AND kind NOT IN ('cooccurrence', 'supersedes')",
             (source_id, source_id),
         ).fetchall()
     finally:

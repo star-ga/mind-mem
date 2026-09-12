@@ -113,7 +113,20 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
   // The REST layer ignores `format: "bundle"` and always answers with
   // {results, attestation}, but lib/api.ts expects an EvidenceBundle.
   // Project one here so the console renders instead of showing blanks.
-  if (upstream.ok && path.join("/") === "recall" && body && body.includes('"bundle"')) {
+  // PARSE the request and read its `format` field. The previous test was
+  // `body.includes('"bundle"')` — a substring match over the RAW REQUEST BODY, so the
+  // QUERY TEXT decided the response shape: `{"query":"bundle","format":"blocks"}`
+  // returned a bundle despite asking for blocks. A caller's data must never select a
+  // code path meant for its parameters.
+  let wantsBundle = false;
+  if (body) {
+    try {
+      wantsBundle = (JSON.parse(body) as { format?: unknown }).format === "bundle";
+    } catch {
+      wantsBundle = false; // unparseable body: do not guess at an intent
+    }
+  }
+  if (upstream.ok && safe.join("/") === "recall" && wantsBundle) {
     try {
       return Response.json(toBundle(JSON.parse(payload)));
     } catch {

@@ -49,12 +49,17 @@ def test_pg_only_is_bound_unconditionally() -> None:
     assert reads, "pg_only is never read — the test can no longer see the defect"
 
     # Straight-line statements of the function body: depth 0, so unconditional.
+    # An `AnnAssign` with NO value binds nothing: `pg_only: set` is a type declaration and
+    # leaves the name unbound, so the runtime still raises. The first version of this list
+    # accepted it — verified by mutation, which passed while the mutated code still crashed.
+    # Require an actual value.
     top_level_binds = [
         stmt.lineno
         for stmt in fn.body
-        if isinstance(stmt, (ast.Assign, ast.AnnAssign))
-        for tgt in ([stmt.target] if isinstance(stmt, ast.AnnAssign) else stmt.targets)
-        if isinstance(tgt, ast.Name) and tgt.id == "pg_only"
+        if (isinstance(stmt, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "pg_only" for t in stmt.targets))
+        or (
+            isinstance(stmt, ast.AnnAssign) and stmt.value is not None and isinstance(stmt.target, ast.Name) and stmt.target.id == "pg_only"
+        )
     ]
 
     assert top_level_binds, (

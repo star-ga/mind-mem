@@ -477,6 +477,17 @@ class TestLintRepairsReachTheCorpus(unittest.TestCase):
             "delete it and tick the roadmap item, do not weaken it. Message was: "
             f"{message}",
         )
+        # AND for the RIGHT REASON. `assertFalse(ok)` alone passes on any refusal at all --
+        # an authorization failure, a missing workspace, a harness error -- so it would keep
+        # passing while the deadlock was fixed and something unrelated broke instead.
+        # Verified by mutation: substituting `(False, "Unrelated authorization failure")`
+        # satisfied the bare assertion.
+        self.assertIn(
+            "Precondition check failed",
+            message,
+            "the repair was refused, but not by the precondition gate this test is about -- "
+            f"so the refusal says nothing about the deadlock. Message was: {message}",
+        )
 
     def test_an_unfixable_defect_DOES_block_an_unrelated_repair(self):
         """A validator-failing defect anywhere blocks every other repair.
@@ -495,4 +506,11 @@ class TestLintRepairsReachTheCorpus(unittest.TestCase):
             "the corpus, so the gate became proposal-scoped rather than corpus-wide -- "
             "the fix this test waits for. Delete this test and tick the roadmap item "
             f"rather than weakening it. Message was: {message}",
+        )
+        # Same reasoning as above: pin the CAUSE, not merely the refusal.
+        self.assertIn(
+            "Precondition check failed",
+            message,
+            "refused, but not by the corpus-wide precondition gate this test is about -- "
+            f"the refusal is therefore not evidence about it. Message was: {message}",
         )

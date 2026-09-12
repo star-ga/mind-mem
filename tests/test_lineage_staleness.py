@@ -85,6 +85,50 @@ class TestPropagateContradictsEdge:
         assert get_staleness_score(workspace, "B") == pytest.approx(1.0)
         assert get_staleness_score(workspace, "A") > 0.0
 
+    def test_supersedes_never_demotes_the_REPLACEMENT(self, workspace) -> None:
+        """`supersedes` is DIRECTIONAL — following it backwards penalised the new block.
+
+        REGRESSION, found adversarially. The seed query had a reverse-edge arm that
+        excluded only `cooccurrence`, so with `A supersedes B`, propagating from B reached
+        A through that arm and charged it the full 1.0 — demoting the replacement instead
+        of the replaced. That inverts the entire meaning of the edge: the whole point is
+        that A is now live and B is not.
+
+        The reverse arm stays correct for `contradicts`, which IS mutual — two blocks both
+        claiming to be current are both in doubt. `supersedes` is not mutual, so it is
+        excluded from that arm while the forward arm still decays the superseded block.
+        """
+        from mind_mem.block_lineage import add_block_edge
+        from mind_mem.lineage_staleness import (
+            get_staleness_score,
+            propagate_lineage_staleness,
+        )
+
+        # A replaces B; B replaces C. Propagating from the MIDDLE block is the case that
+        # exposed it, because B has both an inbound and an outbound supersedes edge.
+        add_block_edge(workspace, "A", "B", "supersedes")
+        add_block_edge(workspace, "B", "C", "supersedes")
+        propagate_lineage_staleness(workspace, source_id="B")
+
+        assert get_staleness_score(workspace, "C") == pytest.approx(1.0), (
+            "C was superseded by B, so propagating from B must demote it — if this fails "
+            "the FORWARD direction broke and supersedes no longer decays anything"
+        )
+        assert get_staleness_score(workspace, "A") == pytest.approx(0.0), (
+            "A supersedes B, so A is the REPLACEMENT and must never be demoted by "
+            "propagation from B. A non-zero score here means the reverse-edge arm is "
+            "following supersedes backwards again, which inverts the edge's meaning"
+        )
+
+        # Positive control on the fixture: `contradicts` IS mutual, so the reverse arm must
+        # still work for it. Without this, the assertion above would also pass if the
+        # reverse arm had been removed entirely.
+        add_block_edge(workspace, "D", "E", "contradicts")
+        propagate_lineage_staleness(workspace, source_id="E")
+        assert get_staleness_score(workspace, "D") > 0.0, (
+            "the reverse-edge arm was removed wholesale rather than narrowed — `contradicts` is mutual and must still seed backwards"
+        )
+
     def test_supersedes_seed_gets_full_penalty(self, workspace) -> None:
         # Bi-temporal graphs: the block
         # named in a `supersedes` edge is no longer live and should be

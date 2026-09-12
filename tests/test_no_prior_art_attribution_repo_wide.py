@@ -26,9 +26,16 @@ import subprocess
 
 #: An actual identifier or a paper/repo URL — not the word, and not a subject.
 PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # Modern arXiv ids (YYMM.NNNNN).
     (re.compile(r"arxiv\s*:\s*\d{4}\.\d{4,5}", re.I), "an arXiv identifier"),
-    (re.compile(r"\barxiv\.org/(?:abs|pdf)/", re.I), "an arXiv URL"),
+    # PRE-2007 arXiv ids (`hep-th/9901001`, `cs.AI/0102003`). The first version of this
+    # matcher missed them entirely, so an older citation would have passed the gate.
+    (re.compile(r"arxiv\s*:\s*[a-z-]+(?:\.[A-Z]{2})?/\d{7}", re.I), "a pre-2007 arXiv identifier"),
+    # Any arXiv URL path, not just /abs/ and /pdf/ — `/html/2501.13956v1` slipped through.
+    (re.compile(r"\barxiv\.org/\S+", re.I), "an arXiv URL"),
+    # DOIs as a URL *and* as a bare `doi:` prefix, which the first version did not match.
     (re.compile(r"\bdoi\.org/10\.\d{4,}", re.I), "a DOI URL"),
+    (re.compile(r"\bdoi\s*:\s*10\.\d{4,}", re.I), "a DOI identifier"),
 )
 
 #: Paths whose identifiers are the detector or its fixtures. Each is verified below to
@@ -40,7 +47,25 @@ ALLOWLIST: tuple[str, ...] = (
 )
 
 #: Extensions worth scanning. A lockfile or a binary carries no attribution prose.
-SCANNED_SUFFIXES = {".py", ".md", ".txt", ".toml", ".yml", ".yaml", ".ts", ".tsx", ".sh", ".rst"}
+#: `.js`, `.jsx`, `.mjs`, `.cjs` and `.mind` were absent from the first version, so an
+#: attribution in a JavaScript or MIND source file would not have been scanned at all.
+SCANNED_SUFFIXES = {
+    ".py",
+    ".md",
+    ".txt",
+    ".toml",
+    ".yml",
+    ".yaml",
+    ".rst",
+    ".sh",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".mind",
+}
 
 
 def _tracked_files() -> list[pathlib.Path]:
@@ -109,6 +134,12 @@ def test_the_matcher_actually_matches() -> None:
         "ARXIV:2504.19874",
         "see https://arxiv.org/abs/2501.13956 for detail",
         "https://doi.org/10.1145/3580305",
+        # Forms the first version of this matcher MISSED. Each was found by an adversarial
+        # audit, so each is pinned here rather than trusted to stay matched.
+        "arXiv:hep-th/9901001",
+        "arXiv:cs.AI/0102003",
+        "https://arxiv.org/html/2501.13956v1",
+        "doi:10.1145/3580305",
     )
     for sample in must_match:
         assert any(p.search(sample) for p, _ in PATTERNS), f"matcher missed {sample!r}"
