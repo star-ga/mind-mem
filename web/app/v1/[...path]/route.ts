@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 /**
  * Server-side proxy to the mind-mem REST API.
  *
@@ -21,32 +23,68 @@ const TOKEN = process.env.MIND_MEM_TOKEN ?? "";
 // FIRST, it must refuse to be a confused deputy for anyone who can reach the Next.js
 // server. A non-loopback bind means the console is reachable by someone who does not
 // hold the token, and forwarding for them would hand out the token's authority.
-// `MIND_MEM_CONSOLE_TOKEN`, when set, is required from the caller; when unset the route
-// serves only loopback callers. Fail-closed on an unrecognised remote address rather
-// than assuming loopback.
+// `MIND_MEM_CONSOLE_TOKEN` is REQUIRED from the caller, always. There is no loopback
+// exemption — see `callerIsAllowed` for why the one this file used to have was unsound.
 const CONSOLE_TOKEN = process.env.MIND_MEM_CONSOLE_TOKEN ?? "";
 
+// A REQUIRED TOKEN, with NO loopback exemption — and the exemption is what was wrong.
+//
+// The first version of this check fell back to "serve loopback callers" by reading the
+// `Host` header. `Host` is CLIENT-CONTROLLED: an adversarial-reproduced request carrying
+// `Host: localhost` was granted the upstream token's full authority. There is no portable,
+// trustworthy peer address in a Next.js route handler, so there is nothing to put in the
+// exemption's place — which means the exemption has to go.
+//
+// With no token configured the route refuses EVERYTHING and says why. That is deliberately
+// inconvenient: a console that silently proxies with privileged credentials is worse than a
+// console that will not start until an operator names a secret.
 function callerIsAllowed(req: Request): boolean {
-  if (CONSOLE_TOKEN) {
-    const auth = req.headers.get("authorization") ?? "";
-    // Constant-time comparison is not reachable here without a crypto import; the
-    // token is a local deployment secret rather than a user password, and the
-    // alternative (no check at all) is strictly worse.
-    return auth === `Bearer ${CONSOLE_TOKEN}`;
-  }
-  const host = (req.headers.get("host") ?? "").split(":")[0];
-  return host === "127.0.0.1" || host === "localhost" || host === "[::1]" || host === "::1";
+  if (!CONSOLE_TOKEN) return false;
+  const auth = req.headers.get("authorization") ?? "";
+  const expected = `Bearer ${CONSOLE_TOKEN}`;
+  // Constant-time: a `===` on a secret leaks the matching prefix length through timing.
+  // Compare equal-length buffers only — the length itself is not the secret, so an early
+  // length exit is fine, but the byte comparison must not short-circuit.
+  const a = Buffer.from(auth);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
-// SECOND, the catch-all segment must not be able to walk out of `/v1/`. Next.js hands
-// the path through decoded, so a `..` segment would let `fetch` normalise
-// `/v1/../admin` to `/admin` and reach endpoints this route is not meant to expose.
-// Rejecting the segment is right rather than stripping it: a caller who sent `..` is
-// not asking for something this proxy should guess at.
+// Full decoding BEFORE validation, then a strict allowlist.
+//
+// The first version tested the segment for `.`/`..`/`/`/`\\` as handed over. That is not
+// enough: a DOUBLE-ENCODED segment (`%252e%252e`) survives one decode as `%2e%2e` and then
+// decodes again to `..`, which was reproduced as a working escape past the `/v1/` prefix.
+// So decode repeatedly until the string stops changing (bounded, because a decode loop on
+// attacker input is itself a denial-of-service surface), and only then check.
+//
+// The final check is an ALLOWLIST rather than a blocklist. A blocklist has to anticipate
+// every encoding; an allowlist only has to describe what a legitimate path segment is.
+function decodeFully(seg: string): string | null {
+  let cur = seg;
+  for (let i = 0; i < 4; i += 1) {
+    let next: string;
+    try {
+      next = decodeURIComponent(cur);
+    } catch {
+      return null; // malformed escape: not a segment we should guess at
+    }
+    if (next === cur) return cur;
+    cur = next;
+  }
+  return null; // still changing after 4 rounds — refuse rather than keep unwrapping
+}
+
+const SAFE_SEGMENT = /^[A-Za-z0-9._~-]+$/;
+
 function pathIsSafe(path: string[]): boolean {
-  return path.every(
-    (seg) => seg.length > 0 && seg !== "." && seg !== ".." && !seg.includes("/") && !seg.includes("\\"),
-  );
+  return path.every((raw) => {
+    const seg = decodeFully(raw);
+    if (seg === null) return false;
+    if (seg === "." || seg === "..") return false;
+    return SAFE_SEGMENT.test(seg);
+  });
 }
 
 async function proxy(req: Request, path: string[]): Promise<Response> {
@@ -57,7 +95,10 @@ async function proxy(req: Request, path: string[]): Promise<Response> {
     return Response.json({ error: "invalid path segment" }, { status: 400 });
   }
   const incoming = new URL(req.url);
-  const target = `${API_ORIGIN}/v1/${path.join("/")}${incoming.search}`;
+  // Decoded segments, so the URL we build is the one we validated — forwarding the raw
+  // form would let an encoding we accepted mean something different upstream.
+  const safe = path.map((seg) => decodeFully(seg) as string);
+  const target = `${API_ORIGIN}/v1/${safe.join("/")}${incoming.search}`;
 
   const headers = new Headers();
   const contentType = req.headers.get("content-type");

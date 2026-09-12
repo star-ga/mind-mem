@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1549 | **Est. tokens:** ~4,576,427
-**Generated:** 2026-09-12 18:39 UTC
+**Files:** 1549 | **Est. tokens:** ~4,577,284
+**Generated:** 2026-09-12 18:44 UTC
 
 ## Token Budget Guide
 
@@ -101,10 +101,10 @@
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
 | `train/` | 33 | ~60,269 |
-| `web/` | 5 | ~920 |
+| `web/` | 5 | ~1,310 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
-| `web/app/v1/[...path]/` | 1 | ~1,476 |
+| `web/app/v1/[...path]/` | 1 | ~1,943 |
 | `web/components/` | 4 | ~2,477 |
 | `web/lib/` | 1 | ~775 |
 
@@ -1872,7 +1872,7 @@
 - `page.tsx` (~1036 tok, large)
 ### `web/app/v1/[...path]/`
 
-- `route.ts` (~1476 tok, large) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
+- `route.ts` (~1943 tok, huge) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
 ### `web/components/`
 
 - `FactList.tsx` (~276 tok, medium)
@@ -1889,7 +1889,7 @@
 
 - `next.config.ts` (~104 tok, small) — mind-mem-web is a thin client — the REST API lives on the
 - `package.json` (~183 tok, small) — Keys: name, version, private, description, license
-- `README.md` (~464 tok, medium) — MIND-Mem web console
+- `README.md` (~854 tok, large) — MIND-Mem web console
 - `tsconfig.json` (~149 tok, small) — Keys: compilerOptions, include, exclude
 
 ---
