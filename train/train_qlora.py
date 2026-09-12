@@ -21,11 +21,21 @@ import torch
 from datasets import load_dataset
 from peft import LoraConfig, get_peft_model
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
 )
 from trl import SFTConfig, SFTTrainer
+
+try:
+    from train._causal_lm_import import load_causal_lm
+except ModuleNotFoundError as exc:
+    if exc.name not in {"train", "train._causal_lm_import"}:
+        raise
+    # Keep this script runnable from the bare RunPod bundle as well as a
+    # source checkout where the package has not been installed.
+    from _causal_lm_import import load_causal_lm
 
 BASE_MODEL = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
 # All training artifacts live on /data (916 GB, 303 GB free) —
@@ -63,8 +73,11 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(
+    model = load_causal_lm(
         BASE_MODEL,
+        auto_config=AutoConfig,
+        auto_model=AutoModelForCausalLM,
+        config_kwargs={"trust_remote_code": True},
         quantization_config=bnb_config,
         device_map="auto",
         torch_dtype=torch.bfloat16,

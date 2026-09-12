@@ -439,7 +439,9 @@ def _transformers_call(prompt: str, model: str) -> _ModelResponse:
     the char estimator.
     """
     import torch  # type: ignore[import-not-found]
-    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
+
+    from mind_mem.causal_lm_loader import load_causal_lm
 
     cache = getattr(_transformers_call, "_cache", None)
     if cache is None:
@@ -450,8 +452,11 @@ def _transformers_call(prompt: str, model: str) -> _ModelResponse:
         tok = AutoTokenizer.from_pretrained(model, trust_remote_code=True)  # nosec B615 — model path is from operator-controlled mind-mem.json config, not user input; revision pinning is the operator's responsibility
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token
-        m = AutoModelForCausalLM.from_pretrained(  # nosec B615 — same justification as above
+        m = load_causal_lm(  # nosec B615 — same justification as above
             model,
+            auto_config=AutoConfig,
+            auto_model=AutoModelForCausalLM,
+            config_kwargs={"trust_remote_code": True},
             dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,

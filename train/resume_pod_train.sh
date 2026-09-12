@@ -76,6 +76,11 @@ ssh "${SSH_OPTS[@]}" "root@${ip}" "pip install --no-cache-dir 'transformers==5.7
 
 echo ""
 echo "=== Step 4: detect resume state ==="
+ssh "${SSH_OPTS[@]}" "root@${ip}" "test -s /workspace/_causal_lm_import.py && test -s /workspace/mind_mem_causal_lm_loader.py" || {
+    echo "missing deployed causal loader bundle; refusing to launch stale training script" >&2
+    echo "redeploy with train/runpod_deploy.py so both loader files reach /workspace" >&2
+    exit 1
+}
 ckpt=$(ssh "${SSH_OPTS[@]}" "root@${ip}" "ls -d /workspace/train-output/full-ft/checkpoint-* 2>/dev/null | tail -1")
 if [[ -n "$ckpt" ]]; then
     echo "found checkpoint at $ckpt — will resume"
