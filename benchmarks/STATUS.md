@@ -220,7 +220,21 @@ What *is* committed is the machinery and the check:
   depth, marked `headline_claim: false`. It exercises the package end to end.
   **It is not the 250/250 figure and may not be cited as one.**
 
-Publishing the full matrix is a separate, deliberate run. Until it lands and
-verifies, `250/250` is a test-suite result, not an artifact-backed one.
+**LANDED AND VERIFIED 2026-09-11. `250/250` IS NOW ARTIFACT-BACKED.**
+`benchmarks/repro/niah/` carries the full matrix: `RESULT: 250/250 (killed/crashed 0)`,
+`headline_claim: true`, and `repro_verify.py` re-derives every committed number from the
+committed raw rows — **PASS, 22 checks**.
+
+Two details worth the space, because they are what make it evidence rather than a number:
+
+* **The claim was asserted at RUN time, not patched in.** The first full run came back
+  `headline_claim: false` because `--headline-claim` is an explicit opt-in that REFUSES on a
+  partial matrix. Editing the manifest afterwards would have been forging evidence, so the
+  matrix was re-run with the assertion. ~58 min per run, local, no API key.
+* **Run-to-run determinism, measured rather than assumed.** The two independent runs are
+  identical in every field except `latency_ms` and `unit_elapsed_s` — all 250 retrieval
+  results, ids and excerpts match exactly, and both headline blocks are byte-equal.
+
+Publishing these numbers outside the repo remains a separate, deliberate operator decision.
 
 See `benchmarks/NIAH.md` and `EVIDENCE.md` rows 1-3, 9.

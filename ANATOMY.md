@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1580 | **Est. tokens:** ~4,614,179
-**Generated:** 2026-09-12 04:28 UTC
+**Files:** 1580 | **Est. tokens:** ~4,614,412
+**Generated:** 2026-09-12 04:56 UTC
 
 ## Token Budget Guide
 
@@ -26,9 +26,9 @@
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 66 | ~181,940 |
+| `benchmarks/` | 66 | ~182,174 |
 | `benchmarks/repro/` | 1 | ~689 |
-| `benchmarks/repro/niah/` | 4 | ~2,558 |
+| `benchmarks/repro/niah/` | 4 | ~2,557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
 | `bin/` | 1 | ~526 |
 | `deploy/` | 2 | ~772 |
@@ -231,7 +231,7 @@
 
 - `dataset.json` (~792 tok, large) — Keys: content_sha256, depth_percentages, generated_by, generator_sha256, haystack_sizes
 - `environment.json` (~95 tok, small) — Keys: captured_utc, cpu_count, machine, mind_mem_version, packages
-- `manifest.json` (~1430 tok, large) — Keys: artifacts, benchmark, commands, headline, headline_claim
+- `manifest.json` (~1429 tok, large) — Keys: artifacts, benchmark, commands, headline, headline_claim
 - `metrics.json` (~241 tok, medium) — Keys: benchmark, breakdown, determinism, headline, integrity
 ### `benchmarks/`
 
@@ -250,7 +250,7 @@
 
 - `repro_verify.py` (~4137 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
-- `STATUS.md` (~3163 tok, huge) — Benchmark Status
+- `STATUS.md` (~3397 tok, huge) — Benchmark Status
 - `strat_probe.py` (~936 tok, large) — Stratified LongMemEval probe.
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
 - `train_config_a100.yaml` (~347 tok, medium) — base_model: star-ga/mind-mem-4b

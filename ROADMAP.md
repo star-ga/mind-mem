@@ -540,7 +540,24 @@ below, no code, no attribution in public artifacts.)
       subprocess-isolated per case) and the LongMemEval scorecard/NDJSON pairs.
       Observation, not a new claim: all six committed LongMemEval scorecards
       recompute exactly from their own rows.
-- [ ] **Publish artifact-backed headline numbers** — the machinery above is
+- [~] **Publish artifact-backed headline numbers** — **NIAH 250/250 IS NOW
+      ARTIFACT-BACKED (2026-09-11).** `benchmarks/repro/niah/` holds the full matrix:
+      `RESULT: 250/250 (killed/crashed 0)`, `headline_claim: true`, and
+      `repro_verify.py` re-derives every committed number from the committed raw rows
+      — **PASS, 22 checks**, re-deriving each case's hit from the retrieved ids rather
+      than trusting the row's own `found` field.
+      **The claim was asserted at RUN time, not patched in:** the first full run
+      returned `headline_claim: false` because `--headline-claim` is an explicit
+      opt-in that REFUSES on a partial matrix, and editing the manifest afterwards
+      would have been forging evidence — so the matrix was re-run with the assertion.
+      **Run-to-run determinism measured, not assumed:** the two independent 250-cell
+      runs are identical in every field except `latency_ms` and `unit_elapsed_s`.
+      Item stays `[~]` because two halves remain, and neither is mine to close:
+      (b) the LoCoMo repro package still needs a judge-response artifact and a
+      judge-pinning story, and (c) an independent third-party rerun reporting the same
+      `decision_fingerprint`. PUBLISHING any of it is a separate gated decision, as
+      this item's own text says — the artifact exists; announcing it is the operator's.
+      Formerly: the machinery above is
       landed; the runs are not. Outstanding: (a) a full 250-cell NIAH package
       committed and verifying, so `250/250` stops being a test-suite result and
       becomes an artifact-backed one (`benchmarks/STATUS.md` records that gap;
