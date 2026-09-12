@@ -29,6 +29,14 @@ def _block(path: Path, block_id: str, statement: str) -> None:
     )
 
 
+def _symlink_directory_or_skip(target: Path, link: Path) -> None:
+    """Create a directory link, recording an explicit platform limitation."""
+    try:
+        os.symlink(target, link, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"directory symlink unavailable: {exc}")
+
+
 @pytest.fixture()
 def namespaced_workspace(tmp_path: Path) -> Path:
     ws = tmp_path / "workspace"
@@ -63,7 +71,7 @@ def namespaced_workspace(tmp_path: Path) -> Path:
     return ws
 
 
-def _ids_and_scores(workspace: Path, agent: str, query: str) -> list[tuple[str, float]]:
+def _ids_and_scores(workspace: Path, agent: str | None, query: str) -> list[tuple[str, float]]:
     """Run the production core entry point and expose rankable evidence."""
     hits = recall(str(workspace), query, limit=10, agent_id=agent, rerank=False)
     return [(str(hit["_id"]), float(hit["score"])) for hit in hits if hit.get("_id")]
@@ -148,7 +156,7 @@ def test_shared_symlink_escape_is_not_recalled(namespaced_workspace: Path, tmp_p
     _block(outside / "DECISIONS.md", "ESCAPE-1", "outside-only aurora fact")
 
     shutil.rmtree(workspace / "shared/decisions")
-    os.symlink(outside, workspace / "shared/decisions")
+    _symlink_directory_or_skip(outside, workspace / "shared/decisions")
 
     # The logical path remains ACL-readable and a raw store follows the link;
     # recall must enforce realpath confinement before parsing it.
@@ -158,3 +166,56 @@ def test_shared_symlink_escape_is_not_recalled(namespaced_workspace: Path, tmp_p
     assert MarkdownBlockStore(str(workspace / "shared")).get_by_id("ESCAPE-1") is not None
     hits = _ids_and_scores(workspace, "alice", "aurora")
     assert all(block_id != "ESCAPE-1" for block_id, _ in hits)
+
+
+def test_shared_symlink_to_private_target_is_denied(namespaced_workspace: Path) -> None:
+    workspace = namespaced_workspace
+    private_target = workspace / "agents/bob/decisions"
+    shutil.rmtree(workspace / "shared/decisions")
+    _symlink_directory_or_skip(private_target, workspace / "shared/decisions")
+
+    # Logical shared ACL passes and direct storage follows the link, but the
+    # resolved private target must fail Alice's and an unknown agent's ACL.
+    assert NamespaceManager(str(workspace), agent_id="alice").can_read(
+        "shared/decisions/DECISIONS.md"
+    )
+    assert MarkdownBlockStore(str(workspace / "shared")).get_by_id("BOB-1") is not None
+    for agent in ("alice", "unlisted-agent"):
+        hits = _ids_and_scores(workspace, agent, "comet")
+        assert all(block_id != "BOB-1" for block_id, _ in hits)
+
+
+def test_intra_shared_directory_alias_remains_reachable(namespaced_workspace: Path) -> None:
+    workspace = namespaced_workspace
+    alias_target = workspace / "shared/alias"
+    _block(alias_target / "DECISIONS.md", "ALIAS-1", "intra-shared aurora alias")
+    shutil.rmtree(workspace / "shared/decisions")
+    _symlink_directory_or_skip(alias_target, workspace / "shared/decisions")
+
+    hits = _ids_and_scores(workspace, "alice", "aurora alias")
+    assert hits and hits[0][0] == "ALIAS-1"
+    assert hits[0][1] > 0.0
+
+
+def test_root_symlink_outside_workspace_is_not_recalled(namespaced_workspace: Path, tmp_path: Path) -> None:
+    workspace = namespaced_workspace
+    outside = tmp_path / "outside-root"
+    outside.mkdir()
+    _block(outside / "DECISIONS.md", "ROOT-ESCAPE-1", "outside-only aurora root fact")
+
+    shutil.rmtree(workspace / "decisions")
+    _symlink_directory_or_skip(outside, workspace / "decisions")
+    assert MarkdownBlockStore(str(workspace)).get_by_id("ROOT-ESCAPE-1") is not None
+    hits = _ids_and_scores(workspace, None, "aurora root")
+    assert all(block_id != "ROOT-ESCAPE-1" for block_id, _ in hits)
+
+
+def test_private_symlink_to_other_agent_is_denied(namespaced_workspace: Path) -> None:
+    workspace = namespaced_workspace
+    private_target = workspace / "agents/bob/decisions"
+    shutil.rmtree(workspace / "agents/alice/decisions")
+    _symlink_directory_or_skip(private_target, workspace / "agents/alice/decisions")
+
+    assert MarkdownBlockStore(str(workspace / "agents/alice")).get_by_id("BOB-1") is not None
+    hits = _ids_and_scores(workspace, "alice", "comet")
+    assert all(block_id != "BOB-1" for block_id, _ in hits)
