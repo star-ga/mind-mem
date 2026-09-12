@@ -298,7 +298,7 @@ def _llm_chat(
 
 
 # ---------------------------------------------------------------------------
-# Prompts (adapted from Mem0/memobase eval pipelines)
+# Prompts (shaped to match common LoCoMo evaluation practice)
 # ---------------------------------------------------------------------------
 
 ANSWER_SYSTEM_PROMPT = """\

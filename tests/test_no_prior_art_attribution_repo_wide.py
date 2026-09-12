@@ -36,6 +36,31 @@ PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # DOIs as a URL *and* as a bare `doi:` prefix, which the first version did not match.
     (re.compile(r"\bdoi\.org/10\.\d{4,}", re.I), "a DOI URL"),
     (re.compile(r"\bdoi\s*:\s*10\.\d{4,}", re.I), "a DOI identifier"),
+    # ATTRIBUTION TO A NAMED THIRD PARTY. Identifiers alone miss it: a line reading
+    # "motivated by the … model in Zep/Graphiti" attributes a borrowed idea with no arXiv id
+    # or DOI, and one survived the identifier-only version of this gate.
+    #
+    # The VERB is not the signal — the OBJECT is. A first attempt matched "motivated by" and
+    # friends outright, and it flagged (a) ordinary technical prose like "re-derived from the
+    # ids", and (b) the very phrasing the rule PRESCRIBES, "motivated by … recent research".
+    # A gate that flags the approved wording is a gate that gets deleted.
+    #
+    # So this requires an attribution verb followed by a CAPITALISED proper noun, and
+    # explicitly not by the sanctioned objects. Naming a competitor in a comparison table
+    # stays legitimate — this repo does that extensively — because a table is not a claim
+    # about where an idea came from.
+    (
+        re.compile(
+            r"\b(?:motivated by|inspired by|adapted from|following the approach (?:of|in))\b"
+            r"(?![^.\n]{0,60}?\b(?:recent research|prior work|the literature|recent work)\b)"
+            # The proper noun must not be a GENERIC capitalised term. "motivated by
+            # incidents in the broader AI ecosystem" is not an attribution, and matching
+            # "AI" there was the gate's own false positive.
+            r"[^.\n]{0,60}?\b(?!(?:AI|ML|LLM|API|CI|CD|OS|SQL|HTTP|JSON|UTC|RFC|MIT|BSD|GPU|CPU|KV|The|This|That|We|It|A|An|In|On|For|By)\b)"
+            r"[A-Z][A-Za-z0-9]{2,}(?:/[A-Za-z0-9]+)?\b",
+        ),
+        "attribution of a borrowed idea to a named third party",
+    ),
 )
 
 #: Paths whose identifiers are the detector or its fixtures. Each is verified below to
@@ -140,11 +165,21 @@ def test_the_matcher_actually_matches() -> None:
         "arXiv:cs.AI/0102003",
         "https://arxiv.org/html/2501.13956v1",
         "doi:10.1145/3580305",
+        # The phrasing form, which the identifier-only matcher missed on a real line.
+        "motivated by the bi-temporal validity-window model in SomeProduct",
+        "inspired by the approach in AnotherSystem",
     )
     for sample in must_match:
         assert any(p.search(sample) for p, _ in PATTERNS), f"matcher missed {sample!r}"
 
     must_not_match = (
+        # Competitive comparison is legitimate and must NOT trip the gate.
+        "| Feature | MIND-Mem | Mem0 | Zep | Letta |",
+        "MIND-Mem vs Zep",
+        "Zep requires Zep Cloud; we are self-hosted",
+        # Generic capitalised terms after an attribution verb are NOT attributions.
+        "Hardening thread motivated by incidents in the broader AI ecosystem",
+        "motivated by the bi-temporal validity-window model described in recent research",
         "the arxiv preprint server",
         "recent research on memory decay",
         "`urn:arxiv:2401.00001` is an example URN shape",

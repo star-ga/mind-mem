@@ -27,28 +27,52 @@ const TOKEN = process.env.MIND_MEM_TOKEN ?? "";
 // exemption — see `callerIsAllowed` for why the one this file used to have was unsound.
 const CONSOLE_TOKEN = process.env.MIND_MEM_CONSOLE_TOKEN ?? "";
 
-// A REQUIRED TOKEN, with NO loopback exemption — and the exemption is what was wrong.
+// WHO MAY CALL THIS ROUTE. Three iterations got here, and the two rejected ones are worth
+// keeping visible because each was plausible.
 //
-// The first version of this check fell back to "serve loopback callers" by reading the
-// `Host` header. `Host` is CLIENT-CONTROLLED: an adversarial-reproduced request carrying
-// `Host: localhost` was granted the upstream token's full authority. There is no portable,
-// trustworthy peer address in a Next.js route handler, so there is nothing to put in the
-// exemption's place — which means the exemption has to go.
+// (1) "Serve loopback callers" by reading the `Host` header — UNSOUND. `Host` is
+//     client-controlled; a request carrying `Host: localhost` was reproduced receiving the
+//     upstream token's full authority.
+// (2) "Require a bearer token from every caller" — CORRECT but UNUSABLE. The console's own
+//     browser fetches send no such header, so every request 403'd and the only working mode
+//     was the one that bypasses the proxy entirely. A security control that forces everyone
+//     onto the insecure path has made things worse. Putting the token in a `NEXT_PUBLIC_`
+//     variable is not a fix: that ships it to the browser, which is the one thing the proxy
+//     exists to prevent.
+// (3) What is here: require the request to be SAME-ORIGIN, and additionally accept a bearer
+//     token for non-browser callers.
 //
-// With no token configured the route refuses EVERYTHING and says why. That is deliberately
-// inconvenient: a console that silently proxies with privileged credentials is worse than a
-// console that will not start until an operator names a secret.
-function callerIsAllowed(req: Request): boolean {
+// `Sec-Fetch-Site` is set by the browser and cannot be overridden by page JavaScript, so it
+// is trustworthy in exactly the way `Host` is not. It defends the threat a local console
+// actually faces — a malicious page in the operator's browser issuing cross-origin requests
+// to 127.0.0.1 — which is reachable in a way a remote attacker's spoofed `Host` is not.
+//
+// The remaining exposure is an attacker who can reach the console's port directly. That is a
+// BIND-ADDRESS question, not something this route can decide: bind Next.js to loopback, and
+// set MIND_MEM_CONSOLE_TOKEN if it must listen more widely. `web/README.md` says so.
+const CONSOLE_TOKEN = process.env.MIND_MEM_CONSOLE_TOKEN ?? "";
+
+function tokenMatches(req: Request): boolean {
   if (!CONSOLE_TOKEN) return false;
   const auth = req.headers.get("authorization") ?? "";
-  const expected = `Bearer ${CONSOLE_TOKEN}`;
-  // Constant-time: a `===` on a secret leaks the matching prefix length through timing.
-  // Compare equal-length buffers only — the length itself is not the secret, so an early
-  // length exit is fine, but the byte comparison must not short-circuit.
   const a = Buffer.from(auth);
-  const b = Buffer.from(expected);
+  const b = Buffer.from(`Bearer ${CONSOLE_TOKEN}`);
+  // Constant-time: `===` on a secret leaks the matching prefix length through timing. The
+  // length check may exit early — a length is not the secret — but the bytes must not.
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+function callerIsAllowed(req: Request): boolean {
+  const site = req.headers.get("sec-fetch-site");
+  // Browser-set, and page script cannot forge it. `none` is a direct navigation.
+  if (site === "same-origin" || site === "none") return true;
+  // A cross-site or cross-origin fetch is refused even WITH a token — a token does not make
+  // a cross-origin request legitimate, and accepting one would reopen the CSRF path.
+  if (site) return false;
+  // No `Sec-Fetch-Site` at all means a non-browser client (curl, a script). Those must
+  // present the token.
+  return tokenMatches(req);
 }
 
 // Full decoding BEFORE validation, then a strict allowlist.

@@ -29,7 +29,7 @@ All notable changes to MIND-Mem are documented in this file.
 ### Added
 
 - `supersedes` typed lineage edge kind (`block_lineage.ALLOWED_KINDS`),
-  motivated by the bi-temporal validity-window model in Zep/Graphiti
+  motivated by the bi-temporal validity-window model described in recent research
   (bi-temporal supersession): a `supersedes(new, old)` edge marks `old` as fully
   replaced by `new`, distinct from `contradicts` (an unresolved conflict
   between two blocks that both still claim to be current). Wired into
