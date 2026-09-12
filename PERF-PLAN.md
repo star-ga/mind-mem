@@ -136,14 +136,40 @@ spending effort where the clock is not. The remaining 35ms is dominated by fixed
 costs — 19 file reads plus blake2b (~11ms measured), index open, attestation — so P1c
 targets the READ path, not the arithmetic.
 
-## P1c — THE READ PATH (next)
+## P1c — THE READ PATH. ⚠ THE STAT-GATE DESIGN IS RETRACTED (2026-09-12)
 
-The parse cache still reads every corpus file on every recall to hash it. The read is 7.9ms
-of the 35ms. A stat-gated fast path in FRONT of the content hash would skip the read when
-`(mtime_ns, size)` is unchanged, and fall through to the hash when it is — keeping the
-content hash as the authority for the size-and-mtime-identical edit that
-`test_recall_hot_path_5_0_2` pins, while paying for it only when the stat moves. That is the
-one design where the cheap check cannot mask the correct one.
+**The design this section proposed cannot be built, and the sentence claiming otherwise was
+wrong.** It said a stat-gated fast path would "skip the read when `(mtime_ns, size)` is
+unchanged" while "keeping the content hash as the authority for the size-and-mtime-identical
+edit". Those two clauses contradict each other. If the read is skipped when the stat is
+unchanged, then for an edit that keeps BOTH size and mtime the hash is never computed, and the
+stale parse is served — which is precisely the failure the content-hash key exists to prevent.
+
+That case is pinned by a test, with a fixture control of its own:
+`tests/test_parse_file_cache.py::test_an_edit_that_preserves_BOTH_SIZE_AND_MTIME_is_still_seen`,
+plus the fixture in `tests/test_recall_hot_path_5_0_2.py` that caught the stat-keyed version the
+first time. So implementing this section as written would go red immediately — the right outcome,
+but a wasted cycle, which is why the retraction is recorded here rather than discovered again.
+
+Two premises also need separating, because they were conflated:
+
+- This section says "the read is 7.9ms of the 35ms."
+- `test_parse_file_cache.py`'s own docstring says "the read is nothing and the PARSE is 81%",
+  and that is the reasoning the content-hash key rests on.
+
+Both can hold at different scales (a per-file read is small next to a parse; nineteen of them
+add up), but a plan that quotes one and a guard that rests on the other need the measurement
+stated per-file AND in aggregate before either is acted on. Re-measured 2026-09-12: `recall.py`
+does not call `parse_file` or `_load_corpus` at all, so the 7.9ms attributed to "the recall path"
+belongs to some other layer — the MCP wrapper or index load. **Locate it before optimising it.**
+
+**What a safe version would have to look like.** Any scheme that avoids the read is using a
+weaker key than the content, so it cannot be the default. The honest directions are:
+reduce the NUMBER of reads per operation (53 `parse_file` call sites exist across the package —
+if one operation reaches several, that is a real and correctness-free win); or treat the 7.9ms as
+the price of the guarantee and take the remaining ~27ms elsewhere. A stat gate is only admissible
+as an explicit opt-in with the weaker guarantee named at the call site, and an opt-in that is off
+by default buys nothing by default.
 
 Not guesses. `cProfile` over a realistic recall on the 2,726-block live corpus, ranked by
 cumulative time. Candidates already visible from today's reading, to be confirmed or
