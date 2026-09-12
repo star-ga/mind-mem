@@ -26,6 +26,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -65,6 +66,37 @@ DEFAULT_IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 DEFAULT_GPU_TYPE = "NVIDIA A100 80GB PCIe"
 DEFAULT_CONTAINER_DISK_GB = 60
 DEFAULT_VOLUME_GB = 40
+
+# The pod is deliberately a small, reproducible checkout rather than a flat
+# collection of scripts.  Evaluators derive the repository root from
+# ``__file__.parents[1]`` and the model-card builder reaches into ``src/`` and
+# ``scripts/``; preserving these paths keeps every attested command on the
+# same source tree.
+REMOTE_ROOT = "/workspace"
+REMOTE_SOURCE_ROOT = f"{REMOTE_ROOT}/mind-mem-release"
+REMOTE_TRAIN_ROOT = f"{REMOTE_ROOT}/train-output"
+REMOTE_FULLFT_DIR = f"{REMOTE_TRAIN_ROOT}/full-ft"
+REMOTE_CORPUS = f"{REMOTE_TRAIN_ROOT}/corpus.jsonl"
+REMOTE_EVAL_REPORT = f"{REMOTE_TRAIN_ROOT}/eval_report.json"
+REMOTE_HOLDOUT_REPORT = f"{REMOTE_TRAIN_ROOT}/eval_holdout_report.json"
+REMOTE_TOKEN_FILE = f"{REMOTE_ROOT}/.hf_token"
+
+# These are the source files needed by training, both gated evaluations, the
+# receipt validator, the model-card builder, and the canonical Qwen loader.
+# Every destination keeps its checkout-relative train/src/scripts path.
+RELEASE_FILES = (
+    "train/runpod_full_ft.py",
+    "train/_causal_lm_import.py",
+    "train/eval_harness.py",
+    "train/eval_holdout.py",
+    "train/eval_receipt.py",
+    "train/build_corpus.py",
+    "train/build_model_card.py",
+    "train/upload_to_hf.py",
+    "src/mind_mem/causal_lm_loader.py",
+    "src/mind_mem/__init__.py",
+    "scripts/count_mcp_tools.py",
+)
 
 
 def _api_key() -> str:
@@ -232,6 +264,115 @@ def _scp_from(ip: str, port: int, remote: str, local: str) -> None:
     )
 
 
+def _remote_env(*, include_base_model: bool = False) -> str:
+    """Return the one path environment shared by every remote release step."""
+    values = (
+        ("MM_TRAIN_ROOT", REMOTE_TRAIN_ROOT),
+        ("MM_FULLFT_DIR", REMOTE_FULLFT_DIR),
+        ("MM_WEIGHTS_DIR", REMOTE_FULLFT_DIR),
+        ("MM_HOLDOUT_REPORT", REMOTE_HOLDOUT_REPORT),
+        ("MM_CORPUS", REMOTE_CORPUS),
+    )
+    assignments = [f"{name}={shlex.quote(value)}" for name, value in values]
+    if include_base_model:
+        assignments.append(
+            "MM_BASE_MODEL="
+            + shlex.quote(os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B"))
+        )
+    return " ".join(assignments)
+
+
+def _stage_release_bundle(ip: str, port: int, repo_root: Path | None = None) -> None:
+    """Copy the runnable checkout slice while preserving its source layout."""
+    root = Path(repo_root or Path(__file__).resolve().parents[1]).resolve()
+    paths = [root / relative for relative in RELEASE_FILES]
+    missing = [str(path) for path in paths if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("release bundle source missing: " + ", ".join(missing))
+
+    directories = sorted(
+        {str(Path(REMOTE_SOURCE_ROOT, Path(relative).parent)) for relative in RELEASE_FILES}
+    )
+    _ssh_cmd(ip, port, "mkdir -p " + " ".join(shlex.quote(directory) for directory in directories))
+    for relative, local in zip(RELEASE_FILES, paths):
+        _scp_to(ip, port, str(local), str(Path(REMOTE_SOURCE_ROOT, relative)))
+    tracked = " ".join(shlex.quote(relative) for relative in RELEASE_FILES)
+    _ssh_cmd(
+        ip,
+        port,
+        f"cd {shlex.quote(REMOTE_SOURCE_ROOT)} && git init -q && git reset -q && "
+        "git config user.name 'STARGA Inc' && "
+        "git config user.email 'noreply@star.ga' && "
+        f"git add -- {tracked} && "
+        "(git diff --cached --quiet || git commit -qm 'stage release bundle')",
+    )
+
+
+def _stage_hf_token(ip: str, port: int) -> None:
+    """Transfer the token file without placing its contents in a command."""
+    _scp_to(ip, port, str(HF_TOKEN_FILE), REMOTE_TOKEN_FILE)
+    _ssh_cmd(ip, port, f"chmod 600 {shlex.quote(REMOTE_TOKEN_FILE)}")
+
+
+def _training_command_body() -> str:
+    """Build the inner shell that exports the token before exec-ing Python."""
+    return (
+        f'export HF_TOKEN="$(cat {shlex.quote(REMOTE_TOKEN_FILE)})" && '
+        f"{_remote_env(include_base_model=True)} "
+        "exec python3 -u train/runpod_full_ft.py"
+    )
+
+
+def _training_launch_command() -> str:
+    """Build the detached training command without exposing the HF token."""
+    return (
+        f"cd {shlex.quote(REMOTE_SOURCE_ROOT)} && nohup bash -lc "
+        + shlex.quote(_training_command_body())
+        + " "
+        f">{shlex.quote(REMOTE_TRAIN_ROOT + '/train.log')} 2>&1 < /dev/null & "
+        f'echo "launched pid=$!" >{shlex.quote(REMOTE_TRAIN_ROOT + "/training.pid")}; sleep 3'
+    )
+
+
+def _run_gated_evals(ip: str, port: int) -> None:
+    """Run both evaluations with identical explicit input/output paths."""
+    for label, script in (
+        ("main", "train/eval_harness.py"),
+        ("holdout", "train/eval_holdout.py"),
+    ):
+        command = (
+            f"cd {shlex.quote(REMOTE_SOURCE_ROOT)} && {_remote_env()} "
+            f"python3 -u {shlex.quote(script)}"
+        )
+        try:
+            _ssh_cmd(ip, port, command)
+        except RuntimeError as exc:
+            raise RuntimeError(f"{label} evaluation failed; refusing release") from exc
+
+
+def _run_release_commands(ip: str, port: int, version_tag: str, *, skip_upload: bool) -> None:
+    """Gate, card, and optionally upload a completed remote checkpoint."""
+    _run_gated_evals(ip, port)
+    _ssh_cmd(
+        ip,
+        port,
+        f"cd {shlex.quote(REMOTE_SOURCE_ROOT)} && {_remote_env()} "
+        "python3 -u train/build_model_card.py",
+    )
+    if skip_upload:
+        print("--skip-upload set: NOT pushing to HF. Eval locally first, then re-run upload manually.")
+        return
+
+    commit_msg = f"Full-FT retrain on Qwen3.5-4B ({version_tag})"
+    _ssh_cmd(
+        ip,
+        port,
+        f"cd {shlex.quote(REMOTE_SOURCE_ROOT)} && "
+        f"{_remote_env()} HF_TOKEN=\"$(cat {shlex.quote(REMOTE_TOKEN_FILE)})\" "
+        f"python3 -u train/upload_to_hf.py --commit-message {shlex.quote(commit_msg)}",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -301,8 +442,6 @@ def main() -> None:
     if not Path(f"{SSH_KEY}.pub").is_file():
         sys.exit(f"SSH key missing: {SSH_KEY}(.pub)")
 
-    hf_token = HF_TOKEN_FILE.read_text(encoding="utf-8").strip()
-
     pod_id = args.pod_id or provision(gpu_type=args.gpu_type, image=args.image)
     if args.pod_id:
         print(f"reusing existing pod {pod_id}")
@@ -335,23 +474,11 @@ def main() -> None:
             "huggingface_hub",
         )
 
-        # 2. Ship corpus + training script + upload helper
+        # 2. Ship corpus + complete source bundle.  The remote checkout must
+        # retain train/ and src/ because eval receipts attest those paths.
         print("uploading corpus + scripts …")
-        _scp_to(ip, port, str(CORPUS), "/workspace/train-output/corpus.jsonl")
-        _train_dir = Path(__file__).resolve().parent
-        _scp_to(ip, port, str(_train_dir / "runpod_full_ft.py"), "/workspace/runpod_full_ft.py")
-        # The pod runs a bare script bundle rather than an installed
-        # mind-mem checkout.  Ship the canonical loader and its import shim
-        # explicitly so composite Qwen3.5 configs are normalized there too.
-        _scp_to(ip, port, str(_train_dir / "_causal_lm_import.py"), "/workspace/_causal_lm_import.py")
-        _scp_to(
-            ip,
-            port,
-            str(_train_dir.parent / "src" / "mind_mem" / "causal_lm_loader.py"),
-            "/workspace/mind_mem_causal_lm_loader.py",
-        )
-        _scp_to(ip, port, str(_train_dir / "upload_to_hf.py"), "/workspace/upload_to_hf.py")
-        _scp_to(ip, port, str(_train_dir / "build_model_card.py"), "/workspace/build_model_card.py")
+        _scp_to(ip, port, str(CORPUS), REMOTE_CORPUS)
+        _stage_release_bundle(ip, port)
 
         # 3. Launch training via nohup so it survives SSH disconnects
         # (RunPod hosts have been dropping connections every ~3-20 min,
@@ -359,28 +486,11 @@ def main() -> None:
         # session). Now: detach via nohup, then poll the log file via
         # short ssh sessions until the run finishes or fails.
         #
-        # HF_TOKEN goes to a file on the pod first (mode 600) so it
-        # never appears in `ps aux` / proc command lines for any
-        # process on the host. The training script reads it from the
-        # env via the `env $(cat ...)` shell idiom — token still in
-        # the env at process-start, but never on the command line.
+        # HF_TOKEN goes to a file on the pod first (mode 600) so its contents
+        # never appear in an SSH command, process argument, or log.
         print("staging HF token + launching full FT via nohup (survives SSH drops) …")
-        _ssh_cmd(
-            ip, port,
-            f"umask 077 && printf '%s' {hf_token!r} > /workspace/.hf_token && "
-            "chmod 600 /workspace/.hf_token",
-        )
-        _ssh_cmd(
-            ip, port,
-            "cd /workspace && nohup bash -lc '"
-            "export HF_TOKEN=$(cat /workspace/.hf_token) && "
-            f"export MM_BASE_MODEL={os.environ.get('MM_BASE_MODEL', 'Qwen/Qwen3.5-4B')} && "
-            "export MM_TRAIN_ROOT=/workspace/train-output && "
-            "export MM_CORPUS=/workspace/train-output/corpus.jsonl && "
-            "python3 -u runpod_full_ft.py' "
-            ">/workspace/train-output/train.log 2>&1 < /dev/null & "
-            "echo \"launched pid=$!\" >/workspace/train-output/training.pid; sleep 3",
-        )
+        _stage_hf_token(ip, port)
+        _ssh_cmd(ip, port, _training_launch_command())
         # Poll until the saved-model marker appears in the log or the
         # training process is gone with no marker (= failure).
         print("polling training log every 30s (will break on completion / failure) …")
@@ -417,19 +527,11 @@ def main() -> None:
         if rc != 0:
             raise RuntimeError("training exited / timed out without success; pod kept alive for inspection")
 
-        # 4. Generate + upload (model card + merged weights)
-        if args.skip_upload:
-            print("--skip-upload set: NOT pushing to HF. Eval locally first, then re-run upload manually.")
-        else:
-            print(f"building model card + pushing to HF (version tag: {args.version_tag}) …")
-            commit_msg = f"Full-FT retrain on Qwen3.5-4B ({args.version_tag})"
-            _ssh_cmd(
-                ip, port,
-                "cd /workspace && MM_TRAIN_ROOT=/workspace/train-output "
-                "python3 build_model_card.py && "
-                "HF_TOKEN=$(cat /workspace/.hf_token) python3 upload_to_hf.py "
-                f"--commit-message {commit_msg!r}",
-            )
+        # 4. Both evaluations must pass before card generation or publication.
+        # The skip-upload option still runs and records both gates, then leaves
+        # the attested bundle available for a later explicit upload command.
+        print("running main + held-out evaluation gates …")
+        _run_release_commands(ip, port, args.version_tag, skip_upload=args.skip_upload)
 
         # 5. Pull a copy of the weights back for local reference.
         WEIGHTS_OUT.mkdir(parents=True, exist_ok=True)

@@ -33,18 +33,22 @@ from pathlib import Path
 
 # Reuse the model loader + chat helpers from eval_harness.
 sys.path.insert(0, str(Path(__file__).parent))
-from eval_harness import _chat, _load_model  # noqa: E402
+from eval_harness import _load_model, select_model  # noqa: E402
 
 REPORT = Path(
     os.environ.get(
         "MM_HOLDOUT_REPORT",
-        "/data/checkpoints/mm-workspace/full-ft/eval_holdout_report.json",
+        str(
+            Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")).parent
+            / "full-ft"
+            / "eval_holdout_report.json"
+        ),
     )
 )
 CORPUS = Path(
     os.environ.get(
         "MM_CORPUS",
-        "/data/checkpoints/mm-workspace/train-output/corpus.jsonl",
+        str(Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")) / "corpus.jsonl"),
     )
 )
 
@@ -199,24 +203,29 @@ def _verify_no_verbatim_in_corpus() -> None:
 
 
 def _bench(tokenizer, model, probes: list[tuple[str, list[str]]]) -> dict:
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required in probes:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tok in resp for tok in required):
-            hits += 1
-        else:
-            missing = [t for t in required if t not in resp]
-            misses.append(
-                {"prompt": prompt, "missing": missing, "response": resp[:200]}
-            )
-    total = len(probes)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    from eval_harness import _bench_probes
+
+    return _bench_probes(tokenizer, model, "holdout", probes)
 
 
 def main() -> None:
+    from eval_receipt import capture_inputs, eval_source_paths, new_run_id, now_iso
+
     _verify_no_verbatim_in_corpus()
-    tokenizer, model, model_root = _load_model()
+    run_id, started_at = new_run_id(), now_iso()
+    repo_root = Path(__file__).resolve().parents[1]
+    probe_sets = {"v4_holdout": V4_HOLDOUT, "v312_holdout": V312_HOLDOUT}
+    selection = select_model()
+    # BEFORE anything is used: weights, tokenizer, base, corpus, evaluator
+    # sources and the probe definitions themselves.
+    captured = capture_inputs(
+        selection,
+        repo_root=repo_root,
+        dataset_root=CORPUS,
+        source_paths=eval_source_paths(repo_root),
+        probe_sets=probe_sets,
+    )
+    tokenizer, model, selection = _load_model(selection)
     v4 = _bench(tokenizer, model, V4_HOLDOUT)
     v312 = _bench(tokenizer, model, V312_HOLDOUT)
 
@@ -224,16 +233,24 @@ def main() -> None:
     total = v4["total"] + v312["total"]
     overall = total_hits / total
 
-    from eval_receipt import build_receipt
+    from eval_receipt import build_receipt, finalize_report
 
-    repo_root = Path(__file__).resolve().parents[1]
+    probe_counts = {
+        "v4_holdout": (len(V4_HOLDOUT), v4["total"]),
+        "v312_holdout": (len(V312_HOLDOUT), v312["total"]),
+    }
+    incomplete = [n for n, (want, done) in probe_counts.items() if want != done]
     receipt = build_receipt(
         repo_root=repo_root,
-        model_root=model_root,
-        dataset_root=CORPUS,
-        source_paths=(repo_root / "train/eval_harness.py", Path(__file__), repo_root / "train/build_corpus.py"),
-        probe_sets={"holdout": {"v4": V4_HOLDOUT, "v312": V312_HOLDOUT}},
+        suite="holdout",
+        captured=captured,
+        probe_counts=probe_counts,
+        probe_sets=probe_sets,
         command="python3 train/eval_holdout.py",
+        run_id=run_id,
+        started_at=started_at,
+        ended_at=now_iso(),
+        status="incomplete" if incomplete else "completed",
     )
     report = {
         "v4_holdout": v4,
@@ -244,6 +261,9 @@ def main() -> None:
         "targets": {"per_group": 0.90, "overall": 0.90},
         "receipt": receipt,
     }
+    report = finalize_report(report, receipt)
+    receipt = report["receipt"]
+    REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print("=" * 60)
@@ -260,6 +280,12 @@ def main() -> None:
         )
     print(f"  overall                          {total_hits:3d}/{total:<3d}  {overall:.2%}")
     print(f"\nreport → {REPORT}")
+
+    if not receipt["complete"]:
+        # The report is still written — a partial run is useful for diagnosis —
+        # but it must never exit green.
+        print("FAIL: evaluation receipt is incomplete; refusing a green gate")
+        sys.exit(2)
 
     passed = (
         v4["accuracy"] >= 0.90

@@ -64,9 +64,11 @@ import json
 import os
 import sys
 
-from train.eval_receipt import receipt_is_valid
+sys.path.insert(0, os.path.join(os.getcwd(), "train"))
+from eval_receipt import bindings_match, receipt_is_valid, report_matches_receipt
 
-for name in ("EVAL_REPORT", "HOLDOUT_REPORT"):
+selections = {}
+for name, suite in (("EVAL_REPORT", "main"), ("HOLDOUT_REPORT", "holdout")):
     path = os.environ[name]
     try:
         report = json.loads(open(path, encoding="utf-8").read())
@@ -74,10 +76,26 @@ for name in ("EVAL_REPORT", "HOLDOUT_REPORT"):
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"[chain] FAIL: {name} has no usable receipt: {exc}")
         sys.exit(1)
-    if not receipt.get("complete") or not receipt_is_valid(receipt):
-        print(f"[chain] FAIL: {name} receipt is incomplete or tampered")
+    if receipt.get("suite") != suite or not receipt.get("complete"):
+        print(f"[chain] FAIL: {name} receipt is incomplete or attests the wrong suite")
         sys.exit(1)
-print("[chain] evaluation receipts complete and self-consistent")
+    if not receipt_is_valid(receipt) or not report_matches_receipt(report):
+        print(f"[chain] FAIL: {name} receipt or report payload was modified after evaluation")
+        sys.exit(1)
+    ok, reason = bindings_match(receipt)
+    if not ok:
+        print(f"[chain] FAIL: {name} binding check: {reason}")
+        sys.exit(1)
+    selections[name] = receipt["selection"]
+main_sel, holdout_sel = selections["EVAL_REPORT"], selections["HOLDOUT_REPORT"]
+if main_sel["model"] != holdout_sel["model"] or main_sel["kind"] != holdout_sel["kind"]:
+    print("[chain] FAIL: the two suites attest different checkpoints")
+    sys.exit(1)
+if (main_sel.get("base") or {}) != (holdout_sel.get("base") or {}):
+    print("[chain] FAIL: the two suites attest different base checkpoints")
+    sys.exit(1)
+print("[chain] evaluation receipts complete, self-consistent, same checkpoint")
+print("[chain] scope: recorded bytes/results are consistent; not proof of execution or origin")
 PY
     RECEIPT_RC=$?
 fi

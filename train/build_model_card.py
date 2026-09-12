@@ -348,7 +348,59 @@ def _current_tool_count() -> str:
     return "unknown"
 
 
+def render_release_card(reports: dict) -> str:
+    """Render only facts bound by the uploader's validated evaluation pair.
+
+    This deterministic card deliberately has no mutable date, inferred training
+    revision, historical scores, local paths, or metrics from another run.
+    Callers must validate both reports before treating it as a release artifact.
+    """
+    selection = reports["main"]["receipt"]["selection"]
+    layout = "full fine-tune" if selection["kind"] == "full-ft" else "LoRA adapter"
+    lines = [
+        "---", "language:", "  - en", "license: apache-2.0",
+        "library_name: transformers", "pipeline_tag: text-generation", "---", "",
+        "# mind-mem-4b", "", f"Checkpoint layout: **{layout}**.", "",
+        "This release candidate is bound to the recorded inputs and results of the",
+        "product-conformance and held-out paraphrase evaluations below. These checks",
+        "do not prove execution, authentic origin, or uncontaminated capability.", "",
+        "Training-source revision and training metrics are not inferred from the",
+        "evaluation results. No benchmark leadership claim is made.", "",
+        "| Suite | Check | Passed | Total | Accuracy |",
+        "| --- | --- | ---: | ---: | ---: |",
+    ]
+    for suite in ("main", "holdout"):
+        # Real holdout reports also contain aggregate scalars and target
+        # metadata. Only the groups checked against fixed probes are scores.
+        for group in sorted(reports[suite]["receipt"]["probes"]):
+            result = reports[suite][group]
+            lines.append(
+                f"| {suite} | {group} | {result['hits']} | {result['total']} | {result['accuracy']:.1%} |"
+            )
+    lines += ["", "## Evaluation bindings", ""]
+    for suite in ("main", "holdout"):
+        receipt = reports[suite]["receipt"]
+        lines += [
+            f"- {suite} report SHA-256: `{receipt['report_sha256']}`",
+            f"- {suite} corpus SHA-256: `{receipt['dataset']['sha256']}`",
+        ]
+    return "\n".join(lines) + "\n"
+
+
 def main() -> None:
+    # An evaluated candidate always takes the strict release path. The legacy
+    # template remains useful for an unverified preview before evaluation.
+    if EVAL_REPORT.is_file():
+        try:
+            from train import upload_to_hf
+        except ModuleNotFoundError as exc:
+            if exc.name not in {"train", "train.upload_to_hf"}:
+                raise
+            import upload_to_hf
+        reports = upload_to_hf._require_eval_receipts()
+        OUT.write_text(render_release_card(reports), encoding="utf-8")
+        print(f"wrote model card bound to both validated evaluation reports → {OUT}")
+        return
     init_path = Path(os.environ.get("MM_INIT_PATH", str(Path(__file__).resolve().parents[1] / "src" / "mind_mem" / "__init__.py")))
     package_version = os.environ.get("MM_VERSION_OVERRIDE", "3.9.0")
     if init_path.is_file() and not os.environ.get("MM_VERSION_OVERRIDE"):

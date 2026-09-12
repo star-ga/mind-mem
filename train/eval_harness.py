@@ -18,15 +18,31 @@ import os
 import sys
 from pathlib import Path
 
-import torch
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
 try:
     from train._causal_lm_import import load_causal_lm
 except ModuleNotFoundError as exc:
     if exc.name not in {"train", "train._causal_lm_import"}:
         raise
     from _causal_lm_import import load_causal_lm
+
+torch = None  # Keep probe imports usable without the inference stack.
+AutoConfig = AutoModelForCausalLM = AutoTokenizer = BitsAndBytesConfig = None
+
+
+def _load_backend() -> None:
+    """Import the heavy inference stack only when evaluating a model."""
+    global torch, AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    if torch is not None:
+        return
+    import torch as _torch
+    from transformers import AutoConfig as _Config
+    from transformers import AutoModelForCausalLM as _Model
+    from transformers import AutoTokenizer as _Tok
+    from transformers import BitsAndBytesConfig as _Bnb
+
+    torch, AutoConfig = _torch, _Config
+    AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig = _Model, _Tok, _Bnb
+
 
 BASE = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
 _BASE_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
@@ -485,7 +501,40 @@ V4_SURFACES: list[tuple[str, list[str]]] = [
 # ---------------------------------------------------------------------------
 
 
-def _load_model():
+def select_model() -> "object":
+    """Resolve exactly which checkpoint/tokenizer/base the loader will use.
+
+    Returned *before* anything is loaded, so the receipt can capture the
+    selected inputs and re-verify them afterwards.  This detects drift at the
+    endpoint we actually read from; it does not prove the loader honoured it.
+    """
+    from eval_receipt import BASE_SCOPE_FULL, BASE_SCOPE_INDEX_ONLY, ModelSelection
+
+    fullft_dir = Path(os.environ.get("MM_FULLFT_DIR", _BASE_DIR / "full-ft"))
+    if (fullft_dir / "model.safetensors").is_file() or (
+        fullft_dir / "model.safetensors.index.json"
+    ).is_file():
+        return ModelSelection(
+            kind="full-ft",
+            model_path=fullft_dir,
+            tokenizer_path=fullft_dir,
+        )
+    if not ADAPTER.is_dir():
+        sys.exit(f"no weights found — checked full-FT dir {fullft_dir} and adapter {ADAPTER}. Train first.")
+    base_path = Path(BASE)
+    resolved_base = base_path if base_path.is_dir() else None
+    return ModelSelection(
+        kind="lora",
+        model_path=ADAPTER,
+        tokenizer_path=resolved_base or ADAPTER,
+        base_path=resolved_base,
+        base_ref=BASE,
+        base_scope=BASE_SCOPE_FULL if resolved_base else BASE_SCOPE_INDEX_ONLY,
+        notes={"base_is_local_snapshot": resolved_base is not None},
+    )
+
+
+def _load_model(selection=None):
     """Load eval target. Two modes:
 
     * QLoRA adapter overlay (legacy v3.0):  4-bit base + PEFT adapter at
@@ -495,8 +544,10 @@ def _load_model():
       quantization is still applied on the 3080 so the merged model
       fits in 10 GB VRAM.
     """
-    fullft_dir = Path(os.environ.get("MM_FULLFT_DIR", _BASE_DIR / "full-ft"))
-    use_fullft = (fullft_dir / "model.safetensors").is_file() or (fullft_dir / "model.safetensors.index.json").is_file()
+    _load_backend()
+    selection = selection or select_model()
+    use_fullft = selection.kind == "full-ft"
+    fullft_dir = Path(selection.model_path)
 
     bnb = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -519,13 +570,11 @@ def _load_model():
             trust_remote_code=True,
         )
         model.eval()
-        return tokenizer, model, fullft_dir
+        return tokenizer, model, selection
 
-    if not ADAPTER.is_dir():
-        sys.exit(f"no weights found — checked full-FT dir {fullft_dir} and adapter {ADAPTER}. Train first.")
-    tokenizer = AutoTokenizer.from_pretrained(BASE, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(str(selection.tokenizer_path), trust_remote_code=True)
     model = load_causal_lm(
-        BASE,
+        str(selection.base_path or selection.base_ref),
         auto_config=AutoConfig,
         auto_model=AutoModelForCausalLM,
         config_kwargs={"trust_remote_code": True},
@@ -535,9 +584,9 @@ def _load_model():
         trust_remote_code=True,
     )
     from peft import PeftModel  # lazy: only the legacy QLoRA path needs peft
-    model = PeftModel.from_pretrained(model, str(ADAPTER))
+    model = PeftModel.from_pretrained(model, str(selection.model_path))
     model.eval()
-    return tokenizer, model, ADAPTER
+    return tokenizer, model, selection
 
 
 #: Targeted 1-shot exemplars for known paraphrase-stress paraphrases.
@@ -638,181 +687,112 @@ def _chat(tokenizer, model, prompt: str) -> str:
     return tokenizer.decode(out[0][input_len:], skip_special_tokens=True)
 
 
+def score_probe(group: str, probe, response: str) -> tuple[bool, dict]:
+    """Apply the existing fixed token predicate to one complete response."""
+    if group in {"tool_call", "v39_new_tools"}:
+        expected = probe[1]
+        passed = expected.lower() in response.lower()
+        return passed, {"expected": expected}
+    required = probe[1]
+    missing = [token for token in required if token not in response]
+    detail = {"missing": missing}
+    if group == "v39_transport_guard":
+        hallucinated = [token for token in probe[2] if token in response]
+        detail["hallucinated"] = hallucinated
+        return not missing and not hallucinated, detail
+    return not missing, detail
+
+
+def _bench_probes(tokenizer, model, group: str, probes) -> dict:
+    items, misses = [], []
+    for index, probe in enumerate(probes):
+        prompt = probe[0]
+        response = _chat(tokenizer, model, prompt)
+        passed, detail = score_probe(group, probe, response)
+        items.append({"index": index, "prompt": prompt, "response": response, "passed": passed})
+        if not passed:
+            misses.append({"prompt": prompt, **detail, "response": response[:200]})
+    hits = sum(item["passed"] for item in items)
+    total = len(items)
+    return {"accuracy": hits / total if total else 0.0, "hits": hits, "total": total,
+            "misses": misses, "items": items}
+
+
 def _bench_tool_calls(tokenizer, model) -> dict:
-    hits = 0
-    misses: list[dict] = []
-    for prompt, expected in TOOL_CALL_QUESTIONS:
-        resp = _chat(tokenizer, model, prompt).lower()
-        if expected.lower() in resp:
-            hits += 1
-        else:
-            misses.append({"prompt": prompt, "expected": expected, "response": resp[:200]})
-    total = len(TOOL_CALL_QUESTIONS)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "tool_call", TOOL_CALL_QUESTIONS)
 
 
 def _bench_block_schemas(tokenizer, model) -> dict:
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required_tokens in BLOCK_SCHEMA_QUESTIONS:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tok in resp for tok in required_tokens):
-            hits += 1
-        else:
-            missing = [tok for tok in required_tokens if tok not in resp]
-            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
-    total = len(BLOCK_SCHEMA_QUESTIONS)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "block_schema", BLOCK_SCHEMA_QUESTIONS)
 
 
 def _bench_workflows(tokenizer, model) -> dict:
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required_tools in WORKFLOW_QUESTIONS:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tool in resp for tool in required_tools):
-            hits += 1
-        else:
-            missing = [tool for tool in required_tools if tool not in resp]
-            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
-    total = len(WORKFLOW_QUESTIONS)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "workflow", WORKFLOW_QUESTIONS)
 
 
 def _bench_v39_new_tools(tokenizer, model) -> dict:
-    """v3.9 probe 1: every tool added since v3.0 must surface by name."""
-    hits = 0
-    misses: list[dict] = []
-    for prompt, expected in V39_NEW_TOOLS:
-        resp = _chat(tokenizer, model, prompt).lower()
-        if expected.lower() in resp:
-            hits += 1
-        else:
-            misses.append({"prompt": prompt, "expected": expected, "response": resp[:200]})
-    total = len(V39_NEW_TOOLS)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "v39_new_tools", V39_NEW_TOOLS)
 
 
 def _bench_v39_transform_hash(tokenizer, model) -> dict:
-    """v3.9 probe 2: TransformHash field + helpers must be cited."""
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required_tokens in V39_TRANSFORMHASH_PROMPTS:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tok in resp for tok in required_tokens):
-            hits += 1
-        else:
-            missing = [tok for tok in required_tokens if tok not in resp]
-            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
-    total = len(V39_TRANSFORMHASH_PROMPTS)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "v39_transform_hash", V39_TRANSFORMHASH_PROMPTS)
 
 
 def _bench_v39_transport_guard(tokenizer, model) -> dict:
-    """v3.9 probe 3: transport mentions stay inside the real endpoint allowlist."""
-    hits = 0
-    misses: list[dict] = []
-    for prompt, must_include, must_not_include in V39_TRANSPORT_PROMPTS:
-        resp = _chat(tokenizer, model, prompt)
-        ok = all(tok in resp for tok in must_include) and not any(tok in resp for tok in must_not_include)
-        if ok:
-            hits += 1
-        else:
-            missing = [tok for tok in must_include if tok not in resp]
-            hallucinated = [tok for tok in must_not_include if tok in resp]
-            misses.append(
-                {
-                    "prompt": prompt,
-                    "missing": missing,
-                    "hallucinated": hallucinated,
-                    "response": resp[:200],
-                }
-            )
-    total = len(V39_TRANSPORT_PROMPTS)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "v39_transport_guard", V39_TRANSPORT_PROMPTS)
 
 
 def _bench_v311_new_tools(tokenizer, model) -> dict:
-    """v3.11.0 probe 1: validate_block / block_lineage / add_block_edge."""
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required_tokens in V311_NEW_TOOLS:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tok in resp for tok in required_tokens):
-            hits += 1
-        else:
-            missing = [tok for tok in required_tokens if tok not in resp]
-            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
-    total = len(V311_NEW_TOOLS)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "v311_new_tools", V311_NEW_TOOLS)
 
 
 def _bench_v311_explain_field(tokenizer, model) -> dict:
-    """v3.11.0 probe 2: _explain field shape on recall(explain=True)."""
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required_tokens in V311_EXPLAIN_FIELD:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tok in resp for tok in required_tokens):
-            hits += 1
-        else:
-            missing = [tok for tok in required_tokens if tok not in resp]
-            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
-    total = len(V311_EXPLAIN_FIELD)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "v311_explain_field", V311_EXPLAIN_FIELD)
 
 
 def _bench_v312_quality_gate_strict_mode(tokenizer, model) -> dict:
-    """v3.12.0 probe 1: quality_gate.mode config, modes, counters, escape hatch."""
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required_tokens in V312_QUALITY_GATE_STRICT_MODE:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tok in resp for tok in required_tokens):
-            hits += 1
-        else:
-            missing = [tok for tok in required_tokens if tok not in resp]
-            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
-    total = len(V312_QUALITY_GATE_STRICT_MODE)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "v312_quality_gate_strict_mode", V312_QUALITY_GATE_STRICT_MODE)
 
 
 def _bench_v312_lineage_staleness(tokenizer, model) -> dict:
-    """v3.12.0 probe 2: block_staleness table, propagation, decay multipliers."""
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required_tokens in V312_LINEAGE_STALENESS:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tok in resp for tok in required_tokens):
-            hits += 1
-        else:
-            missing = [tok for tok in required_tokens if tok not in resp]
-            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
-    total = len(V312_LINEAGE_STALENESS)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+    return _bench_probes(tokenizer, model, "v312_lineage_staleness", V312_LINEAGE_STALENESS)
 
 
 def _bench_v4_surfaces(tokenizer, model) -> dict:
-    """v4 probe: 9 new modules — circuit_breaker, backpressure, health,
-    logging_context, block_metadata, observability cardinality, eviction
-    debug_plan/active_policy, surprise FallbackPolicy, public predicates.
+    return _bench_probes(tokenizer, model, "v4_surfaces", V4_SURFACES)
 
-    Strict required-token match. Target ≥ 90%."""
-    hits = 0
-    misses: list[dict] = []
-    for prompt, required_tokens in V4_SURFACES:
-        resp = _chat(tokenizer, model, prompt)
-        if all(tok in resp for tok in required_tokens):
-            hits += 1
-        else:
-            missing = [tok for tok in required_tokens if tok not in resp]
-            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
-    total = len(V4_SURFACES)
-    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
 
 
 def main() -> None:
-    tokenizer, model, model_root = _load_model()
+    from eval_receipt import capture_inputs, eval_source_paths, new_run_id, now_iso
+
+    run_id, started_at = new_run_id(), now_iso()
+    repo_root = Path(__file__).resolve().parents[1]
+    corpus = Path(os.environ.get("MM_CORPUS", _BASE_DIR / "corpus.jsonl"))
+    probe_sets = {
+        "tool_call": TOOL_CALL_QUESTIONS,
+        "block_schema": BLOCK_SCHEMA_QUESTIONS,
+        "workflow": WORKFLOW_QUESTIONS,
+        "v39_new_tools": V39_NEW_TOOLS,
+        "v39_transform_hash": V39_TRANSFORMHASH_PROMPTS,
+        "v39_transport_guard": V39_TRANSPORT_PROMPTS,
+        "v311_new_tools": V311_NEW_TOOLS,
+        "v311_explain_field": V311_EXPLAIN_FIELD,
+        "v312_quality_gate_strict_mode": V312_QUALITY_GATE_STRICT_MODE,
+        "v312_lineage_staleness": V312_LINEAGE_STALENESS,
+        "v4_surfaces": V4_SURFACES,
+    }
+    selection = select_model()
+    # BEFORE anything is used: weights, tokenizer, base, corpus, evaluator
+    # sources and the probe definitions themselves.
+    captured = capture_inputs(
+        selection,
+        repo_root=repo_root,
+        dataset_root=corpus,
+        source_paths=eval_source_paths(repo_root),
+        probe_sets=probe_sets,
+    )
+    tokenizer, model, selection = _load_model(selection)
     tool_bench = _bench_tool_calls(tokenizer, model)
     schema_bench = _bench_block_schemas(tokenizer, model)
     workflow_bench = _bench_workflows(tokenizer, model)
@@ -825,31 +805,36 @@ def main() -> None:
     v312_lineage_staleness_bench = _bench_v312_lineage_staleness(tokenizer, model)
     v4_surfaces_bench = _bench_v4_surfaces(tokenizer, model)
 
-    from eval_receipt import build_receipt
+    from eval_receipt import build_receipt, finalize_report
 
-    repo_root = Path(__file__).resolve().parents[1]
-    corpus = Path(os.environ.get("MM_CORPUS", _BASE_DIR / "corpus.jsonl"))
+    benches = {
+        "tool_call": tool_bench,
+        "block_schema": schema_bench,
+        "workflow": workflow_bench,
+        "v39_new_tools": v39_new_tools_bench,
+        "v39_transform_hash": v39_xform_bench,
+        "v39_transport_guard": v39_transport_bench,
+        "v311_new_tools": v311_new_tools_bench,
+        "v311_explain_field": v311_explain_bench,
+        "v312_quality_gate_strict_mode": v312_quality_gate_bench,
+        "v312_lineage_staleness": v312_lineage_staleness_bench,
+        "v4_surfaces": v4_surfaces_bench,
+    }
+    probe_counts = {
+        name: (len(probes), benches[name]["total"]) for name, probes in probe_sets.items()
+    }
+    incomplete = [n for n, (want, done) in probe_counts.items() if want != done]
     receipt = build_receipt(
         repo_root=repo_root,
-        model_root=model_root,
-        dataset_root=corpus,
-        source_paths=(Path(__file__), repo_root / "train/eval_holdout.py", repo_root / "train/build_corpus.py"),
-        probe_sets={
-            "main": {
-                "tool_call": TOOL_CALL_QUESTIONS,
-                "block_schema": BLOCK_SCHEMA_QUESTIONS,
-                "workflow": WORKFLOW_QUESTIONS,
-                "v39_new_tools": V39_NEW_TOOLS,
-                "v39_transform_hash": V39_TRANSFORMHASH_PROMPTS,
-                "v39_transport_guard": V39_TRANSPORT_PROMPTS,
-                "v311_new_tools": V311_NEW_TOOLS,
-                "v311_explain_field": V311_EXPLAIN_FIELD,
-                "v312_quality_gate_strict_mode": V312_QUALITY_GATE_STRICT_MODE,
-                "v312_lineage_staleness": V312_LINEAGE_STALENESS,
-                "v4_surfaces": V4_SURFACES,
-            }
-        },
+        suite="main",
+        captured=captured,
+        probe_counts=probe_counts,
+        probe_sets=probe_sets,
         command="python3 train/eval_harness.py",
+        run_id=run_id,
+        started_at=started_at,
+        ended_at=now_iso(),
+        status="incomplete" if incomplete else "completed",
     )
     report = {
         "tool_call": tool_bench,
@@ -878,6 +863,10 @@ def main() -> None:
             "v4_surfaces": 0.90,
         },
     }
+    # `targets` is printed for humans; the upload gate applies its own fixed
+    # criteria and never reads a threshold out of this file.
+    report = finalize_report(report, receipt)
+    receipt = report["receipt"]
     REPORT.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print("=" * 60)

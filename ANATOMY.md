@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1551 | **Est. tokens:** ~4583700
-**Generated:** 2026-09-12 22:40 UTC
+**Files:** 1553 | **Est. tokens:** ~4611666
+**Generated:** 2026-09-12 23:37 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 670 | ~2019511 |
+| `tests/` | 672 | ~2035075 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -100,7 +100,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 34 | ~62749 |
+| `train/` | 34 | ~75151 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -1682,6 +1682,7 @@
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
 - `test_roadmap_hygiene.py` (~4292 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_roadmap_ticks_gate.py` (~2911 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_runpod_release_bundle.py` (~2524 tok, huge) — Offline closure tests for the RunPod training/evaluation release bundle."""
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
@@ -1746,8 +1747,9 @@
 - `test_tool_output_postgres_backend.py` (~1615 tok, huge) — ``ToolOutputStore`` on the Postgres backend the module advertises.
 - `test_tracking_online_trainer_wiring.py` (~1519 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_tracking_wiring.py` (~8018 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_train_eval_receipt.py` (~647 tok, large) — Integrity controls for the existing 4B evaluation runners."""
+- `test_train_eval_receipt.py` (~12194 tok, huge) — Publication-gate controls for the 4B evaluation attestation.
 - `test_train_mind_mem_4b.py` (~962 tok, large) — Smoke tests for benchmarks/train_mind_mem_4b.py.
+- `test_train_release_entrypoints.py` (~1493 tok, large) — Default-path integration for the staged training release entrypoints.
 - `test_trajectory.py` (~2396 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_trajectory_wiring.py` (~6650 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""
@@ -1839,24 +1841,24 @@
 - `audit_semantic_correctness.json` (~5 tok, tiny) — Keys: findings
 - `audit_semantic_correctness.py` (~1971 tok, huge) — Cross-check every 'file X ships Y' claim in the corpus against src/.
 - `backport_sweep.py` (~1722 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
-- `build_model_card.py` (~4857 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
-- `eval_harness.py` (~9092 tok, huge) — Eval harness for mind-mem-4b.
-- `eval_holdout.py` (~2309 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
-- `eval_receipt.py` (~1496 tok, large) — Build a small, content-addressed receipt for the 4B evaluation gates.
+- `build_model_card.py` (~5526 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
+- `eval_harness.py` (~8821 tok, huge) — Eval harness for mind-mem-4b.
+- `eval_holdout.py` (~2556 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
+- `eval_receipt.py` (~6560 tok, huge) — Content-addressed receipts binding a 4B evaluation report to its inputs.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `merge_and_eval_v4.1.0.py` (~1488 tok, large) — Post-Kaggle: pull LoRA adapter, merge with v4.0.0-base, eval 131 probes.
-- `post_train_chain.sh` (~897 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
+- `post_train_chain.sh` (~1160 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
 - `post_train_pipeline.sh` (~592 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
 - `qlora_local_3080.py` (~1182 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
 - `qwen35_text_config_control.py` (~1075 tok, large) — Offline smoke control for the Qwen3.5 composite-config adapter.
 - `resume_pod_train.sh` (~1220 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
-- `runpod_deploy.py` (~5470 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_deploy.py` (~6392 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
 - `runpod_full_ft.py` (~2669 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `ship_gguf_ollama_v4.1.0.py` (~1754 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.0.
 - `ship_gguf_ollama_v4.1.1.py` (~1804 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
 - `spend_guard.py` (~2040 tok, huge) — spend_guard — mechanical interlock on cloud spend.
 - `train_qlora.py` (~1433 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
-- `upload_to_hf.py` (~1377 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
+- `upload_to_hf.py` (~6885 tok, huge) — Push the retrained checkpoint + model card to star-ga/mind-mem-4b.
 ### `web/`
 
 - `.gitignore` (~20 tok, tiny) — node_modules/
