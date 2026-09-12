@@ -80,7 +80,20 @@ by its full description below.
 ### Group E — Compliance (5 items — 2 shipped, 3 open)
 
 - [~] **Pluggable redaction layer** — the stated blocker is GONE but completeness is unverified. `compliance/detectors.py` + `compliance/prewrite.py` exist and `screen(...)` IS called on the governed door (`mcp/tools/governance.py:328`, fail-closed on a malformed policy), so "no pre-write detector chain in-tree; the redaction flag is a name with no consumer" is false as written. **Not ticked:** this item is on the retracted-ticks lock from the 2026-09-01 audit (`tests/test_roadmap_ticks_gate.py`), which exists because it previously carried a confidently-worded false tick. Verified 2026-09-06 that the chain is wired; whether it is *pluggable* to the item's full intent is NOT verified, and that is the half the lock is about.
-- [~] **Compliance export pipeline** — the stated blocker is GONE but completeness is unverified. `mm export --policy {full|redacted|metadata-only} --since --format --out` runs (`compliance/export.py`), so "no `mm export` verb and no `--policy` option anywhere in `src/`" is false as written. **Not ticked** — retracted-ticks lock, see above. The surface exists; its behaviour against the full item text is NOT verified.
+- [~] **Compliance export pipeline** — **BEHAVIOUR NOW VERIFIED 2026-09-11; still
+  not ticked (retracted-ticks lock).** A `--policy` flag that accepted three
+  values and produced identical bundles would pass every existing test while
+  protecting nothing, so this was measured on a block containing an email:
+  `full` -> address PRESENT (the control: without it every redaction assertion
+  is vacuous); `redacted` and `metadata-only` -> address ABSENT; all three
+  bundles genuinely distinct; and every policy still exports the record, so
+  redaction is not implemented by dropping the row (an empty bundle also
+  contains no email, and would have passed a weaker test).
+  `tests/test_compliance_export_policies_differ.py`, 6 tests. Recorded oddity:
+  `metadata-only` is LARGER than `redacted` (192 vs 183 bytes) because it keeps
+  structural fields the redacted form drops — byte count is not a proxy for how
+  much was removed.
+- [~] **Compliance export pipeline (original wording)** — the stated blocker is GONE but completeness is unverified. `mm export --policy {full|redacted|metadata-only} --since --format --out` runs (`compliance/export.py`), so "no `mm export` verb and no `--policy` option anywhere in `src/`" is false as written. **Not ticked** — retracted-ticks lock, see above. The surface exists; its behaviour against the full item text is NOT verified.
 - [~] **Provenance-rich blocks** — **ENFORCEMENT NOW VERIFIED 2026-09-11; still
   not ticked, because the retracted-ticks lock is the authority on that.**
   Measured through the real governed door (`mcp.tools.governance.propose_update`):
