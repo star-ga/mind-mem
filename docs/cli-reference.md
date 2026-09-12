@@ -35,6 +35,7 @@ The sections below this index cover the frequently-used verbs in depth.
 | `mm install` | Configure mind-mem for one named AI coding client. |
 | `mm install-all` | Auto-detect + configure every installed AI coding client. |
 | `mm install-model` | Download `mind-mem-4b` GGUF (~2.5GB) from HuggingFace and import into Ollama as `mind-mem:4b`. Idempotent. |
+| `mm view` | Serve a read-only local web page showing the ADMITTED corpus (pending/quarantined blocks are never shown). Loopback only; requires "v4": {"viewer": {"enabled": true}}. |
 | `mm doctor` | Diagnose workspace state (block-store parity, recall-log schema drift). Add --rebuild-cache or --migrate-recall-log to actually repair. |
 | `mm token` | Federation/HTTP transport token management (rotation primitive). |
 | `mm import` | Import memory from another system into the corpus (local dumps and note directories). |

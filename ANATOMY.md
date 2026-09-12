@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1578 | **Est. tokens:** ~4,608,989
-**Generated:** 2026-09-12 04:08 UTC
+**Files:** 1579 | **Est. tokens:** ~4,610,939
+**Generated:** 2026-09-12 04:21 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~50,437 |
+| `./` | 37 | ~51,935 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 93 | ~206,831 |
+| `docs/` | 93 | ~206,877 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~93,116 |
-| `tests/` | 682 | ~2,029,941 |
+| `tests/` | 682 | ~2,030,347 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -135,6 +135,7 @@
 - `Makefile` (~1097 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
+- `PERF-PLAN.md` (~1498 tok, large) — Performance plan of record — 2026-09-11
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~3746 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
@@ -377,7 +378,7 @@
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
-- `cli-reference.md` (~7063 tok, huge) — CLI Reference
+- `cli-reference.md` (~7109 tok, huge) — CLI Reference
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
@@ -1359,7 +1360,7 @@
 - `test_error_codes_wiring.py` (~823 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_error_paths.py` (~5924 tok, huge) — Error path and edge-case tests for mind-mem — malformed inputs, missing files, bad configs."""
 - `test_event_fanout.py` (~1153 tok, large) — v4.0 prep — governance event fan-out."""
-- `test_event_fanout_wiring.py` (~7068 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_event_fanout_wiring.py` (~7474 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_event_id_filter.py` (~1779 tok, huge) — Unit tests for the event_id recall post-filter.
 - `test_every_serving_surface_attests.py` (~10651 tok, huge) — Every door proves what it served — not one of them.
 - `test_evidence_bundle.py` (~1562 tok, huge) — v3.3.0 Tier 3 #7 — structured evidence bundle.

@@ -637,18 +637,43 @@ class TestStructuralRails:
         shape of the bug this door exists to avoid.
         """
         allowed = {"emit_event", "is_fanout_enabled", "reset_fanout_cache", "scrub_payload"}
+        # ONE narrow exception, for a READER rather than an emitter.
+        #
+        # sdk spec generation reads the taxonomy to DOCUMENT it: the canonical event set
+        # becomes the channel's message list and the Event dataclass's field names become
+        # the published envelope schema. Deriving those from the code is the entire reason
+        # asyncapi.json cannot drift from the wire; restating them would reintroduce
+        # exactly the drift the drift-gate exists to catch.
+        #
+        # The rail's real target is a module that PUBLISHES without the funnel -- without
+        # the flag check, the failure swallowing or the payload scrub. A documenter cannot,
+        # and that is asserted below rather than assumed, so this exception cannot widen
+        # into a publish path.
+        reader_exceptions = {"export_asyncapi.py": {"Event", "_CANONICAL_EVENTS"}}
         importers: list[str] = []
         offenders: list[str] = []
         for path in _product_sources():
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            permitted = allowed | reader_exceptions.get(path.name, set())
             for node in ast.walk(tree):
                 if not isinstance(node, ast.ImportFrom) or (node.module or "").split(".")[-1] != "event_fanout":
                     continue
                 importers.append(path.name)
-                bad = sorted(a.name for a in node.names if not a.name.startswith("EVENT_") and a.name not in allowed)
+                bad = sorted(a.name for a in node.names if not a.name.startswith("EVENT_") and a.name not in permitted)
                 if bad:
                     offenders.append(f"{path.name}: {bad}")
         assert offenders == [], offenders
+
+        # The exception's price: every excepted reader must be incapable of publishing.
+        for name in reader_exceptions:
+            matches = [p for p in _product_sources() if p.name == name]
+            assert matches, f"reader exception {name!r} names a file that does not exist"
+            body = matches[0].read_text(encoding="utf-8")
+            for forbidden in ("EventFanout", ".publish(", "emit_event("):
+                assert forbidden not in body, (
+                    f"{name} is excepted from the emit rail as a READER but references "
+                    f"{forbidden!r}; the exception must never become a publish path"
+                )
         # Positive control: a rail over an empty set proves nothing.
         assert {"governance.py", "memory_tiers.py"} <= set(importers), importers
 
