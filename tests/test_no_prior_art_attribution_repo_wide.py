@@ -61,6 +61,14 @@ PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "attribution of a borrowed idea to a named third party",
     ),
+    # AN AUTHOR CREDIT. `scripts/check_roadmap_ticks.py` has caught this on ROADMAP.md all
+    # along; this gate did not, so the two disagreed about what the rule IS — and a rule
+    # enforced differently in two places is the shape of the gap that let ten identifiers
+    # accumulate outside ROADMAP.md in the first place.
+    # A SURNAME before it, not any word. `pyproject.toml` writes "tests/test_rest_api.py et
+    # al." meaning "and the others", which is not an author credit — matching bare `et al.`
+    # flagged it. Require a capitalised, surname-shaped token immediately before.
+    (re.compile(r"\b[A-Z][a-z]{2,}\s+et\s+al\."), "an author credit"),
 )
 
 #: Paths whose identifiers are the detector or its fixtures. Each is verified below to
@@ -168,6 +176,9 @@ def test_the_matcher_actually_matches() -> None:
         # The phrasing form, which the identifier-only matcher missed on a real line.
         "motivated by the bi-temporal validity-window model in SomeProduct",
         "inspired by the approach in AnotherSystem",
+        # Aligned with the ROADMAP gate, which has always caught this form.
+        "following Smith et al. the decay is exponential",
+        "LoCoMo (Maharana et al., *Evaluating Very Long-Term Conversational Memory*)",
     )
     for sample in must_match:
         assert any(p.search(sample) for p, _ in PATTERNS), f"matcher missed {sample!r}"
@@ -180,6 +191,8 @@ def test_the_matcher_actually_matches() -> None:
         # Generic capitalised terms after an attribution verb are NOT attributions.
         "Hardening thread motivated by incidents in the broader AI ecosystem",
         "motivated by the bi-temporal validity-window model described in recent research",
+        # Colloquial "et al." about files, not authors.
+        "install them in the test matrix so tests/test_rest_api.py et al. can import",
         "the arxiv preprint server",
         "recent research on memory decay",
         "`urn:arxiv:2401.00001` is an example URN shape",

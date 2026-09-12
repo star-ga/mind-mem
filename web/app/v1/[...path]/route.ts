@@ -8,7 +8,8 @@ import { timingSafeEqual } from "node:crypto";
  * bearer token server-side instead of shipping it to the browser, and makes
  * the API same-origin so no CORS handling is needed.
  *
- * Env: MIND_MEM_API_ORIGIN (default http://127.0.0.1:18795), MIND_MEM_TOKEN.
+ * Env: MIND_MEM_API_ORIGIN (default http://127.0.0.1:8080, matching `mm serve`),
+ * MIND_MEM_TOKEN (forwarded upstream), MIND_MEM_CONSOLE_TOKEN (non-browser callers).
  */
 
 // 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
