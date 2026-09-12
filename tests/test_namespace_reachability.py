@@ -9,6 +9,8 @@ caller carrying agent identity; the public MCP wrapper does not expose it.
 from __future__ import annotations
 
 import json
+import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -120,3 +122,39 @@ def test_acl_denial_removes_other_agent_private_block(namespaced_workspace: Path
     assert MarkdownBlockStore(str(workspace / "agents/bob")).get_by_id("BOB-1") is not None
     denied = _ids_and_scores(workspace, "bob", "comet")
     assert all(block_id != "BOB-1" for block_id, _ in denied)
+
+
+def test_shared_acl_denial_removes_shared_hit(namespaced_workspace: Path) -> None:
+    workspace = namespaced_workspace
+    acl = json.loads((workspace / "mind-mem-acl.json").read_text(encoding="utf-8"))
+    acl["agents"]["alice"]["read"] = ["agents/alice"]
+    acl["agents"]["alice"]["namespaces"] = ["agents/alice"]
+    (workspace / "mind-mem-acl.json").write_text(json.dumps(acl), encoding="utf-8")
+
+    denied = _ids_and_scores(workspace, "alice", "aurora")
+    assert all(block_id != "SHARED-1" for block_id, _ in denied)
+
+
+def test_unknown_agent_uses_documented_shared_default(namespaced_workspace: Path) -> None:
+    hits = _ids_and_scores(namespaced_workspace, "unlisted-agent", "aurora")
+    assert hits and hits[0][0] == "SHARED-1"
+    assert hits[0][1] > 0.0
+
+
+def test_shared_symlink_escape_is_not_recalled(namespaced_workspace: Path, tmp_path: Path) -> None:
+    workspace = namespaced_workspace
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    _block(outside / "DECISIONS.md", "ESCAPE-1", "outside-only aurora fact")
+
+    shutil.rmtree(workspace / "shared/decisions")
+    os.symlink(outside, workspace / "shared/decisions")
+
+    # The logical path remains ACL-readable and a raw store follows the link;
+    # recall must enforce realpath confinement before parsing it.
+    assert NamespaceManager(str(workspace), agent_id="alice").can_read(
+        "shared/decisions/DECISIONS.md"
+    )
+    assert MarkdownBlockStore(str(workspace / "shared")).get_by_id("ESCAPE-1") is not None
+    hits = _ids_and_scores(workspace, "alice", "aurora")
+    assert all(block_id != "ESCAPE-1" for block_id, _ in hits)

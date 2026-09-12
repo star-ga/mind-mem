@@ -1347,6 +1347,41 @@ def recall(
             b["_source_label"] = label
             all_blocks.append(b)
 
+    # If agent has namespace, search the ACL-visible shared corpus first.
+    # ``discover_corpus_files`` describes the workspace-root corpus only; the
+    # documented namespace layout stores the shared copy under
+    # ``shared/<corpus-file>``.  Keep this loop table-shaped and deterministic:
+    # it must not enumerate other agents, and each logical shared file is read
+    # at most once.
+    if ns_manager and agent_id:
+        workspace_real = os.path.realpath(workspace)
+        workspace_prefix = workspace_real + os.sep
+        seen_shared_paths: set[str] = set()
+        for label, rel_path in CORPUS_FILES.items():
+            ns_path = os.path.join("shared", rel_path)
+            if ns_path in seen_shared_paths:
+                continue
+            seen_shared_paths.add(ns_path)
+            if not ns_manager.can_read(ns_path):
+                continue
+            candidate_real = os.path.realpath(os.path.join(workspace_real, ns_path))
+            if not candidate_real.startswith(workspace_prefix):
+                _log.warning("shared_corpus_path_escaped", ns_path=ns_path)
+                continue
+            if not os.path.isfile(candidate_real):
+                continue
+            try:
+                blocks = parse_file(candidate_real)
+            except (OSError, UnicodeDecodeError, ValueError) as e:
+                _log.debug("corpus_parse_failed", file=ns_path, error=str(e))
+                continue
+            if active_only:
+                blocks = get_active(blocks)
+            for b in blocks:
+                b["_source_file"] = ns_path
+                b["_source_label"] = f"{label}@shared"
+                all_blocks.append(b)
+
     # If agent has namespace, also search agent-private corpus files.
     # CodeQL py/path-injection cleansing pattern: resolve to absolute
     # realpath, then verify the result is contained within the trusted

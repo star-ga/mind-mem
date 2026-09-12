@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1549 | **Est. tokens:** ~4,580,573
-**Generated:** 2026-09-12 19:25 UTC
+**Files:** 1550 | **Est. tokens:** ~4,582,255
+**Generated:** 2026-09-12 23:15 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 669 | ~2,018,864 |
+| `tests/` | 670 | ~2,020,546 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
