@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 
 from ._recall_constants import _IRREGULAR_LEMMA, _STOPWORDS
@@ -14,6 +15,25 @@ __all__ = ["_stem", "tokenize"]
 # ---------------------------------------------------------------------------
 
 
+#: Memo size for :func:`_stem`.
+#:
+#: PROFILED 2026-09-11, after the corpus-parse cache removed the previous 81% of recall
+#: time: `_stem` was 124,203 calls per 15 recalls, driving 2,328,980 `str.endswith` calls
+#: (~19 per call, which is what a suffix-rule stemmer does). Corpus words repeat heavily,
+#: so nearly all of that was recomputation.
+#:
+#: BOUNDED on purpose. An unbounded memo over the tokens of an arbitrarily large corpus is
+#: a memory leak with a plausible-sounding justification, and a corpus has many distinct
+#: words. 16384 covers a large vocabulary at a few hundred KB.
+#:
+#: Safe ONLY because `_stem` is pure -- one str in, one str out, no clock, no I/O, no
+#: module state. `tests/test_stem_memoisation.py` pins that purity over the AST, because if
+#: a later edit makes the stemmer context-dependent the memo will serve its first answer
+#: forever, silently, for every word in every corpus.
+_STEM_CACHE_SIZE = 16384
+
+
+@functools.lru_cache(maxsize=_STEM_CACHE_SIZE)
 def _stem(word: str) -> str:
     """Simplified Porter stemmer — handles common English suffixes.
 

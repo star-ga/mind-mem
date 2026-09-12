@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1580 | **Est. tokens:** ~4,614,412
-**Generated:** 2026-09-12 04:56 UTC
+**Files:** 1581 | **Est. tokens:** ~4,616,296
+**Generated:** 2026-09-12 05:00 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~52,268 |
+| `./` | 37 | ~52,716 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -74,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 246 | ~1,083,526 |
+| `src/mind_mem/` | 246 | ~1,083,778 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~93,116 |
-| `tests/` | 683 | ~2,032,171 |
+| `tests/` | 684 | ~2,033,355 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -135,7 +135,7 @@
 - `Makefile` (~1097 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
-- `PERF-PLAN.md` (~1831 tok, huge) — Performance plan of record — 2026-09-11
+- `PERF-PLAN.md` (~2279 tok, huge) — Performance plan of record — 2026-09-11
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~3746 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
@@ -967,7 +967,7 @@
 - `_recall_scoring.py` (~4992 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories.
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `_recall_temporal.py` (~2214 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
-- `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
+- `_recall_tokenization.py` (~1036 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
 - `recall_vector.py` (~23703 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1990 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompact_cli.py` (~1402 tok, large) — ``mind-mem-recompact`` — cluster, recompact, PROPOSE. Never apply.
@@ -1762,6 +1762,7 @@
 - `test_sqlite_handle_close_tool_output_hnsw.py` (~2197 tok, huge) — Every SQLite connection ``tool_output/store.py`` opens must be CLOSED before
 - `test_sqlite_index_backends.py` (~2781 tok, huge) — Backend-parity regression tests for ``sqlite_index`` (audit bugs 4, 9, 13, 14).
 - `test_sqlite_index.py` (~5547 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
+- `test_stem_memoisation.py` (~1184 tok, large) — `_stem` is memoised — a pure function called 124,203 times per 15 recalls.
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
 - `test_storage_factory.py` (~2902 tok, huge) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
 - `test_streaming_front_gate.py` (~5460 tok, huge) — # Copyright 2026 STARGA, Inc.

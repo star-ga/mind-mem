@@ -111,7 +111,39 @@ Measured on the live corpus: 19 files, 1.96 MB; read 7.9ms, blake2b 3.1ms, sha25
 
 **34.9ms p50 is now faster than the 52-64ms the docs advertise for vector search alone.**
 
-## P1b — PROFILE AGAIN (the 81% is gone, so the ranking has changed; do not guess)
+## P1b — RE-PROFILED, and the honest result: work removed, p50 unchanged
+
+After the parse cache, total profiled time was 1.746s and the new top cost was tokenisation:
+`_stem` 124,203 calls driving 2,328,980 `str.endswith` calls. `_stem` is pure, so it is
+memoised (bounded at 16384).
+
+| | before memo | after memo |
+|---|---|---|
+| total profiled | 1.746s | **1.041s** (-40%) |
+| `tokenize` cumulative | 0.768s | **0.121s** (6x) |
+| `extract_field_tokens` | 0.771s | **0.192s** (4x) |
+| `_stem` / `endswith` | top-3 / 2.3M calls | **gone from the top 20** |
+| **end-to-end p50** | 34.9ms | **35.0ms — NO CHANGE** |
+
+**Both numbers are real and the discrepancy is the finding.** cProfile charges per-call
+overhead heavily, so removing millions of Python calls shows up as 40% there; wall-clock p50
+does not move because at 35ms recall is no longer CPU-bound in tokenisation. The memo is
+kept — it removes real work, and it helps most exactly where corpora are largest — but it is
+NOT a p50 win and is not claimed as one.
+
+**What that tells the next step:** further CPU micro-optimisation of the scoring path is
+spending effort where the clock is not. The remaining 35ms is dominated by fixed per-recall
+costs — 19 file reads plus blake2b (~11ms measured), index open, attestation — so P1c
+targets the READ path, not the arithmetic.
+
+## P1c — THE READ PATH (next)
+
+The parse cache still reads every corpus file on every recall to hash it. The read is 7.9ms
+of the 35ms. A stat-gated fast path in FRONT of the content hash would skip the read when
+`(mtime_ns, size)` is unchanged, and fall through to the hash when it is — keeping the
+content hash as the authority for the size-and-mtime-identical edit that
+`test_recall_hot_path_5_0_2` pins, while paying for it only when the stat moves. That is the
+one design where the cheap check cannot mask the correct one.
 
 Not guesses. `cProfile` over a realistic recall on the 2,726-block live corpus, ranked by
 cumulative time. Candidates already visible from today's reading, to be confirmed or
