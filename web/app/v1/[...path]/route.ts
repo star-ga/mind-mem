@@ -157,10 +157,20 @@ function headline(excerpt: string): string {
   return "";
 }
 
-function toBundle(raw: { query?: string; results?: RecallResult[] }) {
+function toBundle(raw: {
+  query?: string;
+  results?: RecallResult[];
+  attestation?: unknown;
+}) {
   const results = raw.results ?? [];
   return {
     query: raw.query ?? "",
+    // CARRIED THROUGH, not dropped. The attestation is the evidence that a recall is
+    // reproducible — config hash, results digest, which legs ran, which degraded. An
+    // adapter that discards it shows the caller an answer with no provenance, which for
+    // this product is the one thing the console must not do. It was being silently
+    // dropped here.
+    attestation: raw.attestation ?? null,
     facts: results.map((r) => ({
       claim: headline(r.excerpt ?? ""),
       source_id: r._id ?? "",
@@ -171,7 +181,10 @@ function toBundle(raw: { query?: string; results?: RecallResult[] }) {
       // name so the UI shows what it actually is.
       score: r.score ?? 0,
     })),
-    relations: [],
+    // `null`, NOT `[]`. An empty array asserts "this graph has no edges"; this adapter
+    // simply does not compute them. Saying "absent" lets the console render "not
+    // available" instead of an authoritative-looking empty graph.
+    relations: null,
     timeline: results
       .filter((r) => r.Date)
       .map((r) => ({

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1549 | **Est. tokens:** ~4,578,897
-**Generated:** 2026-09-12 18:52 UTC
+**Files:** 1549 | **Est. tokens:** ~4,579,183
+**Generated:** 2026-09-12 18:54 UTC
 
 ## Token Budget Guide
 
@@ -104,9 +104,9 @@
 | `web/` | 5 | ~1,310 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
-| `web/app/v1/[...path]/` | 1 | ~2,089 |
-| `web/components/` | 4 | ~2,477 |
-| `web/lib/` | 1 | ~775 |
+| `web/app/v1/[...path]/` | 1 | ~2,258 |
+| `web/components/` | 4 | ~2,514 |
+| `web/lib/` | 1 | ~855 |
 
 ## Files
 
@@ -1872,11 +1872,11 @@
 - `page.tsx` (~1036 tok, large)
 ### `web/app/v1/[...path]/`
 
-- `route.ts` (~2089 tok, huge) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
+- `route.ts` (~2258 tok, huge) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
 ### `web/components/`
 
 - `FactList.tsx` (~276 tok, medium)
-- `GraphView.tsx` (~1063 tok, large)
+- `GraphView.tsx` (~1100 tok, large) — than treating "not computed" as "no edges".
 - `TenantSwitcher.tsx` (~839 tok, large) — HeadersInit can be a Headers, a [string, string][], or a Record.
 - `TimelineView.tsx` (~299 tok, medium)
 ### `web/`
@@ -1884,7 +1884,7 @@
 - `.gitignore` (~20 tok, tiny) — node_modules/
 ### `web/lib/`
 
-- `api.ts` (~775 tok, large) — SAME-ORIGIN BY DEFAULT, so requests go through the server-side proxy in
+- `api.ts` (~855 tok, large) — adapter does not derive relations, and asserting an empty graph would be a claim it
 ### `web/`
 
 - `next.config.ts` (~104 tok, small) — mind-mem-web is a thin client — the REST API lives on the

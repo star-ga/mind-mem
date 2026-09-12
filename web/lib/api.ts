@@ -46,7 +46,12 @@ export type EntityRef = {
 export type EvidenceBundle = {
   query: string;
   facts: Array<{ claim: string; source_id: string; score: number }>;
-  relations: Relation[];
+  // `null` means NOT COMPUTED, which is different from "no edges". The proxy's bundle
+  // adapter does not derive relations, and asserting an empty graph would be a claim it
+  // has not earned.
+  relations: Relation[] | null;
+  // The recall attestation, carried through so a rendered answer can show its provenance.
+  attestation?: unknown;
   timeline: TimelineEvent[];
   entities: EntityRef[];
   source_blocks: MindMemBlock[];
