@@ -29,6 +29,62 @@ not history.
 >    waiting* (a decision, with its trigger) from *no recorded decision* (an
 >    open question). Never let the second silently become a deletion.
 
+## What "100%" actually requires — the 31 open boxes, classified 2026-09-11
+
+Counting boxes answers the wrong question. Of the 31 open items, **4 are work I can
+do**; the rest need money, a credential, a publish decision, or a prerequisite that
+does not exist yet. Classified so the number stops standing in for a plan.
+
+**A — NOT WORK AT ALL (5 boxes). Status lines carrying a checkbox.**
+`REVERSED — the "no caller, no tick" gate did NOT pay out` · `BLOCKED BY THE 5.0.0
+SWEEP — Group N has no subject any more` · `5. Chunk provenance — see Group N` ·
+`GATE — re-open K.2 only after the K.0 backfill produces a populated graph` ·
+`Rust hot path for hybrid search` (explicitly ⊘ superseded by the pure-MIND port).
+These inflate the count exactly the way the 10 phantom "(original wording)" boxes did.
+Left as boxes for now rather than silently rewritten, because a narrative line is not
+mine to delete on a count argument — but they are not remaining work and should not be
+planned against.
+
+**B — BLOCKED ON THE OPERATOR (10 boxes): money, a credential, or a publish decision.**
+- `Retrain mind-mem-4b` + `mind-mem-4b v2 retrain` + `Regenerate the training corpus` —
+  RunPod H200, ~$55, and the roadmap already sequences it AFTER the pure-MIND port.
+- `Publish the Go client as a Go module` ×2 · `JavaScript / TypeScript SDK` npm publish —
+  the CLIENTS SHIP IN-TREE WITH TESTS; only the registry push is open, and pushing to a
+  public registry is an outward-facing act that is not mine to take.
+- `Migration importers` ×2 endpoint-backed half — pinecone / weaviate / qdrant need a
+  live endpoint and a credential, and they are correctly refused with an explicit
+  deferred message rather than faked.
+- `Merkle root anchored to an external ledger` — needs a funded L2 account.
+- `Publish artifact-backed headline numbers` — the roadmap's own text says publishing
+  "is a separate gated decision, not a side effect of running the harness". The NIAH
+  250-cell artifact half is being produced now; the publish is still yours.
+
+**C — BLOCKED ON A PREREQUISITE (12 boxes).**
+- `SHA3-512 → .mind → GPU kernel` · `Vector similarity → .mind → GPU kernel` ·
+  `FFI bridge` — GPU/CUDA lives in the PRIVATE mind-runtime and cannot land in this
+  public repo; the arrow's right-hand side is not absent, it is elsewhere.
+- The five pure-MIND port lines (`Hot scoring kernels`, `Governance layer`,
+  `Core retrieval engine`, `I/O adapters`, `Python reduced to a shim`) — gated on
+  `mindc` capability, tracked in the MIND repo, not here.
+- `M7 — Tier-ablation gate` — its own text says "blocked, sequenced last".
+- `N2 — Chunk-provenance anchoring` — Group N has no subject after the sweep.
+- `Compliance export pipeline` — already `[~]` with behaviour verified.
+
+**D — WORK I CAN DO (4 boxes).** This is the real remaining surface:
+1. `Local visual viewer` (`mm view`) — stdlib HTTP + minimal JS/D3, self-contained.
+2. `L2 — Prescriptive blocks` — an EVALUATION, explicitly "not committed"; the
+   deliverable is a recommendation with evidence, not a feature.
+3. `Prefetch hit rate tracked in calibration feedback loop` — on the retracted-ticks
+   lock; `prefetch.py:619` computes a hit_rate and no prefetch signal reaches the
+   calibration loop. Wiring it is real work, and the lock comes off only the way the
+   redaction lock did: traced, with a control that fails on revert.
+4. `Quantized prefix cache` — also on the lock; `prefix_cache` caches responses, not
+   embeddings, and `turbo_quant` is a placeholder with no consumers.
+
+**So the honest answer to "how long to 100%":** the four D items are days, not weeks.
+Everything else needs a decision or a purchase from you, or a prerequisite that lives in
+another repo. A "100%" that counted A and C as done would be a number, not a product.
+
 ## Genuinely Open Items (post-5.0.1 reality)
 
 Surfaced at the top so the actual remaining work is visible without
