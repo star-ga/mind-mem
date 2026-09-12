@@ -572,9 +572,7 @@ def test_the_release_decision_carries_every_field_its_validator_requires() -> No
         date="2026-09-12",
     )
     fields = {
-        line.split(":", 1)[0]: line.split(":", 1)[1].strip()
-        for line in rendered.splitlines()
-        if ":" in line and not line.startswith("-")
+        line.split(":", 1)[0]: line.split(":", 1)[1].strip() for line in rendered.splitlines() if ":" in line and not line.startswith("-")
     }
 
     missing = [name for name in DECISION_REQUIRED_FIELDS if name not in fields]

@@ -52,9 +52,14 @@ export type EvidenceBundle = {
   source_blocks: MindMemBlock[];
 };
 
+// SAME-ORIGIN BY DEFAULT, so requests go through the server-side proxy in
+// `app/v1/[...path]/route.ts`. Defaulting to `http://127.0.0.1:8080` sent the browser
+// STRAIGHT AT the API and left the proxy as dead code -- which defeated the one thing
+// the proxy exists for, keeping the bearer token out of the browser. An explicit
+// NEXT_PUBLIC_MIND_MEM_API_URL still wins, for the case where someone really does want
+// to talk to a bare loopback API with no token.
 const API_BASE_URL =
-  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_MIND_MEM_API_URL) ||
-  "http://127.0.0.1:8080";
+  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_MIND_MEM_API_URL) || "";
 
 export async function recallBundle(
   query: string,

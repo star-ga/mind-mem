@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1547 | **Est. tokens:** ~4,572,726
-**Generated:** 2026-09-12 18:07 UTC
+**Files:** 1548 | **Est. tokens:** ~4,574,621
+**Generated:** 2026-09-12 18:10 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 667 | ~2,013,773 |
+| `tests/` | 668 | ~2,015,011 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -104,9 +104,9 @@
 | `web/` | 5 | ~920 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
-| `web/app/v1/[...path]/` | 1 | ~832 |
+| `web/app/v1/[...path]/` | 1 | ~1,378 |
 | `web/components/` | 4 | ~2,482 |
-| `web/lib/` | 1 | ~665 |
+| `web/lib/` | 1 | ~776 |
 
 ## Files
 
@@ -1308,6 +1308,7 @@
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
 - `test_docs_alignment.py` (~24789 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_docs_claims.py` (~818 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_doctor_rebuild_cache_default_backend.py` (~1242 tok, large) — ``mm doctor --rebuild-cache`` must not crash on the DEFAULT markdown backend.
 - `test_documented_surfaces_exist.py` (~2128 tok, huge) — Documentation that names a symbol, a backend or an installable extra has
 - `test_downgrade_mitigation.py` (~1016 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_dream_cycle_backends.py` (~2824 tok, huge) — Backend-aware dream-cycle maintenance passes (audit bug 11).
@@ -1417,7 +1418,7 @@
 - `test_importers_field_injection.py` (~1609 tok, huge) — Regression gate: dump content cannot forge a second block field.
 - `test_importers_notes.py` (~7184 tok, huge) — Tests for the note-tree and transcript importers.
 - `test_importers.py` (~5662 tok, huge) — Tests for the roadmap Group G migration importers (file-based subset).
-- `test_importers_quarantine.py` (~5723 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
+- `test_importers_quarantine.py` (~5719 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
 - `test_inbox.py` (~2419 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""
 - `test_indexed_validity_topk.py` (~2073 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1870,7 +1871,7 @@
 - `page.tsx` (~1036 tok, large)
 ### `web/app/v1/[...path]/`
 
-- `route.ts` (~832 tok, large) — The REST layer ignores `format: "bundle"` and always answers with
+- `route.ts` (~1378 tok, large) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
 ### `web/components/`
 
 - `FactList.tsx` (~281 tok, medium)
@@ -1882,7 +1883,7 @@
 - `.gitignore` (~20 tok, tiny) — node_modules/
 ### `web/lib/`
 
-- `api.ts` (~665 tok, large)
+- `api.ts` (~776 tok, large) — SAME-ORIGIN BY DEFAULT, so requests go through the server-side proxy in
 ### `web/`
 
 - `next.config.ts` (~104 tok, small) — mind-mem-web is a thin client — the REST API lives on the

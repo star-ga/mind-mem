@@ -2995,6 +2995,12 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     # sqlite-only -- so ``in_sync`` went false (and, via the ``healthy``
     # verdict below, the whole doctor call) the moment the default
     # backend had any content at all.
+    # Bound BEFORE the branch, because it is read again ~130 lines below in the
+    # `--rebuild-cache` block. Binding it only inside the Postgres arm made
+    # `mm doctor --rebuild-cache` raise UnboundLocalError on the DEFAULT
+    # markdown/SQLite backend -- the common case, and the one least likely to be
+    # exercised by a Postgres-focused test.
+    pg_only: set = set()
     if store_class == "PostgresBlockStore":
         pg_only = pg_ids - sq_ids
         sq_only = sq_ids - pg_ids
@@ -4666,7 +4672,18 @@ def build_parser() -> argparse.ArgumentParser:
     l_flag.add_argument(
         "--kind",
         default="contradicts",
-        choices=("cites", "implements", "refines", "contradicts", "cooccurrence"),
+        # `supersedes` belongs here: the library accepts it (block_lineage's kind
+        # weights) and the contradiction set treats it as staleness-firing, so
+        # omitting it from the parser made a supported edge kind unreachable from
+        # the CLI -- a surface gap, not a capability gap.
+        choices=(
+            "cites",
+            "implements",
+            "refines",
+            "contradicts",
+            "supersedes",
+            "cooccurrence",
+        ),
         help="Edge kind. Default 'contradicts' (the staleness-firing kind).",
     )
     l_flag.add_argument("--weight", type=float, default=1.0, help="Edge weight (default 1.0).")
