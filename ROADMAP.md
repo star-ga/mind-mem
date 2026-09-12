@@ -415,7 +415,10 @@ below, no code, no attribution in public artifacts.)
       **Remaining:** a higher-recall extractor on this path, generalising
       `_ENTITY_ID_RE` for cross-lingual surface forms, and the same hook on the
       direct `write_block` path.
-- [ ] **Edge extraction body (original wording)** — wire
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** Edge extraction body (original wording)** — wire
       lightweight entity/relation extraction (generalize the
       `block_parser.py:60-64` `_ENTITY_ID_RE` beyond canonical IDs to
       named entities) into `propose_update`, so writing a block *proposes*
@@ -664,7 +667,10 @@ Group H recompaction).
       **Remaining:** the description-similarity judgement itself (needs a
       model), cross-lingual transliteration, and wiring the guard into the
       `capture.py` merge path.
-- [ ] **Description-grounded resolution body (original wording)** — canonicalize
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** Description-grounded resolution body (original wording)** — canonicalize
       surface-form variants (nicknames, abbreviations, cross-lingual
       transliterations) that string-similarity dedup misses, using a
       one-line per-entity description as disambiguation context rather
@@ -696,7 +702,10 @@ Group H recompaction).
       prevent.
       **Remaining:** the LLM arbitration within a block, and wiring blocking into
       the `capture.py` merge path.
-- [ ] **Blocking (original wording) + LLM-arbitration hybrid (resolution at scale)** —
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** Blocking (original wording) + LLM-arbitration hybrid (resolution at scale)** —
       cheap deterministic blocking (inverted index on name tokens /
       embedding neighbors) narrows candidates to 50–100-item blocks; the
       LLM only arbitrates *within* a block. Keeps resolution sublinear
@@ -742,7 +751,10 @@ Group H recompaction).
       atomic facts, structured time range), the most-specific-claim
       contradiction rule, and emitting as `propose_update` never a direct
       write.
-- [ ] **Hub-node synthesis body (original wording)** — for high-degree
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** Hub-node synthesis body (original wording)** — for high-degree
       nodes only (degree ≥ 3), pool every mention + graph neighborhood
       into a synthesized profile (summary + 3–5 traceable atomic facts +
       structured time range), "resolve contradictions by preferring the
@@ -2739,7 +2751,10 @@ multi-tenancy thread is also tracked as issue [#505].
   touching any canary. A canary is a tripwire, not a filter.
   **Remaining:** planting canaries at init and running the sweep from the daemon;
   Sigstore-signed manifests still release-artifacts-only.
-- [ ] **Adversarial / poisoning defense (original wording)** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** Adversarial / poisoning defense (original wording)** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
 - [x] **Approval workflows for sensitive proposals** — multi-reviewer chain (OPA/Rego-style) ships behind opt-in dep.
 - [x] **Memory reputation / trust scores** — provenance class surfaced on recall hits as `actor_trust` (`provenance_class.py`, the validity gate's fifth component), with an opt-in low-provenance demotion re-rank.
 
@@ -3920,18 +3935,21 @@ much context it consumed and cannot say what the consumption was worth.
   control that a 100-token budget DOES bind, since "more budget adds nothing"
   and "the budget is ignored entirely" otherwise look identical, and one that
   the packer never pads.
-- [ ] **L1 (original wording) — Recall utility per context token.** Define and publish a utility-against-
-  consumption measure for `pack_recall_budget` and the recall path generally:
-  decision-relevant content delivered per token of context spent. Requires a
-  ground-truth set on our own corpus, not a borrowed benchmark — now specified in
-  [`docs/design/eval-set-ground-truth.md`](docs/design/eval-set-ground-truth.md),
-  shared with M7 and deliberately written before either consumer so it is not
-  built to fit only one of them. **Close condition is
-  one-sided and decision-shaped, matching the criterion-gate rule used elsewhere in
-  the ecosystem:** a measured curve of utility against `max_tokens`, on our traffic,
-  with the honest possibility that the current default (2000) is already at or past
-  the knee. A result showing no headroom closes this as a negative finding and is a
-  valid outcome — the point is to make the claim measurable, not to make it flattering.
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** L1 (original wording) — Recall utility per context token.** Define and publish a utility-against-
+      consumption measure for `pack_recall_budget` and the recall path generally:
+      decision-relevant content delivered per token of context spent. Requires a
+      ground-truth set on our own corpus, not a borrowed benchmark — now specified in
+      [`docs/design/eval-set-ground-truth.md`](docs/design/eval-set-ground-truth.md),
+      shared with M7 and deliberately written before either consumer so it is not
+      built to fit only one of them. **Close condition is
+      one-sided and decision-shaped, matching the criterion-gate rule used elsewhere in
+      the ecosystem:** a measured curve of utility against `max_tokens`, on our traffic,
+      with the honest possibility that the current default (2000) is already at or past
+      the knee. A result showing no headroom closes this as a negative finding and is a
+      valid outcome — the point is to make the claim measurable, not to make it flattering.
 
 - [ ] **L2 — Prescriptive blocks (EVALUATE, not committed).** Assess whether a
   procedural/prescriptive block kind — recall returns *a strategy*, not *a fact* —
@@ -4123,15 +4141,18 @@ mislabelled eval set still produces confident numbers.
   like the contrast above. `tests/test_namespace_relevance_floors.py` pins the
   measurement and the no-floor default, so a global floor cannot be introduced
   later without contradicting recorded evidence.
-- [ ] **M3 (original wording) — Per-namespace relevance floors.** A single similarity threshold
-  across differently-shaped namespaces is wrong in both directions. An unbounded,
-  mostly-irrelevant corpus needs a floor to suppress noise; a small bounded
-  per-entity record needs *no* floor, because a floor drops the one durable fact
-  on a query that never uses its vocabulary. Make the floor a per-namespace
-  property with the evidence recorded — the external example justified its floor
-  with a two-order-of-magnitude score gap (0.41 correct hit vs. 0.005 noise)
-  rather than a vibe, and any floor we set should carry the same kind of
-  measurement. Depends on M2 for the measurement surface.
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** M3 (original wording) — Per-namespace relevance floors.** A single similarity threshold
+      across differently-shaped namespaces is wrong in both directions. An unbounded,
+      mostly-irrelevant corpus needs a floor to suppress noise; a small bounded
+      per-entity record needs *no* floor, because a floor drops the one durable fact
+      on a query that never uses its vocabulary. Make the floor a per-namespace
+      property with the evidence recorded — the external example justified its floor
+      with a two-order-of-magnitude score gap (0.41 correct hit vs. 0.005 noise)
+      rather than a vibe, and any floor we set should carry the same kind of
+      measurement. Depends on M2 for the measurement surface.
 
 - [~] **M4 — Enum-keyed upsert slots inside the governed path (best product
   value).** **MECHANISM LANDED 2026-09-11; adoption by the governed door is the
@@ -4163,43 +4184,46 @@ mislabelled eval set still produces confident numbers.
   **Remaining:** `propose_update` calling `upsert_plan` and emitting the
   supersession proposal. Deliberately not done here — that is root's
   publication surface and the hot path for every governed write.
-- [ ] **M4 (original wording) — Enum-keyed upsert slots inside the governed path (best product
-  value).** For *bounded* fact spaces, prevent contradiction structurally instead
-  of detecting it after the fact. File each fact under a topic slug drawn from a
-  **closed set**, so a second statement on the same topic collides by
-  construction — an exact key collision, not a fuzzy similarity match that can
-  miss. The closed set is the load-bearing part: an open-ended topic string lets
-  an extractor file `plan` on Monday and `plan_tier` on Friday, and the two
-  contradicting facts never collide at all.
-  **This is genuinely orthogonal to what we have.** `contradiction_detector.py`,
-  `conflict_resolver.py`, and `compiled_truth_contradictions` are all *detective*
-  — they run after two conflicting facts coexist and depend on detection finding
-  them. Enum-keyed slots make coexistence impossible for the bounded case, at
-  zero detection cost and with no false negatives.
-  **Where we must not copy them:** their upsert is a silent overwrite with no
-  proposal, no lineage, no rollback. Ours must route the supersession through
-  `propose_update` → `approve_apply` so the replacement is a *recorded,
-  reversible event*. That combination — their exactness, our audit trail — is
-  strictly better than either side alone, and it is the honest reason to build it
-  rather than adopt theirs.
-  **Residual risk, stated plainly:** the model still chooses the slug. This moves
-  the failure from "forgets what it wrote" to "picks the wrong enum member" —
-  narrower and *validatable* (a closed enum rejects an invented member), but not
-  eliminated. Say so rather than claiming contradiction is solved.
-  Note also the escape hatch's cost: free-form facts with no natural identity have
-  nothing to collide on and therefore accumulate. That trade is acceptable and
-  should be stated; what should **not** be copied is content-hash keying at
-  demo width (32 bits is collision-prone as a durable identity scheme).
-  **The precedent is internal and one layer up (re-sourced 2026-08-17).**
-  `512-mind/src/drift.mind` applies closed-set discipline to *meaning* rather
-  than to keys: `no_semantic_drift` enumerates the mutation classes that corrupt
-  a contract — `"must not"`→`"should not"` (obligation weakened to suggestion),
-  `"fail open"`→`"fail safe"` (default inverted), `"any human"`→`"authorized
-  participants"` (scope narrowed) — and asserts against that fixed list. Same
-  move as M4: enumerate the space so the violation is *structural* instead of
-  detected. 121 enums across that repo's modules make it the house style, not a
-  one-off. So M4 should cite `drift.mind` as its precedent; the external tutorial
-  contributed the framing and none of the mechanism.
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** M4 (original wording) — Enum-keyed upsert slots inside the governed path (best product
+      value).** For *bounded* fact spaces, prevent contradiction structurally instead
+      of detecting it after the fact. File each fact under a topic slug drawn from a
+      **closed set**, so a second statement on the same topic collides by
+      construction — an exact key collision, not a fuzzy similarity match that can
+      miss. The closed set is the load-bearing part: an open-ended topic string lets
+      an extractor file `plan` on Monday and `plan_tier` on Friday, and the two
+      contradicting facts never collide at all.
+      **This is genuinely orthogonal to what we have.** `contradiction_detector.py`,
+      `conflict_resolver.py`, and `compiled_truth_contradictions` are all *detective*
+      — they run after two conflicting facts coexist and depend on detection finding
+      them. Enum-keyed slots make coexistence impossible for the bounded case, at
+      zero detection cost and with no false negatives.
+      **Where we must not copy them:** their upsert is a silent overwrite with no
+      proposal, no lineage, no rollback. Ours must route the supersession through
+      `propose_update` → `approve_apply` so the replacement is a *recorded,
+      reversible event*. That combination — their exactness, our audit trail — is
+      strictly better than either side alone, and it is the honest reason to build it
+      rather than adopt theirs.
+      **Residual risk, stated plainly:** the model still chooses the slug. This moves
+      the failure from "forgets what it wrote" to "picks the wrong enum member" —
+      narrower and *validatable* (a closed enum rejects an invented member), but not
+      eliminated. Say so rather than claiming contradiction is solved.
+      Note also the escape hatch's cost: free-form facts with no natural identity have
+      nothing to collide on and therefore accumulate. That trade is acceptable and
+      should be stated; what should **not** be copied is content-hash keying at
+      demo width (32 bits is collision-prone as a durable identity scheme).
+      **The precedent is internal and one layer up (re-sourced 2026-08-17).**
+      `512-mind/src/drift.mind` applies closed-set discipline to *meaning* rather
+      than to keys: `no_semantic_drift` enumerates the mutation classes that corrupt
+      a contract — `"must not"`→`"should not"` (obligation weakened to suggestion),
+      `"fail open"`→`"fail safe"` (default inverted), `"any human"`→`"authorized
+      participants"` (scope narrowed) — and asserts against that fixed list. Same
+      move as M4: enumerate the space so the violation is *structural* instead of
+      detected. 121 enums across that repo's modules make it the house style, not a
+      one-off. So M4 should cite `drift.mind` as its precedent; the external tutorial
+      contributed the framing and none of the mechanism.
 
 - [~] **M5 — Enforcement-in-code audit, closing with capability flags** —
   **THE MECHANISM LANDED 2026-09-11** (`src/mind_mem/capabilities.py`, pure, 8
@@ -4234,38 +4258,41 @@ mislabelled eval set still produces confident numbers.
   condition M5 was written under no longer holds.
   **Remaining:** gate the three unenforced paths on their flags at their call
   sites, so a caller relying on them refuses rather than assumes.
-- [ ] **M5 (original wording) — Enforcement-in-code audit, closing with capability flags
-  (rescoped 2026-08-17).** Sweep for every place a governance or privacy property
-  in this project rests on an *instruction to a model* rather than on code that
-  executes. The principle in one line: a summarizer is *told* not to include
-  names, but a prompt is a request — a scrub function is what actually holds.
-  This project already argues exactly that for `propose_update` versus "the model
-  will remember"; the audit confirms we live by it everywhere else, particularly
-  on any path where redaction, scoping, or exclusion is currently prompt-shaped.
-  Verified precondition: `scrub`/`redact` vocabulary occurs in essentially one
-  CLI file — not the write path, not the distillers, not compaction, not export.
-  That is not proof of a leak; it is proof there is **no enforcement layer to
-  point at**, which is exactly the condition under which a prompt-shaped property
-  survives unnoticed.
-  **The close condition is a mechanism, not a document.** The original scope
-  ended at "a ranked list with a code-enforced replacement for each", which
-  leaves every finding in the same unenforced state it was found in. The
-  ecosystem already has the right pattern: `512-mind` ships **fail-closed
-  capability flags** — `drift.semantic_mutation_scan_supported() -> u8 { 0 }`
-  (`drift.mind:30`) and `key_management.signature_verification_supported() -> u8
-  { 0 }` (`key_management.mind:324`), each paired with an undefined `extern` so a
-  missing backend fails at link time rather than silently returning a passing
-  default. `detect_drift` reads its flag and returns `equivalent: false` when the
-  scan is unsupported, with the reasoning written into the source: *"An
-  undefined/empty mutation list must NEVER make `equivalent` true — that was the
-  forgery-by-absence path this fix closes."*
-  That is M5 solved structurally. Each audit finding should close by installing a
-  flag that **fails closed while unimplemented**, so an unenforced property is a
-  function returning 0 that gates the path — not a doc saying the property is
-  aspirational. A caller intending to rely on it must check and refuse. The
-  ranked list becomes the work queue for installing flags, not the deliverable.
-  Keep the audit and the remediation separate passes regardless: bundling them
-  guarantees the sweep stops at the first interesting finding.
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** M5 (original wording) — Enforcement-in-code audit, closing with capability flags
+      (rescoped 2026-08-17).** Sweep for every place a governance or privacy property
+      in this project rests on an *instruction to a model* rather than on code that
+      executes. The principle in one line: a summarizer is *told* not to include
+      names, but a prompt is a request — a scrub function is what actually holds.
+      This project already argues exactly that for `propose_update` versus "the model
+      will remember"; the audit confirms we live by it everywhere else, particularly
+      on any path where redaction, scoping, or exclusion is currently prompt-shaped.
+      Verified precondition: `scrub`/`redact` vocabulary occurs in essentially one
+      CLI file — not the write path, not the distillers, not compaction, not export.
+      That is not proof of a leak; it is proof there is **no enforcement layer to
+      point at**, which is exactly the condition under which a prompt-shaped property
+      survives unnoticed.
+      **The close condition is a mechanism, not a document.** The original scope
+      ended at "a ranked list with a code-enforced replacement for each", which
+      leaves every finding in the same unenforced state it was found in. The
+      ecosystem already has the right pattern: `512-mind` ships **fail-closed
+      capability flags** — `drift.semantic_mutation_scan_supported() -> u8 { 0 }`
+      (`drift.mind:30`) and `key_management.signature_verification_supported() -> u8
+      { 0 }` (`key_management.mind:324`), each paired with an undefined `extern` so a
+      missing backend fails at link time rather than silently returning a passing
+      default. `detect_drift` reads its flag and returns `equivalent: false` when the
+      scan is unsupported, with the reasoning written into the source: *"An
+      undefined/empty mutation list must NEVER make `equivalent` true — that was the
+      forgery-by-absence path this fix closes."*
+      That is M5 solved structurally. Each audit finding should close by installing a
+      flag that **fails closed while unimplemented**, so an unenforced property is a
+      function returning 0 that gates the path — not a doc saying the property is
+      aspirational. A caller intending to rely on it must check and refuse. The
+      ranked list becomes the work queue for installing flags, not the deliverable.
+      Keep the audit and the remediation separate passes regardless: bundling them
+      guarantees the sweep stops at the first interesting finding.
 
 - [x] **M6 — Negative results as a recorded outcome.** Record what was
   *attempted and did not work*, not only what resolved. A record carrying only
@@ -5056,15 +5083,18 @@ evidence.
   **not** solve paraphrase.
   **Remaining:** embed the gist on the indexing path, and extract slots at
   propose time so a human approves them. Both touch root's publication surface.
-- [ ] **1b (original wording). Store/embed/slot split** — the actual fix behind the gauge. Keep the
-  canonical `statement` untouched (evidence chain and MIC preimages must not
-  move); add versioned `slots` (typed key→value, extracted at propose time so a
-  human approves them) and `gist` (statement minus slot values and template
-  boilerplate). **The gist is embedded; the slots are exact-match filters.** A
-  proposal whose gist matches an existing block's offers a slot-delta instead of
-  a new block — the governed answer to a caller that writes one flat string per
-  record. Absorbs Group M's enum-keyed upsert slots: building those without the
-  embed split wires slots into writes while leaving reads broken.
+      **Original text, preserved verbatim rather than rewritten — this is
+      the SAME item as the entry above, not additional open work; it
+      carried its own checkbox until 2026-09-11, which inflated the open
+      count with a phantom:** 1b (original wording). Store/embed/slot split** — the actual fix behind the gauge. Keep the
+      canonical `statement` untouched (evidence chain and MIC preimages must not
+      move); add versioned `slots` (typed key→value, extracted at propose time so a
+      human approves them) and `gist` (statement minus slot values and template
+      boilerplate). **The gist is embedded; the slots are exact-match filters.** A
+      proposal whose gist matches an existing block's offers a slot-delta instead of
+      a new block — the governed answer to a caller that writes one flat string per
+      record. Absorbs Group M's enum-keyed upsert slots: building those without the
+      embed split wires slots into writes while leaving reads broken.
 
 - [x] **3. Lifecycle deaths in the evidence chain** — **CLOSED 2026-09-11.**
   The chained/replayable half already held: `lifecycle_evidence.LifecycleRecorder`
