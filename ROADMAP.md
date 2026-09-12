@@ -70,18 +70,19 @@ planned against.
 - `N2 — Chunk-provenance anchoring` — Group N has no subject after the sweep.
 - `Compliance export pipeline` — already `[~]` with behaviour verified.
 
-**D — WORK I CAN DO (4 boxes).** This is the real remaining surface:
+**D — WORK I CAN DO (4 boxes, 1 already done).** This is the real remaining surface:
 1. `Local visual viewer` (`mm view`) — stdlib HTTP + minimal JS/D3, self-contained.
 2. `L2 — Prescriptive blocks` — an EVALUATION, explicitly "not committed"; the
    deliverable is a recommendation with evidence, not a feature.
-3. `Prefetch hit rate tracked in calibration feedback loop` — on the retracted-ticks
-   lock; `prefetch.py:619` computes a hit_rate and no prefetch signal reaches the
-   calibration loop. Wiring it is real work, and the lock comes off only the way the
-   redaction lock did: traced, with a control that fails on revert.
+3. ~~`Prefetch hit rate tracked in calibration feedback loop`~~ — **DONE the same day
+   this list was written.** Landed as a reported sidecar rather than as feedback: the
+   obvious wiring would have fed cache-warmth into the weights that move retrieval
+   scores. Lock removed with the evidence recorded beside it.
 4. `Quantized prefix cache` — also on the lock; `prefix_cache` caches responses, not
    embeddings, and `turbo_quant` is a placeholder with no consumers.
 
-**So the honest answer to "how long to 100%":** the four D items are days, not weeks.
+**So the honest answer to "how long to 100%":** the D items are days, not weeks —
+one of the four landed within hours of this list being written.
 Everything else needs a decision or a purchase from you, or a prerequisite that lives in
 another repo. A "100%" that counted A and C as done would be a number, not a product.
 
@@ -1336,7 +1337,24 @@ pin a state the toolchain cannot yet satisfy.
 - [x] Predict next-needed blocks based on query pattern + access history
 - [x] Automatic prefetch during multi-hop decomposition (warm blocks before sub-query executes)
 - [x] Existing `prefetch` MCP tool becomes automatic (opt-in via config)
-- [ ] Prefetch hit rate tracked in calibration feedback loop
+- [x] Prefetch hit rate tracked in calibration feedback loop — **LANDED 2026-09-11**
+      as a REPORTED SIDECAR on `calibration_stats`, not as feedback, and the
+      distinction is the whole design. Feeding prefetch hits into
+      `record_feedback` as accepted/rejected votes would put them into the weights
+      that MOVE RETRIEVAL SCORES — a prefetch hit means "this bundle was warm",
+      not "this block was useful to a human", and conflating them corrupts the
+      single calibration authority with a signal about cache warmth. Same shape the
+      codebase already names for `llm_noise_profile`: sidecar only, nothing on the
+      scored path reads it.
+      Labelled in its own payload so an operator cannot mistake it for a ranking
+      input; non-fatal, because a failing diagnostic must not take down the report
+      someone reaches for when something is already wrong; and BARRED from the
+      scoring path by an import-graph walk over `_recall_core`, `hybrid_recall`,
+      `recall_vector`, `recall` and `calibration`.
+      7 tests, with a positive control that the counters are real rather than a
+      hardcoded zero — a metric that cannot move is not a metric. Mutation-verified:
+      deleting the one line that reports it turns 4 of the 7 red. Removed from the
+      retracted-ticks lock with that evidence recorded beside it.
   - **UNTICKED 2026-09-10.** MEASURED: `grep -c prefetch src/mind_mem/calibration.py`
     returns **0**. `prefetch.py:619` computes a `hit_rate`, but no prefetch signal
     reaches the calibration loop, so nothing tracks it there.

@@ -310,11 +310,34 @@ class TestRetractedItemsStayRetracted:
             # Added 2026-09-10. Four more ticks that no mechanical rule can
             # refute, each retired by running the code rather than reading the
             # sentence beside it.
-            (
-                "Prefetch hit rate tracked in calibration feedback loop",
-                "grep -c prefetch src/mind_mem/calibration.py == 0; prefetch.py:619 computes a "
-                "hit_rate but no prefetch signal reaches the calibration loop",
-            ),
+            # "Prefetch hit rate tracked in calibration feedback loop" was retracted
+            # here on the premise "grep -c prefetch src/mind_mem/calibration.py == 0;
+            # prefetch.py computes a hit_rate but no prefetch signal reaches the
+            # calibration loop". That premise was TRUE and the signal now exists, so
+            # the item is removed from this guard rather than left to fail.
+            #
+            # The note matters more than the removal, because the OBVIOUS wiring would
+            # have been wrong: feeding prefetch hits into `record_feedback` as
+            # accepted/rejected votes would put them into the weights that MOVE
+            # RETRIEVAL SCORES. A prefetch hit means "this bundle was warm", not "this
+            # block was useful to a human" -- conflating them corrupts the single
+            # calibration authority with a signal about cache warmth. The grep in the
+            # premise would have gone non-zero either way, which is exactly why a
+            # grep-shaped premise cannot settle a wiring question.
+            #
+            # So it lands as a REPORTED SIDECAR on calibration_stats (the shape the
+            # codebase already names for llm_noise_profile: "Sidecar only -- nothing on
+            # the scored path reads it"), labelled in its own payload so an operator
+            # reading the report cannot mistake it for a ranking input, non-fatal so a
+            # failing diagnostic never takes down the report an operator reaches for
+            # when something is already wrong -- and BARRED from the scoring path by a
+            # test that walks the import graph of _recall_core, hybrid_recall,
+            # recall_vector, recall and calibration.
+            #
+            # tests/test_prefetch_signal_reaches_calibration.py, 7 tests, with a
+            # positive control that the counters are real rather than a hardcoded zero
+            # (a metric that cannot move is not a metric). Mutation-verified: deleting
+            # the one line that reports it turns 4 of the 7 red.
             (
                 "SHA3-512 hash chain verification",
                 "no .mind source mentions sha3/keccak anywhere in the tree, and mind_ffi.py has "

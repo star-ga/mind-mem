@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1567 | **Est. tokens:** ~4,592,057
-**Generated:** 2026-09-12 03:36 UTC
+**Files:** 1568 | **Est. tokens:** ~4,594,656
+**Generated:** 2026-09-12 03:41 UTC
 
 ## Token Budget Guide
 
@@ -80,14 +80,14 @@
 | `src/mind_mem/importers/` | 9 | ~26,660 |
 | `src/mind_mem/mcp/` | 3 | ~6,417 |
 | `src/mind_mem/mcp/infra/` | 8 | ~12,671 |
-| `src/mind_mem/mcp/tools/` | 29 | ~110,616 |
+| `src/mind_mem/mcp/tools/` | 29 | ~111,146 |
 | `src/mind_mem/skill_opt/` | 11 | ~20,899 |
 | `src/mind_mem/spec/` | 2 | ~2,005 |
 | `src/mind_mem/storage/` | 2 | ~11,368 |
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,924 |
-| `tests/` | 677 | ~2,021,074 |
+| `tests/` | 678 | ~2,023,143 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -875,7 +875,7 @@
 - `arch_mind.py` (~3475 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
 - `audit.py` (~4247 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~2334 tok, huge) — Benchmark + category-summary MCP tools.
-- `calibration.py` (~2845 tok, huge) — Calibration MCP tools — feedback (quality) + outcome attribution (utility).
+- `calibration.py` (~3375 tok, huge) — Calibration MCP tools — feedback (quality) + outcome attribution (utility).
 - `chat.py` (~922 tok, large) — Chat surface — grounded question answering over the workspace.
 - `consolidation.py` (~6920 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
@@ -1582,6 +1582,7 @@
 - `test_postgres_pool_shutdown.py` (~1303 tok, large) — Regression coverage for process-wide Postgres pool shutdown."""
 - `test_postgres_replica_routing.py` (~2241 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""
 - `test_prefetch_context.py` (~1496 tok, large) — Tests for prefetch_context() in recall.py."""
+- `test_prefetch_signal_reaches_calibration.py` (~1621 tok, huge) — Prefetch quality must be VISIBLE beside calibration — and must not move a score.
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_protection.py` (~2068 tok, huge) — Tests for mind_mem.protection (v3.3.0+)."""
 - `test_provenance_policy_enforces.py` (~1060 tok, large) — Group E — the provenance policy does not merely EXIST, it refuses (verified).
@@ -1702,7 +1703,7 @@
 - `test_review_queue.py` (~2038 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_review_render.py` (~2348 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
-- `test_roadmap_hygiene.py` (~5376 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_roadmap_hygiene.py` (~5824 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_roadmap_ticks_gate.py` (~3338 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.

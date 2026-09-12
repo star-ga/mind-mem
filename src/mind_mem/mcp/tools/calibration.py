@@ -14,6 +14,7 @@ Both write to the same calibration store — see
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
@@ -126,6 +127,32 @@ def calibration_feedback(
     )
 
 
+def _prefetch_sidecar() -> dict[str, Any]:
+    """Prefetch cache counters, for REPORTING beside calibration. Never a score input.
+
+    ROADMAP (`Prefetch hit rate tracked in calibration feedback loop`) was retired on the
+    true premise that "prefetch.py computes a hit_rate but no prefetch signal reaches the
+    calibration loop". This is that signal — and it arrives as a sidecar, not as feedback,
+    which is the whole design decision.
+
+    Feeding prefetch hits into ``record_feedback`` as accepted/rejected votes would put
+    them into the weights that MOVE RETRIEVAL SCORES. A prefetch hit means "this bundle
+    was warm", not "this block was useful to a human": different claims, and conflating
+    them would corrupt the single calibration authority with a signal about cache warmth.
+    The codebase already names this shape for ``llm_noise_profile`` — "Sidecar only,
+    nothing on the scored path reads it" — and a test walks the import graph of the
+    scoring modules to keep it that way.
+    """
+    from mind_mem.prefetch import get_cache
+
+    stats = dict(get_cache().stats())
+    stats["note"] = (
+        "sidecar only — reported beside calibration for visibility; prefetch warmth "
+        "does NOT feed the calibration weights and never influences ranking"
+    )
+    return stats
+
+
 @mcp_tool_observe
 def calibration_stats() -> str:
     """Report calibration health — per-block scores, per-query-type accuracy.
@@ -160,11 +187,26 @@ def calibration_stats() -> str:
             }
         )
 
+    # Additive and non-fatal. A diagnostic that takes the whole report down with it is
+    # worse than an absent diagnostic, and this report is what an operator reaches for
+    # when something is already wrong -- so a failure is REPORTED in place rather than
+    # swallowed or propagated.
+    try:
+        prefetch_block: dict[str, Any] = _prefetch_sidecar()
+    except Exception as exc:  # noqa: BLE001 — the sidecar must never break the report
+        _log.warning("calibration_prefetch_sidecar_failed", error=str(exc))
+        prefetch_block = {
+            "unavailable": True,
+            "reason": f"{type(exc).__name__}: {exc}",
+            "note": "sidecar only — its absence says nothing about calibration health",
+        }
+
     metrics.inc("mcp_calibration_stats")
     return json.dumps(
         {
             "_schema_version": MCP_SCHEMA_VERSION,
             **stats,
+            "prefetch": prefetch_block,
         },
         indent=2,
     )
