@@ -320,7 +320,38 @@ entity/relation/observation pattern lives in the unrelated
 `gannonh/memento-mcp`. We adopt the *pattern's* one real modeling idea
 below, no code, no attribution in public artifacts.)
 
-- [ ] **Auto-extract edges on the write path (HITL-gated)** — wire
+- [~] **Auto-extract edges on the write path (HITL-gated)** — **EXTRACTOR LANDED
+      2026-09-11; the `propose_update` call is the remaining half.**
+      `src/mind_mem/edge_extraction.py`, pure. Two halves already existed and
+      nothing joined them: `_ENTITY_ID_RE` found canonical ids and
+      `knowledge_graph.propose_edge` was the HITL surface, so writing a block
+      proposed **no edges at all**.
+      - generalised past canonical ids to multi-word capitalised names, with a
+        control that ordinary prose yields NOTHING — an extractor returning every
+        capitalised word would pass the generalisation test while flooding the
+        graph.
+      - predicates come from the EXISTING closed `Predicate` enum, asserted by a
+        test. An extractor free to invent a predicate string would put untyped
+        edges in a typed graph — the same open-set failure M4 closed for slots.
+      - relation phrase must be ADJACENT to the target, so "unlike the approach
+        in X, this refines Y" does not attach the claim to X.
+      - bounded at 12 candidates: an unbounded extractor turns one pathological
+        block into a review flood, and a flood is how a HITL gate stops being
+        read — which would make the guardrail worse than useless.
+      - **THE WEDGE GUARDRAIL IS ASSERTED, not promised:** a test walks the
+        import graph and fails if this module calls `propose_edge`, `add_edge`,
+        `approve_edge`, `commit` or `write`. It returns candidates; the governed
+        door decides. Group H's "source-of-truth graph never self-modifies" is
+        exactly what a refactor loses, so it is checked rather than trusted.
+      11 tests. **RESIDUAL LIMITS, stated in the module:** relations are
+      recognised by surface phrase so it UNDER-proposes by design (a missed
+      proposal costs a human noticing; a wrong one costs a human un-noticing);
+      NER is a capitalised-run heuristic, not a model; and there is **no negation
+      handling** — "this does not supersede X" proposes `supersedes`, which a
+      reviewer must know.
+      **Remaining:** `propose_update` calling `candidate_edges` and staging the
+      results through `propose_edge`. Root's publication surface.
+- [ ] **Auto-extract edges (original wording) on the write path (HITL-gated)** — wire
       lightweight entity/relation extraction (generalize the
       `block_parser.py:60-64` `_ENTITY_ID_RE` beyond canonical IDs to
       named entities) into `propose_update`, so writing a block *proposes*
