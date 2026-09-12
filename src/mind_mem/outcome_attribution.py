@@ -320,6 +320,7 @@ def report_outcome(
     session_id: str = "",
     tool_id: str = "",
     evidence: str = "",
+    run_id: str = "",
     recorded_at: str | None = None,
     project_to_calibration: bool = False,
 ) -> dict[str, Any]:
@@ -335,6 +336,22 @@ def report_outcome(
         session_id: Session provenance.
         tool_id: Reporting tool provenance.
         evidence: Free-text proof (e.g. a test summary line).
+        run_id: The served-ledger ``run_id`` this outcome is about — RA.1's
+            right-hand side of the join. The ledger records WHAT was served;
+            without this nothing records whether it HELPED.
+
+            Optional, because most reporters never saw a recall run. When
+            given it is VALIDATED against the served ledger and an unknown
+            value RAISES: an orphan join row makes the join silently drop, so
+            the caller believes the outcome was attributed while every later
+            view under-counts and nothing says so.
+
+            The join is written to an append-only sidecar, never into the
+            calibration DB, because RA.1's rail is that nothing on the scoring
+            path may import the ledger — putting the ledger's key inside the
+            store the scoring path reads would make that rail a convention
+            instead of a property. The value is provenance and never reaches a
+            score.
         recorded_at: Injectable ISO-8601 timestamp; defaults to now. It is
             provenance only and never reaches a score.
         project_to_calibration: Also write the verdicts into the existing
@@ -368,8 +385,38 @@ def report_outcome(
         recorded_at=recorded_at,
         project_to_calibration=project_to_calibration,
     )
+    # RA.1 join. Runs only AFTER the outcome is durably recorded, so a report that
+    # record_outcome rejects leaves no join behind — and an unknown run_id raises
+    # rather than recording an orphan, which is why this is not wrapped in a
+    # swallow-everything guard: a caller that passed a bad run_id can still fix it.
+    joined = _record_run_join(workspace, run_id, result)
+
     trajectory_path = _capture_trajectory(workspace, result)
-    return result if trajectory_path is None else {**result, "trajectory": trajectory_path}
+    out = result if trajectory_path is None else {**result, "trajectory": trajectory_path}
+    # STATED, not inferred from a missing key: an unattributed outcome must never be
+    # countable as an attributed one.
+    return {**out, "run_attributed": joined}
+
+
+def _record_run_join(workspace: str, run_id: str, result: dict[str, Any]) -> bool:
+    """Bind this outcome to its served run. True when a join now exists.
+
+    Returns False for the ordinary no-run_id case rather than raising, and re-raises
+    JoinRefused for an unknown run_id: the first is a normal report, the second is a
+    caller error that must not become a silent hole in the join.
+    """
+    run = str(run_id or "").strip()
+    if not run:
+        return False
+    from .served_outcome_join import append_outcome_join, outcomes_for_run
+
+    outcome_id = str(result.get("outcome_id") or "").strip()
+    if not outcome_id:
+        # No id to join ON. Refusing loudly would punish a caller for an internal
+        # shape change, but claiming attribution would be false -- so: not attributed.
+        return False
+    append_outcome_join(workspace, run_id=run, outcome_id=outcome_id)
+    return outcome_id in outcomes_for_run(workspace, run)
 
 
 def _capture_trajectory(workspace: str, result: dict[str, Any]) -> str | None:

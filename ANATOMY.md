@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1564 | **Est. tokens:** ~4,577,733
-**Generated:** 2026-09-12 02:59 UTC
+**Files:** 1562 | **Est. tokens:** ~4,580,167
+**Generated:** 2026-09-12 03:11 UTC
 
 ## Token Budget Guide
 
@@ -28,7 +28,6 @@
 | `audits/` | 5 | ~24,039 |
 | `benchmarks/` | 66 | ~181,940 |
 | `benchmarks/repro/` | 1 | ~689 |
-| `benchmarks/repro/niah/` | 4 | ~2,557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
 | `bin/` | 1 | ~526 |
 | `deploy/` | 2 | ~772 |
@@ -74,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 242 | ~1,072,692 |
+| `src/mind_mem/` | 243 | ~1,075,114 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -88,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,886 |
-| `tests/` | 674 | ~2,012,442 |
+| `tests/` | 675 | ~2,015,011 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -226,14 +225,6 @@
 - `REPORT.md` (~5281 tok, huge) — MIND-Mem Benchmark Report
 - `repro_manifest.py` (~2145 tok, huge) — Write a repro package: raw rows, recomputed metrics, and a manifest that pins
 - `repro_metrics.py` (~2213 tok, huge) — Recompute every headline metric from RAW per-unit rows, and nothing else.
-### `benchmarks/repro/niah/`
-
-- `dataset.json` (~792 tok, large) — Keys: content_sha256, depth_percentages, generated_by, generator_sha256, haystack_sizes
-- `environment.json` (~95 tok, small) — Keys: captured_utc, cpu_count, machine, mind_mem_version, packages
-- `manifest.json` (~1429 tok, large) — Keys: artifacts, benchmark, commands, headline, headline_claim
-- `metrics.json` (~241 tok, medium) — Keys: benchmark, breakdown, determinism, headline, integrity
-### `benchmarks/`
-
 - `repro_niah.py` (~3976 tok, huge) — Reproducible NIAH benchmark harness -- emits an independently-verifiable package.
 ### `benchmarks/repro/niah-smoke/`
 
@@ -933,7 +924,7 @@
 - `ollama_host.py` (~1022 tok, large) — Single source of truth for the ollama base URL.
 - `online_trainer.py` (~6077 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ontology.py` (~3933 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `outcome_attribution.py` (~4288 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
+- `outcome_attribution.py` (~4914 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
 - `outcome_store.py` (~4094 tok, huge) — Outcome-attribution persistence over the calibration store.
 - `payload_admission.py` (~3614 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `personas.py` (~1256 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
@@ -987,6 +978,7 @@
 - `scoring_instant.py` (~1643 tok, huge) — The recency seam — one UTC date, resolved once, threaded everywhere.
 - `self_update.py` (~5198 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `served_ledger.py` (~11663 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `served_outcome_join.py` (~1796 tok, huge) — The right-hand side of the served/outcome join (RA.1).
 - `session_boost.py` (~1511 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
 - `session_summarizer.py` (~3852 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 ### `src/mind_mem/skill_opt/`
@@ -1722,6 +1714,7 @@
 - `test_self_update.py` (~2727 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_served_ledger_concurrency.py` (~6866 tok, huge) — The served ledger under a SECOND WRITER — the two shapes production has.
 - `test_served_ledger.py` (~12023 tok, huge) — RA.1 — the served-set ledger: proof of what was served, joinable to outcome.
+- `test_served_outcome_join.py` (~2569 tok, huge) — RA.1's open half — the RIGHT-HAND SIDE of the served/outcome join.
 - `test_session_boost.py` (~1488 tok, large) — v3.3.0 Tier 2 #5 — session-boundary preservation via recall-side boost.
 - `test_session_summarizer_door.py` (~3747 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_session_summarizer.py` (~3976 tok, huge) — Comprehensive tests for mind_mem/session_summarizer.py.
