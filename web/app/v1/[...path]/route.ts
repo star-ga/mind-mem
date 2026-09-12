@@ -110,7 +110,12 @@ function toBundle(raw: { query?: string; results?: RecallResult[] }) {
     facts: results.map((r) => ({
       claim: headline(r.excerpt ?? ""),
       source_id: r._id ?? "",
-      confidence: r.score ?? 0,
+      // `score`, NOT `confidence`. A retrieval score is a ranking quantity (BM25/RRF,
+      // unbounded, not on [0,1]), so projecting it into a field named `confidence`
+      // invented a probability the system never computed -- and the console multiplied
+      // it by 100, so a score of 17 displayed as "1700%". Passed through under its real
+      // name so the UI shows what it actually is.
+      score: r.score ?? 0,
     })),
     relations: [],
     timeline: results

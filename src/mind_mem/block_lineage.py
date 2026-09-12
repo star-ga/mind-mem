@@ -99,7 +99,7 @@ ALLOWED_KINDS: frozenset[str] = frozenset(
 )
 
 #: ``supersedes(new, old)``: ``new`` fully replaces ``old`` as of the edge's
-#: write time — the bi-temporal case (arXiv:2501.13956's "validity window"),
+#: write time — the bi-temporal case (a "validity window"),
 #: as distinct from ``contradicts``, which flags an unresolved conflict
 #: between two blocks that both still claim to be current. ``old`` should be
 #: read as no longer live; :mod:`mind_mem.lineage_staleness` decays it (and

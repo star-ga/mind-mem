@@ -45,7 +45,7 @@ export type EntityRef = {
 
 export type EvidenceBundle = {
   query: string;
-  facts: Array<{ claim: string; source_id: string; confidence: number }>;
+  facts: Array<{ claim: string; source_id: string; score: number }>;
   relations: Relation[];
   timeline: TimelineEvent[];
   entities: EntityRef[];

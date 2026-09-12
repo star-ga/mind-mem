@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1548 | **Est. tokens:** ~4,574,621
-**Generated:** 2026-09-12 18:10 UTC
+**Files:** 1549 | **Est. tokens:** ~4,576,341
+**Generated:** 2026-09-12 18:17 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~51,084 |
+| `./` | 36 | ~51,068 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1,059,638 |
+| `src/mind_mem/` | 231 | ~1,059,633 |
 | `src/mind_mem/api/` | 5 | ~27,043 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 668 | ~2,015,011 |
+| `tests/` | 669 | ~2,016,660 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -104,9 +104,9 @@
 | `web/` | 5 | ~920 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
-| `web/app/v1/[...path]/` | 1 | ~1,378 |
-| `web/components/` | 4 | ~2,482 |
-| `web/lib/` | 1 | ~776 |
+| `web/app/v1/[...path]/` | 1 | ~1,476 |
+| `web/components/` | 4 | ~2,477 |
+| `web/lib/` | 1 | ~775 |
 
 ## Files
 
@@ -124,7 +124,7 @@
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
-- `EVIDENCE.md` (~2318 tok, huge) — Evidence Matrix
+- `EVIDENCE.md` (~2303 tok, huge) — Evidence Matrix
 - `generate_mind7b_training.py` (~5567 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~243 tok, medium) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~494 tok, medium) — *.pyc
@@ -141,9 +141,9 @@
 - `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
-- `SECURITY.md` (~2998 tok, huge) — Security Policy
+- `SECURITY.md` (~2996 tok, huge) — Security Policy
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
-- `SPEC.md` (~6429 tok, huge) — Mind Mem Formal Specification v1.5.1
+- `SPEC.md` (~6430 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `train_mind7b_runpod.py` (~1659 tok, huge)
 - `.trivyignore` (~338 tok, medium) — # Trivy ignore file — DOCUMENTED, un-actionable pip-vendored findings only.
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
@@ -726,7 +726,7 @@
 - `repo_task_validation.py` (~4291 tok, huge) — Execute a mined commit to prove it is a real red->green task.
 ### `src/mind_mem/`
 
-- `block_lineage.py` (~6067 tok, huge) — Typed block-lineage edges + bounded BFS reader (v3.11.0+, Pattern 3).
+- `block_lineage.py` (~6062 tok, huge) — Typed block-lineage edges + bounded BFS reader (v3.11.0+, Pattern 3).
 - `block_maturity.py` (~3317 tok, huge) — Block maturity metric — consolidation gate (Group H, v4.0.x).
 - `block_metadata.py` (~5685 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~8138 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
@@ -1216,7 +1216,7 @@
 - `test_bigrams.py` (~168 tok, small) — Tests for bigram extraction."""
 - `test_bitemporal_edge_validity.py` (~2524 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_block_id_format.py` (~345 tok, medium) — Tests for block ID format validation."""
-- `test_block_lineage.py` (~2311 tok, huge) — Tests for the v3.11.0 typed block-lineage graph (Pattern 3)."""
+- `test_block_lineage.py` (~2303 tok, huge) — Tests for the v3.11.0 typed block-lineage graph (Pattern 3)."""
 - `test_block_maturity_group_h.py` (~4178 tok, huge) — Tests for Group H maturity metric — consolidation gate.
 - `test_block_metadata.py` (~945 tok, large) — Tests for A-MEM block metadata evolution."""
 - `test_block_metadata_wiring.py` (~3680 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1449,8 +1449,8 @@
 - `test_legacy_restore_symlink_confinement.py` (~1152 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_evidence.py` (~5244 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_filter.py` (~1781 tok, huge) — Unit tests for the optional lifecycle block field and recall filter.
-- `test_lineage_staleness.py` (~2360 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
-- `test_lint_autofix.py` (~4311 tok, huge) — Tests for the lint -> repair-proposal path (mind_mem.lint / lint_autofix).
+- `test_lineage_staleness.py` (~2352 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
+- `test_lint_autofix.py` (~4635 tok, huge) — Tests for the lint -> repair-proposal path (mind_mem.lint / lint_autofix).
 - `test_lint_wiring.py` (~4397 tok, huge) — ``lint`` is actually reachable — from ``mm lint`` and from the MCP surface.
 - `test_llama_cpp_provider_contract.py` (~1294 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_llm_extractor_gate.py` (~2248 tok, huge) — Backend wiring — :func:`mind_mem.llm_extractor._gate_check_local`.
@@ -1533,6 +1533,7 @@
 - `test_network_cert_pinning.py` (~5212 tok, huge) — Certificate pinning is opt-in, and when it is on it refuses — RM-2290 / RM-2382.
 - `test_network_tls_floor.py` (~3100 tok, huge) — The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).
 - `test_niah.py` (~5014 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
+- `test_no_prior_art_attribution_repo_wide.py` (~1341 tok, large) — No prior-art identifier may appear in a tracked file, anywhere in the repository.
 - `test_no_silent_success_paths.py` (~3801 tok, huge) — Regressions for paths that used to report success while doing the wrong thing.
 - `test_no_vacuous_skips.py` (~7101 tok, huge) — A skipped test reads as a pass — so the skip surface itself needs a gate.
 - `test_novel_term_gate.py` (~2202 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1871,10 +1872,10 @@
 - `page.tsx` (~1036 tok, large)
 ### `web/app/v1/[...path]/`
 
-- `route.ts` (~1378 tok, large) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
+- `route.ts` (~1476 tok, large) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
 ### `web/components/`
 
-- `FactList.tsx` (~281 tok, medium)
+- `FactList.tsx` (~276 tok, medium)
 - `GraphView.tsx` (~1063 tok, large)
 - `TenantSwitcher.tsx` (~839 tok, large) — HeadersInit can be a Headers, a [string, string][], or a Record.
 - `TimelineView.tsx` (~299 tok, medium)
@@ -1883,7 +1884,7 @@
 - `.gitignore` (~20 tok, tiny) — node_modules/
 ### `web/lib/`
 
-- `api.ts` (~776 tok, large) — SAME-ORIGIN BY DEFAULT, so requests go through the server-side proxy in
+- `api.ts` (~775 tok, large) — SAME-ORIGIN BY DEFAULT, so requests go through the server-side proxy in
 ### `web/`
 
 - `next.config.ts` (~104 tok, small) — mind-mem-web is a thin client — the REST API lives on the

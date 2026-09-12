@@ -86,7 +86,7 @@ class TestPropagateContradictsEdge:
         assert get_staleness_score(workspace, "A") > 0.0
 
     def test_supersedes_seed_gets_full_penalty(self, workspace) -> None:
-        # arXiv:2501.13956 (Zep/Graphiti bi-temporal graphs): the block
+        # Bi-temporal graphs: the block
         # named in a `supersedes` edge is no longer live and should be
         # demoted at least as strongly as an unresolved `contradicts`.
         from mind_mem.block_lineage import add_block_edge

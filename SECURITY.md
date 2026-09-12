@@ -91,7 +91,7 @@ to `127.0.0.1` by default.
 
 ### Prompt Injection via Recalled Content
 
-A survey on long-term memory security in LLM agents (arXiv:2604.16548)
+Recent research on long-term memory security in agent systems
 identifies memory content itself as an attack surface: text written into
 a memory store earlier can carry instructions that, when recalled and
 placed back into an LLM's context, get followed as if the calling agent

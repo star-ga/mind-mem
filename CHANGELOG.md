@@ -7,7 +7,7 @@ All notable changes to MIND-Mem are documented in this file.
 ### Security
 
 - Document the recall-path prompt-injection surface identified in
-  arXiv:2604.16548 (long-term memory security survey): text returned by
+  recent long-term-memory security research: text returned by
   `recall`, `hybrid_search`, `find_similar` and `prefetch` is corpus data
   approved through `propose_update` -> `approve_apply`, not an instruction
   for the calling agent. Added a docstring note to each of those tools, a
@@ -19,8 +19,8 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Roadmap
 
-- Recorded content-category decay policy (per arXiv:2603.18330
-  MemArchitect and arXiv:2603.11768 SSGM) as a genuinely open item in
+- Recorded content-category decay policy (per recent research on
+  memory decay and consistency) as a genuinely open item in
   `ROADMAP.md` / `EVIDENCE.md` rather than guessing at a taxonomy and
   default TTLs: `memory_tiers.py`'s existing TTL/LRU decay is
   recency-based, not content-category-based, and picking wrong defaults
@@ -30,7 +30,7 @@ All notable changes to MIND-Mem are documented in this file.
 
 - `supersedes` typed lineage edge kind (`block_lineage.ALLOWED_KINDS`),
   motivated by the bi-temporal validity-window model in Zep/Graphiti
-  (arXiv:2501.13956): a `supersedes(new, old)` edge marks `old` as fully
+  (bi-temporal supersession): a `supersedes(new, old)` edge marks `old` as fully
   replaced by `new`, distinct from `contradicts` (an unresolved conflict
   between two blocks that both still claim to be current). Wired into
   `KIND_DECAY` (1.0 — decays its target at least as fast as

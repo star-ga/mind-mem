@@ -53,8 +53,8 @@ by its full description below.
   (`TierPolicy.ttl_hours`, LRU-style demotion between `MemoryTier` levels) —
   a block nobody has touched in a while ages out regardless of what kind of
   fact it is. What's still missing, per the governance frameworks in
-  arXiv:2603.18330 (MemArchitect: memory decay / conflict resolution /
-  privacy as explicit *policies*) and arXiv:2603.11768 (SSGM: consistency
+  recent research treating memory decay / conflict resolution /
+  privacy as explicit *policies*, and related work on consistency
   verification + temporal decay + access control as three separate
   safeguards), is decay keyed to *what kind of fact it is*, independent of
   how often it gets recalled: an infra/status-type fact (e.g. "service X is

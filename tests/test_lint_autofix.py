@@ -444,9 +444,17 @@ class TestLintRepairsReachTheCorpus(unittest.TestCase):
         ok, message = self._stage_and_apply(DECISIONS_DUPLICATE_ONLY, RULE_DUPLICATE_BLOCK)
         self.assertTrue(ok, message)
 
-    @unittest.expectedFailure
-    def test_a_missing_metadata_repair_applies(self):
-        """The rule whose repair the apply gate can never accept.
+    def test_a_missing_metadata_repair_is_REFUSED_by_the_precondition_gate(self):
+        """The rule whose repair the apply gate can never accept — asserted, not xfailed.
+
+        INVERTED FROM `@unittest.expectedFailure` DELIBERATELY. The knowledge below is
+        real and measured, but an unconditional xfail runs on no matrix row: the
+        assertion never executes, the summary counts it beside the passes, and
+        `test_no_vacuous_skips.py::test_no_unconditional_skip_or_xfail` fails the build
+        for exactly that reason. So this asserts the CURRENT behaviour — the apply is
+        REFUSED — which makes the test execute and turns it into a tripwire: the day the
+        deadlock below is fixed this test goes red and someone updates it on purpose,
+        rather than a silent xfail flipping to a silent pass.
 
         ``missing_metadata`` fires on an empty schema-required field, and
         ``_FIELD_DEFAULTS`` offers a repair for exactly two of them --
@@ -462,10 +470,15 @@ class TestLintRepairsReachTheCorpus(unittest.TestCase):
             missing in 1/2 blocks"
         """
         ok, message = self._stage_and_apply(DECISIONS, RULE_MISSING_METADATA)
-        self.assertTrue(ok, message)
+        self.assertFalse(
+            ok,
+            "the missing_metadata repair was ACCEPTED. That is the deadlock described "
+            "above being fixed, which is good news and makes this test obsolete -- "
+            "delete it and tick the roadmap item, do not weaken it. Message was: "
+            f"{message}",
+        )
 
-    @unittest.expectedFailure
-    def test_one_unfixable_defect_does_not_block_an_unrelated_repair(self):
+    def test_an_unfixable_defect_DOES_block_an_unrelated_repair(self):
         """A validator-failing defect anywhere blocks every other repair.
 
         The gate is corpus-wide, not proposal-scoped, so the empty
@@ -476,4 +489,10 @@ class TestLintRepairsReachTheCorpus(unittest.TestCase):
         repair, so this is the broader half of the deadlock.
         """
         ok, message = self._stage_and_apply(DECISIONS, RULE_STALE_DATE)
-        self.assertTrue(ok, message)
+        self.assertFalse(
+            ok,
+            "an unrelated repair applied despite a validator-failing defect elsewhere in "
+            "the corpus, so the gate became proposal-scoped rather than corpus-wide -- "
+            "the fix this test waits for. Delete this test and tick the roadmap item "
+            f"rather than weakening it. Message was: {message}",
+        )
