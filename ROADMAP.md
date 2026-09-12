@@ -405,8 +405,16 @@ below, no code, no attribution in public artifacts.)
       (`v4.auto_edges_on_write`, declared in `ALL_V4_FLAGS` so it is reachable at
       all) and probed with `is_enabled_quiet`, so a flag-off build is
       indistinguishable from one without the feature.
-      **Remaining:** generalising `_ENTITY_ID_RE` further for cross-lingual
-      surface forms, and the same hook on the direct `write_block` path.
+      **MEASURED YIELD ON THE LIVE CORPUS IS ZERO,** so the wiring is what
+      shipped, not edges: the deterministic extractor is precision-first and
+      matched no governed relation in 2726 blocks (see "Run the backfill over
+      the live corpus" for the numbers and why zero is correct). The hook is
+      extractor-agnostic — `backfill` takes `extract_fn` — so the recall path is
+      a swap, not a rewrite. Stated here so nobody reads the flag as a populated
+      graph.
+      **Remaining:** a higher-recall extractor on this path, generalising
+      `_ENTITY_ID_RE` for cross-lingual surface forms, and the same hook on the
+      direct `write_block` path.
 - [ ] **Edge extraction body (original wording)** — wire
       lightweight entity/relation extraction (generalize the
       `block_parser.py:60-64` `_ENTITY_ID_RE` beyond canonical IDs to
@@ -805,10 +813,45 @@ measure. Wiring comes first, with the yield measurement built into the wiring:
       set; user-scope graph mutation now routes through signal staging +
       approval only, making the Group K "every graph mutation routes through
       HITL" guardrail true in code, not just in docs.
-- [ ] **Run the backfill over the live corpus** — with the wiring landed,
-      run `mm graph-backfill` over the 1469-block corpus, read the yield
-      numbers, review/approve the staged edges, then enable
-      `retrieval.kg_fusion` once there is a graph worth walking.
+- [~] **Run the backfill over the live corpus** — **DRY-RUN MEASURED 2026-09-11,
+      and it found a coverage defect before it found any edges. Nothing was
+      staged; `dry_run` writes nothing.**
+
+      **First: `backfill` was reading 1.2% of the corpus and reporting a clean
+      run.** Its text lookup was `block.get("excerpt") or block.get("content") or
+      block.get("Statement")` — two lowercase keys, one capitalised. The live
+      corpus carries **`Excerpt`** (capital E) on 2692 of 2776 blocks, so a
+      one-character case mismatch made 2742 blocks textless. Worse, the metric hid
+      it: `blocks_scanned` is `len(with_ids)`, so it reported **2776** while 34
+      blocks had text, and `edges_per_block` divided by 2776 — a denominator of
+      blocks it never read. FIXED: case-insensitive lookup with a fixed resolution
+      order, plus `blocks_examined` and `blocks_without_text` in the metrics, and
+      the yield now divides by blocks EXAMINED. Coverage 34 → **2726 blocks, an
+      80x increase**.
+
+      **Then the honest yield, on 2726 blocks: ZERO edges.** And zero is the
+      CORRECT answer here, not a second bug:
+      - 69 blocks (2.5%) contain any phrase from the closed governance vocabulary;
+      - 327 (12%) contain a named entity;
+      - **18 (0.66%) contain both**;
+      - and in all 18 the phrase does not govern the entity — `contradiction
+        detection` matches `contradict` as a NOUN PHRASE while the entity sits
+        elsewhere in the sentence. The adjacency requirement in `_predicate_for`
+        rejects exactly these, which is what it is for: a phrase matched anywhere
+        in the sentence would attach the wrong object and propose a false edge for
+        a human to approve.
+
+      **So the deterministic extractor is precision-first with ~zero recall on
+      this corpus, and that is the measured finding, not a defect to patch.** It
+      cannot populate the graph alone. `backfill` already defaults `extract_fn` to
+      the configured extraction model, and that default is the recall path; the
+      deterministic extractor's place is the free fast path on the write path,
+      where being silent is the right behaviour when nothing is certain.
+
+      **Remaining:** a bounded model-extractor run over the corpus (cost-capped,
+      dry-run first, yield read before anything stages), then review/approve, then
+      `retrieval.kg_fusion` once there is a graph worth walking. Enabling fusion
+      over an empty graph would add a hop that returns nothing on every recall.
 - [x] **Widen the predicate vocabulary beyond repo topology** — **SHIPPED
       2026-09-07.** The four named relation classes now have predicates:
       `member_of` (person ↔ organization), `justified_by` (decision ↔

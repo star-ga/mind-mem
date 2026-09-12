@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1561 | **Est. tokens:** ~4,571,283
-**Generated:** 2026-09-12 02:35 UTC
+**Files:** 1562 | **Est. tokens:** ~4,573,130
+**Generated:** 2026-09-12 02:40 UTC
 
 ## Token Budget Guide
 
@@ -74,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 242 | ~1,071,175 |
+| `src/mind_mem/` | 242 | ~1,071,786 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,886 |
-| `tests/` | 671 | ~2,007,509 |
+| `tests/` | 672 | ~2,008,745 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -813,7 +813,7 @@
 - `governance_gate.py` (~21316 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `governance_raft.py` (~2474 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
 - `granularity_align.py` (~3714 tok, huge) — Granularity / abstraction alignment — named merge operation (Group H, v4.0.x).
-- `graph_ingest.py` (~7386 tok, huge) — Corpus → typed knowledge-graph ingestion (HITL-gated).
+- `graph_ingest.py` (~7997 tok, huge) — Corpus → typed knowledge-graph ingestion (HITL-gated).
 - `graph_recall.py` (~4558 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `graph_schema.py` (~2082 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `guardrail_patterns.py` (~1463 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1224,6 +1224,7 @@
 - `test_auto_resolver.py` (~1185 tok, large) — Tests for mind-mem auto contradiction resolution (auto_resolver.py)."""
 - `test_axis_recall_mcp.py` (~1381 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_axis_recall.py` (~3683 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_backfill_text_fields.py` (~1236 tok, large) — `backfill` must find a block's text, and must SAY when it cannot.
 - `test_backpressure_recovery.py` (~1081 tok, large) — Two defects the slice-3 verifier reproduced, pinned so they cannot return.
 - `test_backpressure_wiring.py` (~5799 tok, huge) — ``v4/backpressure`` wired into the producer loops that can drown the store.
 - `test_backup_restore.py` (~3306 tok, huge) — Tests for backup_restore.py — zero external deps (stdlib unittest)."""

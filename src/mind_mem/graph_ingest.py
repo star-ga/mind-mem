@@ -574,6 +574,33 @@ def _load_corpus(workspace: str) -> list[dict]:
     return blocks
 
 
+#: Field names that may carry a block's text, in resolution order. Matched
+#: CASE-INSENSITIVELY: the live corpus carries ``Excerpt`` (capital E) on 2692 of 2776
+#: blocks while this lookup asked for lowercase ``excerpt``, so a one-character case
+#: mismatch removed 98.8% of the corpus from every backfill that ever ran -- and the
+#: yield number such a run produced looked exactly like a real measurement.
+#: MEASURED 2026-09-11: corpus 2776 blocks loaded, ``blocks_scanned`` 34.
+_TEXT_FIELDS: tuple[str, ...] = ("excerpt", "content", "statement")
+
+
+def _block_text(block: dict) -> str:
+    """The block's text, or "" when it carries none.
+
+    Resolution order is fixed by ``_TEXT_FIELDS``, not by dict order: the text decides
+    what edges are proposed, so a reader comparing two runs must see a real change
+    rather than an iteration-order difference.
+    """
+    lowered = {str(k).lower(): v for k, v in block.items()}
+    for field in _TEXT_FIELDS:
+        value = lowered.get(field)
+        if value is None:
+            continue
+        text = str(value)
+        if text.strip():
+            return text
+    return ""
+
+
 def backfill(
     workspace: str,
     *,
@@ -608,7 +635,11 @@ def backfill(
             never a direct graph write).
 
     Returns:
-        Metrics dict: ``blocks_scanned``, ``blocks_with_edges``,
+        Metrics dict: ``blocks_scanned`` (blocks with ids considered),
+        ``blocks_examined`` (reached the extractor), ``blocks_without_text``
+        (had an id, carried no text — reported so a scan that drops most of its
+        input says so; ``scanned`` = ``examined`` + ``without_text``),
+        ``blocks_with_edges``,
         ``edges_extracted``, ``edges_per_block``,
         ``predicate_histogram``, ``edges_dropped_invalid``,
         ``signals_written``, ``dry_run``, ``restricted_to_blocks``
@@ -636,10 +667,14 @@ def backfill(
     blocks_with_edges = 0
     dropped = 0
 
+    without_text = 0
     for block in with_ids:
         bid = str(block["_id"]).strip()
-        text = str(block.get("excerpt") or block.get("content") or block.get("Statement") or "")
+        text = _block_text(block)
         if not text.strip():
+            # COUNTED, never merely skipped. See _block_text: a silent skip is how a
+            # scan of 1.2% of the corpus read as a clean run for months.
+            without_text += 1
             continue
         raw = extract_fn(text)
         block_edges = 0
@@ -666,12 +701,25 @@ def backfill(
     if not dry_run and triples:
         signals_written = stage_relation_signals(workspace, triples)
 
+    # Blocks that actually reached the extractor. `scanned` counts blocks with IDS,
+    # which is not the same thing and was being reported as though it were: on the
+    # live corpus that meant `blocks_scanned` 2776 while only 34 blocks had text this
+    # function could find, and `edges_per_block` divided by 2776 -- a denominator of
+    # blocks it never read. A yield computed that way is not the extractor's yield.
+    examined = scanned - without_text
     report = {
         "dry_run": bool(dry_run),
         "blocks_scanned": scanned,
+        "blocks_examined": examined,
+        # Blocks that HAD an id and were dropped for carrying no text. Reported
+        # because "scanned 34" alone cannot be told apart from "the corpus has 34
+        # blocks" -- and that indistinguishability is exactly what let a scan of 1.2%
+        # of the live corpus read as a clean run.
+        "blocks_without_text": without_text,
         "blocks_with_edges": blocks_with_edges,
         "edges_extracted": len(triples),
-        "edges_per_block": (len(triples) / scanned) if scanned else 0.0,
+        # Per block EXAMINED, not per block with an id.
+        "edges_per_block": (len(triples) / examined) if examined else 0.0,
         "predicate_histogram": dict(sorted(histogram.items())),
         "edges_dropped_invalid": dropped,
         "signals_written": signals_written,
