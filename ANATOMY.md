@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1546 | **Est. tokens:** ~4,572,020
-**Generated:** 2026-09-12 01:36 UTC
+**Files:** 1548 | **Est. tokens:** ~4,574,946
+**Generated:** 2026-09-12 01:41 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 235 | ~1,084,351 |
+| `src/mind_mem/` | 236 | ~1,085,902 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 664 | ~1,995,511 |
+| `tests/` | 665 | ~1,996,886 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -738,6 +738,7 @@
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `calibration.py` (~7485 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
+- `canary.py` (~1551 tok, huge) — Canary blocks: detect corpus poisoning by planting what must NOT move.
 - `capture.py` (~5255 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6359 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~4689 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
@@ -1247,6 +1248,7 @@
 - `test_boundary_witness.py` (~2442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_calibration.py` (~3269 tok, huge) — Tests for calibration feedback loop.
 - `test_calibration_window_determinism.py` (~1159 tok, large) — The calibration window boundary is UTC-anchored and pinnable.
+- `test_canary_blocks.py` (~1375 tok, large) — Canary blocks — detect corpus poisoning by planting what must NOT move.
 - `test_capture_governed_signals.py` (~2903 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_capture.py` (~2193 tok, huge) — Tests for capture.py — zero external deps (stdlib unittest)."""
 - `test_category_distiller.py` (~2660 tok, huge) — Tests for category_distiller.py — CategoryDistiller class."""

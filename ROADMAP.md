@@ -2515,7 +2515,34 @@ multi-tenancy thread is also tracked as issue [#505].
 - [ ] **Local visual viewer** — `mm view` web UI not yet shipped. Stack target: stdlib HTTP + minimal JS/D3. Tracked.
 - [x] **Auto-generated hierarchical index** — `index.md` (hierarchical: category → kind) + `log.md` (chronological) are regenerated from the block corpus by `src/mind_mem/memory_index.py` (`generate_index`), exposed as the `mm index` verb (`mm_cli._cmd_index`); `tests/test_memory_index.py` covers it with 14 tests. The earlier text on this line denied its own tick — corrected 2026-09-01 against the code.
 - [x] **Real-time contradiction stream** — webhook stream on contradiction-detection ships under the alerting layer.
-- [ ] **Adversarial / poisoning defense** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
+- [~] **Adversarial / poisoning defense** — **CANARY BLOCKS LANDED 2026-09-11**
+  (`src/mind_mem/canary.py`, pure, 13 tests). Per-actor anomaly detection remains
+  out, and deliberately: it means learned per-actor scoring, which this roadmap
+  already rules out for trust scores — "No per-actor learned or anomaly scoring
+  (determinism wedge)". A canary is the opposite kind of mechanism: a fixed
+  known-good block whose fingerprint is recorded once, so a deviation is
+  DETERMINISTIC rather than statistical, which is the only shape this product's
+  wedge permits.
+  Detects: content edited, status changed (a quarantined known-good block), and
+  **VANISHED** — removing the tripwire is the cheapest way past it, so absence is
+  a failure, never a clean sheet.
+  A canary must DECLARE itself by tag, never by id prefix: if `CANARY-` in an id
+  sufficed, an attacker could plant `CANARY-999` and its own clean verdict would
+  launder the corpus — the tripwire would be under the attacker's control.
+  The fingerprint covers four fields, not all of them: a digest over every field
+  flips on any metadata touch and the check gets ignored. Length-prefixed, so a
+  value containing the separator cannot forge another field and hold the
+  fingerprint fixed while editing the statement.
+  `CanaryVerdict.vacuous` is a FIELD, not a convention: "no canary deviated"
+  otherwise reads identically whether the corpus is intact or no canary was ever
+  planted, and every gate in this codebase that conflated those two shipped a
+  silent pass.
+  **WHAT IT DOES NOT DETECT**, stated because a defense believed to do more than
+  it does is worse than none: an injected block adding a false claim without
+  touching any canary. A canary is a tripwire, not a filter.
+  **Remaining:** planting canaries at init and running the sweep from the daemon;
+  Sigstore-signed manifests still release-artifacts-only.
+- [ ] **Adversarial / poisoning defense (original wording)** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
 - [x] **Approval workflows for sensitive proposals** — multi-reviewer chain (OPA/Rego-style) ships behind opt-in dep.
 - [x] **Memory reputation / trust scores** — provenance class surfaced on recall hits as `actor_trust` (`provenance_class.py`, the validity gate's fifth component), with an opt-in low-provenance demotion re-rank.
 
