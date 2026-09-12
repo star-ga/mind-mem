@@ -6,6 +6,17 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Sync `EVIDENCE.md` row 1, the README NIAH badge/provenance note, and
+  `docs/integrations.md` with reality: `benchmarks/repro/niah/` has carried
+  the committed, first-party-verified 250/250 package since b36ff3a
+  (2026-09-05), but the surrounding prose still said "none committed" /
+  "no full-matrix artifact is committed yet". Also corrected the NIAH
+  embedder in `README.md`, `benchmarks/NIAH.md` and `docs/integrations.md`
+  from `BAAI/bge-large-en-v1.5` to `all-MiniLM-L6-v2` — the model the
+  committed harness (`tests/test_niah.py`) actually uses ("lighter model
+  to avoid OOM on large matrices"); the docs had never been updated after
+  that swap. No code change; independent reproduction of row 1 is still
+  outstanding.
 - Isolate recall cache entries by workspace, schema, request filters and a
   versioned configuration fingerprint, including workspaces with empty governed
   anchors. Keep provider-degradation evidence through filtering and cache replay.

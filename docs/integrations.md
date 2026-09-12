@@ -87,7 +87,7 @@ matching pipeline configs in the README.
 
 | Benchmark | Score | Methodology |
 |-----------|-------|-------------|
-| **NIAH** (Needle In A Haystack) | **250 / 250** (100%) | Hybrid BM25 + BAAI/bge-large-en-v1.5 + RRF (k=60) + sqlite-vec. See `benchmarks/NIAH.md`. |
+| **NIAH** (Needle In A Haystack) | **250 / 250** (100%) | Hybrid BM25 + all-MiniLM-L6-v2 + RRF (k=60) + sqlite-vec. See `benchmarks/NIAH.md`. |
 | **LoCoMo** (external LLM judge, 10-conv, 1986 questions) | **73.8% Acc≥50, mean 70.5** | BM25 + RM3 query expansion → top-18 evidence → observation compression → answer → judge. Full 10-conv benchmark. |
 | **LoCoMo** (external LLM judge, conv-0, 199 questions, hybrid pipeline) | **92.5% Acc≥50, mean 76.7** | Hybrid: BM25 + Qwen3-Embedding-8B (4096d) → RRF fusion → top-18 → compression → answer → judge. |
 | **LoCoMo Adversarial subset** | **97.9% Acc≥50** | Subset of the conv-0 hybrid run; tests retrieval against intentionally-misleading distractor turns. |

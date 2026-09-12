@@ -129,7 +129,7 @@ Filler blocks are generated from 20+ topic categories (astrophysics, culinary sc
     "rrf_k": 60,
     "bm25_weight": 1.0,
     "vector_weight": 1.0,
-    "model": "BAAI/bge-large-en-v1.5",
+    "model": "all-MiniLM-L6-v2",
     "vector_enabled": true,
     "onnx_backend": true,
     "provider": "sqlite_vec"
@@ -142,7 +142,9 @@ Filler blocks are generated from 20+ topic categories (astrophysics, culinary sc
 ```
 BM25 (Porter stemming + RM3 query expansion)
   +
-BAAI/bge-large-en-v1.5 (384-dim dense vectors via sentence-transformers)
+all-MiniLM-L6-v2 (384-dim dense vectors via sentence-transformers — chosen
+over BAAI/bge-large-en-v1.5 to avoid OOM on the largest haystack matrices,
+see `tests/test_niah.py`)
   ↓
 Reciprocal Rank Fusion (k=60, equal weights)
   ↓

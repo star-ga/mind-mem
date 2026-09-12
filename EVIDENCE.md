@@ -37,7 +37,7 @@ package that passes this is not evidence, whoever published it.
 
 | # | Claim | Evidence artifact | Repro command | Last verified | Independent? |
 |---|-------|-------------------|---------------|---------------|--------------|
-| 1 | **NIAH 250/250** (100% top-5 retrieval, 5 sizes × 5 depths × 10 needles) | **none committed.** The full-matrix package has never been in this repository; earlier revisions of this row cited `benchmarks/repro/niah/` artifacts that did not exist. The harness and the verifier are committed; the run is not. | `make repro-niah` (~1 h, writes the package) then `make repro-verify` | **never** — no committed artifact | ❌ not yet, and not first-party-verified either while no package is committed |
+| 1 | **NIAH 250/250** (100% top-5 retrieval, 5 sizes × 5 depths × 10 needles) | `benchmarks/repro/niah/{raw.ndjson,metrics.json,dataset.json,environment.json,manifest.json}` — committed in b36ff3a on a clean tree (`repo_tracked_files_dirty_at_run: false`), pinned to commit `acb5a8b`. Two earlier 250/250 runs were discarded because they ran against a dirty tree and were not reproducible by a checkout. | `make repro-verify` (recomputes the metrics from the committed raw rows) or `make repro-niah` to regenerate from scratch | 2026-09-05 (250/250 cells, 22 checks, `decision_fingerprint` `33d5f8e6282e9844455c4d20c8701a2fe96f29cf6d33bf47278f5ab1dcc9570b`) | ❌ not yet — first-party only. The package is now committed and checkable end to end; nobody outside STARGA has re-run it and reported the same fingerprint |
 | 2 | **The harness produces a verifiable package** (raw rows → metrics → manifest, checkable end to end) | `benchmarks/repro/niah-smoke/` — 7 of 250 cells spanning every haystack size and depth. A machinery smoke fixture: `headline_claim: false`, and it is **not** the 250/250 figure | `make repro-verify` | 2026-09-05 (7/7 cells, 22 checks) | ❌ not yet — deterministic by construction; `metrics.determinism.decision_fingerprint` is the cross-box comparison |
 | 3 | **Pinned dataset + config** (no hidden inputs) | every package's `manifest.json` carries the dataset `content_sha256` **and** the generator's own source hash, the effective config + its sha256, the seeds, k, and the exclusion rule with counts | `make repro-verify` | 2026-09-05 | ✅ self-verifying (hashes in artifact, re-checked by the verifier) |
 | 4 | **Governed write prevents silent mutation** (propose → review → apply, never direct) | `propose_update` writes to `SIGNALS.md`; never touches `DECISIONS.md`/`TASKS.md` until `approve_apply` | `pytest tests/ -k "governance or propose or apply"` | see `CHANGELOG.md` | ❌ not yet — covered by repo tests |
@@ -51,11 +51,13 @@ package that passes this is not evidence, whoever published it.
 
 Per an external rubric, the score is gated on **external** proof, not more code:
 
-1. **One independent reproduction** of NIAH (row 1) — a third-party issue/PR/CI fork that
-   runs `make repro-niah`, then `make repro-verify`, and reports the same
-   `metrics.determinism.decision_fingerprint`. (Do not diff whole files: latency does not
-   reproduce across boxes, which is why the fingerprint covers the retrieval decisions and
-   leaves timing out.) This is the single biggest lever and the most welcome contribution.
+1. **One independent reproduction** of NIAH (row 1) — the package is committed
+   (`benchmarks/repro/niah/`); what's missing is a third-party issue/PR/CI fork that
+   runs `make repro-verify` (or regenerates via `make repro-niah`) and reports the same
+   `metrics.determinism.decision_fingerprint` (`33d5f8e6282e9844455c4d20c8701a2fe96f29cf6d33bf47278f5ab1dcc9570b`).
+   (Do not diff whole files: latency does not reproduce across boxes, which is why the
+   fingerprint covers the retrieval decisions and leaves timing out.) This is the single
+   biggest lever and the most welcome contribution.
 2. **Independent security review** + SLSA L3 / signed releases / SBOM (roadmap, not done).
 3. **A named external user / integration** not controlled by STARGA (roadmap, not done).
 
