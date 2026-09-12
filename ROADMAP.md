@@ -603,7 +603,30 @@ Group H recompaction).
       "granularity / abstraction alignment." Two enforced failure modes:
       unmatched name → single-element cluster (never silently dropped);
       over-merge guarded by description mismatch + HITL review.
-- [ ] **Blocking + LLM-arbitration hybrid (resolution at scale)** —
+- [~] **Blocking + LLM-arbitration hybrid (resolution at scale)** — **THE
+      DETERMINISTIC HALF LANDED 2026-09-11** (`src/mind_mem/entity_blocking.py`,
+      pure, 11 tests). Shipping the cheap layer alone is the point of the split:
+      arbitration needs a model, blocking is an inverted index, and with blocking
+      in place the expensive call is never asked whether "Ada Lovelace" and
+      "ada lovelace" are the same person.
+      Union-find over shared tokens, so A~B and B~C group all three even when A
+      and C share nothing — transitivity a pairwise scan misses. Casing,
+      punctuation and spacing normalise away, since those are exactly the "easy
+      cases deterministic logic already handles". Common tokens (`the`, `dr`,
+      `inc`) are excluded, because blocking on one puts every person in one block
+      and hands the model the corpus.
+      **THE ENFORCED FAILURE MODE IS HONOURED:** the companion item requires
+      "unmatched name -> single-element cluster (never silently dropped)", so
+      `block_for` returns `[name]` rather than `[]` — "nothing" would read as
+      "no entity" instead of "no match" — and a test asserts every input appears
+      in exactly one block across the whole set, not just in one example.
+      The 100-item cap SPLITS on overflow rather than truncating, with a test
+      that coverage survives: a cap implemented by truncation would silently
+      reintroduce the dropped-entity failure the single-element rule exists to
+      prevent.
+      **Remaining:** the LLM arbitration within a block, and wiring blocking into
+      the `capture.py` merge path.
+- [ ] **Blocking (original wording) + LLM-arbitration hybrid (resolution at scale)** —
       cheap deterministic blocking (inverted index on name tokens /
       embedding neighbors) narrows candidates to 50–100-item blocks; the
       LLM only arbitrates *within* a block. Keeps resolution sublinear

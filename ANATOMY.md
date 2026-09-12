@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1554 | **Est. tokens:** ~4,583,362
-**Generated:** 2026-09-12 01:50 UTC
+**Files:** 1556 | **Est. tokens:** ~4,585,940
+**Generated:** 2026-09-12 01:52 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1,090,550 |
+| `src/mind_mem/` | 240 | ~1,091,879 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 668 | ~2,000,654 |
+| `tests/` | 669 | ~2,001,903 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -787,6 +787,7 @@
 - `edge_extraction.py` (~1859 tok, huge) — Propose typed KG edges from a block's text. Proposals only, never writes.
 - `edge_grounded_answer.py` (~5493 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
+- `entity_blocking.py` (~1329 tok, large) — Deterministic blocking for entity resolution: keep the model off easy cases.
 - `entity_ingest.py` (~3309 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
 - `entity_prefetch.py` (~3059 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
 - `enums.py` (~3698 tok, huge) — Centralised enum definitions for mind-mem.
@@ -1332,6 +1333,7 @@
 - `test_edge_grounded_answer.py` (~4262 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_embedding_augmentation_probe.py` (~1685 tok, huge) — M1 — the embed-vs-store exposure, measured rather than assumed.
 - `test_encryption.py` (~2848 tok, huge) — Tests for mind-mem encryption at rest."""
+- `test_entity_blocking.py` (~1249 tok, large) — Deterministic blocking for entity resolution — keep the model off easy cases.
 - `test_entity_ingest.py` (~4122 tok, huge) — Tests for the entity_ingest module — extraction, filtering, signal generation."""
 - `test_entity_observations.py` (~1975 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_entity_prefetch.py` (~1674 tok, huge) — v3.3.0 Tier 3 #8 — entity-graph prefetch.
