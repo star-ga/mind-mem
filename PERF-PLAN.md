@@ -87,7 +87,31 @@ re-look-up the compiled pattern; `re._compile` alone is 1.6s cumulative.
 
 Each lands with a before/after number and a regression gate, not a claim.
 
-## P1b — PROFILE AGAIN AFTER FIX 1
+## P1 FIX 1 — LANDED. 279.4ms -> 34.9ms p50 (8.0x), measured both sides
+
+| | baseline | stat-keyed (WRONG) | content-hash (shipped) |
+|---|---|---|---|
+| p50 | 279.4ms | 32.7ms | **34.9ms** |
+| p95 | 312.5ms | 38.9ms | **43.8ms** |
+| cold | 613ms | 382ms | **358ms** |
+
+**My first key was `(mtime_ns, size)` and it was wrong on both counts.** The reasoning --
+"a stat, not a read", citing the off-path config probe -- does not transfer: there the READ
+was the whole cost, here the read is 7.9ms and the PARSE is 81%. And it was incorrect, not
+merely suboptimal: `tests/test_recall_hot_path_5_0_2.py` already carried a fixture whose
+docstring names the hole ("keeps byte size AND st_mtime_ns identical ... the one class of
+change size+mtime cannot see") and it caught the stale serve.
+
+Keying on the content hash cost 39ms at first, and ~23ms of that was `str.encode()`
+re-encoding 2 MB that had just been decoded. Reading BYTES, hashing bytes with blake2b
+(3.1ms vs sha256's 8.3ms on this corpus) and deferring the decode to a cache MISS got the
+correct version back to the incorrect version's speed.
+
+Measured on the live corpus: 19 files, 1.96 MB; read 7.9ms, blake2b 3.1ms, sha256 8.3ms.
+
+**34.9ms p50 is now faster than the 52-64ms the docs advertise for vector search alone.**
+
+## P1b — PROFILE AGAIN (the 81% is gone, so the ranking has changed; do not guess)
 
 Not guesses. `cProfile` over a realistic recall on the 2,726-block live corpus, ranked by
 cumulative time. Candidates already visible from today's reading, to be confirmed or

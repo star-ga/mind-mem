@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1579 | **Est. tokens:** ~4,610,939
-**Generated:** 2026-09-12 04:21 UTC
+**Files:** 1580 | **Est. tokens:** ~4,614,179
+**Generated:** 2026-09-12 04:28 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~51,935 |
+| `./` | 37 | ~52,268 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -74,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 246 | ~1,082,443 |
+| `src/mind_mem/` | 246 | ~1,083,526 |
 | `src/mind_mem/api/` | 5 | ~26,782 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~93,116 |
-| `tests/` | 682 | ~2,030,347 |
+| `tests/` | 683 | ~2,032,171 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -135,7 +135,7 @@
 - `Makefile` (~1097 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
-- `PERF-PLAN.md` (~1498 tok, large) — Performance plan of record — 2026-09-11
+- `PERF-PLAN.md` (~1831 tok, huge) — Performance plan of record — 2026-09-11
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~3746 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
@@ -736,7 +736,7 @@
 - `block_lineage.py` (~5901 tok, huge) — Typed block-lineage edges + bounded BFS reader (v3.11.0+, Pattern 3).
 - `block_maturity.py` (~3317 tok, huge) — Block maturity metric — consolidation gate (Group H, v4.0.x).
 - `block_metadata.py` (~5685 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
-- `block_parser.py` (~8138 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
+- `block_parser.py` (~9221 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_provenance.py` (~2728 tok, huge) — Provenance-rich blocks — optional actor/session/tool/source metadata.
 - `block_store_encrypted.py` (~5788 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `block_store_postgres.py` (~22445 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
@@ -1585,6 +1585,7 @@
 - `test_outcome_attribution_bounds.py` (~3311 tok, huge) — Abuse bounds for outcome attribution — one reporter, one vote.
 - `test_outcome_attribution.py` (~4120 tok, huge) — Regression gate for outcome attribution — did the memory actually help?
 - `test_paired_scorecard_gate.py` (~6587 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_parse_file_cache.py` (~1824 tok, huge) — `parse_file` caches on a STAT, and a changed file is never served stale.
 - `test_payload_admission.py` (~5425 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_peer_identity_binding.py` (~3148 tok, huge) — Per-peer identity, stage (a): a token may only write as the agent it is bound to.
 - `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""

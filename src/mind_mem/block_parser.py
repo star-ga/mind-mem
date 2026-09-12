@@ -18,8 +18,11 @@ As library:
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 import re
 import sys
+from collections import OrderedDict
 from typing import Any, cast
 
 from .observability import get_logger
@@ -576,6 +579,78 @@ def _coerce_value(s: str) -> Any:
     return s
 
 
+#: Parsed-corpus memo, keyed on ``(path, sha256(content), strict)``.
+#:
+#: PROFILED 2026-09-11: over 15 recalls on the live 2,726-block corpus, parse_file ->
+#: parse_blocks was 8.53s of 10.48s -- 81% of recall time -- with 285 parse_file calls for
+#: 15 recalls. Nineteen corpus files were re-read and re-tokenised PER QUERY, and the 2.7
+#: million re.match calls in that profile all fall out of the same loop.
+#:
+#: THE KEY IS THE CONTENT HASH, AND MY FIRST VERSION GOT THIS WRONG. I keyed on
+#: ``(mtime_ns, size)`` reasoning "a stat, not a read", citing the off-path config probe
+#: this codebase already paid for. That rule does not transfer: there the READ was the
+#: entire cost, here the read is nothing and the PARSE is 81%. The right rule is "key on
+#: something cheaper than what you are avoiding", and hashing bytes is far cheaper than
+#: 2.7 million regex matches.
+#:
+#: It also mattered for correctness, not just principle.
+#: ``tests/test_recall_hot_path_5_0_2.py`` already carries a fixture whose docstring names
+#: this exact hole -- "an in-place edit that keeps byte size AND st_mtime_ns identical ...
+#: the one class of change size+mtime cannot see" -- and it caught the stat-keyed version
+#: serving that edit stale. The index path hashes for the same reason. Hashing here means
+#: there is no staleness class at all rather than one that is merely unlikely.
+#:
+#: ``strict`` is part of the key because it changes the CONTRACT -- it raises where the
+#: lenient path skips -- and answering a strict call from a lenient entry would make strict
+#: silently permissive, which is the dangerous direction.
+#:
+#: Bounded, evicted in insertion order: a corpus is a handful of files, so the cap is a
+#: runaway guard rather than a tuning parameter.
+_PARSE_CACHE: "OrderedDict[tuple[str, str, bool], list[dict]]" = OrderedDict()
+_PARSE_CACHE_MAX = 64
+
+
+def _parse_cache_key(filepath: str, raw: bytes, strict: bool) -> "tuple[str, str, bool]":
+    """Content-addressed cache key over the RAW BYTES.
+
+    Hashing bytes, not text, is what makes a cache HIT cost nothing but the read: the
+    decode is deferred to a miss. Measured on the live 1.96 MB corpus -- read 7.9ms,
+    blake2b 3.1ms, sha256 8.3ms -- and the first version's extra ~23ms per recall was
+    `str.encode()` re-encoding 2 MB that had just been decoded. Decode once, on a miss, or
+    not at all.
+
+    blake2b rather than sha256: 2.7x faster here, and still a cryptographic digest, so
+    collision resistance is not being traded for speed. This key is not a security
+    boundary either way -- a content hash decides only whether to re-parse a file the
+    caller just read.
+    """
+    digest = hashlib.blake2b(raw, digest_size=32).hexdigest()
+    return (os.path.realpath(filepath), digest, bool(strict))
+
+
+def _parse_cache_get(key: "tuple[str, str, bool]") -> "list[dict] | None":
+    hit = _PARSE_CACHE.get(key)
+    if hit is None:
+        return None
+    _PARSE_CACHE.move_to_end(key)
+    # A COPY, never the cached object. A caller that appends to or edits its result must
+    # not corrupt what the next caller sees -- that is the corruption naive memoisation
+    # ships with, and it stays invisible until something downstream mutates.
+    return [dict(b) for b in hit]
+
+
+def _parse_cache_put(key: "tuple[str, str, bool]", blocks: list[dict]) -> None:
+    _PARSE_CACHE[key] = [dict(b) for b in blocks]
+    _PARSE_CACHE.move_to_end(key)
+    while len(_PARSE_CACHE) > _PARSE_CACHE_MAX:
+        _PARSE_CACHE.popitem(last=False)
+
+
+def clear_parse_cache() -> None:
+    """Drop the parsed-corpus memo. For tests and long-lived processes."""
+    _PARSE_CACHE.clear()
+
+
 def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
     """Parse blocks from a file path.
 
@@ -601,8 +676,21 @@ def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
     # TASKS.md, ingested haystacks) grows without bound; reading only the
     # first MAX_PARSE_SIZE bytes silently drops every block past the cap
     # — catastrophic, invisible recall loss for any mature workspace.
-    with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-        content = f.read()
+    # Read BYTES. The hash is taken over the raw bytes so a cache HIT costs the read and
+    # nothing else -- no decode, no parse. `errors="replace"` is preserved on the decode
+    # below, which now happens only on a miss.
+    with open(filepath, "rb") as f:
+        raw = f.read()
+
+    # A missing file has already raised above, so a deleted file can never be served from
+    # cache -- its absence is a fact the caller needs, not a reason to serve the last good
+    # parse.
+    _cache_key = _parse_cache_key(filepath, raw, strict)
+    _cached = _parse_cache_get(_cache_key)
+    if _cached is not None:
+        return _cached
+
+    content = raw.decode("utf-8", errors="replace")
     if len(content) > MAX_PARSE_SIZE:
         # Over the (generous) DoS guard. Truncate ONLY at a real block
         # boundary and make it LOUD — never silently lose memory.
@@ -650,6 +738,7 @@ def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
                     file_path=filepath,
                     context=ctx,
                 ) from exc
+    _parse_cache_put(_cache_key, valid)
     return valid
 
 
