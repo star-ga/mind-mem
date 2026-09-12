@@ -115,8 +115,8 @@ python3 mcp_server.py --workspace /path/to/workspace
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `validate_block` | Deterministic quality gate: validate schema, coherence, reference integrity | `block_id` |
-| `block_lineage` | Retrieve typed relationship edges for a block (cites/implements/refines/contradicts/cooccurrence) | `block_id`, `direction` (`forward`/`backward`/`both`) |
-| `add_block_edge` | Create a typed relationship edge between two blocks | `source_block_id`, `target_block_id`, `relationship` (`cites`/`implements`/`refines`/`contradicts`/`cooccurrence`) |
+| `block_lineage` | Retrieve typed relationship edges for a block (cites/implements/refines/contradicts/cooccurrence/supersedes) | `block_id`, `direction` (`forward`/`backward`/`both`) |
+| `add_block_edge` | Create a typed relationship edge between two blocks | `source_block_id`, `target_block_id`, `relationship` (`cites`/`implements`/`refines`/`contradicts`/`cooccurrence`/`supersedes`) |
 
 #### Corpus Lint (`v4.lint`, default OFF)
 

@@ -325,8 +325,16 @@ def render_release_decision(
         f"Statement: Admit {len(block_ids)} quarantined imported block(s) from {_one_line(system)} into recall.",
         f"Date: {date}",
         "Status: active",
+        # Scope/Supersedes/Tags/Sources are required on every DECISIONS.md
+        # block. Omitting them made the apply write a block its own
+        # validator rejected, so the post-check failed and every release
+        # rolled back -- the whole quarantine-then-release path was dead.
+        "Scope: global",
         "Type: decision",
         f"Rationale: {_one_line(rationale)}",
+        "Supersedes: none",
+        f"Tags: import, quarantine-release, {_one_line(system)}",
+        f"Sources: imported:{_one_line(system)}",
         f"Source: {QUARANTINE_TIER}",
         f"{BATCH_ADMIT_FIELD}: {_one_line(batch) if batch else 'none'}",
         f"{RELEASE_FIELD}:",

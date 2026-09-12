@@ -147,7 +147,21 @@ def _status_of(ws: str, block_id: str) -> str:
 
 
 def _run_cli(ws: str, *argv: str) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "MIND_MEM_WORKSPACE": ws, "PYTHONIOENCODING": "utf-8"}
+    # The subprocess inherits no import path, so in a source checkout --
+    # where the package lives under ``src/`` and may not be installed --
+    # ``-m mind_mem.mm_cli`` died on ModuleNotFoundError, stdout came back
+    # empty, and every assertion here failed while parsing that as JSON.
+    # Hand it the directory the imported package actually sits in.
+    import mind_mem
+
+    pkg_parent = os.path.dirname(os.path.dirname(os.path.abspath(mind_mem.__file__)))
+    inherited = os.environ.get("PYTHONPATH", "")
+    env = {
+        **os.environ,
+        "MIND_MEM_WORKSPACE": ws,
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONPATH": pkg_parent if not inherited else pkg_parent + os.pathsep + inherited,
+    }
     return subprocess.run(
         [sys.executable, "-m", "mind_mem.mm_cli", *argv],
         capture_output=True,

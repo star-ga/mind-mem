@@ -545,3 +545,45 @@ def test_the_importer_status_is_withheld_by_the_admissibility_rule() -> None:
     assert not is_admissible_status(QUARANTINE_STATUS)
     hits = [{"_id": "IMP-1", "status": QUARANTINE_STATUS}, {"_id": "D-1", "status": "active"}]
     assert [h["_id"] for h in _withhold_inadmissible(hits, None, status_key="status")] == ["D-1"]
+
+
+def test_the_release_decision_carries_every_field_its_validator_requires() -> None:
+    """The release decision must satisfy DECISIONS.md's own schema.
+
+    This block is written by ``apply_proposal`` and then graded by the
+    post-apply validator. When it shipped without Scope/Supersedes/Tags/
+    Sources the post-check failed on every release, the apply rolled
+    back, and the whole quarantine-then-release path was unreachable —
+    with the four FAIL lines naming fields the renderer never emitted.
+    Pinning the renderer to ``DECISION_REQUIRED_FIELDS`` keeps the two
+    from drifting apart again.
+    """
+    import re
+
+    from mind_mem.importers.quarantine import render_release_decision
+    from mind_mem.validate_py import DECISION_REQUIRED_FIELDS
+
+    rendered = render_release_decision(
+        "D-20260912-001",
+        system="markdown",
+        batch="IMPB-markdown-deadbeef",
+        block_ids=["IMP-markdown-1", "IMP-markdown-2"],
+        rationale="operator authored the source corpus",
+        date="2026-09-12",
+    )
+    fields = {
+        line.split(":", 1)[0]: line.split(":", 1)[1].strip()
+        for line in rendered.splitlines()
+        if ":" in line and not line.startswith("-")
+    }
+
+    missing = [name for name in DECISION_REQUIRED_FIELDS if name not in fields]
+    assert not missing, f"release decision omits required field(s): {missing}"
+
+    # The two fields the validator constrains by pattern, not presence.
+    assert re.match(r"^(global|project:\S+|channel:\S+)$", fields["Scope"])
+    assert re.match(r"^(none|D-\d{8}-\d{3})$", fields["Supersedes"])
+
+    # Every field stays single-line so the block survives the proposal
+    # round trip; only the trailing id list is a bullet list.
+    assert rendered.count("Releases:") == 1

@@ -115,3 +115,39 @@ def test_mindllm_backend_in_pipeline_hash_known_backends() -> None:
     # And it points at the same llm_extractor.py source as ollama (same
     # extraction logic; just a different HTTP endpoint).
     assert pipeline_hash._BACKEND_SOURCE_FILES["mindllm"] == pipeline_hash._BACKEND_SOURCE_FILES["ollama"]
+
+
+def test_a_bare_200_is_not_an_openai_compatible_backend(monkeypatch) -> None:
+    """``/v1/models`` answering 200 with HTML must not select the backend.
+
+    The probe returned ``resp.status == 200`` and nothing else. Port 8000
+    is vLLM's default and also a popular port for unrelated web apps; one
+    of those answering with a 200 login page made ``backend: "auto"``
+    choose this backend and POST prompts -- which carry memory content --
+    to whatever happened to be listening. The documented shape is JSON
+    with a ``data`` list, so require that.
+    """
+    import io
+    import urllib.request
+
+    from mind_mem import llm_extractor as le
+
+    class _Resp(io.BytesIO):
+        status = 200
+
+        def __init__(self, payload: bytes) -> None:
+            super().__init__(payload)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    html = b"<!DOCTYPE html><html><head><title>Redirecting</title></head></html>"
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Resp(html))
+    assert le._openai_compatible_available("http://127.0.0.1:8000/v1") is False
+
+    models = b'{"object":"list","data":[{"id":"gpt-4o-mini","object":"model"}]}'
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Resp(models))
+    assert le._openai_compatible_available("http://127.0.0.1:8000/v1") is True

@@ -162,6 +162,19 @@ class TestKindDecay:
         assert by_id["Y"] == KIND_DECAY["refines"]
         assert by_id["X"] > by_id["Y"]
 
+    def test_supersedes_is_allowed_and_decays_like_contradicts(self, workspace) -> None:
+        # arXiv:2501.13956 (Zep/Graphiti): a new fact fully replacing an old
+        # one is the bi-temporal case, distinct from an unresolved conflict.
+        # It should invalidate its target at least as fast as `contradicts`.
+        assert "supersedes" in ALLOWED_KINDS
+        assert KIND_DECAY["supersedes"] == KIND_DECAY["contradicts"] == 1.0
+
+    def test_supersedes_one_hop_confidence(self, workspace) -> None:
+        add_block_edge(workspace, "NEW", "OLD", "supersedes")
+        result = block_lineage(workspace, "NEW", max_depth=1)
+        by_id = {e.block_id: e.confidence for e in result.edges}
+        assert by_id["OLD"] == KIND_DECAY["supersedes"]
+
 
 @pytest.mark.unit
 class TestAdjacency:

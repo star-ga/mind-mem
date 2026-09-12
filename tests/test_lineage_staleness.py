@@ -85,6 +85,23 @@ class TestPropagateContradictsEdge:
         assert get_staleness_score(workspace, "B") == pytest.approx(1.0)
         assert get_staleness_score(workspace, "A") > 0.0
 
+    def test_supersedes_seed_gets_full_penalty(self, workspace) -> None:
+        # arXiv:2501.13956 (Zep/Graphiti bi-temporal graphs): the block
+        # named in a `supersedes` edge is no longer live and should be
+        # demoted at least as strongly as an unresolved `contradicts`.
+        from mind_mem.block_lineage import add_block_edge
+        from mind_mem.lineage_staleness import (
+            get_staleness_score,
+            propagate_lineage_staleness,
+        )
+
+        add_block_edge(workspace, "A", "OLD", "cites")
+        add_block_edge(workspace, "NEW", "OLD", "supersedes")
+        propagate_lineage_staleness(workspace, source_id="NEW")
+
+        assert get_staleness_score(workspace, "OLD") == pytest.approx(1.0)
+        assert get_staleness_score(workspace, "A") > 0.0
+
     def test_kind_decay_contradicts_faster_than_refines(self, workspace) -> None:
         from mind_mem.block_lineage import add_block_edge
         from mind_mem.lineage_staleness import (

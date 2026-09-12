@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1546 | **Est. tokens:** ~4,566,923
-**Generated:** 2026-09-12 18:00 UTC
+**Files:** 1547 | **Est. tokens:** ~4,572,726
+**Generated:** 2026-09-12 18:07 UTC
 
 ## Token Budget Guide
 
@@ -22,11 +22,11 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~50,201 |
+| `./` | 36 | ~51,084 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 66 | ~181,940 |
+| `benchmarks/` | 66 | ~181,965 |
 | `benchmarks/repro/` | 1 | ~689 |
 | `benchmarks/repro/niah/` | 4 | ~2,557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 93 | ~207,667 |
+| `docs/` | 93 | ~207,672 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -73,21 +73,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 231 | ~1,059,258 |
+| `src/mind_mem/` | 231 | ~1,059,638 |
 | `src/mind_mem/api/` | 5 | ~27,043 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~13,934 |
-| `src/mind_mem/importers/` | 9 | ~26,660 |
-| `src/mind_mem/mcp/` | 3 | ~6,512 |
+| `src/mind_mem/importers/` | 9 | ~26,775 |
+| `src/mind_mem/mcp/` | 3 | ~6,614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13,249 |
-| `src/mind_mem/mcp/tools/` | 29 | ~113,641 |
+| `src/mind_mem/mcp/tools/` | 29 | ~113,848 |
 | `src/mind_mem/skill_opt/` | 11 | ~20,899 |
 | `src/mind_mem/spec/` | 2 | ~2,005 |
 | `src/mind_mem/storage/` | 2 | ~11,368 |
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~92,798 |
-| `tests/` | 667 | ~2,010,512 |
+| `tests/` | 667 | ~2,013,773 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -101,9 +101,10 @@
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
 | `train/` | 33 | ~60,269 |
-| `web/` | 5 | ~927 |
+| `web/` | 5 | ~920 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
+| `web/app/v1/[...path]/` | 1 | ~832 |
 | `web/components/` | 4 | ~2,482 |
 | `web/lib/` | 1 | ~665 |
 
@@ -123,7 +124,7 @@
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
-- `EVIDENCE.md` (~1913 tok, huge) — Evidence Matrix
+- `EVIDENCE.md` (~2318 tok, huge) — Evidence Matrix
 - `generate_mind7b_training.py` (~5567 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~243 tok, medium) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~494 tok, medium) — *.pyc
@@ -140,7 +141,7 @@
 - `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
-- `SECURITY.md` (~2520 tok, huge) — Security Policy
+- `SECURITY.md` (~2998 tok, huge) — Security Policy
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
 - `SPEC.md` (~6429 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `train_mind7b_runpod.py` (~1659 tok, huge)
@@ -215,7 +216,7 @@
 - `memory_ab_placebo.py` (~1754 tok, huge) — The placebo arm: same shape, same length, same framing — wrong corpus.
 - `memory_ab_stratum.py` (~1285 tok, large) — Run a memory A/B stratum one task at a time, resumably.
 - `niah_full_results.txt` (~5134 tok, huge) — ============================= test session starts ==============================
-- `NIAH.md` (~1995 tok, huge) — Needle In A Haystack (NIAH) Benchmark
+- `NIAH.md` (~2020 tok, huge) — Needle In A Haystack (NIAH) Benchmark
 - `niah_v3.2.1_redis_results.txt` (~111 tok, small) — ============================= test session starts ==============================
 - `niah_v3.2.1_results.txt` (~203 tok, medium) — ============================= test session starts ==============================
 - `paired_scorecard.py` (~5476 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -285,7 +286,7 @@
 - `agent-comm.md` (~1251 tok, large) — Agent-to-agent messaging (`mm send` / `mm inbox`)
 - `AGENTIC-MEMORY-SOTA.md` (~1674 tok, huge) — mind-mem → SOTA Agentic Memory (v4.5.0+ design brief)
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
-- `api-reference.md` (~2673 tok, huge) — API Reference
+- `api-reference.md` (~2679 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1626 tok, huge) — Append-Only Audit Logs — Operator Runbook
 - `architecture.md` (~3226 tok, huge) — Architecture
 ### `docs/audit/`
@@ -425,7 +426,7 @@
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
 - `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
-- `integrations.md` (~1540 tok, huge) — Integrations
+- `integrations.md` (~1539 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1625 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1770 tok, huge) — MCP Integration Guide
@@ -725,7 +726,7 @@
 - `repo_task_validation.py` (~4291 tok, huge) — Execute a mined commit to prove it is a real red->green task.
 ### `src/mind_mem/`
 
-- `block_lineage.py` (~5901 tok, huge) — Typed block-lineage edges + bounded BFS reader (v3.11.0+, Pattern 3).
+- `block_lineage.py` (~6067 tok, huge) — Typed block-lineage edges + bounded BFS reader (v3.11.0+, Pattern 3).
 - `block_maturity.py` (~3317 tok, huge) — Block maturity metric — consolidation gate (Group H, v4.0.x).
 - `block_metadata.py` (~5685 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~8138 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
@@ -820,7 +821,7 @@
 - `note_parsers.py` (~3667 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `okf_source.py` (~1885 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `parsers.py` (~3243 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `quarantine.py` (~5463 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `quarantine.py` (~5578 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `records.py` (~990 tok, large) — # Copyright 2026 STARGA, Inc.
 - `_shared.py` (~947 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
@@ -841,7 +842,7 @@
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `lint_autofix.py` (~2148 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lint.py` (~3856 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `llm_extractor.py` (~8857 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
+- `llm_extractor.py` (~9071 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~5228 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `maintenance_migrate.py` (~2109 tok, huge) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
 - `maturity_breadth_scan.py` (~3027 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -860,7 +861,7 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~3199 tok, huge) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~3098 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
+- `server.py` (~3200 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1871 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
@@ -882,7 +883,7 @@
 - `_helpers.py` (~1412 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
-- `lineage.py` (~717 tok, large) — MCP wrapping for the v3.11.0 typed block-lineage graph (Pattern 3).
+- `lineage.py` (~725 tok, large) — MCP wrapping for the v3.11.0 typed block-lineage graph (Pattern 3).
 - `lint.py` (~1511 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `memory_ops.py` (~16514 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `mic_map.py` (~2436 tok, huge) — MIC/MAP serialization MCP tools — wraps ``mind_mem.mic_map``.
@@ -891,7 +892,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~18378 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~18577 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1571 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -1215,7 +1216,7 @@
 - `test_bigrams.py` (~168 tok, small) — Tests for bigram extraction."""
 - `test_bitemporal_edge_validity.py` (~2524 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_block_id_format.py` (~345 tok, medium) — Tests for block ID format validation."""
-- `test_block_lineage.py` (~2122 tok, huge) — Tests for the v3.11.0 typed block-lineage graph (Pattern 3)."""
+- `test_block_lineage.py` (~2311 tok, huge) — Tests for the v3.11.0 typed block-lineage graph (Pattern 3)."""
 - `test_block_maturity_group_h.py` (~4178 tok, huge) — Tests for Group H maturity metric — consolidation gate.
 - `test_block_metadata.py` (~945 tok, large) — Tests for A-MEM block metadata evolution."""
 - `test_block_metadata_wiring.py` (~3680 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1416,7 +1417,7 @@
 - `test_importers_field_injection.py` (~1609 tok, huge) — Regression gate: dump content cannot forge a second block field.
 - `test_importers_notes.py` (~7184 tok, huge) — Tests for the note-tree and transcript importers.
 - `test_importers.py` (~5662 tok, huge) — Tests for the roadmap Group G migration importers (file-based subset).
-- `test_importers_quarantine.py` (~5278 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
+- `test_importers_quarantine.py` (~5723 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
 - `test_inbox.py` (~2419 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""
 - `test_indexed_validity_topk.py` (~2073 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1447,9 +1448,9 @@
 - `test_legacy_restore_symlink_confinement.py` (~1152 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_evidence.py` (~5244 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_filter.py` (~1781 tok, huge) — Unit tests for the optional lifecycle block field and recall filter.
-- `test_lineage_staleness.py` (~2161 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
-- `test_lint_autofix.py` (~3142 tok, huge) — Tests for the lint -> repair-proposal path (mind_mem.lint / lint_autofix).
-- `test_lint_wiring.py` (~4237 tok, huge) — ``lint`` is actually reachable — from ``mm lint`` and from the MCP surface.
+- `test_lineage_staleness.py` (~2360 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
+- `test_lint_autofix.py` (~4311 tok, huge) — Tests for the lint -> repair-proposal path (mind_mem.lint / lint_autofix).
+- `test_lint_wiring.py` (~4397 tok, huge) — ``lint`` is actually reachable — from ``mm lint`` and from the MCP surface.
 - `test_llama_cpp_provider_contract.py` (~1294 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_llm_extractor_gate.py` (~2248 tok, huge) — Backend wiring — :func:`mind_mem.llm_extractor._gate_check_local`.
 - `test_llm_extractor.py` (~1842 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
@@ -1470,7 +1471,7 @@
 - `test_mcp_compiled_truth_load.py` (~4697 tok, huge) — The compiled-truth read tool -- registered since v3.2.0, never tested.
 - `test_mcp_db_error_backstop.py` (~1717 tok, huge) — The MCP tool decorator must not let a backend DB error crash the server.
 - `test_mcp_graph_hitl.py` (~1868 tok, huge) — MCP-surface tests for the HITL typed-edge flow + provenance (v4.4.0 Finding 1)
-- `test_mcp_http_gate_matches_enforcement.py` (~2405 tok, huge) — The MCP HTTP startup gate must agree with what actually enforces auth.
+- `test_mcp_http_gate_matches_enforcement.py` (~2695 tok, huge) — The MCP HTTP startup gate must agree with what actually enforces auth.
 - `test_mcp_integration.py` (~5530 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_list_cores.py` (~3407 tok, huge) — ``list_cores`` — the read side of the ``.mmcore`` lifecycle, previously unpinned.
 - `test_mcp_list_evidence.py` (~4569 tok, huge) — ``list_evidence`` — the audit family's only *reader* of the evidence chain.
@@ -1509,14 +1510,14 @@
 - `test_mind_ffi.py` (~1519 tok, huge) — Tests for MIND FFI module."""
 - `test_mind_kernels_v3_3.py` (~998 tok, large) — Kernel-loading tests for v3.3.0 features.
 - `test_mind_kernels_wiring.py` (~5671 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_mindllm_backend.py` (~1324 tok, large) — Regression tests for the MindLLM backend (roadmap v4.0.15).
+- `test_mindllm_backend.py` (~1673 tok, huge) — Regression tests for the MindLLM backend (roadmap v4.0.15).
 - `test_mm_cli_audit_pinned_tilde.py` (~1077 tok, large) — ``mm audit-pinned`` must resolve a ``~`` config path before deriving the
 - `test_mm_cli_bind_arms_the_gate.py` (~4579 tok, huge) — ``mm bind`` — the missing command that arms GovernanceGate step 1.
 - `test_mm_cli_chain_recover.py` (~2197 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mm_cli_config_set.py` (~3637 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mm_cli_debug.py` (~3352 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mm_cli_keyfile_perms.py` (~1473 tok, large) — ``mm sign-model --generate-key`` and the permissions it claims.
-- `test_mm_doctor_postgres_hint.py` (~1128 tok, large) — Regression test: mm doctor must emit a clear hint when backend=postgres
+- `test_mm_doctor_postgres_hint.py` (~1517 tok, huge) — Regression test: mm doctor must emit a clear hint when backend=postgres
 - `test_model_audit.py` (~3557 tok, huge) — Tests for ``mind_mem.model_audit`` — checkpoint static-security audit.
 - `test_model_audit_unreadable_files.py` (~1411 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_model_card_training_metrics.py` (~364 tok, medium) — Model cards must not replace missing run evidence with invented metrics."""
@@ -1755,7 +1756,7 @@
 - `test_trust_scores.py` (~4581 tok, huge) — Standalone trust surface — determinism, zero-regression, poisoning.
 - `test_trust_signals.py` (~1433 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_truth_score.py` (~1930 tok, huge) — v3.3.0 — probabilistic truth score.
-- `test_typed_edges_group_h.py` (~2875 tok, huge) — Tests for Group H typed-edge additions: supports, derived_from, edge_aware_boost.
+- `test_typed_edges_group_h.py` (~2946 tok, huge) — Tests for Group H typed-edge additions: supports, derived_from, edge_aware_boost.
 - `test_typed_edges.py` (~3442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_unanchored_blocks.py` (~4814 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_uncertainty_propagation.py` (~2158 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1867,6 +1868,9 @@
 
 - `layout.tsx` (~168 tok, small)
 - `page.tsx` (~1036 tok, large)
+### `web/app/v1/[...path]/`
+
+- `route.ts` (~832 tok, large) — The REST layer ignores `format: "bundle"` and always answers with
 ### `web/components/`
 
 - `FactList.tsx` (~281 tok, medium)
@@ -1875,14 +1879,14 @@
 - `TimelineView.tsx` (~299 tok, medium)
 ### `web/`
 
-- `.gitignore` (~17 tok, tiny) — node_modules/
+- `.gitignore` (~20 tok, tiny) — node_modules/
 ### `web/lib/`
 
 - `api.ts` (~665 tok, large)
 ### `web/`
 
 - `next.config.ts` (~104 tok, small) — mind-mem-web is a thin client — the REST API lives on the
-- `package.json` (~193 tok, small) — Keys: name, version, private, description, license
+- `package.json` (~183 tok, small) — Keys: name, version, private, description, license
 - `README.md` (~464 tok, medium) — MIND-Mem web console
 - `tsconfig.json` (~149 tok, small) — Keys: compilerOptions, include, exclude
 

@@ -2989,11 +2989,21 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         except Exception as exc:
             report["sqlite_count_error"] = str(exc)
 
-    pg_only = pg_ids - sq_ids
-    sq_only = sq_ids - pg_ids
-    report["pg_only_count"] = len(pg_only)
-    report["sqlite_only_count"] = len(sq_only)
-    report["in_sync"] = len(pg_only) == 0 and len(sq_only) == 0
+    # Parity is a Postgres-vs-cache question. On the markdown/SQLite
+    # default there is no second store to disagree with, and diffing
+    # against an empty ``pg_ids`` reported every indexed block as
+    # sqlite-only -- so ``in_sync`` went false (and, via the ``healthy``
+    # verdict below, the whole doctor call) the moment the default
+    # backend had any content at all.
+    if store_class == "PostgresBlockStore":
+        pg_only = pg_ids - sq_ids
+        sq_only = sq_ids - pg_ids
+        report["pg_only_count"] = len(pg_only)
+        report["sqlite_only_count"] = len(sq_only)
+        report["in_sync"] = len(pg_only) == 0 and len(sq_only) == 0
+    else:
+        report["parity"] = "not applicable — single-store backend"
+        report["in_sync"] = True
 
     # FTS index health (P0 hybrid-noise guard). A recall.db whose blocks_fts
     # table is empty/missing WHILE the store has active blocks is the exact
