@@ -46,6 +46,11 @@ _log = logging.getLogger("mind_mem.llm_extractor")
 #: two stay equal by reading the ledger a real call writes.
 _USAGE_OPERATION = "extraction"
 
+#: Bytes read from a ``/v1/models`` probe response. A real model list is
+#: small; the cap keeps a misconfigured endpoint from streaming into the
+#: availability check.
+_PROBE_READ_LIMIT = 64 * 1024
+
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
@@ -214,9 +219,19 @@ def _openai_compatible_available(base_url: str) -> bool:
     try:
         req = urllib.request.Request(f"{base_url}/models", method="GET")
         with urllib.request.urlopen(req, timeout=2) as resp:  # nosec B310 — scheme validated above to http/https only
-            return bool(resp.status == 200)
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError):
+            if resp.status != 200:
+                return False
+            # A bare 200 is not proof of an OpenAI-compatible server. The
+            # default vLLM port (8000) is a popular port generally, and any
+            # unrelated web app there answers /v1/models with 200 and HTML --
+            # which used to select this backend under `backend: "auto"` and
+            # POST prompts carrying memory content to whatever was listening.
+            # Require the documented shape instead: JSON with a "data" list.
+            body = resp.read(_PROBE_READ_LIMIT)
+        payload = json.loads(body)
+    except (OSError, ValueError, urllib.error.URLError, urllib.error.HTTPError):
         return False
+    return isinstance(payload, dict) and isinstance(payload.get("data"), list)
 
 
 def _transformers_available() -> bool:
