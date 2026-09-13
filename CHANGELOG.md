@@ -4,6 +4,14 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Local anticipation-cache answers now record a V2 serving receipt bound to
+  their ordered result IDs and captured request context. They remain distinct
+  from a recall attestation asserting a corpus read. Unresolved ledger heads,
+  malformed answers and unavailable serving evidence stay explicitly unproven;
+  policy changes during cache lookup cannot change the captured result limit.
+
 ## [5.0.2] - 2026-09-13
 
 ### Security

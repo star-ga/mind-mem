@@ -120,26 +120,18 @@ def _anticipation_envelope(
     attestation says "this run read the corpus at this anchor and served these
     ids"; this run read a *bundle*. Stamping it would be the exact
     stale-evidence-as-this-run's failure the post-cache attestation exists to
-    avoid, so the early return below skips the attestation, explain and
-    served-ledger stages, and the envelope says so in-band: every hit carries
+    avoid, so the early return below skips the normal attestation, explain and
+    attested-ledger stages. A separate ``serving_receipt`` records the local
+    serve without claiming a corpus read; the envelope says the source
+    in-band: every hit carries
     ``_retrieval_source: "anticipation_cache"``, the envelope carries an
     ``anticipation`` block with the gate's numbers, and a warning names the
     trade in words.
 
-    **Named consequence, so it is not discovered later.** Skipping the
-    served-ledger stage means an anticipation-served run leaves no RA.1 row, so
-    the ledger under-counts what was served. That is deliberate rather than an
-    oversight — ``append_served_run`` records an attestation's ``index_anchor``
-    and this run has no attestation to record — but it is a real gap, and the
-    way to close it is to give the ledger a row shape that says "served from a
-    local bundle at head H, unattested" rather than to fabricate an attestation
-    here. Until then, an operator should read the ledger as a record of
-    *attested* recalls only.
-
-    The gap got wider in 5.0.2 and is worth restating in those terms: the
-    ledger is now ON by default, so this is no longer "two opt-ins that
-    interact". Switching ``cache.anticipation.enabled`` on is now, on its own,
-    a decision to stop recording the runs it answers locally.
+    The ``serving_receipt`` uses the existing v2 row kind ``"anticipation"``.
+    Its ``results_digest`` commits to the ordered result ids, not arbitrary hit
+    text bytes; the local bundle remains the source of the content and the
+    ordinary recall attestation remains absent.
     """
     try:
         from mind_mem.prefetch import anticipation_config, get_cache, observe_served
@@ -176,13 +168,98 @@ def _anticipation_envelope(
         "results": results,
         "anticipation": decision.as_dict(),
         "warnings": [
-            "Served from the local anticipation cache at this workspace's current "
+            "Served from the local anticipation cache at this workspace's captured "
             "governed-ledger head — no store round-trip, and therefore no recall "
-            "attestation. Set cache.anticipation.enabled to false for the "
-            "attested path."
+            "attestation. The serving_receipt records whether this local serve "
+            "was appended to the served ledger."
         ],
     }
     return json.dumps(envelope, indent=2, default=str)
+
+
+def _record_anticipation_run(
+    raw_json: str,
+    ws: str,
+    *,
+    query: str,
+    config_hash: str,
+    index_anchor: str,
+    scoring_instant: str,
+    generation: str | None,
+) -> str:
+    """Attach a ledger receipt for a local bundle serve without minting an attestation.
+
+    An anticipation hit did not read the governed store, so it cannot truthfully
+    carry the normal recall attestation. It can still record what the caller got:
+    the ordered result ids, the captured policy/corpus coordinates, and the fact
+    that the source was the local bundle. ``attach_served_run`` owns the row
+    schema and fail-safe handling; this helper only supplies its canonical input
+    digests and publishes the returned receipt beside ``anticipation``.
+    """
+    try:
+        from mind_mem.recall_attestation import _served_ids
+        from mind_mem.recall_digests import query_hash, served_set_digest
+        from mind_mem.served_ledger import (
+            LEDGER_ERROR_KEY,
+            PROOF_UNPROVEN,
+            SERVED_PROOF_KEY,
+            SERVED_ROW_HASH_KEY,
+            SERVED_SEQ_KEY,
+            attach_served_run,
+        )
+
+        envelope = json.loads(raw_json)
+        if not isinstance(envelope, dict) or envelope.get("backend") != "anticipation_cache":
+            return raw_json
+        results = envelope.get("results")
+        if not isinstance(results, list):
+            raise ValueError("anticipation envelope results must be a list")
+        # The receipt must describe exactly the serialized answer. Coercing a
+        # missing id to ``""`` would create a valid-looking smaller/altered
+        # commitment, so refuse the ledger append while leaving the answer
+        # available with an explicit unproven receipt.
+        if any(not isinstance(hit, dict) or not isinstance(hit.get("_id"), str) or not hit.get("_id") for hit in results):
+            raise ValueError("anticipation result is missing a non-empty string _id")
+        ids = _served_ids(results)
+        record = {
+            "query_hash": query_hash(query),
+            "results_digest": served_set_digest(ids),
+            "config_hash": config_hash,
+            "index_anchor": index_anchor,
+            "scoring_instant": scoring_instant,
+        }
+        record = attach_served_run(
+            record,
+            ws,
+            ids=ids,
+            serve_kind="anticipation",
+            generation=generation,
+        )
+        envelope["serving_receipt"] = record
+        return json.dumps(envelope, indent=2, default=str)
+    except Exception as exc:  # pragma: no cover — receipt must not break a cached answer
+        _log.warning("anticipation_receipt_failed", error=str(exc))
+        try:
+            from mind_mem.served_ledger import (
+                LEDGER_ERROR_KEY,
+                PROOF_UNPROVEN,
+                SERVED_PROOF_KEY,
+                SERVED_ROW_HASH_KEY,
+                SERVED_SEQ_KEY,
+            )
+
+            envelope = json.loads(raw_json)
+            if isinstance(envelope, dict) and envelope.get("backend") == "anticipation_cache":
+                envelope["serving_receipt"] = {
+                    SERVED_SEQ_KEY: None,
+                    SERVED_ROW_HASH_KEY: None,
+                    SERVED_PROOF_KEY: PROOF_UNPROVEN,
+                    LEDGER_ERROR_KEY: f"anticipation receipt failed: {type(exc).__name__}: {exc}",
+                }
+                return json.dumps(envelope, indent=2, default=str)
+        except Exception:  # noqa: BLE001 — the fallback must never break recall
+            pass
+        return raw_json
 
 
 def _record_anticipation_bundle(
@@ -401,6 +478,18 @@ def _recall_impl_ranked(
         except Exception:  # noqa: BLE001 — an unresolvable hash must not break recall
             _config_hash_snapshot = _CONFIG_HASH_UNRESOLVED
 
+    # Bind the captured mapping around BOTH possible retrieval doors. The local
+    # anticipation path still consults ``_get_limits`` before selecting a bundle;
+    # without this bind a config edit between the snapshot and lookup could apply
+    # a new result ceiling to an answer recorded under the old generation.
+    _request_context = RequestContext(
+        workspace=ws,
+        config=_raw_config if isinstance(_raw_config, dict) else {},
+        config_hash=None if _config_hash_snapshot == _CONFIG_HASH_UNRESOLVED else _config_hash_snapshot,
+        index_anchor=_index_anchor,
+        scoring_instant=instant_iso,
+    )
+
     # Group J — the anticipation cache, consulted BEFORE the store round-trip.
     # Off by default; the probe is a dict lookup on the config already loaded
     # above, so a workspace that has not opted in pays no syscall, no parse and
@@ -434,17 +523,26 @@ def _recall_impl_ranked(
     # through a different door. Falling through costs one round-trip and is
     # always correct, which is the trade this whole module makes everywhere else.
     if _anticipation_identity is not None and format == "blocks":
-        _anticipated = _anticipation_envelope(
-            ws,
-            query,
-            limit,
-            _raw_config,
-            _index_anchor,
-            instant_iso,
-            _anticipation_identity,
-        )
+        with bind_request_context(_request_context):
+            _anticipated = _anticipation_envelope(
+                ws,
+                query,
+                limit,
+                _raw_config,
+                _index_anchor,
+                instant_iso,
+                _anticipation_identity,
+            )
         if _anticipated is not None:
-            return _anticipated
+            return _record_anticipation_run(
+                _anticipated,
+                ws,
+                query=query,
+                config_hash=_config_hash_snapshot,
+                index_anchor=_index_anchor,
+                scoring_instant=instant_iso,
+                generation=_anticipation_identity,
+            )
 
     # BIND THE CAPTURED CONTEXT AROUND THE ACTUAL RETRIEVAL, both branches. Capturing
     # `_config_hash_snapshot` and `_index_anchor` above fixed WHEN they were read; it did not stop
@@ -454,13 +552,6 @@ def _recall_impl_ranked(
     # from whatever is on disk when the leg runs. Binding the snapshot here and threading its
     # coordinates to the recorder keeps those paths coherent. The context's read counter is
     # diagnostic only; a cache hit need not execute the engine to record a v2 row.
-    _request_context = RequestContext(
-        workspace=ws,
-        config=_raw_config if isinstance(_raw_config, dict) else {},
-        config_hash=None if _config_hash_snapshot == _CONFIG_HASH_UNRESOLVED else _config_hash_snapshot,
-        index_anchor=_index_anchor,
-        scoring_instant=instant_iso,
-    )
     with bind_request_context(_request_context):
         if _anchor_resolution.resolved and isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
             raw = cached_recall(

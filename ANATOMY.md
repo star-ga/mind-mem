@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1574 | **Est. tokens:** ~4687808
-**Generated:** 2026-09-13 12:03 UTC
+**Files:** 1574 | **Est. tokens:** ~4691759
+**Generated:** 2026-09-13 12:38 UTC
 
 ## Token Budget Guide
 
@@ -80,14 +80,14 @@
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
-| `src/mind_mem/mcp/tools/` | 29 | ~115842 |
+| `src/mind_mem/mcp/tools/` | 29 | ~116783 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11515 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 690 | ~2075455 |
+| `tests/` | 690 | ~2078465 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -897,7 +897,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~20571 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~21512 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1571 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -1587,7 +1587,7 @@
 - `test_ra1_direct_python_snapshot.py` (~1713 tok, huge) — The public Python recall wrapper must snapshot policy before ranking."""
 - `test_ra1_empty_config_backend_binding.py` (~1677 tok, huge) — The captured empty policy must not fall back to a later backend choice."""
 - `test_ra1_engine_ranks_under_captured_context.py` (~1788 tok, huge) — The engine ranks under the CAPTURED config, not the file as it stands when a leg runs.
-- `test_ra1_public_boundary_binding.py` (~2309 tok, huge) — Public axis/prefetch RA.1 boundaries must retain one request snapshot.
+- `test_ra1_public_boundary_binding.py` (~5319 tok, huge) — Public axis/prefetch RA.1 boundaries must retain one request snapshot.
 - `test_ra1_serving_receipt_binds_engine_config.py` (~3802 tok, huge) — The recorded receipt must bind the config the ENGINE consumed — and the binding must not
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
