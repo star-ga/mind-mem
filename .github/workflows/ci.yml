@@ -520,9 +520,35 @@ jobs:
       - name: Install lock and audit tooling
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pip-audit uv
-      - name: Resolve complete hashed closure (metadata-only)
+          # Pin the supply-chain tooling itself. An unpinned pip-audit/uv would
+          # let a PyPI-side compromise or dependency-confusion between runs be
+          # trusted silently — the one un-hashed install sitting next to the very
+          # job whose purpose is lock hygiene.
+          python -m pip install "pip-audit==2.10.1" "uv==0.9.22"
+      - name: Lock is current with requirements-optional.in (no drift)
         run: |
+          # A stale lock with valid OLD hashes passes every other check. Only a
+          # recompile-and-compare proves requirements-optional.txt still derives
+          # from its .in inputs. Compare the SUBSTANCE (pins + hashes + markers)
+          # and not the header/`# via` comment lines, which uv varies by
+          # invocation and output path — a raw diff would false-positive on
+          # cosmetics while a stripped compare fails closed only on real drift.
+          uv pip compile requirements-optional.in \
+            --universal --generate-hashes --python-version 3.10 \
+            --quiet -o /tmp/requirements-optional.regen.txt
+          strip() { grep -vE '^[[:space:]]*#' "$1" | grep -vE '^[[:space:]]*$'; }
+          if ! diff -u <(strip requirements-optional.txt) <(strip /tmp/requirements-optional.regen.txt); then
+            echo "::error::requirements-optional.txt drifted from requirements-optional.in — regenerate with 'uv pip compile requirements-optional.in --universal --generate-hashes --python-version 3.10 -o requirements-optional.txt'"
+            exit 1
+          fi
+      - name: Resolve complete hashed closure (dry-run — resolves+parses, does NOT byte-verify)
+        run: |
+          # HONESTY: --dry-run resolves the closure and confirms the lock parses
+          # under --require-hashes, but it does NOT download and hash wheel bytes
+          # — a deliberately-wrong hash passes this step (verified with uv
+          # 0.9.22). Wheel-byte hash verification happens at real install on the
+          # release machine, where `uv pip install --require-hashes` fails closed
+          # on a mismatch. Do not read a green here as "wheel hashes verified".
           uv pip install --dry-run --require-hashes --no-cache \
             --system \
             --python-version 3.12 \

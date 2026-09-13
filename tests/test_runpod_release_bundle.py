@@ -18,11 +18,35 @@ SECRET = "hf_fixture_secret_must_not_escape"
 
 
 def _bash_executable() -> str:
-    """Resolve Git Bash before a test changes any child environment."""
+    """Resolve bash before a test changes any child environment.
+
+    On Windows the fixture drives path conversion through ``cygpath``, which
+    ships with Git Bash / MSYS2 but NOT with WSL's bash. Trusting PATH order can
+    resolve ``bash`` to WSL, where ``cygpath`` does not exist and the fixture
+    would later abort with an opaque cygpath error that reads like a portability
+    bug. So on Windows we require a bash whose ``cygpath`` is reachable and
+    otherwise ``skip`` WITH A REASON (never a silent skip, never a misleading
+    hard failure). On the GitHub ``windows-latest`` runner ``bash`` is Git Bash,
+    so this passes. On POSIX any ``bash`` is fine and no cygpath is needed.
+    """
     bash = shutil.which("bash")
     if not bash:
-        raise AssertionError("the Windows release fixture requires Git Bash")
-    return str(Path(bash).resolve())
+        if os.name == "nt":
+            pytest.skip("Windows release fixture requires Git Bash (no bash on PATH)")
+        raise AssertionError("the release fixture requires bash")
+    resolved = str(Path(bash).resolve())
+    if os.name == "nt":
+        probe = subprocess.run(
+            [resolved, "-lc", "command -v cygpath"],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=10,
+        )
+        if probe.returncode != 0 or not probe.stdout.strip():
+            pytest.skip(f"Windows release fixture requires Git Bash with cygpath; resolved bash ({resolved}) has none (likely WSL bash)")
+    return resolved
 
 
 def _bash_path(path: Path) -> str:

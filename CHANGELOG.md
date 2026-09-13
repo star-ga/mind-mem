@@ -17,6 +17,15 @@ All notable changes to MIND-Mem are documented in this file.
   instruction-detection is performed on approved blocks). Docs-only; no
   behavior change.
 
+### Fixed
+
+- Native `top_k_mask` (`lib/kernels.c`) selected against a finite `-1e30f`
+  sentinel, so any score at or below `-1e30` (down to `-FLT_MAX`) could never
+  be chosen — a wrong top-k on legitimately very-negative float32 scores. The
+  sentinel is now `-INFINITY`, so every finite score is selectable; NaN/-inf
+  are documented as never-selected (top-k operates over finite scores) and
+  pinned by native-ABI tests.
+
 ### Roadmap
 
 - Recorded content-category decay policy (per recent research on

@@ -117,6 +117,22 @@ def test_rrf_empty_vectors_are_a_valid_empty_result(production_kernel: MindMemKe
         ([-2e30, -3e30], 1, [True, False]),
         ([-1e30, -1e30, -1e30], 2, [True, True, False]),
         ([1.0, -2e30, -3e30, -3.4028235e38], 3, [True, True, True, False]),
+        # ── Non-finite contract (lib/kernels.c top_k_mask), UNIFORM across the
+        # k<n partial-selection loop AND the k>=n fast path: a score is selected
+        # iff it is > -INFINITY (finite or +inf). NaN and -inf are NEVER
+        # selected; +inf ranks highest. Exercised at k<n, k=n, and k>n because
+        # the fast path (k>=n) previously masked non-finite slots blindly.
+        # -- k < n (partial-selection loop) --
+        ([float("nan"), 1.0], 1, [False, True]),
+        ([float("inf"), 2.0, 1.0], 1, [True, False, False]),
+        # -- k == n (fast path; the cases that failed before the fix) --
+        ([float("nan"), float("-inf")], 2, [False, False]),
+        ([float("nan"), 1.0], 2, [False, True]),
+        ([float("inf"), float("-inf")], 2, [True, False]),
+        ([0.5, 0.7], 2, [True, True]),  # all-finite k==n still selects all
+        # -- k > n (fast path) --
+        ([float("nan"), 2.0], 3, [False, True]),
+        ([float("inf"), float("-inf"), float("nan")], 5, [True, False, False]),
     ],
 )
 def test_top_k_mask_boundaries_and_input_order_ties(production_kernel: MindMemKernel, scores: list[float], k: int, expected: list[bool]):
