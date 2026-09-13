@@ -363,7 +363,10 @@ def _run_release_commands(ip: str, port: int, version_tag: str, *, skip_upload: 
         print("--skip-upload set: NOT pushing to HF. Eval locally first, then re-run upload manually.")
         return
 
-    commit_msg = f"Full-FT retrain on Qwen3.5-4B ({version_tag})"
+    # The base is operator-selectable through MM_BASE_MODEL.  Keep the
+    # publication message truthful for overrides instead of naming the
+    # repository's default model unconditionally.
+    commit_msg = f"Full-FT retrain on configured base ({version_tag})"
     _ssh_cmd(
         ip,
         port,
@@ -386,7 +389,7 @@ def main() -> None:
         "--version-tag",
         default=os.environ.get("MM_VERSION_TAG", "v4.0.0"),
         help="Version label used in the HF commit message (e.g. v4.0.0). "
-        "Drives `--commit-message 'Full-FT retrain on Qwen3.5-4B (<TAG>)'`.",
+        "Drives the generic configured-base HF commit message.",
     )
     parser.add_argument(
         "--provision-only",

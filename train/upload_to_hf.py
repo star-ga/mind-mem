@@ -31,7 +31,11 @@ REPO_ID = os.environ.get("MM_HF_REPO_ID", "star-ga/mind-mem-4b")
 OUT_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
 # Source dir holding the trained weights. For QLoRA this is `adapter/`; for
 # a full fine-tune (v3.9 onward) this is `full-ft/`. Override via MM_WEIGHTS_DIR.
-_DEFAULT_WEIGHTS_DIR = (OUT_DIR / "full-ft") if any((OUT_DIR / "full-ft" / name).is_file() for name in ("model.safetensors", "model.safetensors.index.json")) else (OUT_DIR / "adapter")
+_DEFAULT_WEIGHTS_DIR = (
+    (OUT_DIR / "full-ft")
+    if any((OUT_DIR / "full-ft" / name).is_file() for name in ("model.safetensors", "model.safetensors.index.json"))
+    else (OUT_DIR / "adapter")
+)
 WEIGHTS_DIR = Path(os.environ.get("MM_WEIGHTS_DIR", str(_DEFAULT_WEIGHTS_DIR)))
 
 # ---------------------------------------------------------------------------
@@ -108,10 +112,7 @@ def _expected_probe_specs() -> dict[str, dict[str, dict]]:
 
 def _expected_probe_counts() -> dict[str, dict[str, int]]:
     """Per-group counts derived from the same definitions (count-only view)."""
-    return {
-        suite: {group: spec["n_items"] for group, spec in groups.items()}
-        for suite, groups in _expected_probe_specs().items()
-    }
+    return {suite: {group: spec["n_items"] for group, spec in groups.items()} for suite, groups in _expected_probe_specs().items()}
 
 
 class GateError(Exception):
@@ -142,20 +143,14 @@ def _check_group(report: dict, group: str, expected: int, threshold: float) -> N
     if total <= 0:
         raise GateError(f"{group}.total must be > 0")
     if total != expected:
-        raise GateError(
-            f"{group}.total is {total} but the harness defines {expected} probes — "
-            "partial or stale run"
-        )
+        raise GateError(f"{group}.total is {total} but the harness defines {expected} probes — partial or stale run")
     if not 0 <= hits <= total:
         raise GateError(f"{group}.hits={hits} is out of range for total={total}")
     accuracy = _strict_float(bench.get("accuracy"), f"{group}.accuracy")
     if abs(accuracy - hits / total) > 1e-9:
         raise GateError(f"{group}.accuracy does not match hits/total")
     if accuracy < threshold:
-        raise GateError(
-            f"{group} scored {hits}/{total} ({accuracy:.2%}) below the fixed "
-            f"threshold {threshold:.0%}"
-        )
+        raise GateError(f"{group} scored {hits}/{total} ({accuracy:.2%}) below the fixed threshold {threshold:.0%}")
 
 
 def _check_raw_items(report: dict, suite: str) -> None:
@@ -204,18 +199,14 @@ def _check_probe_records(receipt: dict, expected: dict[str, dict]) -> None:
         n_items = _strict_int(record.get("n_items"), f"probes.{group}.n_items")
         n_done = _strict_int(record.get("n_completed"), f"probes.{group}.n_completed")
         if n_items != spec["n_items"]:
-            raise GateError(
-                f"probes.{group}.n_items={n_items} but the harness defines {spec['n_items']}"
-            )
+            raise GateError(f"probes.{group}.n_items={n_items} but the harness defines {spec['n_items']}")
         if record.get("digest") != spec["digest"]:
             raise GateError(
                 f"probes.{group} digest does not match the harness probe definitions "
                 "— the attested probe set is not the one this gate expects"
             )
         if n_done != n_items:
-            raise GateError(
-                f"probes.{group} completed {n_done}/{n_items} — run did not finish"
-            )
+            raise GateError(f"probes.{group} completed {n_done}/{n_items} — run did not finish")
 
 
 def _check_layout(receipt: dict) -> str:
@@ -232,9 +223,7 @@ def _check_layout(receipt: dict) -> str:
         for name in _FULLFT_REQUIRED:
             if name not in files:
                 raise GateError(f"full-FT checkpoint manifest is missing {name}")
-        ok, reason = weight_set_is_closed(
-            Path((selection["model"])["path"]), files, "full-FT checkpoint"
-        )
+        ok, reason = weight_set_is_closed(Path((selection["model"])["path"]), files, "full-FT checkpoint")
         if not ok:
             raise GateError(reason)
         # The evaluator selects full-FT safetensors only, and the uploader
@@ -252,15 +241,12 @@ def _check_layout(receipt: dict) -> str:
             raise GateError(reason)
     else:
         raise GateError(f"unsupported checkpoint layout {kind!r}")
-    if "tokenizer_config.json" not in tokenizer_files or not any(
-        name in tokenizer_files for name in _TOKENIZER_REQUIRED_ANY
-    ):
+    if "tokenizer_config.json" not in tokenizer_files or not any(name in tokenizer_files for name in _TOKENIZER_REQUIRED_ANY):
         raise GateError("tokenizer manifest is incomplete")
     return kind
 
 
-def _validate_report(path: Path, suite: str, thresholds: dict[str, float],
-                     expected: dict[str, dict]) -> dict:
+def _validate_report(path: Path, suite: str, thresholds: dict[str, float], expected: dict[str, dict]) -> dict:
     """Full quality + binding validation of one attested report."""
     from eval_receipt import bindings_match, receipt_is_valid, report_matches_receipt
 
@@ -272,10 +258,7 @@ def _validate_report(path: Path, suite: str, thresholds: dict[str, float],
     if not isinstance(receipt, dict):
         raise GateError(f"receipt at {path} is not an object")
     if receipt.get("schema") != "mind-mem/eval-receipt@2":
-        raise GateError(
-            f"receipt at {path} has schema {receipt.get('schema')!r}; this gate "
-            "requires mind-mem/eval-receipt@2"
-        )
+        raise GateError(f"receipt at {path} has schema {receipt.get('schema')!r}; this gate requires mind-mem/eval-receipt@2")
     if receipt.get("suite") != suite:
         raise GateError(f"receipt at {path} attests suite {receipt.get('suite')!r}, expected {suite!r}")
     run = receipt.get("run") or {}
@@ -286,10 +269,7 @@ def _validate_report(path: Path, suite: str, thresholds: dict[str, float],
     if not receipt_is_valid(receipt):
         raise GateError(f"evaluation receipt at {path} fails its own digest — tampered")
     if not report_matches_receipt(report):
-        raise GateError(
-            f"report payload at {path} does not match the digest inside its receipt — "
-            "results were edited after evaluation"
-        )
+        raise GateError(f"report payload at {path} does not match the digest inside its receipt — results were edited after evaluation")
     ok, reason = bindings_match(receipt)
     if not ok:
         raise GateError(f"binding check for {path}: {reason}")
@@ -324,9 +304,7 @@ def _require_eval_receipts() -> dict:
         except GateError as exc:
             sys.exit(f"refusing upload: {exc}")
 
-    selections = {
-        suite: report["receipt"]["selection"] for suite, report in reports.items()
-    }
+    selections = {suite: report["receipt"]["selection"] for suite, report in reports.items()}
     try:
         target = Path(WEIGHTS_DIR).resolve(strict=True)
     except OSError as exc:
@@ -334,10 +312,7 @@ def _require_eval_receipts() -> dict:
     for suite, selection in selections.items():
         attested = Path(selection["model"]["path"]).resolve()
         if attested != target:
-            sys.exit(
-                f"refusing upload: {suite} suite attests checkpoint {attested} but the "
-                f"upload plan would publish {target}"
-            )
+            sys.exit(f"refusing upload: {suite} suite attests checkpoint {attested} but the upload plan would publish {target}")
     _require_identical_selection(selections["main"], selections["holdout"])
     # Holdout's overlap check is against the training corpus, not a separate
     # benchmark dataset. Both suites must bind those same bytes. Identical
@@ -359,15 +334,9 @@ def _require_identical_selection(main: dict, holdout: dict) -> None:
     scope and every base file hash) must agree.
     """
     if main.get("kind") != holdout.get("kind"):
-        sys.exit(
-            f"refusing upload: suites attest different checkpoint kinds "
-            f"({main.get('kind')!r} vs {holdout.get('kind')!r})"
-        )
+        sys.exit(f"refusing upload: suites attest different checkpoint kinds ({main.get('kind')!r} vs {holdout.get('kind')!r})")
     if main["model"]["files"] != holdout["model"]["files"]:
-        sys.exit(
-            "refusing upload: the two evaluation suites attest different checkpoint "
-            "contents at the same path"
-        )
+        sys.exit("refusing upload: the two evaluation suites attest different checkpoint contents at the same path")
     if main["tokenizer"]["files"] != holdout["tokenizer"]["files"]:
         sys.exit("refusing upload: the two evaluation suites attest different tokenizers")
     main_base = main.get("base") or {}
@@ -391,13 +360,23 @@ def _require_identical_selection(main: dict, holdout: dict) -> None:
 # checkpoint payload: training logs, optimiser state and unrelated files are
 # not model assets. Tokenizers may be selected from a separate base snapshot.
 _TOKENIZER_NAMES = {
-    "tokenizer.json", "tokenizer.model", "tokenizer_config.json",
-    "special_tokens_map.json", "added_tokens.json", "vocab.json", "vocab.txt",
-    "merges.txt", "chat_template.jinja",
+    "tokenizer.json",
+    "tokenizer.model",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+    "added_tokens.json",
+    "vocab.json",
+    "vocab.txt",
+    "merges.txt",
+    "chat_template.jinja",
 }
 _MODEL_NAMES = _TOKENIZER_NAMES | {
-    "config.json", "generation_config.json", "model.safetensors",
-    "model.safetensors.index.json", "adapter_config.json", "adapter_model.safetensors",
+    "config.json",
+    "generation_config.json",
+    "model.safetensors",
+    "model.safetensors.index.json",
+    "adapter_config.json",
+    "adapter_model.safetensors",
 }
 
 
@@ -524,9 +503,8 @@ def _remote_release_plan(api, uploads: list[tuple[Path, str]]) -> tuple[str, lis
     selected = {name for _, name in uploads}
     obsolete = []
     for name in existing:
-        legacy_weight = (
-            name in {"pytorch_model.bin", "pytorch_model.bin.index.json", "adapter_model.bin", "mind-mem-4b-Q4_K_M.gguf"}
-            or ("/" not in name and name.startswith("pytorch_model-") and name.endswith(".bin"))
+        legacy_weight = name in {"pytorch_model.bin", "pytorch_model.bin.index.json", "adapter_model.bin", "mind-mem-4b-Q4_K_M.gguf"} or (
+            "/" not in name and name.startswith("pytorch_model-") and name.endswith(".bin")
         )
         if name not in selected and (_is_payload(name) or legacy_weight):
             obsolete.append(name)
@@ -568,10 +546,7 @@ def main() -> None:
         print(f"  {local}  →  {REPO_ID}:{remote}  ({local.stat().st_size} bytes)")
 
     if not token:
-        sys.exit(
-            "no HF token provided. Set HF_TOKEN (write scope) for star-ga/mind-mem-4b, "
-            "or pass --token."
-        )
+        sys.exit("no HF token provided. Set HF_TOKEN (write scope) for star-ga/mind-mem-4b, or pass --token.")
 
     from huggingface_hub import CommitOperationAdd, CommitOperationDelete, HfApi, create_commit
 

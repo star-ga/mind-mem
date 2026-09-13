@@ -23,13 +23,14 @@ Output:
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-BASE = "Qwen/Qwen3.5-4B"
+BASE = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
 _BASE_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
 ADAPTER = _BASE_DIR / "adapter"
 FULLFT = Path(
@@ -49,6 +50,8 @@ LLAMA_CPP = Path(os.environ.get("MM_LLAMA_CPP_DIR", str(Path.home() / "llama.cpp
 def _resolve_source() -> Path:
     """Pick the model dir to convert. Full-FT preferred over QLoRA merge."""
     pref = os.environ.get("MM_GGUF_SOURCE", "").strip().lower()
+    if pref not in {"", "adapter", "fullft"}:
+        sys.exit(f"unknown MM_GGUF_SOURCE={pref!r}; expected 'fullft' or 'adapter'")
     fullft_ready = (FULLFT / "model.safetensors").is_file() or (FULLFT / "model.safetensors.index.json").is_file()
     if pref == "adapter":
         if not ADAPTER.is_dir():
@@ -68,17 +71,33 @@ def _resolve_source() -> Path:
 
 
 def _merge_adapter_to_disk() -> Path:
-    # Heavy imports only when QLoRA path is chosen.
+    _validate_adapter_base()
+    # Heavy imports only when QLoRA path is chosen and its base binding passed.
     import torch
     from peft import PeftModel
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
+    try:
+        from train._causal_lm_import import load_causal_lm
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"train", "train._causal_lm_import"}:
+            raise
+        from _causal_lm_import import load_causal_lm
 
     if MERGED.is_dir():
         shutil.rmtree(MERGED)
     MERGED.mkdir(parents=True)
     tokenizer = AutoTokenizer.from_pretrained(BASE, trust_remote_code=True)
     print("loading base on CPU (bf16) …")
-    model = AutoModelForCausalLM.from_pretrained(BASE, torch_dtype=torch.bfloat16, device_map=None, trust_remote_code=True)
+    model = load_causal_lm(
+        BASE,
+        auto_config=AutoConfig,
+        auto_model=AutoModelForCausalLM,
+        config_kwargs={"trust_remote_code": True},
+        torch_dtype=torch.bfloat16,
+        device_map=None,
+        trust_remote_code=True,
+    )
     print("applying adapter …")
     model = PeftModel.from_pretrained(model, str(ADAPTER), device_map=None)
     print("merging adapter into base weights …")
@@ -87,6 +106,35 @@ def _merge_adapter_to_disk() -> Path:
     model.save_pretrained(str(MERGED), safe_serialization=True)
     tokenizer.save_pretrained(str(MERGED))
     return MERGED
+
+
+def _validate_adapter_base() -> None:
+    """Refuse an adapter/base mismatch before heavy imports or merge deletion."""
+    config_path = ADAPTER / "adapter_config.json"
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        sys.exit(f"refusing adapter merge: adapter_config.json is unreadable: {exc}")
+    if not isinstance(config, dict):
+        sys.exit("refusing adapter merge: adapter_config.json must contain an object")
+    declared = config.get("base_model_name_or_path")
+    if not isinstance(declared, str) or not declared.strip():
+        sys.exit("refusing adapter merge: adapter_config.json declares no base_model_name_or_path")
+
+    selected = BASE.strip()
+    if not selected:
+        sys.exit("refusing adapter merge: MM_BASE_MODEL is empty")
+    candidates = {selected}
+    selected_path = Path(selected)
+    if selected_path.exists():
+        candidates.add(str(selected_path.resolve()))
+    declared_path = Path(declared)
+    declared_resolved = str(declared_path.resolve()) if declared_path.exists() else declared
+    if declared not in candidates and declared_resolved not in candidates:
+        sys.exit(
+            f"refusing adapter merge: adapter_config.json binds base {declared!r}, "
+            f"but MM_BASE_MODEL selects {selected!r}"
+        )
 
 
 def _convert_to_gguf(source: Path) -> None:
