@@ -294,18 +294,37 @@ def capture_policy_snapshot(workspace: str) -> tuple[Any, str, str]:
         config = _load_config(workspace)
     except Exception:  # noqa: BLE001 — an unreadable config must not break recall
         config = None
-    try:
-        from .pipeline_hash import current_pipeline_hash
 
-        config_hash = current_pipeline_hash(workspace)
-        if not isinstance(config_hash, str) or not config_hash:
+    if config is None:
+        # FAIL CLOSED. Deriving a live hash while the mapping is unknown is what produced a RECORDED
+        # row whose coordinates came from two different moments. An independent review named this
+        # exact path: "if config loading itself fails, the same function may return config=None while
+        # still deriving a live hash, then bind {}". There is nothing to bind, so there is nothing to
+        # prove — return the sentinel and let the recorder refuse.
+        return None, _CONFIG_HASH_UNRESOLVED, ""
+
+    # DERIVE INSIDE A CONTEXT CARRYING THE CAPTURED MAPPING. The hash and the anchor are DERIVED from
+    # a configuration; taking them with a fresh workspace read let the mapping and the hash disagree.
+    # A source-bound reproduction on the public door observed the engine consuming config A while the
+    # recorded row carried hash B — a concrete false binding, not an ordering worry. Binding here makes
+    # ``pipeline_hash._load_workspace_config`` answer from ``config``, so the hash is the hash OF THIS
+    # MAPPING by construction. The ranked MCP door does the same thing at its own capture point.
+    from .request_context import RequestContext, bind_request_context
+
+    _pre = RequestContext(workspace=workspace, config=config)
+    with bind_request_context(_pre):
+        try:
+            from .pipeline_hash import current_pipeline_hash
+
+            config_hash = current_pipeline_hash(workspace)
+            if not isinstance(config_hash, str) or not config_hash:
+                config_hash = _CONFIG_HASH_UNRESOLVED
+        except Exception:  # noqa: BLE001
             config_hash = _CONFIG_HASH_UNRESOLVED
-    except Exception:  # noqa: BLE001
-        config_hash = _CONFIG_HASH_UNRESOLVED
-    try:
-        index_anchor = _resolve_index_anchor(workspace)
-    except Exception:  # noqa: BLE001
-        index_anchor = ""
+        try:
+            index_anchor = _resolve_index_anchor(workspace)
+        except Exception:  # noqa: BLE001
+            index_anchor = ""
     return config, config_hash, index_anchor
 
 

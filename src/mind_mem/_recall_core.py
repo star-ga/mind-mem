@@ -2403,7 +2403,7 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
     """
     cfg = _get_config(workspace)
     recall_backend: str | None = None
-    if cfg:
+    if isinstance(cfg, dict):
         recall_cfg = cfg.get("recall", {})
         # Defensive: an old or hand-edited mind-mem.json can have
         # `recall` as a string / list / null.  Treat anything non-dict
@@ -2438,12 +2438,14 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
     try:
         from .storage import _backend_name
 
-        block_backend = _backend_name(workspace, cfg or None)
+        # Preserve a captured empty dict. ``cfg or None`` would discard a valid snapshot and make
+        # this selector reread the mutable workspace file, allowing a backend/corpus switch mid-run.
+        block_backend = _backend_name(workspace, cfg)
     except Exception as exc:  # pragma: no cover — config read is best-effort
         _log.debug("block_store_backend_probe_failed", error=str(exc))
         block_backend = "markdown"
     if block_backend == "postgres":
-        return PostgresRecallBackend(workspace, config=cfg or None)
+        return PostgresRecallBackend(workspace, config=cfg)
 
     return None  # use built-in BM25 scan
 
@@ -2643,8 +2645,17 @@ def main():
     # reaches must stay out of the scoring path's import closure
     # (``tests/test_recall_attestation_v2.py`` fails the build on that edge).
     from .recall import attest_and_record, capture_policy_snapshot, serving_scope
+    from .request_context import RequestContext, bind_request_context
 
-    with serving_scope():
+    _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
+    _request_context = RequestContext(
+        workspace=workspace,
+        config=_snap_config if isinstance(_snap_config, dict) else {},
+        config_hash=_snap_hash,
+        index_anchor=_snap_anchor,
+    )
+
+    with bind_request_context(_request_context), serving_scope():
         # Resolve backend: CLI flag > config > default scan
         backend = args.backend
         if backend == "auto":
@@ -2688,10 +2699,7 @@ def main():
                 rerank_debug=args.rerank_debug,
             )
 
-    # Reads no clock of its own: ``scoring_instant`` is left to the value the
-    # run resolved, and the ranking above is already fixed and printed below,
-    # so nothing recorded here can reach it.
-    _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
+    # Reuse the pre-retrieval coordinates; no post-ranking workspace reread can create a mixed row.
     from .mcp.infra.constants import MCP_SCHEMA_VERSION
     from .prefetch import anticipation_generation_identity
 

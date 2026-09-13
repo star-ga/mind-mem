@@ -137,7 +137,16 @@ def get_block_store(workspace: str, config: dict[str, Any] | None = None) -> Blo
                      ``psycopg[binary]`` is not installed.
     """
     if config is None:
-        config = _load_workspace_config(workspace)
+        # A serving request may already have captured one policy mapping and
+        # bound it to the current context.  Consume that snapshot here too:
+        # this factory is used below the recall engine, and re-reading the
+        # workspace file would let a backend constructor select a different
+        # store than the bound metadata path selected.  Outside a request
+        # context this remains the historical disk-loaded behavior.
+        from ..request_context import context_config_for
+
+        bound = context_config_for(workspace)
+        config = dict(bound) if bound is not None else _load_workspace_config(workspace)
 
     bs_cfg, cfg_error = _block_store_section(config)
     if cfg_error:

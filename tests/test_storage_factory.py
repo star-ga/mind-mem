@@ -10,6 +10,7 @@ import os
 import pytest
 
 from mind_mem.block_store import MarkdownBlockStore
+from mind_mem.request_context import RequestContext, bind_request_context
 from mind_mem.storage import get_block_store
 
 # ---------------------------------------------------------------------------
@@ -86,6 +87,46 @@ def test_reads_mind_mem_json_when_config_none(tmp_path):
     ws = _make_workspace(tmp_path, config={"block_store": {"backend": "markdown"}})
     store = get_block_store(ws)  # no explicit config
     assert isinstance(store, MarkdownBlockStore)
+
+
+@pytest.mark.parametrize(
+    ("backend", "backend_config"),
+    [
+        ("postgres", {"dsn": "postgresql://user@host/db"}),
+        ("encrypted", {}),
+    ],
+)
+def test_config_none_uses_bound_backend_snapshot(
+    tmp_path, monkeypatch, backend, backend_config
+):
+    """A bound request snapshot governs config=None factory calls.
+
+    The file is changed to Markdown after the request captures a non-Markdown
+    backend.  The real constructors are lazy: Postgres does not connect here,
+    and encrypted dispatch only needs its documented passphrase.  This keeps
+    the control on factory selection rather than replacing a backend with a
+    test double.
+    """
+    if backend == "encrypted":
+        monkeypatch.setenv("MIND_MEM_ENCRYPTION_PASSPHRASE", "test-secret-passphrase")
+        from mind_mem.block_store_encrypted import EncryptedBlockStore
+
+        expected_type = EncryptedBlockStore
+    else:
+        from mind_mem.block_store_postgres import PostgresBlockStore
+
+        expected_type = PostgresBlockStore
+
+    captured = {"block_store": {"backend": backend, **backend_config}}
+    (tmp_path / "mind-mem.json").write_text(
+        json.dumps({"block_store": {"backend": "markdown"}}), encoding="utf-8"
+    )
+    context = RequestContext(str(tmp_path), captured)
+    with bind_request_context(context):
+        store = get_block_store(str(tmp_path), config=None)
+
+    assert isinstance(store, expected_type)
+    assert context.reads == 1
 
 
 def test_missing_mind_mem_json_falls_back_to_markdown(tmp_path):

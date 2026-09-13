@@ -368,15 +368,22 @@ def _recall_impl_ranked(
     # ``_apply_attestation`` binds as ``index_anchor``, read through the same
     # resolver, so the cached answer and the attested corpus state can never be
     # two different opinions of "which corpus is this".
-    _index_anchor = _resolve_chain_head(ws)
-    try:
-        from mind_mem.pipeline_hash import current_pipeline_hash as _cph
+    # Derive the anchor and hash while the captured mapping is bound. A later workspace read here
+    # could pair engine A with receipt B even though the ranking itself is correctly bound below.
+    _pre_context = RequestContext(
+        workspace=ws,
+        config=_raw_config if isinstance(_raw_config, dict) else {},
+    )
+    with bind_request_context(_pre_context):
+        _index_anchor = _resolve_chain_head(ws)
+        try:
+            from mind_mem.pipeline_hash import current_pipeline_hash as _cph
 
-        _config_hash_snapshot: str = _cph(ws)
-        if not isinstance(_config_hash_snapshot, str) or not _config_hash_snapshot:
+            _config_hash_snapshot: str = _cph(ws)
+            if not isinstance(_config_hash_snapshot, str) or not _config_hash_snapshot:
+                _config_hash_snapshot = _CONFIG_HASH_UNRESOLVED
+        except Exception:  # noqa: BLE001 — an unresolvable hash must not break recall
             _config_hash_snapshot = _CONFIG_HASH_UNRESOLVED
-    except Exception:  # noqa: BLE001 — an unresolvable hash must not break recall
-        _config_hash_snapshot = _CONFIG_HASH_UNRESOLVED
 
     # Group J — the anticipation cache, consulted BEFORE the store round-trip.
     # Off by default; the probe is a dict lookup on the config already loaded
@@ -1635,8 +1642,36 @@ def prefetch(signals: str, limit: int = 5) -> str:
     instant = resolve_scoring_instant(None)
     try:
         from mind_mem.recall import prefetch_context
+        from mind_mem.request_context import RequestContext, bind_request_context
 
-        results = prefetch_context(ws, signal_list, limit=limit, scoring_instant=instant)
+        # Capture and bind before fan-out. Every worker must consume this request's policy, and the
+        # later record/cache coordinates must come from the same snapshot.
+        _prefetch_config = _load_config(ws)
+        if not isinstance(_prefetch_config, dict):
+            _prefetch_config = {}
+            _prefetch_hash = _CONFIG_HASH_UNRESOLVED
+            _prefetch_anchor = ""
+        else:
+            _prefetch_context = RequestContext(workspace=ws, config=_prefetch_config)
+            with bind_request_context(_prefetch_context):
+                _prefetch_anchor = _resolve_chain_head(ws)
+                try:
+                    from mind_mem.pipeline_hash import current_pipeline_hash as _pf_cph
+
+                    _prefetch_hash = _pf_cph(ws)
+                    if not isinstance(_prefetch_hash, str) or not _prefetch_hash:
+                        _prefetch_hash = _CONFIG_HASH_UNRESOLVED
+                except Exception:  # noqa: BLE001 — refuse an unresolvable coordinate
+                    _prefetch_hash = _CONFIG_HASH_UNRESOLVED
+        _prefetch_request_context = RequestContext(
+            workspace=ws,
+            config=_prefetch_config,
+            config_hash=None if _prefetch_hash == _CONFIG_HASH_UNRESOLVED else _prefetch_hash,
+            index_anchor=_prefetch_anchor,
+            scoring_instant=instant,
+        )
+        with bind_request_context(_prefetch_request_context):
+            results = prefetch_context(ws, signal_list, limit=limit, scoring_instant=instant)
         metrics.inc("mcp_prefetch_queries")
         _log.info("mcp_prefetch", signals=signal_list, results=len(results))
         # Group J — this is the tool the roadmap item calls "idle": it
@@ -1651,16 +1686,6 @@ def prefetch(signals: str, limit: int = 5) -> str:
         # from it, or the row asserts coordinates from different moments. A probe changed config
         # between this point and the attest call and prefetch wrote a RECORDED v2 row mixing them —
         # the worst of the three doors, because v2 carries a context digest making the claim.
-        _prefetch_config = _load_config(ws)
-        try:
-            from mind_mem.pipeline_hash import current_pipeline_hash as _pf_cph
-
-            _prefetch_hash = _pf_cph(ws)
-            if not isinstance(_prefetch_hash, str) or not _prefetch_hash:
-                _prefetch_hash = _CONFIG_HASH_UNRESOLVED
-        except Exception:  # noqa: BLE001 — an unresolvable hash must refuse, not reread
-            _prefetch_hash = _CONFIG_HASH_UNRESOLVED
-        _prefetch_anchor = _resolve_chain_head(ws)
         _served_generation = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
         if anticipation_enabled(_prefetch_config):
             _prefetch_identity = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
@@ -1671,7 +1696,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
                         ws,
                         "prefetch",
                         hits,
-                        head=_resolve_chain_head(ws),
+                        head=_prefetch_anchor,
                         generation_identity=_prefetch_identity,
                     )
         # This tool is a door: it hands assembled block content back to a

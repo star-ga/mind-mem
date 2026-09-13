@@ -111,15 +111,27 @@ def test_bind_current_is_a_passthrough_when_nothing_is_bound() -> None:
 
 
 def test_the_context_config_cannot_be_rebound_through_the_value_handed_out(tmp_path: Path) -> None:
-    """Top-level sections are read-only, so the engine cannot edit the policy it was given."""
+    """A consumer may edit its copy, but cannot edit the policy captured by the request."""
     workspace = _ws(tmp_path)
     context = RequestContext(workspace=workspace, config={"recall": {"a": 1}})
     with bind_request_context(context):
         cfg = context_config_for(workspace)
     assert cfg is not None
-    try:
-        cfg["recall"] = {"a": 2}  # type: ignore[index]
-    except TypeError:
-        pass
-    else:  # pragma: no cover — a writable mapping means the immutability claim is false
-        raise AssertionError("the bound config accepted a top-level rebind")
+    cfg["recall"] = {"a": 2}  # type: ignore[index]
+    assert context.config == {"recall": {"a": 1}}
+
+
+def test_a_nested_consumer_edit_cannot_mutate_the_captured_policy(tmp_path: Path) -> None:
+    """A backend validator may mutate its copy without changing later request coordinates."""
+    workspace = _ws(tmp_path)
+    context = RequestContext(
+        workspace=workspace,
+        config={"recall": {"rrf_k": "bad", "vector_weight": 0.5}},
+    )
+    with bind_request_context(context):
+        handed = context_config_for(workspace)
+        assert handed is not None
+        del handed["recall"]["rrf_k"]
+        handed["recall"]["vector_weight"] = 99
+
+    assert context.config == {"recall": {"rrf_k": "bad", "vector_weight": 0.5}}
