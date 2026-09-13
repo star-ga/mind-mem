@@ -1,8 +1,8 @@
 # Setup
 
-Full installation + configuration guide for mind-mem. All features
-work with pure Python; the optional MIND native runtime is a drop-in
-accelerator with automatic fallback.
+Installation and configuration guide for mind-mem. The core uses Python's
+standard library. Optional backends and model integrations add dependencies;
+the C kernel backend has a Python fallback.
 
 ## 1. Install
 
@@ -19,12 +19,41 @@ pip install mind-mem[embeddings]
 # With cross-encoder reranking
 pip install mind-mem[cross-encoder]
 
-# Everything
+# Combined extra (see pyproject.toml for separately shipped extras)
 pip install mind-mem[all]
 ```
 
-Python 3.10–3.14 supported. No required native dependencies — every
-feature has a pure-Python path.
+The core supports Python 3.10–3.14 without required native dependencies.
+Optional integrations have their own Python, platform and service requirements.
+
+### Locked optional ML stack
+
+From a source checkout, the embedding and reranking stack has a complete
+transitive lock with SHA-256 hashes:
+
+```bash
+pip install --require-hashes -r requirements-optional.txt
+```
+
+The direct pins are maintained in `requirements-optional.in`. To regenerate:
+
+```bash
+uv pip compile requirements-optional.in --universal --generate-hashes \
+  --python-version 3.10 --output-file requirements-optional.txt
+```
+
+The resolver emits Python and platform markers. Wheel availability still limits
+installation. Metadata resolution was checked for CPython 3.11–3.14 on x86_64
+Linux (manylinux 2.28) and Windows. The preserved ONNX Runtime 1.24.3 pin has
+no CPython 3.10 wheel. Windows ARM is unresolved for the pinned Torch dependency.
+The generic macOS ARM probe targets macOS 13, while the published ONNX wheel
+requires macOS 14; that profile has not been validated.
+
+CI resolves the complete lock without installing the ML stack and audits the
+active package versions against advisories. This checks dependency metadata;
+it does not execute the models or verify downloaded wheel bytes. Installation
+with `--require-hashes` performs the artifact hash checks. The lock can include
+large Torch/CUDA packages and does not include trained model weights.
 
 ## 2. Initialise a workspace
 

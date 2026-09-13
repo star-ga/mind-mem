@@ -506,40 +506,44 @@ jobs:
         run: python -c "import mind_mem; print(mind_mem.__name__)"
 
   pinned-requirements:
-    # v3.7.0 M5 follow-up: requirements-optional.txt only pins three
-    # top-level packages (onnxruntime / tokenizers / sentence-
-    # transformers); transitive deps are intentionally resolved by pip.
-    # ``--require-hashes`` is implicitly enabled for the whole resolve
-    # whenever ANY line has ``--hash=``, so a plain ``pip install`` of
-    # this file fails on transitive deps that aren't pinned (the file
-    # is a "minimum supported set" not a full lockfile). Generating a
-    # full hashed lockfile (200+ entries) would silently expand the
-    # file's scope; the audit's M5 intent ("prove the pinned versions
-    # still resolve on a fresh runner so a yanked wheel breaks the
-    # release, not prod") is satisfied by:
-    #   1. ``pip download --no-deps --require-hashes`` — proves all
-    #      three pins still exist on PyPI with the recorded hashes
-    #   2. ``pip install`` of the same three top-level packages
-    #      *without* the requirements file — proves the version line
-    #      still resolves a working transitive closure
+    # The optional lock is generated from requirements-optional.in with
+    # uv's universal marker-aware resolver. It includes every transitive
+    # package and hash while retaining the three direct pins. This job is
+    # intentionally metadata-only: resolving the ML stack must not download
+    # or install Torch/CUDA wheels on every CI run.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
-      - name: Verify hashes for pinned wheels (gate against yanked wheels)
+      - name: Install lock and audit tooling
         run: |
           python -m pip install --upgrade pip
-          python -m pip download --no-deps --require-hashes \
-            --dest /tmp/hash-verify \
-            -r requirements-optional.txt
-      - name: Resolve transitive closure (gate against unsatisfiable deps)
+          python -m pip install pip-audit uv
+      - name: Resolve complete hashed closure (metadata-only)
         run: |
-          python -m pip install \
-            onnxruntime==1.24.2 \
-            tokenizers==0.22.2 \
-            sentence-transformers==5.2.3
+          uv pip install --dry-run --require-hashes --no-cache \
+            --system \
+            --python-version 3.12 \
+            --python-platform x86_64-manylinux_2_28 \
+            -r requirements-optional.txt
+      - name: Audit complete lock
+        run: |
+          pip-audit --disable-pip --no-deps \
+            --desc --format json \
+            --output optional-pip-audit.json \
+            -r requirements-optional.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("optional-pip-audit.json").read_text())
+          dependencies = data.get("dependencies", [])
+          if not dependencies:
+              raise SystemExit("pip-audit covered no dependencies")
+          print(f"pip-audit covered {len(dependencies)} locked packages")
+          PY
 
   docker-build:
     runs-on: ubuntu-latest

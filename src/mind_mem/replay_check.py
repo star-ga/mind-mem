@@ -79,7 +79,14 @@ from typing import Any, Final
 from .observability import get_logger
 from .recall_attestation import RecallAttestation, verify_recall_attestation
 from .recall_digests import served_set_digest
-from .served_ledger import ServedRun, ledger_enabled, ledger_path, read_served_runs, verify_served_chain
+from .served_ledger import (
+    ServedRun,
+    ServedRunV2,
+    ledger_enabled,
+    ledger_path,
+    read_served_runs,
+    verify_served_chain,
+)
 
 _log = get_logger("replay_check")
 
@@ -192,7 +199,7 @@ def _unverifiable(reason: str) -> ReplayVerdict:
     )
 
 
-def _row_findings(record: RecallAttestation, rows: Sequence[ServedRun]) -> tuple[str, ...]:
+def _row_findings(record: RecallAttestation, rows: Sequence[ServedRun | ServedRunV2]) -> tuple[str, ...]:
     """Every disagreement between *record* and the rows that claim its run id.
 
     Two checks, and they are not the same check twice:
