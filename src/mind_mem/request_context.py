@@ -28,6 +28,18 @@ WORKSPACE IS PART OF THE KEY. A context bound for workspace A must never answer 
 workspace B. Without that check a multi-workspace server, or a test that binds once and recalls
 twice, would attribute one workspace's policy to another's ranking.
 
+WHAT IS DELIBERATELY *NOT* BOUND, so the exclusion is not mistaken for an oversight.
+``served_ledger.ledger_enabled`` re-reads ``mind-mem.json`` on every served recall and keeps doing
+so. Measured after this work: the ranked, axis and public doors each show ZERO ranking-path config
+reads while bound; that one recorder-side read is the only remaining live read, and it stays live for
+two reasons. It cannot affect WHICH POLICY PRODUCED THE RANKING, which is the entire claim this
+module exists to support — it decides only whether a row is appended. And its read-failure path
+returns ``False`` deliberately, fail-closed: routing it through a context whose config may be an
+empty fallback after a failed capture would turn that into fail-OPEN, and it would reintroduce the
+staleness window its own docstring says was rejected on purpose so an operator's ``enabled: false``
+is honoured promptly. Binding it would trade a real safety property for a coherence that nothing
+reads.
+
 IMPORT RAIL. This module must not import :mod:`.served_ledger`: ``_recall_core`` consumes the
 context and the scoring path is pinned to zero ledger import edges by two tests
 (``test_recall_attestation_v2.py::test_t12_the_scoring_path_ledger_surface_is_pinned`` and

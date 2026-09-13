@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1569 | **Est. tokens:** ~4668717
-**Generated:** 2026-09-13 05:12 UTC
+**Files:** 1570 | **Est. tokens:** ~4670349
+**Generated:** 2026-09-13 05:13 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 233 | ~1065819 |
+| `src/mind_mem/` | 233 | ~1066316 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 685 | ~2062569 |
+| `tests/` | 686 | ~2063704 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -849,7 +849,7 @@
 - `lineage_staleness.py` (~2108 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `lint.py` (~3856 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lint_autofix.py` (~2148 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `llm_extractor.py` (~9071 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
+- `llm_extractor.py` (~9323 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~5228 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `maintenance_migrate.py` (~2109 tok, huge) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
 - `maturity_breadth_scan.py` (~3027 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -952,7 +952,7 @@
 - `recall_vector.py` (~24008 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `replay_check.py` (~4323 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `request_context.py` (~1979 tok, huge) — One immutable policy context per request, consumed by the engine itself.
+- `request_context.py` (~2224 tok, huge) — One immutable policy context per request, consumed by the engine itself.
 - `rerank_ensemble.py` (~4393 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `resume_brief.py` (~2720 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retention_class.py` (~1840 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1662,6 +1662,7 @@
 - `test_repro_disclosure_consistency.py` (~1312 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_repro_package.py` (~2585 tok, huge) — The verifier must be able to FAIL.
 - `test_request_context_binding.py` (~1426 tok, large) — The request context must be READ by the engine, and by its thread workers.
+- `test_request_context_isolation.py` (~1135 tok, large) — The context must not outlive its request, and must not leak between them.
 - `test_required_named_controls.py` (~2126 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.

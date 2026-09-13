@@ -77,6 +77,24 @@ def load_config(workspace: str = ".") -> dict[str, Any]:
     Returns the extraction section merged with defaults.
     """
     config = dict(_DEFAULT_CONFIG)
+    # THE THIRD LOADER. ``_recall_core`` imports ``enrich_results`` from this module, so this read
+    # happens DURING a ranked recall — measured: one open of mind-mem.json while a request context
+    # was bound, the only such bypass left after the other two loaders were bound. It matters because
+    # the section it reads, ``extraction``, is part of ``current_pipeline_hash``: it is exactly the
+    # section whose change moved the hash 4b586a38 -> 734aaf80 in the review's reproduction. A row
+    # committing to the captured hash while the extraction actually used came from a later config is
+    # the same incoherence, one layer out.
+    from .request_context import context_config_for
+
+    _bound = context_config_for(workspace)
+    if _bound is not None:
+        extraction = _bound.get("extraction", {})
+        if isinstance(extraction, dict):
+            for key in _DEFAULT_CONFIG:
+                if key in extraction:
+                    config[key] = extraction[key]
+        return config
+
     config_path = os.path.join(workspace, "mind-mem.json")
     if os.path.isfile(config_path):
         try:
