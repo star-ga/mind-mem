@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1559 | **Est. tokens:** ~4621398
-**Generated:** 2026-09-13 02:34 UTC
+**Files:** 1559 | **Est. tokens:** ~4621405
+**Generated:** 2026-09-13 03:22 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 677 | ~2044173 |
+| `tests/` | 677 | ~2044180 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1527,7 +1527,7 @@
 - `test_multi_modal_wiring.py` (~8022 tok, huge) — ``multi_modal`` is actually reachable — and the door it opens quarantines.
 - `test_namespace_reachability.py` (~2391 tok, huge) — M2: namespace direct-get versus production recall reachability.
 - `test_namespaces.py` (~5844 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
-- `test_native_c_abi.py` (~1549 tok, huge) — Required, opt-in ABI gate for the checked-in C kernel reference.
+- `test_native_c_abi.py` (~1556 tok, huge) — Required, opt-in ABI gate for the checked-in C kernel reference.
 - `test_network_audit_headers.py` (~5743 tok, huge) — Audit headers propagate end-to-end — roadmap v4.0.0 Group D (RM-2291).
 - `test_network_cert_pinning.py` (~5212 tok, huge) — Certificate pinning is opt-in, and when it is on it refuses — RM-2290 / RM-2382.
 - `test_network_tls_floor.py` (~3100 tok, huge) — The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).

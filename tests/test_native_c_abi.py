@@ -50,6 +50,7 @@ def _compile_shared(source: Path, output: Path) -> Path:
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
     )
     assert result.returncode == 0, result.stderr or result.stdout
