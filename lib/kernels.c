@@ -135,7 +135,7 @@ void top_k_mask(const float *scores, int n, int k, float *out) {
     /* For benchmark sizes, a simple approach suffices */
     for (int found = 0; found < k; found++) {
         int best_idx = -1;
-        float best_val = -1e30f;
+        float best_val = -INFINITY;
         for (int i = 0; i < n; i++) {
             if (out[i] < 0.5f && scores[i] > best_val) {
                 best_val = scores[i];
