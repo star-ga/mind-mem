@@ -15,6 +15,7 @@ symbol.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from mind_mem import __version__
 from mind_mem.mind_ffi import MindMemKernel
 
 pytestmark = pytest.mark.skipif(
@@ -48,6 +50,7 @@ def _compile_shared(source: Path, output: Path) -> Path:
         check=False,
         capture_output=True,
         text=True,
+        timeout=30,
     )
     assert result.returncode == 0, result.stderr or result.stdout
     assert output.is_file() and output.stat().st_size > 0
@@ -55,25 +58,32 @@ def _compile_shared(source: Path, output: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def production_kernel(tmp_path_factory: pytest.TempPathFactory) -> MindMemKernel:
+def production_kernel(tmp_path_factory: pytest.TempPathFactory, record_testsuite_property) -> MindMemKernel:
     """Build and load the actual checked-in C implementation."""
     assert PRODUCTION_C_SOURCE.is_file(), f"missing production C source: {PRODUCTION_C_SOURCE}"
     output = tmp_path_factory.mktemp("native-c-abi") / "libmindmem.so"
+    source_bytes = PRODUCTION_C_SOURCE.read_bytes()
     _compile_shared(PRODUCTION_C_SOURCE, output)
-    return MindMemKernel(str(output))
+    assert PRODUCTION_C_SOURCE.read_bytes() == source_bytes, "C source changed during compilation"
+    record_testsuite_property("native_c_source_sha256", hashlib.sha256(source_bytes).hexdigest())
+    record_testsuite_property("native_c_artifact_path", str(output))
+    record_testsuite_property("native_c_artifact_sha256", hashlib.sha256(output.read_bytes()).hexdigest())
+    record_testsuite_property("native_c_compiler", _compiler())
+    kernel = MindMemKernel(str(output))
+    assert kernel._lib._name == str(output), "consumer loaded a different library"
+    return kernel
 
 
 def test_production_c_library_loads_through_actual_ctypes_bridge(production_kernel: MindMemKernel):
     """A successful fixture construction alone must not be the only control."""
-    assert production_kernel.rrf_fuse_py([1.0], [1.0]) == pytest.approx([2.0 / 61.0], abs=2e-7, rel=1e-9)
+    assert production_kernel.rrf_fuse_py([1.0], [1.0]) == pytest.approx([2.0 / 61.0], abs=1e-9, rel=2e-7)
 
 
 @pytest.mark.parametrize(
     ("bm25", "vector", "k", "bm25_weight", "vector_weight"),
     [
-        # Three-rank vector used by the C smoke contract: the reversed lists
-        # exercise every position while keeping the expected values distinct.
-        ([1.0, 2.0, 3.0], [3.0, 2.0, 1.0], 60.0, 1.0, 1.0),
+        # A non-symmetric rank permutation gives distinct expected scores.
+        ([1.0, 2.0, 3.0], [3.0, 1.0, 2.0], 60.0, 1.0, 1.0),
         ([0.0, 10.0, 100.0], [3.0, 3.0, 3.0], 10.0, 0.5, 2.0),
     ],
 )
@@ -87,7 +97,7 @@ def test_rrf_matches_named_python_reference_vectors(
 ):
     expected = [bm25_weight / (k + bm25_rank) + vector_weight / (k + vector_rank) for bm25_rank, vector_rank in zip(bm25, vector)]
     actual = production_kernel.rrf_fuse_py(bm25, vector, k, bm25_weight, vector_weight)
-    assert actual == pytest.approx(expected, abs=2e-7, rel=1e-9)
+    assert actual == pytest.approx(expected, abs=1e-9, rel=2e-7)
 
 
 def test_rrf_empty_vectors_are_a_valid_empty_result(production_kernel: MindMemKernel):
@@ -125,12 +135,16 @@ def test_production_c_library_has_honest_optional_no_version_contract(production
 
 
 def test_version_reporting_provider_accepts_matching_major_minor(tmp_path: Path):
-    kernel = MindMemKernel(str(_compile_version_provider(tmp_path, "5.0.99")))
-    assert kernel.so_version() == "5.0.99"
+    major, minor = __version__.split(".")[:2]
+    version = f"{major}.{minor}.9999"
+    kernel = MindMemKernel(str(_compile_version_provider(tmp_path, version)))
+    assert kernel.so_version() == version
     assert kernel.version_compatible() is True
 
 
-def test_version_reporting_provider_rejects_mismatched_major_minor(tmp_path: Path):
-    kernel = MindMemKernel(str(_compile_version_provider(tmp_path, "4.9.0")))
-    assert kernel.so_version() == "4.9.0"
+def test_version_reporting_provider_reports_mismatched_major_minor(tmp_path: Path):
+    major, minor = __version__.split(".")[:2]
+    version = f"{int(major) + 1}.{minor}.0"
+    kernel = MindMemKernel(str(_compile_version_provider(tmp_path, version)))
+    assert kernel.so_version() == version
     assert kernel.version_compatible() is False

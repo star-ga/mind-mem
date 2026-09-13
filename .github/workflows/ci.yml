@@ -255,13 +255,12 @@ jobs:
         run: python scripts/check_reachable_modules.py --check
 
   native-c-abi:
-    # The C reference is optional at runtime, but this Ubuntu gate is
-    # required whenever the repository advertises the native ABI. A missing
-    # compiler, failed build, missing artifact, failed ctypes load, or failed
-    # numerical control makes this job red; no native test is allowed to turn
-    # that absence into a green skip.
+    # The optional C backend has one required Ubuntu execution gate. The
+    # fixture builds the checked-in source and loads that exact artifact;
+    # JUnit records its identity and a separate check refuses skipped tests.
     name: native C ABI (required Ubuntu control)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -269,37 +268,46 @@ jobs:
           python-version: "3.12"
       - name: Install the test runner
         run: python -m pip install "pytest>=7.4,<10.0"
-      - name: Require compiler and build the checked-in C source
-        run: |
-          command -v cc
-          test -r lib/kernels.c
-          mkdir -p "$RUNNER_TEMP/mind-mem-native-c-abi"
-          cc -std=c99 -O2 -shared -fPIC \
-            -o "$RUNNER_TEMP/mind-mem-native-c-abi/libmindmem.so" \
-            lib/kernels.c -lm
-          test -s "$RUNNER_TEMP/mind-mem-native-c-abi/libmindmem.so"
-      - name: Load the CI-built artifact through the ctypes bridge
-        env:
-          PYTHONPATH: src
-        run: |
-          python - "$RUNNER_TEMP/mind-mem-native-c-abi/libmindmem.so" <<'PY'
-          import math
-          import sys
-
-          from mind_mem.mind_ffi import MindMemKernel
-
-          kernel = MindMemKernel(sys.argv[1])
-          actual = kernel.rrf_fuse_py([1.0, 2.0, 3.0], [3.0, 2.0, 1.0])
-          expected = [1 / 61 + 1 / 63, 1 / 62 + 1 / 62, 1 / 63 + 1 / 61]
-          assert all(math.isclose(a, e, rel_tol=1e-9, abs_tol=2e-7) for a, e in zip(actual, expected))
-          assert kernel.so_version() is None
-          assert kernel.version_compatible() is None
-          PY
-      - name: Run ctypes ABI and numerical boundary controls
+      - name: Require the C compiler
+        run: command -v cc
+      - name: Build, load and exercise the actual C ABI
         env:
           MIND_MEM_RUN_NATIVE_C_ABI: "1"
           PYTHONPATH: src
-        run: python -m pytest tests/test_native_c_abi.py -q
+        run: python -m pytest tests/test_native_c_abi.py -q --junitxml="$RUNNER_TEMP/native-c-abi.xml"
+      - name: Require executed controls and artifact identity
+        run: |
+          python - "$RUNNER_TEMP/native-c-abi.xml" <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(sys.argv[1]).getroot()
+          cases = root.findall(".//testcase")
+          assert cases, "native gate executed no test cases"
+          assert not any(case.find(tag) is not None for case in cases for tag in ("skipped", "failure", "error")), "native controls skipped or failed"
+          properties = {p.get("name"): p.get("value") for p in root.findall(".//property")}
+          for name in ("native_c_source_sha256", "native_c_artifact_sha256", "native_c_artifact_path", "native_c_compiler"):
+              assert properties.get(name), f"missing artifact evidence: {name}"
+          source = Path("lib/kernels.c")
+          artifact = Path(properties["native_c_artifact_path"])
+          compiler = Path(properties["native_c_compiler"])
+          assert artifact.is_absolute() and artifact.is_file(), "recorded native artifact is unavailable"
+          assert compiler.is_absolute() and compiler.is_file() and os.access(compiler, os.X_OK), "recorded compiler is unavailable"
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == properties["native_c_source_sha256"], "C source identity mismatch"
+          assert hashlib.sha256(artifact.read_bytes()).hexdigest() == properties["native_c_artifact_sha256"], "loaded artifact identity mismatch"
+          print(f"Executed {len(cases)} native C ABI controls without skips")
+          PY
+      - name: Retain native C ABI execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: native-c-abi-evidence
+          path: ${{ runner.temp }}/native-c-abi.xml
+          retention-days: 30
+          if-no-files-found: error
 
   repro-verify:
     # Every published number must follow from the raw rows committed beside it.

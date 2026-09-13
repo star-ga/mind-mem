@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1558 | **Est. tokens:** ~4619482
-**Generated:** 2026-09-13 01:48 UTC
+**Files:** 1559 | **Est. tokens:** ~4621353
+**Generated:** 2026-09-13 02:16 UTC
 
 ## Token Budget Guide
 
@@ -29,7 +29,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~19164 |
+| `.github/workflows/` | 11 | ~19902 |
 | `.roo/` | 1 | ~22 |
 | `audits/` | 5 | ~24039 |
 | `benchmarks/` | 66 | ~181946 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 676 | ~2042996 |
+| `tests/` | 677 | ~2044129 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -187,7 +187,7 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~7479 tok, huge) — name: CI
+- `ci.yml` (~8217 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
@@ -1505,7 +1505,7 @@
 - `test_mic_map_fuzz.py` (~2471 tok, huge) — Property-based fuzz tests for ``mind_mem.mic_map``.
 - `test_mic_map_mcp.py` (~1812 tok, huge) — Integration tests for the MIC/MAP MCP tools (``mic_convert_tool``,
 - `test_mic_map_stream.py` (~2770 tok, huge) — Streaming-parser tests for ``mind_mem.mic_map.parse_micb_stream``.
-- `test_mind_ffi.py` (~1519 tok, huge) — Tests for MIND FFI module."""
+- `test_mind_ffi.py` (~1147 tok, large) — Tests for MIND FFI module."""
 - `test_mind_kernels_v3_3.py` (~998 tok, large) — Kernel-loading tests for v3.3.0 features.
 - `test_mind_kernels_wiring.py` (~5671 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mindllm_backend.py` (~1673 tok, huge) — Regression tests for the MindLLM backend (roadmap v4.0.15).
@@ -1527,6 +1527,7 @@
 - `test_multi_modal_wiring.py` (~8022 tok, huge) — ``multi_modal`` is actually reachable — and the door it opens quarantines.
 - `test_namespace_reachability.py` (~2391 tok, huge) — M2: namespace direct-get versus production recall reachability.
 - `test_namespaces.py` (~5844 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
+- `test_native_c_abi.py` (~1505 tok, huge) — Required, opt-in ABI gate for the checked-in C kernel reference.
 - `test_network_audit_headers.py` (~5743 tok, huge) — Audit headers propagate end-to-end — roadmap v4.0.0 Group D (RM-2291).
 - `test_network_cert_pinning.py` (~5212 tok, huge) — Certificate pinning is opt-in, and when it is on it refuses — RM-2290 / RM-2382.
 - `test_network_tls_floor.py` (~3100 tok, huge) — The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).
