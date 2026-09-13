@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1574 | **Est. tokens:** ~4687498
-**Generated:** 2026-09-13 10:54 UTC
+**Files:** 1574 | **Est. tokens:** ~4687808
+**Generated:** 2026-09-13 12:03 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 690 | ~2075145 |
+| `tests/` | 690 | ~2075455 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1418,7 +1418,7 @@
 - `test_importers_field_injection.py` (~1609 tok, huge) — Regression gate: dump content cannot forge a second block field.
 - `test_importers_notes.py` (~7184 tok, huge) — Tests for the note-tree and transcript importers.
 - `test_importers_quarantine.py` (~5719 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
-- `test_inbox.py` (~2419 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
+- `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""
 - `test_indexed_validity_topk.py` (~2073 tok, huge) — # Copyright 2026 STARGA, Inc.

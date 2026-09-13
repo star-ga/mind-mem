@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import pytest
 from mind_mem.inbox import (
     ROUTING_TABLE,
     InboxWatcher,
+    IngestResult,
     classify_file,
     ingest_text_file,
     process_file,
@@ -226,18 +228,49 @@ class TestInboxWatcher:
         assert [Path(r.path).name for r in results] == ["a.md", "b.md"]
 
     def test_start_stop_lifecycle(self, workspace: str, inbox: Path) -> None:
-        watcher = InboxWatcher(workspace, str(inbox), interval=0.5)
+        completed = threading.Event()
+        results: list[IngestResult] = []
+
+        def record_result(result: IngestResult) -> None:
+            results.append(result)
+            completed.set()
+
+        watcher = InboxWatcher(
+            workspace,
+            str(inbox),
+            interval=0.5,
+            on_result=record_result,
+        )
+        # Finish writing outside the watched directory so the worker cannot read a partial file.
+        staged = inbox.parent / "live.md"
+        staged.write_text("live ingest", encoding="utf-8")
         watcher.start()
-        # Drop a file after the watcher is running.
-        (inbox / "live.md").write_text("live ingest", encoding="utf-8")
-        # Wait up to 3 seconds for the watcher to pick it up.
-        deadline = time.time() + 3.0
-        while time.time() < deadline:
-            if not (inbox / "live.md").exists():
-                break
-            time.sleep(0.1)
-        watcher.stop()
-        # File should have been ingested + moved.
-        assert not (inbox / "live.md").exists()
-        moved = list((inbox / "_processed").rglob("live.md"))
-        assert len(moved) == 1
+        try:
+            # Drop a file after the watcher is running and wait for the callback.  The callback runs
+            # after process_file has both written the governed block and moved the source file, so
+            # this event observes completion rather than inferring it from the source path.
+            staged.replace(inbox / "live.md")
+            assert completed.wait(30), "watcher did not report the real ingest result"
+            assert len(results) == 1
+            result = results[0]
+            assert result.ok is True
+            assert result.handler == "text"
+            assert result.block_id is not None
+
+            source = inbox / "live.md"
+            assert not source.exists()
+            moved = list((inbox / "_processed").rglob("live.md"))
+            assert len(moved) == 1
+            assert moved[0].read_text(encoding="utf-8") == "live ingest"
+
+            from mind_mem.storage import get_block_store
+
+            block = get_block_store(workspace).get_by_id(result.block_id)
+            assert block is not None
+            assert block["Statement"] == "live ingest"
+            assert block["Status"] == "quarantined"
+        finally:
+            watcher.stop()
+
+        assert watcher._thread is not None
+        assert not watcher._thread.is_alive()
