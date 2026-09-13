@@ -196,7 +196,7 @@ def test_valid_two_suite_same_checkpoint_is_accepted(workspace) -> None:
 
 def test_suites_cannot_attest_different_training_corpora(workspace) -> None:
     other = workspace["tmp"] / "other-corpus.jsonl"
-    other.write_text('{"messages":["different training material"]}\n')
+    other.write_text('{"messages":["different training material"]}\n', encoding="utf-8")
     _write(workspace["holdout"], _suite_report("holdout", workspace["model"], other))
     with _reject("different corpus contents"):
         U._require_eval_receipts()
@@ -234,11 +234,13 @@ def test_publication_atomically_replaces_stale_weights_from_pinned_parent(worksp
 
     model = workspace["model"]
     (model / "model.safetensors").rename(model / "model-00001-of-00001.safetensors")
-    (model / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"w": "model-00001-of-00001.safetensors"}}))
+    (model / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {"w": "model-00001-of-00001.safetensors"}}), encoding="utf-8"
+    )
     for suite in ("main", "holdout"):
         _write(workspace[suite], _suite_report(suite, model, workspace["dataset"]))
     reports = U._require_eval_receipts()
-    (workspace["tmp"] / "README.md").write_text(B.render_release_card(reports))
+    (workspace["tmp"] / "README.md").write_text(B.render_release_card(reports), encoding="utf-8")
     remote = {
         "model.safetensors": b"old monolithic model that would mask new shards",
         "adapter_model.safetensors": b"old adapter",
@@ -341,7 +343,7 @@ def test_conflicting_model_and_tokenizer_paths_are_refused(workspace) -> None:
 def test_arbitrary_card_with_valid_digest_is_refused(workspace) -> None:
     reports = U._require_eval_receipts()
     digest = reports["main"]["receipt"]["report_sha256"]
-    (workspace["tmp"] / "README.md").write_text(f"Accuracy: 100000%.\n{digest}\n")
+    (workspace["tmp"] / "README.md").write_text(f"Accuracy: 100000%.\n{digest}\n", encoding="utf-8")
     with _reject("model card"):
         U._verify_upload_plan(U._discover_upload_paths(), reports)
 
@@ -349,11 +351,11 @@ def test_arbitrary_card_with_valid_digest_is_refused(workspace) -> None:
 def test_indexed_shards_with_nonstandard_names_are_uploaded(workspace) -> None:
     model = workspace["model"]
     (model / "model.safetensors").rename(model / "text-weights.safetensors")
-    (model / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"w": "text-weights.safetensors"}}))
+    (model / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"w": "text-weights.safetensors"}}), encoding="utf-8")
     for suite in ("main", "holdout"):
         _write(workspace[suite], _suite_report(suite, model, workspace["dataset"]))
     reports = U._require_eval_receipts()
-    (workspace["tmp"] / "README.md").write_text(B.render_release_card(reports))
+    (workspace["tmp"] / "README.md").write_text(B.render_release_card(reports), encoding="utf-8")
     uploads = U._discover_upload_paths(reports)
     assert "text-weights.safetensors" in {name for _, name in uploads}
     U._verify_upload_plan(uploads, reports)
@@ -367,12 +369,12 @@ def test_separate_tokenizer_snapshot_supplies_the_uploaded_tokenizer(workspace) 
     tokenizer.mkdir()
     for name in ("tokenizer.json", "tokenizer_config.json"):
         (model / name).rename(tokenizer / name)
-    (tokenizer / "added_tokens.json").write_text('{"special": 4}')
+    (tokenizer / "added_tokens.json").write_text('{"special": 4}', encoding="utf-8")
     selection = E.ModelSelection(kind="full-ft", model_path=model, tokenizer_path=tokenizer)
     for suite in ("main", "holdout"):
         _write(workspace[suite], _suite_report(suite, model, workspace["dataset"], selection=selection))
     reports = U._require_eval_receipts()
-    (workspace["tmp"] / "README.md").write_text(B.render_release_card(reports))
+    (workspace["tmp"] / "README.md").write_text(B.render_release_card(reports), encoding="utf-8")
     uploads = U._discover_upload_paths(reports)
     assert (tokenizer / "added_tokens.json", "added_tokens.json") in uploads
     U._verify_upload_plan(uploads, reports)
@@ -398,7 +400,7 @@ def test_loader_source_is_required_and_drift_is_detected(tmp_path) -> None:
         probe_sets={"g": [1]},
     )
     assert captured["source"]["files"]["src/mind_mem/causal_lm_loader.py"]["present"]
-    loader.write_text("# replaced loader\n")
+    loader.write_text("# replaced loader\n", encoding="utf-8")
     receipt = E.build_receipt(
         repo_root=root,
         suite="main",
@@ -420,7 +422,7 @@ def test_unsupported_bin_fullft_cannot_pass_publication(workspace, sharded) -> N
     name = "pytorch_model-00001-of-00001.bin" if sharded else "pytorch_model.bin"
     (model / "model.safetensors").rename(model / name)
     if sharded:
-        (model / "pytorch_model.bin.index.json").write_text(json.dumps({"weight_map": {"w": name}}))
+        (model / "pytorch_model.bin.index.json").write_text(json.dumps({"weight_map": {"w": name}}), encoding="utf-8")
     for suite in ("main", "holdout"):
         _write(workspace[suite], _suite_report(suite, model, workspace["dataset"]))
     with _reject("full-FT release requires safetensors"):
@@ -812,8 +814,8 @@ def test_control_same_adapter_evaluated_against_different_bases_is_refused(tmp_p
     # The cross-suite comparison is exercised directly below, since a fixture
     # cannot make both suites agree with adapter_config *and* disagree on the
     # base — asserting only the end-to-end refusal would leave it untested.
-    main_sel = json.loads(space["main"].read_text())["receipt"]["selection"]
-    holdout_sel = json.loads(space["holdout"].read_text())["receipt"]["selection"]
+    main_sel = json.loads(space["main"].read_text(encoding="utf-8"))["receipt"]["selection"]
+    holdout_sel = json.loads(space["holdout"].read_text(encoding="utf-8"))["receipt"]["selection"]
     with _reject("different base checkpoints"):
         U._require_identical_selection(main_sel, holdout_sel)
 
@@ -821,8 +823,8 @@ def test_control_same_adapter_evaluated_against_different_bases_is_refused(tmp_p
 def test_identical_selections_pass_the_cross_suite_check(tmp_path, monkeypatch) -> None:
     """Positive control for the comparison the different-base test drives."""
     space = _lora_workspace(tmp_path, monkeypatch)
-    main_sel = json.loads(space["main"].read_text())["receipt"]["selection"]
-    holdout_sel = json.loads(space["holdout"].read_text())["receipt"]["selection"]
+    main_sel = json.loads(space["main"].read_text(encoding="utf-8"))["receipt"]["selection"]
+    holdout_sel = json.loads(space["holdout"].read_text(encoding="utf-8"))["receipt"]["selection"]
     U._require_identical_selection(main_sel, holdout_sel)  # must not exit
 
 
@@ -840,8 +842,8 @@ def test_identical_selections_pass_the_cross_suite_check(tmp_path, monkeypatch) 
 )
 def test_every_selection_field_is_compared(tmp_path, monkeypatch, mutate, expected) -> None:
     space = _lora_workspace(tmp_path, monkeypatch)
-    main_sel = json.loads(space["main"].read_text())["receipt"]["selection"]
-    holdout_sel = json.loads(space["holdout"].read_text())["receipt"]["selection"]
+    main_sel = json.loads(space["main"].read_text(encoding="utf-8"))["receipt"]["selection"]
+    holdout_sel = json.loads(space["holdout"].read_text(encoding="utf-8"))["receipt"]["selection"]
     mutate(holdout_sel)
     with _reject(expected):
         U._require_identical_selection(main_sel, holdout_sel)
@@ -1083,7 +1085,7 @@ def test_token_cli_argument_is_supported_and_never_printed(workspace, capsys, mo
 
 @pytest.mark.parametrize("mutation", ["missing", "truncated", "duplicate", "prompt", "verdict", "response", "aggregate"])
 def test_complete_raw_probe_outcomes_are_required(workspace, mutation):
-    report = json.loads(workspace["main"].read_text())
+    report = json.loads(workspace["main"].read_text(encoding="utf-8"))
     bench = report["tool_call"]
     if mutation == "missing":
         del bench["items"]

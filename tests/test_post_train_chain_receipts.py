@@ -60,13 +60,7 @@ def _run_chain(main_report: Path, holdout_report: Path) -> subprocess.CompletedP
             "MM_POST_TRAIN_HOLDOUT_REPORT": str(holdout_report),
         }
     )
-    return subprocess.run(
-        ["bash", str(CHAIN), "--validate-receipts"],
-        cwd=REPO,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
+    return subprocess.run(["bash", str(CHAIN), "--validate-receipts"], cwd=REPO, env=env, capture_output=True, text=True, encoding="utf-8")
 
 
 @pytest.mark.skipif(os.name != "posix" or shutil.which("bash") is None, reason="POSIX training chain requires bash")

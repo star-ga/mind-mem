@@ -101,9 +101,7 @@ def file_manifest(root: Path) -> dict[str, dict[str, Any]]:
         }
         if path.is_symlink():
             entry["link_target"] = str(target)
-            entry["link_target_inside_root"] = str(target).startswith(
-                str(root_resolved) + os.sep
-            )
+            entry["link_target_inside_root"] = str(target).startswith(str(root_resolved) + os.sep)
         manifest[name] = entry
     return manifest
 
@@ -121,12 +119,7 @@ def _git(repo_root: Path, rel_paths: tuple[str, ...] = ()) -> dict[str, Any]:
     """
     try:
         commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=repo_root,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True, capture_output=True, text=True, timeout=5, encoding="utf-8"
         ).stdout.strip()
         status = subprocess.run(
             ["git", "status", "--porcelain", "--untracked-files=all", "--", *rel_paths],
@@ -135,6 +128,7 @@ def _git(repo_root: Path, rel_paths: tuple[str, ...] = ()) -> dict[str, Any]:
             capture_output=True,
             text=True,
             timeout=10,
+            encoding="utf-8",
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return {"commit": None, "dirty": None, "scope": list(rel_paths)}
@@ -294,11 +288,7 @@ def capture_inputs(
             "path": str(Path(selection.base_path).resolve()) if selection.base_path else None,
             "ref": selection.base_ref,
             "scope": selection.base_scope,
-            "files": (
-                file_manifest(Path(selection.base_path))
-                if selection.base_path and selection.base_scope == BASE_SCOPE_FULL
-                else {}
-            ),
+            "files": (file_manifest(Path(selection.base_path)) if selection.base_path and selection.base_scope == BASE_SCOPE_FULL else {}),
         }
         captured["base"] = base
     if selection.notes:
@@ -317,9 +307,7 @@ def _recapture(captured: Mapping[str, Any]) -> dict[str, Any]:
     again["dataset"] = _dataset_manifest(Path(again["dataset"]["path"]))
     source = again["source"]
     repo_root = Path(source["repo_root"])
-    source["files"] = _source_manifest(
-        repo_root, [repo_root / rel for rel in sorted(source["files"])]
-    )
+    source["files"] = _source_manifest(repo_root, [repo_root / rel for rel in sorted(source["files"])])
     return again
 
 
@@ -371,10 +359,7 @@ def build_receipt(
     repo_root = repo_root.resolve()
     for key in ("dataset", "source", "probes"):
         if key not in captured:
-            raise ReceiptError(
-                f"captured inputs lack {key!r}: capture_inputs() must run before the "
-                "evaluation, not after it"
-            )
+            raise ReceiptError(f"captured inputs lack {key!r}: capture_inputs() must run before the evaluation, not after it")
 
     verified = _recapture(captured)
     capture_verified = verified == json.loads(json.dumps(dict(captured)))
@@ -394,19 +379,14 @@ def build_receipt(
             "defined_n_items": defined.get("n_items"),
         }
     counts_match_definitions = all(
-        rec["digest"] is not None and rec["n_items"] == rec["defined_n_items"]
-        for rec in probes.values()
+        rec["digest"] is not None and rec["n_items"] == rec["defined_n_items"] for rec in probes.values()
     ) and set(probes) == set(captured_probes)
 
     dataset = json.loads(json.dumps(captured["dataset"]))
     source_files = json.loads(json.dumps(captured["source"]["files"]))
     source_present = {rel: m for rel, m in source_files.items() if m.get("present")}
 
-    model_block = {
-        k: json.loads(json.dumps(v))
-        for k, v in captured.items()
-        if k not in ("dataset", "source", "probes")
-    }
+    model_block = {k: json.loads(json.dumps(v)) for k, v in captured.items() if k not in ("dataset", "source", "probes")}
     receipt: dict[str, Any] = {
         "schema": SCHEMA,
         "suite": suite,
@@ -468,9 +448,7 @@ def finalize_report(report: dict[str, Any], receipt: dict[str, Any]) -> dict[str
     """
     sealed = dict(receipt)
     sealed["report_sha256"] = _digest(report_payload(report))
-    sealed["receipt_sha256"] = _digest(
-        {k: v for k, v in sealed.items() if k != "receipt_sha256"}
-    )
+    sealed["receipt_sha256"] = _digest({k: v for k, v in sealed.items() if k != "receipt_sha256"})
     return {**report, "receipt": sealed}
 
 
@@ -481,9 +459,7 @@ def finalize_report(report: dict[str, Any], receipt: dict[str, Any]) -> dict[str
 
 def require_complete(receipt: Mapping[str, Any]) -> None:
     if not receipt.get("complete"):
-        raise ReceiptError(
-            "evaluation receipt is incomplete: model/source/dataset/probe binding is required"
-        )
+        raise ReceiptError("evaluation receipt is incomplete: model/source/dataset/probe binding is required")
 
 
 def receipt_is_valid(receipt: Mapping[str, Any]) -> bool:
@@ -534,10 +510,7 @@ def bindings_match(receipt: Mapping[str, Any]) -> tuple[bool, str]:
         dataset_path = Path(dataset["path"])
         if not dataset.get("present") or not dataset_path.is_file():
             return False, "attested dataset is missing"
-        if (
-            sha256_file(dataset_path) != dataset["sha256"]
-            or dataset_path.stat().st_size != dataset["bytes"]
-        ):
+        if sha256_file(dataset_path) != dataset["sha256"] or dataset_path.stat().st_size != dataset["bytes"]:
             return False, "attested dataset changed"
         selection = receipt["selection"]
         for key in ("model", "tokenizer"):
@@ -551,10 +524,7 @@ def bindings_match(receipt: Mapping[str, Any]) -> tuple[bool, str]:
         if not receipt.get("capture_verified"):
             return False, "inputs changed between capture and finalization"
         if not receipt.get("probes_match_definitions"):
-            return False, (
-                "probe records do not match the probe definitions captured before "
-                "the run (substituted or resized probe set)"
-            )
+            return False, ("probe records do not match the probe definitions captured before the run (substituted or resized probe set)")
         return True, "ok"
     except (KeyError, TypeError, ValueError) as exc:
         return False, f"receipt is structurally unusable: {exc}"
@@ -569,9 +539,7 @@ _SINGLE_WEIGHTS = ("model.safetensors", "pytorch_model.bin")
 _WEIGHT_INDEXES = ("model.safetensors.index.json", "pytorch_model.bin.index.json")
 
 
-def weight_set_is_closed(
-    root: Path, files: Mapping[str, Any], label: str
-) -> tuple[bool, str]:
+def weight_set_is_closed(root: Path, files: Mapping[str, Any], label: str) -> tuple[bool, str]:
     """A named single weight file, or an index whose every shard is manifested.
 
     ``root`` is the directory the manifest was taken from; the index is read
@@ -583,10 +551,7 @@ def weight_set_is_closed(
         return True, "ok"
     index_name = next((name for name in _WEIGHT_INDEXES if name in files), None)
     if index_name is None:
-        return False, (
-            f"{label} manifest has no recognised weight file "
-            f"(expected one of {list(_SINGLE_WEIGHTS)} or a shard index)"
-        )
+        return False, (f"{label} manifest has no recognised weight file (expected one of {list(_SINGLE_WEIGHTS)} or a shard index)")
     try:
         index = json.loads((Path(root) / index_name).read_text(encoding="utf-8"))
         shards = sorted(set((index.get("weight_map") or {}).values()))
@@ -644,8 +609,7 @@ def base_binding_is_release_ready(receipt: Mapping[str, Any]) -> tuple[bool, str
         )
     if base.get("scope") != BASE_SCOPE_FULL:
         return False, (
-            f"base binding scope is {base.get('scope')!r}; index-only binding is "
-            "not release-ready — a full base manifest is required"
+            f"base binding scope is {base.get('scope')!r}; index-only binding is not release-ready — a full base manifest is required"
         )
     files = base.get("files") or {}
     if "config.json" not in files:
@@ -653,8 +617,6 @@ def base_binding_is_release_ready(receipt: Mapping[str, Any]) -> tuple[bool, str
     ok, reason = weight_set_is_closed(Path(base["path"]), files, "base checkpoint")
     if not ok:
         return False, reason
-    if "tokenizer_config.json" not in files or not any(
-        n in files for n in ("tokenizer.json", "tokenizer.model")
-    ):
+    if "tokenizer_config.json" not in files or not any(n in files for n in ("tokenizer.json", "tokenizer.model")):
         return False, "base checkpoint manifest carries no tokenizer files"
     return _adapter_base_binding(receipt)

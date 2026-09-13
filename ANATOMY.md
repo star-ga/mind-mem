@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1557 | **Est. tokens:** ~4618976
-**Generated:** 2026-09-12 23:47 UTC
+**Files:** 1557 | **Est. tokens:** ~4618930
+**Generated:** 2026-09-13 00:10 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 675 | ~2041529 |
+| `tests/` | 675 | ~2041583 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -100,7 +100,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 34 | ~75316 |
+| `train/` | 34 | ~75216 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -1557,7 +1557,7 @@
 - `test_pg_pool_autocommit_isolation.py` (~3285 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_pg_restore_file_path.py` (~1187 tok, large) — restore() must preserve each block's file_path (routing metadata).
 - `test_pipeline_hash.py` (~3381 tok, huge) — Tests for v3.9 hash-of-code pipeline invalidation."""
-- `test_post_train_chain_receipts.py` (~831 tok, large) — Regression controls for the post-training receipt comparison shell path."""
+- `test_post_train_chain_receipts.py` (~824 tok, large) — Regression controls for the post-training receipt comparison shell path."""
 - `test_postgres_active_admission.py` (~6670 tok, huge) — R2-06 — on Postgres, ``blocks.active`` must mean what admission means.
 - `test_postgres_block_store.py` (~8589 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_postgres_partial_import.py` (~992 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1685,7 +1685,7 @@
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
 - `test_roadmap_hygiene.py` (~4292 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_roadmap_ticks_gate.py` (~2911 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_runpod_release_bundle.py` (~2524 tok, huge) — Offline closure tests for the RunPod training/evaluation release bundle."""
+- `test_runpod_release_bundle.py` (~2515 tok, huge) — Offline closure tests for the RunPod training/evaluation release bundle."""
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
@@ -1751,9 +1751,9 @@
 - `test_tool_output_postgres_backend.py` (~1615 tok, huge) — ``ToolOutputStore`` on the Postgres backend the module advertises.
 - `test_tracking_online_trainer_wiring.py` (~1519 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_tracking_wiring.py` (~8018 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_train_eval_receipt.py` (~12194 tok, huge) — Publication-gate controls for the 4B evaluation attestation.
+- `test_train_eval_receipt.py` (~12271 tok, huge) — Publication-gate controls for the 4B evaluation attestation.
 - `test_train_mind_mem_4b.py` (~962 tok, large) — Smoke tests for benchmarks/train_mind_mem_4b.py.
-- `test_train_release_entrypoints.py` (~1493 tok, large) — Default-path integration for the staged training release entrypoints.
+- `test_train_release_entrypoints.py` (~1486 tok, large) — Default-path integration for the staged training release entrypoints.
 - `test_trajectory.py` (~2396 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_trajectory_wiring.py` (~6650 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""
@@ -1848,7 +1848,7 @@
 - `build_model_card.py` (~5526 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `eval_harness.py` (~8821 tok, huge) — Eval harness for mind-mem-4b.
 - `eval_holdout.py` (~2556 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
-- `eval_receipt.py` (~6560 tok, huge) — Content-addressed receipts binding a 4B evaluation report to its inputs.
+- `eval_receipt.py` (~6460 tok, huge) — Content-addressed receipts binding a 4B evaluation report to its inputs.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `merge_and_eval_v4.1.0.py` (~1488 tok, large) — Post-Kaggle: pull LoRA adapter, merge with v4.0.0-base, eval 131 probes.
 - `post_train_chain.sh` (~1325 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.

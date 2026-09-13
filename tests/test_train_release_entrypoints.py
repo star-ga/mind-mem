@@ -152,13 +152,7 @@ def test_default_release_entrypoints_run_in_order_without_live_imports(tmp_path:
     child_env["MM_LIVE_REPO"] = str(REPO)
     child_env["PYTHONDONTWRITEBYTECODE"] = "1"
     child_env["PYTHONPATH"] = os.pathsep.join((str(checkout), str(checkout / "train")))
-    result = subprocess.run(
-        [sys.executable, str(driver)],
-        cwd=checkout,
-        env=child_env,
-        text=True,
-        capture_output=True,
-    )
+    result = subprocess.run([sys.executable, str(driver)], cwd=checkout, env=child_env, text=True, capture_output=True, encoding="utf-8")
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     for stage in ("main-eval", "holdout-eval", "publication-gate", "model-card", "assertions"):

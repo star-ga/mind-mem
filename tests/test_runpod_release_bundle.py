@@ -147,11 +147,7 @@ def test_training_shell_exports_token_without_env_argv_secret(monkeypatch, tmp_p
     run_env["PATH"] = f"{fake_bin}:/usr/bin:/bin"
 
     completed = subprocess.run(
-        ["bash", "-c", deploy._training_command_body()],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=run_env,
+        ["bash", "-c", deploy._training_command_body()], check=True, capture_output=True, text=True, env=run_env, encoding="utf-8"
     )
 
     assert completed.stdout == ""
@@ -204,12 +200,7 @@ def test_staging_smoke_bare_import_and_receipt_sources(monkeypatch, tmp_path):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(remote_source)
     completed = subprocess.run(
-        [sys.executable, "-c", probe],
-        cwd=remote_source,
-        env=env,
-        check=True,
-        capture_output=True,
-        text=True,
+        [sys.executable, "-c", probe], cwd=remote_source, env=env, check=True, capture_output=True, text=True, encoding="utf-8"
     )
 
     assert "staged_eval_imports=ok" in completed.stdout
