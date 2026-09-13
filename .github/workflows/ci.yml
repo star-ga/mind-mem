@@ -254,6 +254,53 @@ jobs:
       - name: Reachability gate (no caller, no tick)
         run: python scripts/check_reachable_modules.py --check
 
+  native-c-abi:
+    # The C reference is optional at runtime, but this Ubuntu gate is
+    # required whenever the repository advertises the native ABI. A missing
+    # compiler, failed build, missing artifact, failed ctypes load, or failed
+    # numerical control makes this job red; no native test is allowed to turn
+    # that absence into a green skip.
+    name: native C ABI (required Ubuntu control)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install the test runner
+        run: python -m pip install "pytest>=7.4,<10.0"
+      - name: Require compiler and build the checked-in C source
+        run: |
+          command -v cc
+          test -r lib/kernels.c
+          mkdir -p "$RUNNER_TEMP/mind-mem-native-c-abi"
+          cc -std=c99 -O2 -shared -fPIC \
+            -o "$RUNNER_TEMP/mind-mem-native-c-abi/libmindmem.so" \
+            lib/kernels.c -lm
+          test -s "$RUNNER_TEMP/mind-mem-native-c-abi/libmindmem.so"
+      - name: Load the CI-built artifact through the ctypes bridge
+        env:
+          PYTHONPATH: src
+        run: |
+          python - "$RUNNER_TEMP/mind-mem-native-c-abi/libmindmem.so" <<'PY'
+          import math
+          import sys
+
+          from mind_mem.mind_ffi import MindMemKernel
+
+          kernel = MindMemKernel(sys.argv[1])
+          actual = kernel.rrf_fuse_py([1.0, 2.0, 3.0], [3.0, 2.0, 1.0])
+          expected = [1 / 61 + 1 / 63, 1 / 62 + 1 / 62, 1 / 63 + 1 / 61]
+          assert all(math.isclose(a, e, rel_tol=1e-9, abs_tol=2e-7) for a, e in zip(actual, expected))
+          assert kernel.so_version() is None
+          assert kernel.version_compatible() is None
+          PY
+      - name: Run ctypes ABI and numerical boundary controls
+        env:
+          MIND_MEM_RUN_NATIVE_C_ABI: "1"
+          PYTHONPATH: src
+        run: python -m pytest tests/test_native_c_abi.py -q
+
   repro-verify:
     # Every published number must follow from the raw rows committed beside it.
     # This recomputes them -- it does not re-run a benchmark -- so it costs
