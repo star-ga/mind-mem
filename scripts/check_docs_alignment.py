@@ -316,9 +316,19 @@ _TOOL_PATTERNS = (
 _MARKDOWN_CLAIM_DELIMITERS = re.compile(r"[*_~`\[\]>]")
 
 
+_MARKDOWN_LINK = re.compile(r"\[([^\]\r\n]*)\]\([^\)\r\n]*\)")
+
+
 def _markdown_claim_text(line: str) -> str:
     """Return a same-length line with inline Markdown delimiters blanked."""
+
+    def blank_destination(match: re.Match[str]) -> str:
+        label = match.group(1)
+        return " " + label + " " * (len(match.group(0)) - len(label) - 1)
+
+    line = _MARKDOWN_LINK.sub(blank_destination, line)
     return _MARKDOWN_CLAIM_DELIMITERS.sub(" ", line)
+
 
 _VERSION_PATTERNS = (re.compile(r"(?:Current|Latest) release:?[^\n]{0,40}?\bv(?P<n>\d+\.\d+\.\d+)(?P<plus>)"),)
 

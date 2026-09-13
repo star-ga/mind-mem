@@ -356,8 +356,10 @@ class TestToolCountScoping:
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "83", "102")]
         code = scan("Run `the live server exposes 95 MCP tools`.", rel=card)
         link = scan("[the live server exposes **95** MCP tools](https://example.test).", rel=card)
+        numeric_link = scan("The live server exposes [95](https://example.test) MCP tools.", rel=card)
         assert [(f.claimed, f.actual) for f in code] == [("95", "102")]
         assert [(f.claimed, f.actual) for f in link] == [("95", "102")]
+        assert [(f.claimed, f.actual) for f in numeric_link] == [("95", "102")]
 
     def test_a_swapped_pair_is_caught_both_ways(self):
         """The failure that produced 84-vs-96: the two numbers traded places.
@@ -381,6 +383,7 @@ class TestToolCountScoping:
 
     def test_a_one_digit_count_near_the_word_tool_is_too_noisy_to_gate(self):
         assert scan("the existing builder sees 1 tool, not 81.") == []
+
 
 class TestRecordScopes:
     """A release record must keep its own numbers, and only a release record."""
@@ -529,6 +532,14 @@ class TestFixMode:
         assert (fixed, skipped) == (2, [])
         expected = '<img src="https://img.shields.io/badge/test_functions-9%2C707-x" alt="Test functions: 9,707">\n'
         assert doc.read_text(encoding="utf-8") == expected
+
+        linked = tmp_path / "docs" / "linked.md"
+        linked.write_text("The live server exposes [95](https://example.test) MCP tools.\n", encoding="utf-8")
+        linked_findings = cda.scan_text("docs/linked.md", linked.read_text(encoding="utf-8").splitlines(), make_authorities())
+        assert [(f.claimed, f.actual, f.start, f.end) for f in linked_findings] == [("95", "102", 25, 27)]
+        fixed, skipped = cda.apply_fixes(linked_findings, tmp_path)
+        assert (fixed, skipped) == (1, [])
+        assert linked.read_text(encoding="utf-8") == "The live server exposes [102](https://example.test) MCP tools.\n"
 
     def test_fix_refuses_a_finding_whose_line_moved(self, tmp_path):
         doc = tmp_path / "docs" / "x.md"
