@@ -85,9 +85,7 @@ def test_raised_config_loader_is_unproven_without_a_ledger_row(monkeypatch, tmp_
     assert read_served_runs(workspace) == ()
 
 
-def test_prefetch_context_uses_the_serialized_resolved_scoring_instant(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_prefetch_context_uses_the_serialized_resolved_scoring_instant(monkeypatch, tmp_path: Path) -> None:
     """The bound prefetch context and real fan-out receive one ISO date."""
     workspace = tmp_path / "prefetch"
     workspace.mkdir()

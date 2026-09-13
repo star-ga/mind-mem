@@ -26,8 +26,7 @@ def _seed(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     for name in ("tasks", "entities", "intelligence"):
         (root / name).mkdir()
     (root / "decisions" / "DECISIONS.md").write_text(
-        "[D-CTX-001]\nStatement: deterministic compiler retrieval context\n"
-        "Status: active\nDate: 2026-01-01\n\n",
+        "[D-CTX-001]\nStatement: deterministic compiler retrieval context\nStatus: active\nDate: 2026-01-01\n\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -39,9 +38,7 @@ def _seed(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     }
     config_b = copy.deepcopy(config_a)
     config_b["extraction"]["model"] = "capture-b"
-    (root / "mind-mem.json").write_text(
-        json.dumps(config_a), encoding="utf-8", newline="\n"
-    )
+    (root / "mind-mem.json").write_text(json.dumps(config_a), encoding="utf-8", newline="\n")
     return config_a, config_b
 
 
@@ -71,9 +68,7 @@ def test_direct_python_door_binds_hash_to_engine_snapshot(tmp_path, monkeypatch)
     assert result.attestation["config_hash"] == hash_a
 
 
-def test_public_prefetch_binds_worker_engine_to_pre_retrieval_snapshot(
-    tmp_path, monkeypatch
-) -> None:
+def test_public_prefetch_binds_worker_engine_to_pre_retrieval_snapshot(tmp_path, monkeypatch) -> None:
     workspace = tmp_path / "prefetch"
     config_a, config_b = _seed(workspace)
     config_path = workspace / "mind-mem.json"

@@ -64,8 +64,7 @@ def _seed(root: Path) -> str:
     for name in ("tasks", "entities", "intelligence"):
         (root / name).mkdir()
     (root / "decisions" / "DECISIONS.md").write_text(
-        "[D-CTX-001]\nStatement: deterministic compiler retrieval context\n"
-        "Status: active\nDate: 2026-01-01\n\n",
+        "[D-CTX-001]\nStatement: deterministic compiler retrieval context\nStatus: active\nDate: 2026-01-01\n\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -80,9 +79,7 @@ def _reset_anticipation_cache() -> Any:
     prefetch.reset_cache()
 
 
-def test_the_recorded_row_binds_the_config_the_engine_actually_consumed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_recorded_row_binds_the_config_the_engine_actually_consumed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The reproduction, as a test: flip the file on the door's own first load.
 
     The flip happens INSIDE ``_load_config``, right after it answers A, so the door's captured mapping
@@ -125,12 +122,10 @@ def test_the_recorded_row_binds_the_config_the_engine_actually_consumed(
 
     assert payload.get("results"), payload
     assert seen, "the real HybridBackend was never constructed; this proves nothing"
-    assert all(
-        cfg.get("extraction", {}).get("model") == "capture-a" for cfg in seen
-    ), f"the engine did not consume A, so the receipt check below is meaningless: {seen}"
-    assert json.loads(config_path.read_text(encoding="utf-8")) == config_b, (
-        "the flip never reached disk"
+    assert all(cfg.get("extraction", {}).get("model") == "capture-a" for cfg in seen), (
+        f"the engine did not consume A, so the receipt check below is meaningless: {seen}"
     )
+    assert json.loads(config_path.read_text(encoding="utf-8")) == config_b, "the flip never reached disk"
 
     attestation = payload.get("attestation")
     assert isinstance(attestation, dict), payload
@@ -147,8 +142,7 @@ def test_the_recorded_row_binds_the_config_the_engine_actually_consumed(
     row = rows[0]
     assert isinstance(row, ServedRunV2), row
     assert row.pipeline_hash == hash_a, (
-        f"the engine consumed A but the recorded receipt binds {row.pipeline_hash[:16]}…; "
-        f"hash_a={hash_a[:16]}… hash_b={hash_b[:16]}…"
+        f"the engine consumed A but the recorded receipt binds {row.pipeline_hash[:16]}…; hash_a={hash_a[:16]}… hash_b={hash_b[:16]}…"
     )
     assert attestation.get("config_hash") == hash_a, attestation
 
@@ -158,16 +152,13 @@ def test_a_bound_context_does_not_downgrade_a_non_markdown_backend(tmp_path: Pat
     workspace = str(tmp_path / "pg")
     Path(workspace).mkdir(parents=True)
     config = {"block_store": {"backend": "postgres", "dsn": "postgresql://user@host/db"}}
-    Path(workspace, "mind-mem.json").write_text(
-        json.dumps(config), encoding="utf-8", newline="\n"
-    )
+    Path(workspace, "mind-mem.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
 
     assert _backend_name(workspace) == "postgres", "baseline: the file alone must resolve to postgres"
 
     context = RequestContext(workspace=workspace, config=config)
     assert type(context.config) is dict, (
-        "the context must hold a plain dict; a mappingproxy fails isinstance(config, dict) and "
-        "silently degrades storage to markdown"
+        "the context must hold a plain dict; a mappingproxy fails isinstance(config, dict) and silently degrades storage to markdown"
     )
     with bind_request_context(context):
         assert _backend_name(workspace, config=context.config) == "postgres"
@@ -184,9 +175,7 @@ def test_the_downgrade_predicate_still_fires_on_a_mappingproxy(tmp_path: Path) -
     workspace = str(tmp_path / "pg2")
     Path(workspace).mkdir(parents=True)
     config = {"block_store": {"backend": "postgres", "dsn": "postgresql://user@host/db"}}
-    Path(workspace, "mind-mem.json").write_text(
-        json.dumps(config), encoding="utf-8", newline="\n"
-    )
+    Path(workspace, "mind-mem.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
     assert _backend_name(workspace, config=MappingProxyType(config)) == "markdown", (
         "the predicate no longer degrades on a non-dict mapping, so the plain-dict requirement is "
         "no longer load-bearing and this whole guard has stopped measuring anything"
@@ -207,16 +196,12 @@ def test_a_hash_taken_inside_a_bound_context_describes_that_context(tmp_path: Pa
 
     # Disk now says B. A hash taken under a context carrying A must still be A.
     with bind_request_context(RequestContext(workspace=workspace, config=_CONFIG_A)):
-        assert current_pipeline_hash(workspace) == hash_a, (
-            "the hash was re-read from disk instead of derived from the bound config"
-        )
+        assert current_pipeline_hash(workspace) == hash_a, "the hash was re-read from disk instead of derived from the bound config"
     # And outside the context it follows the file again, so the binding is not a permanent freeze.
     assert current_pipeline_hash(workspace) == hash_b_from_disk
 
 
-def test_the_direct_python_door_records_the_config_it_captured(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_direct_python_door_records_the_config_it_captured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The public ``recall()`` door, which derived its hash outside the captured context.
 
     ``capture_policy_snapshot`` loaded the config and then called ``current_pipeline_hash`` and
@@ -258,14 +243,10 @@ def test_the_direct_python_door_records_the_config_it_captured(
         assert rows == (), rows
         return
     assert attestation.get("config_hash") == hash_a, attestation
-    assert [r.pipeline_hash for r in rows] == [hash_a], (
-        "the direct door recorded a hash taken after its own capture"
-    )
+    assert [r.pipeline_hash for r in rows] == [hash_a], "the direct door recorded a hash taken after its own capture"
 
 
-def test_the_public_prefetch_door_binds_its_fan_out(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_public_prefetch_door_binds_its_fan_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The prefetch door captured AFTER the fan-out, so engine and receipt could disagree.
 
     The reproduction flipped the workspace to B for the actual N+1 core recalls and restored A before
@@ -310,9 +291,7 @@ def test_the_public_prefetch_door_binds_its_fan_out(
     assert payload.get("error") is None, payload
     observed = [m for m in seen if m is not None]
     assert observed, "no core config read was observed; this test would prove nothing"
-    assert all(m == "capture-a" for m in observed), (
-        f"the fan-out read the config written during the request: {observed}"
-    )
+    assert all(m == "capture-a" for m in observed), f"the fan-out read the config written during the request: {observed}"
     rows = read_served_runs(workspace)
     if rows:
         assert [r.pipeline_hash for r in rows] == [hash_a], rows
@@ -328,18 +307,14 @@ def test_a_consumer_cannot_mutate_a_nested_section_of_the_context(tmp_path: Path
     workspace = str(tmp_path / "nested")
     Path(workspace).mkdir(parents=True)
     config = {"recall": {"rrf_k": "bad", "vector_weight": 0.5}}
-    Path(workspace, "mind-mem.json").write_text(
-        json.dumps(config), encoding="utf-8", newline="\n"
-    )
+    Path(workspace, "mind-mem.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
     context = RequestContext(workspace=workspace, config=config)
     before = sorted(context.config["recall"])
     with bind_request_context(context):
         handed = context_config_for(workspace)
         assert handed is not None
-        del handed["recall"]["rrf_k"]          # exactly what HybridBackend does on a bad value
+        del handed["recall"]["rrf_k"]  # exactly what HybridBackend does on a bad value
         handed["recall"]["vector_weight"] = 99
     after = sorted(context.config["recall"])
     assert before == after == ["rrf_k", "vector_weight"], (before, after)
-    assert context.config["recall"]["vector_weight"] == 0.5, (
-        "a consumer's nested edit reached the captured context"
-    )
+    assert context.config["recall"]["vector_weight"] == 0.5, "a consumer's nested edit reached the captured context"
