@@ -113,6 +113,9 @@ def test_rrf_empty_vectors_are_a_valid_empty_result(production_kernel: MindMemKe
         ([0.9, 0.7], 0, [False, False]),
         ([0.9, 0.7], 2, [True, True]),
         ([], 0, []),
+        ([-2e30, -3e30], 1, [True, False]),
+        ([-1e30, -1e30, -1e30], 2, [True, True, False]),
+        ([1.0, -2e30, -3e30, -3.4028235e38], 3, [True, True, True, False]),
     ],
 )
 def test_top_k_mask_boundaries_and_input_order_ties(production_kernel: MindMemKernel, scores: list[float], k: int, expected: list[bool]):
