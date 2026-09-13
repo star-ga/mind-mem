@@ -16,8 +16,12 @@ overridden independently with `MM_CORPUS_OUT`.
 1. **Harvest a deterministic corpus.**
 
    ```bash
-   export MM_TRAIN_ROOT=/data/checkpoints/mm-workspace/train-output
+   export MM_TRAIN_ROOT=/data/checkpoints/mm-workspace/train-output-next
    export MM_CORPUS_OUT="$MM_TRAIN_ROOT/corpus.jsonl"
+   export MM_CORPUS="$MM_CORPUS_OUT"
+   export MM_FULLFT_DIR="$MM_TRAIN_ROOT/full-ft"
+   export MM_HOLDOUT_REPORT="$MM_TRAIN_ROOT/eval_holdout_report.json"
+   export MM_BASE_MODEL=Qwen/Qwen3.5-4B
    python3 train/build_corpus.py
    ```
 
@@ -27,7 +31,8 @@ overridden independently with `MM_CORPUS_OUT`.
 2. **Train an adapter or full-FT checkpoint.**
 
    ```bash
-   MM_BASE_MODEL=Qwen/Qwen3.5-4B python3 train/train_qlora.py
+   python3 train/train_qlora.py
+   export MM_WEIGHTS_DIR="$MM_TRAIN_ROOT/adapter"
    ```
 
    QLoRA writes `$MM_TRAIN_ROOT/adapter`. Full fine-tuning is run by
@@ -37,6 +42,13 @@ overridden independently with `MM_CORPUS_OUT`.
    configured base generically, so an `MM_BASE_MODEL` override is not
    misrepresented as Qwen3.5.
 
+   Use a fresh training root for each run. For a local full-FT checkpoint,
+   set `MM_WEIGHTS_DIR="$MM_FULLFT_DIR"` instead. The RunPod driver sets its
+   own consistent remote paths. An adapter release requires a fully manifested
+   local base snapshot: set `MM_BASE_MODEL` to that same local directory for
+   training, evaluation and export, with matching adapter metadata. A remote
+   model identifier alone is insufficient for the adapter release receipt.
+
 3. **Run both evaluations.**
 
    ```bash
@@ -45,8 +57,8 @@ overridden independently with `MM_CORPUS_OUT`.
    ```
 
    The main report is `$MM_TRAIN_ROOT/eval_report.json`; the holdout report
-   defaults to `$MM_TRAIN_ROOT/../full-ft/eval_holdout_report.json` and can be
-   set with `MM_HOLDOUT_REPORT`. Both reports carry model/base and corpus
+   is the explicit `MM_HOLDOUT_REPORT` set above (the legacy unset default is
+   `$MM_TRAIN_ROOT/../full-ft/eval_holdout_report.json`). Both reports carry model/base and corpus
    bindings and are required by the release gate. A report records the
    measured result and its inputs; it is not proof of model availability,
    execution provenance, or a passed benchmark when a required field is
@@ -82,8 +94,7 @@ omits GGUF until derived-artifact parent binding and post-quantization
 evaluation exist.
 
 ```bash
-MM_GGUF_SOURCE=fullft MM_BASE_MODEL=Qwen/Qwen3.5-4B \
-  python3 train/export_gguf.py
+MM_GGUF_SOURCE=fullft python3 train/export_gguf.py
 ```
 
 Set `MM_GGUF_SOURCE=fullft` or `adapter` explicitly. Unknown values are
@@ -94,8 +105,9 @@ before heavyweight imports, merged-directory deletion, or conversion. The
 canonical causal loader is used for the adapter merge, so the selected base
 and its verified configuration follow the same loading path as training.
 
-The converter writes a temporary F16 file and then a Q4_K_M file beneath the
-training root. Successful conversion alone does not establish quality,
+The Q4_K_M output is beneath the training root. The legacy intermediate F16
+path remains `/data/checkpoints/mm-workspace/mind-mem-4b-F16.gguf`, and adapter
+merges use `/data/checkpoints/mm-workspace/mm_merged`. Successful conversion alone does not establish quality,
 compatibility, provenance, or upload eligibility. Keep the output separate
 from the safetensors release until those controls are implemented.
 

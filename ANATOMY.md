@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1557 | **Est. tokens:** ~4618930
-**Generated:** 2026-09-13 00:40 UTC
+**Files:** 1558 | **Est. tokens:** ~4621428
+**Generated:** 2026-09-13 01:08 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 675 | ~2041583 |
+| `tests/` | 676 | ~2043002 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -100,7 +100,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 34 | ~75216 |
+| `train/` | 34 | ~76295 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -1340,6 +1340,7 @@
 - `test_excerpt.py` (~248 tok, medium) — Tests for excerpt generation."""
 - `test_expand_query.py` (~265 tok, medium) — Tests for query expansion module."""
 - `test_expand_query_config_knob.py` (~2045 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_export_gguf_base_binding.py` (~1419 tok, large) — Offline controls for GGUF source selection and adapter/base binding."""
 - `test_extraction_feedback_durability.py` (~1194 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_extraction_recall_gate.py` (~1749 tok, huge) — Read-path extraction gate + feedback anchoring + graph-edge ACL.
 - `test_extractor.py` (~3387 tok, huge) — Tests for the regex NER-lite entity/fact extractor."""
@@ -1836,7 +1837,7 @@
 - `Modelfile.v4.0.0` (~576 tok, large) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `Modelfile.v4.1.0` (~395 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.0/mind-mem-4b-v4.1.0-Q4_K_M.gguf
 - `Modelfile.v4.1.1` (~440 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.1/mind-mem-4b-v4.1.1-Q4_K_M.gguf
-- `README.md` (~675 tok, large) — mind-mem-4b training pipeline
+- `README.md` (~1319 tok, large) — mind-mem training pipeline
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
 - `V4_RETRAIN_TODO.md` (~2361 tok, huge) — v4 Retrain — Probe Honesty TODO
 - `_causal_lm_import.py` (~493 tok, medium) — Import the shared causal loader from a checkout or a deployed RunPod file."""
@@ -1849,20 +1850,20 @@
 - `eval_harness.py` (~8821 tok, huge) — Eval harness for mind-mem-4b.
 - `eval_holdout.py` (~2556 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
 - `eval_receipt.py` (~6460 tok, huge) — Content-addressed receipts binding a 4B evaluation report to its inputs.
-- `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
+- `export_gguf.py` (~1769 tok, huge) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `merge_and_eval_v4.1.0.py` (~1488 tok, large) — Post-Kaggle: pull LoRA adapter, merge with v4.0.0-base, eval 131 probes.
 - `post_train_chain.sh` (~1325 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
 - `post_train_pipeline.sh` (~592 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
 - `qlora_local_3080.py` (~1182 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
 - `qwen35_text_config_control.py` (~1075 tok, large) — Offline smoke control for the Qwen3.5 composite-config adapter.
 - `resume_pod_train.sh` (~1220 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
-- `runpod_deploy.py` (~6392 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_deploy.py` (~6438 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
 - `runpod_full_ft.py` (~2669 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `ship_gguf_ollama_v4.1.0.py` (~1754 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.0.
 - `ship_gguf_ollama_v4.1.1.py` (~1804 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
 - `spend_guard.py` (~2040 tok, huge) — spend_guard — mechanical interlock on cloud spend.
 - `train_qlora.py` (~1433 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
-- `upload_to_hf.py` (~6885 tok, huge) — Push the retrained checkpoint + model card to star-ga/mind-mem-4b.
+- `upload_to_hf.py` (~6779 tok, huge) — Push the retrained checkpoint + model card to star-ga/mind-mem-4b.
 ### `web/`
 
 - `.gitignore` (~20 tok, tiny) — node_modules/

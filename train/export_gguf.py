@@ -121,8 +121,8 @@ def _validate_adapter_base() -> None:
     if not isinstance(declared, str) or not declared.strip():
         sys.exit("refusing adapter merge: adapter_config.json declares no base_model_name_or_path")
 
-    selected = BASE.strip()
-    if not selected:
+    selected = BASE
+    if not selected.strip():
         sys.exit("refusing adapter merge: MM_BASE_MODEL is empty")
     candidates = {selected}
     selected_path = Path(selected)

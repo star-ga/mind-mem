@@ -36,13 +36,15 @@ def _adapter(root: Path, declared: object) -> Path:
     return adapter
 
 
+@pytest.mark.parametrize("case", ["different_base", "trimmed_alias"])
 def test_mismatched_adapter_refuses_before_heavy_import_or_merge_delete(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
 ) -> None:
     base = tmp_path / "selected-base"
     base.mkdir()
-    _adapter(tmp_path, "different/base")
-    module = _load_export(monkeypatch, tmp_path, str(base))
+    _adapter(tmp_path, "different/base" if case == "different_base" else str(base))
+    selected = str(base) if case == "different_base" else " " + str(base)
+    module = _load_export(monkeypatch, tmp_path, selected)
     deleted = False
 
     def fail_delete(_path):
