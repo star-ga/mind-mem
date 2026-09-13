@@ -1,9 +1,10 @@
 /*
  * mind-mem scoring kernels — C99 reference implementations.
  *
- * These are the C equivalents of the MIND tensor kernels in mind/*.mind.
- * When mindc gains --emit-obj in the full build, this file becomes redundant.
- * Until then, gcc -O3 -march=native produces competitive native code.
+ * These implement the current native scoring ABI. The tensor prototypes in
+ * mind/*.mind are migration work and are not all semantically equivalent.
+ * Retain this backend until a MIND-emitted replacement passes consumer ABI,
+ * numerical parity, and performance gates; object emission alone is not parity.
  *
  * ABI: all functions use flat float arrays + int lengths.
  * Build: gcc -O3 -march=native -shared -fPIC -o libmindmem.so kernels.c -lm

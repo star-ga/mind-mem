@@ -1,56 +1,57 @@
-# MIND Kernels
+# MIND kernels and pipeline configuration
 
-Numerical hot paths for MIND-Mem, written in the [MIND programming language](https://mindlang.dev).
+This directory contains two kinds of `.mind` files: eight MIND compiler sources
+and 18 INI-style pipeline configuration files. Configuration files are read by
+Python; they are not compiler inputs.
 
-The MIND kernel is **optional**. MIND-Mem works without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
+mind-mem currently retains its Python implementations and an optional C scoring
+library. The MIND sources are migration work: no complete compiler-to-shared-library
+replacement of that scoring library has been verified. Installing the compiler
+alone does not enable a native MIND backend.
 
-## Compilation
+## Compiler sources
 
-Requires the MIND compiler (`mindc`). See [mindlang.dev](https://mindlang.dev) for installation.
+| File | Purpose |
+| --- | --- |
+| `bm25.mind` | BM25F scoring and score boosts |
+| `rrf.mind` | Reciprocal rank fusion |
+| `reranker.mind` | Date, category and negation reranking |
+| `abstention.mind` | Entity overlap and confidence |
+| `ranking.mind` | Weighted ranking and threshold mask prototype |
+| `importance.mind` | Importance score prototype |
+| `category.mind` | Category affinity and assignment |
+| `prefetch.mind` | Prefetch signal scoring |
+
+The prototypes do not yet establish parity with the serving implementations.
+For example, `ranking.mind` uses a sigmoid threshold approximation; the C
+`top_k_mask` selects a fixed number of entries. Their names do not imply identical
+behavior or interchangeable ABIs.
+
+For compiler development, verify one source at a time:
 
 ```bash
-# Compile all kernels to a single shared library
-mindc mind/bm25.mind mind/rrf.mind mind/reranker.mind mind/abstention.mind \
-      mind/ranking.mind mind/importance.mind mind/category.mind \
-      --emit=shared -o lib/libmindmem.so
-
-# Or compile individually for testing
-mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
-mindc mind/rrf.mind --emit=shared -o lib/librrf.so
+mindc mind/rrf.mind --verify-only
 ```
 
-## Kernels
+Verification is separate from native emission and execution. A source may pass
+verification while shared-library emission rejects its tensor parameter ABI.
+The CLI's shared-library option is `--emit-shared OUTPUT`, with one source input;
+`--emit=shared` and a `mind/*.mind` input glob are not supported build recipes.
+Keep the existing implementation until the replacement exports the required
+symbols and passes actual consumer, numerical parity and performance gates.
 
-| File              | Functions                                                                            | Purpose                         |
-| ----------------- | ------------------------------------------------------------------------------------ | ------------------------------- |
-| `bm25.mind`       | `bm25f_doc`, `bm25f_batch`, `apply_recency`, `apply_graph_boost`                     | BM25F scoring with field boosts |
-| `rrf.mind`        | `rrf_fuse`, `rrf_fuse_three`                                                         | Reciprocal Rank Fusion          |
-| `reranker.mind`   | `date_proximity_score`, `category_boost`, `negation_penalty`, `rerank_deterministic` | Deterministic reranking         |
-| `abstention.mind` | `entity_overlap`, `confidence_score`                                                 | Confidence gating               |
-| `ranking.mind`    | `weighted_rank`, `top_k_mask`                                                        | Evidence ranking                |
-| `importance.mind` | `importance_score`                                                                   | A-MEM importance scoring        |
-| `category.mind`   | `category_affinity`, `query_category_relevance`, `category_assign`                   | Category distillation scoring   |
+## Pipeline configuration
 
-### Configuration Kernels
+The configuration files are `adversarial`, `answer`, `cognitive`, `cross_encoder`,
+`ensemble`, `evidence`, `governance`, `graph`, `hybrid`, `intent`, `query_plan`,
+`recall`, `rerank`, `rm3`, `session`, `temporal`, `trajectory` and `truth`, each with
+the `.mind` extension. See [configuration documentation](../docs/mind-kernels.md).
 
-INI-style `.mind` files that configure pipeline parameters (not compiled):
+## Existing native bridge
 
-| File                  | Sections                            | Purpose                          |
-| --------------------- | ----------------------------------- | -------------------------------- |
-| `recall.mind`         | `bm25`, `fields`                    | BM25 parameters and field boosts |
-| `rm3.mind`            | `expansion`, `feedback`             | RM3 query expansion tuning       |
-| `rerank.mind`         | `weights`, `context_pack`, `anchor` | Reranker weights and packing     |
-| `hybrid.mind`         | `fusion`, `vector`                  | Hybrid search tuning             |
-| `adversarial.mind`    | `features`, `abstention`            | Adversarial detection tuning     |
-| `temporal.mind`       | `decay`, `boost`                    | Temporal scoring adjustments     |
-| `prefetch.mind`       | `signals`, `ranking`                | Prefetch context tuning          |
-| `intent.mind`         | `routing`, `graph`, `weights`       | Intent router configuration      |
-| `cross_encoder.mind`  | `model`, `blending`, `normalization`| Cross-encoder reranker config    |
-
-## FFI
-
-The compiled `.so` exposes a C99-compatible ABI. Python calls via `ctypes` through `scripts/mind_ffi.py`. Each function accepts and returns flat float arrays.
-
-## Without MIND
-
-If `lib/libmindmem.so` is not present, MIND-Mem uses pure Python implementations. The Python fallback produces identical results (within f32 epsilon). No functionality is lost.
+[`src/mind_mem/mind_ffi.py`](../src/mind_mem/mind_ffi.py) loads the optional
+`libmindmem` library with `ctypes`. Its current symbols and argument declarations
+are the consumer ABI. [`lib/kernels.c`](../lib/kernels.c) provides C implementations;
+a library built from that file is a C backend, not evidence of pure MIND migration.
+Current wheels do not ship this shared library. The supported Python path remains
+available when no compatible native library is present.

@@ -173,19 +173,17 @@ Four-signal reranking pipeline: negation awareness (penalizes contradicting resu
 ### Optional Cross-Encoder
 Drop-in ms-marco-MiniLM-L-6-v2 cross-encoder (80MB). Blends 0.6 * CE + 0.4 * original score. Falls back gracefully when unavailable. Enabled via config.
 
-### MIND Kernels (Optional, Native Speed — forward-looking)
-26 `.mind` files at `mind/` that tune the scoring pipeline (BM25F, RRF
-fusion, reranking, negation penalty, date proximity, category boost,
-importance, entity overlap, confidence, top-k, weighted rank, category
-affinity, query-category relevance, category assignment, and others). **18
-are INI-format declarative configuration** parsed by `mind_ffi.py`; the
-**other 8 are already MIND-language tensor sources** (`bm25`, `ranking`,
-`reranker`, `rrf`, `prefetch`, `importance`, `category`, `abstention`) that
-compile to native `.so` via the [MIND compiler](https://mindlang.dev) — the
-forward-looking story. See
-[`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md) for
-the per-file breakdown. The pure-Python scoring logic in
-`src/mind_mem/mind_kernels.py` is the authoritative implementation today.
+### MIND Kernel Sources and Configuration
+
+The `mind/` directory contains 26 `.mind` files: 18 INI-style pipeline
+configurations and eight MIND-language tensor-source prototypes. The
+configuration files are parsed by `mind_ffi.py`; the source prototypes are
+migration work and are not a native serving backend. See
+[`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md) for the
+verified split. The pure-Python scoring logic in
+`src/mind_mem/mind_kernels.py` remains authoritative. An optional C library
+implements the existing native scoring ABI when a compatible library is
+provided.
 
 ### MIC/MAP — MIND IR graph serialization
 Pure-Python codec for the STARGA wire formats: **mic@2** (line-oriented
@@ -295,7 +293,7 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 | Multi-agent shared memory (MCP) | Y | — | — | Y | — |
 | Zero core dependencies | Y | — | — | — | — |
 | Local-only (no cloud required) | Y | — | — | — | — |
-| Compiled native kernels (MIND) | Y | — | — | — | — |
+| Optional native C scoring backend | Y | — | — | — | — |
 | Backup/restore with zip-slip protection | Y | — | — | — | — |
 | Multi-query expansion with RRF | Y | — | — | — | — |
 | 4-layer search deduplication | Y | — | — | — | — |
@@ -759,26 +757,15 @@ your-workspace/
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
-├── mind/                    # 26 INI-style config files (.mind, see docs/MIND_CONFIG_VS_MIND_LANG.md)
-│   ├── bm25.mind           # BM25F scoring kernel
-│   ├── rrf.mind            # Reciprocal Rank Fusion kernel
-│   ├── reranker.mind        # Deterministic reranking
-│   ├── abstention.mind      # Confidence gating
-│   ├── ranking.mind         # Evidence ranking
-│   ├── importance.mind      # A-MEM importance scoring
-│   ├── category.mind        # Category relevance scoring
-│   ├── recall.mind          # Combined recall scoring
-│   ├── hybrid.mind          # BM25 + vector hybrid fusion
-│   ├── rm3.mind             # RM3 pseudo-relevance feedback
-│   ├── rerank.mind          # Score combination pipeline
-│   ├── adversarial.mind     # Adversarial query detection
-│   ├── temporal.mind        # Time-aware scoring
-│   ├── prefetch.mind        # Context pre-assembly
-│   ├── intent.mind          # Intent classification
-│   └── cross_encoder.mind   # Cross-encoder blending
+├── mind/                    # 26 .mind files: 18 INI config + 8 MIND sources
+│   ├── README.md            # Source/config inventory and migration status
+│   ├── bm25.mind            # MIND-language source prototype
+│   ├── rrf.mind             # MIND-language source prototype
+│   ├── ranking.mind         # MIND-language source prototype
+│   └── recall.mind          # INI pipeline configuration example
 │
-├── lib/                     # Compiled MIND kernels (optional)
-│   └── libmindmem.so       # mindc output — not required for operation
+├── lib/                     # Optional native C scoring backend
+│   └── libmindmem.so        # Locally built from lib/kernels.c; not bundled
 │
 ├── decisions/
 │   └── DECISIONS.md         # Formal decisions [D-YYYYMMDD-###]
@@ -950,7 +937,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **102 tools**   |
-| MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **26 MIND kernels**  |
+| MIND `.mind` files (18 config + 8 source) |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **26 files**  |
 
 ### The Gap MIND-Mem Fills
 
@@ -1079,58 +1066,36 @@ Supports ONNX inference (local, no server) or cloud embeddings. Falls back to BM
 
 ## MIND Kernels
 
-MIND-Mem ships **26 `.mind` configuration files** under `mind/` that tune
-the scoring pipeline at runtime. These files are **INI-style declarative
-configuration** (e.g. `[fusion]` / `rrf_k = 60`), parsed by
-`load_kernel_config()` in `src/mind_mem/mind_ffi.py`. They are **not** the
-MIND programming language — see
-[`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md) for
-the disambiguation. The Python runtime (in `src/mind_mem/mind_kernels.py`)
-implements the actual scoring logic; the `.mind` files only carry
-numerical knobs.
+MIND-Mem ships **26 `.mind` files** under `mind/`: 18 INI-style pipeline
+configuration files and eight MIND-language tensor sources. Configuration is
+parsed by `load_kernel_config()` in `src/mind_mem/mind_ffi.py`; compiler sources
+are migration prototypes. See the [file inventory](mind/README.md) and
+[format distinction](docs/MIND_CONFIG_VS_MIND_LANG.md).
 
-### Compilation (forward-looking — not yet wired)
+### Native migration status
 
-The roadmap moves these numerical hot paths to true MIND-language kernels
-that compile to a native shared library via `mindc`
-(see [mindlang.dev](https://mindlang.dev)). When that integration lands,
-the build command will look like:
+The Python implementation remains available without `mindc`. An optional C
+library implements the existing native scoring ABI. A MIND-emitted replacement
+still needs compiler support, consumer ABI compatibility, numerical parity and
+performance validation. Source verification alone does not establish those gates.
+See [compiler development and native bridge status](mind/README.md) for the
+current boundary. The 26 files ship in the wheel under
+`<sys.prefix>/share/mind-mem/kernels/`; packaging them does not execute the sources.
 
-```bash
-# Once the MIND-language port ships (not currently supported):
-mindc mind/*.mind --emit=shared -o lib/libmindmem.so
-```
+### Compiler Source Index
 
-Until then, the Python fallback in `mind_kernels.py` is the authoritative
-implementation. `pip install mind-mem` is fully functional without
-`mindc`. The 26 config files themselves ship in the wheel under
-`<sys.prefix>/share/mind-mem/kernels/` for forward-compatibility tooling.
+| Source | Role |
+| --- | --- |
+| `abstention.mind`, `bm25.mind`, `category.mind`, `importance.mind` | MIND-language scoring prototypes |
+| `prefetch.mind`, `ranking.mind`, `reranker.mind`, `rrf.mind` | MIND-language scoring prototypes |
 
-### Kernel Index
-
-| File               | Functions                                                                            | Purpose                              |
-| ------------------ | ------------------------------------------------------------------------------------ | ------------------------------------ |
-| `bm25.mind`        | `bm25f_doc`, `bm25f_batch`, `apply_recency`, `apply_graph_boost`                    | BM25F scoring with field boosts      |
-| `rrf.mind`         | `rrf_fuse`, `rrf_fuse_three`                                                        | Reciprocal Rank Fusion               |
-| `reranker.mind`    | `date_proximity_score`, `category_boost`, `negation_penalty`, `rerank_deterministic` | Deterministic reranking              |
-| `rerank.mind`      | `rerank_scores`                                                                      | Score combination pipeline           |
-| `abstention.mind`  | `entity_overlap`, `confidence_score`                                                 | Confidence gating                    |
-| `ranking.mind`     | `weighted_rank`, `top_k_mask`                                                        | Evidence ranking                     |
-| `importance.mind`  | `importance_score`                                                                   | A-MEM importance scoring             |
-| `category.mind`    | `category_affinity`, `query_category_relevance`, `category_assign`                   | Category distillation scoring        |
-| `prefetch.mind`    | `prefetch_score`, `prefetch_select`                                                  | Signal-based context pre-assembly    |
-| `recall.mind`      | `recall_score`                                                                       | Combined recall scoring              |
-| `hybrid.mind`      | `hybrid_fuse`                                                                        | BM25 + vector hybrid fusion          |
-| `rm3.mind`         | `rm3_weight`                                                                         | RM3 pseudo-relevance feedback        |
-| `adversarial.mind` | `adversarial_gate`                                                                   | Adversarial query detection          |
-| `temporal.mind`    | `temporal_decay`                                                                     | Time-aware scoring                   |
-| `intent.mind`      | `intent_params`                                                                      | Intent classification parameters     |
-| `cross_encoder.mind` | `ce_blend`                                                                         | Cross-encoder blending configuration |
+The other 18 files are INI-style configurations and do not define compiler
+functions. See the [source/configuration inventory](mind/README.md).
 
 ### Performance
 
 <details>
-<summary>Compiled MIND kernels vs pure Python — 9 core scoring functions (200 iterations, <code>perf_counter</code>)</summary>
+<summary>Optional C scoring ABI vs pure Python — 9 core functions (200 iterations, <code>perf_counter</code>)</summary>
 
 &nbsp;
 
@@ -1147,7 +1112,7 @@ implementation. `pip install mind-mem` is fully functional without
 | `weighted_rank`    |  **5.1x** | **26.6x** | **121.8x** |
 | **Overall**        |           |           | **49.0x** |
 
-> **49x faster** end-to-end at production scale (N=5,000). Individual kernels reach up to **193x** speedup. The compiled library includes 14 runtime protection layers with near-zero overhead.
+> Previously reported local figures, retained for reference: **49x** aggregate speedup at N=5,000 and up to **193x** for an individual function. The harness sums kernel medians and excludes native array marshaling; this is not an end-to-end retrieval measurement. These C ABI figures lack a current source/artifact/hardware receipt here and do not establish MIND emission or numerical parity. The earlier 14-layer runtime protection claim is also unverified by the current C source.
 
 </details>
 
@@ -1166,7 +1131,9 @@ if is_available():
 
 ### Without MIND
 
-If `lib/libmindmem.so` is not present, MIND-Mem uses pure Python implementations. The Python fallback produces identical results (within f32 epsilon). No functionality is lost — MIND is a performance optimization, not a requirement.
+If `lib/libmindmem.so` is not present, MIND-Mem uses the supported pure-Python
+implementations. The optional native C library is a performance path; no
+MIND-emitted replacement or cross-backend parity claim follows from its absence.
 
 ---
 
@@ -1644,7 +1611,7 @@ tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 | `capture` says "no daily log"               | No `memory/YYYY-MM-DD.md` for today. Write something first.                                                       |
 | `intel_scan` finds 0 contradictions         | Good — no conflicting decisions.                                                                                  |
 | Tests fail on Windows                       | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL.                                                 |
-| MIND kernel not loading                     | Expected — no compiled kernel ships in the wheel. Of the 26 `mind/*.mind` files, 18 are INI-style config read at runtime and 8 are MIND-language tensor source that is inert until compiled; the optional native `libmindmem.so` is built from `lib/kernels.c` and is refused on an ABI/version mismatch. Pure-Python scoring (in `mind_kernels.py`) is the authoritative path. See [`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md). |
+| MIND kernel not loading                     | Expected — no compiled kernel ships in the wheel. Of the 26 `mind/*.mind` files, 18 are INI-style config read at runtime and 8 are MIND-language tensor source that is inert until compiled; the optional native `libmindmem.so` is built from `lib/kernels.c`, with optional version reporting. The current C source has no version symbol, so its version compatibility is unknown; a reported version mismatch does not automatically refuse loading. Pure-Python scoring (in `mind_kernels.py`) is the authoritative path. See [`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md). |
 
 ### FAQ
 
@@ -1658,10 +1625,11 @@ Verify that `fastmcp` is installed (`pip install fastmcp`). Check the transport
 configuration in your client's MCP config (stdio vs HTTP). Ensure the
 `MIND_MEM_WORKSPACE` environment variable points to a valid workspace directory.
 
-**MIND kernels not loading?**
-Run `bash src/mind_mem/build.sh` to compile the MIND source files (requires `mindc`).
-If the MIND compiler is not available, MIND-Mem automatically uses the pure Python
-fallback with identical results.
+**MIND sources or native kernels not loading?**
+The eight MIND-language files are migration prototypes and are not required by
+the supported Python path. The optional native backend is the C implementation
+in `lib/kernels.c`; it is not bundled in the wheel. See
+[`mind/README.md`](mind/README.md) for the current source and ABI boundary.
 
 **Index corrupt?**
 Run the `reindex` MCP tool, or from the command line:
@@ -1676,13 +1644,20 @@ For the formal grammar, invariant rules, state machine, and atomicity guarantees
 
 ---
 
-## Built in MIND lang
+## MIND language sources
 
-mind-mem's scoring kernels live in the `mind/` directory of this repo. The BM25F field-weighting, RRF fusion, reranking, negation penalty, date proximity, category boost, importance decay, entity overlap, confidence gating, and top-k selection are all written in MIND source and compiled to native shared libraries via the MIND compiler. The pure Python fallback mirrors them exactly — same results, no compilation required.
+Eight files in `mind/` contain MIND-language scoring prototypes; 18 additional
+`.mind` files are INI-style runtime configuration. The prototypes have not
+established a complete native backend, consumer ABI compatibility, numerical
+parity, or performance parity. The existing optional native implementation is
+the C library in `lib/kernels.c`, while the supported Python implementation
+remains available without a compiler or shared library.
 
 The MIND language compiler is at [github.com/star-ga/mind](https://github.com/star-ga/mind). The formal specification is at [github.com/star-ga/mind-spec](https://github.com/star-ga/mind-spec). The agent CLI being built on the same substrate is at [github.com/star-ga/mind](https://github.com/star-ga/mind) (RFC 0013, in development). Visit [mindlang.dev](https://mindlang.dev) to see the substrate that makes byte-identical replay possible.
 
-For many developers, `pip install mind-mem` is their first encounter with a MIND-native system. The scoring kernels in `mind/` are readable MIND source — the language is approachable, and the compiler produces output that is byte-identical on every architecture mind-mem CI targets.
+The compiler and specification links above are the references for MIND-language
+syntax and semantics. A readable source prototype or compiler verification does
+not by itself establish native execution or byte-identical scoring output.
 
 ---
 

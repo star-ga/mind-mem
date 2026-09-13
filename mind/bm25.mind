@@ -1,5 +1,5 @@
 // BM25F scoring kernel with field boosts and length normalization
-// Compiled: mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
+// Migration source; native ABI and numerical parity remain to be verified.
 import std.tensor;
 
 fn bm25f_doc(

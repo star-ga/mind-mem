@@ -1,9 +1,10 @@
-"""mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
+"""mind-mem FFI bridge — loads an optional native scoring library.
 
 The MIND kernel is OPTIONAL. mind-mem works without it (pure Python fallback).
-With it, scoring is native-speed compiled code with compile-time tensor shape checks.
+The current native implementation is in lib/kernels.c. The MIND source migration
+has not yet established a compatible emitted library or numerical parity.
 
-The compiled .so exposes a C99-compatible ABI via mind_runtime.h.
+The library exposes the C ABI declared by this module.
 Each function accepts flat float pointers and dimension parameters.
 
 Also provides utility functions for listing .mind source files (used by MCP tools).
@@ -184,7 +185,7 @@ class MindMemKernel:
                         break
 
         if self._lib is None:
-            raise OSError("MIND kernel library not found. Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so")
+            raise OSError("Native kernel library not found. Use the Python fallback; see mind/README.md for native backend status.")
 
         # Declare argtypes for all kernel functions (prevents silent memory corruption)
         _f = ctypes.c_float
@@ -561,7 +562,7 @@ def get_kernel() -> MindMemKernel | None:
         _USE_MIND = True
         return _kernel
     _USE_MIND = False
-    _log.info("MIND kernel .so not found — using pure Python fallback. Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so")
+    _log.info("Native kernel library not found; using the Python fallback. See mind/README.md for native backend status.")
     return None
 
 

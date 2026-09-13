@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1558 | **Est. tokens:** ~4621422
-**Generated:** 2026-09-13 01:10 UTC
+**Files:** 1558 | **Est. tokens:** ~4619482
+**Generated:** 2026-09-13 01:48 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~207746 |
+| `docs/` | 93 | ~206008 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -59,8 +59,8 @@
 | `hooks/openclaw/mind-mem/` | 2 | ~1211 |
 | `intelligence/` | 1 | ~113 |
 | `intelligence/state/snapshots/` | 1 | ~114 |
-| `lib/` | 1 | ~2170 |
-| `mind/` | 27 | ~9687 |
+| `lib/` | 1 | ~2191 |
+| `mind/` | 27 | ~9456 |
 | `scripts/` | 21 | ~65271 |
 | `sdk/go/` | 10 | ~9098 |
 | `sdk/js/` | 6 | ~4864 |
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 232 | ~1060442 |
+| `src/mind_mem/` | 232 | ~1060450 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -315,7 +315,7 @@
 - `GOVERNED_WRITES.md` (~2664 tok, huge) — Governed writes
 - `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
 - `MHS_DEVICE_MEMORY.md` (~524 tok, large) — MHS / Device Memory Boundary
-- `MIND_CONFIG_VS_MIND_LANG.md` (~2540 tok, huge) — MIND configuration vs MIND language — clarifying the .mind extension
+- `MIND_CONFIG_VS_MIND_LANG.md` (~743 tok, large) — Pipeline configuration and MIND language sources
 - `POST-V4.4.0-ROADMAP-PLAN.md` (~1905 tok, huge) — mind-mem — Post-v4.4.0 Roadmap Plan (reference)
 - `ROADMAP-RETRIEVAL-ACCOUNTABILITY.md` (~2736 tok, huge) — Group R — Retrieval Accountability (memory as rent, not storage)
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2267 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
@@ -473,7 +473,7 @@
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2761 tok, huge) — Migration Guide: mem-os to MIND-Mem
-- `mind-kernels.md` (~339 tok, medium) — MIND Kernels
+- `mind-kernels.md` (~398 tok, medium) — MIND Kernels
 - `mind-mem-4b-setup.md` (~3193 tok, huge) — Setting up the mind-mem-4b model
 - `mind-mem-4b-training-runbook.md` (~3586 tok, huge) — mind-mem-4b training runbook (post-v3.10.2 lessons)
 - `mind-mem-4b-v2-training-recipe.md` (~1683 tok, huge) — mind-mem-4b v2 training recipe — Runpod H200
@@ -555,14 +555,14 @@
 - `S-2026-04-13.json` (~114 tok, small) — Keys: date, generated_at, decisions, tasks, projects
 ### `lib/`
 
-- `kernels.c` (~2170 tok, huge)
+- `kernels.c` (~2191 tok, huge)
 ### `mind/`
 
-- `README.md` (~911 tok, large) — MIND Kernels
+- `README.md` (~677 tok, large) — MIND kernels and pipeline configuration
 - `abstention.mind` (~215 tok, medium) — Confidence gating: decide whether to abstain from answering
 - `adversarial.mind` (~156 tok, small)
 - `answer.mind` (~1294 tok, large)
-- `bm25.mind` (~477 tok, medium) — BM25F scoring kernel with field boosts and length normalization
+- `bm25.mind` (~480 tok, medium) — BM25F scoring kernel with field boosts and length normalization
 - `category.mind` (~395 tok, medium) — Category distillation scoring kernel
 - `cognitive.mind` (~434 tok, medium)
 - `cross_encoder.mind` (~174 tok, small)
@@ -909,7 +909,7 @@
 - `memory_tiers.py` (~6427 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `merkle_tree.py` (~3673 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mic_map.py` (~8384 tok, huge) — MIC/MAP — STARGA-native serialization for MIND IR graphs.
-- `mind_ffi.py` (~7630 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
+- `mind_ffi.py` (~7638 tok, huge) — mind-mem FFI bridge — loads an optional native scoring library.
 - `mind_filelock.py` (~10088 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~3107 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4920 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.

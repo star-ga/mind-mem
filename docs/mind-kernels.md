@@ -2,13 +2,17 @@
 
 ## Overview
 
-MIND kernels are configuration files (`.mind` extension) that customize scoring and retrieval behavior. They live in the `.mind/` subdirectory of the workspace.
+This page describes INI-style pipeline configuration files with the `.mind`
+extension. Workspace overrides live in `.mind/`. The repository also contains
+MIND compiler sources with the same extension; see the
+[source and native migration inventory](../mind/README.md). Those compiler
+sources are separate from the configuration format described here.
 
 ## Kernel Format
 
-Kernels use TOML-like syntax:
+Configuration files use INI-style sections and key/value assignments:
 
-```toml
+```ini
 # recall.mind — customize BM25F scoring
 [bm25]
 k1 = 1.5
@@ -51,5 +55,5 @@ Controls the BM25F scoring pipeline.
 
 1. Create `.mind/` in your workspace
 2. Add a `.mind` file with the kernel name
-3. Use TOML sections and keys as documented
+3. Use INI-style sections and keys as documented
 4. Restart the MCP server to load changes
