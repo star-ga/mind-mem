@@ -30,6 +30,7 @@ from datetime import date
 from typing import Any
 
 from mind_mem.error_codes import ErrorCode
+from mind_mem.recall import _CONFIG_HASH_UNRESOLVED as _RECALL_CONFIG_HASH_UNRESOLVED
 from mind_mem.recall import recall as recall_engine
 from mind_mem.recall_cache import retrieval_config_fingerprint
 from mind_mem.retrieval_graph import retrieval_diagnostics as _retrieval_diag
@@ -53,6 +54,10 @@ _log = get_logger("mcp_server")
 
 
 _MAX_QUERY_LEN = 8192
+
+# Keep the sentinel local to this module so every post-cache door uses the
+# same unresolved state without importing private names at each call site.
+_CONFIG_HASH_UNRESOLVED = _RECALL_CONFIG_HASH_UNRESOLVED
 
 
 def _resolve_chain_head(ws: str) -> str:
@@ -363,6 +368,14 @@ def _recall_impl_ranked(
     # resolver, so the cached answer and the attested corpus state can never be
     # two different opinions of "which corpus is this".
     _index_anchor = _resolve_chain_head(ws)
+    try:
+        from mind_mem.pipeline_hash import current_pipeline_hash as _cph
+
+        _config_hash_snapshot: str = _cph(ws)
+        if not isinstance(_config_hash_snapshot, str) or not _config_hash_snapshot:
+            _config_hash_snapshot = _CONFIG_HASH_UNRESOLVED
+    except Exception:  # noqa: BLE001 — an unresolvable hash must not break recall
+        _config_hash_snapshot = _CONFIG_HASH_UNRESOLVED
 
     # Group J — the anticipation cache, consulted BEFORE the store round-trip.
     # Off by default; the probe is a dict lookup on the config already loaded
@@ -445,7 +458,15 @@ def _recall_impl_ranked(
     # to the CURRENT pipeline config + live index anchor every time, and keeps
     # the cached payload attestation-free.
     if raw:
-        raw = _apply_attestation(raw, backend, instant_iso, query)
+        raw = _apply_attestation(
+            raw,
+            backend,
+            instant_iso,
+            query,
+            config_hash=_config_hash_snapshot,
+            index_anchor=_index_anchor,
+            config=_raw_config,
+        )
 
     # v3.11.0 Pattern 1 — apply explain annotation post-cache so that the
     # cached payload (explain-free) is not polluted and explain=True can
@@ -458,7 +479,10 @@ def _recall_impl_ranked(
     # Default ON since 5.0.2; opt out per workspace with a literal
     # ``served_ledger.enabled: false`` in mind-mem.json.
     if raw:
-        raw = _record_served_run(raw, ws)
+        _served_generation = anticipation_generation_identity(
+            _raw_config, str(MCP_SCHEMA_VERSION)
+        )
+        raw = _record_served_run(raw, ws, generation=_served_generation)
 
     # Group J — the producer half. What this recall served becomes the bundle a
     # later, lexically-close query can be answered from without a round-trip,
@@ -501,7 +525,9 @@ def _trace_attribution_enabled(config: Any) -> bool:
     return is_trace_enabled(recall_cfg if isinstance(recall_cfg, dict) else None)
 
 
-def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
+def _current_vector_flags(
+    ws: str, backend: str, config: Any | None = None
+) -> tuple[bool, bool]:
     """Resolve the CURRENT config's ``(vector_requested, vector_available)``.
 
     Derived fresh from the live ``mind-mem.json`` each call so a config toggle
@@ -519,7 +545,7 @@ def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
     """
     from mind_mem.recall import resolve_vector_flags
 
-    return resolve_vector_flags(ws, backend, _load_config(ws))
+    return resolve_vector_flags(ws, backend, _load_config(ws) if config is None else config)
 
 
 def _served_backend(envelope: dict[str, Any], requested: str) -> str:
@@ -597,7 +623,16 @@ def _apply_bundle_format(query: str, raw_json: str) -> str:
         return raw_json
 
 
-def _apply_attestation(raw_json: str, backend: str, scoring_instant: str, query: str) -> str:
+def _apply_attestation(
+    raw_json: str,
+    backend: str,
+    scoring_instant: str,
+    query: str,
+    *,
+    config_hash: str | None = None,
+    index_anchor: str | None = None,
+    config: Any | None = None,
+) -> str:
     """Derive the recall attestation from *raw_json* + live config, inject it.
 
     *scoring_instant* is the instant the run **actually scored with**, passed in
@@ -637,8 +672,15 @@ def _apply_attestation(raw_json: str, backend: str, scoring_instant: str, query:
         degraded = envelope.get("degraded")
         if isinstance(degraded, dict):
             carrier.degraded = degraded
+        if config_hash == _CONFIG_HASH_UNRESOLVED:
+            raise RuntimeError(
+                "config hash could not be resolved for this request's snapshot, so no coherent "
+                "context could be bound"
+            )
         # The served leg, not the requested one — see :func:`_served_backend`.
-        vector_requested, vector_available = _current_vector_flags(ws, _served_backend(envelope, backend))
+        vector_requested, vector_available = _current_vector_flags(
+            ws, _served_backend(envelope, backend), config
+        )
         attestation = derive_recall_attestation_for_workspace(
             carrier,
             ws,
@@ -646,15 +688,37 @@ def _apply_attestation(raw_json: str, backend: str, scoring_instant: str, query:
             vector_available=vector_available,
             query=query,
             scoring_instant=scoring_instant,
+            config_hash=config_hash,
+            index_anchor=index_anchor,
         )
         envelope["attestation"] = attestation.to_dict()
         return json.dumps(envelope, indent=2, default=str)
     except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
         _log.warning("recall_attestation_apply_failed", error=str(exc))
+        try:
+            from mind_mem.served_ledger import (
+                LEDGER_ERROR_KEY,
+                PROOF_UNPROVEN,
+                SERVED_PROOF_KEY,
+                SERVED_ROW_HASH_KEY,
+                SERVED_SEQ_KEY,
+            )
+
+            envelope = json.loads(raw_json)
+            if isinstance(envelope, dict) and isinstance(envelope.get("results"), list):
+                envelope["attestation"] = {
+                    SERVED_SEQ_KEY: None,
+                    SERVED_ROW_HASH_KEY: None,
+                    SERVED_PROOF_KEY: PROOF_UNPROVEN,
+                    LEDGER_ERROR_KEY: f"attestation derivation failed: {type(exc).__name__}: {exc}",
+                }
+                return json.dumps(envelope, indent=2, default=str)
+        except Exception:  # noqa: BLE001 — the fallback must never break recall
+            pass
         return raw_json
 
 
-def _record_served_run(raw_json: str, ws: str) -> str:
+def _record_served_run(raw_json: str, ws: str, *, generation: str | None) -> str:
     """Append this run to the served-set ledger (RA.1). Default ON since 5.0.2.
 
     Runs **after** ``recall()`` has returned and after the envelope is
@@ -697,7 +761,13 @@ def _record_served_run(raw_json: str, ws: str) -> str:
             # there is no record to join to, so there is nothing to record and
             # nothing to stamp the outcome onto.
             return raw_json
-        envelope["attestation"] = attach_served_run(attestation, ws, ids=_served_ids(results))
+        envelope["attestation"] = attach_served_run(
+            attestation,
+            ws,
+            ids=_served_ids(results),
+            serve_kind="attested",
+            generation=generation,
+        )
         return json.dumps(envelope, indent=2, default=str)
     except Exception as exc:  # pragma: no cover — defensive; recall must not fail on the ledger
         _log.warning("served_ledger_append_failed", error=str(exc))
@@ -1569,7 +1639,20 @@ def prefetch(signals: str, limit: int = 5) -> str:
         # hand, so an opted-out workspace pays nothing for the wiring.
         from mind_mem.prefetch import anticipation_enabled, anticipation_generation_identity, get_cache
 
+        # ONE MAPPING for this door: the generation, the hash and the vector flags must all come
+        # from it, or the row asserts coordinates from different moments. A probe changed config
+        # between this point and the attest call and prefetch wrote a RECORDED v2 row mixing them —
+        # the worst of the three doors, because v2 carries a context digest making the claim.
         _prefetch_config = _load_config(ws)
+        try:
+            from mind_mem.pipeline_hash import current_pipeline_hash as _pf_cph
+
+            _prefetch_hash = _pf_cph(ws)
+            if not isinstance(_prefetch_hash, str) or not _prefetch_hash:
+                _prefetch_hash = _CONFIG_HASH_UNRESOLVED
+        except Exception:  # noqa: BLE001 — an unresolvable hash must refuse, not reread
+            _prefetch_hash = _CONFIG_HASH_UNRESOLVED
+        _prefetch_anchor = _resolve_chain_head(ws)
         if anticipation_enabled(_prefetch_config):
             _prefetch_identity = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
             if _prefetch_identity is not None:
@@ -1591,7 +1674,16 @@ def prefetch(signals: str, limit: int = 5) -> str:
         # here: one record, one row, over the answer the caller actually got.
         from mind_mem.recall import attest_and_record
 
-        attestation = attest_and_record(ws, ",".join(signal_list), results, scoring_instant=instant)
+        attestation = attest_and_record(
+            ws,
+            ",".join(signal_list),
+            results,
+            scoring_instant=instant,
+            generation=_served_generation,
+            config=_prefetch_config,
+            config_hash=_prefetch_hash,
+            index_anchor=_prefetch_anchor,
+        )
         return json.dumps(
             {
                 "_schema_version": MCP_SCHEMA_VERSION,

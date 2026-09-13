@@ -306,6 +306,14 @@ def recall_with_axis(
     tried_axes: set[ObservationAxis] = set(weights.active_axes())
     rotated = False
 
+    # SNAPSHOT BEFORE THE PASSES, then thread it. An independent probe changed extraction config
+    # between retrieval and the attest call and this door recorded the LATER hash: retrieval under
+    # 4b586a38… with the row carrying 734aaf80…. Passing generation="__not_bound__" made the row
+    # v1, which HID the context digest without making the reread coherent.
+    from .recall import capture_policy_snapshot
+
+    _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
+
     with serving_scope():
         fused = _run_pass(
             workspace,
@@ -351,6 +359,10 @@ def recall_with_axis(
         query,
         fused,
         scoring_instant=base_kwargs.get("scoring_instant"),
+        config=_snap_config,
+        config_hash=_snap_hash,
+        index_anchor=_snap_anchor,
+        generation="__not_bound__",
     )
 
     diversity_count = _count_axis_diversity(fused)

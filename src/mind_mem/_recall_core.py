@@ -2616,7 +2616,7 @@ def main():
     # serving entry re-exports this module, and the write-side ledger it
     # reaches must stay out of the scoring path's import closure
     # (``tests/test_recall_attestation_v2.py`` fails the build on that edge).
-    from .recall import attest_and_record, serving_scope
+    from .recall import attest_and_record, capture_policy_snapshot, serving_scope
 
     with serving_scope():
         # Resolve backend: CLI flag > config > default scan
@@ -2665,6 +2665,7 @@ def main():
     # Reads no clock of its own: ``scoring_instant`` is left to the value the
     # run resolved, and the ranking above is already fixed and printed below,
     # so nothing recorded here can reach it.
+    _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
     attest_and_record(
         workspace,
         args.query,
@@ -2674,6 +2675,10 @@ def main():
         # degraded that this run never requested. A configured custom backend
         # (the vector one) is the case where those flags ARE the run's own.
         backend="bm25" if backend in ("scan", "sqlite") else "auto",
+        config=_snap_config,
+        config_hash=_snap_hash,
+        index_anchor=_snap_anchor,
+        generation="__not_bound__",
     )
 
     if args.json:
