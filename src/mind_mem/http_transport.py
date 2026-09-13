@@ -289,6 +289,8 @@ def _active_tokens_with_admin(
     observed_at = time.time() if now is None else now
     if raw_multi is _AUTH_ENV_UNSET:
         raw_multi = os.environ.get("MIND_MEM_TOKENS")
+    if raw_multi is not None and not isinstance(raw_multi, str):
+        raise TypeError("raw_multi must be a string or None")
     if raw_multi is not None and raw_multi.strip():
         # A configured list is authoritative even when every entry has
         # expired. Falling through here would resurrect a retired token.
@@ -297,6 +299,8 @@ def _active_tokens_with_admin(
 
     if raw_single is _AUTH_ENV_UNSET:
         raw_single = os.environ.get("MIND_MEM_TOKEN")
+    if raw_single is not None and not isinstance(raw_single, str):
+        raise TypeError("raw_single must be a string or None")
     if raw_single is not None and raw_single.strip():
         # The configured singular source is authoritative after parsing too;
         # an expired entry must not fall back to the handler-bound credential.
