@@ -526,17 +526,18 @@ class TestWiredIntoTheRecallSurface:
             json.dump({"cache": {"enabled": False}}, fh)
         _append_to_governed_ledger(ws, "D-20260101-000", "create", "seed")
 
-        real_chain_head = prefetch.chain_head
+        real_chain_head_resolution = prefetch.chain_head_resolution
         resolutions = 0
 
-        def counting_chain_head(workspace: str) -> str:
+        def counting_chain_head_resolution(workspace: str):
             nonlocal resolutions
             resolutions += 1
-            return real_chain_head(workspace)
+            return real_chain_head_resolution(workspace)
 
-        # ``_resolve_chain_head`` imports the function at call time, so patching
-        # the module attribute is what the recall path actually reaches.
-        monkeypatch.setattr(prefetch, "chain_head", counting_chain_head)
+        # The recall path resolves the typed status at call time; patch the
+        # module attribute it actually reaches so this remains an exact-once
+        # check rather than a compatibility spy on the string wrapper.
+        monkeypatch.setattr(prefetch, "chain_head_resolution", counting_chain_head_resolution)
 
         with use_workspace(ws):
             for _ in range(5):

@@ -54,6 +54,7 @@ from collections import OrderedDict
 from typing import Any
 
 from .observability import get_logger, metrics
+from .recall_attestation import INDEX_ANCHOR_UNRESOLVED
 
 _log = get_logger("recall_cache")
 
@@ -450,6 +451,12 @@ def cached_recall(
         # config collide. The file-backed public config is JSON and never takes
         # this branch; it protects programmatic callers without guessing an
         # identity for data the canonical serializer refused.
+        return str(inner(query, limit=limit, active_only=active_only, backend=backend, **(filters or {})))
+
+    if index_anchor == INDEX_ANCHOR_UNRESOLVED:
+        # A failed governed-head read is not a corpus generation. Never let a
+        # caller accidentally turn its explicit failure state into a reusable
+        # cache entry by invoking this primitive directly.
         return str(inner(query, limit=limit, active_only=active_only, backend=backend, **(filters or {})))
 
     key = make_cache_key(

@@ -27,7 +27,7 @@ import re as _re_mod
 import sqlite3
 import time
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mind_mem.error_codes import ErrorCode
 from mind_mem.recall import _CONFIG_HASH_UNRESOLVED as _RECALL_CONFIG_HASH_UNRESOLVED
@@ -52,6 +52,9 @@ from ._helpers import (
 
 _log = get_logger("mcp_server")
 
+if TYPE_CHECKING:
+    from mind_mem.recall_attestation import IndexAnchorResolution
+
 
 _MAX_QUERY_LEN = 8192
 
@@ -68,10 +71,10 @@ def _resolve_chain_head(ws: str) -> str:
     attested corpus state are one value rather than two opinions. Resolved once
     per recall, here at the top, and handed to both consumers.
 
-    Degrades to the genesis anchor on any failure: a cache key that cannot be
-    computed must fall back to a *constant*, so two runs at different corpus
-    states still share a key only when nothing could be learned about either —
-    never silently drop the coordinate and re-open the staleness hole it closes.
+    Returns the distinct unresolved sentinel when the governed head cannot be
+    read. Only an absent or readable empty ledger returns the genesis anchor;
+    callers that serve results use :func:`_resolve_chain_head_resolution` to
+    bypass caches and recorded proof on unresolved state.
     """
     try:
         from mind_mem.prefetch import chain_head
@@ -79,9 +82,21 @@ def _resolve_chain_head(ws: str) -> str:
         return chain_head(ws)
     except Exception as exc:  # pragma: no cover — defensive
         _log.warning("chain_head_unresolved", error=str(exc))
-        from mind_mem.recall_attestation import GENESIS_ANCHOR
+        from mind_mem.recall_attestation import INDEX_ANCHOR_UNRESOLVED
 
-        return GENESIS_ANCHOR
+        return INDEX_ANCHOR_UNRESOLVED
+
+
+def _resolve_chain_head_resolution(ws: str) -> "IndexAnchorResolution":
+    """Resolve the head with failure state preserved for serving callers."""
+    try:
+        from mind_mem.prefetch import chain_head_resolution
+
+        return chain_head_resolution(ws)
+    except Exception as exc:  # pragma: no cover - defensive boundary
+        from mind_mem.recall_attestation import IndexAnchorResolution
+
+        return IndexAnchorResolution.unresolved(f"{type(exc).__name__}: governed head unresolved")
 
 
 def _anticipation_envelope(
@@ -375,7 +390,8 @@ def _recall_impl_ranked(
         config=_raw_config if isinstance(_raw_config, dict) else {},
     )
     with bind_request_context(_pre_context):
-        _index_anchor = _resolve_chain_head(ws)
+        _anchor_resolution = _resolve_chain_head_resolution(ws)
+        _index_anchor = _anchor_resolution.anchor
         try:
             from mind_mem.pipeline_hash import current_pipeline_hash as _cph
 
@@ -401,7 +417,14 @@ def _recall_impl_ranked(
     # A usable generation identity is the admission condition. Keep the runtime
     # guard at each use site so it remains effective under optimized Python.
     _anticipation_identity: str | None = None
-    if anticipation_enabled(_raw_config) and not _trace_on and not _active_filters and not active_only and backend == "auto":
+    if (
+        _anchor_resolution.resolved
+        and anticipation_enabled(_raw_config)
+        and not _trace_on
+        and not _active_filters
+        and not active_only
+        and backend == "auto"
+    ):
         _anticipation_identity = anticipation_generation_identity(_raw_config, str(MCP_SCHEMA_VERSION))
     # ``format="bundle"`` never takes the local answer. The early return below
     # skips the post-cache stages, and the bundle re-shaping is one of them, so
@@ -439,7 +462,7 @@ def _recall_impl_ranked(
         scoring_instant=instant_iso,
     )
     with bind_request_context(_request_context):
-        if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
+        if _anchor_resolution.resolved and isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
             raw = cached_recall(
                 _inner,
                 query,
@@ -490,6 +513,8 @@ def _recall_impl_ranked(
             config_hash=_config_hash_snapshot,
             index_anchor=_index_anchor,
             config=_raw_config,
+            anchor_resolved=_anchor_resolution.resolved,
+            anchor_error=_anchor_resolution.reason,
         )
 
     # v3.11.0 Pattern 1 — apply explain annotation post-cache so that the
@@ -502,7 +527,7 @@ def _recall_impl_ranked(
     # decided and serialised the ranking, so nothing this does can reach it.
     # Default ON since 5.0.2; opt out per workspace with a literal
     # ``served_ledger.enabled: false`` in mind-mem.json.
-    if raw:
+    if raw and _anchor_resolution.resolved:
         _served_generation = anticipation_generation_identity(_raw_config, str(MCP_SCHEMA_VERSION))
         raw = _record_served_run(raw, ws, generation=_served_generation)
 
@@ -513,7 +538,7 @@ def _recall_impl_ranked(
     # because nothing ever told it what a query resolved to). Recorded against
     # the head the answer was computed at, so a write that lands between now
     # and the next lookup retires this bundle rather than aging it out.
-    if _anticipation_identity is not None and raw:
+    if _anchor_resolution.resolved and _anticipation_identity is not None and raw:
         _record_anticipation_bundle(ws, "recall", raw, _index_anchor, _anticipation_identity)
 
     return raw
@@ -652,6 +677,8 @@ def _apply_attestation(
     config_hash: str | None = None,
     index_anchor: str | None = None,
     config: Any | None = None,
+    anchor_resolved: bool = True,
+    anchor_error: str | None = None,
 ) -> str:
     """Derive the recall attestation from *raw_json* + live config, inject it.
 
@@ -694,6 +721,8 @@ def _apply_attestation(
             carrier.degraded = degraded
         if config_hash == _CONFIG_HASH_UNRESOLVED:
             raise RuntimeError("config hash could not be resolved for this request's snapshot, so no coherent context could be bound")
+        if not anchor_resolved:
+            raise RuntimeError(anchor_error or "governed chain head could not be resolved for this request's snapshot")
         # The served leg, not the requested one — see :func:`_served_backend`.
         vector_requested, vector_available = _current_vector_flags(ws, _served_backend(envelope, backend), config)
         attestation = derive_recall_attestation_for_workspace(
@@ -1649,13 +1678,17 @@ def prefetch(signals: str, limit: int = 5) -> str:
         # later record/cache coordinates must come from the same snapshot.
         _prefetch_config = _load_config(ws)
         if not isinstance(_prefetch_config, dict):
+            from mind_mem.recall_attestation import IndexAnchorResolution
+
             _prefetch_config = {}
             _prefetch_hash = _CONFIG_HASH_UNRESOLVED
-            _prefetch_anchor = ""
+            _prefetch_resolution = IndexAnchorResolution.unresolved("prefetch config snapshot unavailable")
+            _prefetch_anchor = _prefetch_resolution.anchor
         else:
             _prefetch_context = RequestContext(workspace=ws, config=_prefetch_config)
             with bind_request_context(_prefetch_context):
-                _prefetch_anchor = _resolve_chain_head(ws)
+                _prefetch_resolution = _resolve_chain_head_resolution(ws)
+                _prefetch_anchor = _prefetch_resolution.anchor
                 try:
                     from mind_mem.pipeline_hash import current_pipeline_hash as _pf_cph
 
@@ -1688,7 +1721,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
         # between this point and the attest call and prefetch wrote a RECORDED v2 row mixing them —
         # the worst of the three doors, because v2 carries a context digest making the claim.
         _served_generation = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
-        if anticipation_enabled(_prefetch_config):
+        if _prefetch_resolution.resolved and anticipation_enabled(_prefetch_config):
             _prefetch_identity = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
             if _prefetch_identity is not None:
                 hits = [r for r in results if isinstance(r, dict)]
@@ -1718,6 +1751,8 @@ def prefetch(signals: str, limit: int = 5) -> str:
             config=_prefetch_config,
             config_hash=_prefetch_hash,
             index_anchor=_prefetch_anchor,
+            anchor_resolved=_prefetch_resolution.resolved,
+            anchor_error=_prefetch_resolution.reason,
         )
         return json.dumps(
             {

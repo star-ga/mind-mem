@@ -288,7 +288,7 @@ def capture_policy_snapshot(workspace: str) -> tuple[Any, str, str]:
     may read as licence to bind current state.
     """
     from .mcp.infra.config import _load_config
-    from .recall_attestation import _resolve_index_anchor
+    from .recall_attestation import INDEX_ANCHOR_UNRESOLVED, resolve_index_anchor
 
     try:
         config = _load_config(workspace)
@@ -322,9 +322,9 @@ def capture_policy_snapshot(workspace: str) -> tuple[Any, str, str]:
         except Exception:  # noqa: BLE001
             config_hash = _CONFIG_HASH_UNRESOLVED
         try:
-            index_anchor = _resolve_index_anchor(workspace)
+            index_anchor = resolve_index_anchor(workspace).anchor
         except Exception:  # noqa: BLE001
-            index_anchor = ""
+            index_anchor = INDEX_ANCHOR_UNRESOLVED
     return config, config_hash, index_anchor
 
 
@@ -404,6 +404,8 @@ def attest_and_record(
     config: Any | None = None,
     config_hash: str | None = None,
     index_anchor: str | None = None,
+    anchor_resolved: bool | None = None,
+    anchor_error: str | None = None,
 ) -> dict[str, Any] | None:
     """Derive this run's attestation and append its served-ledger row.
 
@@ -455,7 +457,7 @@ def attest_and_record(
     the same way.
     """
     try:
-        from .recall_attestation import _served_ids, derive_recall_attestation_for_workspace
+        from .recall_attestation import INDEX_ANCHOR_UNRESOLVED, _served_ids, derive_recall_attestation_for_workspace
 
         if backend is None:
             backend = default_backend_for(workspace)
@@ -473,6 +475,8 @@ def attest_and_record(
         # are unaffected.
         if config_hash == _CONFIG_HASH_UNRESOLVED:
             raise RuntimeError("config hash could not be resolved for this request's snapshot, so no coherent context could be bound")
+        if anchor_resolved is False or index_anchor == INDEX_ANCHOR_UNRESOLVED:
+            raise RuntimeError(anchor_error or "governed chain head could not be resolved for this request's snapshot")
         vector_requested, vector_available = resolve_vector_flags(workspace, backend, config)
         attestation = derive_recall_attestation_for_workspace(
             results,

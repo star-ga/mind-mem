@@ -157,6 +157,11 @@ clean. `mm chain survey` is read-only and exits 1 on damage so it can gate CI.
 
 ### Changed — request-bound policy and served-run receipts
 
+- Keep a genuinely absent or readable empty governed ledger distinct from an unresolved
+  head. Unreadable databases, malformed rows, and broken ledger or parent links bypass
+  ordinary and anticipation caches and return fresh retrieval with explicit unproven
+  status, without appending a served row. The direct cache APIs also refuse unresolved
+  generations; healthy and genesis anchors retain their existing behavior.
 - Capture the request policy snapshot once and use that same mapping for ranking and its
   attestation. A malformed `mind-mem.json` follows the bound MCP loader's built-in
   `DEFAULT_CONFIG` fallback; this is intentionally different from the historical unbound
