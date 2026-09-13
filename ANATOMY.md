@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1559 | **Est. tokens:** ~4621405
-**Generated:** 2026-09-13 03:22 UTC
+**Files:** 1562 | **Est. tokens:** ~4646378
+**Generated:** 2026-09-13 04:01 UTC
 
 ## Token Budget Guide
 
@@ -22,14 +22,14 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~51068 |
+| `./` | 37 | ~72635 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~19902 |
+| `.github/workflows/` | 11 | ~19861 |
 | `.roo/` | 1 | ~22 |
 | `audits/` | 5 | ~24039 |
 | `benchmarks/` | 66 | ~181946 |
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206008 |
+| `docs/` | 93 | ~206359 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 232 | ~1060450 |
+| `src/mind_mem/` | 232 | ~1061318 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 677 | ~2044180 |
+| `tests/` | 679 | ~2046408 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -144,7 +144,8 @@
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
 - `pyproject.toml` (~3733 tok, huge) — [project]
-- `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
+- `requirements-optional.in` (~54 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
+- `requirements-optional.txt` (~22642 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
 - `train_mind7b_runpod.py` (~1659 tok, huge)
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
@@ -187,7 +188,7 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~8217 tok, huge) — name: CI
+- `ci.yml` (~8176 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
@@ -506,7 +507,7 @@
 ### `docs/`
 
 - `security-model.md` (~823 tok, large) — Security Model
-- `setup.md` (~1870 tok, huge) — Setup
+- `setup.md` (~2221 tok, huge) — Setup
 - `status.md` (~1335 tok, large) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
@@ -950,7 +951,7 @@
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `recall_vector.py` (~24008 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
-- `replay_check.py` (~4309 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `replay_check.py` (~4323 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `rerank_ensemble.py` (~4393 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `resume_brief.py` (~2720 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retention_class.py` (~1840 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -968,7 +969,7 @@
 - `scopes.py` (~283 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `scoring_instant.py` (~1643 tok, huge) — The recency seam — one UTC date, resolved once, threaded everywhere.
 - `self_update.py` (~5198 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `served_ledger.py` (~11663 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `served_ledger.py` (~12517 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `session_boost.py` (~1511 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
 - `session_summarizer.py` (~3852 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 ### `src/mind_mem/skill_opt/`
@@ -1550,6 +1551,7 @@
 - `test_online_trainer_wiring.py` (~8382 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ontology_predicate_constraints.py` (~2315 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_optional_requirements_lock.py` (~504 tok, large) — Checks for the reproducible optional dependency lock."""
 - `test_outcome_attribution.py` (~4120 tok, huge) — Regression gate for outcome attribution — did the memory actually help?
 - `test_outcome_attribution_bounds.py` (~3311 tok, huge) — Abuse bounds for outcome attribution — one reporter, one vote.
 - `test_paired_scorecard_gate.py` (~6587 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1704,6 +1706,7 @@
 - `test_self_update.py` (~2727 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_served_ledger.py` (~12023 tok, huge) — RA.1 — the served-set ledger: proof of what was served, joinable to outcome.
 - `test_served_ledger_concurrency.py` (~6866 tok, huge) — The served ledger under a SECOND WRITER — the two shapes production has.
+- `test_served_ledger_v2_compat.py` (~1724 tok, huge) — Reader-only compatibility controls for mixed v1/v2 served ledgers.
 - `test_session_boost.py` (~1488 tok, large) — v3.3.0 Tier 2 #5 — session-boundary preservation via recall-side boost.
 - `test_session_summarizer.py` (~3976 tok, huge) — Comprehensive tests for mind_mem/session_summarizer.py.
 - `test_session_summarizer_door.py` (~3747 tok, huge) — # Copyright 2026 STARGA, Inc.
