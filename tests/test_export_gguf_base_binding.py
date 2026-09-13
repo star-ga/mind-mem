@@ -30,16 +30,12 @@ def _load_export(monkeypatch: pytest.MonkeyPatch, root: Path, base: str):
 def _adapter(root: Path, declared: object) -> Path:
     adapter = root / "train-output" / "adapter"
     adapter.mkdir(parents=True)
-    (adapter / "adapter_config.json").write_text(
-        json.dumps({"base_model_name_or_path": declared}), encoding="utf-8"
-    )
+    (adapter / "adapter_config.json").write_text(json.dumps({"base_model_name_or_path": declared}), encoding="utf-8")
     return adapter
 
 
 @pytest.mark.parametrize("case", ["different_base", "trimmed_alias"])
-def test_mismatched_adapter_refuses_before_heavy_import_or_merge_delete(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
-) -> None:
+def test_mismatched_adapter_refuses_before_heavy_import_or_merge_delete(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str) -> None:
     base = tmp_path / "selected-base"
     base.mkdir()
     _adapter(tmp_path, "different/base" if case == "different_base" else str(base))
@@ -86,9 +82,7 @@ def test_unknown_gguf_source_is_rejected(tmp_path: Path, monkeypatch: pytest.Mon
         module._resolve_source()
 
 
-def test_matching_adapter_uses_selected_base_through_canonical_loader(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_matching_adapter_uses_selected_base_through_canonical_loader(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = tmp_path / "selected-base"
     base.mkdir()
     adapter = _adapter(tmp_path, str(base))

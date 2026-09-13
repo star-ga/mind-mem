@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1558 | **Est. tokens:** ~4621428
-**Generated:** 2026-09-13 01:08 UTC
+**Files:** 1558 | **Est. tokens:** ~4621422
+**Generated:** 2026-09-13 01:10 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 676 | ~2043002 |
+| `tests/` | 676 | ~2042996 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1340,7 +1340,7 @@
 - `test_excerpt.py` (~248 tok, medium) — Tests for excerpt generation."""
 - `test_expand_query.py` (~265 tok, medium) — Tests for query expansion module."""
 - `test_expand_query_config_knob.py` (~2045 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_export_gguf_base_binding.py` (~1419 tok, large) — Offline controls for GGUF source selection and adapter/base binding."""
+- `test_export_gguf_base_binding.py` (~1413 tok, large) — Offline controls for GGUF source selection and adapter/base binding."""
 - `test_extraction_feedback_durability.py` (~1194 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_extraction_recall_gate.py` (~1749 tok, huge) — Read-path extraction gate + feedback anchoring + graph-edge ACL.
 - `test_extractor.py` (~3387 tok, huge) — Tests for the regex NER-lite entity/fact extractor."""
