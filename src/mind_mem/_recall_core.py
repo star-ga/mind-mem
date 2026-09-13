@@ -131,7 +131,25 @@ _config_mtime: dict[str, float] = {}
 
 
 def _get_config(workspace: str) -> dict[str, Any]:
-    """Return parsed mind-mem.json contents, cached per workspace by file mtime."""
+    """Return the request's config if one is bound, else parsed mind-mem.json (mtime-cached).
+
+    THE BOUND BRANCH IS THE POINT. This function is the one place the ranking reads policy: eight
+    call sites below plus ``sqlite_index.query_index`` all come through here. Before this branch
+    existed, each of them read whatever was on disk at the moment it ran, so a row could report a
+    config hash captured by the caller while the ranking had been produced under a different
+    configuration. An independent review's phrasing: passing the context only to the recorder
+    "cannot prove which policy produced the ranking".
+
+    An unbound read still answers from disk — recall must work for callers that never established
+    a context. What it must NOT do is look proven: ``request_context`` records no read, so
+    ``context_was_consumed_for`` stays False and the row that describes this ranking is unproven.
+    """
+    from .request_context import context_config_for
+
+    bound = context_config_for(workspace)
+    if bound is not None:
+        return bound  # type: ignore[return-value]
+
     global _config_cache, _config_mtime
     cfg_path = os.path.join(workspace, "mind-mem.json")
     try:
@@ -2475,6 +2493,8 @@ def prefetch_context(
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    from .request_context import bind_current
+
     # Strip and filter empty signals upfront
     signals = [s.strip() for s in recent_signals if s.strip()]
     if not signals:
@@ -2496,7 +2516,15 @@ def prefetch_context(
     # Preserve signal order: collect results by index, then flatten in order
     ordered_hits: list[list[dict]] = [[] for _ in signals]
     with ThreadPoolExecutor(max_workers=min(len(signals), 4)) as executor:
-        futures = {executor.submit(_recall_signal, sig): idx for idx, sig in enumerate(signals)}
+        # ``bind_current`` and not ``_recall_signal`` directly: a ThreadPoolExecutor worker starts
+        # with a FRESH context, so a worker submitted bare would read live config while the request
+        # that spawned it is bound — N+1 signal recalls each ranking under whatever is on disk when
+        # its thread happens to run, under a row claiming the captured snapshot. Re-binding inside
+        # the worker also means the parent's receipt counts the worker's reads, so a fan-out that
+        # ignored the context cannot be reported as proven.
+        futures = {
+            executor.submit(bind_current(_recall_signal), sig): idx for idx, sig in enumerate(signals)
+        }
         for future in as_completed(futures):
             idx = futures[future]
             try:
@@ -2666,6 +2694,14 @@ def main():
     # run resolved, and the ranking above is already fixed and printed below,
     # so nothing recorded here can reach it.
     _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
+    from .mcp.infra.constants import MCP_SCHEMA_VERSION
+    from .prefetch import anticipation_generation_identity
+
+    _snap_generation = (
+        anticipation_generation_identity(_snap_config, str(MCP_SCHEMA_VERSION))
+        if _snap_config is not None
+        else None
+    )
     attest_and_record(
         workspace,
         args.query,
@@ -2675,10 +2711,17 @@ def main():
         # degraded that this run never requested. A configured custom backend
         # (the vector one) is the case where those flags ARE the run's own.
         backend="bm25" if backend in ("scan", "sqlite") else "auto",
+    
         config=_snap_config,
         config_hash=_snap_hash,
         index_anchor=_snap_anchor,
-        generation="__not_bound__",
+        # Derived from the captured config, like every other door that holds a snapshot. This site
+        # used to pass the NOT_BOUND literal while ALSO passing config_hash above, which is the
+        # incoherence an independent control caught on the axis door: a recorded row carrying a
+        # bound hash beside an unbound generation. NOT_BOUND stays correct only for a door that
+        # captures nothing. ``None`` means "not derivable for this config" and the recorder turns it
+        # into an explicit unproven reference rather than a silent v1 downgrade.
+        generation=_snap_generation,
     )
 
     if args.json:

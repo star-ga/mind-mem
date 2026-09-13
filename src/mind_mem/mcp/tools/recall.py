@@ -335,6 +335,7 @@ def _recall_impl_ranked(
     # (limits, timeout, backend selection, telemetry) only fires on
     # cache misses. Opt-out: set ``cache.enabled: false`` in
     # ``mind-mem.json``. Default is enabled.
+    from mind_mem.request_context import RequestContext, bind_request_context
     from mind_mem.recall_cache import cached_recall
 
     _raw_config = _load_config(ws)
@@ -415,7 +416,23 @@ def _recall_impl_ranked(
         if _anticipated is not None:
             return _anticipated
 
-    if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
+    # BIND THE CAPTURED CONTEXT AROUND THE ACTUAL RETRIEVAL, both branches. Capturing
+    # `_config_hash_snapshot` and `_index_anchor` above fixed WHEN they were read; it did not stop
+    # the engine reading policy for itself. `_recall_core._get_config` is consulted at eight sites
+    # during one ranking plus once inside `sqlite_index.query_index`, so without this bind the
+    # recorded hash describes this function's moment while `HybridBackend.from_config` is built
+    # from whatever is on disk when the leg runs. The context's receipt counts the reads the engine
+    # actually served from it, which is what makes a recorded v2 row a claim about the ranking
+    # instead of a claim about the caller.
+    _request_context = RequestContext(
+        workspace=ws,
+        config=_raw_config if isinstance(_raw_config, dict) else {},
+        config_hash=None if _config_hash_snapshot == _CONFIG_HASH_UNRESOLVED else _config_hash_snapshot,
+        index_anchor=_index_anchor,
+        scoring_instant=instant_iso,
+    )
+    with bind_request_context(_request_context):
+      if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
         raw = cached_recall(
             _inner,
             query,
@@ -431,9 +448,9 @@ def _recall_impl_ranked(
             schema_version=str(MCP_SCHEMA_VERSION),
             filters=_active_filters,
         )
-    else:
-        raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend, **_active_filters)
-        raw = str(raw_result) if raw_result is not None else ""
+      else:
+          raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend, **_active_filters)
+          raw = str(raw_result) if raw_result is not None else ""
 
     # ``format`` is a PRESENTATION choice over one retrieval, so it is applied
     # POST-cache — the same rail the attestation and explain blocks below run

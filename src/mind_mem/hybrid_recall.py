@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
+
+from .request_context import bind_current
 from concurrent.futures import TimeoutError as _FutureTimeout
 from contextlib import AbstractContextManager, nullcontext
 from datetime import date
@@ -1022,8 +1024,12 @@ class HybridBackend:
             bm25_degraded = None
             pool = ThreadPoolExecutor(max_workers=2)
             try:
+                # Both legs go through ``bind_current``: a worker thread inherits no context, so a
+                # bare submit would let one leg rank under the request's captured config and the
+                # other under whatever landed on disk meanwhile — a fused ranking with no single
+                # policy behind it, described by a row naming one.
                 bm25_future: Future = pool.submit(
-                    self._bm25_search,
+                    bind_current(self._bm25_search),
                     query,
                     workspace,
                     limit=_leg_k,
@@ -1035,7 +1041,7 @@ class HybridBackend:
                     **kwargs,
                 )
                 vec_future: Future = pool.submit(
-                    self._vector_search,
+                    bind_current(self._vector_search),
                     query,
                     workspace,
                     limit=_leg_k,
@@ -1295,7 +1301,15 @@ class HybridBackend:
 
             max_workers = min(len(queries), 4)
             with ThreadPoolExecutor(max_workers=max_workers) as ex:
-                per_query_results = list(ex.map(_one, queries))
+                # ``bind_current(_one)``, evaluated HERE in the submitting thread. The trace comment
+                # above already names this hazard for attribution traces ("a task runs in a fresh
+                # context"); policy reads have it too, and for them a silently unbound variant is
+                # worse than a missing trace step — each variant would rank under whatever config
+                # its thread saw, and the fused answer would have no single policy behind it. This
+                # binds the context OBJECT rather than entering a copied Context, which is why it
+                # does not hit the "one Context cannot be entered by two threads at once" limit the
+                # comment above records.
+                per_query_results = list(ex.map(bind_current(_one), queries))
 
         if not per_query_results:
             return _as_results([])

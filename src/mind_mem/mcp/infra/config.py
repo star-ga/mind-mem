@@ -44,10 +44,27 @@ _DEFAULT_LIMITS = {
 
 
 def _load_config(ws: str) -> dict:
-    """Load mind-mem.json config with graceful fallback (#26).
+    """Return the request's bound config if one governs *ws*, else load mind-mem.json (#26).
+
+    THE SECOND CHOKEPOINT. ``_recall_core._get_config`` is not the only loader the ranking
+    consults: ``_recall_impl_uncached`` builds the hybrid backend from ``_load_config(ws)``, so
+    binding only the engine's loader still let ``HybridBackend.from_config`` be constructed from
+    whatever was on disk when the leg ran. An independent control caught exactly that — the
+    recorded metadata claimed the captured config while the backend had been built from a later
+    one. Both loaders have to honour the binding or neither claim is worth anything.
+
+    A copy is returned, not the bound mapping itself: callers here mutate the dict they get
+    (defaults are merged into it), and letting that reach the context would make the "immutable
+    request context" a claim rather than a fact.
 
     On JSONDecodeError, logs line/column and returns DEFAULT_CONFIG.
     """
+    from mind_mem.request_context import context_config_for
+
+    _bound = context_config_for(ws)
+    if _bound is not None:
+        return dict(_bound)
+
     config_path = os.path.join(ws, "mind-mem.json")
     if not os.path.isfile(config_path):
         return {}

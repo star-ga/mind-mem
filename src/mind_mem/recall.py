@@ -118,6 +118,7 @@ from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 
 # --- Tokenization (_recall_tokenization) ---
 from ._recall_tokenization import _stem, tokenize
+from .request_context import RequestContext, bind_request_context
 
 # --- Guardrails (guardrails / guardrail_surface) ---
 from .guardrail_surface import apply_guardrail_surfacing, guardrail_hits
@@ -260,6 +261,24 @@ def serving_scope() -> Iterator[None]:
 #: became permission to bind a later config. NUL-prefixed so no hex digest can collide, following
 #: recall_cache.UNCACHEABLE_CONFIG_FINGERPRINT.
 _CONFIG_HASH_UNRESOLVED = "\x00config-hash-unresolved"
+
+
+
+def _derive_generation(config: Mapping[str, Any] | None) -> str | None:
+    """The anticipation generation identity for a captured config, or ``None``.
+
+    ONE derivation for every door. Three doors each need this value and each had its own idea of
+    it — two passed the NOT_BOUND literal while holding a snapshot, which is what let a recorded row
+    carry a bound config hash beside an unbound generation. ``None`` is returned for a config whose
+    identity cannot be represented, and means "tried and failed": the recorder turns that into an
+    explicit unproven reference rather than a v1 row that quietly makes no claim.
+    """
+    if config is None:
+        return None
+    from .mcp.infra.constants import MCP_SCHEMA_VERSION
+    from .prefetch import anticipation_generation_identity
+
+    return anticipation_generation_identity(config, str(MCP_SCHEMA_VERSION))
 
 
 def capture_policy_snapshot(workspace: str) -> tuple[Any, str, str]:
@@ -454,6 +473,10 @@ def attest_and_record(
         )
         record = attestation.to_dict()
     except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
+        # AN EXPLICIT UNPROVEN RECORD, not None. Returning None lost the reason entirely: the
+        # axis and prefetch doors answered with "attestation": null and nothing said why, while
+        # ranked MCP emitted a marker. Same serve-but-say-so rule, now on every door.
+        reason = f"attestation derivation failed: {type(exc).__name__}: {exc}"
         _serving_log().warning("recall_attestation_apply_failed", error=str(exc))
         from .served_ledger import (
             LEDGER_ERROR_KEY,
@@ -467,7 +490,7 @@ def attest_and_record(
             SERVED_SEQ_KEY: None,
             SERVED_ROW_HASH_KEY: None,
             SERVED_PROOF_KEY: PROOF_UNPROVEN,
-            LEDGER_ERROR_KEY: f"attestation derivation failed: {type(exc).__name__}: {exc}",
+            LEDGER_ERROR_KEY: reason,
         }
     from .served_ledger import attach_served_run
 
@@ -533,23 +556,48 @@ def recall(
         served_leg = ServedResults(raw_leg)
         _carry_degraded(raw_leg, served_leg)
         return served_leg
-    with serving_scope():
+    # SNAPSHOT BEFORE THE ENGINE RUNS. This capture was placed AFTER _engine_recall, so a policy
+    # change landing between ranking and the capture was recorded as if it had governed the
+    # retrieval — an independent probe reproduced it: retrieval under
+    # hash 4b586a38…, row and attestation carrying 734aaf80…, served_proof="recorded", no refusal.
+    # Threading the values was correct; taking them late made the threading meaningless.
+    _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
+    # AND BIND IT SO THE ENGINE READS IT. Capturing early is necessary and not sufficient: the
+    # engine loads policy on its own at eight `_get_config` sites plus `sqlite_index.query_index`,
+    # so a hash threaded only into the recorder describes the caller's moment, not the ranking's.
+    # Binding here makes every one of those reads answer from THIS mapping, and the context's
+    # receipt counts them — which is what lets a recorded row claim the ranking rather than assume
+    # it. An unbound path still ranks; it just cannot be reported as proven.
+    _snap_generation = _derive_generation(_snap_config)
+    _request_context = RequestContext(
+        workspace=workspace,
+        config=_snap_config if _snap_config is not None else {},
+        config_hash=_snap_hash,
+        index_anchor=_snap_anchor,
+        scoring_instant=kwargs.get("scoring_instant"),
+    )
+    with bind_request_context(_request_context), serving_scope():
         raw = _engine_recall(workspace, query, *args, **kwargs)
         served = ServedResults(raw)
         # ``derive_legs`` reads the ``.degraded`` marker off the results object;
         # re-presenting it here keeps a degraded vector leg visible through the
         # wrapper instead of being lost with the engine's own return type.
         _carry_degraded(raw, served)
-        _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
+
         served.attestation = attest_and_record(
             workspace,
             query,
             served,
             scoring_instant=kwargs.get("scoring_instant"),
+        
             config=_snap_config,
             config_hash=_snap_hash,
             index_anchor=_snap_anchor,
-            generation="__not_bound__",
+            # Derived, not NOT_BOUND. This door captures a snapshot and binds it around the
+            # engine, so declaring the generation unbound would put a bound hash and an unbound
+            # generation in one recorded row — the mixed-coordinate row an independent control
+            # caught on the axis door. NOT_BOUND now means only "this door captures nothing".
+            generation=_snap_generation,
         )
     return served
 

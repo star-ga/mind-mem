@@ -313,8 +313,31 @@ def recall_with_axis(
     from .recall import capture_policy_snapshot
 
     _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
+    # DERIVE THE GENERATION FROM THE CAPTURED CONFIG, and bind the context so the passes below
+    # actually rank under it. Threading the hash while still declaring generation NOT_BOUND minted a
+    # RECORDED row holding a bound hash next to an unbound generation — coordinates from two
+    # different claims in one row, which an independent control caught on this door. NOT_BOUND is
+    # for a door that captures NOTHING; a door holding a snapshot owes a generation or an honest
+    # refusal. ``None`` here means "derivable in principle, not for this config", which the recorder
+    # turns into an explicit unproven reference rather than a v1 downgrade.
+    from .mcp.infra.constants import MCP_SCHEMA_VERSION
+    from .prefetch import anticipation_generation_identity
+    from .request_context import RequestContext, bind_request_context
 
-    with serving_scope():
+    _snap_generation = (
+        anticipation_generation_identity(_snap_config, str(MCP_SCHEMA_VERSION))
+        if _snap_config is not None
+        else None
+    )
+    _request_context = RequestContext(
+        workspace=workspace,
+        config=_snap_config if _snap_config is not None else {},
+        config_hash=_snap_hash,
+        index_anchor=_snap_anchor,
+        scoring_instant=base_kwargs.get("scoring_instant"),
+    )
+
+    with bind_request_context(_request_context), serving_scope():
         fused = _run_pass(
             workspace,
             query,
@@ -359,10 +382,11 @@ def recall_with_axis(
         query,
         fused,
         scoring_instant=base_kwargs.get("scoring_instant"),
+    
         config=_snap_config,
         config_hash=_snap_hash,
         index_anchor=_snap_anchor,
-        generation="__not_bound__",
+        generation=_snap_generation,
     )
 
     diversity_count = _count_axis_diversity(fused)
