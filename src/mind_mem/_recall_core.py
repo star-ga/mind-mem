@@ -140,9 +140,9 @@ def _get_config(workspace: str) -> dict[str, Any]:
     configuration. An independent review's phrasing: passing the context only to the recorder
     "cannot prove which policy produced the ranking".
 
-    An unbound read still answers from disk — recall must work for callers that never established
-    a context. What it must NOT do is look proven: ``request_context`` records no read, so
-    ``context_was_consumed_for`` stays False and the row that describes this ranking is unproven.
+    An unbound read still answers from disk for callers that never established a context.
+    Serving callers bind the captured mapping here and pass its coordinates to the recorder.
+    The request-context read counter is diagnostic; it does not govern ledger row admission.
     """
     from .request_context import context_config_for
 

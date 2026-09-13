@@ -578,9 +578,9 @@ def recall(
     # AND BIND IT SO THE ENGINE READS IT. Capturing early is necessary and not sufficient: the
     # engine loads policy on its own at eight `_get_config` sites plus `sqlite_index.query_index`,
     # so a hash threaded only into the recorder describes the caller's moment, not the ranking's.
-    # Binding here makes every one of those reads answer from THIS mapping, and the context's
-    # receipt counts them — which is what lets a recorded row claim the ranking rather than assume
-    # it. An unbound path still ranks; it just cannot be reported as proven.
+    # Binding here makes those reads answer from THIS mapping; the recorder receives the same
+    # snapshot's coordinates. The context's read counter is diagnostic only and does not govern
+    # whether a ledger row is appended.
     _snap_generation = _derive_generation(_snap_config)
     _request_context = RequestContext(
         workspace=workspace,

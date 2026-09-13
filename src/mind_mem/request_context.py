@@ -10,12 +10,12 @@ the hash was read; it did not make the hash a fact about the ranking.
 
 The binding therefore has to sit where the engine reads, not where the recorder writes.
 
-WHAT "PROVEN" MEANS HERE, AND WHY THERE IS A RECEIPT. A context that is bound but never read
-proves nothing — it is indistinguishable from no context at all, which is the vacuous-pass shape
-this repo keeps paying for. So the context carries a :class:`_Receipt` that counts the reads the
-engine actually served from it. A caller may only claim a recorded row when the receipt shows the
-engine consumed the context at least once. The count is observational: it records what happened,
-it never changes what any read returns.
+THE RECEIPT IS DIAGNOSTIC. The context carries a :class:`_Receipt` that observes reads served
+from it for tests and diagnostics. No production ledger-admission path consults this counter.
+``served_proof="recorded"`` means a chain row was appended with the caller's captured policy
+coordinates. Ranking and receipt coherence comes from binding the snapshot at the engine's
+loaders and threading its coordinates to the recorder, not from measuring consumption. A cache
+hit can legitimately record a row without re-running the engine or incrementing the counter.
 
 THREAD-POOL WORKERS ARE EXPLICIT, NOT INHERITED. ``ContextVar`` values do not cross a
 ``ThreadPoolExecutor`` boundary on their own, which is the honest default here: a worker that was
@@ -44,7 +44,7 @@ IMPORT RAIL. This module must not import :mod:`.served_ledger`: ``_recall_core``
 context and the scoring path is pinned to zero ledger import edges by two tests
 (``test_recall_attestation_v2.py::test_t12_the_scoring_path_ledger_surface_is_pinned`` and
 ``test_recall_admissibility.py::test_the_scoring_path_has_no_import_edge_to_the_importer``).
-Nothing here needs the ledger — the ledger reads the context, never the reverse.
+Neither module imports the other. Serving callers pass captured coordinates to the ledger.
 """
 
 from __future__ import annotations
@@ -74,8 +74,8 @@ class _Receipt:
     """How many reads the engine actually served from the context it was given.
 
     Deliberately mutable and deliberately NOT part of the context's value: two contexts with the
-    same policy are the same policy whatever their read counts. It exists so "the engine consumed
-    this" is a measurement rather than an assumption.
+    same policy are the same policy whatever their read counts. The counter supports tests and
+    diagnostics; it is neither a ledger-admission predicate nor a proof of policy coherence.
     """
 
     reads: int = 0
@@ -114,7 +114,7 @@ class RequestContext:
 
     @property
     def reads(self) -> int:
-        """Reads the engine served from this context. Zero means it proved nothing."""
+        """Diagnostic read count; a cache hit can legitimately leave it at zero."""
         return self._receipt.reads
 
 
@@ -147,9 +147,9 @@ def active_request_context() -> Optional[RequestContext]:
 def context_config_for(workspace: str | os.PathLike[str]) -> Optional[Mapping[str, Any]]:
     """The bound config for *workspace*, or ``None`` when nothing is bound for it.
 
-    ``None`` means "no context governs this read", never "the config is empty" — the caller then
-    reads live config as it always did, and the absent receipt entry is what keeps the resulting
-    row honest about not being proven.
+    ``None`` means "no context governs this read", never "the config is empty". The caller then
+    uses its ordinary config loader. The read counter is diagnostic and does not control whether
+    a serving caller can append a ledger row.
     """
     context = _ACTIVE.get()
     if context is None or context.workspace != _normalise(workspace):
@@ -163,8 +163,8 @@ def context_config_for(workspace: str | os.PathLike[str]) -> Optional[Mapping[st
 def context_was_consumed_for(workspace: str | os.PathLike[str]) -> bool:
     """True only if a context is bound for *workspace* AND the engine read from it.
 
-    This is the predicate a recorded row depends on. A bound-but-unread context returns False,
-    because a context nothing consumed is not evidence about the ranking.
+    This diagnostic predicate is used by tests, not by production row admission. A bound but
+    unread context returns False; cache hits can still legitimately append a recorded row.
     """
     context = _ACTIVE.get()
     if context is None or context.workspace != _normalise(workspace):
@@ -182,8 +182,9 @@ def bind_current(func: Callable[..., T]) -> Callable[..., T]:
     the wrapper — in the parent, at submit time — and closed over.
 
     Use it as ``executor.submit(bind_current(fn), arg)`` or ``ex.map(bind_current(fn), items)``.
-    Submitting ``fn`` bare is not a smaller version of this: the worker reads live config, and
-    because it recorded no read against the context the resulting row stays honestly unproven.
+    Submitting ``fn`` bare leaves the worker unbound and able to read live config. The diagnostic
+    counter does not prevent a caller from recording mismatched coordinates, so serving callers
+    must propagate the context explicitly.
 
     Returns *func* unchanged when nothing is bound, so an unbound path pays no wrapper.
     """

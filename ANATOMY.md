@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1573 | **Est. tokens:** ~4682271
-**Generated:** 2026-09-13 08:27 UTC
+**Files:** 1573 | **Est. tokens:** ~4682306
+**Generated:** 2026-09-13 09:06 UTC
 
 ## Token Budget Guide
 
@@ -73,14 +73,14 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 233 | ~1067821 |
+| `src/mind_mem/` | 233 | ~1067848 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
-| `src/mind_mem/mcp/tools/` | 29 | ~115432 |
+| `src/mind_mem/mcp/tools/` | 29 | ~115440 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11515 |
@@ -897,7 +897,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~20161 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~20169 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1571 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -944,7 +944,7 @@
 - `quality_gate.py` (~2691 tok, huge) — Deterministic block quality gate (v3.11.0, Pattern 2).
 - `query_expansion.py` (~5349 tok, huge) — Multi-query expansion for improved recall.
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
-- `recall.py` (~7614 tok, huge) — mind-mem Recall Engine (BM25 + TF-IDF + Graph + Stemming). Zero external deps.
+- `recall.py` (~7604 tok, huge) — mind-mem Recall Engine (BM25 + TF-IDF + Graph + Stemming). Zero external deps.
 - `recall_attestation.py` (~11796 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
 - `recall_cache.py` (~4850 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
 - `recall_digests.py` (~2101 tok, huge) — Canonical digests the recall attestation commits to.
@@ -952,7 +952,7 @@
 - `recall_vector.py` (~24008 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `replay_check.py` (~4323 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `request_context.py` (~2353 tok, huge) — One immutable policy context per request, consumed by the engine itself.
+- `request_context.py` (~2388 tok, huge) — One immutable policy context per request, consumed by the engine itself.
 - `rerank_ensemble.py` (~4393 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `resume_brief.py` (~2720 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retention_class.py` (~1840 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -970,7 +970,7 @@
 - `scopes.py` (~283 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `scoring_instant.py` (~1643 tok, huge) — The recency seam — one UTC date, resolved once, threaded everywhere.
 - `self_update.py` (~5198 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `served_ledger.py` (~13277 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `served_ledger.py` (~13279 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `session_boost.py` (~1511 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
 - `session_summarizer.py` (~3852 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 ### `src/mind_mem/skill_opt/`

@@ -428,9 +428,9 @@ def _recall_impl_ranked(
     # the engine reading policy for itself. `_recall_core._get_config` is consulted at eight sites
     # during one ranking plus once inside `sqlite_index.query_index`, so without this bind the
     # recorded hash describes this function's moment while `HybridBackend.from_config` is built
-    # from whatever is on disk when the leg runs. The context's receipt counts the reads the engine
-    # actually served from it, which is what makes a recorded v2 row a claim about the ranking
-    # instead of a claim about the caller.
+    # from whatever is on disk when the leg runs. Binding the snapshot here and threading its
+    # coordinates to the recorder keeps those paths coherent. The context's read counter is
+    # diagnostic only; a cache hit need not execute the engine to record a v2 row.
     _request_context = RequestContext(
         workspace=ws,
         config=_raw_config if isinstance(_raw_config, dict) else {},

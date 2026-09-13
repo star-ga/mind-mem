@@ -353,9 +353,9 @@ class ServedRun:
 class ServedRunV2:
     """A v2 row: the nine v1 fields plus kind and context digest.
 
-    This reader addition is deliberately separate from the current writer:
-    old callers continue to write v1 rows until their context binding is
-    independently released.
+    Context-bound serving doors write v2 once a generation is resolved. The
+    reader also accepts historical v1 rows, and callers without v2 context
+    retain the v1 writer path.
     """
 
     seq: int
