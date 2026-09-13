@@ -37,7 +37,7 @@ import sys
 import threading
 from contextlib import contextmanager
 from datetime import date
-from typing import Any, Iterator
+from typing import Any, Iterator, Mapping
 
 # --- Constants (_recall_constants) ---
 from ._recall_constants import (
@@ -118,7 +118,6 @@ from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 
 # --- Tokenization (_recall_tokenization) ---
 from ._recall_tokenization import _stem, tokenize
-from .request_context import RequestContext, bind_request_context
 
 # --- Guardrails (guardrails / guardrail_surface) ---
 from .guardrail_surface import apply_guardrail_surfacing, guardrail_hits
@@ -130,6 +129,7 @@ from .guardrails import (
     load_guardrails,
     match_guardrails,
 )
+from .request_context import RequestContext, bind_request_context
 from .scoring_instant import (
     as_utc_datetime,
     format_scoring_instant,
@@ -261,7 +261,6 @@ def serving_scope() -> Iterator[None]:
 #: became permission to bind a later config. NUL-prefixed so no hex digest can collide, following
 #: recall_cache.UNCACHEABLE_CONFIG_FINGERPRINT.
 _CONFIG_HASH_UNRESOLVED = "\x00config-hash-unresolved"
-
 
 
 def _derive_generation(config: Mapping[str, Any] | None) -> str | None:
@@ -454,13 +453,8 @@ def attest_and_record(
         # the fallback for callers that captured nothing, so direct mind_mem.recall.recall users
         # are unaffected.
         if config_hash == _CONFIG_HASH_UNRESOLVED:
-            raise RuntimeError(
-                "config hash could not be resolved for this request's snapshot, so no coherent "
-                "context could be bound"
-            )
-        vector_requested, vector_available = resolve_vector_flags(
-            workspace, backend, config
-        )
+            raise RuntimeError("config hash could not be resolved for this request's snapshot, so no coherent context could be bound")
+        vector_requested, vector_available = resolve_vector_flags(workspace, backend, config)
         attestation = derive_recall_attestation_for_workspace(
             results,
             workspace,
@@ -589,7 +583,6 @@ def recall(
             query,
             served,
             scoring_instant=kwargs.get("scoring_instant"),
-        
             config=_snap_config,
             config_hash=_snap_hash,
             index_anchor=_snap_anchor,

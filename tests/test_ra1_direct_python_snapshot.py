@@ -46,20 +46,15 @@ def _seed_workspace(root: Path) -> str:
     for name in ("tasks", "entities", "intelligence"):
         (root / name).mkdir()
     (root / "decisions" / "DECISIONS.md").write_text(
-        "[D-RA1-PY-001]\nStatement: deterministic compiler retrieval context\n"
-        "Status: active\nDate: 2026-01-01\n\n",
+        "[D-RA1-PY-001]\nStatement: deterministic compiler retrieval context\nStatus: active\nDate: 2026-01-01\n\n",
         encoding="utf-8",
         newline="\n",
     )
-    (root / "mind-mem.json").write_text(
-        json.dumps(_CONFIG_A), encoding="utf-8", newline="\n"
-    )
+    (root / "mind-mem.json").write_text(json.dumps(_CONFIG_A), encoding="utf-8", newline="\n")
     return str(root)
 
 
-def test_python_recall_snapshots_before_actual_engine(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_python_recall_snapshots_before_actual_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A governed config change after ranking cannot change the recorded hash."""
     workspace = _seed_workspace(tmp_path / "direct-python")
     config_path = Path(workspace) / "mind-mem.json"
@@ -102,15 +97,11 @@ def test_python_recall_snapshots_before_actual_engine(
 
 def _seed_ranked_workspace(root: Path) -> str:
     workspace = _seed_workspace(root)
-    Path(workspace, "mind-mem.json").write_text(
-        json.dumps(_RANKED_CONFIG_A), encoding="utf-8", newline="\n"
-    )
+    Path(workspace, "mind-mem.json").write_text(json.dumps(_RANKED_CONFIG_A), encoding="utf-8", newline="\n")
     return workspace
 
 
-def test_ranked_positive_passes_the_real_a_config_to_hybrid(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_ranked_positive_passes_the_real_a_config_to_hybrid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The stable control observes the real constructor with A, not a fake result."""
     workspace = _seed_ranked_workspace(tmp_path / "ranked-positive")
     seen: list[dict[str, Any]] = []
@@ -126,21 +117,14 @@ def test_ranked_positive_passes_the_real_a_config_to_hybrid(
     monkeypatch.setattr(hybrid_recall.HybridBackend, "from_config", staticmethod(spy))
 
     with use_workspace(workspace):
-        payload = json.loads(
-            recall_tool._recall_impl(_QUERY, limit=5, backend="auto")
-        )
+        payload = json.loads(recall_tool._recall_impl(_QUERY, limit=5, backend="auto"))
 
     assert payload.get("results"), payload
     assert seen, "the real HybridBackend constructor was not reached"
-    assert all(
-        not bool(cfg.get("recall", {}).get("query_expansion", {}).get("enabled"))
-        for cfg in seen
-    ), seen
+    assert all(not bool(cfg.get("recall", {}).get("query_expansion", {}).get("enabled")) for cfg in seen), seen
 
 
-def test_ranked_pre_retrieval_mutation_keeps_engine_and_row_coherent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_ranked_pre_retrieval_mutation_keeps_engine_and_row_coherent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A captured A context must govern the real engine or produce an honest refusal."""
     workspace = _seed_ranked_workspace(tmp_path / "ranked-boundary")
     config_path = Path(workspace) / "mind-mem.json"
@@ -164,9 +148,7 @@ def test_ranked_pre_retrieval_mutation_keeps_engine_and_row_coherent(
     monkeypatch.setattr(recall_tool, "_recall_impl_uncached", flip_before_real_engine)
 
     with use_workspace(workspace):
-        payload = json.loads(
-            recall_tool._recall_impl(_QUERY, limit=5, backend="auto")
-        )
+        payload = json.loads(recall_tool._recall_impl(_QUERY, limit=5, backend="auto"))
 
     assert payload.get("results"), payload
     assert seen, "the real HybridBackend constructor was not reached"
@@ -181,10 +163,9 @@ def test_ranked_pre_retrieval_mutation_keeps_engine_and_row_coherent(
         return
 
     assert attestation.get("served_proof") == "recorded", attestation
-    assert all(
-        not bool(cfg.get("recall", {}).get("query_expansion", {}).get("enabled"))
-        for cfg in seen
-    ), "the recorded answer ran under B while its metadata claims captured A"
+    assert all(not bool(cfg.get("recall", {}).get("query_expansion", {}).get("enabled")) for cfg in seen), (
+        "the recorded answer ran under B while its metadata claims captured A"
+    )
     assert attestation.get("config_hash") == hash_a, attestation
     assert len(rows) == 1, rows
     assert rows[0].pipeline_hash == hash_a, rows[0]

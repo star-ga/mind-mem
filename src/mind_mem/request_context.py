@@ -114,9 +114,7 @@ class RequestContext:
         return self._receipt.reads
 
 
-_ACTIVE: contextvars.ContextVar[Optional[RequestContext]] = contextvars.ContextVar(
-    "mind_mem_request_context", default=None
-)
+_ACTIVE: contextvars.ContextVar[Optional[RequestContext]] = contextvars.ContextVar("mind_mem_request_context", default=None)
 
 
 def _normalise(workspace: str | os.PathLike[str]) -> str:

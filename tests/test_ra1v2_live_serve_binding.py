@@ -89,9 +89,7 @@ def _record() -> dict:
 def _ws(tmp_path: Path) -> str:
     ws = tmp_path / "wsp"
     (ws / "decisions").mkdir(parents=True)
-    (ws / "decisions" / "DECISIONS.md").write_text(
-        "[D-1]\nStatement: seeded\nStatus: active\n", encoding="utf-8"
-    )
+    (ws / "decisions" / "DECISIONS.md").write_text("[D-1]\nStatement: seeded\nStatus: active\n", encoding="utf-8")
     with open(ws / "mind-mem.json", "w", encoding="utf-8") as fh:
         json.dump({"served_ledger": {"enabled": True}}, fh)
     return str(ws)
@@ -106,9 +104,7 @@ def _only_row(ws: str):
 def test_a_real_generation_records_a_v2_row(tmp_path):
     """The point of the whole change: a live serve's row carries its context."""
     ws = _ws(tmp_path)
-    out = attach_served_run(
-        _record(), ws, ids=_IDS, serve_kind="attested", generation="PV:1:fingerprint"
-    )
+    out = attach_served_run(_record(), ws, ids=_IDS, serve_kind="attested", generation="PV:1:fingerprint")
 
     assert out[SERVED_PROOF_KEY] == PROOF_RECORDED, out
     assert out[SERVED_SEQ_KEY] is not None, out
@@ -132,19 +128,14 @@ def test_a_different_generation_gives_a_different_row_context(tmp_path):
     """Same query, same ids, same head — a changed policy identity must be distinguishable."""
     ws_a = _ws(tmp_path / "a")
     ws_b = _ws(tmp_path / "b")
-    a = attach_served_run(
-        _record(), ws_a, ids=_IDS, serve_kind="attested", generation="PV:1:one"
-    )
-    b = attach_served_run(
-        _record(), ws_b, ids=_IDS, serve_kind="attested", generation="PV:1:two"
-    )
+    a = attach_served_run(_record(), ws_a, ids=_IDS, serve_kind="attested", generation="PV:1:one")
+    b = attach_served_run(_record(), ws_b, ids=_IDS, serve_kind="attested", generation="PV:1:two")
     assert a[SERVED_PROOF_KEY] == b[SERVED_PROOF_KEY] == PROOF_RECORDED
 
     da = getattr(_only_row(ws_a), "context_digest", "")
     db = getattr(_only_row(ws_b), "context_digest", "")
     assert da and db and da != db, (
-        "two serves differing ONLY in generation identity produced the same context digest, so "
-        "the ledger cannot tell the policies apart"
+        "two serves differing ONLY in generation identity produced the same context digest, so the ledger cannot tell the policies apart"
     )
 
 
@@ -171,9 +162,7 @@ def test_not_bound_still_records_a_v1_row(tmp_path):
 
     assert out[SERVED_PROOF_KEY] == PROOF_RECORDED, out
     row = _only_row(ws)
-    assert not getattr(row, "context_digest", ""), (
-        "an unthreaded path must write a v1 row; a context digest here would be fabricated"
-    )
+    assert not getattr(row, "context_digest", ""), "an unthreaded path must write a v1 row; a context digest here would be fabricated"
 
 
 def test_an_unknown_serve_kind_is_refused_with_its_own_reason(tmp_path):
@@ -184,16 +173,10 @@ def test_an_unknown_serve_kind_is_refused_with_its_own_reason(tmp_path):
     mutation testing showed deleting it changed no observable behaviour.
     """
     ws = _ws(tmp_path)
-    out = attach_served_run(
-        _record(), ws, ids=_IDS, serve_kind="made_up", generation="PV:1:fingerprint"
-    )
+    out = attach_served_run(_record(), ws, ids=_IDS, serve_kind="made_up", generation="PV:1:fingerprint")
     assert out[SERVED_PROOF_KEY] == PROOF_UNPROVEN, out
-    assert "made_up" in (out[LEDGER_ERROR_KEY] or ""), (
-        "the reason must name the offending kind, or an operator cannot fix it"
-    )
-    assert out[LEDGER_ERROR_KEY] != GENERATION_UNAVAILABLE, (
-        "a bad serve_kind must not be reported as a generation failure"
-    )
+    assert "made_up" in (out[LEDGER_ERROR_KEY] or ""), "the reason must name the offending kind, or an operator cannot fix it"
+    assert out[LEDGER_ERROR_KEY] != GENERATION_UNAVAILABLE, "a bad serve_kind must not be reported as a generation failure"
     assert not read_served_runs(ws)
 
 
@@ -204,9 +187,7 @@ def test_every_defined_serve_kind_is_accepted(kind, tmp_path):
     Without this, the serve_kind test would pass if the guard rejected EVERYTHING.
     """
     ws = _ws(tmp_path / kind)
-    out = attach_served_run(
-        _record(), ws, ids=_IDS, serve_kind=kind, generation="PV:1:fingerprint"
-    )
+    out = attach_served_run(_record(), ws, ids=_IDS, serve_kind=kind, generation="PV:1:fingerprint")
     assert out[SERVED_PROOF_KEY] == PROOF_RECORDED, (kind, out)
     assert row_serve_kind(_only_row(ws)) == kind
 
@@ -223,8 +204,7 @@ def test_the_binding_parameters_are_required_not_defaulted():
         param = sig.parameters[name]
         assert param.kind is inspect.Parameter.KEYWORD_ONLY, f"{name} must be keyword-only"
         assert param.default is inspect.Parameter.empty, (
-            f"{name} must have NO default: a default lets a call site that forgets keep emitting "
-            f"v1 rows while appearing bound"
+            f"{name} must have NO default: a default lets a call site that forgets keep emitting v1 rows while appearing bound"
         )
 
 
@@ -316,9 +296,9 @@ def test_no_scoring_path_door_declares_its_generation_unbound_while_holding_a_sn
     )
     probe = 'attest_and_record(ws, q, r, generation="__not_bound__")'
     assert re.findall(r'generation="([^"]*)"', probe) == [NOT_BOUND], (
-        "the literal-detecting pattern no longer matches a known-positive sample, so every "
-        "assertion above is vacuous"
+        "the literal-detecting pattern no longer matches a known-positive sample, so every assertion above is vacuous"
     )
+
 
 def test_a_v2_row_hands_its_coordinates_back_to_the_caller(tmp_path):
     """A v2 row a client cannot present back is unusable. This is the hole I made.
@@ -331,14 +311,10 @@ def test_a_v2_row_hands_its_coordinates_back_to_the_caller(tmp_path):
     which is why this assertion lives next to the binding instead.
     """
     ws = _ws(tmp_path)
-    out = attach_served_run(
-        _record(), ws, ids=_IDS, serve_kind="attested", generation="PV:1:fingerprint"
-    )
+    out = attach_served_run(_record(), ws, ids=_IDS, serve_kind="attested", generation="PV:1:fingerprint")
     assert out[SERVED_PROOF_KEY] == PROOF_RECORDED, out
 
-    assert out.get("served_serve_kind") == "attested", (
-        "a v2 row must tell the caller WHICH kind it recorded"
-    )
+    assert out.get("served_serve_kind") == "attested", "a v2 row must tell the caller WHICH kind it recorded"
     digest = out.get("served_context_digest")
     assert digest, "a v2 row must hand back the context digest, or no outcome can be bound to it"
     assert digest == getattr(_only_row(ws), "context_digest", ""), (

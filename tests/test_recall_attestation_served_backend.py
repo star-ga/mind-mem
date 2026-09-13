@@ -241,7 +241,7 @@ class TestLibraryEntryAttestsTheDenseLeg:
         assert recall_mod.resolve_vector_flags(ws, "auto") == (True, True)
         assert recall_mod.resolve_vector_flags(ws, "bm25") == (False, False)
 
-        record = attest_and_record(ws, "attestation backend provenance", [{"_id": "SRVB-001", "score": 1.0}])
+        record = attest_and_record(ws, "attestation backend provenance", [{"_id": "SRVB-001", "score": 1.0}], generation="__not_bound__")
         assert record is not None, "no record: every assertion below would be vacuous"
         assert "vector" in record["legs_ran"], f"dense leg under-claimed: {record['legs_ran']}"
 
@@ -256,7 +256,7 @@ class TestLibraryEntryAttestsTheDenseLeg:
         ws = _write_workspace(str(tmp_path / "ws"), {"vector_enabled": True})
         assert recall_mod.resolve_vector_flags(ws, "auto") == (True, True), "fixture cannot exercise the defect"
 
-        record = attest_and_record(ws, "attestation backend provenance", [{"_id": "SRVB-002", "score": 1.0}])
+        record = attest_and_record(ws, "attestation backend provenance", [{"_id": "SRVB-002", "score": 1.0}], generation="__not_bound__")
         assert record is not None
         assert record["legs_ran"] == ["bm25"]
         assert record["legs_degraded"] == []
@@ -267,7 +267,7 @@ class TestLibraryEntryAttestsTheDenseLeg:
         ws = _write_workspace(str(tmp_path / "ws"), {"vector_enabled": True})
         monkeypatch.setattr(recall_mod, "_load_backend", lambda w: _StandInBackend())
 
-        record = attest_and_record(ws, "explicit leg", [{"_id": "SRVB-003", "score": 1.0}], backend="bm25")
+        record = attest_and_record(ws, "explicit leg", [{"_id": "SRVB-003", "score": 1.0}], backend="bm25", generation="__not_bound__")
         assert record is not None
         assert record["legs_ran"] == ["bm25"]
 

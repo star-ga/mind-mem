@@ -2522,9 +2522,7 @@ def prefetch_context(
         # its thread happens to run, under a row claiming the captured snapshot. Re-binding inside
         # the worker also means the parent's receipt counts the worker's reads, so a fan-out that
         # ignored the context cannot be reported as proven.
-        futures = {
-            executor.submit(bind_current(_recall_signal), sig): idx for idx, sig in enumerate(signals)
-        }
+        futures = {executor.submit(bind_current(_recall_signal), sig): idx for idx, sig in enumerate(signals)}
         for future in as_completed(futures):
             idx = futures[future]
             try:
@@ -2697,11 +2695,7 @@ def main():
     from .mcp.infra.constants import MCP_SCHEMA_VERSION
     from .prefetch import anticipation_generation_identity
 
-    _snap_generation = (
-        anticipation_generation_identity(_snap_config, str(MCP_SCHEMA_VERSION))
-        if _snap_config is not None
-        else None
-    )
+    _snap_generation = anticipation_generation_identity(_snap_config, str(MCP_SCHEMA_VERSION)) if _snap_config is not None else None
     attest_and_record(
         workspace,
         args.query,
@@ -2711,7 +2705,6 @@ def main():
         # degraded that this run never requested. A configured custom backend
         # (the vector one) is the case where those flags ARE the run's own.
         backend="bm25" if backend in ("scan", "sqlite") else "auto",
-    
         config=_snap_config,
         config_hash=_snap_hash,
         index_anchor=_snap_anchor,

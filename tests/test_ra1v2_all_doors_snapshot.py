@@ -64,13 +64,8 @@ def _seed_workspace(root: Path) -> str:
         (root / subdir).mkdir()
     with (decisions / "DECISIONS.md").open("w", encoding="utf-8", newline="\n") as handle:
         for n in range(4):
-            handle.write(
-                f"[D-DOOR-{n:03d}]\nStatement: deterministic compiler retrieval context {n}\n"
-                f"Status: active\nDate: 2026-01-01\n\n"
-            )
-    (root / "mind-mem.json").write_text(
-        json.dumps(_CONFIG_A, ensure_ascii=False), encoding="utf-8", newline="\n"
-    )
+            handle.write(f"[D-DOOR-{n:03d}]\nStatement: deterministic compiler retrieval context {n}\nStatus: active\nDate: 2026-01-01\n\n")
+    (root / "mind-mem.json").write_text(json.dumps(_CONFIG_A, ensure_ascii=False), encoding="utf-8", newline="\n")
     return str(root)
 
 
@@ -86,9 +81,7 @@ def _flip_config_once(workspace: str, flipped: dict[str, bool]) -> None:
     if flipped.get("done"):
         return
     flipped["done"] = True
-    Path(workspace, "mind-mem.json").write_text(
-        json.dumps(_CONFIG_B, ensure_ascii=False), encoding="utf-8", newline="\n"
-    )
+    Path(workspace, "mind-mem.json").write_text(json.dumps(_CONFIG_B, ensure_ascii=False), encoding="utf-8", newline="\n")
 
 
 def _expected_hash_a(workspace: str) -> str:
@@ -104,9 +97,7 @@ def _expected_hash_a(workspace: str) -> str:
     return current_pipeline_hash(workspace)
 
 
-def _assert_coherent_or_refused(
-    workspace: str, payload: dict[str, Any], door: str, expected_hash: str
-) -> None:
+def _assert_coherent_or_refused(workspace: str, payload: dict[str, Any], door: str, expected_hash: str) -> None:
     """Bind the RETRIEVAL snapshot, or refuse explicitly. Never a mixed row.
 
     Deliberately a disjunction: a door whose policy changed mid-request may bind the retrieval
@@ -124,9 +115,7 @@ def _assert_coherent_or_refused(
 
     if attestation.get("served_proof") == "unproven":
         assert attestation.get("served_seq") is None, attestation
-        assert attestation.get("ledger_error"), (
-            f"{door}: an unproven result must carry a REASON an operator can act on"
-        )
+        assert attestation.get("ledger_error"), f"{door}: an unproven result must carry a REASON an operator can act on"
         assert rows == (), f"{door}: a refusal must write no row at all"
         return
 
@@ -141,9 +130,7 @@ def _assert_coherent_or_refused(
         f"(got {attestation.get('config_hash')!r}, retrieval ran under {expected_hash!r}), so its "
         f"context describes a moment the run never occupied"
     )
-    assert attestation["index_anchor"] == row.index_anchor, (
-        f"{door}: the attestation and its row disagree about the corpus head"
-    )
+    assert attestation["index_anchor"] == row.index_anchor, f"{door}: the attestation and its row disagree about the corpus head"
     # THE FLAGS must come from the same snapshot as the hash. Config A disables the vector leg, B
     # enables it; a door that rereads reports the vector leg as having run on a BM25-only run.
     legs = attestation.get("legs_ran") or []
@@ -159,10 +146,7 @@ def _assert_coherent_or_refused(
             config_hash=expected_hash,
             generation=_generation_of_config_a(),
             index_anchor=row.index_anchor,
-        ), (
-            f"{door}: the v2 context digest does not match the RETRIEVAL snapshot's "
-            f"(workspace, hash, generation, anchor)"
-        )
+        ), f"{door}: the v2 context digest does not match the RETRIEVAL snapshot's (workspace, hash, generation, anchor)"
 
 
 def _generation_of_config_a() -> str:
@@ -172,9 +156,7 @@ def _generation_of_config_a() -> str:
     return anticipation_generation_identity(_CONFIG_A, str(MCP_SCHEMA_VERSION)) or ""
 
 
-def test_the_prefetch_door_never_records_a_mixed_context(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_prefetch_door_never_records_a_mixed_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The door that wrote a recorded v2 mixed row. Bind A coherently, or refuse."""
     workspace = _seed_workspace(tmp_path / "prefetch-boundary")
     expected = _expected_hash_a(workspace)
@@ -191,19 +173,13 @@ def test_the_prefetch_door_never_records_a_mixed_context(
     monkeypatch.setattr(recall_mod, "attest_and_record", flip_then_attest)
 
     with use_workspace(workspace):
-        payload = json.loads(
-            public.recall(
-                "deterministic compiler", mode="prefetch", signals="deterministic compiler", limit=5
-            )
-        )
+        payload = json.loads(public.recall("deterministic compiler", mode="prefetch", signals="deterministic compiler", limit=5))
 
     assert flipped.get("done"), "the boundary mutation never ran — this test would prove nothing"
     _assert_coherent_or_refused(workspace, payload, "prefetch", expected)
 
 
-def test_the_axis_door_never_records_a_mixed_context(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_axis_door_never_records_a_mixed_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The v1 row hid the digest but not the reread. Bind A coherently, or refuse."""
     workspace = _seed_workspace(tmp_path / "axis-boundary")
     expected = _expected_hash_a(workspace)
@@ -250,9 +226,7 @@ def test_a_derivation_failure_is_explicit_on_every_door(
 
     assert payload.get("results"), f"{mode}: the door must still answer"
     attestation = payload.get("attestation")
-    assert isinstance(attestation, dict), (
-        f"{mode}: a probe failure must produce an explicit marker, not attestation=None"
-    )
+    assert isinstance(attestation, dict), f"{mode}: a probe failure must produce an explicit marker, not attestation=None"
     assert attestation.get("served_proof") == "unproven", attestation
     assert "DOOR_PROBE_FAIL" in (attestation.get("ledger_error") or ""), (
         f"{mode}: the reason must name the actual failure, not a downstream symptom"

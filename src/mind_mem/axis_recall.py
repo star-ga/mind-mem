@@ -324,11 +324,7 @@ def recall_with_axis(
     from .prefetch import anticipation_generation_identity
     from .request_context import RequestContext, bind_request_context
 
-    _snap_generation = (
-        anticipation_generation_identity(_snap_config, str(MCP_SCHEMA_VERSION))
-        if _snap_config is not None
-        else None
-    )
+    _snap_generation = anticipation_generation_identity(_snap_config, str(MCP_SCHEMA_VERSION)) if _snap_config is not None else None
     _request_context = RequestContext(
         workspace=workspace,
         config=_snap_config if _snap_config is not None else {},
@@ -382,7 +378,6 @@ def recall_with_axis(
         query,
         fused,
         scoring_instant=base_kwargs.get("scoring_instant"),
-    
         config=_snap_config,
         config_hash=_snap_hash,
         index_anchor=_snap_anchor,

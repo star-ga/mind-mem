@@ -29,8 +29,6 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
-
-from .request_context import bind_current
 from concurrent.futures import TimeoutError as _FutureTimeout
 from contextlib import AbstractContextManager, nullcontext
 from datetime import date
@@ -42,6 +40,7 @@ from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_s
 from .enums import Leg
 from .error_codes import DailyTokenCapExceeded
 from .observability import get_logger, metrics, timed
+from .request_context import bind_current
 from .retrieval_trace import current_trace, is_trace_enabled
 from .retrieval_trace import step as _record_step
 from .retrieval_trace import trace as _open_trace

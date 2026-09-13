@@ -335,8 +335,8 @@ def _recall_impl_ranked(
     # (limits, timeout, backend selection, telemetry) only fires on
     # cache misses. Opt-out: set ``cache.enabled: false`` in
     # ``mind-mem.json``. Default is enabled.
-    from mind_mem.request_context import RequestContext, bind_request_context
     from mind_mem.recall_cache import cached_recall
+    from mind_mem.request_context import RequestContext, bind_request_context
 
     _raw_config = _load_config(ws)
     _cache_cfg = _raw_config.get("cache", {}) if isinstance(_raw_config, dict) else {}
@@ -432,25 +432,25 @@ def _recall_impl_ranked(
         scoring_instant=instant_iso,
     )
     with bind_request_context(_request_context):
-      if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
-        raw = cached_recall(
-            _inner,
-            query,
-            limit=limit,
-            backend=backend,
-            active_only=active_only,
-            config=_raw_config,
-            ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
-            scoring_instant=instant_iso,
-            index_anchor=_index_anchor,
-            workspace=ws,
-            config_fingerprint=retrieval_config_fingerprint(_raw_config),
-            schema_version=str(MCP_SCHEMA_VERSION),
-            filters=_active_filters,
-        )
-      else:
-          raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend, **_active_filters)
-          raw = str(raw_result) if raw_result is not None else ""
+        if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
+            raw = cached_recall(
+                _inner,
+                query,
+                limit=limit,
+                backend=backend,
+                active_only=active_only,
+                config=_raw_config,
+                ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
+                scoring_instant=instant_iso,
+                index_anchor=_index_anchor,
+                workspace=ws,
+                config_fingerprint=retrieval_config_fingerprint(_raw_config),
+                schema_version=str(MCP_SCHEMA_VERSION),
+                filters=_active_filters,
+            )
+        else:
+            raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend, **_active_filters)
+            raw = str(raw_result) if raw_result is not None else ""
 
     # ``format`` is a PRESENTATION choice over one retrieval, so it is applied
     # POST-cache — the same rail the attestation and explain blocks below run
@@ -496,9 +496,7 @@ def _recall_impl_ranked(
     # Default ON since 5.0.2; opt out per workspace with a literal
     # ``served_ledger.enabled: false`` in mind-mem.json.
     if raw:
-        _served_generation = anticipation_generation_identity(
-            _raw_config, str(MCP_SCHEMA_VERSION)
-        )
+        _served_generation = anticipation_generation_identity(_raw_config, str(MCP_SCHEMA_VERSION))
         raw = _record_served_run(raw, ws, generation=_served_generation)
 
     # Group J — the producer half. What this recall served becomes the bundle a
@@ -542,9 +540,7 @@ def _trace_attribution_enabled(config: Any) -> bool:
     return is_trace_enabled(recall_cfg if isinstance(recall_cfg, dict) else None)
 
 
-def _current_vector_flags(
-    ws: str, backend: str, config: Any | None = None
-) -> tuple[bool, bool]:
+def _current_vector_flags(ws: str, backend: str, config: Any | None = None) -> tuple[bool, bool]:
     """Resolve the CURRENT config's ``(vector_requested, vector_available)``.
 
     Derived fresh from the live ``mind-mem.json`` each call so a config toggle
@@ -690,14 +686,9 @@ def _apply_attestation(
         if isinstance(degraded, dict):
             carrier.degraded = degraded
         if config_hash == _CONFIG_HASH_UNRESOLVED:
-            raise RuntimeError(
-                "config hash could not be resolved for this request's snapshot, so no coherent "
-                "context could be bound"
-            )
+            raise RuntimeError("config hash could not be resolved for this request's snapshot, so no coherent context could be bound")
         # The served leg, not the requested one — see :func:`_served_backend`.
-        vector_requested, vector_available = _current_vector_flags(
-            ws, _served_backend(envelope, backend), config
-        )
+        vector_requested, vector_available = _current_vector_flags(ws, _served_backend(envelope, backend), config)
         attestation = derive_recall_attestation_for_workspace(
             carrier,
             ws,
@@ -1670,6 +1661,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
         except Exception:  # noqa: BLE001 — an unresolvable hash must refuse, not reread
             _prefetch_hash = _CONFIG_HASH_UNRESOLVED
         _prefetch_anchor = _resolve_chain_head(ws)
+        _served_generation = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
         if anticipation_enabled(_prefetch_config):
             _prefetch_identity = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
             if _prefetch_identity is not None:

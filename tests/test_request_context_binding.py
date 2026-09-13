@@ -27,9 +27,7 @@ from mind_mem.request_context import (
 
 
 def _ws(tmp_path: Path) -> str:
-    (tmp_path / "mind-mem.json").write_text(
-        json.dumps({"recall": {"from_disk": True}}), encoding="utf-8", newline="\n"
-    )
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"recall": {"from_disk": True}}), encoding="utf-8", newline="\n")
     return str(tmp_path)
 
 
@@ -91,15 +89,14 @@ def test_a_thread_worker_reads_the_context_only_when_bound_at_submit_time(tmp_pa
     with bind_request_context(context):
         with ThreadPoolExecutor(max_workers=2) as pool:
             bare = pool.submit(worker).result()
-            wrapped = pool.submit(bind_current(worker), ).result()
+            wrapped = pool.submit(
+                bind_current(worker),
+            ).result()
 
     assert bare is None, (
-        "a bare submit inherited a context it should not have — then this test cannot tell a "
-        "working wrapper from a no-op one"
+        "a bare submit inherited a context it should not have — then this test cannot tell a working wrapper from a no-op one"
     )
-    assert wrapped == {"recall": {"from_context": True}}, (
-        "the wrapped worker did not read the submitting thread's context"
-    )
+    assert wrapped == {"recall": {"from_context": True}}, "the wrapped worker did not read the submitting thread's context"
     # And the parent's receipt saw the worker's read, which is what lets the row claim the fan-out.
     assert context.reads >= 1, "the worker's read was not recorded against the parent's context"
 

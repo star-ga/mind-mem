@@ -31,8 +31,7 @@ def _seed_workspace(root: Path, *, anticipation: bool = False) -> str:
     for name in ("tasks", "entities", "intelligence"):
         (root / name).mkdir()
     (root / "decisions" / "DECISIONS.md").write_text(
-        "[D-RA1-PUBLIC-001]\nStatement: deterministic compiler retrieval context\n"
-        "Status: active\nDate: 2026-01-01\n\n",
+        "[D-RA1-PUBLIC-001]\nStatement: deterministic compiler retrieval context\nStatus: active\nDate: 2026-01-01\n\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -183,9 +182,7 @@ def test_public_prefetch_positive_has_results_and_recorded_row(tmp_path: Path) -
 
 
 @pytest.mark.parametrize("mode", ["axis", "prefetch"])
-def test_public_boundary_proof_failure_is_explicit_and_unrecorded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
-) -> None:
+def test_public_boundary_proof_failure_is_explicit_and_unrecorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
     """A failed proof probe must not disappear as a null attestation."""
     workspace = _seed_workspace(tmp_path / f"failure-{mode}")
     calls: list[str] = []

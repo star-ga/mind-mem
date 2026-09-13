@@ -50,8 +50,7 @@ def _seed(root: Path) -> str:
     for name in ("tasks", "entities", "intelligence"):
         (root / name).mkdir()
     (root / "decisions" / "DECISIONS.md").write_text(
-        "[D-CTX-001]\nStatement: deterministic compiler retrieval context\n"
-        "Status: active\nDate: 2026-01-01\n\n",
+        "[D-CTX-001]\nStatement: deterministic compiler retrieval context\nStatus: active\nDate: 2026-01-01\n\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -66,9 +65,7 @@ def _reset_anticipation_cache() -> Any:
     prefetch.reset_cache()
 
 
-def _run_with_midrequest_flip(
-    workspace: str, monkeypatch: pytest.MonkeyPatch
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _run_with_midrequest_flip(workspace: str, monkeypatch: pytest.MonkeyPatch) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Flip the config to B after the door captured, before the engine ranks.
 
     Returns every config the real ``HybridBackend`` was constructed from and the
@@ -105,9 +102,7 @@ def _expansion_enabled(config: dict[str, Any]) -> bool:
     return bool(config.get("recall", {}).get("query_expansion", {}).get("enabled"))
 
 
-def test_the_backend_is_built_from_the_captured_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_backend_is_built_from_the_captured_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The engine and any recorded row agree on A, though the file says B."""
     workspace = _seed(tmp_path / "bound")
     hash_a = current_pipeline_hash(workspace)
@@ -123,8 +118,7 @@ def test_the_backend_is_built_from_the_captured_config(
         return
 
     assert not any(_expansion_enabled(cfg) for cfg in seen), (
-        "the ranking was built from the config written DURING the request, so no recorded hash "
-        "can describe the policy that produced it"
+        "the ranking was built from the config written DURING the request, so no recorded hash can describe the policy that produced it"
     )
     assert attestation.get("served_proof") == "recorded", attestation
     assert attestation.get("config_hash") == hash_a, attestation
@@ -134,9 +128,7 @@ def test_the_backend_is_built_from_the_captured_config(
     assert row.pipeline_hash == hash_a, row
 
 
-def test_without_the_binding_the_mutation_does_reach_the_backend(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_without_the_binding_the_mutation_does_reach_the_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The control that keeps the test above honest: unbind, and B gets through.
 
     ``context_config_for`` is the single lookup every bound read goes through, so returning ``None``

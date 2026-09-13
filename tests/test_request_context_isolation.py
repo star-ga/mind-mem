@@ -39,9 +39,7 @@ def test_sequential_requests_each_see_their_own_context(tmp_path: Path) -> None:
     workspace = _ws(tmp_path / "seq")
     seen = []
     for tag in ("first", "second"):
-        with bind_request_context(
-            RequestContext(workspace=workspace, config={"recall": {"tag": tag}})
-        ):
+        with bind_request_context(RequestContext(workspace=workspace, config={"recall": {"tag": tag}})):
             cfg = context_config_for(workspace)
             assert cfg is not None
             seen.append(cfg["recall"]["tag"])
@@ -56,9 +54,7 @@ def test_the_context_is_cleared_after_an_exception(tmp_path: Path) -> None:
         with bind_request_context(RequestContext(workspace=workspace, config={"recall": {}})):
             assert active_request_context() is not None
             raise RuntimeError("leg failed")
-    assert active_request_context() is None, (
-        "a failed request left its context bound — the next recall would rank under it"
-    )
+    assert active_request_context() is None, "a failed request left its context bound — the next recall would rank under it"
     assert context_config_for(workspace) is None
 
 
@@ -72,9 +68,7 @@ def test_nesting_restores_the_outer_context(tmp_path: Path) -> None:
             cfg = context_config_for(workspace)
             assert cfg is not None and cfg["recall"]["which"] == "inner"
         cfg = context_config_for(workspace)
-        assert cfg is not None and cfg["recall"]["which"] == "outer", (
-            "the inner bind clobbered the outer context instead of restoring it"
-        )
+        assert cfg is not None and cfg["recall"]["which"] == "outer", "the inner bind clobbered the outer context instead of restoring it"
     assert active_request_context() is None
 
 
@@ -97,6 +91,5 @@ def test_a_worker_binding_does_not_escape_into_the_pool(tmp_path: Path) -> None:
         leaked = pool.submit(probe).result()
 
     assert leaked is False, (
-        "the pooled thread stayed bound after the wrapped task finished, so a later bare task "
-        "would read a previous request's policy"
+        "the pooled thread stayed bound after the wrapped task finished, so a later bare task would read a previous request's policy"
     )

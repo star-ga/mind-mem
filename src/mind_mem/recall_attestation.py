@@ -877,6 +877,8 @@ def derive_recall_attestation_for_workspace(
     vector_available: bool,
     query: str,
     scoring_instant: date | str | None = None,
+    config_hash: str | None = None,
+    index_anchor: str | None = None,
 ) -> RecallAttestation:
     """Convenience wrapper: resolve ``config_hash`` + ``index_anchor`` from *workspace*.
 
@@ -887,16 +889,18 @@ def derive_recall_attestation_for_workspace(
     rather than raising — an attestation with an unresolved config hash is
     honest, a crashed recall is not.
     """
-    try:
-        from .pipeline_hash import current_pipeline_hash
+    if config_hash is None:
+        try:
+            from .pipeline_hash import current_pipeline_hash
 
-        config_hash = current_pipeline_hash(workspace)
-        if not isinstance(config_hash, str):  # pragma: no cover — overload guard
+            config_hash = current_pipeline_hash(workspace)
+            if not isinstance(config_hash, str):  # pragma: no cover — overload guard
+                config_hash = ""
+        except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
+            _log.warning("recall_attestation_config_hash_failed", error=str(exc))
             config_hash = ""
-    except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
-        _log.warning("recall_attestation_config_hash_failed", error=str(exc))
-        config_hash = ""
-    index_anchor = _resolve_index_anchor(workspace)
+    if index_anchor is None:
+        index_anchor = _resolve_index_anchor(workspace)
     return derive_recall_attestation(
         results,
         vector_requested=vector_requested,
