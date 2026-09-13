@@ -1,11 +1,12 @@
 # An external system under the same contract — and what it actually shows
 
-The standing gate has always required a third-party system run under the same
+The standing gate has always required an external system run under the same
 adapter contract, on the same box, over the same questions. Until now the
 registry held two adapters and both were ours, so every published comparison
 was against a floor we wrote.
 
-`chroma_baseline` (commit `4d1ac54`) is the first outside system to run it.
+`chroma_baseline` (commit `4d1ac54`) is the first external-system adapter in
+this repository to run it. It is not an independent-party reproduction.
 Chroma 1.5.9, HNSW/cosine, **attempted** on all 470 eligible LongMemEval-S
 questions and **completing 436**. Every figure below is conditional on that
 436-question subset; the 34 crashes are itemised further down and are never
@@ -28,10 +29,10 @@ mind-mem is ahead of Chroma on all three. The row that matters more is the
 second one: **a purpose-built vector store loses to a forty-line BM25** on this
 corpus, significantly, on two metrics of three.
 
-That independently reproduces the one fixed-harness study in this field, which
-found plain full-context retrieval above every memory system it tested. It is
-the same result from a different direction, and it is a caution against the
-category's published numbers rather than a triumph over Chroma.
+This is a separate result consistent with the fixed-harness study cited in the
+benchmark materials, which found plain full-context retrieval above every
+memory system it tested. It is a caution against overreading the cited numbers
+rather than an independent-party reproduction or a triumph over Chroma.
 
 ## Why 34 questions are excluded, and why including them would be dishonest
 
@@ -64,15 +65,17 @@ is expected to lose on a corpus whose questions share vocabulary with their
 sessions. Read as "hybrid beats dense-only here", which is a fair claim, rather
 than "mind-mem beats Chroma", which is not one this run supports.
 
-## The gate is met; the claim still is not available
+## The external-system requirement is partial; the claim still is not available
 
-All three standing requirements now have a committed full-set number: floor
-parity, a vector-on run, and an external system under the same contract.
+The floor and vector-on requirements have committed full-set artifacts. The
+external-system requirement has a committed **470-attempted / 436-successful**
+result under the same contract; its comparison metrics are conditional on the
+436 successful rows. Independent-party verification remains open.
 
-That does **not** make a SOTA claim available, for a reason no further run of
-this kind will fix. Every competing figure published in this field is *answer
-accuracy* under an LLM judge. These are *retrieval* metrics. They are different
-quantities and must not share an axis — see
+That does **not** make a SOTA claim available. The competing figures cited in
+the benchmark materials are *answer accuracy* under an LLM judge, whereas these
+are *retrieval* metrics. They are different quantities and must not share an
+axis — see
 `docs/benchmarks/SOTA-GATE.md` and the landscape survey.
 
 To claim SOTA against the field the missing piece is an answerer-and-judge arm,

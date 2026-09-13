@@ -58,8 +58,9 @@ metric's `k` cannot express it. That is a limit of the ruler, not the system.
 
 **Therefore the 100% target for completeness belongs on `recall_all@10`**, which
 measures the same property without an artificial slot limit. Current hybrid
-`all@5` is 0.8601 against a 0.99362 ceiling, so there is 0.1335 of genuine
-headroom before the ceiling is even the binding constraint.
+`all@5` is **0.8660** on the full 470-question run, against a 0.99362 ceiling,
+so there is 0.1276 of genuine headroom before the ceiling is even the binding
+constraint.
 
 Eleven further questions have exactly five gold documents, so they demand a
 *perfect* top five — every slot correct, nothing else admitted. Those are real
@@ -68,7 +69,7 @@ and winnable, and they are where the remaining `all@5` work actually lives.
 ### MRR — 100% is reachable in principle and brutal in practice
 
 MRR 1.0000 requires the first gold document at rank 1 on all 470 questions.
-Current hybrid: **0.9014**, against a zero-dependency BM25 floor of 0.9081 —
+Current hybrid: **0.9006**, against a zero-dependency BM25 floor of 0.9081 —
 i.e. we are not yet ahead of a forty-line baseline on ordering, which is the
 sharpest single statement about where the retrieval work remains.
 
@@ -79,9 +80,10 @@ is stochastic and some gold labels are contested; one project withdrew a 100%
 LoCoMo claim itself, noting the last fraction of a point came from inspecting
 wrong answers. Chasing 100% there optimises the judge, not the memory.
 
-The correct target on those benchmarks is to **beat every published figure under
-a stated protocol with a committed artifact** — which no competitor currently
-does, and which is a harder and more defensible claim than a number.
+The correct target on those benchmarks is to **beat published figures only under
+a stated, matched protocol with a committed artifact**. Establishing that
+comparison requires a scoped audit of each cited system; this document does not
+provide one.
 
 ## The corrected metrics, and the finite list standing between us and 1.0000
 
@@ -99,38 +101,40 @@ fixing the ruler did not lower the bar, it revealed more of the capability.
 `max(n_gold)` is 6, so any k ≥ 6 can express full completeness and **1.0000 is a
 legitimate target on both**.
 
-What stands between here and 1.0000 is now a finite, nameable list:
+The current run leaves a finite, nameable diagnostic list. These rows were
+inspected in developing this plan and are not a held-out acceptance set:
 
 * **`any@10`: 5 questions.**
 * **`all@10`: 24 questions**, of which another existing arm completes 4 — so
-  **20 need capability we do not currently have.**
+  **20 remain unresolved by the currently committed arms.** These are
+  exploratory diagnostic cases for a proposed capability, not proof of its
+  cause or a held-out acceptance set.
 
-### Those 24 are a graph problem, not a retrieval problem
+### Those 24 are unresolved by current arms; sibling expansion is a hypothesis
 
 | property | value |
 |---|---|
 | retrieved a full 10 results | 23 of 24 — the slots were never the limit |
-| `n_gold = 2`, found exactly 1 | **11 of 24** |
+| `n_gold = 2`, found exactly 1 | **8 of 24** |
 | found ≥ half the gold | 18 of 24 |
 | found none of it | 5 of 24 |
 | mean fraction of gold retrieved | 0.481 |
 | dominant types | multi-session (11), temporal-reasoning (10) |
 
-The dominant failure is **"found one piece of evidence and missed its
-sibling"**, concentrated on the two question types where evidence is
-*relational*.
+The rows show a concentration in multi-session and temporal-reasoning types,
+and many partial recalls. They do not include the gold-ID list or question text,
+so they establish no causal failure category.
 
-No better BM25 and no better embedder retrieves that second document, because
-the reason it belongs is not that it resembles the query — it is that it is
-**linked** to a document already retrieved: same entity, adjacent in time, same
-session thread. A lexical arm scores it low because it shares few query terms; a
-dense arm scores it low because it is semantically about something adjacent.
+The proposed explanation is that a linked document may require one-hop
+entity/temporal expansion, but this remains unverified. The committed rows do
+not prove why any gold document was missed or whether a graph walk would find
+it.
 
-So the last 5% of completeness is exactly the layer that distinguishes this
-architecture from a vector store. **Sibling-expansion over the knowledge graph —
-retrieve, then walk one hop along entity and temporal edges and re-admit — is
-the mechanism, and these 20 questions are its acceptance test.** That is a
-measurable target with a named question list, not a research direction.
+One-hop sibling-expansion over entity and temporal edges is therefore a
+candidate experiment. The 20 rows can guide its design, but a fresh
+predeclared held-out evaluation is required before making a generalization or
+acceptance claim. This is not an established mechanism or architectural
+distinction.
 
 ## What this changes about the plan
 
@@ -138,11 +142,11 @@ Nothing about the ambition. It changes where the effort goes:
 
 1. **Class A is the moat and it is under-measured.** Six dimensions where 100%
    is provable, and not one has a published coverage number. A falsifiable test
-   per row is worth more than any retrieval point, because no competitor in the
-   surveyed field can produce those numbers at all.
-2. **`any@5` to 1.0000 is a fusion problem**, not a retrieval problem — seven of
-   ten remaining misses are already solved by an arm we run.
+   per row is worth more than any retrieval point; competitor coverage is not
+   established by this document.
+2. **`any@5` to 1.0000 may benefit from fusion** — seven of ten remaining misses
+   are already solved by an arm we run in this cited comparison.
 3. **Retire `all@5` as a 100% target** in favour of `all@10`. The k=5 ceiling is
    0.99362 and three questions make it unreachable by construction.
-4. **Ordering is the honest weak point.** MRR 0.9014 against a floor of 0.9081.
-   Everything else is ahead of the floor; this is not.
+4. **Ordering is the honest weak point.** MRR 0.9006 against a floor of 0.9081.
+   The reported recall metrics are ahead of the floor; MRR is not.
