@@ -88,22 +88,11 @@ class _Receipt:
 class RequestContext:
     """The policy coordinates of ONE request, fixed before retrieval begins.
 
-    ``config`` is a PLAIN ``dict``, deliberately, and that was a correction rather than a default.
-
-    The first version wrapped it in a :class:`~types.MappingProxyType` so the engine could not rebind
-    top-level sections. That guard silently broke storage selection: ``storage.resolve_backend`` (and
-    every other consumer written against this repo's plain-dict convention) tests
-    ``isinstance(config, dict)``, a ``mappingproxy`` is NOT a ``dict``, and the predicate degrades to
-    the markdown backend on failure — audibly in the log, but a workspace on postgres or an encrypted
-    store would silently serve from the wrong corpus. Observed live as
-    ``block_store_config_malformed: config must be an object, got mappingproxy; degrading to markdown
-    backend``.
-
-    So the proxy is gone. Immutability of the context now rests on the fact that nothing here hands
-    the mapping to a mutating caller — ``mcp.infra.config._load_config`` already returns ``dict(...)``
-    for callers that merge defaults into it. That is a weaker guarantee than the proxy gave, and it is
-    the right trade: a hypothetical rebind is a bug we would see, while a silent backend downgrade is
-    a bug that returns plausible answers from the wrong store.
+    ``config`` is stored as a plain ``dict`` for compatibility with backend and
+    engine consumers. The mapping is deep-copied when the context is captured,
+    and :func:`context_config_for` returns a fresh deep copy on every governed
+    read. Consumers can therefore use ordinary dictionary operations without
+    mutating the request snapshot or the caller's original configuration.
     """
 
     workspace: str
@@ -166,20 +155,8 @@ def context_config_for(workspace: str | os.PathLike[str]) -> Optional[Mapping[st
     if context is None or context.workspace != _normalise(workspace):
         return None
     context._receipt.record()
-    # A DEEP COPY, and a plain dict. Two requirements that pull in opposite directions meet here.
-    # Consumers test ``isinstance(config, dict)`` — ``storage._backend_name`` degrades to the markdown
-    # backend when that fails — so this may not be a ``MappingProxyType``; an earlier version was, and
-    # it silently downgraded storage on non-markdown workspaces. But handing out the context's own
-    # mapping would let any reader rebind the policy every later reader sees. A shallow copy satisfies
-    # both: real ``dict`` for the predicates, and top-level rebinding cannot reach the context.
-    # SHALLOW WAS NOT ENOUGH, and that was demonstrated rather than argued. A shallow copy still
-    # shares nested sections, and ``HybridBackend.__init__`` MUTATES its nested recall config when
-    # validation rejects a numeric value: a control passed {'recall': {'rrf_k': 'bad', ...}} through
-    # ``from_config`` and ``rrf_k`` then disappeared from the captured context itself
-    # (before=["rrf_k","vector_weight"], after=["vector_weight"]). A context a consumer can edit is not
-    # a snapshot, and a later generation or config observation would describe a policy no caller
-    # established. ``deepcopy`` costs a traversal of a small mapping per read, which is the right price
-    # for the word "immutable" being true rather than aspirational.
+    # Return a plain, independent mapping. A shallow copy would still expose
+    # nested policy sections to consumers that mutate their input.
     return copy.deepcopy(context.config)
 
 

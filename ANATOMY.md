@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1571 | **Est. tokens:** ~4675950
-**Generated:** 2026-09-13 07:50 UTC
+**Files:** 1573 | **Est. tokens:** ~4682053
+**Generated:** 2026-09-13 08:17 UTC
 
 ## Token Budget Guide
 
@@ -61,7 +61,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9456 |
-| `scripts/` | 21 | ~65271 |
+| `scripts/` | 21 | ~65920 |
 | `sdk/go/` | 10 | ~9098 |
 | `sdk/js/` | 6 | ~4864 |
 | `sdk/js/src/` | 5 | ~3178 |
@@ -73,21 +73,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 233 | ~1068341 |
+| `src/mind_mem/` | 233 | ~1067821 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
-| `src/mind_mem/mcp/tools/` | 29 | ~115419 |
+| `src/mind_mem/mcp/tools/` | 29 | ~115432 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11515 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 687 | ~2065997 |
+| `tests/` | 689 | ~2071958 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -597,7 +597,7 @@
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
-- `check_docs_alignment.py` (~15632 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
+- `check_docs_alignment.py` (~16281 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -897,7 +897,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~20148 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~20161 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1571 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -952,7 +952,7 @@
 - `recall_vector.py` (~24008 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `replay_check.py` (~4323 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `request_context.py` (~2873 tok, huge) — One immutable policy context per request, consumed by the engine itself.
+- `request_context.py` (~2353 tok, huge) — One immutable policy context per request, consumed by the engine itself.
 - `rerank_ensemble.py` (~4393 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `resume_brief.py` (~2720 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retention_class.py` (~1840 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1304,7 +1304,7 @@
 - `test_dependency_audit_closure.py` (~1464 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
-- `test_docs_alignment.py` (~24789 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_docs_alignment.py` (~25102 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_docs_claims.py` (~818 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_doctor_rebuild_cache_default_backend.py` (~1338 tok, large) — ``mm doctor --rebuild-cache`` must not crash on the DEFAULT markdown backend.
 - `test_documented_surfaces_exist.py` (~2128 tok, huge) — Documentation that names a symbol, a backend or an installable extra has
@@ -1583,10 +1583,12 @@
 - `test_query_expansion_multi_provider.py` (~1237 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
 - `test_query_term_stemming.py` (~1052 tok, large) — The query and the index must agree on what a word stems to.
+- `test_ra1_context_storage_proposal.py` (~1069 tok, large) — Source-bound controls for the e376 serving-context proposal.
 - `test_ra1_direct_python_snapshot.py` (~1713 tok, huge) — The public Python recall wrapper must snapshot policy before ranking."""
-- `test_ra1_empty_config_backend_binding.py` (~943 tok, large) — The captured empty policy must not fall back to a later backend choice."""
+- `test_ra1_empty_config_backend_binding.py` (~1678 tok, huge) — The captured empty policy must not fall back to a later backend choice."""
 - `test_ra1_engine_ranks_under_captured_context.py` (~1788 tok, huge) — The engine ranks under the CAPTURED config, not the file as it stands when a leg runs.
 - `test_ra1_public_boundary_binding.py` (~2309 tok, huge) — Public axis/prefetch RA.1 boundaries must retain one request snapshot.
+- `test_ra1_serving_receipt_binds_engine_config.py` (~3849 tok, huge) — The recorded receipt must bind the config the ENGINE consumed — and the binding must not
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
 - `test_read_surface_admission.py` (~6331 tok, huge) — Every read surface, swept with a three-status canary.
@@ -1741,7 +1743,7 @@
 - `test_sqlite_index.py` (~5547 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_sqlite_index_backends.py` (~2781 tok, huge) — Backend-parity regression tests for ``sqlite_index`` (audit bugs 4, 9, 13, 14).
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
-- `test_storage_factory.py` (~3285 tok, huge) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
+- `test_storage_factory.py` (~3280 tok, huge) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
 - `test_streaming.py` (~2023 tok, huge) — v3.3.0 — back-pressure-aware streaming ingest queue."""
 - `test_streaming_front_gate.py` (~5460 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_supersede_pointer.py` (~1697 tok, huge) — # Copyright 2026 STARGA, Inc.

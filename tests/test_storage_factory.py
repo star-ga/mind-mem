@@ -96,9 +96,7 @@ def test_reads_mind_mem_json_when_config_none(tmp_path):
         ("encrypted", {}),
     ],
 )
-def test_config_none_uses_bound_backend_snapshot(
-    tmp_path, monkeypatch, backend, backend_config
-):
+def test_config_none_uses_bound_backend_snapshot(tmp_path, monkeypatch, backend, backend_config):
     """A bound request snapshot governs config=None factory calls.
 
     The file is changed to Markdown after the request captures a non-Markdown
@@ -118,9 +116,7 @@ def test_config_none_uses_bound_backend_snapshot(
         expected_type = PostgresBlockStore
 
     captured = {"block_store": {"backend": backend, **backend_config}}
-    (tmp_path / "mind-mem.json").write_text(
-        json.dumps({"block_store": {"backend": "markdown"}}), encoding="utf-8"
-    )
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"block_store": {"backend": "markdown"}}), encoding="utf-8")
     context = RequestContext(str(tmp_path), captured)
     with bind_request_context(context):
         store = get_block_store(str(tmp_path), config=None)

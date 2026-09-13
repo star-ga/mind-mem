@@ -1640,6 +1640,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
     # attestation below would read a further one — across a UTC midnight that
     # is a record naming a day none of the passes scored against.
     instant = resolve_scoring_instant(None)
+    instant_iso = format_scoring_instant(instant)
     try:
         from mind_mem.recall import prefetch_context
         from mind_mem.request_context import RequestContext, bind_request_context
@@ -1668,7 +1669,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
             config=_prefetch_config,
             config_hash=None if _prefetch_hash == _CONFIG_HASH_UNRESOLVED else _prefetch_hash,
             index_anchor=_prefetch_anchor,
-            scoring_instant=instant,
+            scoring_instant=instant_iso,
         )
         with bind_request_context(_prefetch_request_context):
             results = prefetch_context(ws, signal_list, limit=limit, scoring_instant=instant)

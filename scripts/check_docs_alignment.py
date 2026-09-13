@@ -305,6 +305,21 @@ _TOOL_PATTERNS = (
     re.compile(rf"\b(?P<n>{_SMALL})(?P<plus>)-tool\b", re.IGNORECASE),
 )
 
+# Markdown delimiters are presentation, not part of a numeric claim.  Keep
+# the string length unchanged so Finding offsets still point into the source
+# line (``apply_fixes`` edits those offsets), while allowing the same matcher
+# to see ``**95** MCP tools``, ``[95 MCP tools](...)``, and `` `95 MCP
+# tools` ``.  Delimiters that can occur inside a claim are the only characters
+# removed; parentheses stay intact because the heading form above relies on
+# them.  Scope words and version stamps remain in place, so trained/current
+# disambiguation and historical records keep their existing rules.
+_MARKDOWN_CLAIM_DELIMITERS = re.compile(r"[*_~`\[\]>]")
+
+
+def _markdown_claim_text(line: str) -> str:
+    """Return a same-length line with inline Markdown delimiters blanked."""
+    return _MARKDOWN_CLAIM_DELIMITERS.sub(" ", line)
+
 _VERSION_PATTERNS = (re.compile(r"(?:Current|Latest) release:?[^\n]{0,40}?\bv(?P<n>\d+\.\d+\.\d+)(?P<plus>)"),)
 
 # "38-flag inventory" / "38 v4 feature flags" / "52 flags + is_enabled". The
@@ -584,6 +599,12 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
     line is present-tense by construction and is checked regardless.
     """
     findings: list[Finding] = []
+    # Match tool claims against presentation-stripped text, but retain source
+    # offsets: every replacement is one-for-one, so callers can safely rewrite
+    # the original line when ``--fix`` is used. Other claim families retain
+    # their exact historical matching behavior (notably shields.io badges,
+    # where underscores are meaningful separators).
+    tool_line = _markdown_claim_text(line)
     for pattern in _VERSION_PATTERNS:
         for match in pattern.finditer(line):
             if match.group("n") != auth.version:
@@ -622,7 +643,7 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
             _KERNEL_PATTERNS,
             lambda m: None if cmt._version_qualifies(line, m) else auth.mind_kernels,
         ),
-        ("tools", _TOOL_PATTERNS, lambda m: _tool_expected(rel, line, m, auth)),
+        ("tools", _TOOL_PATTERNS, lambda m: _tool_expected(rel, tool_line, m, auth)),
         ("flags", _FLAG_PATTERNS, lambda m: _flag_expected(rel, line, m, auth)),
         (
             "ci_jobs",
@@ -633,8 +654,9 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
 
     seen: set[tuple[int, int]] = set()
     for kind, patterns, expected_for in checks:
+        match_line = tool_line if kind == "tools" else line
         for pattern in patterns:
-            for match in pattern.finditer(line):
+            for match in pattern.finditer(match_line):
                 span = (match.start("n"), match.end("plus"))
                 if span in seen:
                     continue
@@ -792,6 +814,31 @@ def scan_table_tools(rel: str, lines: list[str], auth: Authorities, scopes: list
     return out
 
 
+def _blockquote_line_pairs(lines: list[str]) -> list[tuple[int, str, int]]:
+    """Return adjacent prose lines in one Markdown blockquote.
+
+    ``count_mcp_tools.wrapped_line_pairs`` intentionally excludes every line
+    beginning with ``>``, which protects list/quote structure from fabricated
+    claims. A blockquote paragraph is a valid prose continuation, though, and
+    Hugging Face renders the card's long claims in exactly that shape. Restrict
+    this supplemental join to two adjacent quote lines and reject quoted list
+    or heading starts, preserving the original conservative behavior elsewhere.
+    """
+    out: list[tuple[int, str, int]] = []
+    for idx, (first, second) in enumerate(zip(lines, lines[1:])):
+        if not first.strip() or not second.strip() or first.rstrip().endswith("|"):
+            continue
+        first_body = first.lstrip()
+        second_body = second.lstrip()
+        if not first_body.startswith(">") or not second_body.startswith(">"):
+            continue
+        continuation = second_body[1:].lstrip()
+        if re.match(r"(?:[-*+]\s|#{1,6}\s|```)", continuation):
+            continue
+        out.append((idx + 1, first + " " + second, len(first)))
+    return out
+
+
 def scan_text(rel: str, lines: list[str], auth: Authorities) -> list[Finding]:
     """Every stale claim in one document: per line, wrapped across a break, and in a table cell."""
     scopes = _record_scopes(lines)
@@ -804,7 +851,9 @@ def scan_text(rel: str, lines: list[str], auth: Authorities) -> list[Finding]:
     # the number, and drop anything the per-line pass already reported --
     # otherwise every claim inside a joined pair is counted twice.
     seen = {(f.lineno, f.start, f.end, f.kind) for f in findings}
-    for lineno, joined, boundary in cmt.wrapped_line_pairs(lines):
+    wrapped = cmt.wrapped_line_pairs(lines)
+    wrapped.extend(_blockquote_line_pairs(lines))
+    for lineno, joined, boundary in wrapped:
         historical = scopes[lineno - 1] or scopes[lineno]
         for finding in scan_line(rel, lineno, joined, auth, historical=historical):
             real_lineno, start, end = cmt.locate_in_pair(finding.start, finding.end, lineno, boundary)
