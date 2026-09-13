@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1570 | **Est. tokens:** ~4670349
-**Generated:** 2026-09-13 05:13 UTC
+**Files:** 1570 | **Est. tokens:** ~4670647
+**Generated:** 2026-09-13 05:14 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 686 | ~2063704 |
+| `tests/` | 686 | ~2064002 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1584,7 +1584,7 @@
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
 - `test_query_term_stemming.py` (~1052 tok, large) — The query and the index must agree on what a word stems to.
 - `test_ra1_direct_python_snapshot.py` (~1775 tok, huge) — The public Python recall wrapper must snapshot policy before ranking."""
-- `test_ra1_engine_ranks_under_captured_context.py` (~1500 tok, huge) — The engine ranks under the CAPTURED config, not the file as it stands when a leg runs.
+- `test_ra1_engine_ranks_under_captured_context.py` (~1798 tok, huge) — The engine ranks under the CAPTURED config, not the file as it stands when a leg runs.
 - `test_ra1_public_boundary_binding.py` (~2313 tok, huge) — Public axis/prefetch RA.1 boundaries must retain one request snapshot.
 - `test_ra1v2_all_doors_snapshot.py` (~3443 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4384 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.

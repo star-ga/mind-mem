@@ -7,8 +7,10 @@ policy produced the ranking." The engine reloads policy for itself — eight ``_
 ``_recall_core`` plus ``_load_config`` in the ranked door plus ``sqlite_index.query_index`` — so a
 row could name a captured hash while ``HybridBackend`` had been constructed from a later config.
 
-So this test does not look at the row at all. It watches the REAL backend constructor and asserts
-what configuration the ranking was actually built from, with the file changed underneath it.
+So this test watches the REAL backend constructor and the row together. It asserts what
+configuration the ranking was actually built from, with the file changed underneath it, and
+rejects a recorded A row unless the real engine consumed A. A fail-closed unproven response is
+also accepted when the transition makes a coherent row impossible.
 
 WHY THE NEGATIVE CONTROL IS THE LOAD-BEARING HALF. In the ordinary case the captured config and the
 file are the same bytes, so a test that merely observes "the backend saw A" passes just as happily
@@ -28,6 +30,8 @@ import pytest
 from mind_mem import hybrid_recall, prefetch
 from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.mcp.tools import recall as recall_tool
+from mind_mem.pipeline_hash import current_pipeline_hash
+from mind_mem.served_ledger import ServedRunV2, read_served_runs
 
 _QUERY = "deterministic compiler"
 
@@ -64,10 +68,11 @@ def _reset_anticipation_cache() -> Any:
 
 def _run_with_midrequest_flip(
     workspace: str, monkeypatch: pytest.MonkeyPatch
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Flip the config to B after the door captured, before the engine ranks.
 
-    Returns every config the real ``HybridBackend`` was constructed from.
+    Returns every config the real ``HybridBackend`` was constructed from and the
+    public envelope, preserving the evidence needed to check its row.
     """
     config_path = Path(workspace) / "mind-mem.json"
     seen: list[dict[str, Any]] = []
@@ -93,7 +98,7 @@ def _run_with_midrequest_flip(
         "the flip never landed on disk — nothing was being discriminated"
     )
     assert seen, "the real HybridBackend was never constructed; this proves nothing"
-    return seen
+    return seen, payload
 
 
 def _expansion_enabled(config: dict[str, Any]) -> bool:
@@ -103,13 +108,30 @@ def _expansion_enabled(config: dict[str, Any]) -> bool:
 def test_the_backend_is_built_from_the_captured_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Every backend construction in the request sees A, though the file says B."""
+    """The engine and any recorded row agree on A, though the file says B."""
     workspace = _seed(tmp_path / "bound")
-    seen = _run_with_midrequest_flip(workspace, monkeypatch)
+    hash_a = current_pipeline_hash(workspace)
+    seen, payload = _run_with_midrequest_flip(workspace, monkeypatch)
+    rows = read_served_runs(workspace)
+    attestation = payload.get("attestation")
+    assert isinstance(attestation, dict), payload
+    if attestation.get("served_proof") == "unproven":
+        assert attestation.get("served_seq") is None, attestation
+        assert attestation.get("served_row_hash") is None, attestation
+        assert attestation.get("ledger_error"), attestation
+        assert rows == (), rows
+        return
+
     assert not any(_expansion_enabled(cfg) for cfg in seen), (
         "the ranking was built from the config written DURING the request, so no recorded hash "
         "can describe the policy that produced it"
     )
+    assert attestation.get("served_proof") == "recorded", attestation
+    assert attestation.get("config_hash") == hash_a, attestation
+    assert len(rows) == 1, rows
+    row = rows[0]
+    assert isinstance(row, ServedRunV2), row
+    assert row.pipeline_hash == hash_a, row
 
 
 def test_without_the_binding_the_mutation_does_reach_the_backend(
@@ -132,7 +154,8 @@ def test_without_the_binding_the_mutation_does_reach_the_backend(
     monkeypatch.setattr(_recall_core, "_config_mtime", {}, raising=False)
     assert infra_config is not None  # the loader under test resolves the patched symbol lazily
 
-    seen = _run_with_midrequest_flip(workspace, monkeypatch)
+    seen, payload = _run_with_midrequest_flip(workspace, monkeypatch)
+    assert payload.get("results"), payload
     assert any(_expansion_enabled(cfg) for cfg in seen), (
         "with the binding neutralised the mid-request config change did NOT reach the backend, so "
         "the positive test above cannot distinguish a working binding from a no-op one"
