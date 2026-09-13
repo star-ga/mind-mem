@@ -32,7 +32,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # ---------------------------------------------------------------------------
 # Config
@@ -291,11 +291,11 @@ def _stage_release_bundle(ip: str, port: int, repo_root: Path | None = None) -> 
         raise FileNotFoundError("release bundle source missing: " + ", ".join(missing))
 
     directories = sorted(
-        {str(Path(REMOTE_SOURCE_ROOT, Path(relative).parent)) for relative in RELEASE_FILES}
+        {str(PurePosixPath(REMOTE_SOURCE_ROOT, relative).parent) for relative in RELEASE_FILES}
     )
     _ssh_cmd(ip, port, "mkdir -p " + " ".join(shlex.quote(directory) for directory in directories))
     for relative, local in zip(RELEASE_FILES, paths):
-        _scp_to(ip, port, str(local), str(Path(REMOTE_SOURCE_ROOT, relative)))
+        _scp_to(ip, port, str(local), str(PurePosixPath(REMOTE_SOURCE_ROOT, relative)))
     tracked = " ".join(shlex.quote(relative) for relative in RELEASE_FILES)
     _ssh_cmd(
         ip,

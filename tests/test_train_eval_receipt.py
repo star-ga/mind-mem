@@ -220,6 +220,24 @@ def test_verified_staging_survives_later_source_replacement(workspace) -> None:
     assert not staged_model.exists()
 
 
+def test_verified_staging_clears_readonly_bit_before_cleanup(workspace, monkeypatch) -> None:
+    """Windows cleanup needs the private files writable before unlinking."""
+    reports = U._require_eval_receipts()
+    uploads = U._discover_upload_paths(reports)
+    modes: list[int] = []
+    original_chmod = Path.chmod
+
+    def record_chmod(path: Path, mode: int, *args, **kwargs):
+        modes.append(mode)
+        return original_chmod(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "chmod", record_chmod)
+    with U._stage_verified_uploads(uploads, reports):
+        pass
+    assert 0o400 in modes
+    assert 0o600 in modes
+
+
 def test_staging_rejects_source_changed_before_copy(workspace) -> None:
     reports = U._require_eval_receipts()
     uploads = U._discover_upload_paths(reports)
@@ -414,6 +432,89 @@ def test_loader_source_is_required_and_drift_is_detected(tmp_path) -> None:
         status="completed",
     )
     assert receipt["capture_verified"] is False
+
+
+def test_source_manifest_uses_posix_keys_for_windows_relative_paths(monkeypatch) -> None:
+    """Receipt JSON keys are wire paths even when pathlib is Windows-flavored."""
+    import types
+
+    class RelativePath:
+        def __str__(self):
+            return r"train\eval_harness.py"
+
+        def as_posix(self):
+            return "train/eval_harness.py"
+
+    class WindowsPath:
+        def resolve(self):
+            return self
+
+        def relative_to(self, _root):
+            return RelativePath()
+
+        def is_file(self):
+            return True
+
+        def stat(self):
+            return types.SimpleNamespace(st_size=7)
+
+    path = WindowsPath()
+    monkeypatch.setattr(E, "Path", lambda _path: path)
+    monkeypatch.setattr(E, "sha256_file", lambda _path: "a" * 64)
+    manifest = E._source_manifest(path, [path])
+    assert set(manifest) == {"train/eval_harness.py"}
+    assert "train\\eval_harness.py" not in manifest
+
+
+def test_file_manifest_uses_posix_keys_for_windows_nested_paths() -> None:
+    """Nested checkpoint names must remain upload-compatible on Windows."""
+    import types
+
+    class RelativePath:
+        def __str__(self):
+            return r"weights\\shard-00001.safetensors"
+
+        def as_posix(self):
+            return "weights/shard-00001.safetensors"
+
+    class WindowsPath:
+        def resolve(self):
+            return self
+
+        def is_file(self):
+            return False
+
+        def is_dir(self):
+            return True
+
+        def rglob(self, _pattern):
+            return [ChildPath()]
+
+    class ChildPath:
+        def relative_to(self, _root):
+            return RelativePath()
+
+        def is_file(self):
+            return True
+
+        def resolve(self):
+            return self
+
+        def stat(self):
+            return types.SimpleNamespace(st_size=3)
+
+        def is_symlink(self):
+            return False
+
+    root = WindowsPath()
+    original_sha256_file = E.sha256_file
+    try:
+        E.sha256_file = lambda _path: "b" * 64
+        manifest = E.file_manifest(root)
+    finally:
+        E.sha256_file = original_sha256_file
+    assert set(manifest) == {"weights/shard-00001.safetensors"}
+    assert r"weights\shard-00001.safetensors" not in manifest
 
 
 @pytest.mark.parametrize("sharded", [False, True])

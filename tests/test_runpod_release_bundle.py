@@ -136,15 +136,17 @@ def test_training_shell_exports_token_without_env_argv_secret(monkeypatch, tmp_p
         encoding="utf-8",
     )
     fake_python.chmod(0o755)
-    monkeypatch.setattr(deploy, "REMOTE_SOURCE_ROOT", str(tmp_path / "source"))
-    monkeypatch.setattr(deploy, "REMOTE_TOKEN_FILE", str(token_file))
-    monkeypatch.setattr(deploy, "REMOTE_TRAIN_ROOT", str(tmp_path / "output"))
-    monkeypatch.setattr(deploy, "REMOTE_FULLFT_DIR", str(tmp_path / "output" / "full-ft"))
-    monkeypatch.setattr(deploy, "REMOTE_HOLDOUT_REPORT", str(tmp_path / "output" / "holdout.json"))
-    monkeypatch.setattr(deploy, "REMOTE_CORPUS", str(tmp_path / "output" / "corpus.jsonl"))
-    monkeypatch.setenv("MM_CAPTURE", str(capture))
+    # The generated command is for a POSIX shell on the Linux pod even when
+    # this test itself runs on Windows.  Use slash-form paths at that boundary.
+    monkeypatch.setattr(deploy, "REMOTE_SOURCE_ROOT", (tmp_path / "source").as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_TOKEN_FILE", token_file.as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_TRAIN_ROOT", (tmp_path / "output").as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_FULLFT_DIR", (tmp_path / "output" / "full-ft").as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_HOLDOUT_REPORT", (tmp_path / "output" / "holdout.json").as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_CORPUS", (tmp_path / "output" / "corpus.jsonl").as_posix())
+    monkeypatch.setenv("MM_CAPTURE", capture.as_posix())
     run_env = os.environ.copy()
-    run_env["PATH"] = f"{fake_bin}:/usr/bin:/bin"
+    run_env["PATH"] = f"{fake_bin.as_posix()}:/usr/bin:/bin"
 
     completed = subprocess.run(
         ["bash", "-c", deploy._training_command_body()], check=True, capture_output=True, text=True, env=run_env, encoding="utf-8"
@@ -163,13 +165,15 @@ def test_staging_smoke_bare_import_and_receipt_sources(monkeypatch, tmp_path):
     """Copy the bundle like SCP, then import the staged evaluators in a subprocess."""
     remote_source = tmp_path / "workspace" / "mind-mem-release"
     remote_output = tmp_path / "workspace" / "train-output"
-    monkeypatch.setattr(deploy, "REMOTE_ROOT", str(tmp_path / "workspace"))
-    monkeypatch.setattr(deploy, "REMOTE_SOURCE_ROOT", str(remote_source))
-    monkeypatch.setattr(deploy, "REMOTE_TRAIN_ROOT", str(remote_output))
-    monkeypatch.setattr(deploy, "REMOTE_FULLFT_DIR", str(remote_output / "full-ft"))
-    monkeypatch.setattr(deploy, "REMOTE_CORPUS", str(remote_output / "corpus.jsonl"))
-    monkeypatch.setattr(deploy, "REMOTE_EVAL_REPORT", str(remote_output / "eval_report.json"))
-    monkeypatch.setattr(deploy, "REMOTE_HOLDOUT_REPORT", str(remote_output / "holdout.json"))
+    # Remote commands always target the POSIX pod filesystem.  The local
+    # Windows runner still maps these slash-form paths to its fixture tree.
+    monkeypatch.setattr(deploy, "REMOTE_ROOT", (tmp_path / "workspace").as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_SOURCE_ROOT", remote_source.as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_TRAIN_ROOT", remote_output.as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_FULLFT_DIR", (remote_output / "full-ft").as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_CORPUS", (remote_output / "corpus.jsonl").as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_EVAL_REPORT", (remote_output / "eval_report.json").as_posix())
+    monkeypatch.setattr(deploy, "REMOTE_HOLDOUT_REPORT", (remote_output / "holdout.json").as_posix())
 
     def fake_ssh(ip, port, command):
         subprocess.run(command, shell=True, check=True, executable="/bin/bash")
