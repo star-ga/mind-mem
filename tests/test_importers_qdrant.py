@@ -181,17 +181,24 @@ def test_qdrant_rejects_duplicate_json_keys(qdrant_server: Any) -> None:
         scroll_qdrant(endpoint, "notes")
 
 
-def test_qdrant_rejects_deep_json_without_quarantine_write(qdrant_server: Any, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("malformed", "message"),
+    [
+        (True, "not valid JSON"),
+        (False, "not valid JSON|contains a non-object point"),
+    ],
+)
+def test_qdrant_rejects_deep_json_without_quarantine_write(qdrant_server: Any, tmp_path: Path, malformed: bool, message: str) -> None:
     endpoint, handler = qdrant_server
     depth = 100_000
-    # Leave one nested array unclosed so this is malformed JSON on every
-    # supported interpreter.  A fully closed version is valid JSON whose
-    # points array contains a non-object point; decoder recursion limits then
-    # choose different downstream diagnostics across Python patch releases.
-    handler.response_override = b'{"status":"ok","result":{"points":' + b"[" * depth + b"]" * (depth - 1) + b"}}"
+    # Missing one closing array is always malformed. Keep the original valid
+    # deep JSON too: decoders that accept this depth must still reject its
+    # non-object point. Both refusal paths must leave the workspace unchanged.
+    closing_brackets = depth - 1 if malformed else depth
+    handler.response_override = b'{"status":"ok","result":{"points":' + b"[" * depth + b"]" * closing_brackets + b"}}"
     workspace = _workspace(tmp_path)
 
-    with pytest.raises(ImportParseError, match="not valid JSON"):
+    with pytest.raises(ImportParseError, match=message):
         run_import(workspace, "qdrant", "", endpoint=endpoint, collection="notes")
 
     assert not (Path(workspace) / "memory" / "IMPORTED.md").exists()
