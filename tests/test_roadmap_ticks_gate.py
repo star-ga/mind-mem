@@ -199,28 +199,17 @@ class TestTheGateHasTeeth:
         assert result.returncode == 1, result.stdout + result.stderr
         assert "tick-under-open-heading" in result.stdout
 
-    def test_the_five_retracted_items_stay_retracted(self) -> None:
-        """Regression lock on the 2026-09-01 audit.
-
-        Two items carried a confidently-worded false tick that no mechanical
-        rule can catch -- the gate above would not notice them coming back, so
-        they are pinned here by name.
-        """
+    def test_verified_e_items_are_ticked_only_with_historic_false_tick_context(self) -> None:
+        """Retire only the E1/E2 name lock after independent closure review."""
         text = ROADMAP.read_text(encoding="utf-8")
-        # "Provenance-rich blocks" was removed from this lock on 2026-09-07 and
-        # from the twin lock in tests/test_roadmap_hygiene.py at the same time —
-        # two guards that disagree about the same item are worse than one.
-        #
-        # Its retraction rested on "the off|recommended|required policy has zero
-        # occurrences in src/", which is now false. Traced rather than grepped:
-        # compliance/provenance_policy.py (193 lines) defines POLICY_OFF /
-        # POLICY_RECOMMENDED / POLICY_REQUIRED; compliance/prewrite.py:65 calls
-        # resolve_policy; and prewrite.screen is reached from TWO real entry
-        # points, mm_cli.py:3750 and mcp/tools/governance.py:328. An import
-        # alone would not have justified unpinning a deliberate lock.
-        for label in ("Pluggable redaction layer", "Compliance export pipeline"):
+        for label, anchor in (
+            ("Pluggable redaction layer", "tests/test_cli_detector_refusal.py"),
+            ("Compliance export pipeline", "content_sha256"),
+        ):
             ticked = [ln for ln in text.splitlines() if label in ln and ln.lstrip().startswith("- [x]")]
-            assert ticked == [], f"{label} is ticked again: {ticked}"
+            assert len(ticked) == 2, f"{label} must have two accepted duplicate entries: {ticked}"
+            assert all("2026-09-01 false shipped tick" in ln for ln in ticked)
+            assert any(anchor in ln for ln in ticked)
 
 
 class TestCommandLineContract:

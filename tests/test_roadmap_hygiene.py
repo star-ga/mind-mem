@@ -12,8 +12,9 @@
   third-party repository URLs. A norm nothing checks is a norm that drifts;
 * the **``placeholder`` marker** on rule 1, which exists because of a sixth
   false tick the attribution sweep uncovered rather than rule 1;
-* the **retraction locks** — four items whose confident wording no mechanical
-  rule can refute, pinned by name so they cannot quietly come back ticked;
+* the **retraction locks** — the remaining false items whose confident wording
+  no mechanical rule can refute, pinned by name so they cannot quietly come
+  back ticked;
 * the **anti-over-correction locks** — two items that were *accused* of being
   false ticks, verified against running code, and found to be REAL. Retracting
   a true capability to make a sweep look tidy is the same defect with the sign
@@ -259,60 +260,40 @@ def _open_lines(label: str) -> list[str]:
     return [ln for ln in _roadmap_text().splitlines() if label in ln and ln.lstrip().startswith("- [ ]")]
 
 
-class TestRetractedItemsStayRetracted:
-    """Four false ticks whose wording no mechanical rule can refute.
-
-    Rules 1-3 cannot catch a confidently-worded lie -- "ships under the
-    redaction module" reads exactly like a true sentence. These are pinned by
-    name, with the verification that retired each one recorded beside it.
-    """
+class TestVerifiedComplianceItemsStayAccepted:
+    """Accepted E1/E2 entries retain history and name their real controls."""
 
     @pytest.mark.parametrize(
         ("label", "why"),
         [
-            (
-                "Pluggable redaction layer",
-                "no v4/redaction.py, no pre-write detector chain in src/, flag has zero consumers",
-            ),
-            (
-                "Compliance export pipeline",
-                "no `mm export` verb, no --policy option anywhere in src/, flag has zero consumers",
-            ),
-            # "Provenance-rich blocks" was retracted here on the basis that
-            # "the off|recommended|required policy has zero occurrences in
-            # src/". That premise is FALSE as of 2026-09-07 and the item is
-            # ticked, so it is removed from this guard rather than left to fail.
-            #
-            # Traced, not grepped: compliance/provenance_policy.py (7,510 bytes)
-            # defines POLICY_OFF / POLICY_RECOMMENDED / POLICY_REQUIRED and
-            # resolve_policy; compliance/prewrite.py:65 calls resolve_policy;
-            # and prewrite.screen is reached from TWO real entry points --
-            # mm_cli.py:3750 and mcp/tools/governance.py:328. Import alone
-            # would not have justified this removal.
-            (
-                "Quantized prefix cache",
-                "prefix_cache caches responses not embeddings; turbo_quant is a placeholder with no consumers",
-            ),
+            ("Pluggable redaction layer", "the old false tick is retained while current detector controls pass"),
+            ("Compliance export pipeline", "the old false tick is retained while current export controls pass"),
         ],
     )
-    def test_the_item_is_not_ticked(self, label: str, why: str) -> None:
-        assert _ticked_lines(label) == [], f"{label} is ticked again ({why}): {_ticked_lines(label)}"
+    def test_the_item_is_accepted_twice_and_preserves_history(self, label: str, why: str) -> None:
+        lines = _ticked_lines(label)
+        assert len(lines) == 2, f"{label} acceptance entries missing ({why}): {lines}"
+        assert all("2026-09-01 false shipped tick" in line for line in lines)
 
     @pytest.mark.parametrize(
         "label",
         [
             "Pluggable redaction layer",
             "Compliance export pipeline",
-            # "Provenance-rich blocks" removed with the entry above — it ships
-            # and is wired; see the note there for the call path.
-            "Quantized prefix cache",
         ],
     )
-    def test_the_item_is_still_present_as_an_open_box(self, label: str) -> None:
-        # POSITIVE CONTROL for the assertion above, and deletion discipline in
-        # test form: "not ticked" also passes when somebody deleted the line.
-        # Retracting a tick must keep the capability on the roadmap.
-        assert _open_lines(label), f"{label} vanished from ROADMAP.md instead of being retracted"
+    def test_the_item_is_not_left_as_an_open_box(self, label: str) -> None:
+        assert not _open_lines(label), f"{label} still has a stale open duplicate: {_open_lines(label)}"
+
+
+class TestRemainingRetractedItemsStayRetracted:
+    """The unrelated historical false tick remains protected."""
+
+    def test_quantized_prefix_cache_is_not_ticked(self) -> None:
+        assert _ticked_lines("Quantized prefix cache") == []
+
+    def test_quantized_prefix_cache_remains_an_open_box(self) -> None:
+        assert _open_lines("Quantized prefix cache")
 
 
 class TestVerifiedRealItemsStayTicked:
