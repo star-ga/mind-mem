@@ -59,9 +59,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     cfg = {"v4": {"block_kinds": {"enabled": True}, "kind_summaries": {"enabled": True}}}
     (tmp_path / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
     (tmp_path / "entities").mkdir()
-    (tmp_path / "entities" / "ENTITIES.md").write_text(
-        "[D-b1]\nName: head\nStatus: active\n\n---\n", encoding="utf-8"
-    )
+    (tmp_path / "entities" / "ENTITIES.md").write_text("[D-b1]\nName: head\nStatus: active\n\n---\n", encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
 
     seed = sqlite3.connect(tmp_path / "index.db")

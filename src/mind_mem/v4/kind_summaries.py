@@ -258,11 +258,7 @@ def refresh_summary(workspace: str | Path, kind: str) -> KindSummary | None:
     source_ids = tuple(block_id for block_id, _ in source_rows)
     source_digest = _source_digest(source_rows)
     summariser = _active_summariser
-    summary = (
-        default_summariser(blocks, max_chars=_max_chars(workspace))
-        if summariser is default_summariser
-        else summariser(blocks)
-    )
+    summary = default_summariser(blocks, max_chars=_max_chars(workspace)) if summariser is default_summariser else summariser(blocks)
     post_source_rows = _current_admitted_source_rows(workspace, indexed_rows)
     if post_source_rows != source_rows:
         raise SummaryOutputError("summary sources changed during generation")
@@ -362,11 +358,7 @@ def list_summaries(workspace: str | Path) -> list[KindSummary]:
         )
         for r in rows
     ]
-    return [
-        _screen_stored_summary(record, workspace)
-        for record in records
-        if _stored_sources_current(workspace, record)
-    ]
+    return [_screen_stored_summary(record, workspace) for record in records if _stored_sources_current(workspace, record)]
 
 
 # ---------------------------------------------------------------------------
@@ -411,9 +403,7 @@ def _current_admitted_source_rows(
         else:
             by_id[block_id] = candidate
     if duplicate_ids:
-        raise SummaryOutputError(
-            "summary source identity is ambiguous for block id(s): " + ", ".join(sorted(duplicate_ids))
-        )
+        raise SummaryOutputError("summary source identity is ambiguous for block id(s): " + ", ".join(sorted(duplicate_ids)))
 
     result: list[tuple[str, str]] = []
     for block_id, _cached_text in indexed_rows:

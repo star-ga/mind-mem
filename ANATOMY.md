@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1608 | **Est. tokens:** ~4721173
-**Generated:** 2026-09-14 11:52 UTC
+**Files:** 1608 | **Est. tokens:** ~4721137
+**Generated:** 2026-09-14 11:59 UTC
 
 ## Token Budget Guide
 
@@ -89,8 +89,8 @@
 | `src/mind_mem/storage/` | 2 | ~11603 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
-| `src/mind_mem/v4/` | 24 | ~95798 |
-| `tests/` | 700 | ~2082685 |
+| `src/mind_mem/v4/` | 24 | ~95777 |
+| `tests/` | 700 | ~2082670 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1108,7 +1108,7 @@
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `kernels.py` (~3819 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_backfill.py` (~3068 tok, huge) — The v4 kind-index build pass — ``mm kinds backfill``'s engine.
-- `kind_summaries.py` (~5335 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
+- `kind_summaries.py` (~5314 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
 - `logging_context.py` (~1424 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
 - `observability.py` (~2993 tok, huge) — v4 observability — counters, timers, histograms, exporters.
 - `pq.py` (~5255 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
@@ -1499,7 +1499,7 @@
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
 - `test_m2_m3_namespace_contract.py` (~3147 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
 - `test_m4_closed_set_slots.py` (~5837 tok, huge) — M4 closed-set slots: declaration, staging, and governed supersession."""
-- `test_m5_enforcement_boundaries.py` (~2970 tok, huge) — M5 output enforcement controls for summaries and evidence scope."""
+- `test_m5_enforcement_boundaries.py` (~2959 tok, huge) — M5 output enforcement controls for summaries and evidence scope."""
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.
@@ -1852,7 +1852,7 @@
 - `test_v4_hnsw_kind_index_wiring.py` (~3436 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v4_kernels.py` (~4297 tok, huge) — Tests for the v4 kernel strategy implementations.
 - `test_v4_kernels_wiring.py` (~3137 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_v4_kind_conn_close.py` (~2201 tok, huge) — Regression: ``v4.block_kinds`` / ``v4.kind_summaries`` must CLOSE connections.
+- `test_v4_kind_conn_close.py` (~2197 tok, huge) — Regression: ``v4.block_kinds`` / ``v4.kind_summaries`` must CLOSE connections.
 - `test_v4_kind_summaries_wiring.py` (~2133 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v4_logging_context_wiring.py` (~4154 tok, huge) — ``v4.logging_context`` is WIRED — 5.0.1 restoration slice.
 - `test_v4_metadata_pq_conn_close.py` (~3168 tok, huge) — Regression: ``v4.block_metadata`` / ``v4.pq`` must CLOSE their connections.

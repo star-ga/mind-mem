@@ -21,8 +21,7 @@ def _workspace(tmp_path: Path, *, redaction: dict | None = None, max_chars: int 
         cfg["v4"]["redaction"] = redaction  # type: ignore[index]
     (ws / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
     (ws / "decisions" / "DECISIONS.md").write_text(
-        "[D-1]\nStatement: Use the blue deployment\nStatus: active\n\n---\n"
-        "[D-2]\nStatement: Deploy Friday\nStatus: active\n",
+        "[D-1]\nStatement: Use the blue deployment\nStatus: active\n\n---\n[D-2]\nStatement: Deploy Friday\nStatus: active\n",
         encoding="utf-8",
     )
     db = sqlite3.connect(ws / "index.db")
@@ -215,8 +214,7 @@ def test_refresh_refuses_a_quarantined_canonical_source(tmp_path: Path, monkeypa
     ws = _workspace(tmp_path)
     monkeypatch.setenv("MIND_MEM_CONFIG", str(ws / "mind-mem.json"))
     (ws / "decisions" / "DECISIONS.md").write_text(
-        "[D-1]\nStatement: Use the blue deployment\nStatus: quarantined\n\n---\n"
-        "[D-2]\nStatement: Deploy Friday\nStatus: active\n",
+        "[D-1]\nStatement: Use the blue deployment\nStatus: quarantined\n\n---\n[D-2]\nStatement: Deploy Friday\nStatus: active\n",
         encoding="utf-8",
     )
     with pytest.raises(kind_summaries.SummaryOutputError, match="absent or not admitted"):
@@ -231,8 +229,7 @@ def test_persisted_summary_is_withheld_after_source_quarantine(tmp_path: Path, m
     result = kind_summaries.refresh_summary(ws, "decision")
     assert result is not None
     (ws / "decisions" / "DECISIONS.md").write_text(
-        "[D-1]\nStatement: Use the blue deployment\nStatus: quarantined\n\n---\n"
-        "[D-2]\nStatement: Deploy Friday\nStatus: active\n",
+        "[D-1]\nStatement: Use the blue deployment\nStatus: quarantined\n\n---\n[D-2]\nStatement: Deploy Friday\nStatus: active\n",
         encoding="utf-8",
     )
     assert kind_summaries.get_summary(ws, "decision") is None
@@ -250,8 +247,7 @@ def test_category_summary_withholds_revoked_summary_after_refresh(tmp_path: Path
     assert before["kind_summaries"]
 
     (ws / "decisions" / "DECISIONS.md").write_text(
-        "[D-1]\nStatement: Use the blue deployment\nStatus: quarantined\n\n---\n"
-        "[D-2]\nStatement: Deploy Friday\nStatus: active\n",
+        "[D-1]\nStatement: Use the blue deployment\nStatus: quarantined\n\n---\n[D-2]\nStatement: Deploy Friday\nStatus: active\n",
         encoding="utf-8",
     )
     with use_workspace(str(ws)):
