@@ -224,6 +224,16 @@ class ViewerHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _graph(self, entity: str, depth: int) -> None:
+        if self.state.agent_id:
+            # KnowledgeGraph edges currently have no namespace-bound source
+            # identity, so exposing them under an agent principal would be an
+            # ACL guess.  Keep the limitation explicit until the graph API
+            # gains the same source-bound admission contract as recall.
+            self._send_json(
+                {"error": "namespace-scoped graph viewing is unsupported until graph edges are source-bound"},
+                HTTPStatus.NOT_IMPLEMENTED,
+            )
+            return
         from .knowledge_graph import KnowledgeGraph
         from .mcp.tools._helpers import _kg_path
 

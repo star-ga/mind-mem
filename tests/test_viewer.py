@@ -87,6 +87,13 @@ def test_viewer_rejects_invalid_principal_and_remote_bind(tmp_path: Path) -> Non
         make_server(str(_workspace(tmp_path)), host="0.0.0.0")
 
 
+def test_agent_graph_is_explicitly_unsupported_without_source_bound_edges(tmp_path: Path) -> None:
+    server = make_server(str(_workspace(tmp_path)), port=0, agent_id="alice")
+    status, _headers, body = _request(server, "GET", "/api/graph?entity=anything")
+    assert status == 501
+    assert "source-bound" in json.loads(body)["error"]
+
+
 def test_static_asset_uses_text_content_and_no_remote_dependency() -> None:
     from importlib.resources import files
 

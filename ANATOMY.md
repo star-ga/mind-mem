@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1628 | **Est. tokens:** ~4792396
-**Generated:** 2026-09-14 17:22 UTC
+**Files:** 1628 | **Est. tokens:** ~4792619
+**Generated:** 2026-09-14 17:23 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 238 | ~1081949 |
+| `src/mind_mem/` | 238 | ~1082086 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 715 | ~2123887 |
+| `tests/` | 715 | ~2123973 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1126,7 +1126,7 @@
 - `validity_gate.py` (~4353 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
 - `vector_inertness.py` (~3125 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `verify_cli.py` (~10537 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `viewer.py` (~3054 tok, huge) — Read-only local memory and graph viewer.
+- `viewer.py` (~3191 tok, huge) — Read-only local memory and graph viewer.
 ### `src/mind_mem/viewer_static/`
 
 - `app.js` (~563 tok, large)
@@ -1903,7 +1903,7 @@
 - `test_vector_index_shape_contract.py` (~4682 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vector_inertness.py` (~1607 tok, huge) — The vector-leg honesty gauge.
 - `test_verify_cli.py` (~4647 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_viewer.py` (~1008 tok, large) — Actual socket and CLI controls for the read-only local viewer."""
+- `test_viewer.py` (~1094 tok, large) — Actual socket and CLI controls for the read-only local viewer."""
 - `test_vocabulary_wiring.py` (~2980 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_walkthrough.py` (~2441 tok, huge) — Tests for the v3.9 dependency-ordered walkthrough."""
 - `test_watcher.py` (~2037 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""
