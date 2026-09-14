@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Iterable, Mapping, Optional, Sequence
@@ -181,34 +180,26 @@ def _block_date(block: Mapping[str, Any]) -> Optional[date]:
 def load_admitted_blocks(workspace: str) -> tuple[list[dict], int]:
     """``(admitted blocks, withheld count)`` over the governed corpus.
 
-    Walks the four governed directories in sorted order, including
-    ``*_ARCHIVE.md``: an archived block is still something the corpus
-    holds, and a compliance export that silently omits it is answering a
-    narrower question than the one it was asked. What it does *not*
-    include is anything the admission gate withholds, which is the
-    security boundary and is counted rather than hidden.
+    Reads the configured backend through the shared corpus enumeration,
+    including archive files and registered ingestion corpora. Local paths
+    must remain inside the workspace without symlinked source components;
+    encrypted corpora use the decrypting reader. Rows withheld by admission
+    are counted without including their content in the result.
     """
     from ..admissibility import admit_corpus
-    from ..block_parser import parse_file
-    from ..corpus_registry import CORPUS_DIRS
+    from ..request_context import context_config_for
+    from ..storage import iter_blocks
 
-    root = os.path.abspath(workspace)
-    parsed: list[dict] = []
-    for subdir in CORPUS_DIRS:
-        dir_path = os.path.join(root, subdir)
-        if not os.path.isdir(dir_path):
-            continue
-        for filename in sorted(os.listdir(dir_path)):
-            if not filename.endswith(".md"):
-                continue
-            try:
-                blocks = parse_file(os.path.join(dir_path, filename))
-            except (OSError, ValueError):
-                continue
-            source = f"{subdir}/{filename}"
-            for block in blocks:
-                block["_source"] = source
-            parsed.extend(blocks)
+    # Enumeration must use the configured backend and the one corpus registry.
+    # In particular, released imports live in memory/IMPORTED.md; a second
+    # CORPUS_DIRS walk silently omitted them and ignored database-only corpora.
+    # Include withheld rows here so release decisions and the withheld count
+    # are evaluated against the same complete snapshot.
+    bound = context_config_for(workspace)
+    config = dict(bound) if bound is not None else None
+    parsed = iter_blocks(workspace, config=config, active_only=False)
+    for block in parsed:
+        block["_source"] = block.get("_source_file") or block.get("_source") or block.get("file") or ""
 
     admitted = admit_corpus(parsed, workspace=workspace)
     return admitted, len(parsed) - len(admitted)

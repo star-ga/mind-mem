@@ -254,12 +254,16 @@ def _corpus_has_ciphertext(workspace: str) -> bool:
     directory under a name the table does not list would otherwise read
     as plaintext here and come back as zero blocks there, silently.
     """
+    from ..content_lifecycle import _safe_source_path
     from ..corpus_registry import discover_corpus_files
     from ..encryption import _MAGIC, has_magic
 
     for _label, rel_path in discover_corpus_files(workspace):
+        path = _safe_source_path(workspace, rel_path)
+        if path is None:
+            continue
         try:
-            with open(os.path.join(workspace, rel_path), "rb") as fh:
+            with open(path, "rb") as fh:
                 if has_magic(fh.read(len(_MAGIC))):
                     return True
         except OSError:
@@ -358,13 +362,14 @@ def _iter_markdown_active_blocks(
     # ``import mind_mem.storage`` time) and avoid an import cycle through
     # the recall constants.
     from ..block_parser import get_active, parse_file
+    from ..content_lifecycle import _safe_source_path
     from ..corpus_registry import discover_corpus_files
 
     read = parse_file if parse is None else parse
     blocks: list[dict[str, Any]] = []
     for label, rel_path in discover_corpus_files(workspace):
-        path = os.path.join(workspace, rel_path)
-        if not os.path.isfile(path):
+        path = _safe_source_path(workspace, rel_path)
+        if path is None:
             continue
         try:
             parsed = read(path)

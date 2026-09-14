@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1608 | **Est. tokens:** ~4721137
-**Generated:** 2026-09-14 11:59 UTC
+**Files:** 1609 | **Est. tokens:** ~4722724
+**Generated:** 2026-09-14 12:06 UTC
 
 ## Token Budget Guide
 
@@ -79,18 +79,18 @@
 | `src/mind_mem/` | 236 | ~1066936 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
-| `src/mind_mem/compliance/` | 7 | ~15393 |
+| `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
 | `src/mind_mem/mcp/tools/` | 29 | ~118257 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
-| `src/mind_mem/storage/` | 2 | ~11603 |
+| `src/mind_mem/storage/` | 2 | ~11646 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 700 | ~2082670 |
+| `tests/` | 701 | ~2084220 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -802,7 +802,7 @@
 - `__init__.py` (~1055 tok, large) — # Copyright 2026 STARGA, Inc.
 - `audit.py` (~995 tok, large) — # Copyright 2026 STARGA, Inc.
 - `detectors.py` (~4220 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `export.py` (~3353 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `export.py` (~3347 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prewrite.py` (~1552 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `provenance_policy.py` (~1878 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `redaction.py` (~2340 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1039,7 +1039,7 @@
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
-- `__init__.py` (~5490 tok, huge) — Storage factory for mind-mem block stores (v3.2.0).
+- `__init__.py` (~5533 tok, huge) — Storage factory for mind-mem block stores (v3.2.0).
 - `sharded_pg.py` (~6113 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
 ### `src/mind_mem/`
 
@@ -1300,6 +1300,7 @@
 - `test_competitive_intel.py` (~1881 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compiled_truth.py` (~4665 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
 - `test_compliance_export.py` (~4108 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_compliance_export_corpus_boundary.py` (~1550 tok, huge) — Export reads the configured corpus, including released ingestion records.
 - `test_compliance_provenance.py` (~3329 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compliance_redaction.py` (~6835 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compressors.py` (~2757 tok, huge) — Tests for compressors.py — real Compressor implementations.
