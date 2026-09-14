@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1623 | **Est. tokens:** ~4787464
-**Generated:** 2026-09-14 16:14 UTC
+**Files:** 1624 | **Est. tokens:** ~4789271
+**Generated:** 2026-09-14 16:32 UTC
 
 ## Token Budget Guide
 
@@ -77,12 +77,12 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 237 | ~1078895 |
-| `src/mind_mem/api/` | 5 | ~27043 |
+| `src/mind_mem/api/` | 5 | ~27237 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
-| `src/mind_mem/mcp/infra/` | 8 | ~15770 |
+| `src/mind_mem/mcp/infra/` | 8 | ~16138 |
 | `src/mind_mem/mcp/tools/` | 29 | ~122708 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 714 | ~2122879 |
+| `tests/` | 715 | ~2124124 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -736,7 +736,7 @@
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~4581 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `grpc_server.py` (~3956 tok, huge) — gRPC wire protocol for mind-mem (v4.0 prep).
-- `rest.py` (~15769 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
+- `rest.py` (~15963 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
 
 - `append_only.py` (~3657 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -895,7 +895,7 @@
 ### `src/mind_mem/mcp/infra/`
 
 - `__init__.py` (~838 tok, large) — MCP infrastructure compatibility exports, resolved only when requested.
-- `acl.py` (~5606 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
+- `acl.py` (~5974 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~1315 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
 - `http_auth.py` (~2032 tok, huge) — HTTP bearer-token authentication helpers for the MCP surface.
@@ -1731,6 +1731,7 @@
 - `test_reranker_model_cache.py` (~1909 tok, huge) — Reranker weights load once per process, not once per query.
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
 - `test_rest_admin_gate_api_key_only.py` (~2102 tok, huge) — The REST admin gate must fire in an API-key-only deployment.
+- `test_rest_admin_scope_handoff.py` (~1245 tok, large) — Real REST -> observed-MCP admin scope handoff controls (RA.4).
 - `test_rest_api.py` (~4353 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_rest_api_oidc.py` (~2737 tok, huge) — Tests for OIDC callback + admin API key endpoints (v3.2.0)."""
 - `test_rest_audit_headers.py` (~1517 tok, huge) — Regression tests for the audit-header middleware (roadmap v4.0.0 Group D).

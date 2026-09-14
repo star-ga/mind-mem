@@ -439,6 +439,10 @@ def _require_auth(
         )
     current_agent_id.set(agent_id)
     request.state.oidc_scopes = oidc_scopes
+    # This is a request-local default for downstream observed MCP callables.
+    # A valid bearer must never inherit an ambient process-wide admin scope;
+    # the admin dependency upgrades this state only after its own decision.
+    request.state.mindmem_authenticated_scope = "user"
     # The ``.set`` above does not reach the endpoint: FastAPI runs this
     # sync dependency in a threadpool worker under a *copy* of the
     # request context, so the assignment dies with the worker frame.
@@ -507,6 +511,7 @@ def _require_admin(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Admin scope required",
             )
+        request.state.mindmem_authenticated_scope = "admin"
     return token
 
 
@@ -551,13 +556,22 @@ def _acting_as(request: Request):  # type: ignore[no-untyped-def]
         # way it did before this existed.
         yield None
         return
+    # The middleware's log bindings were snapshotted before auth ran, so the
+    # resolved identity is pushed here rather than backfilled into a frame
+    # that has already been copied.  Carry the authenticated REST decision
+    # alongside it so an ambient MIND_MEM_SCOPE cannot elevate or deny this
+    # request inside the observed MCP callable.
+    scope = getattr(request.state, "mindmem_authenticated_scope", None)
+    from mind_mem.mcp.infra.acl import bind_transport_auth
+
     reset = current_agent_id.set(agent)
     try:
-        # The middleware's log bindings were snapshotted before auth ran,
-        # so the resolved identity is pushed here rather than backfilled
-        # into a frame that has already been copied.
         with _audit_ctx.log_scope(agent=agent):
-            yield agent
+            if scope:
+                with bind_transport_auth(principal=agent, scope=scope):
+                    yield agent
+            else:
+                yield agent
     finally:
         current_agent_id.reset(reset)
 

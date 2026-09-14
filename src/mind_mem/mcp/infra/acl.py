@@ -162,6 +162,43 @@ def bind_auth_snapshot() -> Iterator[AuthSnapshot]:
         _AUTH_SNAPSHOT.reset(snapshot_token)
 
 
+@contextmanager
+def bind_transport_auth(*, principal: str, scope: str) -> Iterator[AuthSnapshot]:
+    """Bind a transport's already-verified auth decision for one call.
+
+    REST authentication runs in a FastAPI dependency threadpool, while the
+    synchronous endpoint and the observed MCP callable run in another
+    context.  This seam carries the *decision* made by the REST dependency;
+    it never trusts a caller header or re-reads ambient ``MIND_MEM_SCOPE``.
+    A nested transport may reuse the same decision only when both principal
+    and scope match; a mismatch is a fail-closed ``denied`` snapshot.
+    """
+    if scope not in {"admin", "user"}:
+        raise ValueError("transport scope must be 'admin' or 'user'")
+    existing = current_auth_snapshot()
+    if existing is not None:
+        if existing.status == "authenticated" and existing.principal == principal and existing.scope == scope:
+            yield existing
+            return
+        conflict = AuthSnapshot("denied")
+        token = _AUTH_SNAPSHOT.set(conflict)
+        try:
+            yield conflict
+        finally:
+            _AUTH_SNAPSHOT.reset(token)
+        return
+
+    snapshot = AuthSnapshot("authenticated", principal, scope)
+    snapshot_token = _AUTH_SNAPSHOT.set(snapshot)
+    try:
+        from mind_mem.audit_context import bind_current_agent
+
+        with bind_current_agent(principal):
+            yield snapshot
+    finally:
+        _AUTH_SNAPSHOT.reset(snapshot_token)
+
+
 def authenticated_agent_id() -> str | None:
     """Return the transport-authenticated namespace principal, if present.
 
