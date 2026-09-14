@@ -90,12 +90,15 @@ def compile_truth_walkthrough(
 
     from mind_mem.walkthrough import compile_walkthrough
 
+    from ..infra.acl import authenticated_agent_id
+
     try:
         steps = compile_walkthrough(
             workspace=ws,
             topic=topic,
             limit=int(limit),
             active_only=bool(active_only),
+            agent_id=authenticated_agent_id(),
         )
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
@@ -158,6 +161,8 @@ def recall_with_persona(
     if ws_err:
         return ws_err
 
+    from ..infra.acl import authenticated_agent_id
+
     # Reuse the recall MCP impl so cache, axes, observability all flow through.
     from .recall import _recall_impl
 
@@ -165,6 +170,7 @@ def recall_with_persona(
         query,
         limit=int(limit),
         active_only=bool(active_only),
+        agent_id=authenticated_agent_id(),
         # A persona is a projection of the ranked list, so it inherits the
         # recall's determinism seam rather than owning one: same instant, same
         # underlying ranking, same projection.

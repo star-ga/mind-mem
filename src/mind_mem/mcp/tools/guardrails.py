@@ -174,12 +174,15 @@ def recall_with_guardrails(
     except (TypeError, ValueError):
         return json.dumps({"error": "limit must be an integer"})
 
+    from ..infra.acl import authenticated_agent_id
+
     results: list[dict[str, Any]] = recall_engine(
         ws,
         query,
         limit=bounded_limit,
         active_only=bool(active_only),
         guardrail_context=context,
+        agent_id=authenticated_agent_id(),
     )
     guardrail_count = sum(1 for r in results if r.get("guardrail"))
     _log.info("mcp_recall_with_guardrails", query=query, results=len(results), guardrails=guardrail_count)

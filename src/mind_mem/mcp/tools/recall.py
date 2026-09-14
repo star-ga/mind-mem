@@ -1615,7 +1615,86 @@ def hybrid_search(
         return raw
 
 
-def _kind_neighbours(ws: str, block_id: str, kind: str, limit: int) -> dict | None:
+def _bound_agent_id() -> str | None:
+    """Return the verified principal for this public retrieval call."""
+    from ..infra.acl import authenticated_agent_id
+
+    return authenticated_agent_id()
+
+
+def _servable_block_ids(ws: str, agent_id: str | None) -> set[str] | None:
+    """Return IDs admitted for this request before a similarity lookup.
+
+    Similarity indexes contain only IDs, so they cannot enforce a namespace
+    policy themselves. Resolve the IDs against the live corpus first and
+    apply the same indexed-hit ACL funnel used by ranked recall. A bound
+    principal therefore never discloses a private seed or neighbor through
+    co-occurrence/kind metadata.
+    """
+    from mind_mem.admissibility import admissible
+    from mind_mem.storage import iter_blocks
+
+    if agent_id is None or agent_id == "":
+        # The unbound operator surface historically applies only the normal
+        # content admission predicate. Preserve that behavior; there is no
+        # namespace principal to impose an additional restriction.
+        return set(admissible(iter_blocks(ws, active_only=False)))
+
+    # Use the configured backend's admission reader for database/encrypted
+    # stores. A Markdown workspace has explicit shared/agent corpus roots that
+    # the generic storage enumeration intentionally does not walk; enumerate
+    # those same registered paths as the ranked scan does.
+    from mind_mem._recall_core import CORPUS_FILES
+    from mind_mem.admissibility import admit_corpus
+    from mind_mem.block_parser import parse_file
+    from mind_mem.corpus_registry import discover_corpus_files
+    from mind_mem.mcp.tools.memory_ops import _is_markdown_backend
+    from mind_mem.namespaces import NamespaceManager
+
+    manager = NamespaceManager(ws, agent_id=agent_id)
+    if not _is_markdown_backend(ws):
+        from mind_mem.compliance.export import load_admitted_blocks
+
+        admitted, _withheld = load_admitted_blocks(ws)
+    else:
+        workspace_real = os.path.realpath(ws)
+        workspace_prefix = workspace_real + os.sep
+        paths: list[tuple[str, str]] = list(discover_corpus_files(ws))
+        for label, rel_path in CORPUS_FILES.items():
+            paths.extend(
+                (
+                    (f"{label}@shared", os.path.join("shared", rel_path)),
+                    (f"{label}@{agent_id}", os.path.join("agents", agent_id, rel_path)),
+                )
+            )
+        blocks: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for label, rel_path in paths:
+            if rel_path in seen or not manager.can_read(rel_path):
+                continue
+            seen.add(rel_path)
+            candidate = os.path.realpath(os.path.join(workspace_real, rel_path))
+            if not candidate.startswith(workspace_prefix) or not os.path.isfile(candidate):
+                continue
+            try:
+                parsed = parse_file(candidate)
+            except (OSError, UnicodeDecodeError, ValueError):
+                continue
+            for block in parsed:
+                block["_source_file"] = rel_path
+                block["_source_label"] = label
+                blocks.append(block)
+        admitted = admit_corpus(blocks, workspace=ws)
+    return {
+        str(block["_id"])
+        for block in admitted
+        if block.get("_id")
+        and isinstance(block.get("_source_file") or block.get("_source") or block.get("file"), str)
+        and manager.can_read(block.get("_source_file") or block.get("_source") or block.get("file"))
+    }
+
+
+def _kind_neighbours(ws: str, block_id: str, kind: str, limit: int, agent_id: str | None = None) -> dict | None:
     """The ``v4.hnsw_kind_index`` neighbourhood, or ``None`` to fall through.
 
     ``None`` means "this tool behaves exactly as it did before": the flag is
@@ -1643,6 +1722,13 @@ def _kind_neighbours(ws: str, block_id: str, kind: str, limit: int) -> dict | No
         _log.debug("find_similar_kind_leg_unavailable", error=str(exc))
         return None
 
+    # The seed is itself a corpus read. Refuse it before consulting the
+    # embedding partition, so a private seed cannot be used as an oracle for
+    # its neighborhood by an authenticated caller.
+    servable = _servable_block_ids(ws, agent_id)
+    if servable is not None and block_id not in servable:
+        return None
+
     try:
         query = get_block_embedding(ws, block_id)
         if not query:
@@ -1653,11 +1739,11 @@ def _kind_neighbours(ws: str, block_id: str, kind: str, limit: int) -> dict | No
         _log.warning("find_similar_kind_leg_failed", block_id=block_id, kind=kind, error=str(exc))
         return None
 
-    from mind_mem.admissibility import admissible
-    from mind_mem.storage import iter_blocks
-
-    servable = admissible(iter_blocks(ws, active_only=False))
-    similar = [{"block_id": bid, "distance": round(dist, 6)} for bid, dist in hits if bid != block_id and bid in servable][:limit]
+    similar = [
+        {"block_id": bid, "distance": round(dist, 6)}
+        for bid, dist in hits
+        if bid != block_id and (servable is None or bid in servable)
+    ][:limit]
     metrics.inc("mcp_find_similar_kind_queries")
     return {
         "_schema_version": MCP_SCHEMA_VERSION,
@@ -1694,10 +1780,11 @@ def find_similar(block_id: str, limit: int = 5, kind: str = "") -> str:
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
         return json.dumps({"error": f"Invalid block_id format: {block_id}"})
     ws = _workspace()
+    agent_id = _bound_agent_id()
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_similar_results"]))
     if kind:
-        kind_payload = _kind_neighbours(ws, block_id, kind, limit)
+        kind_payload = _kind_neighbours(ws, block_id, kind, limit, agent_id=agent_id)
         if kind_payload is not None:
             return json.dumps(kind_payload, indent=2)
     try:
@@ -1706,9 +1793,24 @@ def find_similar(block_id: str, limit: int = 5, kind: str = "") -> str:
         # The canonical store -- same file the recall writer records
         # co-occurrence into. This used to read ``memory/block_meta.db``,
         # which nothing writes, so "similar" was always empty.
+        servable = _servable_block_ids(ws, agent_id)
+        if servable is not None and block_id not in servable:
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "source": block_id,
+                    "similar": [],
+                    "method": "co-occurrence",
+                },
+                indent=2,
+            )
         db_path = block_meta_db_path(ws)
         mgr = BlockMetadataManager(db_path)
-        co_blocks = mgr.get_co_occurring_blocks(block_id, limit=limit)
+        co_blocks = [
+            item
+            for item in mgr.get_co_occurring_blocks(block_id, limit=limit)
+            if isinstance(item, str) and (servable is None or item in servable)
+        ]
         metrics.inc("mcp_find_similar_queries")
         return json.dumps(
             {
