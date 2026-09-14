@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1639 | **Est. tokens:** ~4833320
-**Generated:** 2026-09-14 18:17 UTC
+**Files:** 1639 | **Est. tokens:** ~4836329
+**Generated:** 2026-09-14 18:18 UTC
 
 ## Token Budget Guide
 
@@ -76,14 +76,14 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1089301 |
+| `src/mind_mem/` | 239 | ~1090422 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
-| `src/mind_mem/mcp/tools/` | 29 | ~124546 |
+| `src/mind_mem/mcp/tools/` | 29 | ~124769 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 721 | ~2139474 |
+| `tests/` | 721 | ~2141139 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -796,7 +796,7 @@
 - `chat_citations.py` (~2480 tok, huge) — Citation extraction + validation for the conversational chat layer.
 - `chat_cli.py` (~1080 tok, large) — ``mind-mem-chat`` — ask a workspace a question, get cited answers.
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
-- `chat_memory.py` (~5472 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
+- `chat_memory.py` (~6593 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
 - `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
@@ -943,7 +943,7 @@
 - `recall.py` (~22956 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
-- `walkthrough_persona.py` (~1620 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
+- `walkthrough_persona.py` (~1843 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
 ### `src/mind_mem/`
 
 - `mcp_entry.py` (~495 tok, medium) — Thin entry point for the ``mind-mem-mcp`` console script.
@@ -1225,7 +1225,7 @@
 - `test_accountability_views.py` (~6320 tok, huge) — RA.2 — precision and waste as derived views, and the four refusals that shape them.
 - `test_acl_tool_coverage.py` (~2384 tok, huge) — ACL coverage invariant for the MCP tool surface.
 - `test_active_only_filter.py` (~312 tok, medium) — Tests for active_only recall filter."""
-- `test_adjacent_public_acl.py` (~3523 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
+- `test_adjacent_public_acl.py` (~3611 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
 - `test_admissibility_unreadable_status.py` (~1104 tok, large) — An unreadable ``Status`` must be withheld on the stale-index path too.
 - `test_admission_seam.py` (~12891 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_admit_proposal_openers.py` (~3596 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1304,7 +1304,7 @@
 - `test_chain_transaction_capability.py` (~1204 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_chain_truncation.py` (~5069 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_change_stream_backpressure.py` (~956 tok, large) — The change stream's backpressure counters, and the drain that gives
-- `test_chat_with_memory.py` (~6346 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_chat_with_memory.py` (~7563 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_check_version.py` (~271 tok, medium) — Tests for version consistency checker."""
 - `test_check_version_gate.py` (~475 tok, medium) — Regression tests for the version-consistency gate.
 - `test_check_workspace_backend.py` (~3248 tok, huge) — Backend-aware workspace validation — ``mcp.infra.workspace._check_workspace``.
@@ -1560,7 +1560,7 @@
 - `test_mcp_traverse_graph.py` (~5735 tok, huge) — ``traverse_graph`` — the causal-graph tool that nothing tested.
 - `test_mcp_unload_core.py` (~3229 tok, huge) — ``unload_core`` — the MCP tool that had no test anywhere.
 - `test_mcp_v140.py` (~6007 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
-- `test_mcp_walkthrough_persona.py` (~1953 tok, huge) — Tests for the v3.9.0 MCP walkthrough + persona wrapper tools."""
+- `test_mcp_walkthrough_persona.py` (~2313 tok, huge) — Tests for the v3.9.0 MCP walkthrough + persona wrapper tools."""
 - `test_medlow_batch12_regressions.py` (~3396 tok, huge) — Regression tests for the batch-12 medium/low audit findings.
 - `test_memory_ab_analysis.py` (~2565 tok, huge) — Reps reduction, context poisoning, and disclosure — checked on known inputs.
 - `test_memory_ab_harness.py` (~6569 tok, huge) — The A/B harness's own guarantees, tested rather than asserted in prose.

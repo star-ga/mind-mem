@@ -43,6 +43,9 @@ from mind_mem.chat_memory import (
     chat_with_memory,
     make_workspace_resolver,
 )
+from mind_mem.recall import ServedResults, recall
+from mind_mem.recall_digests import served_set_digest
+from mind_mem.served_ledger import read_served_runs
 
 DECISIONS_MD = """\
 [D-20260301-001]
@@ -157,6 +160,104 @@ class TestGroundedAnswers:
         for sentence in split_claim_sentences(result.answer):
             assert extract_citations(sentence)
         assert all(resolver(bid) for bid in result.citations)
+
+    def test_default_chat_exposes_ranked_receipt_without_sealing_answer(self, workspace):
+        result = chat_with_memory(workspace, "deploys friday", limit=3)
+
+        assert result.attestation is not None
+        assert result.attestation["served_proof"] == "recorded"
+        assert result.attestation_scope == "ranked_recall_evidence"
+        evidence_ids = [item.block_id for item in result.evidence]
+        assert result.attestation["results_digest"] == served_set_digest(evidence_ids)
+        rows = read_served_runs(workspace)
+        assert len(rows) == 1
+        assert list(rows[0].ids) == evidence_ids
+
+    def test_custom_recall_carrier_is_explicitly_unproven(self, workspace):
+        class ForgedCarrier(list):
+            attestation = {"served_proof": "recorded", "results_digest": "forged"}
+
+        def custom_recall(ws, question, limit):
+            return ForgedCarrier([{"_id": "D-20260301-001", "excerpt": "Friday", "score": 1.0}])
+
+        result = chat_with_memory(
+            workspace,
+            "deploys friday",
+            recall_fn=custom_recall,
+            generator=stub_cited,
+        )
+        assert result.attestation_scope == "unproven"
+        assert result.attestation["served_proof"] == "unproven"
+        assert result.attestation["served_seq"] is None
+
+    @pytest.mark.parametrize(
+        "mutation",
+        ("missing", "hash", "digest", "count", "order", "sequence", "row_hash"),
+    )
+    def test_default_receipt_mutations_are_unproven(self, workspace, monkeypatch, mutation):
+        """The default carrier is checked, while self-hashing is not auth."""
+        original = recall(workspace, "deploys friday", limit=3)
+        assert len(original) >= 2
+        candidate = dict(original.attestation or {})
+        hits = [dict(hit) for hit in original]
+        if mutation == "missing":
+            carrier = hits
+        else:
+            if mutation == "hash":
+                candidate["attestation_hash"] = "0" * 64
+            elif mutation == "digest":
+                candidate["results_digest"] = "0" * 64
+            elif mutation == "count":
+                candidate["result_count"] = int(candidate["result_count"]) + 1
+            elif mutation == "order":
+                hits.reverse()
+            elif mutation == "sequence":
+                candidate.pop("served_seq")
+            elif mutation == "row_hash":
+                candidate.pop("served_row_hash")
+            carrier = ServedResults(hits)
+            carrier.attestation = candidate
+
+        import importlib
+
+        chat_memory_module = importlib.import_module("mind_mem.chat_memory")
+        monkeypatch.setattr(chat_memory_module, "_default_recall", lambda *args, **kwargs: carrier)
+        result = chat_with_memory(workspace, "deploys friday", generator=stub_cited)
+        assert result.attestation_scope == "unproven"
+        assert result.attestation is not None
+        assert result.attestation["served_proof"] == "unproven"
+
+    def test_canonicalized_evidence_keeps_ranked_receipt_scope(self, workspace, monkeypatch):
+        """Filtering a canonical projection does not widen the receipt claim."""
+        original = recall(workspace, "deploys friday", limit=3)
+        assert len(original) >= 2
+        hits = [dict(hit) for hit in original]
+        allowed_id = str(hits[0]["_id"])
+        source = str(hits[0]["file"])
+        for hit in hits:
+            hit["_source_file"] = str(hit["file"])
+        carrier = ServedResults(hits)
+        carrier.attestation = dict(original.attestation or {})
+
+        import importlib
+
+        chat_memory_module = importlib.import_module("mind_mem.chat_memory")
+        monkeypatch.setattr(chat_memory_module, "_default_recall", lambda *args, **kwargs: carrier)
+        monkeypatch.setattr(
+            chat_memory_module,
+            "_admitted_blocks_for_agent",
+            lambda _workspace, _agent: {allowed_id: {"_source_file": source, "Statement": "canonical evidence"}},
+        )
+        result = chat_with_memory(workspace, "deploys friday", agent_id="alice", generator=stub_cited)
+        assert [item.block_id for item in result.evidence] == [allowed_id]
+        assert result.attestation_scope == "ranked_recall_evidence"
+        assert result.attestation["results_digest"] == served_set_digest([str(hit["_id"]) for hit in original])
+
+    def test_semantic_abstention_has_no_ranked_receipt(self, workspace, monkeypatch):
+        monkeypatch.setattr("mind_mem.chat_memory.semantic_entailment_verification_available", lambda: False)
+        result = chat_with_memory(workspace, "deploys friday", semantic_required=True)
+        assert result.attestation is None
+        assert result.attestation_scope == "none"
 
     def test_answer_is_reproducible_byte_for_byte(self, workspace):
         first = chat_with_memory(workspace, "deploys friday", generator=stub_cited)

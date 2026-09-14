@@ -4,6 +4,17 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- A local `mm view` browser for admitted blocks and graph neighborhoods, with
+  packaged assets and loopback IPv4/IPv6 serving. Unsupported namespace graph
+  reads remain explicit, and displayed results are bounded to the documented
+  window. The viewer does not expose ranked retrieval receipts.
+- Chat and persona responses carry the existing ranked recall receipt, allowing
+  callers to join evidence to its serving event. The receipt scope excludes
+  generated prose, persona annotations and canonicalized fields. Missing,
+  inconsistent and custom-callback evidence remains explicitly unproven.
+
 ## [5.0.3] - 2026-09-14
 
 ### Added

@@ -196,6 +196,20 @@ def recall_with_persona(
             "query": query,
             "count": len(projected),
             "results": projected,
+            # The projection changes fields and may remove ids (``brief``),
+            # but it does not rerun retrieval. Forward the ranked receipt
+            # unchanged so callers can join it to the underlying evidence;
+            # the receipt does not attest persona annotations or prose.
+            "attestation": envelope.get("attestation"),
+            # A receipt-shaped dictionary is not enough to claim recorded
+            # ranked evidence: the recall boundary uses ``served_proof`` as
+            # the authoritative status.  Preserve an unproven marker while
+            # keeping its scope honest after persona projection.
+            "attestation_scope": (
+                "ranked_recall_evidence"
+                if isinstance(envelope.get("attestation"), dict) and envelope["attestation"].get("served_proof") == "recorded"
+                else "unproven"
+            ),
         },
         indent=2,
         default=str,
