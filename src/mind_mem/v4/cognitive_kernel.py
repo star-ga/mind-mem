@@ -128,6 +128,9 @@ class KernelResult:
     kernel: KernelKind
     hits: list[KernelHit] = field(default_factory=list)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    # Set only from the core recall result's runtime carrier.  ``None`` is an
+    # unknown/custom backend and cannot be used to make an attestation claim.
+    execution_backend: str | None = None
 
 
 #: A kernel strategy callable. Receives the workspace, the query, and
@@ -213,7 +216,7 @@ def _default_kernel(workspace: str, query: str, **kwargs: Any) -> KernelResult:
     except ImportError:
         # v3 recall not available in this build — return empty rather
         # than crash, so callers can detect the no-op case.
-        return KernelResult(kernel=KernelKind.DEFAULT, hits=[], metadata={"degraded": True})
+        return KernelResult(kernel=KernelKind.DEFAULT, hits=[], metadata={"degraded": True}, execution_backend=None)
 
     # The CLI captures the scoring instant before invoking the strategy.  Keep
     # direct callers byte-for-byte compatible (no keyword when they supplied
@@ -233,7 +236,7 @@ def _default_kernel(workspace: str, query: str, **kwargs: Any) -> KernelResult:
             score = float(getattr(h, "score", 0.0))
         if bid:
             hits.append(KernelHit(block_id=bid, score=score, reason=""))
-    return KernelResult(kernel=KernelKind.DEFAULT, hits=hits, metadata={})
+    return KernelResult(kernel=KernelKind.DEFAULT, hits=hits, metadata={}, execution_backend=getattr(raw, "execution_backend", None))
 
 
 #: The pass-through kernel. Registered automatically at import time

@@ -385,6 +385,11 @@ class RecallBackend(ABC):
     3. recall.py will load it dynamically, falling back to BM25 on error.
     """
 
+    # A backend may opt into a known runtime execution label.  The serving
+    # attestation must never infer this from the requested config after the
+    # search has run; unknown/custom implementations remain unbound.
+    execution_backend: str | None = None
+
     @abstractmethod
     def search(self, workspace, query, limit=10, active_only=False):
         """Return list of {_id, type, score, excerpt, file, line, status}."""
@@ -456,6 +461,12 @@ class PostgresRecallBackend(RecallBackend):
     overridden ``recall.backend`` to ``sqlite`` / ``vector``. The default
     Markdown / SQLite path is untouched.
     """
+
+    # PostgreSQL may serve BM25 or server-side hybrid depending on the actual
+    # returned provenance.  Keep this intentionally unbound here; the result
+    # carrier is stamped at the dispatch seam only when a concrete leg can be
+    # established.
+    execution_backend: str | None = None
 
     def __init__(self, workspace: str, config: dict[str, Any] | None = None) -> None:
         self._workspace = workspace
@@ -953,6 +964,7 @@ def _project_recall_carrier(
     projected: list[dict],
     *,
     degraded: dict[str, object] | None = None,
+    execution_backend: str | None = None,
 ) -> list[dict]:
     """Preserve run metadata when a post-filter creates a new result list.
 
@@ -968,15 +980,18 @@ def _project_recall_carrier(
     source_degraded = getattr(source, "degraded", None)
     marker = degraded if degraded is not None else source_degraded
     trace = getattr(source, "trace", None)
-    if projected is source and marker == source_degraded:
+    source_backend = getattr(source, "execution_backend", None)
+    backend = execution_backend if execution_backend is not None else source_backend
+    if projected is source and marker == source_degraded and backend == source_backend:
         return source
-    if marker is None and trace is None:
+    if marker is None and trace is None and backend is None:
         return projected
 
     from .hybrid_recall import RecallResults
 
     carried = RecallResults(projected)
     carried.degraded = marker
+    carried.execution_backend = backend
     carried.trace = trace
     return carried
 
@@ -1296,7 +1311,7 @@ def recall(
             guardrail_policy=_guardrail_policy,
             admission_allow=_admission_allow,
         )
-        return _project_recall_carrier(indexed_source, filtered, degraded=indexed_marker)
+        return _project_recall_carrier(indexed_source, filtered, degraded=indexed_marker, execution_backend="bm25")
     if isinstance(_cfg_backend, RecallBackend):
         try:
             # No pushable surface on an arbitrary backend, so the only lever
@@ -1309,6 +1324,12 @@ def recall(
             # result with the lexical scan below.
             backend_source = backend_hits
             _backend_marker = getattr(backend_hits, "degraded", None)
+            # Only built-in backends get a runtime label.  A third-party
+            # RecallBackend cannot self-declare an attestation leg; it stays
+            # unbound and a serving surface must report that proof is missing.
+            _execution_backend = getattr(_cfg_backend, "execution_backend", None)
+            if _execution_backend != "vector":
+                _execution_backend = None
             backend_hits = _filter_indexed_hits_for_agent(
                 workspace,
                 backend_hits,
@@ -1343,6 +1364,7 @@ def recall(
                         admission_allow=_admission_allow,
                     ),
                     degraded=_degraded_marker,
+                    execution_backend=_execution_backend,
                 )
             if backend_hits:
                 backend_hits = filter_search_hits(backend_hits, _get_config(workspace))
@@ -1361,7 +1383,12 @@ def recall(
                     guardrail_policy=_guardrail_policy,
                     admission_allow=_admission_allow,
                 )
-                return _project_recall_carrier(backend_source, filtered, degraded=_degraded_marker)
+                return _project_recall_carrier(
+                    backend_source,
+                    filtered,
+                    degraded=_degraded_marker,
+                    execution_backend=_execution_backend,
+                )
         except Exception as exc:
             if isinstance(_cfg_backend, PostgresRecallBackend):
                 # A configured source-of-record failure must remain visible;
@@ -2681,7 +2708,7 @@ def recall(
         guardrail_policy=_guardrail_policy,
         admission_allow=_admission_allow,
     )
-    return _project_recall_carrier(top, top, degraded=_degraded_marker)
+    return _project_recall_carrier(top, top, degraded=_degraded_marker, execution_backend="bm25")
 
 
 #: Every ``recall.backend`` value this loader has a case for. Anything else

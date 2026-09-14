@@ -174,6 +174,7 @@ def surprise_weighted_kernel(
             kernel=KernelKind.SURPRISE_WEIGHTED,
             hits=base.hits,
             metadata={"degraded": True, "reason": "no_centroid_or_embeddings"},
+            execution_backend=base.execution_backend,
         )
 
     rescored: list[KernelHit] = []
@@ -192,6 +193,7 @@ def surprise_weighted_kernel(
         kernel=KernelKind.SURPRISE_WEIGHTED,
         hits=rescored,
         metadata={"context_dim": len(context_centroid)},
+        execution_backend=base.execution_backend,
     )
 
 
@@ -222,6 +224,7 @@ def lineage_first_kernel(
             kernel=KernelKind.LINEAGE_FIRST,
             hits=base.hits,
             metadata={"degraded": True, "reason": "no_lineage_table"},
+            execution_backend=base.execution_backend,
         )
 
     edge_counts: dict[str, int] = {}
@@ -248,6 +251,7 @@ def lineage_first_kernel(
         kernel=KernelKind.LINEAGE_FIRST,
         hits=rescored,
         metadata={"max_hops": max_hops, "nonzero": sum(1 for v in edge_counts.values() if v > 0)},
+        execution_backend=base.execution_backend,
     )
 
 
@@ -275,6 +279,7 @@ def contradicts_first_kernel(workspace: str, query: str, **kwargs: Any) -> Kerne
             kernel=KernelKind.CONTRADICTS_FIRST,
             hits=base.hits,
             metadata={"degraded": True, "reason": "no_lineage_table"},
+            execution_backend=base.execution_backend,
         )
 
     contradicts: set[str] = set()
@@ -287,6 +292,7 @@ def contradicts_first_kernel(workspace: str, query: str, **kwargs: Any) -> Kerne
                 kernel=KernelKind.CONTRADICTS_FIRST,
                 hits=base.hits,
                 metadata={"degraded": True, "reason": "untyped_lineage"},
+                execution_backend=base.execution_backend,
             )
         rows = conn.execute("SELECT mem1_id, mem2_id FROM co_retrieval WHERE kind = 'contradicts'").fetchall()
         for a, b in rows:
@@ -308,6 +314,7 @@ def contradicts_first_kernel(workspace: str, query: str, **kwargs: Any) -> Kerne
         kernel=KernelKind.CONTRADICTS_FIRST,
         hits=rescored,
         metadata={"contradicts_count": len(contradicts)},
+        execution_backend=base.execution_backend,
     )
 
 
@@ -342,6 +349,7 @@ def graph_walk_kernel(
             kernel=KernelKind.GRAPH_WALK,
             hits=base.hits,
             metadata={"degraded": True, "reason": "no_lineage_table"},
+            execution_backend=base.execution_backend,
         )
 
     seeds = list(seed_ids) if seed_ids else [h.block_id for h in base.hits[:5]]
@@ -351,6 +359,7 @@ def graph_walk_kernel(
             kernel=KernelKind.GRAPH_WALK,
             hits=[],
             metadata={"degraded": True, "reason": "no_seeds"},
+            execution_backend=base.execution_backend,
         )
 
     visited: dict[str, int] = {}
@@ -390,6 +399,7 @@ def graph_walk_kernel(
         kernel=KernelKind.GRAPH_WALK,
         hits=hits,
         metadata={"seeds": list(seeds), "visited": len(visited), "max_hops": max_hops},
+        execution_backend=base.execution_backend,
     )
 
 

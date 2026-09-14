@@ -147,6 +147,55 @@ def test_kernel_cli_disabled_ledger_is_explicitly_unproven(
     assert read_served_runs(str(workspace)) == ()
 
 
+def test_kernel_cli_vector_execution_is_not_attested_as_bm25(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A real vector dispatch must fail closed until it has a vector leg contract.
+
+    The local search seam is stubbed only to avoid loading a model.  Backend
+    construction, core dispatch, kernel conversion, CLI admission, and
+    attestation all remain real.  On the parent candidate this exercised a
+    VectorBackend but recorded the default hard-coded ``bm25`` leg.
+    """
+    from mind_mem.recall_vector import VectorBackend
+
+    config = json.loads((workspace / "mind-mem.json").read_text(encoding="utf-8"))
+    config["recall"] = {"backend": "vector", "provider": "local"}
+    config["served_ledger"] = {"enabled": True}
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+
+    def local_fixture(
+        self: VectorBackend,
+        workspace_path: str,
+        query: str,
+        limit: int,
+        active_only: bool,
+        *,
+        scoring_instant: date | None = None,
+    ) -> list[dict[str, object]]:
+        del self, workspace_path, query, limit, active_only, scoring_instant
+        return [
+            {
+                "_id": "D-20260101-001",
+                "score": 0.91,
+                "file": "decisions/DECISIONS.md",
+                "status": "active",
+            }
+        ]
+
+    monkeypatch.setattr(VectorBackend, "_search_local", local_fixture)
+    payload = _run(capsys)
+
+    assert payload["count"] == 1
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "execution backend 'vector'" in attestation["ledger_error"]
+    assert read_served_runs(str(workspace)) == ()
+
+
 def test_kernel_cli_feature_flag_off_keeps_operator_refusal(
     workspace: Path,
     capsys: pytest.CaptureFixture[str],

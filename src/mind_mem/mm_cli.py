@@ -117,6 +117,10 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
         config_hash=snap_hash,
         index_anchor=snap_anchor,
         generation=_derive_generation(snap_config),
+        # The core result stamps this from the backend dispatch seam.  An
+        # absent/unknown marker must become an explicit unproven result rather
+        # than silently inheriting the old BM25 claim.
+        execution_backend=result.execution_backend or "unknown",
     )
     payload = {
         "query": args.query,
