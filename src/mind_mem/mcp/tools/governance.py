@@ -1106,6 +1106,7 @@ def propose_slot_update(
     ws = _workspace()
     from mind_mem.closed_slots import ClosedSlotError, stage_slot_update
     from mind_mem.compliance.provenance_policy import ProvenanceRequired
+    from mind_mem.compliance.redaction import RedactionRefused
 
     try:
         result = stage_slot_update(
@@ -1122,6 +1123,8 @@ def propose_slot_update(
         )
     except ProvenanceRequired as exc:
         return json.dumps({"error": "provenance_required", "reason": str(exc), "namespace": namespace, "slot": slot}, indent=2)
+    except RedactionRefused as exc:
+        return json.dumps({"error": "redaction_refused", "reason": str(exc), "namespace": namespace, "slot": slot}, indent=2)
     except ClosedSlotError as exc:
         return json.dumps({"error": str(exc), "namespace": namespace, "slot": slot}, indent=2)
     metrics.inc("mcp_slot_proposals")

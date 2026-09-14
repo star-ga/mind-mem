@@ -172,6 +172,185 @@ def test_decorated_slot_stage_runs_provenance_gate_and_accepts_attribution(tmp_p
     assert "ActorId: agent-7" in staged
 
 
+def test_decorated_slot_approval_rechecks_current_provenance_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An admin approval cannot apply a proposal after its policy changes."""
+    from mind_mem.init_workspace import init
+    from mind_mem.mcp.tools import governance
+    from mind_mem.spec_binding import SpecBindingManager
+
+    init(str(tmp_path))
+    config_path = tmp_path / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config.update(
+        {
+            "governance_mode": "propose",
+            "closed_slots": _decl(),
+            "v4": {"provenance": {"enabled": True, "policy": "required", "fields": ["ActorId"]}},
+        }
+    )
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+
+    positive = json.loads(governance.propose_slot_update("profile", "tier", "gold", "the profile tier is gold", actor_id="agent-7"))
+    assert positive["status"] == "staged"
+    applied = json.loads(governance.approve_apply(positive["proposal_id"], dry_run=False))
+    assert applied["status"] == "applied"
+
+    state_path = tmp_path / "memory/intel-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["last_apply_ts"] = "2020-01-01T00:00:00Z"
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    staged = json.loads(governance.propose_slot_update("profile", "status", "active", "the profile is active", actor_id="agent-7"))
+    assert staged["status"] == "staged"
+    changed = json.loads(config_path.read_text(encoding="utf-8"))
+    changed["v4"]["provenance"]["fields"] = ["ActorRole"]
+    config_path.write_text(json.dumps(changed), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    from mind_mem.governance_gate import evict_gate
+
+    evict_gate(str(tmp_path))
+
+    refused = json.loads(governance.approve_apply(staged["proposal_id"], dry_run=False))
+    assert refused["status"] == "failed"
+    assert "current policy" in refused["message"]
+    assert "SlotName: status" not in (tmp_path / "decisions/DECISIONS.md").read_text(encoding="utf-8")
+
+
+def test_slot_stage_reuses_provenance_redaction_and_codepoint_gates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Slot metadata follows shared length, vocabulary, redaction, and Unicode controls."""
+    from mind_mem.init_workspace import init
+    from mind_mem.mcp.tools import governance
+    from mind_mem.spec_binding import SpecBindingManager
+
+    init(str(tmp_path))
+    config_path = tmp_path / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config.update(
+        {
+            "governance_mode": "propose",
+            "closed_slots": _decl(),
+            "v4": {"provenance": {"enabled": True, "policy": "required", "fields": ["ActorId"]}},
+        }
+    )
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+
+    overlong = json.loads(governance.propose_slot_update("profile", "status", "active", "the profile is active", actor_id="x" * 257))
+    assert "exceeds" in overlong["error"]
+
+    admitted = json.loads(governance.propose_slot_update("profile", "status", "active", "the profile is active", actor_id="agent\u200b-7"))
+    assert admitted["status"] == "staged"
+    staged = (tmp_path / "intelligence/proposed/EDITS_PROPOSED.md").read_text(encoding="utf-8")
+    assert "ActorId: agent-7" in staged
+    assert "\u200b" not in staged
+
+    # A reject-mode detector must produce the same stable refusal envelope as
+    # ordinary propose_update, before a proposal is appended.
+    reject_config = json.loads(config_path.read_text(encoding="utf-8"))
+    reject_config["v4"]["redaction"] = {"enabled": True, "mode": "reject", "detectors": ["email"]}
+    config_path.write_text(json.dumps(reject_config), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    refused = json.loads(
+        governance.propose_slot_update("profile", "tier", "mail ops@example.com", "the tier contains an address", actor_id="agent-7")
+    )
+    assert refused["error"] == "redaction_refused"
+    assert "SlotName: tier" not in (tmp_path / "intelligence/proposed/EDITS_PROPOSED.md").read_text(encoding="utf-8")
+
+
+def test_slot_approval_rechecks_changed_redaction_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A staged clear-text slot must be restaged when current redaction would reject it."""
+    from mind_mem.init_workspace import init
+    from mind_mem.mcp.tools import governance
+    from mind_mem.spec_binding import SpecBindingManager
+
+    init(str(tmp_path))
+    config_path = tmp_path / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config.update({"governance_mode": "propose", "closed_slots": _decl()})
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+
+    staged = json.loads(governance.propose_slot_update.__wrapped__("profile", "status", "mail ops@example.com", "the profile has mail"))
+    assert staged["status"] == "staged"
+    changed = json.loads(config_path.read_text(encoding="utf-8"))
+    changed["v4"] = {"redaction": {"enabled": True, "mode": "reject", "detectors": ["email"]}}
+    config_path.write_text(json.dumps(changed), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    from mind_mem.governance_gate import evict_gate
+
+    evict_gate(str(tmp_path))
+
+    refused = json.loads(governance.approve_apply.__wrapped__(staged["proposal_id"], dry_run=False))
+    assert refused["status"] == "failed"
+    assert "restaging" in refused["message"]
+    assert "SlotName: status" not in (tmp_path / "decisions/DECISIONS.md").read_text(encoding="utf-8")
+
+
+def test_slot_stage_uses_enabled_v4_field_vocabulary_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An enabled workspace vocabulary also governs closed-slot metadata."""
+    from mind_mem.init_workspace import init
+    from mind_mem.mcp.tools import governance
+    from mind_mem.spec_binding import SpecBindingManager
+
+    init(str(tmp_path))
+    config_path = tmp_path / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config.update(
+        {
+            "governance_mode": "propose",
+            "closed_slots": _decl(),
+            "v4": {"block_metadata": {"enabled": True}, "vocabulary": {"enabled": True}},
+            "vocabularies": {"actor_role": {"values": ["admin"], "mode": "reject"}},
+        }
+    )
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+
+    refused = json.loads(governance.propose_slot_update("profile", "status", "active", "the profile is active", actor_role="planner"))
+    assert refused["error"].startswith("schema_validation_rejection")
+    assert "SlotName: status" not in (tmp_path / "intelligence/proposed/EDITS_PROPOSED.md").read_text(encoding="utf-8")
+
+
+def test_slot_approval_rechecks_new_strict_quality_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A proposal staged under advisory quality cannot bypass a later strict gate."""
+    from mind_mem.init_workspace import init
+    from mind_mem.mcp.tools import governance
+    from mind_mem.spec_binding import SpecBindingManager
+
+    init(str(tmp_path))
+    config_path = tmp_path / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config.update({"governance_mode": "propose", "closed_slots": _decl()})
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+
+    staged = json.loads(governance.propose_slot_update.__wrapped__("profile", "status", "x", "the profile is x"))
+    assert staged["status"] == "staged"
+    changed = json.loads(config_path.read_text(encoding="utf-8"))
+    changed["quality_gate"] = {"mode": "strict"}
+    config_path.write_text(json.dumps(changed), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    from mind_mem.governance_gate import evict_gate
+
+    evict_gate(str(tmp_path))
+
+    refused = json.loads(governance.approve_apply.__wrapped__(staged["proposal_id"], dry_run=False))
+    assert refused["status"] == "failed"
+    assert "quality_gate_rejection" in refused["message"]
+    assert "SlotName: status" not in (tmp_path / "decisions/DECISIONS.md").read_text(encoding="utf-8")
+
+
 def test_apply_rejects_slot_proposal_after_declaration_changes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Approval revalidates the authored declaration under the apply lock."""
     from mind_mem.init_workspace import init

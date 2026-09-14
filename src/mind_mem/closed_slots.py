@@ -57,6 +57,8 @@ def _screen_slot_write(
     value: str,
     rationale: str,
     provenance: Mapping[str, str] | None,
+    *,
+    record_redaction: bool = True,
 ) -> tuple[str, str, dict[str, str]]:
     """Run the same pre-write controls as ``propose_update``.
 
@@ -66,16 +68,36 @@ def _screen_slot_write(
     path inert apart from the existing configuration probe.
     """
     from .apply_engine import _sanitize_reason_for_markdown
+    from .block_provenance import MAX_PROVENANCE_VALUE_LEN, PROVENANCE_FIELDS, clean_provenance_value
+    from .codepoint_sanitize import sanitize_text_for_ingest
     from .compliance.prewrite import PreWritePolicy, screen
     from .compliance.provenance_policy import ProvenanceConfigError, ProvenanceRequired
     from .compliance.redaction import MODE_OFF, RedactionConfigError
 
-    cleaned_value = _sanitize_reason_for_markdown(value.strip())
-    cleaned_rationale = _sanitize_reason_for_markdown(rationale.strip())
-    supplied = {key: val for key, val in (provenance or {}).items() if val}
+    canonical_to_param = {field: param for param, field in PROVENANCE_FIELDS.items()}
+    supplied: dict[str, str] = {}
+    for field, raw in (provenance or {}).items():
+        param = canonical_to_param.get(field)
+        if param is None:
+            raise SlotConfigError(f"unknown provenance field: {field}")
+        if raw in (None, ""):
+            continue
+        if not isinstance(raw, str):
+            raise SlotConfigError(f"provenance field {param!r} must be a string")
+        if len(raw) > MAX_PROVENANCE_VALUE_LEN:
+            raise SlotConfigError(f"{param} exceeds {MAX_PROVENANCE_VALUE_LEN} chars (provenance values are metadata, not content)")
+        try:
+            cleaned = clean_provenance_value(param, sanitize_text_for_ingest(raw, workspace, source=f"slot.{field}"))
+        except (TypeError, ValueError) as exc:
+            raise SlotConfigError(f"provenance_invalid: {exc}") from exc
+        if cleaned:
+            supplied[field] = cleaned
+
+    cleaned_value = _sanitize_reason_for_markdown(sanitize_text_for_ingest(value.strip(), workspace, source="slot.statement"))
+    cleaned_rationale = _sanitize_reason_for_markdown(sanitize_text_for_ingest(rationale.strip(), workspace, source="slot.rationale"))
     try:
         policy = PreWritePolicy.resolve(workspace)
-        results = {
+        results: dict[str, Any] = {
             "statement": screen(
                 cleaned_value, policy=policy, provenance=supplied, target=f"decision.slot.{namespace}.{slot}", record=False
             ),
@@ -83,6 +105,15 @@ def _screen_slot_write(
                 cleaned_rationale, policy=policy, provenance=supplied, target=f"decision.slot.{namespace}.{slot}.rationale", record=False
             ),
         }
+        if policy.redaction_mode != MODE_OFF:
+            for field, value in supplied.items():
+                results[f"provenance:{field}"] = screen(
+                    value,
+                    policy=policy,
+                    provenance=supplied,
+                    target=f"decision.slot.{namespace}.{slot}.{field}",
+                    record=False,
+                )
     except (ProvenanceConfigError, RedactionConfigError) as exc:
         raise SlotConfigError(f"compliance_config_invalid: {exc}") from exc
     except ProvenanceRequired:
@@ -95,13 +126,22 @@ def _screen_slot_write(
     # retain the same field names as the ordinary proposal door.
     result_value = results["statement"].text
     result_rationale = results["rationale"].text
-    if policy.redaction_mode != MODE_OFF:
-        from .compliance.audit import record_redaction
+    for field, result in results.items():
+        if field.startswith("provenance:") and field.rsplit(":", 1)[-1] != "Purpose" and result.changed:
+            raise ClosedSlotError(f"redaction_identity_refused: {field.rsplit(':', 1)[-1]}")
+
+    if policy.redaction_mode != MODE_OFF and record_redaction:
+        from .compliance.audit import record_redaction as _record_redaction
 
         for field, result in results.items():
-            record_redaction(
+            _record_redaction(
                 workspace, result.redaction, target=f"decision.slot.{namespace}.{slot}.{field}", agent=supplied.get("ActorId", "")
             )
+
+    if policy.redaction_mode != MODE_OFF:
+        for field, result in results.items():
+            if field.startswith("provenance:") and field.rsplit(":", 1)[-1] == "Purpose":
+                supplied["Purpose"] = result.text
 
     from .mcp.infra.config import _get_quality_gate_mode
     from .quality_gate import validate_block
@@ -110,10 +150,77 @@ def _screen_slot_write(
     if qg_mode != "off":
         from .mcp.tools.governance import _recent_statements
 
-        verdict = validate_block(result_value, strict=qg_mode == "strict", recent=_recent_statements(workspace))
-        if not verdict.accept:
-            raise ClosedSlotError(f"quality_gate_rejection: {', '.join(verdict.reasons)}")
+        quality_verdict = validate_block(result_value, strict=qg_mode == "strict", recent=_recent_statements(workspace))
+        if not quality_verdict.accept:
+            raise ClosedSlotError(f"quality_gate_rejection: {', '.join(quality_verdict.reasons)}")
+
+    if _v4_enabled_for_slots(workspace):
+        from .v4.block_metadata import validate_block as _validate_metadata_block
+        from .v4.feature_flags import FeatureDisabledError
+
+        v4_fields: dict[str, Any] = {
+            "statement": result_value,
+            "confidence": "medium",
+            "tags": ["closed-slot", namespace, slot],
+            **{canonical_to_param[field]: value for field, value in supplied.items()},
+        }
+        try:
+            metadata_verdict = _validate_metadata_block("decision", v4_fields, workspace=workspace)
+        except FeatureDisabledError:
+            # The flag can be edited between the quiet probe and validation;
+            # the second read's disabled answer is the current policy.
+            metadata_verdict = None
+        if metadata_verdict is None:
+            return result_value, result_rationale, supplied
+        if not metadata_verdict.ok:
+            raise ClosedSlotError(f"schema_validation_rejection: {metadata_verdict.reason}")
     return result_value, result_rationale, supplied
+
+
+def _v4_enabled_for_slots(workspace: str) -> bool:
+    """Return whether the ordinary v4 metadata gate is active for this workspace."""
+
+    from .v4.block_metadata import FLAG
+    from .v4.feature_flags import is_enabled_quiet
+
+    # The feature-flag helper resolves the same workspace-bound flag used by
+    # the ordinary proposal path; the workspace parameter is retained here so
+    # the slot call site documents the policy boundary explicitly.
+    del workspace
+    return is_enabled_quiet(FLAG)
+
+
+def _revalidate_slot_policy(
+    workspace: str,
+    block: Mapping[str, Any],
+    *,
+    namespace: str,
+    slot: str,
+) -> None:
+    """Re-run current write policy before a staged slot reaches source truth."""
+
+    from .compliance.provenance_policy import ProvenanceRequired
+    from .compliance.redaction import RedactionRefused
+
+    provenance = {field: block[field] for field in ("ActorId", "ActorRole", "SessionId", "ToolId", "Purpose") if block.get(field)}
+    try:
+        value, rationale, current_provenance = _screen_slot_write(
+            workspace,
+            namespace,
+            slot,
+            str(block.get("Statement", "")),
+            str(block.get("Rationale", "")),
+            provenance,
+            record_redaction=False,
+        )
+    except (ProvenanceRequired, RedactionRefused, ClosedSlotError) as exc:
+        raise SlotConfigError(f"closed-slot {namespace}/{slot} current policy requires restaging: {exc}") from exc
+
+    stored_provenance = {field: str(block[field]) for field in provenance if block.get(field)}
+    if value != str(block.get("Statement", "")) or rationale != str(block.get("Rationale", "")):
+        raise SlotConfigError(f"closed-slot {namespace}/{slot} current redaction differs; restage the proposal")
+    if current_provenance != stored_provenance:
+        raise SlotConfigError(f"closed-slot {namespace}/{slot} current provenance normalization differs; restage the proposal")
 
 
 def _validate_slot_payload(
@@ -142,6 +249,7 @@ def _validate_slot_payload(
     expected_digest = hashlib.sha256(str(block.get("Statement", "")).encode("utf-8")).hexdigest()
     if block.get("SlotValueDigest") != expected_digest:
         raise SlotInvariantError(f"closed-slot {namespace}/{slot} value digest does not match Statement")
+    _revalidate_slot_policy(workspace, block, namespace=namespace, slot=slot)
     if target is None:
         occupants = [item for item in active_blocks if _slot_fields(item) == identity]
         if len(occupants) > 1:

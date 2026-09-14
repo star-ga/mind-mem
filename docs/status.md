@@ -37,11 +37,11 @@ Package is a flat `src/mind_mem/` — there is no `governance/` subpackage.
 | Tier decay (TTL + idle demotion) | `src/mind_mem/memory_tiers.py` (`TierPolicy`, `run_promotion_cycle`) | RA.0 collapsed three tier ladders to this one and deleted the other two. |
 | Delta-based snapshot rollback | `src/mind_mem/block_store.py` (`MANIFEST.json` write/read) | MANIFEST.json for O(manifest) restore. |
 
-### MCP server (102 tools, 8 resources)
+### MCP server (103 tools, 8 resources)
 
 | Component | Source | Notes |
 |---|---|---|
-| MCP server entry | `src/mind_mem/mcp_server.py` | 102 tools across recall / write / governance / observability / audit. |
+| MCP server entry | `src/mind_mem/mcp_server.py` | 103 tools across recall / write / governance / observability / audit. |
 | Native MCP integration (19 clients) | `src/mind_mem/hook_installer.py` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw + 10 more. |
 | Multi-backend LLM extractor | `src/mind_mem/llm_extractor.py` | ollama / openai-compatible / vLLM / exllamav2 backends selected by `backend="auto"`. |
 | Model provenance (audit / sign / verify) | `src/mind_mem/model_provenance.py`, `src/mind_mem/mcp/tools/model.py` | `audit_model_tool`, `sign_model_tool`, `verify_model_tool` are in the shipped tool surface — no feature flag — with 28 tests and their own `Audit Pinned Models` workflow. This row said "not yet shipped" while all three were counted in the tool badge. |
@@ -60,7 +60,7 @@ Kernel sources live in `mind/` (repo root), not `kernels/`.
 
 | Component | Source | Notes |
 |---|---|---|
-| `star-ga/mind-mem-4b` (v4.1.1) | `docs/mind-mem-4b-setup.md` / [HF model card](https://huggingface.co/star-ga/mind-mem-4b) | Q4_K_M @ 2.7GB via Ollama; reported 133/133 eval (111 main + 22 held-out, two using inference-time anchors). Trained on 83 MCP tools; the current server exposes 102 MCP tools. This is not a new independent evaluation. |
+| `star-ga/mind-mem-4b` (v4.1.1) | `docs/mind-mem-4b-setup.md` / [HF model card](https://huggingface.co/star-ga/mind-mem-4b) | Q4_K_M @ 2.7GB via Ollama; reported 133/133 eval (111 main + 22 held-out, two using inference-time anchors). Trained on 83 MCP tools; the current server exposes 103 MCP tools. This is not a new independent evaluation. |
 | Backend dispatcher | `src/mind_mem/llm_extractor.py` | `mind-mem.json` → `{"backend": "ollama", "model": "mind-mem:4b"}`. |
 
 ## Experimental (in-tree, behind feature flags)

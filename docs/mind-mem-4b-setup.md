@@ -277,7 +277,7 @@ Typical stack:
 ```
 ┌──────────────┐       ┌─────────────────┐       ┌──────────────────────┐
 │  Claude Code │──────▶│ mind-mem MCP    │──────▶│ SQLite + FTS + vec   │
-│ (or any CLI) │       │  (102 tools)     │       │   OR                 │
+│ (or any CLI) │       │  (103 tools)     │       │   OR                 │
 └──────────────┘       └────────┬────────┘       │ Postgres + pgvector  │
                                 │                │   + HNSW + GIN       │
                                 ▼                └──────────────────────┘
