@@ -41,6 +41,10 @@ All notable changes to MIND-Mem are documented in this file.
 - Indexed recall applies a bound agent's namespace permissions before result
   processing, including SQLite and PostgreSQL. An entirely denied database
   result stays empty while retaining backend trace and degradation metadata.
+- The kernel recall CLI attaches local serving evidence for clean default
+  lexical execution. Unsupported execution paths remain explicitly unproven;
+  indexed-backend failures retain a degradation marker instead of receiving a
+  clean fallback receipt. Final ordered IDs are bound after the CLI limit.
 - Receipt manifest paths now use canonical `/` separators on every host, so
   Windows verifiers accept the same committed receipt vectors as POSIX hosts.
 - Remote Qdrant and Pinecone hits now carry and verify a canonical

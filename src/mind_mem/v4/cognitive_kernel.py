@@ -128,6 +128,12 @@ class KernelResult:
     kernel: KernelKind
     hits: list[KernelHit] = field(default_factory=list)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    # Set only from the core recall result's runtime carrier.  ``None`` is an
+    # unknown/custom backend and cannot be used to make an attestation claim.
+    execution_backend: str | None = None
+    # Preserve a runtime fallback/degradation marker while adapting the
+    # list-shaped v3 result to this kernel's hit type.
+    degraded: dict[str, Any] | None = None
 
 
 #: A kernel strategy callable. Receives the workspace, the query, and
@@ -194,7 +200,7 @@ def is_kernel_registered(kind: KernelKind | str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _default_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
+def _default_kernel(workspace: str, query: str, **kwargs: Any) -> KernelResult:
     """Pass-through to v3 recall.
 
     Imports lazily so the v4 module doesn't pull the v3 recall stack at
@@ -202,9 +208,10 @@ def _default_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
     where the v3 recall path may not be initialised yet — useful for
     schema-only test runs).
 
-    The returned :class:`KernelResult` carries no metadata and uses
-    each hit's RRF score as :attr:`KernelHit.score`. Reason tags are
-    empty since the default kernel adds no semantic routing.
+    The returned :class:`KernelResult` uses each hit's RRF score as
+    :attr:`KernelHit.score`. Reason tags are empty since the default kernel
+    adds no semantic routing; the v3 result's runtime degradation marker is
+    carried through for serving attestation.
     """
     require_enabled(FLAG)
 
@@ -213,9 +220,16 @@ def _default_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
     except ImportError:
         # v3 recall not available in this build — return empty rather
         # than crash, so callers can detect the no-op case.
-        return KernelResult(kernel=KernelKind.DEFAULT, hits=[], metadata={"degraded": True})
+        return KernelResult(kernel=KernelKind.DEFAULT, hits=[], metadata={"degraded": True}, execution_backend=None)
 
-    raw = _v3_recall(workspace, query)
+    # The CLI captures the scoring instant before invoking the strategy.  Keep
+    # direct callers byte-for-byte compatible (no keyword when they supplied
+    # none), while ensuring a captured instant governs the actual ranking.
+    scoring_instant = kwargs.get("scoring_instant")
+    if scoring_instant is None:
+        raw = _v3_recall(workspace, query)
+    else:
+        raw = _v3_recall(workspace, query, scoring_instant=scoring_instant)
     hits: list[KernelHit] = []
     for h in raw or []:
         if isinstance(h, dict):
@@ -226,7 +240,16 @@ def _default_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
             score = float(getattr(h, "score", 0.0))
         if bid:
             hits.append(KernelHit(block_id=bid, score=score, reason=""))
-    return KernelResult(kernel=KernelKind.DEFAULT, hits=hits, metadata={})
+    degraded = getattr(raw, "degraded", None)
+    if not isinstance(degraded, dict):
+        degraded = None
+    return KernelResult(
+        kernel=KernelKind.DEFAULT,
+        hits=hits,
+        metadata={},
+        execution_backend=getattr(raw, "execution_backend", None),
+        degraded=degraded,
+    )
 
 
 #: The pass-through kernel. Registered automatically at import time

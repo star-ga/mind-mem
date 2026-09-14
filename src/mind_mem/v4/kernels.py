@@ -134,6 +134,14 @@ def _open_lineage_graph(workspace: str) -> sqlite3.Connection | None:
     return conn
 
 
+def _base_kernel(workspace: str, query: str, kwargs: dict[str, Any]) -> KernelResult:
+    """Delegate to the default kernel with the caller's captured clock, if any."""
+    scoring_instant = kwargs.get("scoring_instant")
+    if scoring_instant is None:
+        return DEFAULT_KERNEL(workspace, query)
+    return DEFAULT_KERNEL(workspace, query, scoring_instant=scoring_instant)
+
+
 # ---------------------------------------------------------------------------
 # surprise_weighted
 # ---------------------------------------------------------------------------
@@ -145,7 +153,7 @@ def surprise_weighted_kernel(
     *,
     context_centroid: Sequence[float] | None = None,
     candidate_embeddings: dict[str, Sequence[float]] | None = None,
-    **_: Any,
+    **kwargs: Any,
 ) -> KernelResult:
     """Rank default-kernel candidates by surprise against a context centroid.
 
@@ -160,12 +168,13 @@ def surprise_weighted_kernel(
     KernelResult with kernel=SURPRISE_WEIGHTED and a per-hit reason
     of the form ``surprise_weighted:s=0.83``.
     """
-    base = DEFAULT_KERNEL(workspace, query)
+    base = _base_kernel(workspace, query, kwargs)
     if context_centroid is None or candidate_embeddings is None:
         return KernelResult(
             kernel=KernelKind.SURPRISE_WEIGHTED,
             hits=base.hits,
             metadata={"degraded": True, "reason": "no_centroid_or_embeddings"},
+            execution_backend=base.execution_backend,
         )
 
     rescored: list[KernelHit] = []
@@ -184,6 +193,7 @@ def surprise_weighted_kernel(
         kernel=KernelKind.SURPRISE_WEIGHTED,
         hits=rescored,
         metadata={"context_dim": len(context_centroid)},
+        execution_backend=base.execution_backend,
     )
 
 
@@ -197,7 +207,7 @@ def lineage_first_kernel(
     query: str,
     *,
     max_hops: int = 2,
-    **_: Any,
+    **kwargs: Any,
 ) -> KernelResult:
     """Promote candidates that have outgoing lineage edges; demote leaves.
 
@@ -207,13 +217,14 @@ def lineage_first_kernel(
     with many outgoing edges out-ranks an isolated leaf at the same
     raw score. Falls back to DEFAULT when the table is missing.
     """
-    base = DEFAULT_KERNEL(workspace, query)
+    base = _base_kernel(workspace, query, kwargs)
     conn = _open_lineage_graph(workspace)
     if conn is None:
         return KernelResult(
             kernel=KernelKind.LINEAGE_FIRST,
             hits=base.hits,
             metadata={"degraded": True, "reason": "no_lineage_table"},
+            execution_backend=base.execution_backend,
         )
 
     edge_counts: dict[str, int] = {}
@@ -240,6 +251,7 @@ def lineage_first_kernel(
         kernel=KernelKind.LINEAGE_FIRST,
         hits=rescored,
         metadata={"max_hops": max_hops, "nonzero": sum(1 for v in edge_counts.values() if v > 0)},
+        execution_backend=base.execution_backend,
     )
 
 
@@ -248,7 +260,7 @@ def lineage_first_kernel(
 # ---------------------------------------------------------------------------
 
 
-def contradicts_first_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
+def contradicts_first_kernel(workspace: str, query: str, **kwargs: Any) -> KernelResult:
     """Surface candidates linked by a ``contradicts`` edge first.
 
     Reads the v3.11 ``co_retrieval`` table (in the workspace
@@ -260,13 +272,14 @@ def contradicts_first_kernel(workspace: str, query: str, **_: Any) -> KernelResu
 
     Falls back to DEFAULT when the lineage table is missing.
     """
-    base = DEFAULT_KERNEL(workspace, query)
+    base = _base_kernel(workspace, query, kwargs)
     conn = _open_lineage_graph(workspace)
     if conn is None:
         return KernelResult(
             kernel=KernelKind.CONTRADICTS_FIRST,
             hits=base.hits,
             metadata={"degraded": True, "reason": "no_lineage_table"},
+            execution_backend=base.execution_backend,
         )
 
     contradicts: set[str] = set()
@@ -279,6 +292,7 @@ def contradicts_first_kernel(workspace: str, query: str, **_: Any) -> KernelResu
                 kernel=KernelKind.CONTRADICTS_FIRST,
                 hits=base.hits,
                 metadata={"degraded": True, "reason": "untyped_lineage"},
+                execution_backend=base.execution_backend,
             )
         rows = conn.execute("SELECT mem1_id, mem2_id FROM co_retrieval WHERE kind = 'contradicts'").fetchall()
         for a, b in rows:
@@ -300,6 +314,7 @@ def contradicts_first_kernel(workspace: str, query: str, **_: Any) -> KernelResu
         kernel=KernelKind.CONTRADICTS_FIRST,
         hits=rescored,
         metadata={"contradicts_count": len(contradicts)},
+        execution_backend=base.execution_backend,
     )
 
 
@@ -315,7 +330,7 @@ def graph_walk_kernel(
     seed_ids: Sequence[str] | None = None,
     max_hops: int = 2,
     max_nodes: int = 50,
-    **_: Any,
+    **kwargs: Any,
 ) -> KernelResult:
     """Bounded BFS from seed IDs (or default-kernel hits if no seeds).
 
@@ -327,13 +342,14 @@ def graph_walk_kernel(
 
     Falls back to DEFAULT when the lineage table is missing.
     """
-    base = DEFAULT_KERNEL(workspace, query)
+    base = _base_kernel(workspace, query, kwargs)
     conn = _open_lineage_graph(workspace)
     if conn is None:
         return KernelResult(
             kernel=KernelKind.GRAPH_WALK,
             hits=base.hits,
             metadata={"degraded": True, "reason": "no_lineage_table"},
+            execution_backend=base.execution_backend,
         )
 
     seeds = list(seed_ids) if seed_ids else [h.block_id for h in base.hits[:5]]
@@ -343,6 +359,7 @@ def graph_walk_kernel(
             kernel=KernelKind.GRAPH_WALK,
             hits=[],
             metadata={"degraded": True, "reason": "no_seeds"},
+            execution_backend=base.execution_backend,
         )
 
     visited: dict[str, int] = {}
@@ -382,6 +399,7 @@ def graph_walk_kernel(
         kernel=KernelKind.GRAPH_WALK,
         hits=hits,
         metadata={"seeds": list(seeds), "visited": len(visited), "max_hops": max_hops},
+        execution_backend=base.execution_backend,
     )
 
 

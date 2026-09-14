@@ -53,13 +53,26 @@ def _mind_mem_stderr():
     """
     buffer = io.StringIO()
     restore: list[tuple[logging.StreamHandler, object]] = []
+
+    def bind(handler: logging.StreamHandler, stream: object) -> None:
+        """Swap streams without flushing a pytest capture that already closed."""
+        current = handler.stream
+        if getattr(current, "closed", False):
+            # ``StreamHandler.setStream`` flushes the old stream first. Pytest
+            # closes per-test capture streams after their test; flushing one
+            # here raises before this helper can observe the next test.
+            with handler.lock:
+                handler.stream = stream
+            return
+        handler.setStream(stream)
+
     for name, logger in list(logging.Logger.manager.loggerDict.items()):
         if not name.startswith("mind-mem") or not isinstance(logger, logging.Logger):
             continue
         for handler in logger.handlers:
             if isinstance(handler, logging.StreamHandler):
                 restore.append((handler, handler.stream))
-                handler.setStream(buffer)
+                bind(handler, buffer)
     saved_stderr = sys.stderr
     sys.stderr = buffer
     try:
@@ -67,7 +80,9 @@ def _mind_mem_stderr():
     finally:
         sys.stderr = saved_stderr
         for handler, stream in restore:
-            handler.setStream(stream)
+            # A live original stream is restored exactly. A closed capture is
+            # replaced by this test's live stderr, not rebound as a dead sink.
+            bind(handler, saved_stderr if getattr(stream, "closed", False) else stream)
 
 
 def _events(buffer: io.StringIO) -> list[tuple[str, str]]:
@@ -528,12 +543,11 @@ class TestTheFlagProbeIsSilent:
         finally:
             sys.modules.pop("mind_mem.mcp.tools._pre_granularity_consolidation", None)
 
-        from mind_mem.mcp.tools.consolidation import plan_consolidation as tool
-
         # Compare equivalent cold transport state. The reference call created
         # its rate limiter, which reads the malformed config once; reusing it
         # only for the candidate would omit that factory diagnostic.
         from mind_mem.mcp.infra import rate_limit
+        from mind_mem.mcp.tools.consolidation import plan_consolidation as tool
 
         with rate_limit._rate_limiters_lock:
             rate_limit._rate_limiters.clear()

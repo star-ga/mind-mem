@@ -29,7 +29,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Final, Mapping, Optional, Sequence
+from typing import Any, Final, Mapping, Optional, Sequence, cast
 
 # ---------------------------------------------------------------------------
 # Workspace resolution (mirrors mcp_server._workspace)
@@ -65,13 +65,37 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
     """
     import mind_mem.v4.kernels  # noqa: F401 — importing IS the registration
     from mind_mem.admissibility import admissible
+    from mind_mem.recall import (
+        ServedResults,
+        _derive_generation,
+        attest_and_record,
+        capture_policy_snapshot,
+        serving_scope,
+    )
+    from mind_mem.request_context import RequestContext, bind_request_context
+    from mind_mem.scoring_instant import format_scoring_instant, resolve_scoring_instant
     from mind_mem.storage import iter_blocks
     from mind_mem.v4.cognitive_kernel import KernelKind, available_kernels, mind_recall
     from mind_mem.v4.feature_flags import FeatureDisabledError
 
     ws = _workspace()
+    # Capture every policy coordinate before the kernel starts.  The v4 API
+    # remains a pure KernelResult; this CLI door owns the existing attestation
+    # and served-ledger attachment, just as the other serving doors do.
+    snap_config, snap_hash, snap_anchor = capture_policy_snapshot(ws)
+    scoring_instant = resolve_scoring_instant(None)
+    request_context = RequestContext(
+        workspace=ws,
+        config=snap_config if snap_config is not None else {},
+        config_hash=snap_hash,
+        index_anchor=snap_anchor,
+        scoring_instant=format_scoring_instant(scoring_instant),
+    )
     try:
-        result = mind_recall(ws, args.query, kernel=args.kernel)
+        with bind_request_context(request_context), serving_scope():
+            result = mind_recall(ws, args.query, kernel=args.kernel, scoring_instant=scoring_instant)
+            servable = admissible(iter_blocks(ws, active_only=False))
+            kept = [h for h in result.hits if h.block_id in servable]
     except (FeatureDisabledError, ValueError, KeyError) as exc:
         # FeatureDisabledError: flag off. ValueError: no such kernel name.
         # KeyError: a real kind with no strategy bound (``recent_first``).
@@ -79,9 +103,41 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
         print(f"mm recall --kernel: {exc}", file=sys.stderr)
         return 64
 
-    servable = admissible(iter_blocks(ws, active_only=False))
-    kept = [h for h in result.hits if h.block_id in servable]
     hits = [{"block_id": h.block_id, "score": h.score, "reason": h.reason} for h in kept][: args.limit]
+    # The attestation helper is the sole owner of digest derivation and ledger
+    # attachment.  Give it the exact final output IDs in output order; kernel
+    # metadata and score values remain explicitly outside that ID commitment.
+    attested_hits = [{"_id": hit["block_id"], "score": hit["score"]} for hit in hits]
+    # Re-wrap the final IDs in the established runtime carrier so a degraded
+    # core run cannot be turned into a clean receipt by the KernelHit adapter.
+    attested_results = ServedResults(attested_hits)
+    attested_results.degraded = cast(dict[str, str] | None, result.degraded)
+    # Only the pass-through default kernel has a complete lexical execution
+    # contract today.  Graph/reranking strategies transform or add hits after
+    # the core leg, so carrying the base marker would overstate what ran.
+    execution_backend = result.execution_backend or "unknown"
+    if result.degraded is not None:
+        # This kernel adapter cannot express a degraded backend in the
+        # existing attestation leg contract.  Refuse proof rather than
+        # certifying the fallback as a clean backend run.
+        execution_backend = "degraded_kernel_result"
+    if result.kernel is not KernelKind.DEFAULT:
+        execution_backend = "unsupported_kernel"
+    attestation = attest_and_record(
+        ws,
+        args.query,
+        attested_results,
+        backend="bm25",
+        scoring_instant=scoring_instant,
+        config=snap_config,
+        config_hash=snap_hash,
+        index_anchor=snap_anchor,
+        generation=_derive_generation(snap_config),
+        # The core result stamps this from the backend dispatch seam.  An
+        # absent/unknown marker must become an explicit unproven result rather
+        # than silently inheriting the old BM25 claim.
+        execution_backend=execution_backend,
+    )
     payload = {
         "query": args.query,
         "kernel": result.kernel.value if isinstance(result.kernel, KernelKind) else str(result.kernel),
@@ -89,7 +145,11 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
         "withheld": len(result.hits) - len(kept),
         "count": len(hits),
         "hits": hits,
-        "metadata": dict(result.metadata),
+        "metadata": {
+            **dict(result.metadata),
+            **({"degraded": result.degraded} if result.degraded is not None else {}),
+        },
+        "attestation": attestation,
     }
     print(json.dumps(payload, indent=2, default=str))
     return 0

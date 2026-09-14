@@ -406,6 +406,7 @@ def attest_and_record(
     index_anchor: str | None = None,
     anchor_resolved: bool | None = None,
     anchor_error: str | None = None,
+    execution_backend: str | None = None,
 ) -> dict[str, Any] | None:
     """Derive this run's attestation and append its served-ledger row.
 
@@ -477,6 +478,8 @@ def attest_and_record(
             raise RuntimeError("config hash could not be resolved for this request's snapshot, so no coherent context could be bound")
         if anchor_resolved is False or index_anchor == INDEX_ANCHOR_UNRESOLVED:
             raise RuntimeError(anchor_error or "governed chain head could not be resolved for this request's snapshot")
+        if execution_backend is not None and execution_backend != "bm25":
+            raise RuntimeError(f"kernel execution backend {execution_backend!r} has no attestation leg contract; refusing a recorded claim")
         vector_requested, vector_available = resolve_vector_flags(workspace, backend, config)
         attestation = derive_recall_attestation_for_workspace(
             results,

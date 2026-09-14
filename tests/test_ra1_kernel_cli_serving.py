@@ -1,0 +1,311 @@
+"""Acceptance controls for the primary ``mm recall --kernel`` serving door.
+
+The kernel API remains a ``KernelResult``.  This file exercises the actual CLI
+door, which owns the existing recall attestation and served-ledger attachment.
+"""
+
+from __future__ import annotations
+
+import json
+from argparse import Namespace
+from datetime import date
+from pathlib import Path
+
+import pytest
+from test_v4_kernels_wiring import _build_workspace, _write_config
+
+from mind_mem import mm_cli
+from mind_mem.served_ledger import read_served_runs, row_hash
+from mind_mem.v4.cognitive_kernel import mind_recall
+
+
+def _args(kernel: str = "default") -> Namespace:
+    return Namespace(query="PostgreSQL", kernel=kernel, limit=10)
+
+
+@pytest.fixture
+def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    root = tmp_path / "ws"
+    _build_workspace(root)
+    _write_config(root, kernels=True)
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(root))
+    monkeypatch.setenv("MIND_MEM_CONFIG", str(root / "mind-mem.json"))
+    return root
+
+
+def _run(capsys: pytest.CaptureFixture[str]) -> dict[str, object]:
+    assert mm_cli._cmd_kernel_recall(_args()) == 0
+    return json.loads(capsys.readouterr().out)
+
+
+def test_kernel_cli_binds_engine_instant_and_records_exact_output(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The row is the final CLI output, with one captured instant end-to-end."""
+    import importlib
+
+    from mind_mem.v4 import cognitive_kernel
+
+    _recall_core = importlib.import_module("mind_mem._recall_core")
+
+    seen: list[date | None] = []
+    real_recall = _recall_core.recall
+
+    def observe(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        value = kwargs.get("scoring_instant")
+        seen.append(value if isinstance(value, date) else None)
+        return real_recall(*args, **kwargs)
+
+    from mind_mem import scoring_instant
+
+    monkeypatch.setattr(scoring_instant, "resolve_scoring_instant", lambda _value: date(2026, 9, 14))
+    monkeypatch.setattr(_recall_core, "recall", observe)
+    with cognitive_kernel._registry_lock:
+        previous = cognitive_kernel._registry.get(cognitive_kernel.KernelKind.DEFAULT)
+        cognitive_kernel._registry[cognitive_kernel.KernelKind.DEFAULT] = cognitive_kernel._default_kernel
+    try:
+        payload = _run(capsys)
+    finally:
+        with cognitive_kernel._registry_lock:
+            if previous is None:
+                cognitive_kernel._registry.pop(cognitive_kernel.KernelKind.DEFAULT, None)
+            else:
+                cognitive_kernel._registry[cognitive_kernel.KernelKind.DEFAULT] = previous
+
+    assert seen == [date(2026, 9, 14)], "the kernel ranked without the CLI's captured instant"
+    assert payload["count"] == 1
+    hits = payload["hits"]
+    assert isinstance(hits, list) and hits[0]["block_id"] == "D-20260101-001"
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "recorded"
+    assert attestation["scoring_instant"] == "2026-09-14"
+
+    rows = read_served_runs(str(workspace))
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.ids == tuple(hit["block_id"] for hit in hits)
+    assert row.served_digest == attestation["results_digest"]
+    assert attestation["served_row_hash"] == row_hash(row)
+    assert attestation["served_seq"] == row.seq
+
+
+def test_kernel_cli_adds_receipt_without_changing_kernel_hits(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The additive receipt does not change the public kernel result."""
+    fixed = date(2026, 9, 14)
+    from mind_mem import scoring_instant
+
+    monkeypatch.setattr(scoring_instant, "resolve_scoring_instant", lambda _value: fixed)
+    expected = mind_recall(str(workspace), "PostgreSQL", kernel="default", scoring_instant=fixed)
+    payload = _run(capsys)
+    got = payload["hits"]
+    assert isinstance(got, list)
+    assert [(h["block_id"], h["score"]) for h in got] == [(h.block_id, h.score) for h in expected.hits]
+    assert isinstance(payload["attestation"], dict)
+
+
+def test_kernel_cli_reports_recorder_failure_while_serving_answer(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A downstream ledger failure is explicit and cannot erase the answer."""
+    import mind_mem.served_ledger as ledger
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise OSError("fixture recorder failure")
+
+    monkeypatch.setattr(ledger, "append_served_run", fail)
+    payload = _run(capsys)
+    assert payload["count"] == 1
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "fixture recorder failure" in attestation["ledger_error"]
+    assert read_served_runs(str(workspace)) == ()
+
+
+def test_kernel_cli_disabled_ledger_is_explicitly_unproven(
+    workspace: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = json.loads((workspace / "mind-mem.json").read_text(encoding="utf-8"))
+    config["served_ledger"] = {"enabled": False}
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+    payload = _run(capsys)
+    assert payload["count"] == 1
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "disabled" in attestation["ledger_error"]
+    assert read_served_runs(str(workspace)) == ()
+
+
+def test_kernel_cli_vector_execution_is_not_attested_as_bm25(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A real vector dispatch must fail closed until it has a vector leg contract.
+
+    The local search seam is stubbed only to avoid loading a model.  Backend
+    construction, core dispatch, kernel conversion, CLI admission, and
+    attestation all remain real.  On the parent candidate this exercised a
+    VectorBackend but recorded the default hard-coded ``bm25`` leg.
+    """
+    from mind_mem.recall_vector import VectorBackend
+
+    config = json.loads((workspace / "mind-mem.json").read_text(encoding="utf-8"))
+    config["recall"] = {"backend": "vector", "provider": "local"}
+    config["served_ledger"] = {"enabled": True}
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+
+    def local_fixture(
+        self: VectorBackend,
+        workspace_path: str,
+        query: str,
+        limit: int,
+        active_only: bool,
+        *,
+        scoring_instant: date | None = None,
+    ) -> list[dict[str, object]]:
+        del self, workspace_path, query, limit, active_only, scoring_instant
+        return [
+            {
+                "_id": "D-20260101-001",
+                "score": 0.91,
+                "file": "decisions/DECISIONS.md",
+                "status": "active",
+            }
+        ]
+
+    monkeypatch.setattr(VectorBackend, "_search_local", local_fixture)
+    payload = _run(capsys)
+
+    assert payload["count"] == 1
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "execution backend 'vector'" in attestation["ledger_error"]
+    assert read_served_runs(str(workspace)) == ()
+
+
+def test_kernel_cli_clears_forged_custom_backend_marker(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A custom backend cannot self-declare a trusted BM25 carrier marker."""
+    import importlib
+
+    from mind_mem._recall_core import RecallBackend
+    from mind_mem.hybrid_recall import RecallResults
+
+    class ForgedBackend(RecallBackend):
+        def search(self, workspace_path: str, query: str, limit: int = 10, active_only: bool = False) -> RecallResults:
+            del workspace_path, query, limit, active_only
+            result = RecallResults(
+                [
+                    {
+                        "_id": "D-20260101-001",
+                        "score": 0.88,
+                        "file": "decisions/DECISIONS.md",
+                        "status": "active",
+                    }
+                ]
+            )
+            # This is deliberately forged carrier state.  The dispatcher must
+            # clear it because this backend is not a built-in attested leg.
+            result.execution_backend = "bm25"
+            return result
+
+        def index(self, workspace_path: str) -> None:
+            del workspace_path
+
+    config = json.loads((workspace / "mind-mem.json").read_text(encoding="utf-8"))
+    config["served_ledger"] = {"enabled": True}
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+    core = importlib.import_module("mind_mem._recall_core")
+    monkeypatch.setattr(core, "_load_backend", lambda _workspace: ForgedBackend())
+
+    payload = _run(capsys)
+
+    assert payload["count"] == 1
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "execution backend 'unknown'" in attestation["ledger_error"]
+    assert read_served_runs(str(workspace)) == ()
+
+
+def test_kernel_cli_refuses_clean_proof_after_backend_fallback(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failed vector dispatch cannot become a clean BM25 receipt."""
+    from mind_mem import _recall_core as core
+
+    class FailingVectorBackend(core.RecallBackend):
+        execution_backend = "vector"
+
+        def search(self, *args: object, **kwargs: object) -> list[dict[str, object]]:
+            del args, kwargs
+            raise RuntimeError("fixture vector dispatch failure")
+
+        def index(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+    config = json.loads((workspace / "mind-mem.json").read_text(encoding="utf-8"))
+    config["recall"] = {"backend": "vector"}
+    config["served_ledger"] = {"enabled": True}
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setattr(core, "_load_backend", lambda _workspace: FailingVectorBackend())
+
+    payload = _run(capsys)
+
+    assert payload["count"] == 1
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "degraded_kernel_result" in attestation["ledger_error"]
+    assert payload["metadata"]["degraded"]["leg"] == "vector"
+    assert payload["metadata"]["degraded"]["reason"] == "backend_error_fallback_to_scan"
+    assert read_served_runs(str(workspace)) == ()
+
+
+def test_kernel_cli_graph_answer_is_unproven_until_graph_trace_is_attestable(
+    workspace: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Graph-produced IDs retain the answer but cannot borrow BM25 proof."""
+    from test_v4_kernels_wiring import _seed_co_retrieval
+
+    _seed_co_retrieval(workspace)
+    assert mm_cli._cmd_kernel_recall(_args("graph_walk")) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["count"] == 1
+    assert payload["hits"][0]["block_id"] == "D-20260101-001"
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "unsupported_kernel" in attestation["ledger_error"]
+    assert read_served_runs(str(workspace)) == ()
+
+
+def test_kernel_cli_feature_flag_off_keeps_operator_refusal(
+    workspace: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = json.loads((workspace / "mind-mem.json").read_text(encoding="utf-8"))
+    config["v4"]["cognitive_kernel"] = {"enabled": False}
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+    assert mm_cli._cmd_kernel_recall(_args()) == 64
+    assert "disabled" in capsys.readouterr().err.lower()

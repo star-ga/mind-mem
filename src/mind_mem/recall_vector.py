@@ -351,6 +351,8 @@ class VectorBackend(RecallBackend):
     Falls back gracefully if sentence-transformers is not installed.
     """
 
+    execution_backend = "vector"
+
     def __init__(self, config: dict[str, Any]):
         """Initialize vector backend from config.
 

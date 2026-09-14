@@ -417,6 +417,10 @@ class RecallResults(list):
     """
 
     degraded: LegMarker | None = None
+    # Runtime-selected backend, stamped by the core dispatcher rather than
+    # inferred from configuration after the fact.  ``None`` means an
+    # unrecognised/custom backend and is deliberately not attestable.
+    execution_backend: str | None = None
     attestation: Any | None = None
     trace: dict[str, Any] | None = None
 
