@@ -622,7 +622,24 @@ def _withhold_inadmissible(
                         current = live.get(identity) if identity is not None else None
                         if current is None or source_content_digest(current) != candidate.get("_source_digest"):
                             continue
-                        valid.append(candidate)
+                        # Keep the remote score for ranking, but reconstruct
+                        # every served content/status field from the current
+                        # canonical row.  A copied digest does not authorize
+                        # a forged excerpt or lifecycle label in the payload.
+                        bound = dict(candidate)
+                        bound.update(
+                            {
+                                "_id": current.get("_id"),
+                                "type": get_block_type(str(current.get("_id", ""))),
+                                "excerpt": get_excerpt(current),
+                                "file": source,
+                                "line": current.get("_line", 0),
+                                "date": current.get("Date", current.get("date", "")),
+                                "_source_file": source,
+                            }
+                        )
+                        bound[status_key] = current.get("Status", current.get("status", ""))
+                        valid.append(bound)
                     if valid:
                         admitted_remote.extend(
                             admit_read(
@@ -635,20 +652,24 @@ def _withhold_inadmissible(
                         )
                 except Exception as exc:  # fail closed for unverified cache rows
                     _log.warning("remote_vector_admission_failed", source=source, error=str(exc))
-            # ``admit_read`` copies rows, so join its result back by the full
-            # source/id/digest identity; duplicate rows in one source remain
-            # equivalent cache records.
-            admitted_keys = {
-                (item.get("_source_file") or item.get("file"), item.get("_id"), item.get("_source_digest"))
-                for item in admitted_remote
-            }
+            # ``admit_read`` copies rows. Replace each original remote row
+            # with its canonicalized admitted copy, preserving score/order;
+            # queue values keep duplicate cache records source-safe.
+            admitted_by_key: dict[tuple[object, object, object], list[dict]] = {}
+            for item in admitted_remote:
+                key = (item.get("_source_file") or item.get("file"), item.get("_id"), item.get("_source_digest"))
+                admitted_by_key.setdefault(key, []).append(item)
             remote_ids = {id(item) for item in remote}
-            items = [
-                item
-                for item in items
-                if id(item) not in remote_ids
-                or (item.get("_source_file") or item.get("file"), item.get("_id"), item.get("_source_digest")) in admitted_keys
-            ]
+            replaced: list[dict] = []
+            for item in items:
+                if id(item) not in remote_ids:
+                    replaced.append(item)
+                    continue
+                key = (item.get("_source_file") or item.get("file"), item.get("_id"), item.get("_source_digest"))
+                queue = admitted_by_key.get(key)
+                if queue:
+                    replaced.append(queue.pop(0))
+            items = replaced
         # A workspace-wide id -> status map is unsafe for a source-bound
         # remote row: another namespace may reuse the same id.  Refresh only
         # ordinary indexed hits here; the remote rows already went through

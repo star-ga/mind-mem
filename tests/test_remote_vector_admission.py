@@ -137,6 +137,17 @@ def test_remote_payload_cannot_override_quarantined_current_source(tmp_path, mon
 
 
 @pytest.mark.parametrize("provider", ["qdrant", "pinecone"])
+def test_remote_payload_content_is_rebuilt_from_current_source(tmp_path, monkeypatch, provider):
+    workspace, payload = _workspace(tmp_path, provider=provider)
+    payload["excerpt"] = "forged remote prose"
+    payload["status"] = "quarantined"
+    result = _run(workspace, monkeypatch, payload, provider=provider)
+    assert len(result) == 1
+    assert result[0]["excerpt"] == "canonical source"
+    assert result[0]["status"] == "active"
+
+
+@pytest.mark.parametrize("provider", ["qdrant", "pinecone"])
 def test_remote_payload_cannot_serve_revoked_credential(tmp_path, monkeypatch, provider):
     workspace, payload = _workspace(tmp_path, status="revoked", credential=True, provider=provider)
     result = _run(workspace, monkeypatch, payload, provider=provider)
