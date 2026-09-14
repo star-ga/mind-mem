@@ -33,7 +33,7 @@ import re
 from collections import deque
 from typing import Any, Optional
 
-from .admissibility import admit_corpus, count_unresolved
+from .admissibility import admit_expansion_corpus, count_unresolved
 from .feature_gate import FeatureGate, FieldSpec, strict_int, strict_number
 from .knowledge_graph import EntityRegistry, KnowledgeGraph
 from .observability import get_logger
@@ -125,6 +125,7 @@ def kg_expand(
     kg: KnowledgeGraph,
     query: str,
     *,
+    workspace: str | None = None,
     max_hops: int = 2,
     decay: float = 0.5,
     max_neighbors_per_hop: int = 5,
@@ -138,6 +139,9 @@ def kg_expand(
         corpus: Full block corpus for source_block_id → block lookup.
         kg: Open knowledge graph.
         query: The recall query — resolved to entities via the registry.
+        workspace: Workspace whose current content-admission policy must be
+            applied before graph edges can resolve blocks. Omit only when the
+            caller supplies a corpus already admitted by the same authority.
         max_hops: Edge-walk depth from each query entity (ceiling 2).
         decay: Multiplicative score decay per hop, applied to the top
             seed score (``score = seed * decay ** hop``).
@@ -161,7 +165,7 @@ def kg_expand(
 
     # Same rule as the cross-reference walk: this leg appends raw corpus
     # blocks, so only admissible ones may be resolvable from an edge.
-    corpus = admit_corpus(corpus)
+    corpus = admit_expansion_corpus(corpus, workspace=workspace)
     id_to_block = {str(b.get("_id")): b for b in corpus if b.get("_id")}
     if not id_to_block:
         return results
