@@ -272,6 +272,19 @@ class TestQueryEndpoint:
         status, _ = _request(port, "POST", PATH_QUERY, body={"query": "x", "agent_id": 123})
         assert status == 400
 
+    @pytest.mark.parametrize("agent_id", ("../alice", "/alice", "alice\x00suffix"))
+    def test_malformed_agent_id_is_client_error(self, server_localhost_unauth, agent_id: str) -> None:
+        port, _ = server_localhost_unauth
+        for path, key in ((PATH_QUERY, "query"), (PATH_WALKTHROUGH, "topic")):
+            status, body = _request(
+                port,
+                "POST",
+                path,
+                body={key: "test", "agent_id": agent_id},
+            )
+            assert status == 400
+            assert body == {"error": "invalid agent_id"}
+
     def test_persona_unknown_400(self, server_localhost_unauth) -> None:
         port, _ = server_localhost_unauth
         status, body = _request(port, "POST", PATH_QUERY, body={"query": "x", "persona": "verbose"})

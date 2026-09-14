@@ -168,6 +168,17 @@ def test_invalid_agent_id_refuses_workspace_fallback(namespaced_workspace: Path,
         )
 
 
+def test_invalid_agent_id_is_refused_for_empty_query(namespaced_workspace: Path) -> None:
+    _block(
+        namespaced_workspace / "decisions/DECISIONS.md",
+        "ROOT-EMPTY-1",
+        "root-only empty-query sentinel",
+    )
+
+    with pytest.raises(InvalidAgentIdError):
+        recall(str(namespaced_workspace), "", limit=10, agent_id="../alice", rerank=False)
+
+
 def test_shared_symlink_escape_is_not_recalled(namespaced_workspace: Path, tmp_path: Path) -> None:
     workspace = namespaced_workspace
     outside = tmp_path / "outside"
