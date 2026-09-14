@@ -12,7 +12,7 @@ import fnmatch
 import math
 import os
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 REACHABILITY_SEARCHABLE = "searchable"
 REACHABILITY_DIRECT_ONLY = "direct-only"
@@ -389,6 +389,137 @@ def always_injected_hits(
     return selected, {"count": len(selected), "cap": min(cap_total, _MAX_ALWAYS_ITEMS), "content_type": "behavior"}
 
 
+def admitted_namespace_blocks(workspace: str, agent_id: str | None) -> dict[str, dict[str, Any]] | None:
+    """Return canonical live blocks visible to a bound principal.
+
+    This is deliberately below the MCP layer so Python callers such as chat
+    can bind evidence without importing an optional transport.  A duplicate
+    block ID across visible sources is unresolved and omitted: choosing one
+    source would let an ID-only extension seam attach the wrong content.
+    Unbound callers receive ``None`` and retain the historical content-only
+    admission path.
+    """
+    if not agent_id:
+        return None
+
+    from .admissibility import admit_corpus
+    from .block_parser import parse_file
+    from .corpus_registry import discover_corpus_files
+    from .namespaces import NamespaceManager
+    from .storage import _MARKDOWN_BACKENDS, _backend_name, _corpus_parse_fn
+
+    manager = NamespaceManager(workspace, agent_id=agent_id)
+    backend = _backend_name(workspace)
+    if backend not in _MARKDOWN_BACKENDS:
+        from .compliance.export import load_admitted_blocks
+
+        admitted, _withheld = load_admitted_blocks(workspace)
+    else:
+        from ._recall_constants import CORPUS_FILES
+
+        workspace_real = os.path.realpath(workspace)
+        prefix = workspace_real + os.sep
+        paths: list[str] = [rel for _label, rel in discover_corpus_files(workspace)]
+        for _label, rel in CORPUS_FILES.items():
+            for candidate in manager.resolve_corpus_paths(rel, policy="read"):
+                candidate_rel = os.path.relpath(candidate, workspace_real).replace(os.sep, "/")
+                paths.append(candidate_rel)
+
+        try:
+            custom_namespaces = declared_custom_namespaces(_load_config_for_namespace(workspace))
+        except ValueError:
+            custom_namespaces = ()
+        custom_roots = set(custom_namespaces)
+        for namespace in custom_namespaces:
+            for _label, local_rel in discover_corpus_files(os.path.join(workspace_real, namespace)):
+                paths.append(os.path.join(namespace, local_rel).replace(os.sep, "/"))
+
+        # ``read`` may name a concrete file or a corpus subdirectory rather
+        # than a namespace root. Resolve those grants against the finite
+        # corpus registry as well; never recurse through an arbitrary ACL
+        # path. Top-level custom roots still require their retrieval
+        # declaration before they enter this set.
+        known_roots = {
+            "shared",
+            "agents",
+            "decisions",
+            "tasks",
+            "entities",
+            "intelligence",
+            "memory",
+            "summaries",
+            "maintenance",
+            ".mind-mem-index",
+            *custom_roots,
+        }
+        read_grants = manager._agent_policy.get("read", [])
+        if isinstance(read_grants, list):
+            for grant in read_grants:
+                if not isinstance(grant, str) or any(mark in grant for mark in "*?["):
+                    continue
+                normalized = grant.replace("\\", "/").strip("/")
+                if not normalized or normalized.split("/", 1)[0] not in known_roots:
+                    continue
+                if normalized.endswith(".md"):
+                    paths.append(normalized)
+                    continue
+                for corpus_rel in CORPUS_FILES.values():
+                    candidate = os.path.join(normalized, corpus_rel).replace(os.sep, "/")
+                    paths.append(candidate)
+                    if "/" in corpus_rel:
+                        subdir, filename = corpus_rel.rsplit("/", 1)
+                        if normalized.endswith("/" + subdir) or normalized == subdir:
+                            paths.append(os.path.join(normalized, filename).replace(os.sep, "/"))
+
+        unique_paths = list(dict.fromkeys(paths))
+        try:
+            reader = _corpus_parse_fn(workspace, backend, sources=unique_paths)
+        except (OSError, ValueError):
+            return {}
+        blocks: list[dict[str, Any]] = []
+        seen_paths: set[str] = set()
+        for rel_path in unique_paths:
+            if rel_path in seen_paths or not manager.can_read(rel_path):
+                continue
+            top_level = rel_path.split("/", 1)[0]
+            if top_level not in known_roots:
+                continue
+            seen_paths.add(rel_path)
+            candidate = os.path.realpath(os.path.join(workspace_real, rel_path))
+            if not candidate.startswith(prefix) or not os.path.isfile(candidate):
+                continue
+            try:
+                parsed = reader(candidate) if reader is not parse_file else parse_file(candidate)
+            except (OSError, UnicodeDecodeError, ValueError):
+                continue
+            for block in parsed:
+                block["_source_file"] = rel_path
+                blocks.append(block)
+        admitted = admit_corpus(blocks, workspace=workspace)
+
+    by_id: dict[str, dict[str, Any]] = {}
+    duplicates: set[str] = set()
+    for block in admitted:
+        block_id = block.get("_id")
+        source = block.get("_source_file") or block.get("_source") or block.get("file")
+        if not isinstance(block_id, str) or not block_id or not isinstance(source, str) or not manager.can_read(source):
+            continue
+        if block_id in by_id:
+            duplicates.add(block_id)
+        else:
+            by_id[block_id] = block
+    for block_id in duplicates:
+        by_id.pop(block_id, None)
+    return by_id
+
+
+def _load_config_for_namespace(workspace: str) -> dict[str, Any]:
+    """Read workspace config without importing MCP configuration helpers."""
+    from .storage import _load_workspace_config
+
+    return cast(dict[str, Any], _load_workspace_config(workspace, quiet=True))
+
+
 __all__ = [
     "REACHABILITY_SEARCHABLE",
     "REACHABILITY_DIRECT_ONLY",
@@ -401,4 +532,5 @@ __all__ = [
     "filter_search_hits",
     "namespace_search_allowed",
     "always_injected_hits",
+    "admitted_namespace_blocks",
 ]

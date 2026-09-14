@@ -208,16 +208,21 @@ def _to_evidence(hits: Sequence[Any]) -> tuple[EvidenceItem, ...]:
 
 
 def _servable_ids_for_agent(workspace: str, agent_id: str | None) -> set[str] | None:
+    blocks = _admitted_blocks_for_agent(workspace, agent_id)
+    return None if blocks is None else set(blocks)
+
+
+def _admitted_blocks_for_agent(workspace: str, agent_id: str | None) -> dict[str, dict[str, Any]] | None:
     """Resolve the same live namespace partition used by MCP retrieval."""
     if not agent_id:
         return None
     try:
-        from .mcp.tools.recall import _servable_block_ids
+        from .namespace_retrieval import admitted_namespace_blocks
 
-        return _servable_block_ids(workspace, agent_id)
+        return admitted_namespace_blocks(workspace, agent_id) or {}
     except Exception as exc:  # pragma: no cover - fail closed for bound callers
         _log.warning("chat_namespace_resolution_failed", error=str(exc))
-        return set()
+        return {}
 
 
 def make_workspace_resolver(
@@ -381,6 +386,7 @@ def chat_with_memory(
     _validate_inputs(workspace, question, limit, on_invalid)
     asked = question.strip()
 
+    hits: Sequence[Any]
     if recall_fn is None:
         hits = _default_recall(workspace, asked, limit, agent_id=agent_id)
     else:
@@ -389,13 +395,36 @@ def chat_with_memory(
         # use the default path above, where the verified principal is bound.
         hits = recall_fn(workspace, asked, limit)
 
-    allowed_ids = _servable_ids_for_agent(workspace, agent_id)
-    if allowed_ids is not None:
+    allowed_blocks = _admitted_blocks_for_agent(workspace, agent_id)
+    if allowed_blocks is not None:
         # An injected recall function is an extension seam, not an ACL
         # authority. Filter its returned evidence before any generator sees
-        # excerpts, so a custom function cannot smuggle a private block into
-        # the prompt even when it ignores ``agent_id``.
-        hits = [hit for hit in hits if isinstance(hit, dict) and str(hit.get("_id", "")) in allowed_ids]
+        # excerpts, so a custom function cannot smuggle private or relabeled
+        # content into the prompt even when it ignores ``agent_id``. Rebuild
+        # content fields from the canonical admitted block; an extension must
+        # provide the matching source coordinate to be usable on this path.
+        canonical_hits: list[dict[str, Any]] = []
+        for hit in hits:
+            if not isinstance(hit, dict):
+                continue
+            block_id = hit.get("_id")
+            canonical = allowed_blocks.get(str(block_id))
+            source = hit.get("_source_file") or hit.get("file")
+            canonical_source = canonical.get("_source_file") if canonical else None
+            if canonical is None or not isinstance(source, str) or source != canonical_source:
+                continue
+            canonical_hit = dict(hit)
+            canonical_hit["_id"] = str(block_id)
+            canonical_hit["_source_file"] = canonical_source
+            canonical_hit["file"] = canonical_source
+            canonical_hit["excerpt"] = str(
+                canonical.get("excerpt") or canonical.get("Statement") or canonical.get("Title") or ""
+            )
+            for field in ("Statement", "Title", "Date", "Status"):
+                if field in canonical:
+                    canonical_hit[field] = canonical[field]
+            canonical_hits.append(canonical_hit)
+        hits = canonical_hits
 
     evidence = _to_evidence(hits or ())
 
@@ -445,7 +474,7 @@ def chat_with_memory(
     active_resolver = resolver or make_workspace_resolver(
         workspace,
         agent_id=agent_id,
-        servable_ids=allowed_ids,
+        servable_ids=None if allowed_blocks is None else set(allowed_blocks),
     )
     report = validate_answer(
         answer,

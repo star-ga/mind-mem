@@ -1631,83 +1631,16 @@ def _servable_block_ids(ws: str, agent_id: str | None) -> set[str] | None:
     principal therefore never discloses a private seed or neighbor through
     co-occurrence/kind metadata.
     """
-    from mind_mem.admissibility import admissible
-    from mind_mem.storage import iter_blocks
+    from mind_mem.namespace_retrieval import admitted_namespace_blocks
 
     if agent_id is None or agent_id == "":
-        # The unbound operator surface historically applies only the normal
-        # content admission predicate. Preserve that behavior; there is no
-        # namespace principal to impose an additional restriction.
+        from mind_mem.admissibility import admissible
+        from mind_mem.storage import iter_blocks
+
+        # Preserve the historical operator path: content admission applies,
+        # with no additional namespace principal to impose.
         return set(admissible(iter_blocks(ws, active_only=False)))
-
-    # Use the configured backend's admission reader for database/encrypted
-    # stores. A Markdown workspace has explicit namespace roots that the
-    # generic storage enumeration intentionally does not walk; resolve those
-    # roots through NamespaceManager so an ACL grant to another agent or an
-    # explicitly configured namespace is neither missed nor guessed.
-    from mind_mem._recall_core import CORPUS_FILES
-    from mind_mem.admissibility import admit_corpus
-    from mind_mem.block_parser import parse_file
-    from mind_mem.corpus_registry import discover_corpus_files
-    from mind_mem.mcp.tools.memory_ops import _is_markdown_backend
-    from mind_mem.namespaces import NamespaceManager
-
-    manager = NamespaceManager(ws, agent_id=agent_id)
-    if not _is_markdown_backend(ws):
-        from mind_mem.compliance.export import load_admitted_blocks
-
-        admitted, _withheld = load_admitted_blocks(ws)
-    else:
-        workspace_real = os.path.realpath(ws)
-        workspace_prefix = workspace_real + os.sep
-        paths: list[tuple[str, str]] = list(discover_corpus_files(ws))
-        for label, rel_path in CORPUS_FILES.items():
-            # ``resolve_corpus_paths`` expands the authenticated policy's
-            # exact and wildcard namespace entries and applies can_read to
-            # every candidate. It is the same registry used by namespace
-            # aware callers, rather than a second own-agent-only list.
-            for candidate in manager.resolve_corpus_paths(rel_path, policy="read"):
-                candidate_rel = os.path.relpath(candidate, workspace_real).replace(os.sep, "/")
-                paths.append((f"{label}@{candidate_rel.split('/', 1)[0]}", candidate_rel))
-
-        # A custom top-level namespace is a separate explicit declaration. It
-        # is admitted only when both the declaration and the ACL authorize it;
-        # no arbitrary workspace directory is promoted into the corpus.
-        from mind_mem.namespace_retrieval import declared_custom_namespaces
-
-        try:
-            custom_namespaces = declared_custom_namespaces(_load_config(ws))
-        except ValueError:
-            custom_namespaces = ()
-        for namespace in custom_namespaces:
-            for label, local_rel_path in discover_corpus_files(os.path.join(workspace_real, namespace)):
-                rel_path = os.path.join(namespace, local_rel_path).replace(os.sep, "/")
-                paths.append((f"{label}@{namespace}", rel_path))
-        blocks: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for label, rel_path in paths:
-            if rel_path in seen or not manager.can_read(rel_path):
-                continue
-            seen.add(rel_path)
-            candidate = os.path.realpath(os.path.join(workspace_real, rel_path))
-            if not candidate.startswith(workspace_prefix) or not os.path.isfile(candidate):
-                continue
-            try:
-                parsed = parse_file(candidate)
-            except (OSError, UnicodeDecodeError, ValueError):
-                continue
-            for block in parsed:
-                block["_source_file"] = rel_path
-                block["_source_label"] = label
-                blocks.append(block)
-        admitted = admit_corpus(blocks, workspace=ws)
-    return {
-        str(block["_id"])
-        for block in admitted
-        if block.get("_id")
-        and isinstance(block.get("_source_file") or block.get("_source") or block.get("file"), str)
-        and manager.can_read(block.get("_source_file") or block.get("_source") or block.get("file"))
-    }
+    return set(admitted_namespace_blocks(ws, agent_id) or ())
 
 
 def _kind_neighbours(ws: str, block_id: str, kind: str, limit: int, agent_id: str | None = None) -> dict | None:

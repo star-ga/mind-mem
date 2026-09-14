@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -117,6 +120,59 @@ def test_chat_injected_recall_is_filtered_before_generator(monkeypatch: pytest.M
     assert seen_prompts == []
 
 
+def test_chat_rebuilds_allowed_id_content_from_canonical_block(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """An allowed ID cannot carry an extension-supplied private excerpt."""
+    from mind_mem.chat_memory import chat_with_memory
+
+    ws = _workspace(tmp_path)
+    _token(monkeypatch, "alice")
+    seen_prompts: list[str] = []
+
+    def generator(request: object) -> str:
+        prompt = str(getattr(request, "prompt", ""))
+        seen_prompts.append(prompt)
+        return "canonical [[D-ALICE]]"
+
+    with use_workspace(str(ws)):
+        result = chat_with_memory(
+            str(ws),
+            "aurora",
+            recall_fn=lambda _ws, _question, _limit: [
+                {
+                    "_id": "D-ALICE",
+                    "excerpt": "private relabeled payload",
+                    "file": "agents/alice/decisions/DECISIONS.md",
+                }
+            ],
+            generator=generator,
+            agent_id="alice",
+            on_invalid="reject",
+        )
+    assert result.grounded is True
+    assert seen_prompts and "alice aurora evidence" in seen_prompts[0]
+    assert "private relabeled payload" not in seen_prompts[0]
+
+
+def test_chat_core_import_does_not_load_optional_mcp_transport() -> None:
+    """The Python chat core remains usable without the optional MCP package."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import mind_mem.chat_memory; "
+            "assert not any(k.startswith('mind_mem.mcp') for k in sys.modules)",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_similar_public_door_filters_seed_and_cooccurrence_neighbors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The ID-only co-occurrence index cannot disclose another namespace."""
     from mind_mem.block_metadata import BlockMetadataManager, block_meta_db_path
@@ -171,6 +227,18 @@ def test_similarity_enumerates_an_explicitly_acl_granted_other_agent_namespace(
         servable = recall_tools._servable_block_ids(str(ws), "alice")
     assert servable is not None
     assert {"D-SHARED", "D-ALICE", "D-BOB"}.issubset(servable)
+
+
+def test_similarity_accepts_an_exact_file_read_grant(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A read ACL may name one corpus file instead of its parent namespace."""
+    ws = _workspace(tmp_path)
+    acl_config = json.loads((ws / "mind-mem-acl.json").read_text(encoding="utf-8"))
+    acl_config["agents"]["alice"]["read"] = ["shared", "agents/alice/decisions/DECISIONS.md"]
+    acl_config["agents"]["alice"]["namespaces"] = ["shared"]
+    (ws / "mind-mem-acl.json").write_text(json.dumps(acl_config), encoding="utf-8")
+    _token(monkeypatch, "alice")
+    servable = recall_tools._servable_block_ids(str(ws), "alice")
+    assert servable is not None and "D-ALICE" in servable
 
 
 def test_indexed_metadata_cannot_claim_postgres_authority_over_acl(tmp_path: Path) -> None:
