@@ -121,6 +121,11 @@ def _recall_for_axis(
         # minimal retry when the caller supplied one.
         if "scoring_instant" in kwargs:
             fallback_kwargs["scoring_instant"] = kwargs["scoring_instant"]
+        # An authenticated namespace principal is an authorization boundary,
+        # not an optional axis hint. Preserve it when the legacy facade rejects
+        # axis-specific backend kwargs and this portable retry runs.
+        if "agent_id" in kwargs:
+            fallback_kwargs["agent_id"] = kwargs["agent_id"]
         raw = _recall(workspace, query, **fallback_kwargs)
 
     # Normalise to list[dict]

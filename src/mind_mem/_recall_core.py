@@ -2774,6 +2774,7 @@ def prefetch_context(
     limit: int = 5,
     *,
     scoring_instant: date | str | None = None,
+    agent_id: str | None = None,
 ) -> list[dict]:
     """Given recent conversation signals (entity mentions, topic keywords),
     pre-fetch memory blocks likely to be needed next.
@@ -2821,7 +2822,14 @@ def prefetch_context(
     # 1. Parallel recall for each signal (#477 — avoid N+1 serial calls)
     def _recall_signal(sig: str) -> list[dict]:
         try:
-            return recall(workspace, sig, limit=limit, rerank=True, scoring_instant=instant)
+            return recall(
+                workspace,
+                sig,
+                limit=limit,
+                rerank=True,
+                scoring_instant=instant,
+                agent_id=agent_id,
+            )
         except RecursionError:
             raise  # structural cycle — never swallow silently
         except Exception as e:
@@ -2888,7 +2896,14 @@ def prefetch_context(
         if relevant_cats and category_reserve > 0:
             cat_query = " ".join(relevant_cats[:3])
             try:
-                cat_hits = recall(workspace, cat_query, limit=category_reserve, rerank=True, scoring_instant=instant)
+                cat_hits = recall(
+                    workspace,
+                    cat_query,
+                    limit=category_reserve,
+                    rerank=True,
+                    scoring_instant=instant,
+                    agent_id=agent_id,
+                )
                 added = 0
                 for block in cat_hits:
                     if added >= category_reserve:

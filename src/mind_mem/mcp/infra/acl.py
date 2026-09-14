@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
 from fastmcp.server.dependencies import get_access_token
 
@@ -22,6 +23,47 @@ from mind_mem.observability import get_logger, metrics
 from mind_mem.scopes import ADMIN_SCOPES  # the single definition
 
 _log = get_logger("mcp_server")
+
+
+def authenticated_agent_id() -> str | None:
+    """Return the transport-authenticated namespace principal, if present.
+
+    ``X-MindMem-Actor`` is a provenance claim and is deliberately not read
+    here.  FastMCP exposes the already-verified access token to tool code;
+    static and JWT providers carry the subject in ``claims['sub']`` (or the
+    token subject), while the static development map also has a client id.
+    Direct stdio calls have no access token and retain the existing
+    workspace-level behavior.  A pre-bound internal transport context wins so
+    REST/gRPC adapters and source-bound tests use the same principal seam.
+    """
+    from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+
+    bound = current_agent_id.get()
+    if bound and bound != UNATTRIBUTED:
+        return bound
+
+    # ``None`` is the SDK's explicit no-request result (stdio and legacy
+    # operator calls).  An exception means an authenticated transport could
+    # not be inspected; propagating it keeps the public recall body from
+    # silently becoming workspace-wide after an authn failure.
+    access_token = get_access_token()
+    if access_token is None:
+        return None
+
+    claims: Any = getattr(access_token, "claims", None)
+    if not isinstance(claims, dict):
+        claims = {}
+    candidate = claims.get("sub") or getattr(access_token, "subject", None)
+    if not candidate:
+        candidate = claims.get("agent_id") or getattr(access_token, "client_id", None)
+    if not isinstance(candidate, str) or not candidate:
+        raise ValueError("authenticated token has no namespace principal")
+
+    # Namespace IDs are path-bearing authorization inputs. Reuse the one
+    # validator rather than allowing provider metadata to bypass it.
+    from mind_mem.namespaces import _validate_agent_id
+
+    return _validate_agent_id(candidate)
 
 
 # ACL COVERAGE INVARIANT (pinned by tests/test_acl_tool_coverage.py):

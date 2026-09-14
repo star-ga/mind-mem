@@ -321,6 +321,7 @@ def _recall_impl(
     lifecycle: str | None = None,
     event_id: str | None = None,
     min_maturity: float | None = None,
+    agent_id: str | None = None,
 ) -> str:
     """Claim the serve, then rank. The attesting entry for this surface.
 
@@ -340,6 +341,10 @@ def _recall_impl(
     :func:`_anticipation_envelope`).
     """
     from mind_mem.recall import serving_scope
+    if agent_id is None:
+        from ..infra.acl import authenticated_agent_id
+
+        agent_id = authenticated_agent_id()
 
     with serving_scope():
         return _recall_impl_ranked(
@@ -355,6 +360,7 @@ def _recall_impl(
             lifecycle=lifecycle,
             event_id=event_id,
             min_maturity=min_maturity,
+            agent_id=agent_id,
         )
 
 
@@ -371,6 +377,7 @@ def _recall_impl_ranked(
     lifecycle: str | None = None,
     event_id: str | None = None,
     min_maturity: float | None = None,
+    agent_id: str | None = None,
 ) -> str:
     """Core recall implementation shared by recall() and hybrid_search().
 
@@ -455,6 +462,7 @@ def _recall_impl_ranked(
             active_only=active_only,
             backend=backend,
             scoring_instant=resolved_instant,
+            agent_id=agent_id,
             **kwargs,
         )
 
@@ -524,6 +532,7 @@ def _recall_impl_ranked(
         and not _active_filters
         and not active_only
         and backend == "auto"
+        and agent_id is None
     ):
         _anticipation_identity = anticipation_generation_identity(_raw_config, str(MCP_SCHEMA_VERSION))
     # ``format="bundle"`` never takes the local answer. The early return below
@@ -564,7 +573,13 @@ def _recall_impl_ranked(
     # coordinates to the recorder keeps those paths coherent. The context's read counter is
     # diagnostic only; a cache hit need not execute the engine to record a v2 row.
     with bind_request_context(_request_context):
-        if _anchor_resolution.resolved and isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True) and not _trace_on:
+        if (
+            _anchor_resolution.resolved
+            and agent_id is None
+            and isinstance(_cache_cfg, dict)
+            and _cache_cfg.get("enabled", True)
+            and not _trace_on
+        ):
             raw = cached_recall(
                 _inner,
                 query,
@@ -579,6 +594,7 @@ def _recall_impl_ranked(
                 config_fingerprint=retrieval_config_fingerprint(_raw_config),
                 schema_version=str(MCP_SCHEMA_VERSION),
                 filters=_active_filters,
+                agent_id=agent_id,
             )
         else:
             raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend, **_active_filters)
@@ -959,6 +975,7 @@ def _recall_impl_uncached(
     lifecycle: str | None = None,
     event_id: str | None = None,
     min_maturity: float | None = None,
+    agent_id: str | None = None,
 ) -> str:
     """The original recall body, now callable as the cache-miss branch of ``_recall_impl``.
 
@@ -1013,6 +1030,7 @@ def _recall_impl_uncached(
                 active_only=active_only,
                 rerank_depth=resolve_rerank_depth(recall_cfg, limit),
                 scoring_instant=scoring_instant,
+                agent_id=agent_id,
             )
             used_backend = "hybrid"
             # Surface an in-band degradation marker: when the vector leg was
@@ -1040,15 +1058,33 @@ def _recall_impl_uncached(
     if used_backend != "hybrid":
         try:
             if os.path.isfile(fts_db_path(ws)):
+                # An agent-bound filter must see a wide enough candidate pool;
+                # asking FTS for only top-k can let forbidden rows crowd out
+                # permitted lower-ranked rows before the ACL is applied.
+                fts_limit = (
+                    min(max(_leg_limit, limit * _FILTER_WIDEN), limits["max_recall_results"])
+                    if agent_id
+                    else _leg_limit
+                )
                 results = fts_query(
                     ws,
                     query,
-                    limit=_leg_limit,
+                    limit=fts_limit,
                     active_only=active_only,
                     scoring_instant=scoring_instant,
                     since=since,
                     until=until,
                 )
+                if agent_id:
+                    from mind_mem._recall_core import _filter_indexed_hits_for_agent
+                    from mind_mem.namespaces import NamespaceManager
+
+                    results = _filter_indexed_hits_for_agent(
+                        ws,
+                        results,
+                        agent_id=agent_id,
+                        namespace_manager=NamespaceManager(ws, agent_id=agent_id),
+                    )
                 used_backend = "sqlite"
             else:
                 results = recall_engine(
@@ -1062,6 +1098,7 @@ def _recall_impl_uncached(
                     lifecycle=lifecycle,
                     event_id=event_id,
                     min_maturity=min_maturity,
+                    agent_id=agent_id,
                 )
                 used_backend = "scan"
                 warnings.append("FTS5 index not found — using full scan. Run 'reindex' tool for faster queries.")
@@ -1288,13 +1325,13 @@ def pack_recall_budget(
     if limit < 1 or limit > 500:
         return json.dumps({"error": "limit must be in [1, 500]"})
 
-    from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+    from ..infra.acl import authenticated_agent_id
 
-    bound_agent = current_agent_id.get()
+    bound_agent = authenticated_agent_id()
     always_results, always_meta = always_injected_hits(
         ws,
         _load_config(ws),
-        agent_id=None if bound_agent == UNATTRIBUTED else bound_agent,
+        agent_id=bound_agent,
     )
     if not query.strip() and not always_results:
         return json.dumps({"error": "query must be a non-empty string"})
@@ -1443,10 +1480,13 @@ def recall_with_axis(
     from mind_mem.axis_recall import recall_with_axis as _axis_recall
     from mind_mem.observation_axis import AxisWeights, ObservationAxis
 
+    from ..infra.acl import authenticated_agent_id
+
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    bound_agent = authenticated_agent_id()
 
     _MAX_ARG_LEN = 1024
     _MAX_TOKENS = 16
@@ -1504,7 +1544,10 @@ def recall_with_axis(
             # Every axis is a ranked recall pass, so they must all score
             # against one instant — otherwise a multi-axis observation can
             # straddle a UTC midnight and fuse two differently-dated rankings.
-            recall_kwargs={"scoring_instant": scoring_instant} if scoring_instant else None,
+            recall_kwargs={
+                **({"scoring_instant": scoring_instant} if scoring_instant else {}),
+                "agent_id": bound_agent,
+            },
         )
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
@@ -1796,6 +1839,9 @@ def prefetch(signals: str, limit: int = 5) -> str:
         )
 
     limits = _get_limits(ws)
+    from ..infra.acl import authenticated_agent_id
+
+    bound_agent = authenticated_agent_id()
     limit = max(1, min(limit, limits["max_prefetch_results"]))
     # Resolved here, once, and handed to both the assembly and the record it
     # gets attested with. Left to default, the N+1 passes inside
@@ -1839,7 +1885,13 @@ def prefetch(signals: str, limit: int = 5) -> str:
             scoring_instant=instant_iso,
         )
         with bind_request_context(_prefetch_request_context):
-            results = prefetch_context(ws, signal_list, limit=limit, scoring_instant=instant)
+            results = prefetch_context(
+                ws,
+                signal_list,
+                limit=limit,
+                scoring_instant=instant,
+                agent_id=bound_agent,
+            )
         metrics.inc("mcp_prefetch_queries")
         _log.info("mcp_prefetch", signals=signal_list, results=len(results))
         # Group J — this is the tool the roadmap item calls "idle": it
@@ -1855,7 +1907,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
         # between this point and the attest call and prefetch wrote a RECORDED v2 row mixing them —
         # the worst of the three doors, because v2 carries a context digest making the claim.
         _served_generation = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
-        if _prefetch_resolution.resolved and anticipation_enabled(_prefetch_config):
+        if bound_agent is None and _prefetch_resolution.resolved and anticipation_enabled(_prefetch_config):
             _prefetch_identity = anticipation_generation_identity(_prefetch_config, str(MCP_SCHEMA_VERSION))
             if _prefetch_identity is not None:
                 hits = [r for r in results if isinstance(r, dict)]

@@ -157,6 +157,7 @@ def make_cache_key(
     config_fingerprint: str = "",
     schema_version: str = "",
     filters: dict | None = None,
+    agent_id: str | None = None,
 ) -> str:
     """Derive a stable cache key for a recall invocation.
 
@@ -211,6 +212,8 @@ def make_cache_key(
     active_filters = {k: v for k, v in (filters or {}).items() if v is not None and v != ""}
     if active_filters:
         payload["filters"] = {k: str(v) for k, v in sorted(active_filters.items())}
+    if agent_id:
+        payload["agent_id"] = str(agent_id)
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
     return f"mindmem:recall:{_KEY_FORMAT}:{namespace}:{digest[:24]}"
@@ -431,6 +434,7 @@ def cached_recall(
     config_fingerprint: str = "",
     schema_version: str = "",
     filters: dict | None = None,
+    agent_id: str | None = None,
 ) -> str:
     """Cache-wrapped call to a recall function.
 
@@ -471,6 +475,7 @@ def cached_recall(
         config_fingerprint=config_fingerprint,
         schema_version=schema_version,
         filters=filters,
+        agent_id=agent_id,
     )
     cache = get_cache(config)
     hit = cache.get(key)
