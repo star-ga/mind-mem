@@ -39,18 +39,29 @@ def _properties(config: Mapping[str, Any] | None) -> Mapping[str, Any]:
     return props if isinstance(props, Mapping) else {}
 
 
-def namespace_for_path(path: object) -> str:
-    """Map a workspace-relative source path to its namespace identity."""
+def namespace_for_path(path: object) -> str | None:
+    """Map a canonical workspace-relative source path to its namespace.
+
+    Invalid source metadata is unresolved rather than silently promoted to the
+    workspace namespace.  That distinction matters when an opted-in policy
+    declares an agent namespace as direct-only.
+    """
     if not isinstance(path, str):
-        return "workspace"
+        return None
     cleaned = path.replace("\\", "/")
     if cleaned.startswith("./"):
         cleaned = cleaned[2:]
-    if cleaned.startswith("/") or ".." in cleaned.split("/"):
-        return "workspace"
-    parts = [part for part in cleaned.split("/") if part]
-    if not parts:
-        return "workspace"
+    if not cleaned or "\x00" in cleaned:
+        return None
+    if (
+        cleaned.startswith("/")
+        or (len(cleaned) >= 2 and cleaned[0].isalpha() and cleaned[1] == ":")
+        or ".." in cleaned.split("/")
+    ):
+        return None
+    parts = cleaned.split("/")
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        return None
     if parts[0] == "agents" and len(parts) >= 2:
         return f"agents/{parts[1]}"
     if parts[0] in {
@@ -129,7 +140,10 @@ def _merge_valid(target: dict[str, Any], candidate: Mapping[str, Any]) -> None:
 
 def _validate_declaration(candidate: Mapping[str, Any], name: str) -> None:
     """Reject malformed declarations instead of silently using a weaker one."""
-    if "reachability" in candidate and candidate["reachability"] not in REACHABILITIES:
+    if "reachability" in candidate and (
+        not isinstance(candidate["reachability"], str)
+        or candidate["reachability"] not in REACHABILITIES
+    ):
         raise ValueError(f"namespace_properties.{name}.reachability is invalid")
     if "floor" in candidate:
         floor = candidate["floor"]
@@ -163,7 +177,14 @@ def _global_floor(config: Mapping[str, Any] | None) -> float:
 
 def namespace_search_allowed(path: object, config: Mapping[str, Any] | None) -> bool:
     """Whether a source path may enter ranked search."""
-    reachability = declaration_for(config, namespace_for_path(path))["reachability"]
+    if not _properties(config):
+        # Preserve the historical unconfigured pipeline, including its
+        # treatment of backend paths that predate source metadata validation.
+        return True
+    namespace = namespace_for_path(path)
+    if namespace is None:
+        return False
+    reachability = declaration_for(config, namespace)["reachability"]
     return reachability not in {REACHABILITY_DIRECT_ONLY, REACHABILITY_ALWAYS_INJECTED}
 
 
@@ -183,7 +204,12 @@ def filter_search_hits(hits: list[dict[str, Any]], config: Mapping[str, Any] | N
             # namespace.  Serving it would let forged/default metadata bypass
             # a direct-only declaration.
             continue
-        declaration = declaration_for(config, namespace_for_path(source))
+        namespace = namespace_for_path(source)
+        if namespace is None:
+            # A declared policy cannot safely classify an absolute, traversal,
+            # empty, or otherwise malformed source claim.
+            continue
+        declaration = declaration_for(config, namespace)
         if declaration["reachability"] in {REACHABILITY_DIRECT_ONLY, REACHABILITY_ALWAYS_INJECTED}:
             continue
         floor = declaration.get("floor", FLOOR_INHERIT_GLOBAL)
@@ -215,6 +241,8 @@ def always_injected_hits(
 
     selected: list[dict[str, Any]] = []
     selected_identities: set[tuple[str, str, str]] = set()
+    processed_namespaces: set[str] = set()
+    effective_caps: dict[str, int] = {}
     remaining_global = _MAX_ALWAYS_ITEMS
     acl = NamespaceManager(workspace, agent_id=agent_id)
     declarations = _properties(config)
@@ -253,12 +281,31 @@ def always_injected_hits(
             if not namespace_root.startswith(root + os.sep) or not os.path.isdir(namespace_root) or os.path.islink(candidate):
                 continue
             actual_namespace = os.path.relpath(namespace_root, root).replace(os.sep, "/")
+            # Resolve the expanded directory again.  An exact declaration is
+            # authoritative over a matching wildcard and must be able to
+            # suppress that wildcard's always-injected read.
+            declaration = declaration_for(config, actual_namespace)
+            if declaration["reachability"] != REACHABILITY_ALWAYS_INJECTED:
+                continue
+            if declaration.get("content_type") != "behavior":
+                continue
+            try:
+                cap = int(declaration.get("max_items", 0))
+            except (TypeError, ValueError):
+                cap = 0
+            if cap < 1 or cap > _MAX_ALWAYS_ITEMS:
+                continue
+            if actual_namespace in processed_namespaces:
+                continue
             # Apply the same namespace ACL before reading a configured source.
             # The workspace-level manager permits all in-workspace paths; an
             # agent-scoped caller therefore cannot use an always declaration as
             # a second, wider discovery mechanism.
             if not acl.can_read(actual_namespace):
+                processed_namespaces.add(actual_namespace)
                 continue
+            processed_namespaces.add(actual_namespace)
+            effective_caps[actual_namespace] = cap
             try:
                 store = MarkdownBlockStore(namespace_root)
                 blocks: list[dict[str, Any]] = []
@@ -318,29 +365,7 @@ def always_injected_hits(
             matched += min(namespace_count, cap)
         if matched == 0:
             continue
-    cap_total = 0
-    for name in declarations:
-        if not isinstance(name, str) or name == "defaults":
-            continue
-        resolved = declaration_for(config, name)
-        if resolved["reachability"] != REACHABILITY_ALWAYS_INJECTED:
-            continue
-        try:
-            declared_cap = int(resolved.get("max_items", 0) or 0)
-        except (TypeError, ValueError):
-            declared_cap = 0
-        if 1 <= declared_cap <= _MAX_ALWAYS_ITEMS:
-            normalized = name.replace("\\", "/").strip("/")
-            matches = (
-                [normalized]
-                if not any(ch in normalized for ch in "*?[")
-                else [
-                    os.path.relpath(p, os.path.realpath(workspace)).replace(os.sep, "/")
-                    for p in glob.glob(os.path.join(os.path.realpath(workspace), normalized))
-                    if os.path.isdir(p)
-                ]
-            )
-            cap_total += declared_cap * len(matches)
+    cap_total = sum(effective_caps.values())
     return selected, {"count": len(selected), "cap": min(cap_total, _MAX_ALWAYS_ITEMS), "content_type": "behavior"}
 
 

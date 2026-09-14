@@ -127,7 +127,10 @@ def content_identity(block: Mapping[str, Any]) -> ContentIdentity | None:
     normalized = "/".join(parts)
     from .namespace_retrieval import namespace_for_path
 
-    return (namespace_for_path(normalized), normalized, block_id)
+    namespace = namespace_for_path(normalized)
+    if namespace is None:
+        return None
+    return (namespace, normalized, block_id)
 
 
 def _safe_source_path(workspace: str, source: str) -> str | None:

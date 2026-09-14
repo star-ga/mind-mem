@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from mind_mem._recall_core import knee_cutoff, recall
 from mind_mem.audit_context import bind_current_agent
 from mind_mem.block_store import MarkdownBlockStore
@@ -91,6 +93,14 @@ def test_indexed_result_cannot_bypass_direct_only_declaration(tmp_path: Path, mo
     assert hits == []
 
 
+def test_invalid_absolute_source_is_rejected_when_namespace_policy_is_enabled() -> None:
+    cfg = {"recall": {"namespace_properties": {"agents/alice": {"reachability": "direct-only", "floor": "none"}}}}
+    assert filter_search_hits([{"_id": "forged", "score": 1.0, "file": "/tmp/ws/agents/alice/decisions/DECISIONS.md"}], cfg) == []
+    assert namespace_for_path("../agents/alice/decisions/DECISIONS.md") is None
+    assert namespace_for_path("C:/ws/agents/alice/decisions/DECISIONS.md") is None
+    assert namespace_for_path("C:agents/alice/decisions/DECISIONS.md") is None
+
+
 def test_pack_injects_only_admitted_behavior_blocks_under_hard_cap(tmp_path: Path, monkeypatch) -> None:
     ws = tmp_path / "always"
     init(str(ws))
@@ -125,6 +135,8 @@ def test_malformed_namespace_declaration_fails_closed_and_missing_source_is_reje
 
     with pytest.raises(ValueError):
         declaration_for(bad, "workspace")
+    with pytest.raises(ValueError):
+        declaration_for({"recall": {"namespace_properties": {"workspace": {"reachability": []}}}}, "workspace")
     cfg = {"recall": {"min_score": 0.9, "namespace_properties": {"workspace": {"floor": "none"}}}}
     assert filter_search_hits([{"_id": "x", "score": 1.0}], cfg) == []
     hits = filter_search_hits(
@@ -170,9 +182,75 @@ def test_pack_allows_empty_query_only_for_configured_always_namespace(tmp_path: 
     _block(ws / "always/decisions/BEHAVIOR.md", "BEHAVIOR-1", "Behavior", "empty query behavior")
     _config(ws, {"always": {"reachability": "always-injected", "floor": "none", "max_items": 1, "content_type": "behavior"}})
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
+    import mind_mem.mcp.tools.recall as recall_tools
+
+    calls = 0
+    original = recall_tools._recall_impl
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(recall_tools, "_recall_impl", counted)
     with use_workspace(str(ws)):
         payload = json.loads(pack_recall_budget("", max_tokens=1000, limit=10))
     assert payload["included"][0]["_id"] == "BEHAVIOR-1"
+    assert calls == 0
+
+
+@pytest.mark.parametrize("exact_reachability", ["searchable", "direct-only"])
+def test_exact_namespace_declaration_overrides_always_wildcard(tmp_path: Path, exact_reachability: str) -> None:
+    from mind_mem.namespace_retrieval import always_injected_hits
+
+    ws = tmp_path / "exact-over-wildcard"
+    init(str(ws))
+    _block(ws / "agents/a1/decisions/BEHAVIOR.md", "BEHAVIOR-1", "Behavior", "private agent behavior")
+    cfg = json.loads((ws / "mind-mem.json").read_text(encoding="utf-8"))
+    cfg["recall"]["namespace_properties"] = {
+        "agents/a1": {"reachability": exact_reachability, "floor": "none"},
+        "agents/*": {
+            "reachability": "always-injected",
+            "floor": "none",
+            "max_items": 1,
+            "content_type": "behavior",
+        },
+    }
+    selected, meta = always_injected_hits(str(ws), cfg)
+    assert selected == []
+    assert meta["count"] == 0
+    assert meta["cap"] == 0
+
+
+def test_always_injected_global_cap_is_bounded_across_expanded_namespaces(tmp_path: Path) -> None:
+    from mind_mem.namespace_retrieval import always_injected_hits
+
+    ws = tmp_path / "global-cap"
+    init(str(ws))
+    for index in range(33):
+        _block(ws / f"always-{index:02d}/decisions/BEHAVIOR.md", f"BEHAVIOR-{index:02d}", "Behavior", "bounded behavior")
+    cfg = json.loads((ws / "mind-mem.json").read_text(encoding="utf-8"))
+    cfg["recall"]["namespace_properties"] = {
+        "always-*": {"reachability": "always-injected", "floor": "none", "max_items": 1, "content_type": "behavior"}
+    }
+    selected, meta = always_injected_hits(str(ws), cfg)
+    assert len(selected) == 32
+    assert meta == {"count": 32, "cap": 32, "content_type": "behavior"}
+
+
+def test_overlapping_exact_and_wildcard_always_declarations_keep_one_effective_cap(tmp_path: Path) -> None:
+    from mind_mem.namespace_retrieval import always_injected_hits
+
+    ws = tmp_path / "overlapping-always"
+    init(str(ws))
+    _block(ws / "agents/a1/decisions/BEHAVIOR-1.md", "BEHAVIOR-1", "Behavior", "first behavior")
+    _block(ws / "agents/a1/decisions/BEHAVIOR-2.md", "BEHAVIOR-2", "Behavior", "second behavior")
+    cfg = json.loads((ws / "mind-mem.json").read_text(encoding="utf-8"))
+    declaration = {"reachability": "always-injected", "floor": "none", "max_items": 1, "content_type": "behavior"}
+    cfg["recall"]["namespace_properties"] = {"agents/a1": declaration, "agents/*": declaration}
+    selected, meta = always_injected_hits(str(ws), cfg)
+    assert len(selected) == 1
+    assert meta == {"count": 1, "cap": 1, "content_type": "behavior"}
 
 
 def test_wildcard_always_namespace_expands_only_real_directories(tmp_path: Path) -> None:
@@ -207,4 +285,4 @@ def test_pack_applies_bound_agent_acl_to_always_namespace(tmp_path: Path, monkey
     with bind_current_agent("alice"), use_workspace(str(ws)):
         payload = json.loads(pack_recall_budget("ordinary", max_tokens=1000, limit=10))
     assert "BEHAVIOR-1" not in [item.get("_id") for item in payload.get("included", [])]
-    assert payload["always_injected"]["count"] == 0
+    assert payload.get("always_injected", {}).get("count", 0) == 0

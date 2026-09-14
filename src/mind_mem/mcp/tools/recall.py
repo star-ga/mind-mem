@@ -1298,14 +1298,20 @@ def pack_recall_budget(
     )
     if not query.strip() and not always_results:
         return json.dumps({"error": "query must be a non-empty string"})
-    raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
     attestation: dict[str, Any] | None = None
-    if isinstance(raw, dict):
-        results = raw.get("results", []) or []
-        attestation = raw.get("attestation")
-    elif isinstance(raw, list):
-        results = raw
+    if query.strip():
+        raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
+        if isinstance(raw, dict):
+            results = raw.get("results", []) or []
+            attestation = raw.get("attestation")
+        elif isinstance(raw, list):
+            results = raw
+        else:
+            results = []
     else:
+        # A supplement-only pack has no ranked query to attest or execute.
+        # Keep the explicit unproven supplement marker below and avoid invoking
+        # the ranked engine for an otherwise valid empty-query request.
         results = []
 
     # Always-injected declarations are a bounded behaviour-only supplement to
