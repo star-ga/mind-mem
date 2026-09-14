@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1632 | **Est. tokens:** ~4819684
-**Generated:** 2026-09-14 17:22 UTC
+**Files:** 1632 | **Est. tokens:** ~4821306
+**Generated:** 2026-09-14 17:34 UTC
 
 ## Token Budget Guide
 
@@ -50,7 +50,7 @@
 | `docs/benchmarks/head-20260907/` | 8 | ~7240 |
 | `docs/benchmarks/memory-ab-420s-runs/` | 26 | ~84421 |
 | `docs/decisions/` | 1 | ~3174 |
-| `docs/design/` | 11 | ~18420 |
+| `docs/design/` | 11 | ~18644 |
 | `docs/evidence/5.0.2-f1/` | 12 | ~188585 |
 | `docs/plans/` | 1 | ~6134 |
 | `docs/security-baselines/` | 1 | ~18974 |
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 238 | ~1084504 |
+| `src/mind_mem/` | 238 | ~1084816 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96290 |
-| `tests/` | 719 | ~2132915 |
+| `tests/` | 719 | ~2134001 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -444,7 +444,7 @@
 - `m4-closed-set-slots.md` (~2250 tok, huge) — Design: M4 — closed-set slots, structural contradiction prevention
 - `m5-enforcement-in-code-audit.md` (~2245 tok, huge) — Design: M5 — enforcement in code, not in the prompt
 - `m6-negative-results.md` (~2171 tok, huge) — Design: M6 — negative results as a first-class recorded outcome
-- `ra4-entity-equivalence.md` (~371 tok, medium) — RA.4 entity equivalence (candidate)
+- `ra4-entity-equivalence.md` (~595 tok, large) — RA.4 entity equivalence (5.0.3 candidate)
 - `recall-harness.md` (~1639 tok, huge) — Design: the recall harness — deterministic working memory for search agents
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
 - `v3-multi-tenancy.md` (~1336 tok, large) — v3.0 Design: Multi-Tenancy Foundation
@@ -884,7 +884,7 @@
 - `iterative_recall.py` (~2856 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4672 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kg_fusion.py` (~2131 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
-- `knowledge_graph.py` (~22046 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~22358 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lifecycle_evidence.py` (~4750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~2108 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
@@ -1529,7 +1529,7 @@
 - `test_mcp_compiled_truth_contradictions.py` (~4713 tok, huge) — ``compiled_truth_contradictions`` — the detective half of the truth pages.
 - `test_mcp_compiled_truth_load.py` (~4697 tok, huge) — The compiled-truth read tool -- registered since v3.2.0, never tested.
 - `test_mcp_db_error_backstop.py` (~1717 tok, huge) — The MCP tool decorator must not let a backend DB error crash the server.
-- `test_mcp_entity_merge.py` (~2604 tok, huge) — Governed RA.4 entity equivalence controls.
+- `test_mcp_entity_merge.py` (~3689 tok, huge) — Governed RA.4 entity equivalence controls.
 - `test_mcp_export_corpus_boundary.py` (~923 tok, large) — MCP export must use the same configured, admitted corpus as other exports.
 - `test_mcp_graph_hitl.py` (~1868 tok, huge) — MCP-surface tests for the HITL typed-edge flow + provenance (v4.4.0 Finding 1)
 - `test_mcp_http_gate_matches_enforcement.py` (~2695 tok, huge) — The MCP HTTP startup gate must agree with what actually enforces auth.
@@ -1741,7 +1741,7 @@
 - `test_reranker_model_cache.py` (~1909 tok, huge) — Reranker weights load once per process, not once per query.
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
 - `test_rest_admin_gate_api_key_only.py` (~2102 tok, huge) — The REST admin gate must fire in an API-key-only deployment.
-- `test_rest_admin_scope_handoff.py` (~1245 tok, large) — Real REST -> observed-MCP admin scope handoff controls (RA.4).
+- `test_rest_admin_scope_handoff.py` (~1246 tok, large) — Real REST -> observed-MCP admin scope handoff controls (RA.4).
 - `test_rest_api.py` (~4353 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_rest_api_oidc.py` (~2737 tok, huge) — Tests for OIDC callback + admin API key endpoints (v3.2.0)."""
 - `test_rest_audit_headers.py` (~1517 tok, huge) — Regression tests for the audit-header middleware (roadmap v4.0.0 Group D).

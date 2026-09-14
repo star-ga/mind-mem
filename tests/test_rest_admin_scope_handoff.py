@@ -3,6 +3,7 @@
 The endpoint is exercised through FastAPI's registered route.  Fixture token
 values are deliberately local and are never included in assertions or output.
 """
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor

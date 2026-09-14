@@ -4,18 +4,17 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
-### Changed
-
-- Require an explicit rationale for task proposals as well as decisions.
-  The eight-character minimum excludes all whitespace, so padding cannot
-  satisfy it. Refusal precedes content screening and proposal writes; clients
-  that omitted task reasons must supply them. Valid reasons retain the existing
-  redaction, Markdown escaping and governed approval behavior.
-
 ## [5.0.3] - 2026-09-14
 
 ### Added
 
+- Governed, reversible entity equivalence through staged `SAME_AS` proposals
+  and an opt-in graph union view. Original entities and source edges remain
+  intact. Admin approval and reversal validate persisted identity and lineage;
+  inconsistent applied state and transitive merge cycles are refused.
+- A reproducible local-receipt mechanics pilot with committed raw measurements
+  and predeclared budgets. It measures one authentic ledger history and does
+  not establish relevance quality, external superiority or independent witnessing.
 - Opt-in closed-set fact slots with workspace-bound approval checks, explicit
   namespace reachability declarations and semantic-lifetime policies. Numeric
   relevance-floor calibration still requires the labelled evaluation corpus.
@@ -38,6 +37,9 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- REST admin actions carry the authenticated transport scope into governed MCP
+  dispatch. Valid administrators can apply proposals without a process-wide
+  admin setting; unauthenticated, user-scope and spoofed requests remain refused.
 - Indexed recall applies a bound agent's namespace permissions before result
   processing, including SQLite and PostgreSQL. An entirely denied database
   result stays empty while retaining backend trace and degradation metadata.
@@ -90,6 +92,11 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Changed
 
+- Require an explicit rationale for task proposals as well as decisions.
+  The eight-character minimum excludes all whitespace, so padding cannot
+  satisfy it. Refusal precedes content screening and proposal writes; clients
+  that omitted task reasons must supply them. Valid reasons retain the existing
+  redaction, Markdown escaping and governed approval behavior.
 - Align active release, test-function, client and model documentation with their
   source authorities. Keep the reported model evaluation separate from a new
   independent run and document its two inference-time anchors and trained-tool
