@@ -186,7 +186,7 @@ class TestPgVectorWiring:
         assert s._has_vector is False
         assert s._embedding_dim == 1024  # mxbai-embed-large default.
 
-    def test_write_block_embedding_dim_check(self, admitted) -> None:
+    def test_write_block_embedding_dim_check(self, admitted, monkeypatch) -> None:
         """write_block must reject mismatched embedding dims even when
         pgvector isn't installed (input validation runs before DB)."""
         from mind_mem.block_store_postgres import BlockStoreError, PostgresBlockStore
@@ -195,6 +195,7 @@ class TestPgVectorWiring:
         s._schema_ready = True  # short-circuit the migration call.
         s._has_vector = True
         s._embedding_dim = 1024
+        monkeypatch.setattr(s, "_get_pool", lambda: pytest.fail("dimension refusal opened a connection pool"))
         with pytest.raises(BlockStoreError, match="embedding dim mismatch"):
             s.write_block({"_id": "X", "Statement": "x"}, embedding=[0.1, 0.2])  # 2 != 1024
 
@@ -257,7 +258,7 @@ class TestPgVectorHardening:
         with pytest.raises(ValueError, match="non-finite"):
             _embedding_to_pg([float("-inf"), 0.1])
 
-    def test_hybrid_search_rejects_empty_embedding_loudly(self) -> None:
+    def test_hybrid_search_rejects_empty_embedding_loudly(self, monkeypatch) -> None:
         """v3.8.13 silently degraded to BM25 on an empty embedding list.
         That hides caller bugs — fail loudly instead."""
         from mind_mem.block_store_postgres import BlockStoreError, PostgresBlockStore
@@ -266,6 +267,7 @@ class TestPgVectorHardening:
         s._schema_ready = True
         s._has_vector = True
         s._embedding_dim = 1024
+        monkeypatch.setattr(s, "_get_pool", lambda: pytest.fail("dimension refusal opened a connection pool"))
         with pytest.raises(BlockStoreError, match="dim mismatch"):
             s.hybrid_search("anything", query_embedding=[])  # 0 != 1024.
 
