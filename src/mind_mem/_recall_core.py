@@ -859,13 +859,19 @@ def _withhold_inadmissible(
         # ordinary indexed hits here; the remote rows already went through
         # source-bound ``admit_read`` above.
         remote_item_ids = {id(item) for item in items if item.get("_remote_vector") is True}
-        ordinary = [item for item in items if id(item) not in remote_item_ids]
+        # Rows that carry a source identity have already been refreshed and
+        # admitted against that exact source above.  Applying the historical
+        # workspace-wide id -> status map to them would let a duplicate ID in
+        # another source overwrite that source-bound decision.  Keep the
+        # legacy map for genuinely unbound rows only.
+        source_bound_ids = {id(item) for item in items if id(item) not in remote_item_ids and _indexed_source_ref(item) is not None}
+        ordinary = [item for item in items if id(item) not in remote_item_ids and id(item) not in source_bound_ids]
         try:
             ordinary = with_live_statuses(ordinary, live_statuses(workspace), status_key=status_key)
         except Exception as exc:  # pragma: no cover — defensive
             _log.warning("live_status_refresh_failed", error=str(exc))
         ordinary_iter = iter(ordinary)
-        items = [item if id(item) in remote_item_ids else next(ordinary_iter) for item in items]
+        items = [item if id(item) in remote_item_ids or id(item) in source_bound_ids else next(ordinary_iter) for item in items]
     if all(is_admissible_status(item.get(status_key)) for item in items):
         return items
     releases: frozenset[str] = frozenset()
