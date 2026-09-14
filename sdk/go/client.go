@@ -138,8 +138,15 @@ func (c *Client) do(ctx context.Context, method, path string, params map[string]
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {
+		var raw json.RawMessage
+		if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 			return fmt.Errorf("mind-mem: decode response: %w", err)
+		}
+		if err := json.Unmarshal(raw, dst); err != nil {
+			return fmt.Errorf("mind-mem: decode response: %w", err)
+		}
+		if result, ok := dst.(interface{ captureJSON(json.RawMessage) }); ok {
+			result.captureJSON(raw)
 		}
 		return nil
 	}

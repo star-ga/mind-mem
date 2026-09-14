@@ -18,15 +18,12 @@ export type { HttpMethod, Route } from "./routes.js";
 export type {
   Block,
   BlockResult,
-  BlockTier,
   ClientOptions,
   ContradictionsResult,
-  Contradiction,
   HealthResult,
   RecallItem,
   RecallOptions,
   RecallResult,
-  ScanIssue,
   ScanResult,
   SearchBackend,
 } from "./types.js";

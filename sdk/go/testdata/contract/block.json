@@ -1,0 +1,18 @@
+{
+  "_schema_version": "1.0",
+  "block_id": "D-20260914-001",
+  "found": true,
+  "block": {
+    "_id": "D-20260914-001",
+    "_line": 1,
+    "Date": "2026-09-14",
+    "Status": "active",
+    "Statement": "Orchid is the SDK contract sentinel.",
+    "_entities": [],
+    "_dates": [
+      "2026-09-14"
+    ],
+    "_has_negation": false,
+    "_source_file": "decisions/DECISIONS.md"
+  }
+}

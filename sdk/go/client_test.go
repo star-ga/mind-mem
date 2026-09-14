@@ -108,7 +108,7 @@ func TestAuthHeader_WithToken(t *testing.T) {
 		gotAuth = r.Header.Get("Authorization")
 		gotToken = r.Header.Get("X-MindMem-Token")
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(mindmem.HealthResult{Status: "ok", Version: "3.2.0"})
+		_ = json.NewEncoder(w).Encode(mindmem.HealthResult{Status: "ok", APIVersion: "5.0.3"})
 	}))
 	defer srv.Close()
 
@@ -150,30 +150,11 @@ func TestAuthHeader_WithoutToken(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRecall_RoundTrip(t *testing.T) {
-	cat := "infra"
 	fixture := mindmem.RecallResult{
-		Query: "postgres",
-		Results: []mindmem.RecallItem{
-			{
-				Block: mindmem.Block{
-					ID:          "b1",
-					Content:     "Use pgvector",
-					Importance:  0.9,
-					Tier:        mindmem.TierWorking,
-					CreatedAt:   "2026-01-01T00:00:00Z",
-					UpdatedAt:   "2026-01-01T00:00:00Z",
-					Keywords:    []string{"postgres"},
-					Category:    &cat,
-					Active:      true,
-					AccessCount: 3,
-				},
-				Score: 0.92,
-				Rank:  1,
-			},
-		},
-		Total:       1,
-		BackendUsed: "hybrid",
-		LatencyMs:   12,
+		Query:   "postgres",
+		Results: []mindmem.RecallItem{{ID: "b1", Excerpt: "Use pgvector", Score: 0.92}},
+		Count:   1,
+		Backend: "hybrid",
 	}
 
 	var capturedPath, capturedMethod, capturedQuery string
@@ -221,11 +202,11 @@ func TestRecall_RoundTrip(t *testing.T) {
 	if _, present := capturedBody["active_only"]; present {
 		t.Errorf("body carried active_only although the caller did not set it: %v", capturedBody)
 	}
-	if result.Total != 1 {
-		t.Errorf("total: got %d, want 1", result.Total)
+	if result.Count != 1 {
+		t.Errorf("total: got %d, want 1", result.Count)
 	}
-	if result.Results[0].Block.ID != "b1" {
-		t.Errorf("block ID: got %q, want b1", result.Results[0].Block.ID)
+	if result.Results[0].ID != "b1" {
+		t.Errorf("block ID: got %q, want b1", result.Results[0].ID)
 	}
 }
 

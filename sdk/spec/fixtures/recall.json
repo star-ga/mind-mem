@@ -1,0 +1,48 @@
+{
+  "_schema_version": "1.0",
+  "backend": "scan",
+  "query": "orchid",
+  "query_id": "cal-608738e4ac08-1789381071741",
+  "count": 1,
+  "scoring_instant": "2026-09-14",
+  "results": [
+    {
+      "_id": "D-20260914-001",
+      "type": "decision",
+      "score": 0.5425,
+      "excerpt": "Orchid is the SDK contract sentinel.",
+      "speaker": "",
+      "tags": "",
+      "file": "decisions/DECISIONS.md",
+      "line": 1,
+      "status": "active",
+      "Date": "2026-09-14"
+    }
+  ],
+  "warnings": [
+    "FTS5 index not found \u2014 using full scan. Run 'reindex' tool for faster queries."
+  ],
+  "attestation": {
+    "schema": "RECALL_ATTEST_v2",
+    "legs_ran": [
+      "bm25"
+    ],
+    "legs_degraded": [],
+    "config_hash": "b27d30c8289923971f8de14daa648fba2b65e80ac16bb090d9ca57d4a6961681",
+    "degraded": null,
+    "index_anchor": "0000000000000000000000000000000000000000000000000000000000000000",
+    "result_count": 1,
+    "results_digest": "47d9b83e1a0f033c9d474ff89fd0a9026868e7f5d48fe4204e8e55ec0f64f2eb",
+    "query_hash": "21dbafd5dc5747dc6d169958663c80c4c95f38cad43ef67d776771dac8db13e1",
+    "query_id": "aadc0e5609929c2a7088edc5be5e49ad230f309e69080d60b67ba702de72d585",
+    "derivation": "derived",
+    "scoring_instant": "2026-09-14",
+    "attestation_hash": "35ac23350805b5b7e6d2f723776fe841bc3e182e7532ff0d030a659e43047e86",
+    "served_serve_kind": "attested",
+    "served_context_digest": "45d21708a0f21dc467da0b671c203cfa732a5b6b99c24d8e827c80cc2fbc0a42",
+    "served_seq": 0,
+    "served_row_hash": "9944f1f39fa67384701154c5fa2dc75665def9cc4a43ff7a160cc1e82d7b042e",
+    "ledger_error": null,
+    "served_proof": "recorded"
+  }
+}

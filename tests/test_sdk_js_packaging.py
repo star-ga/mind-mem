@@ -1,25 +1,10 @@
 # Copyright 2026 STARGA, Inc.
 """The npm package must be publishable-by-script only, and must cohere.
 
-Roadmap RM-2321 ("JavaScript / TypeScript SDK") is a publish-step item whose
-publish step is blocked on a decision that is not an engineer's to make: the
-manifest on disk claims ``@mind-mem/sdk`` and the roadmap names
-``@star-ga/mind-mem-client``, and an npm name, once taken, is not reclaimable.
-Everything up to that decision ships here — the packaging, the version
-derivation, and the gate.
-
-Two properties, both enforced below:
-
-**The tree cannot publish itself.** ``sdk/js/package.json`` carries
-``"private": true``, which npm refuses to publish. That turns "do not publish
-until the name is settled" from a sentence in a plan into something the
-tooling enforces. ``sdk/release/pack_js.py`` stages a copy with the flag
-dropped, so there is exactly one door and it is a script that can be reviewed.
-
-**The version is derived, not typed.** The manifest reads 0.1.0 while the
-package is 5.0.1 — the classic hand-maintained-second-version drift. The
-staged manifest takes its version from ``pyproject.toml`` at pack time, so
-whatever is in the source manifest cannot reach a registry.
+The source manifest stays private. A release stages prebuilt outputs under
+`@star-ga/mind-mem-client` using the Python release version, without source-only
+lifecycle scripts or build dependencies. Registry credentials are required
+only for publication, not for these artifact checks.
 
 Coherence is checked against ``tsconfig.json`` rather than against a build
 directory on purpose: the interesting failure is a manifest whose entry points
@@ -74,11 +59,15 @@ class TestSourceTreeCannotPublish:
     def test_source_manifest_is_private(self, source_manifest: dict[str, Any]) -> None:
         assert source_manifest.get("private") is True, (
             "sdk/js/package.json lost `private: true`; a stray `npm publish` in that directory "
-            "would claim a package name that is still an open decision"
+            "would bypass the release version staging path"
         )
 
     def test_staged_manifest_drops_private(self, staged: dict[str, Any]) -> None:
         assert "private" not in staged
+
+    def test_staged_package_cannot_rebuild_missing_sources(self, staged: dict[str, Any]) -> None:
+        assert "scripts" not in staged
+        assert "devDependencies" not in staged
 
     def test_staging_leaves_the_source_manifest_untouched(self, pack: Any, source_manifest: dict[str, Any]) -> None:
         pack.staged_manifest("9.9.9")
@@ -171,6 +160,14 @@ class TestStaging:
         assert pack.manifest_problems(pack.staged_manifest(PACKAGE_VERSION), js_dir=unbuilt) == []
         with pytest.raises(FileNotFoundError, match="npm run build"):
             pack.stage(tmp_path / "pkg", PACKAGE_VERSION, require_build=True)
+
+        # An empty dist directory must not satisfy the release gate either.
+        (unbuilt / "dist").mkdir()
+        with pytest.raises(FileNotFoundError, match="index"):
+            pack.stage(tmp_path / "pkg", PACKAGE_VERSION, require_build=True)
+        assert not (tmp_path / "pkg").exists()
+        with pytest.raises(FileNotFoundError, match="npm run build"):
+            pack._main(["--stage", str(tmp_path / "cli-pkg")])
 
 
 class TestNpmScriptsAreRunnable:

@@ -1,4 +1,4 @@
-# @mind-mem/sdk
+# @star-ga/mind-mem-client
 
 JavaScript / TypeScript client for the [MIND-Mem](https://github.com/star-ga/mind-mem) REST API.
 
@@ -15,13 +15,10 @@ npm test    # compiles src + test with tsconfig.test.json, then runs node --test
 
 ## Install
 
-> **Not published yet.** The package name is an open decision — the manifest
-> reads `@mind-mem/sdk`, the roadmap names `@star-ga/mind-mem-client`, and an
-> npm name is not reclaimable once taken. Until it is settled,
-> `sdk/js/package.json` carries `"private": true` so no accidental
-> `npm publish` can claim either name. Build the publishable tarball with
-> `python3 sdk/release/pack_js.py --stage <dir>`, which stamps the version
-> from `pyproject.toml` rather than trusting the manifest.
+The release package is `@star-ga/mind-mem-client`, versioned with MIND-Mem.
+The source manifest is private; publication uses a prebuilt staging directory
+with its version derived from `pyproject.toml`. See [SDK release steps](https://github.com/star-ga/mind-mem/blob/main/sdk/release/README.md).
+Publication is pending registry authentication; the source checkout is usable now.
 
 For now, consume it from a checkout:
 
@@ -32,14 +29,14 @@ cd sdk/js && npm install && npm run build
 ## Quick start
 
 ```typescript
-import { MindMemClient } from '@mind-mem/sdk';
+import { MindMemClient } from '@star-ga/mind-mem-client';
 
 const client = new MindMemClient('http://localhost:8080', {
   token: process.env.MIND_MEM_TOKEN,
 });
 
 const results = await client.recall('what did we decide about Postgres?', { limit: 5 });
-console.log(results.results.map(r => r.block.content));
+console.log(results.results.map(r => r.excerpt));
 ```
 
 ## API
@@ -59,7 +56,7 @@ console.log(results.results.map(r => r.block.content));
 | `getBlock(blockId)` | `GET /v1/block/{block_id}` | Fetch a single block by ID. |
 | `listContradictions()` | `GET /v1/contradictions` | List governance-detected contradictions. |
 | `health()` | `GET /v1/health` | Check server health and version. |
-| `scan()` | `GET /v1/scan` | Trigger a governance scan and return issues. |
+| `scan()` | `GET /v1/scan` | Read governance checks and counts. |
 
 The endpoint each method calls is declared in `src/routes.ts` and checked
 against `sdk/spec/openapi.json` by `tests/test_sdk_route_conformance.py`, so a
@@ -71,6 +68,7 @@ at a user's first request.
 ```typescript
 interface RecallOptions {
   limit?: number;                      // default: server-side default (10)
+  scoringInstant?: string;            // optional YYYY-MM-DD recency date
   activeOnly?: boolean;                // filter to active blocks only
   backend?: 'auto' | 'bm25' | 'hybrid';
 }
@@ -87,7 +85,7 @@ All errors extend `MindMemError` and carry `.statusCode` and `.responseBody`.
 | `MindMemServerError` | 5xx | — |
 
 ```typescript
-import { MindMemRateLimitError } from '@mind-mem/sdk';
+import { MindMemRateLimitError } from '@star-ga/mind-mem-client';
 
 try {
   const result = await client.recall('postgres decisions');

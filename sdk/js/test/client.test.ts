@@ -68,7 +68,7 @@ describe("MindMemClient — URL composition", () => {
       capturedInit = init;
       return makeFetch({
         status: 200,
-        body: { query: "test", results: [], total: 0, backend_used: "bm25", latency_ms: 1 },
+        body: { query: "test", results: [], count: 0, backend: "bm25", _schema_version: "1.0" },
       })(input, init);
     };
 
@@ -128,7 +128,7 @@ describe("MindMemClient — auth header", () => {
       );
       return makeFetch({
         status: 200,
-        body: { status: "ok", version: "3.2.0", block_count: 0, index_state: "ready", encryption_enabled: false, uptime_seconds: 1 } as HealthResult,
+        body: { _schema_version: "1.0", status: "ok", api_version: "5.0.3", schema_version: "2.1.0", workspace: "fixture", workspace_exists: true } as HealthResult,
       })(_input, init);
     };
 
@@ -151,7 +151,7 @@ describe("MindMemClient — auth header", () => {
       capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
       return makeFetch({
         status: 200,
-        body: { status: "ok", version: "3.2.0", block_count: 0, index_state: "ready", encryption_enabled: false, uptime_seconds: 1 },
+        body: { _schema_version: "1.0", status: "ok", api_version: "5.0.3", schema_version: "2.1.0", workspace: "fixture", workspace_exists: true },
       })(_input, init);
     };
 
@@ -171,30 +171,8 @@ describe("MindMemClient — auth header", () => {
 describe("MindMemClient — typed results", () => {
   it("returns a typed RecallResult on 200", async () => {
     const envelope: RecallResult = {
-      query: "postgres",
-      results: [
-        {
-          block: {
-            id: "b1",
-            content: "Use pgvector",
-            importance: 0.9,
-            tier: "WORKING",
-            created_at: "2026-01-01T00:00:00Z",
-            updated_at: "2026-01-01T00:00:00Z",
-            keywords: ["postgres"],
-            category: "infra",
-            namespace: null,
-            active: true,
-            access_count: 3,
-            provenance: null,
-          },
-          score: 0.92,
-          rank: 1,
-        },
-      ],
-      total: 1,
-      backend_used: "hybrid",
-      latency_ms: 12,
+      _schema_version: "1.0", query: "postgres", count: 1, backend: "hybrid",
+      results: [{_id: "b1", excerpt: "Use pgvector", score: 0.92}],
     };
 
     const original = globalThis.fetch;
@@ -202,9 +180,9 @@ describe("MindMemClient — typed results", () => {
     try {
       const client = new MindMemClient("http://localhost:8080");
       const result = await client.recall("postgres");
-      assert.equal(result.total, 1);
-      assert.equal(result.results[0]?.block.id, "b1");
-      assert.equal(result.backend_used, "hybrid");
+      assert.equal(result.count, 1);
+      assert.equal(result.results[0]?._id, "b1");
+      assert.equal(result.backend, "hybrid");
     } finally {
       globalThis.fetch = original;
     }

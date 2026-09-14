@@ -175,6 +175,43 @@ jobs:
           path: coverage.xml
           retention-days: 30
 
+  sdk-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6
+        with:
+          go-version-file: sdk/go/go.mod
+          cache: false
+      - run: go vet ./... && go test ./...
+        working-directory: sdk/go
+
+  sdk-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38  # v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sdk/js/package-lock.json
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: npm ci --ignore-scripts && npm test && npm run build
+        working-directory: sdk/js
+      - name: Pack and consume the release artifact
+        shell: bash
+        run: |
+          python3 sdk/release/pack_js.py --stage "$RUNNER_TEMP/mind-mem-client-package"
+          npm pack "$RUNNER_TEMP/mind-mem-client-package" --pack-destination "$RUNNER_TEMP" --json > "$RUNNER_TEMP/sdk-pack.json"
+          tarball=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[0]["filename"])' "$RUNNER_TEMP/sdk-pack.json")
+          mkdir "$RUNNER_TEMP/sdk-consumer"
+          cd "$RUNNER_TEMP/sdk-consumer"
+          npm init -y
+          npm install --ignore-scripts "$RUNNER_TEMP/$tarball"
+          node --input-type=module -e "import { MindMemClient } from '@star-ga/mind-mem-client'; if (typeof MindMemClient !== 'function') process.exit(1)"
+
   version-check:
     runs-on: ubuntu-latest
     steps:
