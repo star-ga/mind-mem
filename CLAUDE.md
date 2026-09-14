@@ -229,15 +229,16 @@ docs/                   — User + integration docs (35+ files)
   audit hash preimages, TAG_v1 NUL-separated composition for collision
   resistance
 - **Local model** (v4.0.0): `star-ga/mind-mem-4b` — full fine-tune of
-  Qwen3.5-4B retrained for v4.0.0 (v4 weights revision). Knows all 83
-  tools, v4 surfaces (cognitive kernel, block kinds, tier memory,
+  Qwen3.5-4B retrained for v4.0.0 (v4 weights revision). Trained on the 83-tool
+  surface, including v4 features (cognitive kernel, block kinds, tier memory,
   self-editing), and the corrected `KIND_DECAY['cites']=0.8` value.
   Prior v3.12.0-fullft weights pinned at `v3.12.0` HF revision. Prior
-  v3.0.0 QLoRA at `v3.0.0`. See `docs/mind-mem-4b-setup.md`.
-- **Native MCP integration** (v3.1.0+): 15 AI clients auto-wired via
-  `mm install-all` (Claude Code, Claude Desktop, Codex CLI, Gemini CLI,
-  Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
-  `docs/client-integrations.md`.
+  v3.0.0 QLoRA at `v3.0.0`. These historical evaluations do not establish
+  competence over the current server's additional tools. See
+  `docs/mind-mem-4b-setup.md`.
+- **Client integrations:** the registry contains 19 AI clients, including
+  11 with MCP configuration formats. `mm install-all` uses each client's
+  supported integration. See `docs/client-integrations.md`.
 
 ### MCP Tools (103)
 Grouped surfaces (full list in `docs/api-reference.md` and
@@ -251,7 +252,7 @@ anchor_history, get_mind_kernel, list_mind_kernels, mic_convert_tool,
 mic_inspect_tool, compile_truth_walkthrough, recall_with_persona,
 pipeline_status, encrypt_file, decrypt_file, graph_query, traverse_graph,
 ontology_load, lint, lint_autofix,
-and 63 more (102 total). Verified against the registry by
+and additional tools listed in the API reference. Names are verified against the registry by
 `scripts/check_tool_surface.py --check-doc-names`, which fails on a tool
 name that no longer exists -- this list previously carried 11 ghosts
 (create_snapshot, briefing, import_memory, audit_replay, ...).

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1621 | **Est. tokens:** ~4782069
-**Generated:** 2026-09-14 15:31 UTC
+**Files:** 1621 | **Est. tokens:** ~4782105
+**Generated:** 2026-09-14 15:47 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~72637 |
+| `./` | 37 | ~72673 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
@@ -128,7 +128,7 @@
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 - `AGENTS.md` (~995 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~4415 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~4451 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `CONTRIBUTING.md` (~753 tok, large) — Contributing to MIND-Mem
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
 - `EVIDENCE.md` (~2303 tok, huge) — Evidence Matrix
