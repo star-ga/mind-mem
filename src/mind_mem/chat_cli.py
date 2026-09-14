@@ -62,11 +62,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="reject",
         help="what to do with an ungrounded answer (default: reject)",
     )
-    parser.add_argument(
+    evidence_group = parser.add_mutually_exclusive_group()
+    evidence_group.add_argument(
         "--require-in-evidence",
+        dest="require_in_evidence",
         action="store_true",
-        help="also reject citations that resolve but were not in the recalled evidence",
+        help="reject citations outside recalled evidence (the default)",
     )
+    evidence_group.add_argument(
+        "--allow-out-of-evidence",
+        dest="require_in_evidence",
+        action="store_false",
+        help="legacy advisory mode; out-of-evidence answers are never marked grounded",
+    )
+    parser.set_defaults(require_in_evidence=True)
     parser.add_argument("--json", action="store_true", help="emit the full result as JSON")
     return parser
 

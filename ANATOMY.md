@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1607 | **Est. tokens:** ~4714828
-**Generated:** 2026-09-14 11:50 UTC
+**Files:** 1608 | **Est. tokens:** ~4721173
+**Generated:** 2026-09-14 11:52 UTC
 
 ## Token Budget Guide
 
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 236 | ~1066709 |
+| `src/mind_mem/` | 236 | ~1066936 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15393 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
-| `src/mind_mem/mcp/tools/` | 29 | ~118183 |
+| `src/mind_mem/mcp/tools/` | 29 | ~118257 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11603 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
-| `src/mind_mem/v4/` | 24 | ~93132 |
-| `tests/` | 699 | ~2079307 |
+| `src/mind_mem/v4/` | 24 | ~95798 |
+| `tests/` | 700 | ~2082685 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -787,9 +787,9 @@
 - `chain_of_note.py` (~1512 tok, huge) — Chain-of-note evidence packing (v3.4.0).
 - `change_stream.py` (~3164 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `chat_citations.py` (~2480 tok, huge) — Citation extraction + validation for the conversational chat layer.
-- `chat_cli.py` (~989 tok, large) — ``mind-mem-chat`` — ask a workspace a question, get cited answers.
+- `chat_cli.py` (~1080 tok, large) — ``mind-mem-chat`` — ask a workspace a question, get cited answers.
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
-- `chat_memory.py` (~3952 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
+- `chat_memory.py` (~4088 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
 - `closed_slots.py` (~6763 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
@@ -913,9 +913,9 @@
 - `agent.py` (~3001 tok, huge) — Agent-bridge + vault MCP tools.
 - `arch_mind.py` (~3475 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
 - `audit.py` (~4247 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
-- `benchmark.py` (~2334 tok, huge) — Benchmark + category-summary MCP tools.
+- `benchmark.py` (~2387 tok, huge) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~2915 tok, huge) — Calibration MCP tools — feedback (quality) + outcome attribution (utility).
-- `chat.py` (~922 tok, large) — Chat surface — grounded question answering over the workspace.
+- `chat.py` (~943 tok, large) — Chat surface — grounded question answering over the workspace.
 - `consolidation.py` (~6957 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
@@ -1108,7 +1108,7 @@
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `kernels.py` (~3819 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_backfill.py` (~3068 tok, huge) — The v4 kind-index build pass — ``mm kinds backfill``'s engine.
-- `kind_summaries.py` (~2669 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
+- `kind_summaries.py` (~5335 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
 - `logging_context.py` (~1424 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
 - `observability.py` (~2993 tok, huge) — v4 observability — counters, timers, histograms, exporters.
 - `pq.py` (~5255 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
@@ -1286,7 +1286,7 @@
 - `test_chain_transaction_capability.py` (~1204 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_chain_truncation.py` (~5069 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_change_stream_backpressure.py` (~956 tok, large) — The change stream's backpressure counters, and the drain that gives
-- `test_chat_with_memory.py` (~5985 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_chat_with_memory.py` (~6346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_check_version.py` (~271 tok, medium) — Tests for version consistency checker."""
 - `test_check_version_gate.py` (~475 tok, medium) — Regression tests for the version-consistency gate.
 - `test_check_workspace_backend.py` (~3248 tok, huge) — Backend-aware workspace validation — ``mcp.infra.workspace._check_workspace``.
@@ -1499,6 +1499,7 @@
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
 - `test_m2_m3_namespace_contract.py` (~3147 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
 - `test_m4_closed_set_slots.py` (~5837 tok, huge) — M4 closed-set slots: declaration, staging, and governed supersession."""
+- `test_m5_enforcement_boundaries.py` (~2970 tok, huge) — M5 output enforcement controls for summaries and evidence scope."""
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.
@@ -1851,7 +1852,7 @@
 - `test_v4_hnsw_kind_index_wiring.py` (~3436 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v4_kernels.py` (~4297 tok, huge) — Tests for the v4 kernel strategy implementations.
 - `test_v4_kernels_wiring.py` (~3137 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_v4_kind_conn_close.py` (~2154 tok, huge) — Regression: ``v4.block_kinds`` / ``v4.kind_summaries`` must CLOSE connections.
+- `test_v4_kind_conn_close.py` (~2201 tok, huge) — Regression: ``v4.block_kinds`` / ``v4.kind_summaries`` must CLOSE connections.
 - `test_v4_kind_summaries_wiring.py` (~2133 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v4_logging_context_wiring.py` (~4154 tok, huge) — ``v4.logging_context`` is WIRED — 5.0.1 restoration slice.
 - `test_v4_metadata_pq_conn_close.py` (~3168 tok, huge) — Regression: ``v4.block_metadata`` / ``v4.pq`` must CLOSE their connections.

@@ -41,7 +41,7 @@ def chat_with_memory(
     limit: int = 8,
     generator: str = "extractive",
     on_invalid: str = "reject",
-    require_in_evidence: bool = False,
+    require_in_evidence: bool = True,
 ) -> str:
     """Answer *question* from workspace memory with verified citations.
 
@@ -53,8 +53,9 @@ def chat_with_memory(
         on_invalid: ``"reject"`` (default) returns the no-record string
             with the violation attached; ``"raise"`` surfaces the
             grounding failure as a structured error.
-        require_in_evidence: Also reject citations that resolve in the
-            workspace but were not part of the recalled evidence.
+        require_in_evidence: Require citations to be among recalled evidence.
+            Defaults to ``True``. Pass ``False`` only for explicit legacy
+            advisory mode; out-of-evidence answers remain ungrounded.
 
     Returns:
         JSON string of the :class:`~mind_mem.chat_memory.ChatAnswer`
