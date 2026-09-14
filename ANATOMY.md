@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1653 | **Est. tokens:** ~4860015
-**Generated:** 2026-09-14 20:41 UTC
+**Files:** 1654 | **Est. tokens:** ~4863671
+**Generated:** 2026-09-14 23:03 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 731 | ~2153586 |
+| `tests/` | 732 | ~2155377 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -104,7 +104,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 35 | ~80081 |
+| `train/` | 35 | ~81946 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -1836,6 +1836,7 @@
 - `test_snapshot_snap_id.py` (~5713 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_spec_binding.py` (~3156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_spend_approval_consumer.py` (~1791 tok, huge) — Controls for the approval parser and the RunPod launch boundary."""
 - `test_sqlite_handle_close_tool_output_hnsw.py` (~2197 tok, huge) — Every SQLite connection ``tool_output/store.py`` opens must be CLOSED before
 - `test_sqlite_index.py` (~5547 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_sqlite_index_backends.py` (~2781 tok, huge) — Backend-parity regression tests for ``sqlite_index`` (audit bugs 4, 9, 13, 14).
@@ -1973,11 +1974,11 @@
 - `qlora_local_3080.py` (~1182 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
 - `qwen35_text_config_control.py` (~1075 tok, large) — Offline smoke control for the Qwen3.5 composite-config adapter.
 - `resume_pod_train.sh` (~1220 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
-- `runpod_deploy.py` (~6445 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_deploy.py` (~7209 tok, huge) — End-to-end RunPod driver for full-FT on an explicitly configured base.
 - `runpod_full_ft.py` (~2669 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `ship_gguf_ollama_v4.1.0.py` (~1754 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.0.
 - `ship_gguf_ollama_v4.1.1.py` (~1804 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
-- `spend_guard.py` (~2040 tok, huge) — spend_guard — mechanical interlock on cloud spend.
+- `spend_guard.py` (~3141 tok, huge) — spend_guard — mechanical interlock on cloud spend.
 - `train_qlora.py` (~1433 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `training_readiness_manifest.py` (~3422 tok, huge) — Create a deterministic, source-bound training-readiness manifest.
 - `upload_to_hf.py` (~6912 tok, huge) — Push the retrained checkpoint + model card to star-ga/mind-mem-4b.
