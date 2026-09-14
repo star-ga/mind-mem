@@ -101,7 +101,8 @@ mm import --from qdrant --endpoint https://qdrant.example \
 
 Use `--text-field` when the collection stores text under a different payload
 key. `--page-size`, `--max-pages`, `--max-records`,
-`--max-response-bytes`, and `--timeout` bound the export. Pinecone and
+`--max-response-bytes`, and `--max-total-response-bytes` bound the export;
+`--timeout` bounds each HTTP request. Pinecone and
 Weaviate endpoint importers remain open and are refused as deferred systems.
 
 ## Local retrieval receipts

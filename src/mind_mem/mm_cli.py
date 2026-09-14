@@ -1416,6 +1416,31 @@ def _cmd_import(args: argparse.Namespace) -> int:
     """
     from mind_mem.importers import ImporterError, UnsupportedSystemError, run_import
 
+    local_systems = {"agentmem", "chatjson", "chroma", "letta", "markdown", "mem0"}
+    if args.source_system in local_systems:
+        qdrant_args = (
+            ("endpoint", args.endpoint),
+            ("collection", args.collection),
+            ("api-key-env", args.api_key_env),
+            ("text-field", args.text_field),
+            ("page-size", args.page_size),
+            ("max-pages", args.max_pages),
+            ("max-records", args.max_records),
+            ("max-response-bytes", args.max_response_bytes),
+            ("max-total-response-bytes", args.max_total_response_bytes),
+            ("timeout", args.timeout),
+        )
+        supplied = [f"--{name}" for name, value in qdrant_args if value is not None]
+        if supplied:
+            print(
+                "mm import: Qdrant endpoint options are only valid with --from qdrant: " + ", ".join(supplied),
+                file=sys.stderr,
+            )
+            return IMPORT_EXIT_BAD_DUMP
+
+    def qdrant_default(value: Any, default: Any) -> Any:
+        return default if value is None else value
+
     try:
         result = run_import(
             _workspace(),
@@ -1429,12 +1454,13 @@ def _cmd_import(args: argparse.Namespace) -> int:
             endpoint=args.endpoint,
             collection=args.collection,
             api_key_env=args.api_key_env,
-            qdrant_text_field=args.text_field,
-            qdrant_page_size=args.page_size,
-            qdrant_max_pages=args.max_pages,
-            qdrant_max_records=args.max_records,
-            qdrant_max_response_bytes=args.max_response_bytes,
-            qdrant_timeout=args.timeout,
+            qdrant_text_field=qdrant_default(args.text_field, "text"),
+            qdrant_page_size=qdrant_default(args.page_size, 100),
+            qdrant_max_pages=qdrant_default(args.max_pages, 1000),
+            qdrant_max_records=qdrant_default(args.max_records, 100000),
+            qdrant_max_response_bytes=qdrant_default(args.max_response_bytes, 8 * 1024 * 1024),
+            qdrant_max_total_response_bytes=qdrant_default(args.max_total_response_bytes, 64 * 1024 * 1024),
+            qdrant_timeout=qdrant_default(args.timeout, 30.0),
         )
     except UnsupportedSystemError as exc:
         print(f"mm import: {exc}", file=sys.stderr)
@@ -4944,12 +4970,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_import.add_argument("--endpoint", help="Qdrant REST endpoint (required for --from qdrant).")
     p_import.add_argument("--collection", help="Qdrant collection (required for --from qdrant).")
     p_import.add_argument("--api-key-env", help="Environment variable containing the Qdrant API key.")
-    p_import.add_argument("--text-field", default="text", help="Declared Qdrant payload field containing text (default: text).")
-    p_import.add_argument("--page-size", type=int, default=100, help="Qdrant page size, bounded to 100 (default: 100).")
-    p_import.add_argument("--max-pages", type=int, default=1000, help="Qdrant page bound (default: 1000).")
-    p_import.add_argument("--max-records", type=int, default=100000, help="Qdrant record bound (default: 100000).")
-    p_import.add_argument("--max-response-bytes", type=int, default=8 * 1024 * 1024, help="Qdrant response-byte bound (default: 8 MiB).")
-    p_import.add_argument("--timeout", type=float, default=30.0, help="Qdrant request timeout in seconds (default: 30).")
+    p_import.add_argument("--text-field", default=None, help="Declared Qdrant payload field containing text (default: text).")
+    p_import.add_argument("--page-size", type=int, default=None, help="Qdrant page size, bounded to 100 (default: 100).")
+    p_import.add_argument("--max-pages", type=int, default=None, help="Qdrant page bound (default: 1000).")
+    p_import.add_argument("--max-records", type=int, default=None, help="Qdrant record bound (default: 100000).")
+    p_import.add_argument("--max-response-bytes", type=int, default=None, help="Qdrant response-byte bound (default: 8 MiB).")
+    p_import.add_argument(
+        "--max-total-response-bytes", type=int, default=None, help="Qdrant cumulative response-byte bound (default: 64 MiB)."
+    )
+    p_import.add_argument("--timeout", type=float, default=None, help="Qdrant per-request timeout in seconds (default: 30).")
     p_import.add_argument(
         "--dedup-near",
         action="store_true",

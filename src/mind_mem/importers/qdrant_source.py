@@ -19,14 +19,35 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .records import ImportParseError
 
-__all__ = ["MAX_PAGE_SIZE", "MAX_PAGES", "MAX_RECORDS", "MAX_RESPONSE_BYTES", "scroll_qdrant"]
+__all__ = [
+    "MAX_PAGE_SIZE",
+    "MAX_PAGES",
+    "MAX_RECORDS",
+    "MAX_RESPONSE_BYTES",
+    "MAX_TOTAL_RESPONSE_BYTES",
+    "scroll_qdrant",
+]
 
 MAX_PAGE_SIZE = 100
 MAX_PAGES = 1_000
 MAX_RECORDS = 100_000
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+MAX_TOTAL_RESPONSE_BYTES = 64 * 1024 * 1024
 MAX_COLLECTION_LENGTH = 255
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+class _DuplicateKeyError(ValueError):
+    """A JSON object repeated a key and cannot be trusted as a receipt."""
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _DuplicateKeyError(f"duplicate JSON object key {key!r}")
+        result[key] = value
+    return result
 
 
 class _RejectRedirect(HTTPRedirectHandler):
@@ -73,10 +94,13 @@ def _api_key(api_key_env: str | None) -> str | None:
 
 def _decode_page(raw: bytes, page: int) -> tuple[list[Mapping[str, Any]], Any]:
     try:
-        payload = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        payload = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
+    except (UnicodeDecodeError, json.JSONDecodeError, _DuplicateKeyError) as exc:
+        if isinstance(exc, _DuplicateKeyError):
+            raise ImportParseError(f"qdrant page {page} contains duplicate JSON object keys") from exc
         raise ImportParseError(f"qdrant page {page} is not valid JSON") from exc
-    if not isinstance(payload, Mapping) or payload.get("status") not in {None, "ok"}:
+    status = payload.get("status") if isinstance(payload, Mapping) else None
+    if not isinstance(payload, Mapping) or (status is not None and status != "ok"):
         raise ImportParseError(f"qdrant page {page} has an invalid status envelope")
     result = payload.get("result")
     if not isinstance(result, Mapping) or not isinstance(result.get("points"), list):
@@ -96,6 +120,7 @@ def scroll_qdrant(
     max_pages: int = MAX_PAGES,
     max_records: int = MAX_RECORDS,
     max_response_bytes: int = MAX_RESPONSE_BYTES,
+    max_total_response_bytes: int = MAX_TOTAL_RESPONSE_BYTES,
     timeout: float = 30.0,
 ) -> tuple[Mapping[str, Any], ...]:
     """Read points from one Qdrant collection using bounded REST scrolls.
@@ -112,6 +137,8 @@ def scroll_qdrant(
         raise ImportParseError(f"qdrant max records must be an integer from 1 to {MAX_RECORDS}")
     if type(max_response_bytes) is not int or not 1 <= max_response_bytes <= MAX_RESPONSE_BYTES:
         raise ImportParseError(f"qdrant response bound must be an integer from 1 to {MAX_RESPONSE_BYTES}")
+    if type(max_total_response_bytes) is not int or not 1 <= max_total_response_bytes <= MAX_TOTAL_RESPONSE_BYTES:
+        raise ImportParseError(f"qdrant cumulative response bound must be an integer from 1 to {MAX_TOTAL_RESPONSE_BYTES}")
     if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or not 0 < timeout <= 300:
         raise ImportParseError("qdrant timeout must be a number greater than 0 and at most 300 seconds")
 
@@ -124,20 +151,27 @@ def scroll_qdrant(
     points: list[Mapping[str, Any]] = []
     offset: Any = None
     seen_offsets: set[str] = set()
+    total_response_bytes = 0
     for page in range(1, max_pages + 1):
+        remaining = max_total_response_bytes - total_response_bytes
+        if remaining <= 0:
+            raise ImportParseError(f"qdrant cumulative response exceeds {max_total_response_bytes} bytes")
         body: dict[str, Any] = {"limit": page_size, "with_payload": True, "with_vector": False}
         if offset is not None:
             body["offset"] = offset
         request = Request(url, data=json.dumps(body, separators=(",", ":")).encode("utf-8"), headers=headers, method="POST")
         try:
             with _OPENER.open(request, timeout=float(timeout)) as response:  # nosec B310 — endpoint is scheme/host validated above
-                raw = response.read(max_response_bytes + 1)
+                raw = response.read(min(max_response_bytes, remaining) + 1)
         except HTTPError as exc:
             raise ImportParseError(f"qdrant endpoint returned HTTP {exc.code}") from exc
         except (OSError, URLError, TimeoutError) as exc:
             raise ImportParseError(f"qdrant endpoint request failed ({type(exc).__name__})") from exc
         if len(raw) > max_response_bytes:
             raise ImportParseError(f"qdrant response exceeds {max_response_bytes} bytes")
+        if total_response_bytes + len(raw) > max_total_response_bytes:
+            raise ImportParseError(f"qdrant cumulative response exceeds {max_total_response_bytes} bytes")
+        total_response_bytes += len(raw)
         page_points, next_offset = _decode_page(raw, page)
         if next_offset is not None and (
             isinstance(next_offset, bool) or not isinstance(next_offset, (str, int)) or not str(next_offset).strip()

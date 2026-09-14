@@ -126,6 +126,17 @@ def test_qdrant_rejects_repeated_offset(qdrant_server: Any) -> None:
     assert len(handler.requests) == 2
 
 
+def test_qdrant_enforces_cumulative_response_bound(qdrant_server: Any) -> None:
+    endpoint, handler = qdrant_server
+    first = json.dumps({"status": "ok", "result": handler.pages[None]}).encode("utf-8")
+    second = json.dumps({"status": "ok", "result": handler.pages[2]}).encode("utf-8")
+    total_limit = max(len(first), len(second)) + 1
+    assert total_limit < len(first) + len(second)
+    with pytest.raises(ImportParseError, match="cumulative response"):
+        scroll_qdrant(endpoint, "notes", max_response_bytes=max(len(first), len(second)), max_total_response_bytes=total_limit)
+    assert len(handler.requests) == 2
+
+
 def test_qdrant_refuses_redirect_and_invalid_offset(qdrant_server: Any) -> None:
     endpoint, handler = qdrant_server
     handler.response_override = json.dumps({"status": "ok", "result": {"points": [], "next_page_offset": {"unexpected": "object"}}}).encode(
@@ -152,6 +163,7 @@ def test_qdrant_refuses_redirect_and_invalid_offset(qdrant_server: Any) -> None:
     [
         (b"not-json", "not valid JSON"),
         (b'{"status":"error","result":{}}', "invalid status"),
+        (b'{"status":{},"result":{"points":[]}}', "invalid status"),
         (b'{"status":"ok","result":{}}', "missing result.points"),
     ],
 )
@@ -159,6 +171,13 @@ def test_qdrant_rejects_invalid_page_shapes(qdrant_server: Any, payload: bytes, 
     endpoint, handler = qdrant_server
     handler.response_override = payload
     with pytest.raises(ImportParseError, match=message):
+        scroll_qdrant(endpoint, "notes")
+
+
+def test_qdrant_rejects_duplicate_json_keys(qdrant_server: Any) -> None:
+    endpoint, handler = qdrant_server
+    handler.response_override = b'{"status":"ok","result":{"points":[],"points":[]}}'
+    with pytest.raises(ImportParseError, match="duplicate JSON object keys"):
         scroll_qdrant(endpoint, "notes")
 
 
@@ -180,6 +199,39 @@ def test_qdrant_missing_key_fails_before_request(qdrant_server: Any, monkeypatch
     with pytest.raises(ImportParseError, match="is not set"):
         scroll_qdrant(endpoint, "notes", api_key_env="QDRANT_MISSING_KEY")
     assert handler.requests == []
+
+
+@pytest.mark.parametrize("system", ["agentmem", "chatjson", "chroma", "letta", "markdown", "mem0"])
+def test_local_imports_require_path_before_source_scan(system: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    workspace = _workspace(tmp_path)
+
+    def fail_if_loaded(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("local source was scanned before path validation")
+
+    monkeypatch.setattr("mind_mem.importers.engine.load_source", fail_if_loaded)
+    with pytest.raises(ImportParseError, match="non-empty path"):
+        run_import(workspace, system, "")
+    assert not (Path(workspace) / "memory" / "IMPORTED.md").exists()
+
+
+def test_qdrant_rejects_local_path_before_endpoint_request(qdrant_server: Any, tmp_path: Path) -> None:
+    endpoint, handler = qdrant_server
+    with pytest.raises(ImportParseError, match="do not accept a local path"):
+        run_import(tmp_path.as_posix(), "qdrant", "pretend-local-dump.json", endpoint=endpoint, collection="notes")
+    assert handler.requests == []
+
+
+def test_cli_rejects_qdrant_options_on_local_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workspace = _workspace(tmp_path)
+    dump = tmp_path / "mem0.json"
+    dump.write_text(json.dumps({"results": [{"id": "local-1", "memory": "local text"}]}), encoding="utf-8")
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
+    exit_code = mm_cli.main(["import", "--from", "mem0", str(dump), "--endpoint", "http://127.0.0.1:6333"])
+    assert exit_code == 3
+    assert "only valid with --from qdrant" in capsys.readouterr().err
+    assert not (Path(workspace) / "memory" / "IMPORTED.md").exists()
 
 
 def test_qdrant_rejects_duplicate_source_ids() -> None:
