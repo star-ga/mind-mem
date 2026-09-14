@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1574 | **Est. tokens:** ~4692534
-**Generated:** 2026-09-14 09:27 UTC
+**Files:** 1575 | **Est. tokens:** ~4670499
+**Generated:** 2026-09-14 09:35 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206359 |
+| `docs/` | 93 | ~206800 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -61,7 +61,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9456 |
-| `scripts/` | 21 | ~65991 |
+| `scripts/` | 21 | ~66207 |
 | `sdk/go/` | 10 | ~9098 |
 | `sdk/js/` | 6 | ~4864 |
 | `sdk/js/src/` | 5 | ~3178 |
@@ -73,21 +73,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 233 | ~1069617 |
+| `src/mind_mem/` | 233 | ~1069643 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
-| `src/mind_mem/mcp/tools/` | 29 | ~116783 |
+| `src/mind_mem/mcp/tools/` | 29 | ~117112 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11515 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 690 | ~2078913 |
+| `tests/` | 691 | ~2055866 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -423,7 +423,7 @@
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~16554 tok, huge) — Configuration Reference
+- `configuration.md` (~16577 tok, huge) — Configuration Reference
 ### `docs/decisions/`
 
 - `author-identity.md` (~3174 tok, huge) — Commit author identity — policy, measured state, and the open decision
@@ -462,11 +462,11 @@
 - `federation-setup.md` (~2406 tok, huge) — mind-mem federation & multi-machine setup
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `governance.md` (~1572 tok, huge) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~1740 tok, huge) — MIND-Mem — governance design (5 layers)
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
-- `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
-- `integrations.md` (~1539 tok, huge) — Integrations
+- `install-guide.md` (~2888 tok, huge) — Installation guide — every step + every option
+- `integrations.md` (~1567 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1625 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1770 tok, huge) — MCP Integration Guide
@@ -498,7 +498,7 @@
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `review.md` (~1647 tok, huge) — `mm review` — batch approval for the HITL queue
 - `roadmap-v4.md` (~11235 tok, huge) — mind-mem v4.0 — Design Rationale
-- `roadmap.md` (~14073 tok, huge) — Roadmap
+- `roadmap.md` (~14200 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-audit-sow.md` (~3353 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
 ### `docs/security-baselines/`
@@ -508,7 +508,7 @@
 
 - `security-model.md` (~823 tok, large) — Security Model
 - `setup.md` (~2221 tok, huge) — Setup
-- `status.md` (~1335 tok, large) — MIND-Mem — implementation status (alignment companion)
+- `status.md` (~1397 tok, large) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
@@ -597,7 +597,7 @@
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
-- `check_docs_alignment.py` (~16352 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
+- `check_docs_alignment.py` (~16568 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -746,7 +746,7 @@
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `calibration.py` (~7500 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
-- `capture.py` (~5255 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
+- `capture.py` (~5281 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6359 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~4689 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
 - `causal_lm_loader.py` (~552 tok, large) — Load causal language models with the narrow Qwen3.5 config workaround.
@@ -884,7 +884,7 @@
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~14742 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~15071 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~7091 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1811 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
@@ -1304,7 +1304,6 @@
 - `test_dependency_audit_closure.py` (~1464 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
-- `test_docs_alignment.py` (~25305 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_docs_claims.py` (~818 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_doctor_rebuild_cache_default_backend.py` (~1338 tok, large) — ``mm doctor --rebuild-cache`` must not crash on the DEFAULT markdown backend.
 - `test_documented_surfaces_exist.py` (~2128 tok, huge) — Documentation that names a symbol, a backend or an installable extra has
@@ -1570,6 +1569,7 @@
 - `test_postgres_replica_routing.py` (~2241 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""
 - `test_prefetch_context.py` (~1496 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_proposal_field_screening.py` (~1229 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_protection.py` (~2068 tok, huge) — Tests for mind_mem.protection (v3.3.0+)."""
 - `test_q1616_preimage.py` (~1496 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_quality_gate.py` (~1971 tok, huge) — Tests for the v3.11.0 deterministic block quality gate.
@@ -1601,6 +1601,7 @@
 - `test_recall_attestation.py` (~5631 tok, huge) — Tests for the per-run recall attestation (recall_attestation.py).
 - `test_recall_attestation_anchor.py` (~4089 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_attestation_completeness.py` (~3691 tok, huge) — An attestation must distinguish two runs that served different answers.
+- `test_recall_attestation_failure_boundary.py` (~1029 tok, large) — Failure-boundary controls for the post-cache recall attestation rail."""
 - `test_recall_attestation_served_backend.py` (~3611 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_attestation_unrequested_leg.py` (~789 tok, large) — An unrequested vector leg must not be attested as degraded.
 - `test_recall_attestation_v2.py` (~8107 tok, huge) — Acceptance gate for the ``RECALL_ATTEST_v2`` preimage.

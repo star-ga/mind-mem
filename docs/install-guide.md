@@ -358,8 +358,8 @@ Restart the CLI. Most clients only re-read MCP config at startup.
 
 ## Versions
 
-- mind-mem: 4.4.0 (PyPI)
-- mind-mem-4b model: v4 weights (full fine-tune of Qwen3.5-4B), **109/109 on the un-softened eval harness** across 11 categories — see model card on Hugging Face for the held-out paraphrase results and known limitations
+- mind-mem: 5.0.2 (PyPI)
+- mind-mem-4b model: v4.1.1 weights (full fine-tune of Qwen3.5-4B), **reported 133/133** — 111 main probes plus 22 held-out paraphrases, two using inference-time anchors. This is the published evaluation, not a new independent run; see the [model card on Hugging Face](https://huggingface.co/star-ga/mind-mem-4b) for the breakdown and known limitations.
 - Postgres: 16+ recommended, 14+ supported
 - Postgres pgvector: 0.6.0+
 - Ollama: 0.3.0+

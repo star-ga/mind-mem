@@ -327,11 +327,11 @@ def propose_update(
     # refusal leaves no trace of content it declined to store.
     from mind_mem.compliance.prewrite import PreWritePolicy, screen
     from mind_mem.compliance.provenance_policy import ProvenanceConfigError, ProvenanceRequired
-    from mind_mem.compliance.redaction import RedactionRefused
+    from mind_mem.compliance.redaction import MODE_OFF, RedactionConfigError, RedactionRefused
 
     try:
         _cp_policy = PreWritePolicy.resolve(ws)
-    except ProvenanceConfigError as exc:
+    except (ProvenanceConfigError, RedactionConfigError) as exc:
         # A malformed policy must not crash the governed write path. Resolving
         # the policy is config parsing, not a decision about this write, and an
         # unhandled exception here would take down the tool rather than
@@ -342,27 +342,34 @@ def propose_update(
         _log.warning("compliance_config_invalid", block_type=block_type, detail=str(exc))
         return json.dumps({"error": "compliance_config_invalid", "reason": str(exc)}, indent=2)
     try:
-        _cp = screen(
-            statement,
-            policy=_cp_policy,
-            # The policy keys off the BLOCK-METADATA field names, which are
-            # the names these values are written under, not the Python
-            # parameter names. Passing the snake_case parameter names here
-            # would make every field look absent, so a ``required`` policy
-            # would refuse an attributed write as loudly as an unattributed
-            # one -- a refusal that cannot be satisfied by doing the right
-            # thing. Caught by a positive control that supplied attribution
-            # and was refused anyway.
-            provenance={
-                "ActorId": actor_id,
-                "ActorRole": actor_role,
-                "SessionId": session_id,
-                "ToolId": tool_id,
-                "Purpose": purpose,
-            },
-            target=block_type,
-            agent=actor_id,
-        )
+        # Screen every caller-supplied field that will be persisted, before
+        # recording any audit metadata. Otherwise a secret in an actor id can
+        # reach the redaction ledger before its own field is refused.
+        _cp_fields = {"statement": statement, "rationale": rationale}
+        _cp_fields["confidence"] = confidence
+        _cp_fields.update({f"tag:{i}": tag for i, tag in enumerate(raw_tags)})
+        _cp_fields.update({f"provenance:{key}": value for key, value in provenance.items()})
+        _cp_provenance = {PROVENANCE_FIELDS[key]: value for key, value in provenance.items()}
+        _cp_results = {}
+        for _field, _value in _cp_fields.items():
+            # With redaction off, provenance needs one check, and no other
+            # field needs a detector pass or a ledger entry.
+            if _field != "statement" and _cp_policy.redaction_mode == MODE_OFF:
+                continue
+            _screened = screen(
+                _value,
+                policy=_cp_policy,
+                provenance=_cp_provenance,
+                target=f"{block_type}.{_field}",
+                record=False,
+            )
+            # Identity and content-source labels must remain attributable to
+            # the caller. Redacting an identity would silently invent another
+            # actor or provenance class, so refuse that proposal instead.
+            _identity_field = _field == "confidence" or (_field.startswith("provenance:") and _field != "provenance:purpose")
+            if _identity_field and _screened.changed:
+                return json.dumps({"error": "redaction_identity_refused", "field": _field.rsplit(":", 1)[-1]})
+            _cp_results[_field] = _screened
     except ProvenanceRequired as exc:
         metrics.inc("compliance_provenance_refusals")
         _log.warning("compliance_provenance_refused", block_type=block_type, detail=str(exc))
@@ -371,9 +378,21 @@ def propose_update(
         metrics.inc("compliance_redaction_refusals")
         _log.warning("compliance_redaction_refused", block_type=block_type, detail=str(exc))
         return json.dumps({"error": "redaction_refused", "reason": str(exc)}, indent=2)
-    # A ``redact`` workspace rewrites the text; every other mode returns it
-    # unchanged, so this assignment is a no-op off the redact path.
-    statement = _cp.text
+    statement = _cp_results["statement"].text
+    if _cp_policy.redaction_mode != MODE_OFF:
+        rationale = _cp_results["rationale"].text
+        raw_tags = [_cp_results[f"tag:{i}"].text for i in range(len(raw_tags))]
+        if "purpose" in provenance:
+            provenance["purpose"] = _cp_results["provenance:purpose"].text
+        from mind_mem.compliance.audit import record_redaction
+
+        for _field, _screened in _cp_results.items():
+            record_redaction(
+                ws,
+                _screened.redaction,
+                target=f"{block_type}.{_field}",
+                agent=provenance.get("actor_id", ""),
+            )
 
     # Quality gate pre-write check (v3.12.0 Theme B).
     from mind_mem.mcp.infra.config import _get_quality_gate_mode
