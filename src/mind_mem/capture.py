@@ -25,6 +25,7 @@ import hashlib
 import os
 import re
 import sys
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -350,7 +351,13 @@ def _signal_block(sig: dict, sig_id: str, date_str: str) -> dict[str, Any]:
     return block
 
 
-def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
+def append_signals(
+    workspace: str,
+    signals: list[dict],
+    date_str: str,
+    *,
+    provenance: Mapping[str, object] | None = None,
+) -> int:
     """Land captured signals as governed ``SIG-`` blocks. Returns the count.
 
     Every signal goes through ``BlockStore.write_block`` inside one
@@ -458,6 +465,7 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
             tier=IngestTier.AUTO_CAPTURE,
             actor="capture",
             target_file=signals_path,
+            provenance=provenance,
         ):
             for block in blocks:
                 store.write_block(block)

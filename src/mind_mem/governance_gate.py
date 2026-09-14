@@ -896,6 +896,7 @@ class GovernanceGate:
         actor: str = "",
         target_file: str = "",
         metadata: Optional[dict] = None,
+        provenance: Optional[Mapping[str, object]] = None,
     ) -> Iterator[AdmissionReceipt]:
         """Admit and authorise a write to exactly *block_id*.
 
@@ -908,7 +909,9 @@ class GovernanceGate:
                 that is not an approved proposal cannot mint a servable
                 status, whatever the caller passes.
         """
-        receipt = self._mint(action, block_id, content, BLOCK, frozenset({str(block_id)}), tier, actor, target_file, metadata)
+        receipt = self._mint(
+            action, block_id, content, BLOCK, frozenset({str(block_id)}), tier, actor, target_file, metadata, provenance=provenance
+        )
         yield from self._run_write_scope(receipt, action, str(block_id), target_file)
 
     @contextmanager
@@ -923,6 +926,7 @@ class GovernanceGate:
         actor: str = "",
         target_file: str = "",
         metadata: Optional[dict] = None,
+        provenance: Optional[Mapping[str, object]] = None,
     ) -> Iterator[AdmissionReceipt]:
         """Admit and authorise writes to a fixed set of block ids.
 
@@ -936,7 +940,7 @@ class GovernanceGate:
                 :meth:`admit_block` is.
         """
         covers = frozenset(str(bid) for bid in block_ids)
-        receipt = self._mint(action, batch_id, content, BATCH, covers, tier, actor, target_file, metadata)
+        receipt = self._mint(action, batch_id, content, BATCH, covers, tier, actor, target_file, metadata, provenance=provenance)
         yield from self._run_write_scope(receipt, action, str(batch_id), target_file)
 
     @contextmanager
@@ -947,6 +951,7 @@ class GovernanceGate:
         actor: str = "",
         target_file: str = "",
         metadata: Optional[dict] = None,
+        provenance: Optional[Mapping[str, object]] = None,
     ) -> Iterator[AdmissionReceipt]:
         """Admit one approved proposal and authorise the blocks it writes.
 
@@ -963,7 +968,18 @@ class GovernanceGate:
         structural — the one scope that reaches ``ACTIVE`` gives its
         caller nothing to pass.
         """
-        receipt = self._mint("APPLY", proposal_id, content, PROPOSAL, frozenset(), IngestTier.PROPOSAL_APPLY, actor, target_file, metadata)
+        receipt = self._mint(
+            "APPLY",
+            proposal_id,
+            content,
+            PROPOSAL,
+            frozenset(),
+            IngestTier.PROPOSAL_APPLY,
+            actor,
+            target_file,
+            metadata,
+            provenance=provenance,
+        )
         yield from self._run_write_scope(receipt, "APPLY", str(proposal_id), target_file)
 
     @contextmanager
@@ -976,6 +992,7 @@ class GovernanceGate:
         actor: str = "",
         target_file: str = "",
         metadata: Optional[dict] = None,
+        provenance: Optional[Mapping[str, object]] = None,
     ) -> Iterator[AdmissionReceipt]:
         """Admit one operator-approved knowledge-graph edge.
 
@@ -1022,7 +1039,9 @@ class GovernanceGate:
                 "after anything else is a block scope wearing an edge's tier; open admit_block."
             )
         covers = frozenset({subject}) | frozenset(str(bid) for bid in block_ids)
-        receipt = self._mint("WRITE", subject, content, EDGE, covers, IngestTier.EDGE_APPROVAL, actor, target_file, metadata)
+        receipt = self._mint(
+            "WRITE", subject, content, EDGE, covers, IngestTier.EDGE_APPROVAL, actor, target_file, metadata, provenance=provenance
+        )
         yield from self._run_write_scope(receipt, "WRITE", subject, target_file)
 
     @contextmanager
@@ -1034,6 +1053,7 @@ class GovernanceGate:
         actor: str = "",
         target_file: str = "",
         metadata: Optional[dict] = None,
+        provenance: Optional[Mapping[str, object]] = None,
     ) -> Iterator[AdmissionReceipt]:
         """Admit one derived artefact — a compiled page or a graph edge.
 
@@ -1090,7 +1110,16 @@ class GovernanceGate:
                 "wearing an artefact's tier; open admit_block."
             )
         receipt = self._mint(
-            "WRITE", subject, content, ARTIFACT, frozenset({subject}), IngestTier.DERIVED_ARTIFACT, actor, target_file, metadata
+            "WRITE",
+            subject,
+            content,
+            ARTIFACT,
+            frozenset({subject}),
+            IngestTier.DERIVED_ARTIFACT,
+            actor,
+            target_file,
+            metadata,
+            provenance=provenance,
         )
         yield from self._run_write_scope(receipt, "WRITE", subject, target_file)
 
@@ -1458,6 +1487,7 @@ class GovernanceGate:
         metadata: Optional[dict],
         *,
         operation: str = OP_WRITE,
+        provenance: Optional[Mapping[str, object]] = None,
     ) -> AdmissionReceipt:
         """Admit the mutation, then read the chain entry back before trusting it.
 
@@ -1476,6 +1506,7 @@ class GovernanceGate:
         refuse it, but only after the chain entry had already landed.
         """
         if operation == OP_WRITE:
+            self._check_provenance(provenance)
             self._check_tier(kind, block_id, tier)
         elif tier is not None:
             raise GovernanceBypassError(
@@ -1522,6 +1553,36 @@ class GovernanceGate:
             actor=actor or _current_agent(),
             operation=operation,
             evidence_id=evidence_id,
+        )
+
+    def _check_provenance(self, provenance: Optional[Mapping[str, object]]) -> None:
+        """Enforce the current workspace write provenance policy before minting.
+
+        The governance receipt ``actor`` is deliberately not treated as any
+        of the five block provenance fields.  Callers that have attribution
+        must pass it explicitly; missing attribution under ``required`` is
+        refused before evidence or the hash chain is touched.
+        """
+        from .block_provenance import PROVENANCE_FIELDS
+        from .compliance.provenance_policy import (
+            POLICY_OFF,
+            require_provenance,
+            resolve_policy,
+            resolve_required_fields,
+        )
+
+        supplied = provenance or {}
+        canonical = {
+            PROVENANCE_FIELDS[key] if key in PROVENANCE_FIELDS else key: value
+            for key, value in supplied.items()
+            if key in PROVENANCE_FIELDS or key in PROVENANCE_FIELDS.values()
+        }
+        policy = resolve_policy(self._ws)
+        required = resolve_required_fields(self._ws) if policy != POLICY_OFF else ()
+        require_provenance(
+            canonical,
+            policy=policy,
+            required=required,
         )
 
     @staticmethod

@@ -1940,9 +1940,11 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
 
     # Governance gate: verify spec-hash BEFORE any ops execute.
     # GovernanceBypassError propagates up to abort the apply.
+    from .block_provenance import extract_provenance
     from .governance_gate import get_gate
 
     gate = get_gate(ws)
+    proposal_provenance = extract_provenance(proposal)
     # One admission per proposal, opened BEFORE any op runs and held
     # for the whole execution: the ops below write blocks through
     # store.write_block, which refuses a write with no receipt open.
@@ -1958,6 +1960,7 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
             actor="apply_engine",
             target_file=source_file,
             metadata={"proposal_id": proposal_id, "phase": "pre_apply"},
+            provenance=proposal_provenance,
         ):
             # 6. Execute ops with WAL protection
             print(f"\n--- Executing {len(proposal.get('Ops', []))} Ops (WAL-protected) ---")

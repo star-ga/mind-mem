@@ -538,7 +538,7 @@ def propose_update(
     if provenance:
         signal["provenance"] = provenance
 
-    written = append_signals(ws, [signal], today)
+    written = append_signals(ws, [signal], today, provenance=provenance)
 
     metrics.inc("mcp_proposals")
     _log.info("mcp_propose", block_type=block_type, confidence=confidence, written=written)
