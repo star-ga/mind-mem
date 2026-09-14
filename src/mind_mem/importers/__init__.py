@@ -34,12 +34,11 @@ is kept but is explicitly low value: a vector store persists embeddings,
 which are re-derived on import, so only its optional source-text array
 is worth anything — see :func:`mind_mem.importers.parsers.parse_chroma`.
 
-Every supported source is a local file or a local directory, so an
-import never opens a socket and never needs a credential. The
-endpoint-backed stores in the roadmap line (pinecone / weaviate /
-qdrant) are *deferred*, not silently missing: asking for one raises
-:class:`~mind_mem.importers.records.UnsupportedSystemError` naming it
-and saying why.
+The supported source set remains local-file/local-directory first, so ordinary
+imports never open a socket. Qdrant additionally has an explicit endpoint-only
+scroll adapter: it is never selected by a plain file import, requires a
+collection and optional environment-backed API key, and still lands through
+the same quarantine/release path. Pinecone and Weaviate remain deferred.
 """
 
 from __future__ import annotations
@@ -82,6 +81,7 @@ from .records import (
 __all__ = [
     "SUPPORTED_SYSTEMS",
     "DEFERRED_SYSTEMS",
+    "ENDPOINT_SYSTEMS",
     "GATED_SYSTEMS",
     "DIRECTORY_SYSTEMS",
     "ALL_SYSTEMS",
@@ -120,16 +120,22 @@ __all__ = [
 # shipped subset. Sorted, and the CLI choice list is held in lockstep.
 SUPPORTED_SYSTEMS: tuple[str, ...] = ("agentmem", "chatjson", "chroma", "letta", "markdown", "mem0")
 
-# deferred: pinecone / weaviate / qdrant importers need a live endpoint +
-# an API credential to page through vectors, which the no-network test
-# gate (and every offline migration) cannot provide. Upgrade path: add a
-# client-backed reader per system behind an explicit `--endpoint` /
-# `--api-key-env` flag pair, keeping this file-based path as the default.
+# deferred: Pinecone and Weaviate need a live endpoint + an API credential
+# to page through vectors, which the no-network test gate (and every offline
+# migration) cannot provide. Qdrant is separately exposed through the bounded
+# stdlib scroll adapter below; keeping it out of this mapping's supported
+# local-file set prevents accidental network access.
 DEFERRED_SYSTEMS: dict[str, str] = {
     "pinecone": "requires a live Pinecone index endpoint + API key to page vectors",
-    "qdrant": "requires a live Qdrant endpoint (or a snapshot restore) to read points",
+    "qdrant": "requires explicit endpoint mode (a bounded REST scroll adapter is available)",
     "weaviate": "requires a live Weaviate endpoint + schema introspection to read objects",
 }
+
+# Qdrant is endpoint-backed but deliberately not part of SUPPORTED_SYSTEMS:
+# keeping it out preserves the file-import choice list and makes accidental
+# network access impossible. ``run_import(..., endpoint=...)`` is the sole
+# explicit opt-in entry point.
+ENDPOINT_SYSTEMS: dict[str, str] = {"qdrant": "requires --endpoint and --collection; reads via bounded REST scroll"}
 
 ALL_SYSTEMS: tuple[str, ...] = tuple(sorted(SUPPORTED_SYSTEMS + tuple(DEFERRED_SYSTEMS)))
 
@@ -187,5 +193,11 @@ def resolve_system(system: str) -> str:
             f"import from {slug!r} is DEFERRED and not supported: {DEFERRED_SYSTEMS[slug]}. "
             f"mind-mem ships the local-file and local-directory importers only ({supported}); "
             f"deferred endpoint-backed systems: {', '.join(sorted(DEFERRED_SYSTEMS))}."
+        )
+    if slug in ENDPOINT_SYSTEMS:
+        raise UnsupportedSystemError(
+            f"import from {slug!r} requires explicit endpoint mode: {ENDPOINT_SYSTEMS[slug]}. "
+            f"Use run_import(..., endpoint=..., collection=...) or the matching CLI flags; "
+            f"plain file imports remain local ({supported})."
         )
     raise UnsupportedSystemError(f"unsupported source system {slug!r}; supported local importers: {supported}")

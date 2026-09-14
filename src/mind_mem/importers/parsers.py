@@ -38,6 +38,11 @@ Supported shapes
 ``chroma``
     The ``collection.get()`` payload. Low value — see
     :func:`parse_chroma`.
+
+``qdrant``
+    A bounded REST scroll page assembled by the endpoint reader. The text
+    payload field is always named explicitly by the caller; point IDs remain
+    the source identity and payload metadata never becomes a governed ID.
 """
 
 from __future__ import annotations
@@ -64,7 +69,7 @@ from .note_parsers import parse_agent_memory, parse_chat_json, parse_markdown_va
 from .okf_source import OKF_SYSTEM, parse_okf
 from .records import ImportParseError, ImportRecord
 
-__all__ = ["MAX_METADATA_KEYS", "MAX_METADATA_VALUE_LEN", "PARSERS", "parse_payload"]
+__all__ = ["MAX_METADATA_KEYS", "MAX_METADATA_VALUE_LEN", "PARSERS", "parse_payload", "parse_qdrant"]
 
 # ---------------------------------------------------------------------------
 # chroma
@@ -153,6 +158,65 @@ def parse_chroma(payload: Any) -> tuple[ImportRecord, ...]:
 
     name = _first_str(mapping, ("collection", "name"))
     return tuple(_parse_chroma_collection(mapping, f"{name}/" if name else ""))
+
+
+# ---------------------------------------------------------------------------
+# qdrant
+# ---------------------------------------------------------------------------
+
+
+def parse_qdrant(payload: Any, *, text_field: str = "text", collection: str = "") -> tuple[ImportRecord, ...]:
+    """Map Qdrant points to records using a declared payload text field.
+
+    Qdrant payloads are user-defined, so guessing among ``text`` / ``content``
+    / ``document`` would silently change which remote data is imported. The
+    point's own ``id`` is the only accepted external identity; all bounded,
+    scalar payload metadata is retained through the existing flattening rules.
+    """
+    if not isinstance(text_field, str) or not text_field.strip() or len(text_field) > MAX_METADATA_VALUE_LEN:
+        raise ImportParseError("qdrant text field must be a non-empty bounded string")
+    if isinstance(payload, Mapping):
+        points = payload.get("points")
+    else:
+        points = payload
+    if not isinstance(points, list):
+        raise ImportParseError("qdrant payload must contain a points array")
+
+    records: list[ImportRecord] = []
+    # ``ImportRecord.external_id`` is the string form used by the existing
+    # block-id derivation.  Reject representations that normalize to the same
+    # value (for example JSON numeric ``1`` and string ``"1"``) before they
+    # can collapse into one downstream block identity.
+    seen_ids: set[str] = set()
+    for index, point in enumerate(points):
+        if not isinstance(point, Mapping):
+            raise ImportParseError(f"qdrant point #{index} must be an object")
+        point_id = point.get("id")
+        if isinstance(point_id, bool) or not isinstance(point_id, (str, int)) or not str(point_id).strip():
+            raise ImportParseError(f"qdrant point #{index} has no supported id")
+        identity = str(point_id)
+        if identity in seen_ids:
+            raise ImportParseError(f"qdrant point #{index} repeats source id {point_id!r}")
+        seen_ids.add(identity)
+        metadata = point.get("payload")
+        if not isinstance(metadata, Mapping):
+            raise ImportParseError(f"qdrant point #{index} is missing an object payload")
+        raw_text = metadata.get(text_field)
+        text = _clean_text(raw_text)
+        if not text:
+            raise ImportParseError(f"qdrant point #{index} payload field {text_field!r} is not non-empty text")
+        flattened = _flatten_metadata(metadata)
+        if collection:
+            flattened = {**flattened, "qdrant_collection": collection}
+        records.append(
+            ImportRecord(
+                system="qdrant",
+                external_id=str(point_id),
+                text=text,
+                metadata=dict(sorted(flattened.items())),
+            )
+        )
+    return tuple(records)
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +349,7 @@ PARSERS: dict[str, Callable[[Any], tuple[ImportRecord, ...]]] = {
     "letta": parse_letta,
     "markdown": parse_markdown_vault,
     "mem0": parse_mem0,
+    "qdrant": parse_qdrant,
     # Flag-gated (v4 ``core_export``): unreachable unless resolve_system
     # lets the slug through, so a registered parser is not a live source.
     OKF_SYSTEM: parse_okf,

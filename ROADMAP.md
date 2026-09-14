@@ -134,7 +134,7 @@ publication remains part of the release gates.
 - *(tracked below — see “JavaScript / TypeScript SDK” in the status section; listed twice, counted once)*
 - [ ] **Publish the Go client as a Go module** — `sdk/go/` exists in-tree with tests; only the publish step is open. Kept from the cut SDK fan-out (the JS publish is tracked separately above); the Rust/Java/Ruby STUBS were inventory and are cut.
 - *(tracked below — see “OpenAPI + AsyncAPI specs” in the status section; listed twice, counted once)*
-- [ ] **Migration importers** — `mm import --from {chroma|mem0|letta} <dump.json>` **ships** (file-based subset: `src/mind_mem/importers/`, `IMP-` blocks in `memory/IMPORTED.md`, `imported:<system>` provenance, idempotent re-import). Open half is the endpoint-backed systems — pinecone / weaviate / qdrant need a live endpoint + credential and are refused with an explicit deferred message
+- [ ] **Migration importers** — `mm import --from {chroma|mem0|letta} <dump.json>` **ships** (file-based subset: `src/mind_mem/importers/`, `IMP-` blocks in `memory/IMPORTED.md`, `imported:<system>` provenance, idempotent re-import). Qdrant now has an explicit bounded, read-only endpoint/collection scroll adapter that still lands quarantined; Pinecone and Weaviate remain deferred. The broader migration item stays open for those systems and complete endpoint acceptance.
 - [x] **Model-call token metering** — per-day token counter plus optional daily cap behind `mm usage`.
 
 ### Group RA — Retrieval accountability (proposed 2026-08-28; **revised after audit**, 5 items)
@@ -2524,7 +2524,7 @@ default story is two laptops talking to each other.
 
 - [ ] **JavaScript / TypeScript SDK** — client code ships in-tree at `sdk/js/`; the npm publish as `@star-ga/mind-mem-client` is the open step. Tracked.
 - [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
-- [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Endpoint-backed (pinecone / weaviate / qdrant) still deferred — they need a live endpoint + API credential.
+- [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Qdrant has a bounded explicit endpoint/collection scroll adapter; Pinecone and Weaviate remain deferred, and the complete endpoint-backed migration scope remains open.
 
 ### F. Anti-patterns explicitly forbidden
 
