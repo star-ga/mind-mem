@@ -261,6 +261,41 @@ def test_applied_merge_mutated_lineage_refuses_idempotent_approval(ws, monkeypat
         assert kg._conn.execute("SELECT COUNT(*) FROM edges WHERE predicate = 'same_as'").fetchone()[0] == 1
 
 
+def test_reverse_rechecks_status_after_acquiring_transaction_lock(ws, monkeypatch):
+    """A proposal changed after the outer read cannot be reversed from stale state."""
+    current = _install_entity_merge_token(monkeypatch)
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        kg.entities.resolve("winner")
+        kg.entities.resolve("loser")
+    staged = json.loads(propose_entity_merge("winner", "loser", "reviewed relation identity"))
+    current["scope"] = "admin"
+    assert json.loads(approve_entity_merge(staged["proposal_id"]))["status"] == "applied"
+
+    import mind_mem.knowledge_graph as knowledge_graph
+
+    original_require_admission = knowledge_graph.require_admission
+
+    def interpose_status(proposal_id):
+        with sqlite3.connect(default_db_path(ws)) as conn:
+            conn.execute(
+                "UPDATE entity_merge_proposals SET status = 'staged' WHERE proposal_id = ?",
+                (proposal_id,),
+            )
+            conn.commit()
+        return original_require_admission(proposal_id)
+
+    monkeypatch.setattr(knowledge_graph, "require_admission", interpose_status)
+    refused = json.loads(reverse_entity_merge(staged["proposal_id"]))
+    assert refused["error"] == "only an applied entity merge can be reversed"
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        assert kg._conn.execute("SELECT COUNT(*) FROM edges WHERE predicate = 'same_as'").fetchone()[0] == 1
+        assert kg.get_entity_merge_proposal(staged["proposal_id"]).status == "staged"
+        assert (
+            kg._conn.execute("SELECT status FROM entity_merge_lineage WHERE proposal_id = ?", (staged["proposal_id"],)).fetchone()[0]
+            == "applied"
+        )
+
+
 def test_graph_query_expands_equivalence_at_each_bounded_hop(ws, monkeypatch):
     """A SAME_AS component supplies edges at the current BFS level."""
     with KnowledgeGraph(default_db_path(ws)) as kg:

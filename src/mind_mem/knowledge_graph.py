@@ -1512,19 +1512,30 @@ class KnowledgeGraph:
         if proposal is None:
             raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
         _validate_entity_merge_identity(proposal_id, proposal)
-        if proposal.status == MERGE_REVERSED:
-            require_admission(proposal_id)
-            return proposal
-        if proposal.status != PROPOSAL_APPLIED:
+        if proposal.status not in {PROPOSAL_APPLIED, MERGE_REVERSED}:
             raise EntityMergeError("only an applied entity merge can be reversed")
         require_admission(proposal_id)
         with self._lock:
             self._conn.execute("BEGIN IMMEDIATE")
             try:
-                self._validate_applied_entity_merge_state(proposal)
+                # The pre-lock row only decides whether this call may enter
+                # the governed operation.  A concurrent writer can change a
+                # proposal between that read and BEGIN IMMEDIATE, so the
+                # locked row is authoritative for status, identity, and the
+                # exact lineage/edge selected below.
+                current = self.get_entity_merge_proposal(proposal_id)
+                if current is None:
+                    raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
+                _validate_entity_merge_identity(proposal_id, current)
+                if current.status == MERGE_REVERSED:
+                    self._conn.commit()
+                    return current
+                if current.status != PROPOSAL_APPLIED:
+                    raise EntityMergeError("only an applied entity merge can be reversed")
+                self._validate_applied_entity_merge_state(current)
                 self._conn.execute(
                     "DELETE FROM edges WHERE subject = ? AND predicate = ? AND object = ? AND source_block_id = ?",
-                    (proposal.winner_id, Predicate.SAME_AS.value, proposal.loser_id, proposal.proposal_id),
+                    (current.winner_id, Predicate.SAME_AS.value, current.loser_id, current.proposal_id),
                 )
                 self._conn.execute("UPDATE entity_merge_lineage SET status = ? WHERE proposal_id = ?", (MERGE_REVERSED, proposal_id))
                 self._conn.execute("UPDATE entity_merge_proposals SET status = ? WHERE proposal_id = ?", (MERGE_REVERSED, proposal_id))
