@@ -1,0 +1,234 @@
+"""Configuration and enforcement for namespace retrieval properties.
+
+This module is deliberately retrieval-only.  Namespace ACLs and admission remain
+owned by :mod:`mind_mem.namespaces` and :mod:`mind_mem.admissibility`; these
+helpers only decide whether an already ACL-visible block may enter search and
+how a bounded behaviour context is added to a pack.
+"""
+
+from __future__ import annotations
+
+import fnmatch
+import math
+import os
+from collections.abc import Mapping
+from typing import Any
+
+REACHABILITY_SEARCHABLE = "searchable"
+REACHABILITY_DIRECT_ONLY = "direct-only"
+REACHABILITY_ALWAYS_INJECTED = "always-injected"
+REACHABILITIES = frozenset(
+    {REACHABILITY_SEARCHABLE, REACHABILITY_DIRECT_ONLY, REACHABILITY_ALWAYS_INJECTED}
+)
+FLOOR_NONE = "none"
+FLOOR_INHERIT_GLOBAL = "inherit-global"
+DEFAULT_DECLARATION = {"reachability": REACHABILITY_SEARCHABLE, "floor": FLOOR_INHERIT_GLOBAL}
+_MAX_ALWAYS_ITEMS = 32
+
+
+def _properties(config: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    """Return the validated-shaped retrieval declarations, or an empty map."""
+    if not isinstance(config, Mapping):
+        return {}
+    recall = config.get("recall")
+    if not isinstance(recall, Mapping):
+        return {}
+    props = recall.get("namespace_properties")
+    return props if isinstance(props, Mapping) else {}
+
+
+def namespace_for_path(path: object) -> str:
+    """Map a workspace-relative source path to its namespace identity."""
+    if not isinstance(path, str):
+        return "workspace"
+    cleaned = path.replace("\\", "/").lstrip("./")
+    parts = [part for part in cleaned.split("/") if part]
+    if not parts:
+        return "workspace"
+    if parts[0] == "agents" and len(parts) >= 2:
+        return f"agents/{parts[1]}"
+    if parts[0] in {
+        "decisions",
+        "tasks",
+        "entities",
+        "intelligence",
+        "memory",
+        "summaries",
+        "maintenance",
+        ".mind-mem-index",
+    }:
+        return "workspace"
+    # Additional top-level roots (for example ``always`` or ``direct``)
+    # are explicit namespace identities rather than workspace corpus files.
+    return parts[0]
+
+
+def declaration_for(config: Mapping[str, Any] | None, namespace: str) -> dict[str, Any]:
+    """Resolve one exact or glob declaration, defaulting to searchable."""
+    props = _properties(config)
+    defaults = props.get("defaults")
+    out = dict(DEFAULT_DECLARATION)
+    if isinstance(defaults, Mapping):
+        _merge_valid(out, defaults)
+    # Exact declarations win.  Otherwise the first matching glob is used in
+    # insertion order, so a config remains deterministic and reviewable.
+    chosen: Mapping[str, Any] | None = None
+    exact = props.get(namespace)
+    if isinstance(exact, Mapping):
+        chosen = exact
+    else:
+        for pattern, candidate in props.items():
+            if pattern in {"defaults", namespace} or not isinstance(candidate, Mapping):
+                continue
+            if isinstance(pattern, str) and fnmatch.fnmatchcase(namespace, pattern):
+                chosen = candidate
+                break
+    if chosen is not None:
+        _merge_valid(out, chosen)
+        out["_configured"] = True
+    else:
+        out["_configured"] = False
+    return out
+
+
+def _merge_valid(target: dict[str, Any], candidate: Mapping[str, Any]) -> None:
+    reachability = candidate.get("reachability")
+    if isinstance(reachability, str) and reachability in REACHABILITIES:
+        target["reachability"] = reachability
+    floor = candidate.get("floor")
+    if floor == FLOOR_NONE or floor == FLOOR_INHERIT_GLOBAL:
+        target["floor"] = floor
+    elif isinstance(floor, (int, float)) and not isinstance(floor, bool) and math.isfinite(float(floor)):
+        evidence = candidate.get("evidence")
+        # Numeric floors are accepted only with a human-readable measurement
+        # reference.  This is a declaration gate, not a tuning guess.
+        if isinstance(evidence, (str, Mapping)) and bool(evidence):
+            value = float(floor)
+            if 0.0 <= value <= 1_000_000.0:
+                target["floor"] = value
+                target["evidence"] = evidence
+    for key in ("max_items", "content_type"):
+        if key in candidate:
+            target[key] = candidate[key]
+
+
+def _global_floor(config: Mapping[str, Any] | None) -> float:
+    recall = config.get("recall") if isinstance(config, Mapping) else None
+    value = recall.get("min_score", 0.0) if isinstance(recall, Mapping) else 0.0
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return value if math.isfinite(value) else 0.0
+
+
+def namespace_search_allowed(path: object, config: Mapping[str, Any] | None) -> bool:
+    """Whether a source path may enter ranked search."""
+    reachability = declaration_for(config, namespace_for_path(path))["reachability"]
+    return reachability not in {REACHABILITY_DIRECT_ONLY, REACHABILITY_ALWAYS_INJECTED}
+
+
+def filter_search_hits(hits: list[dict[str, Any]], config: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    """Remove direct-only/always-injected namespaces and apply declared floors."""
+    out: list[dict[str, Any]] = []
+    global_floor = _global_floor(config)
+    for hit in hits:
+        declaration = declaration_for(config, namespace_for_path(hit.get("file")))
+        if declaration["reachability"] in {REACHABILITY_DIRECT_ONLY, REACHABILITY_ALWAYS_INJECTED}:
+            continue
+        floor = declaration.get("floor", FLOOR_INHERIT_GLOBAL)
+        threshold = global_floor if floor == FLOOR_INHERIT_GLOBAL else None if floor == FLOOR_NONE else float(floor)
+        if threshold is not None:
+            try:
+                if float(hit.get("score", 0.0)) < threshold:
+                    continue
+            except (TypeError, ValueError):
+                continue
+        out.append(hit)
+    return out
+
+
+def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Read bounded, admitted behaviour blocks from configured always namespaces."""
+    from .admissibility import admit_corpus
+    from .block_store import MarkdownBlockStore
+
+    selected: list[dict[str, Any]] = []
+    declarations = _properties(config)
+    for namespace, raw in declarations.items():
+        if namespace == "defaults" or not isinstance(namespace, str) or not isinstance(raw, Mapping):
+            continue
+        declaration = declaration_for(config, namespace)
+        if declaration["reachability"] != REACHABILITY_ALWAYS_INJECTED:
+            continue
+        if declaration.get("content_type") != "behavior":
+            continue
+        try:
+            cap = int(declaration.get("max_items", 0))
+        except (TypeError, ValueError):
+            cap = 0
+        if cap < 1 or cap > _MAX_ALWAYS_ITEMS:
+            continue
+        normalized = namespace.replace("\\", "/").strip("/")
+        if not normalized or normalized in {".", ".."} or normalized.startswith("../") or "/../" in f"/{normalized}/":
+            continue
+        root = os.path.realpath(workspace)
+        namespace_root = os.path.realpath(os.path.join(root, normalized))
+        if not namespace_root.startswith(root + os.sep) or not os.path.isdir(namespace_root):
+            continue
+        try:
+            blocks = admit_corpus(MarkdownBlockStore(namespace_root).get_all())
+        except (OSError, ValueError):
+            continue
+        namespace_count = 0
+        for block in blocks:
+            kind = str(block.get("Type", block.get("type", ""))).strip().lower()
+            if kind not in {"behavior", "behaviour"}:
+                continue
+            block_id = block.get("_id") or block.get("id")
+            if not isinstance(block_id, str) or not block_id:
+                continue
+            excerpt = block.get("Statement") or block.get("Summary") or block.get("Description") or ""
+            selected.append(
+                {
+                    "_id": block_id,
+                    "type": "Behavior",
+                    "score": 0.0,
+                    "excerpt": str(excerpt),
+                    "file": f"{normalized}/{block.get('_source_file', '')}".rstrip("/"),
+                    "line": int(block.get("_line", 0) or 0),
+                    "status": str(block.get("Status", "") or ""),
+                    "_namespace_reachability": REACHABILITY_ALWAYS_INJECTED,
+                }
+            )
+            namespace_count += 1
+            if namespace_count >= cap:
+                break
+    cap_total = 0
+    for name in declarations:
+        if not isinstance(name, str) or name == "defaults":
+            continue
+        resolved = declaration_for(config, name)
+        if resolved["reachability"] != REACHABILITY_ALWAYS_INJECTED:
+            continue
+        try:
+            declared_cap = int(resolved.get("max_items", 0) or 0)
+        except (TypeError, ValueError):
+            declared_cap = 0
+        if 1 <= declared_cap <= _MAX_ALWAYS_ITEMS:
+            cap_total += declared_cap
+    return selected, {"count": len(selected), "cap": cap_total, "content_type": "behavior"}
+
+
+__all__ = [
+    "REACHABILITY_SEARCHABLE",
+    "REACHABILITY_DIRECT_ONLY",
+    "REACHABILITY_ALWAYS_INJECTED",
+    "FLOOR_NONE",
+    "FLOOR_INHERIT_GLOBAL",
+    "declaration_for",
+    "namespace_for_path",
+    "filter_search_hits",
+    "namespace_search_allowed",
+    "always_injected_hits",
+]

@@ -1274,6 +1274,7 @@ def pack_recall_budget(
     from mind_mem.cognitive_forget import pack_to_budget
     from mind_mem.multi_modal import flag_enabled as _multimodal_enabled
     from mind_mem.multi_modal import pack_cost
+    from mind_mem.namespace_retrieval import always_injected_hits
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -1296,6 +1297,13 @@ def pack_recall_budget(
         results = raw
     else:
         results = []
+
+    # Always-injected declarations are a bounded behaviour-only supplement to
+    # the ranked answer. They are loaded through the same admission predicate
+    # and are prepended so the existing packer treats them as highest priority.
+    # An absent declaration returns an empty list and preserves the old output.
+    always_results, always_meta = always_injected_hits(ws, _load_config(ws))
+    results = always_results + results
 
     # None keeps the char-count estimator that has always priced this pack,
     # so the flag-off call is unchanged down to the token.
@@ -1374,6 +1382,7 @@ def pack_recall_budget(
             **packed.as_dict(),
             **({"sufficiency": sufficiency} if sufficiency else {}),
             **({"context_budget": budget} if budget is not None else {}),
+            **({"always_injected": always_meta} if always_meta.get("cap", 0) else {}),
             # The record for the RECALL underneath the pack, surfaced rather
             # than dropped. It commits to the ranking the recall served, which
             # is ``included`` + ``dropped`` — packing is a budget decision

@@ -68,6 +68,7 @@ from .enums import TaskStatus
 from .error_codes import DailyTokenCapExceeded
 from .guardrail_surface import apply_guardrail_surfacing
 from .guardrails import GuardrailContext, GuardrailPolicy
+from .namespace_retrieval import filter_search_hits, namespace_search_allowed
 from .observability import get_logger, metrics
 from .recall_smart_chunk import chunk_statement, resolve_smart_chunking_config
 from .retrieval_graph import (
@@ -1084,6 +1085,7 @@ def recall(
             until=until,
             return_k=_wide_pool_k,
         )
+        hits = filter_search_hits(hits, _get_config(workspace))
         hits = _apply_validity_and_resort(hits, workspace, _indexed_recall_cfg, _scoring_instant)
         return _apply_post_filters(
             hits,
@@ -1115,6 +1117,7 @@ def recall(
 
                 _degraded_marker = _merge_leg_markers(_degraded_marker, dict(_backend_marker))
             if backend_hits:
+                backend_hits = filter_search_hits(backend_hits, _get_config(workspace))
                 backend_hits = _apply_validity_and_resort(backend_hits, workspace, _indexed_recall_cfg, _scoring_instant)
                 filtered = _apply_post_filters(
                     backend_hits,
@@ -1489,6 +1492,17 @@ def recall(
     _pre_admission = len(all_blocks)
     all_blocks = admit_corpus(all_blocks, allow=_admission_allow)
     _stage_counts["withheld"] = _pre_admission - len(all_blocks)
+    # Namespace retrieval declarations are a second, retrieval-only filter.
+    # It runs after ACL + governance admission and before scoring so direct-only
+    # and always-injected content cannot affect IDF, graph rescue, or ranking.
+    _before_namespace = len(all_blocks)
+    _namespace_config = _get_config(workspace)
+    all_blocks = [
+        block
+        for block in all_blocks
+        if namespace_search_allowed(block.get("_source_file", ""), _namespace_config)
+    ]
+    _stage_counts["namespace_excluded"] = _before_namespace - len(all_blocks)
 
     # The scan leg's push-down: the five filters decide the CANDIDATE POOL,
     # not just which of an already-cut top-k survives. Placed after admission
@@ -2115,6 +2129,10 @@ def recall(
             _log.info("temporal_hard_filter", start=str(t_start), end=str(t_end), pre=pre_count, post=len(results))
 
     _stage_counts["temporal_filtered"] = len(results)
+    # Apply per-namespace floors after the score-producing legs and before the
+    # wide candidate cut. This keeps numeric/none/inherit-global declarations
+    # effective on scan and indexed backends alike.
+    results = filter_search_hits(results, _get_config(workspace))
 
     # Sort by score descending
     results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)

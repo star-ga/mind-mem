@@ -513,6 +513,7 @@ _VALID_RECALL_KEYS = frozenset(
         "dedup",
         "validity_gate",
         "feedback_credit",
+        "namespace_properties",
         # Vector / hybrid recall keys (Postgres pgvector + RRF path). These
         # are consumed by PostgresRecallBackend / VectorBackend / the pgvector
         # hybrid_search; previously they lived only in recall_vector's own
