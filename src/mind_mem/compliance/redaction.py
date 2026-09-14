@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..v4.feature_flags import flag_config_for_workspace, is_enabled_for_workspace
-from .detectors import Detector, Finding, resolve_detectors, scan_text
+from .detectors import Detector, DetectorSpecError, Finding, load_external_detector, resolve_detectors, scan_text
 
 __all__ = [
     "MODE_FLAG",
@@ -162,15 +162,35 @@ def redaction_chain_for_workspace(workspace: str) -> tuple[Detector, ...]:
     shorter chain — the failure mode this whole module exists to prevent
     is a detector that is not running while everyone believes it is.
     """
-    raw = flag_config_for_workspace(workspace, REDACTION_FLAG).get("detectors")
+    config = flag_config_for_workspace(workspace, REDACTION_FLAG)
+    raw = config.get("detectors")
     if raw is None:
-        return resolve_detectors(None)
-    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
-        raise RedactionConfigError("v4.redaction.detectors must be a list of detector names")
+        builtins = resolve_detectors(None)
+    else:
+        if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+            raise RedactionConfigError("v4.redaction.detectors must be a list of detector names")
+        try:
+            builtins = resolve_detectors([str(x) for x in raw])
+        except KeyError as exc:
+            raise RedactionConfigError(str(exc)) from None
+
+    raw_plugins = config.get("plugins")
+    if raw_plugins is None:
+        return builtins
+    if not isinstance(raw_plugins, list) or not all(isinstance(x, str) and x.strip() for x in raw_plugins):
+        raise RedactionConfigError("v4.redaction.plugins must be a list of 'module:DetectorClass' strings")
+    if len(set(raw_plugins)) != len(raw_plugins):
+        raise RedactionConfigError("v4.redaction.plugins must not contain duplicate references")
     try:
-        return resolve_detectors([str(x) for x in raw])
-    except KeyError as exc:
+        plugins = tuple(load_external_detector(spec) for spec in sorted(raw_plugins))
+    except DetectorSpecError as exc:
         raise RedactionConfigError(str(exc)) from None
+    names = [detector.name for detector in builtins]
+    for plugin in plugins:
+        if plugin.name in names:
+            raise RedactionConfigError(f"external detector name {plugin.name!r} collides with the configured in-tree chain")
+        names.append(plugin.name)
+    return tuple(sorted((*builtins, *plugins), key=lambda detector: detector.name))
 
 
 def redact(text: str, *, mode: str, detectors: Sequence[Detector] | None = None) -> RedactionResult:

@@ -31,6 +31,7 @@ from typing import Iterator
 import pytest
 
 from mind_mem.audit_chain import AuditChain
+from mind_mem.block_parser import parse_file
 from mind_mem.compliance import detectors as det
 from mind_mem.compliance.audit import REDACTION_OPERATION, record_redaction
 from mind_mem.compliance.detectors import (
@@ -57,6 +58,8 @@ from mind_mem.compliance.redaction import (
     redaction_chain_for_workspace,
     resolve_mode,
 )
+from mind_mem.init_workspace import init
+from mind_mem.mcp.tools.governance import propose_update
 
 CANARY_SECRET = "ghp_canary000000000000000000000000000000"
 SHIPPED_DETECTORS = (
@@ -355,6 +358,134 @@ class TestFlagWiring:
     def test_no_declared_subset_means_every_detector(self, tmp_path: Path) -> None:
         ws = _workspace(tmp_path, redaction={"enabled": True})
         assert [d.name for d in redaction_chain_for_workspace(ws)] == list(detector_names())
+
+
+class TestExplicitExternalDetectors:
+    def _external_package(self, tmp_path: Path) -> None:
+        package = tmp_path / "review_detector_pkg"
+        package.mkdir()
+        (package / "__init__.py").write_text("", encoding="utf-8")
+        (package / "detector.py").write_text(
+            "from mind_mem.compliance.detectors import CATEGORY_SECRET, Detector, Finding\n"
+            "\n"
+            "class CustomerTokenDetector(Detector):\n"
+            "    name = 'customer_token'\n"
+            "    category = CATEGORY_SECRET\n"
+            "\n"
+            "    def scan(self, text):\n"
+            "        marker = 'CORP-'\n"
+            "        start = text.find(marker)\n"
+            "        if start < 0:\n"
+            "            return []\n"
+            "        end = start + len(marker) + 8\n"
+            "        return [Finding(start=start, end=end, detector=self.name, category=self.category)]\n",
+            encoding="utf-8",
+        )
+
+    def test_explicit_plugin_is_sorted_and_does_not_pollute_default_registry(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._external_package(tmp_path)
+        monkeypatch.syspath_prepend(str(tmp_path))
+        before = detector_names()
+        (tmp_path / "workspace").mkdir()
+        ws = _workspace(
+            tmp_path / "workspace",
+            redaction={"enabled": True, "detectors": ["email"], "plugins": ["review_detector_pkg.detector:CustomerTokenDetector"]},
+        )
+        chain = redaction_chain_for_workspace(ws)
+        assert [detector.name for detector in chain] == ["customer_token", "email"]
+        assert detector_names() == before
+        result = redact("x CORP-12345678", mode=MODE_REDACT, detectors=chain)
+        assert result.text == "x [REDACTED:customer_token]"
+        assert result.detectors == ("customer_token", "email")
+
+    def test_default_chain_never_discovers_plugins(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _unexpected_import(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError("default chain attempted ambient plugin discovery")
+
+        monkeypatch.setattr(det.importlib, "import_module", _unexpected_import)
+        ws = _workspace(tmp_path, redaction={"enabled": True})
+        assert [detector.name for detector in redaction_chain_for_workspace(ws)] == list(detector_names())
+
+    @pytest.mark.parametrize(
+        "plugins",
+        [
+            ["review_detector_pkg.detector:Missing"],
+            ["review_detector_pkg.detector"],
+            ["does_not_exist.detector:Detector"],
+            ["review_detector_pkg.detector:CustomerTokenDetector", "review_detector_pkg.detector:CustomerTokenDetector"],
+        ],
+    )
+    def test_malformed_or_unavailable_plugin_is_a_refusal_before_persistence(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, plugins: list[str]
+    ) -> None:
+        self._external_package(tmp_path)
+        monkeypatch.syspath_prepend(str(tmp_path))
+        ws_path = tmp_path / "workspace"
+        init(str(ws_path))
+        config = ws_path / "mind-mem.json"
+        data = json.loads(config.read_text(encoding="utf-8"))
+        data.setdefault("v4", {})["redaction"] = {"enabled": True, "mode": MODE_REDACT, "plugins": plugins}
+        config.write_text(json.dumps(data), encoding="utf-8")
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws_path))
+        monkeypatch.setenv("MIND_MEM_CONFIG", str(config))
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+        signals = ws_path / "intelligence" / "SIGNALS.md"
+        before = signals.read_bytes()
+        response = json.loads(
+            propose_update(
+                block_type="decision",
+                statement="Publish the measured result with its source receipt.",
+                rationale="Independent review requires a reproducible result.",
+                actor_id="audit-operator",
+            )
+        )
+        assert response["error"] == "compliance_config_invalid"
+        assert signals.read_bytes() == before
+
+    def test_external_detector_redacts_through_governed_write_and_is_audited(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._external_package(tmp_path)
+        monkeypatch.syspath_prepend(str(tmp_path))
+        ws_path = tmp_path / "workspace"
+        init(str(ws_path))
+        config = ws_path / "mind-mem.json"
+        data = json.loads(config.read_text(encoding="utf-8"))
+        data.setdefault("v4", {})["redaction"] = {
+            "enabled": True,
+            "mode": MODE_REDACT,
+            "detectors": [],
+            "plugins": ["review_detector_pkg.detector:CustomerTokenDetector"],
+        }
+        config.write_text(json.dumps(data), encoding="utf-8")
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws_path))
+        monkeypatch.setenv("MIND_MEM_CONFIG", str(config))
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+        marker = "CORP-12345678"
+        response = json.loads(
+            propose_update(
+                block_type="decision",
+                statement=f"Publish {marker} after review.",
+                rationale="Independent review requires a reproducible result.",
+                actor_id="audit-operator",
+            )
+        )
+        assert response["written"] == 1
+        record = parse_file(str(ws_path / "intelligence" / "SIGNALS.md"))[0]
+        assert record["Excerpt"] == "Publish [REDACTED:customer_token] after review."
+        assert all(marker.encode() not in path.read_bytes() for path in ws_path.rglob("*") if path.is_file())
+        audit = _chain_text(str(ws_path))
+        assert "customer_token" in audit
+        assert marker not in audit
+
+    def test_malformed_findings_fail_closed(self, clean_registry: None) -> None:
+        class _Malformed(Detector):
+            name = "malformed_external"
+            category = CATEGORY_SECRET
+
+            def scan(self, text: str) -> list[Finding]:
+                return [Finding(start=0, end=1, detector="different", category=self.category)]
+
+        with pytest.raises(DetectorSpecError, match="mismatched finding identity"):
+            scan_text("x", [_Malformed()])
 
 
 # ---------------------------------------------------------------------------

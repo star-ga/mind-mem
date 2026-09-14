@@ -113,12 +113,14 @@ contradiction in workspace Y" and gets POSTed when matches land.
 
 Several primitives — pluggable redaction, time-bounded recall,
 controlled vocabularies, provenance fields, structured
-evidence/confidence, signed compliance export, tenant KMS,
+evidence/confidence, content-digested compliance export, tenant KMS,
 contraindication edges — generalize concerns common to many regulated
 deployments. They ship as opt-in capabilities; domain-specific bits
 (redaction packs, vocabulary sets, export policies) ship as separate
 optional packages so general-purpose users pay nothing in
-dependencies, install size, or attack surface.
+dependencies, install size, or attack surface. The current export carries a
+deterministic content digest; cryptographic signing and independent observation
+remain adapter work for a future release.
 
 The general-purpose memory store stays primary. Compliance is a
 concentric ring around it, not a pivot toward any one vertical.
