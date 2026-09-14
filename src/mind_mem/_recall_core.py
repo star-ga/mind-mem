@@ -142,6 +142,8 @@ def _indexed_hit_is_readable(
     workspace: str,
     hit: Mapping[str, Any],
     namespace_manager: Any,
+    *,
+    check_realpath: bool = True,
 ) -> bool:
     """Check the ACL against both indexed source claims and their real target.
 
@@ -158,14 +160,27 @@ def _indexed_hit_is_readable(
         value = hit[field]
         if not isinstance(value, str) or not value.strip():
             return False
-        source_values.append(value)
+        # Backends use both slash spellings. Compare the canonical separator
+        # form, while refusing explicit empty/dot/traversal components rather
+        # than normalising a potentially ambiguous source claim.
+        source = value.replace("\\", "/")
+        if "\x00" in source or any(part in {"", ".", ".."} for part in source.split("/")):
+            return False
+        source_values.append(source)
     if not source_values or len(set(source_values)) != 1:
         return False
-    source = source_values[0].replace("\\", "/")
-    if "\x00" in source or source.startswith("/") or (len(source) >= 2 and source[1] == ":"):
+    source = source_values[0]
+    if source.startswith("/") or (len(source) >= 2 and source[1] == ":"):
         return False
     if not namespace_manager.can_read(source):
         return False
+
+    # PostgreSQL file_path values are logical store identities. A local
+    # Markdown tree may be absent or contain an unrelated symlink at the same
+    # name; consulting it would turn a valid DB row into a false denial (or
+    # make local bytes part of the DB ACL decision).
+    if not check_realpath:
+        return True
 
     workspace_real = os.path.realpath(workspace)
     try:
@@ -184,6 +199,7 @@ def _filter_indexed_hits_for_agent(
     *,
     agent_id: str | None,
     namespace_manager: Any,
+    check_realpath: bool = True,
 ) -> list[dict]:
     """Apply namespace ACL before indexed hits reach validity or ranking work."""
     if agent_id is None or agent_id == "":
@@ -192,7 +208,7 @@ def _filter_indexed_hits_for_agent(
         # An authenticated namespace request must fail closed if its ACL
         # authority cannot be imported; it must never become workspace-wide.
         return []
-    return [hit for hit in hits if _indexed_hit_is_readable(workspace, hit, namespace_manager)]
+    return [hit for hit in hits if _indexed_hit_is_readable(workspace, hit, namespace_manager, check_realpath=check_realpath)]
 
 
 # ---------------------------------------------------------------------------
@@ -1162,6 +1178,8 @@ def recall(
             until=until,
             return_k=_wide_pool_k,
         )
+        indexed_source = hits
+        indexed_marker = getattr(hits, "degraded", None)
         hits = _filter_indexed_hits_for_agent(
             workspace,
             hits,
@@ -1170,7 +1188,7 @@ def recall(
         )
         hits = filter_search_hits(hits, _get_config(workspace))
         hits = _apply_validity_and_resort(hits, workspace, _indexed_recall_cfg, _scoring_instant)
-        return _apply_post_filters(
+        filtered = _apply_post_filters(
             hits,
             since=since,
             until=until,
@@ -1184,6 +1202,7 @@ def recall(
             guardrail_policy=_guardrail_policy,
             admission_allow=_admission_allow,
         )
+        return _project_recall_carrier(indexed_source, filtered, degraded=indexed_marker)
     if isinstance(_cfg_backend, RecallBackend):
         try:
             # No pushable surface on an arbitrary backend, so the only lever
@@ -1194,12 +1213,14 @@ def recall(
             # Capture before filtering or empty-result fallback. Either can
             # turn the carrier into a plain list or replace the provider's
             # result with the lexical scan below.
+            backend_source = backend_hits
             _backend_marker = getattr(backend_hits, "degraded", None)
             backend_hits = _filter_indexed_hits_for_agent(
                 workspace,
                 backend_hits,
                 agent_id=agent_id,
                 namespace_manager=ns_manager,
+                check_realpath=not isinstance(_cfg_backend, PostgresRecallBackend),
             )
             if _backend_marker is not None:
                 from .hybrid_recall import _merge_leg_markers
@@ -1226,7 +1247,7 @@ def recall(
                         guardrail_policy=_guardrail_policy,
                         admission_allow=_admission_allow,
                     ),
-                    backend_hits,
+                    backend_source,
                     degraded=_degraded_marker,
                 )
             if backend_hits:
@@ -1246,7 +1267,7 @@ def recall(
                     guardrail_policy=_guardrail_policy,
                     admission_allow=_admission_allow,
                 )
-                return _project_recall_carrier(filtered, filtered, degraded=_degraded_marker)
+                return _project_recall_carrier(backend_source, filtered, degraded=_degraded_marker)
         except Exception as exc:
             if isinstance(_cfg_backend, PostgresRecallBackend):
                 # A configured source-of-record failure must remain visible;

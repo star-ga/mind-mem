@@ -12,7 +12,8 @@ import pytest
 
 import mind_mem._recall_core as recall_core
 import mind_mem.sqlite_index as sqlite_index
-from mind_mem._recall_core import RecallBackend, recall
+from mind_mem._recall_core import PostgresRecallBackend, RecallBackend, recall
+from mind_mem.hybrid_recall import RecallResults
 from mind_mem.init_workspace import init
 
 
@@ -184,3 +185,53 @@ def test_declared_backend_preserves_unbound_order_and_scores(monkeypatch: pytest
     result = recall(str(workspace), "remote", rerank=False)
     assert [hit["_id"] for hit in result] == ["SHARED-1", "SHARED-2"]
     assert [hit["score"] for hit in result] == [0.25, 0.125]
+
+
+def test_indexed_acl_preserves_backend_trace_and_degraded_marker(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    result = RecallResults([_hit("SHARED-TRACE", "shared/decisions/DECISIONS.md")])
+    result.trace = {"backend": "fixture"}
+    result.degraded = {"leg": "vector", "reason": "fixture"}
+
+    class Backend(_DeclaredBackend):
+        def search(self, *args, **kwargs):
+            return result
+
+    monkeypatch.setattr(recall_core, "_load_backend", lambda _workspace: Backend([]))
+    returned = recall(str(workspace), "trace query", agent_id="alice", rerank=False)
+    assert returned and returned[0]["_id"] == "SHARED-TRACE"
+    assert getattr(returned, "trace", None) == {"backend": "fixture"}
+    assert getattr(returned, "degraded", None) == {"leg": "vector", "reason": "fixture"}
+
+
+def test_indexed_acl_normalizes_source_separators_but_rejects_dot_segments(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    monkeypatch.setattr(
+        sqlite_index,
+        "query_index",
+        lambda *args, **kwargs: [
+            _hit("SLASH-EQUIV", "shared/decisions/DECISIONS.md", source_file="shared\\decisions\\DECISIONS.md"),
+            _hit("DOT-SEGMENT", "shared/./decisions/DECISIONS.md"),
+            _hit("EMPTY-SEGMENT", "shared//decisions/DECISIONS.md"),
+        ],
+    )
+    returned = recall(str(workspace), "source query", agent_id="alice", rerank=False)
+    assert [hit["_id"] for hit in returned] == ["SLASH-EQUIV"]
+
+
+def test_postgres_indexed_acl_does_not_consult_local_shadow_realpath(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    shadow = workspace / "agents/bob/decisions"
+    shadow.mkdir(parents=True, exist_ok=True)
+    shared = workspace / "shared/virtual"
+    shared.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shared.symlink_to(shadow, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink unavailable: {exc}")
+
+    result = [_hit("PG-SHARED", "shared/virtual/DB-ROW.md")]
+    monkeypatch.setattr(PostgresRecallBackend, "search", lambda self, *args, **kwargs: list(result))
+    monkeypatch.setattr(recall_core, "_load_backend", lambda _workspace: PostgresRecallBackend(str(workspace)))
+    returned = recall(str(workspace), "postgres query", agent_id="alice", rerank=False)
+    assert [hit["_id"] for hit in returned] == ["PG-SHARED"]
