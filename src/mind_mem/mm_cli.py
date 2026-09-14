@@ -1250,6 +1250,7 @@ def _cmd_import(args: argparse.Namespace) -> int:
             dedup_threshold=args.dedup_threshold,
             link_edges=args.link_edges,
             dry_run=args.dry_run,
+            chunk_documents=args.chunk_documents,
         )
     except UnsupportedSystemError as exc:
         print(f"mm import: {exc}", file=sys.stderr)
@@ -4686,6 +4687,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Parse and plan the import without writing any block.",
+    )
+    p_import.add_argument(
+        "--chunk-documents",
+        action="store_true",
+        help=(
+            "Opt-in (default OFF): deterministically chunk markdown/agentmem note trees and stamp "
+            "UTF-8 source anchors; chunks remain quarantined until governed release."
+        ),
     )
     p_import.set_defaults(func=_cmd_import)
 

@@ -8,6 +8,7 @@ credential, no stub server.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -27,6 +28,7 @@ from mind_mem.importers import (
     ImportParseError,
     provenance_token,
     run_import,
+    verify_document_anchor,
 )
 from mind_mem.importers.fs_source import (
     MAX_TREE_FILES,
@@ -154,7 +156,20 @@ class TestNoteTreeLoading:
         assert not any("/.obsidian/" in path or path.startswith(".obsidian/") for path in paths)
 
     def test_notes_carry_no_filesystem_timestamps(self) -> None:
-        assert set(SourceNote.__dataclass_fields__) == {"relative_path", "front_matter", "body"}
+        assert {"relative_path", "front_matter", "body"}.issubset(SourceNote.__dataclass_fields__)
+        assert not {"mtime", "ctime", "atime"} & set(SourceNote.__dataclass_fields__)
+
+    def test_notes_carry_raw_utf8_identity_and_crlf_body_offset(self, tmp_path: Path) -> None:
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        raw = "---\r\ntitle: café\r\n---\r\nπ line\r\nsecond\r\n".encode("utf-8")
+        path = tree / "unicode.md"
+        path.write_bytes(raw)
+        note = load_note_tree(str(tree))[0]
+        decoded = raw.decode("utf-8")
+        assert note.raw_sha256 == hashlib.sha256(raw).hexdigest()
+        assert note.raw_body == "π line\r\nsecond\r\n"
+        assert decoded[note.raw_body_start_char :] == note.raw_body
 
     def test_two_copies_of_a_tree_load_identically(self, tmp_path: Path) -> None:
         copy = tmp_path / "copy"
@@ -207,6 +222,76 @@ class TestNoteTreeLoading:
 
     def test_default_ceilings_are_sane(self) -> None:
         assert MAX_TREE_FILES >= 1000
+
+    def test_chunked_import_anchor_verifies_then_detects_source_mutation(self, tmp_path: Path) -> None:
+        from mind_mem.importers.engine import _chunk_import_records, build_import_block
+
+        raw = ("# Heading\r\n\r\n" + ("π source sentence. " * 120)).encode("utf-8")
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        source = tree / "long.md"
+        source.write_bytes(raw)
+        record = parse_payload("markdown", load_note_tree(str(tree)))[0]
+        chunks = _chunk_import_records((record,))
+        assert len(chunks) >= 2
+        blocks = [build_import_block(chunk) for chunk in chunks]
+        assert all(verify_document_anchor(block, str(tree)) for block in blocks)
+        altered = dict(blocks[0], ChunkerConfigDigest="0" * 64)
+        assert not verify_document_anchor(altered, str(tree))
+        shifted = dict(blocks[0], DocumentStartChar=blocks[0]["DocumentStartChar"] + 1)
+        assert not verify_document_anchor(shifted, str(tree))
+        assert not verify_document_anchor(dict(blocks[0], DocumentStartChar=True), str(tree))
+        assert not verify_document_anchor(dict(blocks[0], DocumentStartChar=" 0"), str(tree))
+        source.write_bytes(raw + b"mutation")
+        assert not verify_document_anchor(blocks[0], str(tree))
+
+    @pytest.mark.parametrize("filename", ["report\u202e.md", "report\n.md", "report\t.md", "report  name.md", " report.md"])
+    def test_chunk_anchor_rejects_ambiguous_source_identity(self, tmp_path, filename):
+        from mind_mem.importers.engine import _chunk_import_records
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / filename).write_text("Valid source sentence. " * 100)
+        records = parse_payload("markdown", load_note_tree(str(tree)))
+        with pytest.raises(ImportParseError, match="unambiguous anchor"):
+            _chunk_import_records(records)
+
+    def test_chunk_anchor_preserves_safe_unicode_source_identity(self, tmp_path):
+        from mind_mem.importers.engine import _chunk_import_records, _sanitized, build_import_block
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / "π report.md").write_text("Valid source sentence. " * 100)
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+        (ws / "mind-mem.json").write_text("{}")
+        chunks = _chunk_import_records(parse_payload("markdown", load_note_tree(str(tree))))
+        blocks = [build_import_block(_sanitized(chunk, str(ws))) for chunk in chunks]
+        assert all(block["DocumentSource"] == "π report.md" for block in blocks)
+        assert all(verify_document_anchor(block, str(tree)) for block in blocks)
+
+    def test_note_read_obeys_actual_size_when_stat_understates_it(self, tmp_path, monkeypatch):
+        from mind_mem.importers import fs_source
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / "small.md").write_text("small")
+        (tree / "grew.md").write_text("x" * 20)
+        monkeypatch.setattr(fs_source, "MAX_NOTE_BYTES", 10)
+        monkeypatch.setattr(fs_source.os.path, "getsize", lambda _: 1)
+        assert [note.relative_path for note in load_note_tree(str(tree))] == ["small.md"]
+
+    def test_tree_budget_counts_actual_bytes_when_stat_understates_it(self, tmp_path, monkeypatch):
+        from mind_mem.importers import fs_source
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / "one.md").write_text("x" * 8)
+        (tree / "two.md").write_text("x" * 8)
+        monkeypatch.setattr(fs_source, "MAX_TREE_BYTES", 10)
+        monkeypatch.setattr(fs_source.os.path, "getsize", lambda _: 1)
+        with pytest.raises(ImportParseError, match="tree too large"):
+            load_note_tree(str(tree))
 
 
 # ---------------------------------------------------------------------------

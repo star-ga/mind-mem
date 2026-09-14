@@ -44,6 +44,7 @@ from mind_mem.importers import (
     propose_import_release,
     quarantined_import_ids,
     run_import,
+    verify_document_anchor,
 )
 from mind_mem.importers.quarantine import (
     DECISIONS_FILE,
@@ -442,6 +443,45 @@ def test_import_is_recorded_in_the_audit_chain() -> None:
             "block_ids": list(result.block_ids),
         }
     )
+
+
+def test_cli_chunked_import_seals_one_anchor_root_and_release_stays_governed(tmp_path: Path, capsys) -> None:
+    """The CLI opt-in reaches quarantine, EvidenceChain, and normal release."""
+    from mind_mem import mm_cli
+    from mind_mem.evidence_objects import EvidenceChain
+
+    ws = _governed_ws()
+    tree = tmp_path / "vault"
+    tree.mkdir()
+    source = tree / "long.md"
+    source.write_bytes(("# Source\r\n\r\n" + ("π evidence sentence. " * 120) + "\u202e hidden").encode("utf-8"))
+    env = dict(os.environ)
+    env["MIND_MEM_WORKSPACE"] = ws
+    with patch.dict(os.environ, env, clear=True):
+        assert mm_cli.main(["import", "--from", "markdown", str(tree), "--chunk-documents"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == QUARANTINE_STATUS
+    blocks = _imported_blocks(ws)
+    assert len(blocks) == payload["imported"] >= 2
+    assert all(block["Status"] == QUARANTINE_STATUS for block in blocks)
+    assert all("\u202e" not in block["Statement"] for block in blocks)
+    assert all(verify_document_anchor(block, str(tree)) for block in blocks)
+    evidence = [
+        entry
+        for entry in EvidenceChain(os.path.join(ws, "memory", "evidence_chain.jsonl"))._entries
+        if entry.metadata.get("chunk_anchor_schema") == "MM_CHUNK_ANCHOR_v1"
+    ]
+    assert len(evidence) == 1
+    metadata = evidence[0].metadata
+    assert metadata["chunk_anchor_schema"] == "MM_CHUNK_ANCHOR_v1"
+    assert metadata["chunk_anchor_count"] == len(blocks)
+    assert metadata["chunk_anchor_encoding"] == "utf-8"
+
+    proposal_id = propose_import_release(ws, payload["block_ids"], system="markdown", batch=payload["batch"], now=FIXED_NOW)
+    applied = _approve(ws, proposal_id, dry_run=False)
+    assert applied["status"] == "applied"
+    released_hits = recall(ws, "π evidence sentence", limit=10)
+    assert {str(hit.get("id") or hit.get("_id")) for hit in released_hits} & set(payload["block_ids"])
 
 
 def test_a_second_import_chains_onto_the_first() -> None:
