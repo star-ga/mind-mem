@@ -4197,14 +4197,26 @@ def _cmd_receipt_export(args: argparse.Namespace) -> int:
 
 def _cmd_receipt_verify(args: argparse.Namespace) -> int:
     """Verify a receipt package from a regular file or bounded stdin."""
-    from mind_mem.retrieval_receipts import ReceiptError, verify_receipt
+    from mind_mem.retrieval_receipts import DEFAULT_MAX_PACKAGE_BYTES, ReceiptError, verify_receipt
 
     try:
-        if args.stdin:
-            source: bytes | Path = sys.stdin.buffer.read(args.max_package_bytes + 1)
+        if not isinstance(args.max_package_bytes, int) or args.max_package_bytes <= 0 or args.max_package_bytes > DEFAULT_MAX_PACKAGE_BYTES:
+            report = {
+                "checks": {},
+                "reason": f"max_package_bytes must be a positive integer no greater than {DEFAULT_MAX_PACKAGE_BYTES}",
+                "scope": "local",
+                "status": "malformed",
+            }
         else:
-            source = Path(args.input)
-        report = verify_receipt(source, max_package_bytes=args.max_package_bytes)
+            if args.stdin:
+                source: bytes | Path = sys.stdin.buffer.read(args.max_package_bytes + 1)
+            else:
+                source = Path(args.input)
+            report = verify_receipt(
+                source,
+                expected_manifest_sha256=args.expected_manifest_sha256,
+                max_package_bytes=args.max_package_bytes,
+            )
     except (ReceiptError, OSError, ValueError) as exc:
         report = {"checks": {}, "reason": str(exc), "scope": "local", "status": "unavailable"}
     print(json.dumps(report, sort_keys=True, separators=(",", ":")))
@@ -5520,6 +5532,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=12 * 1024 * 1024,
         help="Maximum package bytes read from the file or stdin.",
+    )
+    r_verify.add_argument(
+        "--expected-manifest-sha256",
+        default=None,
+        help="Optional independently retained manifest digest; mismatch is integrity_failed.",
     )
     r_verify.set_defaults(func=_cmd_receipt_verify)
 
