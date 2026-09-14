@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1575 | **Est. tokens:** ~4699413
-**Generated:** 2026-09-14 08:55 UTC
+**Files:** 1575 | **Est. tokens:** ~4700465
+**Generated:** 2026-09-14 09:06 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206831 |
+| `docs/` | 93 | ~206961 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -54,7 +54,7 @@
 | `docs/evidence/5.0.2-f1/` | 12 | ~188585 |
 | `docs/plans/` | 1 | ~6134 |
 | `docs/security-baselines/` | 1 | ~18974 |
-| `docs/specs/` | 1 | ~6874 |
+| `docs/specs/` | 1 | ~7796 |
 | `examples/` | 3 | ~1203 |
 | `hooks/` | 3 | ~1026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1211 |
@@ -335,7 +335,7 @@
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~2679 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1626 tok, huge) — Append-Only Audit Logs — Operator Runbook
-- `architecture.md` (~3387 tok, huge) — Architecture
+- `architecture.md` (~3506 tok, huge) — Architecture
 ### `docs/audit/`
 
 - `GROUP-R-AUDIT-2026-08-28.md` (~4973 tok, huge) — Group R — Independent Architecture Audit
@@ -499,7 +499,7 @@
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `review.md` (~1647 tok, huge) — `mm review` — batch approval for the HITL queue
 - `roadmap-v4.md` (~11235 tok, huge) — mind-mem v4.0 — Design Rationale
-- `roadmap.md` (~14259 tok, huge) — Roadmap
+- `roadmap.md` (~14270 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-audit-sow.md` (~3353 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
 ### `docs/security-baselines/`
@@ -511,7 +511,7 @@
 - `setup.md` (~2221 tok, huge) — Setup
 ### `docs/specs/`
 
-- `retrieval-receipt-contract.md` (~6874 tok, huge) — Retrieval receipt contract
+- `retrieval-receipt-contract.md` (~7796 tok, huge) — Retrieval receipt contract
 ### `docs/`
 
 - `status.md` (~1335 tok, large) — MIND-Mem — implementation status (alignment companion)

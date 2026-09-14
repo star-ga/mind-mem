@@ -17,8 +17,9 @@ below are historical planning records, not the current release declaration.
 
 The [retrieval receipt contract](specs/retrieval-receipt-contract.md) is a draft
 for portable evidence built over the existing served ledger. [Group RE](../ROADMAP.md#group-re--portable-retrieval-evidence)
-tracks schema/identity, export/verification, optional independent evidence
-exchange, and a measured operator pilot. Billing and settlement remain optional
+tracks schema/identity, export/verification, the independent CVS / MIND Witness
+contract, a measured operator pilot, and the required canonical-lineage consumer.
+Billing and settlement remain optional
 future adapters behind demonstrated demand. They do not block release readiness,
 Pure-MIND migration, or model training.
 

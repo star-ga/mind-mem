@@ -106,7 +106,7 @@ Keep three identities distinct:
 
 | Identity | Meaning |
 | --- | --- |
-| `canonical_512_hash` | Immutable commitment identifying the original 512 constitution claimed. |
+| `canonical_512_ref` | Typed algorithm/digest, canonical byte format and resolution provenance identifying the original 512 constitution claimed. `canonical_512_hash` means only its digest subfield. |
 | `implementation_spec_hash_v2` | Versioned commitment binding that root to the 512-MIND decomposition, registry and implementation. |
 | `mind_language_spec_ref` | Separately typed MIND language-spec identity; not an alias for the implementation hash. |
 
@@ -132,6 +132,53 @@ lineage status unknown; they cannot pass a new lineage-required profile through
 an invented field or a silent fallback. Keep lineage in the appropriate evidence
 plane: this does not authorize action identifiers or reward signals in an
 I13-governed non-causal structural witness.
+
+### 3.3 Independent CVS protocol and MIND adapter
+
+**Architectural separation adopted 2026-09-14; implementation pending.**
+CVS owns an environment-independent evidence protocol. MIND Witness is
+the MIND-specific adapter: it maps admitted MIND/MIND-Mem event evidence into
+that protocol, submits it with bounded retry behavior, and returns the scoped
+receipt/verification result. It must preserve original producer commitments and
+version references rather than rehashing rewritten fields as if they were the
+original evidence. Reuse the existing common evidence envelope on the MIND side
+and map it into the separately versioned CVS contract. CVS does not need to adopt
+MIND payload semantics, branding or runtime dependencies. Keep the two protocol
+owners explicit rather than forking either format silently.
+
+The protocol must be usable by a non-MIND producer without a MIND compiler or
+runtime dependency. Its minimal contract covers versioned evidence submission,
+idempotent acknowledgement, retrieval and verification, with explicit failure,
+retention, disclosure and trust profiles. Authentication to submit evidence
+does not authorize the producer's underlying computation. CVS must not acquire
+retrieval, governance or settlement authority from accepting an event.
+
+CVS is architecturally standalone and can be commercially deployed independently;
+this document does not claim such a service is already implemented or launched.
+The deployment must state who controls observation, keys, storage and retained
+checkpoints before making an independence claim. A producer-controlled process
+or key is not an independent witness just because its package has another name.
+
+The adapter binds the canonical MIND event/transition identity and artifact
+context to the CVS submission. CVS returns evidence that a verifier outside MIND
+can validate without trusting the adapter to declare itself correct. Verification
+must distinguish producer-submitted claims, independent receipt/custody, and
+independently observed execution. A signature over a producer's self-report
+does not prove the reported computation occurred. An execution-observation claim
+needs its own observation mechanism and failure tests.
+
+512-MIND may consume or require validated CVS evidence as a declared admission
+precondition. That is 512's policy decision; CVS does not own admissibility.
+Identify whether a precondition concerns prior evidence or a separately scoped
+observation of the current action, avoiding a circular requirement for a
+post-execution receipt before execution can begin. Current-action accounting
+before result release remains an explicit service policy, not witness authority.
+
+The existing MIND-EVIDENCE/1 shared-secret authentication is not public-key
+verification by an independent party. External profiles must state their actual
+algorithm/key/trust contract; a common envelope name cannot fill that gap.
+Production hosting, commercial terms and operational provisioning remain separate
+delivery decisions. Local audit retains its explicitly local proof scope.
 
 ## 4. Identity and candidate data contract
 
@@ -361,12 +408,19 @@ third-party model scores or differently scoped evidence records.
 | --- | --- | --- |
 | RE.1 | Freeze the smallest receipt contract and lifecycle rules. | Machine-readable schema, canonical vectors, coverage inventory and trust/disclosure decisions pass independent review. |
 | RE.2 | Implement the local export adapter and verifier over existing evidence. | RE-A1 through RE-A8 pass at the actual entry point; no runtime dependency or ranking change. |
-| RE.3 | Validate an optional independent evidence-exchange profile. | Authentic external checkpoint/identity controls and privacy review pass; local-only scope remains usable. |
+| RE.3 | Implement the independent CVS contract / MIND Witness adapter boundary. | A non-MIND producer and external verifier interoperate; issuer/checkpoint, observation-scope, custody, mapping-mutation and privacy controls pass. Local-only scope remains usable. |
 | RE.4 | Run a practical operator pilot and publish scoped results. | At least one actual audit/debugging task demonstrates utility; performance budgets and source/artifact evidence are recorded. |
 | RE.5 | Consume the required canonical 512 lineage profile. | Producer contract and manifest resolution are implemented; RE-A10 verifies authentic runtime verdict/event binding and rejects mutations. |
 | Commercial discovery | Identify a willing provider and consumer with an agreed metering problem. | Both parties accept the service and evidence model; compare the cost of receipt handling/batching with a simpler usage log or invoice. |
 | Optional aggregation | Build a settlement-neutral billable-unit adapter. | Demand gate passes, agreement profile is frozen, and RE-A9 plus independent arithmetic vectors pass. |
 | Optional settlement | Integrate a selected authorized arrangement. | Funding, authority, failure/reconciliation and confirmation behavior are specified and tested. |
+
+The **CVS/MIND Witness architectural split** is required for the RE.3 independent
+witness profile: define the neutral contract and MIND adapter, demonstrate a
+non-MIND producer and an external verifier, and test key/custody/observation
+boundaries. A deployment using only local MIND evidence must report that scope.
+Platform packaging, operation and commercial terms are separate decisions; none
+closes the required RE.5 lineage work.
 
 Stop or defer the commercial branch if there is no willing counterparty, if
 existing accounting solves the need adequately, or if the evidence cannot
@@ -374,7 +428,7 @@ support the agreed service claim. Retain the useful local audit capability.
 Model-training funding and milestones remain separate.
 
 RE.2 depends on RE.1. The local pilot in RE.4 can follow RE.2 without waiting
-for optional external exchange in RE.3. Any commercial adapter also requires
+for the independent witness profile in RE.3. Any commercial adapter also requires
 the proof profile its counterparties actually accept; local consistency must
 not silently stand in for independent history.
 RE.5 depends on the 512-MIND producer's canonical-lineage implementation; it

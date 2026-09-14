@@ -183,6 +183,13 @@ independently retained history. The new interface is a draft, not a shipped
 receipt service. Optional economic adapters consume agreed, eligible events
 downstream and have no authority over retrieval ranking or governed writes.
 
+The adopted target architecture gives CVS an environment-independent evidence
+contract, with MIND Witness as the MIND event/artifact adapter and 512-MIND as
+the admissibility layer. Independent verification, observation and custody need
+explicit proof profiles; an internal signed self-report is not an independent
+execution witness. This separation and canonical-lineage integration are open
+implementation work in Group RE, not properties inferred from the current ledger.
+
 Further rows in the same report are **not** ledgers
 (`verify_cli.NON_LEDGER_CHECKS`): `spec_binding` compares the live
 `mind-mem.json` against its attestation, `open_scopes` asks the evidence
