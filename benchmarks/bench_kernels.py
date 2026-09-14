@@ -108,28 +108,19 @@ def py_top_k_mask(scores: list[float], k: int) -> list[bool]:
     """Match ``lib/kernels.c:top_k_mask`` for float32-domain scores.
 
     The native contract admits scores strictly greater than ``-INFINITY``;
-    NaN and negative infinity are ineligible.  Repeated strict ``>`` scans
-    preserve the first input occurrence for ties and never select more than
-    ``k`` entries.  The benchmark supplies float32-normalized inputs before
-    timing, so this function contains no conversion work in its timed path.
+    NaN and negative infinity are ineligible.  A stable descending sort of
+    eligible indices preserves the first input occurrence for ties and never
+    selects more than ``k`` entries.  The benchmark supplies float32-
+    normalized inputs before timing, so this function contains no conversion
+    work in its timed path.
     """
     n = len(scores)
     mask = [False] * n
     if k <= 0 or n == 0:
         return mask
-    if k >= n:
-        return [score > -math.inf for score in scores]
-
-    for _ in range(k):
-        best_index = -1
-        best_value = -math.inf
-        for index, score in enumerate(scores):
-            if not mask[index] and score > best_value:
-                best_value = score
-                best_index = index
-        if best_index < 0:
-            break
-        mask[best_index] = True
+    eligible = [index for index, score in enumerate(scores) if score > -math.inf]
+    for index in sorted(eligible, key=scores.__getitem__, reverse=True)[:k]:
+        mask[index] = True
     return mask
 
 

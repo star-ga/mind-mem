@@ -15,6 +15,7 @@ symbol.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import os
 import shutil
@@ -23,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks.bench_kernels import py_top_k_mask
 from mind_mem import __version__
 from mind_mem.mind_ffi import MindMemKernel
 
@@ -111,6 +113,7 @@ def test_rrf_empty_vectors_are_a_valid_empty_result(production_kernel: MindMemKe
         ([0.9, 0.7, 0.8, 0.1], 2, [True, False, True, False]),
         ([0.5, 0.5, 0.4], 1, [True, False, False]),
         ([0.5, 0.5, 0.4], 2, [True, True, False]),
+        ([2.0, 2.0, 3.0], 2, [True, False, True]),
         ([0.9, 0.7], 0, [False, False]),
         ([0.9, 0.7], 2, [True, True]),
         ([], 0, []),
@@ -142,7 +145,11 @@ def test_rrf_empty_vectors_are_a_valid_empty_result(production_kernel: MindMemKe
     ],
 )
 def test_top_k_mask_boundaries_and_input_order_ties(production_kernel: MindMemKernel, scores: list[float], k: int, expected: list[bool]):
-    assert production_kernel.top_k_mask_py(scores, k) == expected
+    # The C ABI receives float32 values.  Normalize once so the independent
+    # Python reference and actual consumer are checked on identical inputs.
+    normalized_scores = [ctypes.c_float(score).value for score in scores]
+    assert py_top_k_mask(normalized_scores, k) == expected
+    assert production_kernel.top_k_mask_py(normalized_scores, k) == expected
 
 
 def _compile_version_provider(tmp_path: Path, version: str) -> Path:
