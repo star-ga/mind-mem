@@ -241,6 +241,36 @@ class TestPostgresRecallLive:
         assert store.get_all() == []
         assert recall(ws, query, limit=5) == []
 
+    def test_recall_agent_acl_uses_real_database_sources(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
+        ws, store = pg_workspace
+        (Path(ws) / "mind-mem-acl.json").write_text(
+            json.dumps(
+                {
+                    "agents": {
+                        "alice": {"read": ["shared", "agents/alice"], "write": []},
+                        "bob": {"read": ["shared", "agents/bob"], "write": []},
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        for owner in ("alice", "bob", "shared"):
+            source = "shared/decisions/DECISIONS.md" if owner == "shared" else f"agents/{owner}/decisions/DECISIONS.md"
+            store.write_block(
+                {
+                    "_id": f"D-PG-ACL-{owner.upper()}",
+                    "_source_file": source,
+                    "Statement": f"database namespace marker {owner}",
+                    "Status": "active",
+                }
+            )
+
+        for principal in ("alice", "bob"):
+            hits = recall(ws, "database namespace marker", agent_id=principal, rerank=False)
+            assert {h["_id"] for h in hits} == {f"D-PG-ACL-{principal.upper()}", "D-PG-ACL-SHARED"}
+        assert recall(ws, "bob", agent_id="alice", rerank=False) == []
+        assert {h["_id"] for h in recall(ws, "bob", agent_id="bob", rerank=False)} == {"D-PG-ACL-BOB"}
+
     def test_recall_respects_limit(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
         ws, store = pg_workspace
         for i in range(5):

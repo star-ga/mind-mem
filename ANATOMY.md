@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1618 | **Est. tokens:** ~4766388
-**Generated:** 2026-09-14 14:24 UTC
+**Files:** 1618 | **Est. tokens:** ~4766741
+**Generated:** 2026-09-14 14:27 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 709 | ~2110021 |
+| `tests/` | 709 | ~2110374 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1682,7 +1682,7 @@
 - `test_recall_metadata.py` (~1345 tok, large) — Tests for A-MEM block metadata integration in recall pipeline."""
 - `test_recall_pgvector_engagement.py` (~2392 tok, huge) — Regression tests for the Postgres pgvector recall-engagement audit.
 - `test_recall_post_filters.py` (~310 tok, medium) — recall() applies lifecycle/event_id/min_maturity on EVERY dispatch path.
-- `test_recall_postgres_backend.py` (~2957 tok, huge) — Backend-aware recall dispatch — Postgres parity (audit bug 1).
+- `test_recall_postgres_backend.py` (~3310 tok, huge) — Backend-aware recall dispatch — Postgres parity (audit bug 1).
 - `test_recall_priority.py` (~414 tok, medium) — Tests for priority boost in recall."""
 - `test_recall_quality_locomo.py` (~2613 tok, huge) — LoCoMo recall-quality regression gate.
 - `test_recall_query_id_join.py` (~7740 tok, huge) — RA.1's residual, closed: the recall envelope publishes the run identity.
