@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1616 | **Est. tokens:** ~4757527
-**Generated:** 2026-09-14 13:31 UTC
+**Files:** 1616 | **Est. tokens:** ~4757712
+**Generated:** 2026-09-14 13:37 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1074935 |
+| `src/mind_mem/` | 237 | ~1075058 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 707 | ~2103104 |
+| `tests/` | 707 | ~2103166 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -775,7 +775,7 @@
 - `block_provenance.py` (~2728 tok, huge) — Provenance-rich blocks — optional actor/session/tool/source metadata.
 - `block_store.py` (~18362 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `block_store_encrypted.py` (~5809 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~22467 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~22590 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~3138 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1613,7 +1613,7 @@
 - `test_pipeline_hash.py` (~3381 tok, huge) — Tests for v3.9 hash-of-code pipeline invalidation."""
 - `test_post_train_chain_receipts.py` (~824 tok, large) — Regression controls for the post-training receipt comparison shell path."""
 - `test_postgres_active_admission.py` (~6670 tok, huge) — R2-06 — on Postgres, ``blocks.active`` must mean what admission means.
-- `test_postgres_block_store.py` (~8589 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
+- `test_postgres_block_store.py` (~8651 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_postgres_partial_import.py` (~992 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_postgres_pool_shutdown.py` (~1303 tok, large) — Regression coverage for process-wide Postgres pool shutdown."""
 - `test_postgres_replica_routing.py` (~2241 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""

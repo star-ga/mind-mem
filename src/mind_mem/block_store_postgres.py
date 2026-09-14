@@ -1150,7 +1150,6 @@ class PostgresBlockStore:
         """
         self._ensure_schema()
         psycopg, _ = _require_psycopg()
-        pool = self._get_pool()
 
         # Bound caller-controlled values so a runaway agent can't trigger
         # an OOM via huge candidate_pool / limit values. The caps are
@@ -1164,6 +1163,11 @@ class PostgresBlockStore:
         if query_embedding is not None and len(query_embedding) != self._embedding_dim:
             raise BlockStoreError(f"query_embedding dim mismatch: got {len(query_embedding)}, schema expects {self._embedding_dim}")
         do_vector = query_embedding is not None and self._has_vector
+        # Validate the vector before opening a pool.  The empty/mismatched
+        # vector path is locally decidable and must not create connection-pool
+        # workers for a request that will be refused.
+        emb_lit = _embedding_to_pg(query_embedding) if do_vector and query_embedding is not None else None
+        pool = self._get_pool()
 
         # BM25 lexical arm: OR the query terms (via to_tsquery) instead of
         # plainto_tsquery's implicit AND. plainto ANDs every term, so a
@@ -1207,7 +1211,7 @@ class PostgresBlockStore:
                         bm25_rows = cur.fetchall()  # [(id, rank), ...]
                     cos_rows: list[tuple[str, float]] = []
                     if do_vector:
-                        emb_lit = _embedding_to_pg(query_embedding or [])
+                        assert emb_lit is not None
                         cur.execute(cos_sql, (emb_lit, emb_lit, candidate_pool))
                         cos_rows = cur.fetchall()
 
@@ -1375,7 +1379,6 @@ class PostgresBlockStore:
         """
         require_admission(str(block.get("_id") or ""), status=block.get("Status"), provenance=extract_provenance(block))
         self._ensure_schema()
-        pool = self._get_pool()
         block_id, file_path, content, metadata_json = _block_to_row(block)
         # The ``active`` column is written, not defaulted. It used to be
         # declared ``NOT NULL DEFAULT TRUE`` and named by no INSERT and no
@@ -1388,6 +1391,7 @@ class PostgresBlockStore:
         if embedding is not None and self._has_vector:
             if len(embedding) != self._embedding_dim:
                 raise BlockStoreError(f"embedding dim mismatch: got {len(embedding)}, schema expects {self._embedding_dim}")
+            embedding_literal = _embedding_to_pg(embedding)
             sql = _sql(
                 self._schema,
                 "INSERT INTO {s}.blocks (id, file_path, content, metadata, embedding, active, updated_at)"
@@ -1400,7 +1404,7 @@ class PostgresBlockStore:
                 "         active     = EXCLUDED.active,"
                 "         updated_at = EXCLUDED.updated_at",
             )
-            params: tuple[Any, ...] = (block_id, file_path, content, metadata_json, _embedding_to_pg(embedding), active)
+            params: tuple[Any, ...] = (block_id, file_path, content, metadata_json, embedding_literal, active)
         else:
             sql = _sql(
                 self._schema,
@@ -1414,6 +1418,9 @@ class PostgresBlockStore:
                 "         updated_at = EXCLUDED.updated_at",
             )
             params = (block_id, file_path, content, metadata_json, active)
+        # All refusal-capable input validation is complete before opening the
+        # pool.  A malformed block or embedding must not create workers.
+        pool = self._get_pool()
         try:
             with pool.connection() as conn:
                 with conn.transaction():
