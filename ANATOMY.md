@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1653 | **Est. tokens:** ~4859920
-**Generated:** 2026-09-14 20:11 UTC
+**Files:** 1653 | **Est. tokens:** ~4860015
+**Generated:** 2026-09-14 20:41 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 731 | ~2153491 |
+| `tests/` | 731 | ~2153586 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1800,7 +1800,7 @@
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_asyncapi_drift.py` (~1462 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_sdk_exporter_package_layout.py` (~818 tok, large) — The spec exporters must work after installation outside a checkout."""
+- `test_sdk_exporter_package_layout.py` (~913 tok, large) — The spec exporters must work after installation outside a checkout."""
 - `test_sdk_js_packaging.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.

@@ -25,8 +25,13 @@ def _installed_package(tmp_path: Path) -> tuple[Path, dict[str, str]]:
 
 
 def _run(site: Path, env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
+    # ``-P`` was added in Python 3.11.  The CI matrix includes 3.10, where
+    # the temporary working directory is already outside the checkout and
+    # contains no importable ``mind_mem`` package, so omitting the flag keeps
+    # the same installed-package isolation without an unsupported option.
+    safe_path_args = ["-P"] if sys.version_info >= (3, 11) else []
     return subprocess.run(
-        [sys.executable, "-P", *args],
+        [sys.executable, *safe_path_args, *args],
         cwd=site.parent,
         env=env,
         text=True,
