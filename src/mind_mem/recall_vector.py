@@ -2057,7 +2057,7 @@ def rebuild_index(workspace: str) -> int:
     # anything unlabelled.
     from .admissibility import admit_corpus
 
-    blocks = admit_corpus(parsed)
+    blocks = admit_corpus(parsed, workspace=workspace)
     withheld = len(parsed) - len(blocks)
     if withheld:
         _log.info("rebuild_index_withheld", workspace=workspace, withheld=withheld)

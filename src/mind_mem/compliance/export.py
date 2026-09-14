@@ -210,7 +210,7 @@ def load_admitted_blocks(workspace: str) -> tuple[list[dict], int]:
                 block["_source"] = source
             parsed.extend(blocks)
 
-    admitted = admit_corpus(parsed)
+    admitted = admit_corpus(parsed, workspace=workspace)
     return admitted, len(parsed) - len(admitted)
 
 

@@ -10,6 +10,8 @@ from mind_mem.block_store import MarkdownBlockStore
 from mind_mem.init_workspace import init
 from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.mcp.tools.recall import pack_recall_budget
+from mind_mem.namespace_retrieval import declaration_for, filter_search_hits
+from mind_mem._recall_core import knee_cutoff
 
 
 def _block(path: Path, block_id: str, block_type: str, statement: str) -> None:
@@ -114,3 +116,45 @@ def test_pack_injects_only_admitted_behavior_blocks_under_hard_cap(tmp_path: Pat
     assert payload["always_injected"] == {"count": 1, "cap": 1, "content_type": "behavior"}
     assert "BEHAVIOR-1" in included_ids
     assert "FACT-1" not in included_ids
+
+
+def test_malformed_namespace_declaration_fails_closed_and_missing_source_is_rejected() -> None:
+    bad = {"recall": {"namespace_properties": {"workspace": {"reachability": "maybe"}}}}
+    import pytest
+
+    with pytest.raises(ValueError):
+        declaration_for(bad, "workspace")
+    cfg = {"recall": {"min_score": 0.9, "namespace_properties": {"workspace": {"floor": "none"}}}}
+    assert filter_search_hits([{"_id": "x", "score": 1.0}], cfg) == []
+    hits = filter_search_hits(
+        [{"_id": "a", "score": 1.0, "file": "decisions/DECISIONS.md"}, {"_id": "b", "score": 0.95, "file": "decisions/DECISIONS.md"}],
+        cfg,
+    )
+    assert len(knee_cutoff(hits, min_results=1, min_score=0.9)) == 2
+
+
+def test_pack_allows_empty_query_only_for_configured_always_namespace(tmp_path: Path, monkeypatch) -> None:
+    ws = tmp_path / "empty-pack"
+    init(str(ws))
+    _block(ws / "always/decisions/BEHAVIOR.md", "BEHAVIOR-1", "Behavior", "empty query behavior")
+    _config(ws, {"always": {"reachability": "always-injected", "floor": "none", "max_items": 1, "content_type": "behavior"}})
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
+    with use_workspace(str(ws)):
+        payload = json.loads(pack_recall_budget("", max_tokens=1000, limit=10))
+    assert payload["included"][0]["_id"] == "BEHAVIOR-1"
+
+
+def test_wildcard_always_namespace_expands_only_real_directories(tmp_path: Path) -> None:
+    from mind_mem.namespace_retrieval import always_injected_hits
+
+    ws = tmp_path / "wildcard"
+    init(str(ws))
+    _block(ws / "agents/a1/decisions/BEHAVIOR.md", "BEHAVIOR-1", "Behavior", "agent behavior")
+    cfg = json.loads((ws / "mind-mem.json").read_text(encoding="utf-8"))
+    cfg["recall"]["namespace_properties"] = {
+        "agents/*": {"reachability": "always-injected", "floor": "none", "max_items": 1, "content_type": "behavior"}
+    }
+    selected, meta = always_injected_hits(str(ws), cfg)
+    assert [item["_id"] for item in selected] == ["BEHAVIOR-1"]
+    assert selected[0]["file"] == "agents/a1/decisions/BEHAVIOR.md"
+    assert meta["cap"] == 1

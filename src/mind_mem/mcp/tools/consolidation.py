@@ -184,7 +184,7 @@ def plan_consolidation(
             # now one of them.
             from mind_mem.admissibility import admit_corpus
 
-            for r in admit_corpus([{"_id": r["block_id"], "Status": r["status"], "_row": r} for r in rows]):
+            for r in admit_corpus([{"_id": r["block_id"], "Status": r["status"], "_row": r} for r in rows], workspace=ws):
                 r = r["_row"]
                 tel = telemetry.get(r["block_id"], _NO_TELEMETRY)
                 try:
@@ -235,7 +235,7 @@ def plan_consolidation(
         # identical to the pre-gate implementation.
         payload["plan"] = _plan(blocks, config=cfg, now=now).as_dict()
         if granularity_on:
-            payload["granularity_align"] = _granularity_section(db_path, granularity)
+            payload["granularity_align"] = _granularity_section(db_path, granularity, workspace=ws)
         return json.dumps(payload, indent=2)
 
     from mind_mem.consolidation_maturity_gate import (
@@ -258,7 +258,7 @@ def plan_consolidation(
     payload["plan"] = _plan(blocks, config=cfg, gate=gate, now=now).as_dict()
     payload["maturity_gate"] = {"min_maturity": gate_cfg.min_maturity, **decision.as_dict()}
     if granularity_on:
-        payload["granularity_align"] = _granularity_section(db_path, granularity)
+        payload["granularity_align"] = _granularity_section(db_path, granularity, workspace=ws)
     return json.dumps(payload, indent=2)
 
 
@@ -382,7 +382,7 @@ def _bounded_int(raw: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, value))
 
 
-def _load_granularity_blocks(db_path: str, limit: int) -> list[dict[str, Any]]:
+def _load_granularity_blocks(db_path: str, limit: int, *, workspace: str | None = None) -> list[dict[str, Any]]:
     """Read the block text granularity alignment compares. Flag-gated caller only.
 
     Top-level blocks only (``parent_id = ''``): the sub-blocks are extracted
@@ -433,7 +433,9 @@ def _load_granularity_blocks(db_path: str, limit: int) -> list[dict[str, Any]]:
     # _recall_core, hybrid_recall); this one is now one of them.
     from mind_mem.admissibility import admit_corpus
 
-    admitted = admit_corpus([{"_id": r["id"], "Status": r["status"], "_row": r} for r in rows])
+    admitted = admit_corpus(
+        [{"_id": r["id"], "Status": r["status"], "_row": r} for r in rows], workspace=workspace
+    )
 
     for _entry in admitted:
         r = _entry["_row"]
@@ -456,7 +458,7 @@ def _load_granularity_blocks(db_path: str, limit: int) -> list[dict[str, Any]]:
     return blocks
 
 
-def _granularity_section(db_path: str, settings: dict[str, Any]) -> dict[str, Any]:
+def _granularity_section(db_path: str, settings: dict[str, Any], *, workspace: str | None = None) -> dict[str, Any]:
     """Build the proposal-only merge-candidate section of the plan.
 
     Runs only with ``v4.granularity_align`` on. Every value here is a pure
@@ -480,7 +482,7 @@ def _granularity_section(db_path: str, settings: dict[str, Any]) -> dict[str, An
     max_candidates = _bounded_int(settings.get("max_candidates", _GRANULARITY_MAX_CANDIDATES), _GRANULARITY_MAX_CANDIDATES, 0, 500)
     max_blocks = _bounded_int(settings.get("max_blocks", _GRANULARITY_MAX_BLOCKS), _GRANULARITY_MAX_BLOCKS, 1, 5000)
 
-    blocks = _load_granularity_blocks(db_path, max_blocks)
+    blocks = _load_granularity_blocks(db_path, max_blocks, workspace=workspace)
     candidates = find_merge_candidates(blocks, min_similarity=min_similarity, max_candidates=max_candidates)
 
     entries: list[dict[str, Any]] = []

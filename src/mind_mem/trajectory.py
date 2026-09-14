@@ -460,7 +460,7 @@ def load_trajectories(workspace: str) -> list[dict]:
         if parsed is not None and parsed.get("_id") == fname[:-3]:
             blocks.append(parsed)
 
-    return admit_corpus(blocks)
+    return admit_corpus(blocks, workspace=workspace)
 
 
 # ---------------------------------------------------------------------------

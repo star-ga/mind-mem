@@ -316,6 +316,7 @@ def admit_corpus(
     *,
     status_key: str = "Status",
     allow: frozenset[str] = frozenset(),
+    workspace: str | None = None,
 ) -> list[dict]:
     """The servable subset of a parsed corpus, order preserved.
 
@@ -330,8 +331,13 @@ def admit_corpus(
     asked to see unreviewed signals; it is a per-call widening with a
     caller behind it, never a default.
     """
-    releases = release_ids(blocks)
-    return [dict(b) for b in blocks if _admitted(b, status_key, releases, allow)]
+    rows = [dict(b) for b in blocks]
+    if workspace is not None:
+        from .content_lifecycle import filter_revoked_credentials
+
+        rows = filter_revoked_credentials(rows, workspace)
+    releases = release_ids(rows)
+    return [dict(b) for b in rows if _admitted(b, status_key, releases, allow)]
 
 
 def admit_leg(

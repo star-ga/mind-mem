@@ -1281,13 +1281,16 @@ def pack_recall_budget(
     if ws_err:
         return ws_err
 
-    if not isinstance(query, str) or not query.strip():
-        return json.dumps({"error": "query must be a non-empty string"})
+    if not isinstance(query, str):
+        return json.dumps({"error": "query must be a string"})
     if max_tokens <= 0 or max_tokens > 1_000_000:
         return json.dumps({"error": "max_tokens must be in [1, 1_000_000]"})
     if limit < 1 or limit > 500:
         return json.dumps({"error": "limit must be in [1, 500]"})
 
+    always_results, always_meta = always_injected_hits(ws, _load_config(ws))
+    if not query.strip() and not always_results:
+        return json.dumps({"error": "query must be a non-empty string"})
     raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
     attestation: dict[str, Any] | None = None
     if isinstance(raw, dict):
@@ -1302,7 +1305,6 @@ def pack_recall_budget(
     # the ranked answer. They are loaded through the same admission predicate
     # and are prepended so the existing packer treats them as highest priority.
     # An absent declaration returns an empty list and preserves the old output.
-    always_results, always_meta = always_injected_hits(ws, _load_config(ws))
     results = always_results + results
 
     # None keeps the char-count estimator that has always priced this pack,

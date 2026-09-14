@@ -289,7 +289,12 @@ def knee_cutoff(
     best_cut = max(min_results, best_cut)
 
     # Also filter by absolute minimum score
-    filtered = [r for r in results[:best_cut] if r.get("score", 0) >= min_score]
+    # A namespace may explicitly declare ``floor: none``.  Preserve that
+    # declaration through the global knee stage; applying ``min_score`` here
+    # would make the setting ineffective after the earlier namespace filter.
+    filtered = [
+        r for r in results[:best_cut] if r.get("score", 0) >= min_score or r.get("_namespace_floor_none") is True
+    ]
     return filtered if filtered else results[:min_results]
 
 
@@ -1060,9 +1065,11 @@ def recall(
         _indexed_recall_cfg = {}
     _validity_cfg = _indexed_recall_cfg.get("validity_gate")
     _validity_on = isinstance(_validity_cfg, dict) and bool(_validity_cfg.get("enabled", False))
+    _namespace_props = _indexed_recall_cfg.get("namespace_properties")
+    _namespace_on = isinstance(_namespace_props, dict) and bool(_namespace_props)
     # Demotion needs candidates outside the original top-k. Otherwise an
     # enabled gate can lower the first hit's score but cannot replace it.
-    _wide_pool_k = max(retrieve_wide_k, limit) if _filters_on or _validity_on else None
+    _wide_pool_k = max(retrieve_wide_k, limit) if _filters_on or _validity_on or _namespace_on else None
 
     if _cfg_backend == "sqlite":
         from .sqlite_index import query_index

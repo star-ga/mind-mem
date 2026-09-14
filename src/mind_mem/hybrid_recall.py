@@ -1544,7 +1544,7 @@ class HybridBackend:
             # again on its own corpus argument — this is not redundancy, it
             # is the same rule enforced at the point of use so a caller that
             # loads its own corpus cannot bypass it.
-            return admit_corpus(blocks)
+            return admit_corpus(blocks, workspace=workspace)
         except Exception as exc:  # pragma: no cover
             _log.warning("corpus_load_failed", error=str(exc))
             return None

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from mind_mem._recall_core import recall
-from mind_mem.content_lifecycle import ContentLifecyclePolicy
+from mind_mem.content_lifecycle import ContentLifecyclePolicy, content_identity, live_content_blocks
 from mind_mem.dream_cycle import pass_stale_detection
 from mind_mem.init_workspace import init
 from mind_mem.memory_tiers import DemotionReason, MemoryTier, TierManager
@@ -135,6 +135,45 @@ def test_credential_revocation_is_not_overridden_by_durability(tmp_path: Path) -
     hits = recall(workspace, "orchid", limit=10, rerank=False, scoring_instant=NOW)
     assert hits
     assert "D-20260901-004" not in {hit["_id"] for hit in hits}
+
+
+def test_lifetime_metadata_is_bound_to_namespace_source_when_ids_repeat(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    shared = Path(workspace) / "shared" / "decisions"
+    shared.mkdir(parents=True)
+    shared.joinpath("DECISIONS.md").write_text(
+        "[D-20260901-001]\nStatus: active\nContentCategory: status\nContentValidFrom: 2026-09-01\nStatement: shared copy\n\n",
+        encoding="utf-8",
+    )
+    root_row = {"_id": "D-20260901-001", "_source_file": "decisions/DECISIONS.md"}
+    shared_row = {"_id": "D-20260901-001", "_source_file": "shared/decisions/DECISIONS.md"}
+    records = live_content_blocks(workspace, blocks=[root_row, shared_row])
+    assert sum(key[2] == "D-20260901-001" for key in records) == 2
+    assert content_identity(root_row) != content_identity(shared_row)
+    hit = {**shared_row, "Status": "active", "score": 1.0}
+    assert apply_validity_gate([hit], workspace, CFG, scoring_instant=NOW) == 1
+    assert hit["validity"]["content_lifecycle"]["state"] == "stale"
+
+
+def test_revoked_credentials_are_withheld_by_generic_corpus_admission(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    corpus = Path(workspace) / "decisions/DECISIONS.md"
+    corpus.write_text(corpus.read_text().replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"))
+    from mind_mem.admissibility import admit_corpus
+
+    rows = [{"_id": "D-20260901-004", "_source_file": "decisions/DECISIONS.md", "Status": "active", "ContentCategory": "credential"}]
+    assert admit_corpus(rows, workspace=workspace) == []
+
+
+def test_compliance_export_door_applies_revocation_before_serialization(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    corpus = Path(workspace) / "decisions/DECISIONS.md"
+    corpus.write_text(corpus.read_text().replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"))
+    from mind_mem.compliance.export import load_admitted_blocks
+
+    admitted, withheld = load_admitted_blocks(workspace)
+    assert withheld == 1
+    assert "D-20260901-004" not in {row["_id"] for row in admitted}
 
 
 def test_public_direct_fetch_withholds_revoked_credential_but_serves_decision(tmp_path: Path, monkeypatch) -> None:

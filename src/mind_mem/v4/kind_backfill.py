@@ -126,7 +126,7 @@ def _admitted_blocks(workspace: str) -> tuple[int, list[dict[str, Any]]]:
     from ..storage import iter_blocks
 
     raw = iter_blocks(workspace, active_only=False)
-    admitted = admit_corpus(raw)
+    admitted = admit_corpus(raw, workspace=workspace)
     admitted.sort(key=lambda b: str(b.get("_id", "")))
     return len(raw), [b for b in admitted if str(b.get("_id", "")).strip()]
 
