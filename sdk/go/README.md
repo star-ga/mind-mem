@@ -31,7 +31,7 @@ import (
     "log"
     "os"
 
-    mindmem "github.com/star-ga/mind-mem/sdk/go"
+    mindmem "github.com/star-ga/mind-mem/sdk/go/v5"
 )
 
 func main() {
@@ -47,7 +47,7 @@ func main() {
         log.Fatal(err)
     }
     for _, item := range result.Results {
-        fmt.Printf("[%.2f] %s\n", item.Score, item.Block.Content)
+        fmt.Printf("[%.2f] %s\n", item.Score, item.Excerpt)
     }
 }
 ```

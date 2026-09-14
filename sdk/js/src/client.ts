@@ -29,7 +29,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  *
  * @example
  * ```ts
- * import { MindMemClient } from '@mind-mem/sdk';
+ * import { MindMemClient } from '@star-ga/mind-mem-client';
  *
  * const client = new MindMemClient('http://localhost:8080', {
  *   token: process.env.MIND_MEM_TOKEN,
@@ -67,6 +67,7 @@ export class MindMemClient {
     if (opts.limit !== undefined) body["limit"] = opts.limit;
     if (opts.activeOnly !== undefined) body["active_only"] = opts.activeOnly;
     if (opts.backend !== undefined) body["backend"] = opts.backend;
+    if (opts.scoringInstant !== undefined) body["scoring_instant"] = opts.scoringInstant;
     return this.request<RecallResult>(ROUTE_RECALL.method, expandRoute(ROUTE_RECALL), {
       body,
     });

@@ -1,101 +1,67 @@
 # SDK release path
 
-Everything here stops short of publishing. Both publish steps need a decision
-that is an operator's to make, and both are irreversible, so what ships is the
-packaging, the version derivation, and the gates — never the push.
+Both SDKs share the MIND-Mem version from `pyproject.toml`. The npm package is
+`@star-ga/mind-mem-client`; the Go module is
+`github.com/star-ga/mind-mem/sdk/go/v5`. Registry publication remains pending.
 
-## What is derived, and from what
-
-`pyproject.toml`'s `[project].version` is the only version in the repository.
-`version.py` derives everything else from it:
+## Version and contract checks
 
 ```bash
-python3 sdk/release/version.py            # print the derived identifiers
-python3 sdk/release/version.py --check    # exit 1 if the tree disagrees
+python3 sdk/release/version.py --check
+python3 sdk/release/pack_js.py --check
+PYTHONPATH=src python3 -m pytest tests/test_sdk_response_contract.py tests/test_sdk_route_conformance.py tests/test_sdk_release_versioning.py tests/test_sdk_js_packaging.py
 ```
 
-```
-package_version: 5.0.1
-go_module_path:  github.com/star-ga/mind-mem/sdk/go/v5
-go_tag:          sdk/go/v5.0.1
-npm_version:     5.0.1
-```
+The response gate calls the authenticated REST API on a synthetic workspace.
+Both client suites consume the resulting contract fixtures. Changes to a route
+or served response therefore need corresponding client support.
 
-Gated by `tests/test_sdk_release_versioning.py` and
-`tests/test_sdk_js_packaging.py`.
+## Build and inspect the npm artifact
 
-## Go module — the defect this closed
-
-`sdk/go/go.mod` declared `module github.com/star-ga/mind-mem/sdk/go`, with no
-major-version suffix. A subdirectory module publishes under a tag prefixed by
-its directory, so the 5.x line publishes as `sdk/go/v5.0.2` — and Go refuses a
-v2-or-higher version for a module path with no matching `/vN` suffix. The tag
-would have resolved to nothing, `go get` would have failed for every consumer
-with a module-path mismatch, and **a tag pushed to a public repository cannot
-be withdrawn from the module proxy**. The item was filed as "only the publish
-step is open"; the publish step was the broken part.
-
-The suffix is now derived rather than typed, so a future major cannot leave it
-behind: `version.py --check` goes red when `go.mod` and the package version
-part company.
-
-### Publishing (operator, after the release tag)
+Run these commands from the repository root after the client tests pass:
 
 ```bash
-git tag sdk/go/v5.0.2        # exact string from `version.py`
-git push origin sdk/go/v5.0.2
-GOPROXY=proxy.golang.org go list -m github.com/star-ga/mind-mem/sdk/go/v5@v5.0.2
+npm --prefix sdk/js ci --ignore-scripts
+npm --prefix sdk/js test
+npm --prefix sdk/js run build
+python3 sdk/release/pack_js.py --stage /tmp/mind-mem-client-package
+npm pack /tmp/mind-mem-client-package
 ```
 
-**Decision needed:** whether the Go client shares the package's version line at
-all. It does today, which is why the `/v5` suffix is required. Giving it an
-independent v1 line would drop the suffix and decouple the two — a legitimate
-choice, but it must be made before the first tag, because the module path is
-part of every consumer's import statement.
+Use a fresh staging directory for each build. `--stage` requires the compiled
+JavaScript and declarations. It stamps the version, removes the private flag,
+and omits source-only lifecycle scripts and development dependencies. In
+particular, publication must not rebuild the staged artifact: it contains the
+reviewed `dist/`, license and README, without the compiler sources.
 
-## npm package
+The source manifest stays private and its placeholder version cannot reach the
+registry through this path. Install the resulting tarball in a fresh consumer
+project and check its import before uploading that same tarball:
 
 ```bash
-python3 sdk/release/pack_js.py --check           # validate the staged manifest
-cd sdk/js && npm install && npm run build        # produce dist/
-python3 sdk/release/pack_js.py --stage /tmp/pkg  # publishable copy
-cd /tmp/pkg && npm pack                          # tarball, for inspection
+npm publish /path/to/star-ga-mind-mem-client-VERSION.tgz --access public
 ```
 
-`sdk/js/package.json` carries `"private": true`, so `npm publish` in the source
-tree refuses. The staged copy drops the flag and takes its version from
-`pyproject.toml`, so the `0.1.0` sitting in the manifest cannot reach a
-registry.
+This upload needs npm authentication with publish rights to the `@star-ga`
+scope. The repository does not contain registry credentials.
 
-**Decision needed:** the package name. The manifest says `@mind-mem/sdk`; the
-roadmap says `@star-ga/mind-mem-client`. An npm name is not reclaimable, and
-the two names imply different scopes to own. Once settled, change `name` in
-`sdk/js/package.json` and publish the staged directory:
+## Publish the Go module
+
+After the verified release commit is on the public repository, take the exact
+subdirectory tag from `python3 sdk/release/version.py`. For the 5.0.3 candidate
+it is `sdk/go/v5.0.3`. Create that new tag at the release commit, push it, and
+verify it through the module proxy:
 
 ```bash
-cd /tmp/pkg && npm publish --access public
+GOPROXY=proxy.golang.org go list -m github.com/star-ga/mind-mem/sdk/go/v5@v5.0.3
 ```
 
-## The CI job
+Never move an existing published tag. The `/v5` module path and the
+`sdk/go/v5.x.y` tag prefix are both required by Go's module versioning rules.
 
-Not committed — `.github/workflows/` was outside this change's scope. The job
-is three steps and needs no secrets, because it does not publish:
+## CI
 
-```yaml
-# .github/workflows/ci.yml — add to the existing job matrix
-- name: SDK gates
-  run: |
-    python3 -m mind_mem.spec.export_openapi --check
-    python3 sdk/release/version.py --check
-    python3 sdk/release/pack_js.py --check
-- name: Go client
-  run: cd sdk/go && go vet ./... && go test ./...
-- name: JS client
-  run: cd sdk/js && npm ci && npm test
-```
-
-The first step is already covered by `tests/test_sdk_*.py`, so the Python
-matrix enforces it today with no workflow change at all. The Go and JS steps
-are the genuinely new coverage: neither client's suite runs in CI right now,
-which is how both of them drifted off the served routes without anything going
-red.
+The Python matrix checks OpenAPI, client routes, actual response shapes,
+version derivation and packaging. The `sdk-go` and `sdk-js` jobs additionally
+compile and test the actual clients. The JavaScript job builds, packs and
+imports the staged artifact. These jobs do not publish packages.

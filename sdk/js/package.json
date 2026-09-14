@@ -1,5 +1,5 @@
 {
-  "name": "@mind-mem/sdk",
+  "name": "@star-ga/mind-mem-client",
   "private": true,
   "version": "0.1.0",
   "description": "JS/TS client SDK for the mind-mem REST API",

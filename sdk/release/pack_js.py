@@ -1,22 +1,17 @@
 # Copyright 2026 STARGA, Inc.
 """Stage the JS client for publication, and prove the staged package coheres.
 
-Roadmap RM-2321 asks for the npm publish of the in-tree JS client. The publish
-itself needs an operator decision that is not ours to make — the manifest on
-disk says ``@mind-mem/sdk`` and the roadmap says ``@star-ga/mind-mem-client``,
-and an npm name is not reclaimable once taken. So what ships here is
-everything up to that decision: the packaging, the version derivation, and the
-gate that says the artifact is coherent.
+The package is ``@star-ga/mind-mem-client``, sharing the Python release
+version. Publication uses this staged, prebuilt artifact; registry
+authentication and access to the STARGA scope are needed to upload it.
 
 Two properties make the source tree unable to publish itself by accident:
 
 * ``sdk/js/package.json`` carries ``"private": true``. npm refuses to publish
-  such a manifest, so no stray ``npm publish`` in that directory can claim a
-  name while the name is still undecided.
+  such a manifest, keeping publication on the version-stamped staging path.
 * The version in that manifest is NOT the authority. It is stamped here from
   ``pyproject.toml`` at pack time, so a release cannot ship whatever number
-  was last typed by hand — the manifest currently reads 0.1.0 while the
-  package is 5.0.1, which is exactly the drift this removes.
+  was last typed by hand.
 
 Coherence, without a toolchain
 ------------------------------
@@ -85,11 +80,14 @@ def load_source_manifest(path: Path | None = None) -> dict[str, Any]:
 def staged_manifest(version: str, source: dict[str, Any] | None = None) -> dict[str, Any]:
     """Return the publishable manifest: version stamped, ``private`` dropped.
 
-    Key order is preserved so a diff against the source manifest shows only
-    the two intended changes.
+    Source-only scripts/dependencies are omitted. Running prepublishOnly in
+    the staged tree would delete dist and try to build sources it does not
+    contain; consumers also need no TypeScript compiler to install the SDK.
     """
     manifest = dict(source if source is not None else load_source_manifest())
     manifest.pop("private", None)
+    manifest.pop("scripts", None)
+    manifest.pop("devDependencies", None)
     manifest["version"] = version
     return manifest
 
@@ -171,6 +169,14 @@ def stage(dest: Path, version: str, require_build: bool = False) -> Path:
     if found:
         raise ValueError("staged manifest is not coherent: " + "; ".join(found))
 
+    built = JS_DIR / "dist"
+    if require_build:
+        targets = {manifest["main"], manifest["types"]}
+        targets.update(manifest["exports"]["."].values())
+        missing = [target for target in sorted(targets) if not (JS_DIR / target).is_file()]
+        if missing:
+            raise FileNotFoundError(f"Missing build outputs {missing} — run `npm run build` in {JS_DIR} first")
+
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "package.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -180,11 +186,8 @@ def stage(dest: Path, version: str, require_build: bool = False) -> Path:
     if LICENSE.is_file():
         shutil.copy2(LICENSE, dest / "LICENSE")
 
-    built = JS_DIR / "dist"
     if built.is_dir():
         shutil.copytree(built, dest / "dist", dirs_exist_ok=True)
-    elif require_build:
-        raise FileNotFoundError(f"{built} does not exist — run `npm run build` in {JS_DIR} first")
 
     return dest
 
@@ -209,7 +212,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     print(f"staged manifest ok: {manifest.get('name')}@{manifest['version']}")
     if args.stage:
-        target = stage(Path(args.stage), resolved)
+        target = stage(Path(args.stage), resolved, require_build=True)
         print(f"staged into {target}")
     return 0
 

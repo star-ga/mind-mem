@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1581 | **Est. tokens:** ~4693491
-**Generated:** 2026-09-14 10:38 UTC
+**Files:** 1597 | **Est. tokens:** ~4697575
+**Generated:** 2026-09-14 10:41 UTC
 
 ## Token Budget Guide
 
@@ -29,7 +29,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~20368 |
+| `.github/workflows/` | 11 | ~20788 |
 | `.roo/` | 1 | ~22 |
 | `audits/` | 5 | ~24039 |
 | `benchmarks/` | 66 | ~181946 |
@@ -63,12 +63,14 @@
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9456 |
 | `scripts/` | 21 | ~66207 |
-| `sdk/go/` | 10 | ~9098 |
+| `sdk/go/` | 11 | ~9890 |
+| `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4864 |
-| `sdk/js/src/` | 5 | ~3178 |
-| `sdk/js/test/` | 1 | ~3096 |
-| `sdk/release/` | 3 | ~4922 |
+| `sdk/js/src/` | 5 | ~3113 |
+| `sdk/js/test/` | 2 | ~3654 |
+| `sdk/release/` | 3 | ~4640 |
 | `sdk/spec/` | 2 | ~5702 |
+| `sdk/spec/fixtures/` | 7 | ~926 |
 | `security/` | 5 | ~24696 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
@@ -88,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 693 | ~2061341 |
+| `tests/` | 694 | ~2062401 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -189,7 +191,7 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~8683 tok, huge) — name: CI
+- `ci.yml` (~9103 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
@@ -619,43 +621,66 @@
 ### `sdk/go/`
 
 - `.gitignore` (~5 tok, tiny) — *.test
-- `README.md` (~704 tok, large) — MIND-Mem Go SDK
-- `client.go` (~1194 tok, large) — Option is a functional option for NewClient.
-- `client_test.go` (~3904 tok, huge) — Helpers
+- `README.md` (~703 tok, large) — MIND-Mem Go SDK
+- `client.go` (~1255 tok, large) — Option is a functional option for NewClient.
+- `client_test.go` (~3805 tok, huge) — Helpers
 - `doc.go` (~334 tok, medium) — Package mindmem is the official Go SDK for the mind-mem REST API.
 - `errors.go` (~640 tok, large) — APIError is returned for any non-2xx response from the mind-mem server.
 - `go.mod` (~198 tok, small) — // The /v5 suffix is required, not cosmetic. This is a subdirectory module in
-- `methods.go` (~603 tok, large) — recallRequest is the JSON body POST /v1/recall accepts. Field names and the
+- `methods.go` (~632 tok, large) — recallRequest is the JSON body POST /v1/recall accepts. Field names and the
+- `response_contract_test.go` (~889 tok, large) — Copyright 2026 STARGA, Inc.
 - `routes.go` (~667 tok, large) — Route is one REST operation this client knows how to call, expressed in the
-- `types.go` (~849 tok, large) — BlockTier represents the storage tier of a memory block.
+### `sdk/go/testdata/contract/`
+
+- `block.json` (~97 tok, small) — Keys: _schema_version, block_id, found, block
+- `contradictions.json` (~29 tok, tiny) — Keys: _schema_version, status, contradictions, message
+- `health.json` (~43 tok, tiny) — Keys: _schema_version, status, schema_version, api_version, workspace
+- `health_public.json` (~26 tok, tiny) — Keys: _schema_version, status, schema_version, api_version
+- `recall.json` (~416 tok, medium) — Keys: _schema_version, backend, query, query_id, count
+- `scan.json` (~64 tok, small) — Keys: _schema_version, backend, checks
+### `sdk/go/`
+
+- `types.go` (~762 tok, large) — Copyright 2026 STARGA, Inc.
 ### `sdk/js/`
 
 - `.gitignore` (~7 tok, tiny) — node_modules/
-- `README.md` (~917 tok, large) — @mind-mem/sdk
-- `package-lock.json` (~3326 tok, huge) — Keys: name, version, lockfileVersion, requires, packages
-- `package.json` (~289 tok, medium) — Keys: name, private, version, description, license
+- `README.md` (~911 tok, large) — @star-ga/mind-mem-client
+- `package-lock.json` (~3332 tok, huge) — Keys: name, version, lockfileVersion, requires, packages
+- `package.json` (~292 tok, medium) — Keys: name, private, version, description, license
 ### `sdk/js/src/`
 
-- `client.ts` (~1450 tok, large) — Normalise: strip trailing slash so path joining is consistent.
+- `client.ts` (~1476 tok, large) — Normalise: strip trailing slash so path joining is consistent.
 - `errors.ts` (~438 tok, medium) — Restore prototype chain (required when extending built-ins in TS)
-- `index.ts` (~150 tok, small)
+- `index.ts` (~140 tok, small)
 - `routes.ts` (~607 tok, large)
-- `types.ts` (~533 tok, large) — Shared domain types
+- `types.ts` (~452 tok, medium) — Copyright 2026 STARGA, Inc.
 ### `sdk/js/test/`
 
-- `client.test.ts` (~3096 tok, huge) — Minimal fetch mock helpers
+- `client.test.ts` (~2987 tok, huge) — Minimal fetch mock helpers
+- `response-contract.test.ts` (~667 tok, large) — Copyright 2026 STARGA, Inc.
 ### `sdk/js/`
 
-- `tsconfig.json` (~147 tok, small) — Keys: compilerOptions, include, exclude
-- `tsconfig.test.json` (~178 tok, small) — Keys: //, extends, compilerOptions, include, exclude
+- `tsconfig.json` (~139 tok, small) — Keys: compilerOptions, include, exclude
+- `tsconfig.test.json` (~183 tok, small) — Keys: //, extends, compilerOptions, include, exclude
 ### `sdk/release/`
 
-- `README.md` (~985 tok, large) — SDK release path
-- `pack_js.py` (~2235 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `README.md` (~682 tok, large) — SDK release path
+- `pack_js.py` (~2256 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `version.py` (~1702 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `sdk/spec/`
 
 - `README.md` (~672 tok, large) — API specifications
+### `sdk/spec/fixtures/`
+
+- `README.md` (~251 tok, medium) — REST response contract fixtures
+- `block.json` (~97 tok, small) — Keys: _schema_version, block_id, found, block
+- `contradictions.json` (~29 tok, tiny) — Keys: _schema_version, status, contradictions, message
+- `health.json` (~43 tok, tiny) — Keys: _schema_version, status, schema_version, api_version, workspace
+- `health_public.json` (~26 tok, tiny) — Keys: _schema_version, status, schema_version, api_version
+- `recall.json` (~416 tok, medium) — Keys: _schema_version, backend, query, query_id, count
+- `scan.json` (~64 tok, small) — Keys: _schema_version, backend, checks
+### `sdk/spec/`
+
 - `openapi.json` (~5030 tok, huge) — Keys: components, info, openapi, paths
 ### `security/`
 
@@ -1715,9 +1740,10 @@
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_sdk_js_packaging.py` (~2404 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_sdk_js_packaging.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_sdk_response_contract.py` (~1110 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_route_conformance.py` (~1778 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_live_request_parity.py` (~5192 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_route_scope_parity.py` (~2287 tok, huge) — # Copyright 2026 STARGA, Inc.

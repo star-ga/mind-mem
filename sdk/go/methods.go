@@ -9,16 +9,18 @@ import (
 // sdk/spec/openapi.json: every field except query has a server-side default,
 // so omitting it is how a caller asks for that default.
 type recallRequest struct {
-	Query      string `json:"query"`
-	Limit      int    `json:"limit,omitempty"`
-	ActiveOnly bool   `json:"active_only,omitempty"`
-	Backend    string `json:"backend,omitempty"`
+	Query          string `json:"query"`
+	Limit          int    `json:"limit,omitempty"`
+	ActiveOnly     bool   `json:"active_only,omitempty"`
+	Backend        string `json:"backend,omitempty"`
+	ScoringInstant string `json:"scoring_instant,omitempty"`
 }
 
 // Recall queries the memory store using full-text and semantic search.
 // It maps to POST /v1/recall with a JSON body.
 func (c *Client) Recall(ctx context.Context, query string, opts RecallOptions) (*RecallResult, error) {
 	body := recallRequest{Query: query}
+	body.ScoringInstant = opts.ScoringInstant
 	if opts.Limit > 0 {
 		body.Limit = opts.Limit
 	}

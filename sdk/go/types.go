@@ -1,15 +1,17 @@
+// Copyright 2026 STARGA, Inc.
 package mindmem
 
-// BlockTier represents the storage tier of a memory block.
-type BlockTier string
+import "encoding/json"
 
-const (
-	TierWorking  BlockTier = "WORKING"
-	TierArchival BlockTier = "ARCHIVAL"
-	TierCold     BlockTier = "COLD"
-)
+// RawResponse preserves the complete server JSON, including optional evidence
+// and fields introduced after this SDK. It is not a verification verdict.
+type RawResponse struct {
+	Raw           json.RawMessage `json:"-"`
+	SchemaVersion string          `json:"_schema_version,omitempty"`
+}
 
-// SearchBackend selects the retrieval backend used for a recall query.
+func (r *RawResponse) captureJSON(raw json.RawMessage) { r.Raw = append(json.RawMessage(nil), raw...) }
+
 type SearchBackend string
 
 const (
@@ -18,90 +20,75 @@ const (
 	BackendHybrid SearchBackend = "hybrid"
 )
 
-// Block is a single persisted memory unit.
+// Block carries governed fields with their case-sensitive server spelling.
+// Arbitrary extra block fields remain available in BlockResult.Raw.
 type Block struct {
-	ID          string    `json:"id"`
-	Content     string    `json:"content"`
-	Importance  float64   `json:"importance"`
-	Tier        BlockTier `json:"tier"`
-	CreatedAt   string    `json:"created_at"`
-	UpdatedAt   string    `json:"updated_at"`
-	Keywords    []string  `json:"keywords"`
-	Category    *string   `json:"category"`
-	Namespace   *string   `json:"namespace"`
-	Active      bool      `json:"active"`
-	AccessCount int       `json:"access_count"`
-	Provenance  *string   `json:"provenance"`
+	ID        string `json:"_id"`
+	Statement string `json:"Statement,omitempty"`
+	Status    string `json:"Status,omitempty"`
+	Date      string `json:"Date,omitempty"`
+	Type      string `json:"Type,omitempty"`
 }
 
-// RecallItem is one result entry returned by the Recall endpoint.
+// RecallItem is a flat ranked hit, not a nested persisted block.
 type RecallItem struct {
-	Block Block   `json:"block"`
-	Score float64 `json:"score"`
-	Rank  int     `json:"rank"`
+	ID      string  `json:"_id"`
+	Type    string  `json:"type,omitempty"`
+	Score   float64 `json:"score"`
+	Excerpt string  `json:"excerpt"`
+	File    string  `json:"file,omitempty"`
+	Line    int     `json:"line,omitempty"`
+	Status  string  `json:"status,omitempty"`
+	Date    string  `json:"Date,omitempty"`
 }
 
-// RecallResult is the response envelope for POST /v1/recall.
 type RecallResult struct {
-	Query       string       `json:"query"`
-	Results     []RecallItem `json:"results"`
-	Total       int          `json:"total"`
-	BackendUsed string       `json:"backend_used"`
-	LatencyMs   float64      `json:"latency_ms"`
+	RawResponse
+	Query          string          `json:"query"`
+	QueryID        string          `json:"query_id,omitempty"`
+	Results        []RecallItem    `json:"results"`
+	Count          int             `json:"count"`
+	Backend        string          `json:"backend"`
+	ScoringInstant string          `json:"scoring_instant,omitempty"`
+	Attestation    json.RawMessage `json:"attestation,omitempty"`
+	Warnings       []string        `json:"warnings,omitempty"`
 }
 
-// BlockResult is the response envelope for GET /v1/block/{block_id}.
 type BlockResult struct {
-	Block Block `json:"block"`
+	RawResponse
+	BlockID string `json:"block_id"`
+	Found   bool   `json:"found"`
+	Block   Block  `json:"block"`
 }
 
-// Contradiction describes a detected conflict between two memory blocks.
-type Contradiction struct {
-	BlockAID      string  `json:"block_a_id"`
-	BlockBID      string  `json:"block_b_id"`
-	ConflictScore float64 `json:"conflict_score"`
-	Description   string  `json:"description"`
-	DetectedAt    string  `json:"detected_at"`
-}
-
-// ContradictionsResult is the response envelope for GET /v1/contradictions.
+// Contradictions is a count; Resolutions holds the optional structured findings.
 type ContradictionsResult struct {
-	Contradictions []Contradiction `json:"contradictions"`
-	Total          int             `json:"total"`
+	RawResponse
+	Status         string            `json:"status"`
+	Contradictions int               `json:"contradictions"`
+	Resolutions    []json.RawMessage `json:"resolutions,omitempty"`
+	Message        string            `json:"message,omitempty"`
 }
 
-// HealthResult is the response envelope for GET /v1/health.
 type HealthResult struct {
-	Status            string `json:"status"`
-	Version           string `json:"version"`
-	BlockCount        int    `json:"block_count"`
-	IndexState        string `json:"index_state"`
-	EncryptionEnabled bool   `json:"encryption_enabled"`
-	UptimeSeconds     int    `json:"uptime_seconds"`
+	RawResponse
+	Status                 string  `json:"status"`
+	APIVersion             string  `json:"api_version"`
+	Workspace              *string `json:"workspace,omitempty"`
+	WorkspaceExists        *bool   `json:"workspace_exists,omitempty"`
+	WorkspaceSchemaVersion string  `json:"schema_version"`
 }
 
-// ScanIssue is a single issue detected during a governance scan.
-type ScanIssue struct {
-	Type     string  `json:"type"`
-	Severity string  `json:"severity"`
-	BlockID  *string `json:"block_id"`
-	Message  string  `json:"message"`
-}
-
-// ScanResult is the response envelope for GET /v1/scan.
 type ScanResult struct {
-	Issues        []ScanIssue `json:"issues"`
-	TotalIssues   int         `json:"total_issues"`
-	ScannedBlocks int         `json:"scanned_blocks"`
-	DurationMs    float64     `json:"duration_ms"`
+	RawResponse
+	Backend string                     `json:"backend"`
+	Checks  map[string]json.RawMessage `json:"checks"`
 }
 
-// RecallOptions controls the behaviour of a Recall call.
 type RecallOptions struct {
-	// Limit caps the number of results returned (0 means server default).
-	Limit int
-	// ActiveOnly restricts results to non-archived blocks.
+	Limit      int
 	ActiveOnly bool
-	// Backend selects the retrieval backend. Empty string means server default.
-	Backend SearchBackend
+	Backend    SearchBackend
+	// UTC YYYY-MM-DD for deterministic replay; empty uses the server default.
+	ScoringInstant string
 }

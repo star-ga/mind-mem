@@ -1,0 +1,16 @@
+{
+  "_schema_version": "1.0",
+  "backend": "markdown",
+  "checks": {
+    "decisions": {
+      "total": 1,
+      "active": 1
+    },
+    "contradictions": {
+      "raw": 0,
+      "resolvable": 0
+    },
+    "drift_items": 0,
+    "pending_signals": 0
+  }
+}
