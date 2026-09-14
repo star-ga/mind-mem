@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1653 | **Est. tokens:** ~4859152
-**Generated:** 2026-09-14 20:07 UTC
+**Files:** 1653 | **Est. tokens:** ~4859935
+**Generated:** 2026-09-14 20:08 UTC
 
 ## Token Budget Guide
 
@@ -62,7 +62,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9632 |
-| `scripts/` | 22 | ~70475 |
+| `scripts/` | 22 | ~70855 |
 | `sdk/go/` | 11 | ~9890 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4864 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 731 | ~2153093 |
+| `tests/` | 731 | ~2153496 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -613,7 +613,7 @@
 - `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `build_integrity_manifest.py` (~681 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `check_author_identity.sh` (~1880 tok, huge) — check_author_identity.sh — enforce the single-author identity rule.
-- `check_built_integrity.py` (~3568 tok, huge) — Fail-closed verification of the integrity manifest in release archives.
+- `check_built_integrity.py` (~3948 tok, huge) — Fail-closed verification of the integrity manifest in release archives.
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
@@ -1297,7 +1297,7 @@
 - `test_bootstrap_corpus_wiring.py` (~5443 tok, huge) — Wiring + quarantine proof for the ``mind-mem-bootstrap`` ingest door.
 - `test_boundary_witness.py` (~2442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_boundary_witness_cli_e2e.py` (~3954 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_built_integrity.py` (~1379 tok, large) — Source-bound controls for the wheel/sdist integrity release gate."""
+- `test_built_integrity.py` (~1782 tok, huge) — Source-bound controls for the wheel/sdist integrity release gate."""
 - `test_calibration.py` (~3269 tok, huge) — Tests for calibration feedback loop.
 - `test_calibration_window_determinism.py` (~1159 tok, large) — The calibration window boundary is UTC-anchored and pinnable.
 - `test_capture.py` (~2193 tok, huge) — Tests for capture.py — zero external deps (stdlib unittest)."""

@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import tarfile
 import zipfile
 from pathlib import Path
@@ -128,6 +129,41 @@ def test_symlink_archive_entry_is_refused(tmp_path: Path) -> None:
     source, digests = _source(tmp_path)
     with pytest.raises(gate.IntegrityGateError, match="non-regular archive entry"):
         gate.verify_dist(_archives(tmp_path, digests, symlink_wheel_name="mind_mem/link.py"), source)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="source symlink control requires POSIX symlink support")
+def test_source_critical_symlink_is_refused(tmp_path: Path) -> None:
+    source, digests = _source(tmp_path)
+    critical = source / "mind_mem" / "recall.py"
+    outside = tmp_path / "outside.py"
+    critical.rename(outside)
+    critical.symlink_to(outside)
+    with pytest.raises(gate.IntegrityGateError, match="outside package"):
+        gate.verify_dist(_archives(tmp_path, digests), source)
+
+
+def test_manifest_size_limit_is_refused(tmp_path: Path) -> None:
+    source, digests = _source(tmp_path)
+    oversized = b" " * (gate._MAX_MANIFEST_BYTES + 1)
+    with pytest.raises(gate.IntegrityGateError, match="manifest exceeds size limit"):
+        gate.verify_dist(_archives(tmp_path, digests, manifest=oversized), source)
+
+
+@pytest.mark.parametrize("limit", [1, 4])
+def test_archive_entry_count_limit_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: int
+) -> None:
+    source, digests = _source(tmp_path)
+    monkeypatch.setattr(gate, "_MAX_ARCHIVE_ENTRIES", limit)
+    with pytest.raises(gate.IntegrityGateError, match="entry count exceeds limit"):
+        gate.verify_dist(_archives(tmp_path, digests), source)
+
+
+def test_archive_directory_count_limit_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source, digests = _source(tmp_path)
+    monkeypatch.setattr(gate, "_MAX_ARCHIVE_DIRECTORIES", 2)
+    with pytest.raises(gate.IntegrityGateError, match="directory count exceeds limit"):
+        gate.verify_dist(_archives(tmp_path, digests), source)
 
 
 def test_missing_manifest_is_refused(tmp_path: Path) -> None:

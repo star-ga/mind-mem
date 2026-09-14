@@ -32,6 +32,9 @@ _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 _MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
 _MAX_ENTRY_BYTES = 16 * 1024 * 1024
+_MAX_MANIFEST_BYTES = 1 * 1024 * 1024
+_MAX_ARCHIVE_ENTRIES = 20_000
+_MAX_ARCHIVE_DIRECTORIES = 20_000
 
 
 class IntegrityGateError(ValueError):
@@ -105,6 +108,8 @@ def _normal_path(name: str) -> str:
 
 
 def _manifest_bytes(raw: bytes, *, archive: Path) -> dict[str, str]:
+    if len(raw) > _MAX_MANIFEST_BYTES:
+        raise IntegrityGateError(f"{archive.name}: manifest exceeds size limit")
     try:
         def pairs_hook(items: list[tuple[str, Any]]) -> dict[str, Any]:
             seen: set[str] = set()
@@ -160,11 +165,20 @@ def _archive_entries(path: Path) -> dict[str, bytes]:
     except OSError as exc:
         raise IntegrityGateError(f"{path.name}: cannot stat archive") from exc
     uncompressed = 0
+    entry_count = 0
+    directory_count = 0
     if path.name.endswith(".whl"):
         try:
             with zipfile.ZipFile(path) as archive:
                 for info in archive.infolist():
+                    entry_count += 1
+                    if entry_count > _MAX_ARCHIVE_ENTRIES:
+                        raise IntegrityGateError(f"{path.name}: archive entry count exceeds limit")
                     directory = info.is_dir()
+                    if directory:
+                        directory_count += 1
+                        if directory_count > _MAX_ARCHIVE_DIRECTORIES:
+                            raise IntegrityGateError(f"{path.name}: archive directory count exceeds limit")
                     name = _archive_name(info.filename, directory=directory)
                     if name in entries:
                         raise IntegrityGateError(f"{path.name}: duplicate archive entry {name!r}")
@@ -187,8 +201,15 @@ def _archive_entries(path: Path) -> dict[str, bytes]:
     elif path.name.endswith(".tar.gz"):
         try:
             with tarfile.open(path, mode="r:gz") as archive:
-                for info in archive.getmembers():
+                for info in archive:
+                    entry_count += 1
+                    if entry_count > _MAX_ARCHIVE_ENTRIES:
+                        raise IntegrityGateError(f"{path.name}: archive entry count exceeds limit")
                     directory = info.isdir()
+                    if directory:
+                        directory_count += 1
+                        if directory_count > _MAX_ARCHIVE_DIRECTORIES:
+                            raise IntegrityGateError(f"{path.name}: archive directory count exceeds limit")
                     name = _archive_name(info.name, directory=directory)
                     if name in entries:
                         raise IntegrityGateError(f"{path.name}: duplicate archive entry {name!r}")
@@ -274,13 +295,18 @@ def verify_dist(
     if not modules or len(set(modules)) != len(modules):
         raise IntegrityGateError("critical module list must be non-empty and unique")
     expected: dict[str, str] = {}
+    source_package_root = source_package.resolve()
     for rel in modules:
         _normal_path(rel)
         if rel.startswith("mind_mem/"):
             raise IntegrityGateError(f"critical module must be package-relative: {rel!r}")
         path = source_package / rel
-        if not path.is_file():
-            raise IntegrityGateError(f"source critical module missing: {rel}")
+        try:
+            resolved = path.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise IntegrityGateError(f"source critical module missing or outside package: {rel}") from exc
+        if path.is_symlink() or not resolved.is_relative_to(source_package_root) or not path.is_file():
+            raise IntegrityGateError(f"source critical module missing or outside package: {rel}")
         expected[rel] = _sha256(path.read_bytes())
     wheels = sorted(dist.glob("*.whl"))
     sdists = sorted(dist.glob("*.tar.gz"))
