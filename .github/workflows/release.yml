@@ -284,6 +284,12 @@ jobs:
       - name: Build distributions
         run: python -m build
 
+      - name: Verify built integrity manifests
+        # Inspect the actual wheel and sdist before either can be uploaded.
+        # This catches package-data omissions that runtime verification cannot
+        # see after an install with zero checked files.
+        run: python scripts/check_built_integrity.py --dist dist --source-root src
+
       - name: Upload dist artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
