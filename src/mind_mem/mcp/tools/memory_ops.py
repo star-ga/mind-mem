@@ -1052,8 +1052,8 @@ def get_block(block_id: str, namespace: str = "") -> str:
     selected_namespace: str | None = None
     if namespace:
         selected_namespace, selector_error = _namespace_selector(namespace)
-        if selector_error:
-            return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": selector_error})
+        if selector_error or selected_namespace is None:
+            return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": selector_error or "invalid namespace selector"})
         from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
         from mind_mem.namespaces import InvalidAgentIdError, NamespaceManager
 

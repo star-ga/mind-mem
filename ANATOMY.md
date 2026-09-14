@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1607 | **Est. tokens:** ~4716201
-**Generated:** 2026-09-14 11:34 UTC
+**Files:** 1607 | **Est. tokens:** ~4716216
+**Generated:** 2026-09-14 11:36 UTC
 
 ## Token Budget Guide
 
@@ -83,7 +83,7 @@
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
-| `src/mind_mem/mcp/tools/` | 29 | ~119695 |
+| `src/mind_mem/mcp/tools/` | 29 | ~119710 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11515 |
@@ -926,7 +926,7 @@
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `lineage.py` (~725 tok, large) — MCP wrapping for the v3.11.0 typed block-lineage graph (Pattern 3).
 - `lint.py` (~1511 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `memory_ops.py` (~18022 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `memory_ops.py` (~18037 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `mic_map.py` (~2436 tok, huge) — MIC/MAP serialization MCP tools — wraps ``mind_mem.mic_map``.
 - `model.py` (~3185 tok, huge) — Model audit / signing MCP tools — wraps ``mind_mem.model_audit``,
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
