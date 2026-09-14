@@ -160,6 +160,9 @@ except RuntimeError as exc:
 else:
     raise AssertionError('strict import swallowed verifier failure')
 """
-    env = dict(os.environ, MIND_MEM_INTEGRITY="off")
+    # Bind the child to this test's source tree, not an unrelated editable
+    # installation inherited from the developer's interpreter.
+    source = Path(__file__).resolve().parents[1] / "src"
+    env = dict(os.environ, MIND_MEM_INTEGRITY="off", PYTHONPATH=str(source))
     completed = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=20, encoding="utf-8")
     assert completed.returncode == 0, completed.stderr

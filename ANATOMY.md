@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1649 | **Est. tokens:** ~4851611
-**Generated:** 2026-09-14 19:57 UTC
+**Files:** 1649 | **Est. tokens:** ~4851666
+**Generated:** 2026-09-14 20:00 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 729 | ~2150833 |
+| `tests/` | 729 | ~2150888 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1499,7 +1499,7 @@
 - `test_injection_framing_e2e.py` (~4777 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_install_script.py` (~750 tok, large) — # pip --user honours PYTHONUSERBASE on every platform; without it a
 - `test_integration.py` (~1386 tok, large) — Integration test: full mind-mem lifecycle init → capture → scan → recall."""
-- `test_integrity_manifest_refusals.py` (~1633 tok, huge) — An absent, incomplete or substituted manifest cannot satisfy strict mode."""
+- `test_integrity_manifest_refusals.py` (~1688 tok, huge) — An absent, incomplete or substituted manifest cannot satisfy strict mode."""
 - `test_intel_scan.py` (~5959 tok, huge) — Tests for intel_scan.py — contradiction detection, drift analysis, impact graph."""
 - `test_intent_classify.py` (~328 tok, medium) — Tests for intent classification."""
 - `test_intent_router.py` (~1176 tok, large) — Tests for 9-type intent router."""
