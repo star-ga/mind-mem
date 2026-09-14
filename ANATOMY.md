@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1574 | **Est. tokens:** ~4692067
-**Generated:** 2026-09-14 06:46 UTC
+**Files:** 1575 | **Est. tokens:** ~4693634
+**Generated:** 2026-09-14 06:49 UTC
 
 ## Token Budget Guide
 
@@ -73,21 +73,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 233 | ~1069598 |
+| `src/mind_mem/` | 233 | ~1069624 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
-| `src/mind_mem/mcp/tools/` | 29 | ~116783 |
+| `src/mind_mem/mcp/tools/` | 29 | ~117112 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11515 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 690 | ~2078465 |
+| `tests/` | 691 | ~2079677 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -746,7 +746,7 @@
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `calibration.py` (~7500 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
-- `capture.py` (~5255 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
+- `capture.py` (~5281 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6359 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~4689 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
 - `causal_lm_loader.py` (~552 tok, large) — Load causal language models with the narrow Qwen3.5 config workaround.
@@ -884,7 +884,7 @@
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~14742 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~15071 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~7091 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1811 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
@@ -1570,6 +1570,7 @@
 - `test_postgres_replica_routing.py` (~2241 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""
 - `test_prefetch_context.py` (~1496 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_proposal_field_screening.py` (~1212 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_protection.py` (~2068 tok, huge) — Tests for mind_mem.protection (v3.3.0+)."""
 - `test_q1616_preimage.py` (~1496 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_quality_gate.py` (~1971 tok, huge) — Tests for the v3.11.0 deterministic block quality gate.
