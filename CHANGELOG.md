@@ -4,6 +4,14 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Require an explicit rationale for task proposals as well as decisions.
+  The eight-character minimum excludes all whitespace, so padding cannot
+  satisfy it. Refusal precedes content screening and proposal writes; clients
+  that omitted task reasons must supply them. Valid reasons retain the existing
+  redaction, Markdown escaping and governed approval behavior.
+
 ## [5.0.3] - 2026-09-14
 
 ### Added

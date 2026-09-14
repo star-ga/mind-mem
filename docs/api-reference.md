@@ -87,7 +87,7 @@ python3 mcp_server.py --workspace /path/to/workspace
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `propose_update` | Propose a decision or task (writes to SIGNALS.md) | `block_type`, `statement`, `rationale`, `tags`, `confidence` |
+| `propose_update` | Propose a decision or task; both require a caller-supplied rationale with at least eight non-whitespace characters (writes to SIGNALS.md) | `block_type`, `statement`, `rationale`, `tags`, `confidence` |
 | `propose_slot_update` | Stage a value for an explicitly declared closed slot; admin scope, separate approval required | `namespace`, `slot`, `value`, `rationale`, optional provenance fields |
 | `approve_apply` | Apply a staged proposal with contradiction check (dry_run default) | `proposal_id`, `dry_run` |
 | `rollback_proposal` | Rollback an applied proposal by receipt timestamp | `receipt_ts` |

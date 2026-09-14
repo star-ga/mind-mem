@@ -208,11 +208,10 @@ def propose_update(
 ) -> str:
     """Propose a new decision or task. Writes to SIGNALS.md for human review.
 
-    v3.6.1: ``rationale`` is required for ``block_type="decision"`` (tasks
-    stay permissive). Forcing a written reason on every decision proposal
-    means the audit trail answers "why" three months later without having
-    to dig through Slack. Must be at least 8 non-whitespace characters
-    so callers can't bypass the gate with a trivial string.
+    ``rationale`` is required for both accepted types, ``decision`` and
+    ``task``. It must contain at least 8 non-whitespace characters so every
+    proposed change carries the caller's written reason. Whitespace padding
+    does not count, and a missing reason is never synthesized by the server.
 
     Provenance (roadmap Group E, all optional): ``actor_id`` /
     ``actor_role`` / ``session_id`` / ``tool_id`` / ``purpose`` record
@@ -279,16 +278,16 @@ def propose_update(
     if block_type not in ("decision", "task"):
         return json.dumps({"error": f"block_type must be 'decision' or 'task', got '{block_type}'"})
 
-    if block_type == "decision" and len(rationale.strip()) < 8:
+    rationale_length = sum(not char.isspace() for char in rationale)
+    if rationale_length < 8:
         return json.dumps(
             {
                 "error": (
-                    "rationale is required for decision proposals and must be at least "
-                    "8 non-whitespace characters. Decisions without written reasons leave "
-                    "no audit trail. Tasks may still omit rationale."
+                    "rationale is required for decision and task proposals and must contain "
+                    "at least 8 non-whitespace characters. Supply the reason for the proposed change."
                 ),
                 "block_type": block_type,
-                "rationale_length": len(rationale.strip()),
+                "rationale_length": rationale_length,
             }
         )
 
