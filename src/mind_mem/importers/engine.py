@@ -552,6 +552,8 @@ def _chunk_import_records(records: Iterable[ImportRecord]) -> tuple[ImportRecord
     and pass through unchanged; ``run_import`` rejects that combination
     before this helper is called for non-note systems.
     """
+    import unicodedata
+
     from ..smart_chunker import smart_chunk
 
     config = _document_chunk_config()
@@ -561,6 +563,20 @@ def _chunk_import_records(records: Iterable[ImportRecord]) -> tuple[ImportRecord
         if not record.document_hash or not record.document_text:
             out.append(record)
             continue
+        # The source identity must survive the block format unchanged.
+        # Removing invisible characters here would point at another file;
+        # copying them unchanged would bypass ingest sanitization. Refuse
+        # before the write plan instead of emitting an ambiguous anchor.
+        source = record.document_source
+        if (
+            not source
+            or source.startswith("/")
+            or "\\" in source
+            or any(part in {"", ".", ".."} for part in source.split("/"))
+            or _as_field_value(source) != source
+            or any(unicodedata.category(char) in {"Cc", "Cf", "Cs"} for char in source)
+        ):
+            raise ImportParseError("chunk document source cannot be represented as an unambiguous anchor")
         chunks = smart_chunk(record.document_text, config=config, source=record.document_source)
         total = len(chunks)
         for chunk in chunks:

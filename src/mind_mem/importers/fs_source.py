@@ -240,14 +240,20 @@ def load_note_tree(
                     extra={"file": os.path.relpath(full, root), "bytes": size, "max_bytes": MAX_NOTE_BYTES},
                 )
                 continue
-            total_bytes += size
-            if total_bytes > MAX_TREE_BYTES:
-                raise ImportParseError(f"note tree too large: over {MAX_TREE_BYTES} bytes of notes under {path}")
             if len(collected) >= MAX_TREE_FILES:
                 raise ImportParseError(f"note tree has more than {MAX_TREE_FILES} notes: {path}")
             try:
                 with open(full, "rb") as handle:
-                    raw_bytes = handle.read()
+                    raw_bytes = handle.read(MAX_NOTE_BYTES + 1)
+                if len(raw_bytes) > MAX_NOTE_BYTES:
+                    _log.warning(
+                        "import_note_skipped_oversize",
+                        extra={"file": os.path.relpath(full, root), "bytes": len(raw_bytes), "max_bytes": MAX_NOTE_BYTES},
+                    )
+                    continue
+                total_bytes += len(raw_bytes)
+                if total_bytes > MAX_TREE_BYTES:
+                    raise ImportParseError(f"note tree too large: over {MAX_TREE_BYTES} bytes of notes under {path}")
                 text = raw_bytes.decode("utf-8")
             except UnicodeDecodeError as exc:
                 raise ImportParseError(f"note is not valid UTF-8: {os.path.relpath(full, root)}") from exc

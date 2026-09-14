@@ -245,6 +245,54 @@ class TestNoteTreeLoading:
         source.write_bytes(raw + b"mutation")
         assert not verify_document_anchor(blocks[0], str(tree))
 
+    @pytest.mark.parametrize("filename", ["report\u202e.md", "report\n.md", "report\t.md", "report  name.md", " report.md"])
+    def test_chunk_anchor_rejects_ambiguous_source_identity(self, tmp_path, filename):
+        from mind_mem.importers.engine import _chunk_import_records
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / filename).write_text("Valid source sentence. " * 100)
+        records = parse_payload("markdown", load_note_tree(str(tree)))
+        with pytest.raises(ImportParseError, match="unambiguous anchor"):
+            _chunk_import_records(records)
+
+    def test_chunk_anchor_preserves_safe_unicode_source_identity(self, tmp_path):
+        from mind_mem.importers.engine import _chunk_import_records, _sanitized, build_import_block
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / "π report.md").write_text("Valid source sentence. " * 100)
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+        (ws / "mind-mem.json").write_text("{}")
+        chunks = _chunk_import_records(parse_payload("markdown", load_note_tree(str(tree))))
+        blocks = [build_import_block(_sanitized(chunk, str(ws))) for chunk in chunks]
+        assert all(block["DocumentSource"] == "π report.md" for block in blocks)
+        assert all(verify_document_anchor(block, str(tree)) for block in blocks)
+
+    def test_note_read_obeys_actual_size_when_stat_understates_it(self, tmp_path, monkeypatch):
+        from mind_mem.importers import fs_source
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / "small.md").write_text("small")
+        (tree / "grew.md").write_text("x" * 20)
+        monkeypatch.setattr(fs_source, "MAX_NOTE_BYTES", 10)
+        monkeypatch.setattr(fs_source.os.path, "getsize", lambda _: 1)
+        assert [note.relative_path for note in load_note_tree(str(tree))] == ["small.md"]
+
+    def test_tree_budget_counts_actual_bytes_when_stat_understates_it(self, tmp_path, monkeypatch):
+        from mind_mem.importers import fs_source
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / "one.md").write_text("x" * 8)
+        (tree / "two.md").write_text("x" * 8)
+        monkeypatch.setattr(fs_source, "MAX_TREE_BYTES", 10)
+        monkeypatch.setattr(fs_source.os.path, "getsize", lambda _: 1)
+        with pytest.raises(ImportParseError, match="tree too large"):
+            load_note_tree(str(tree))
+
 
 # ---------------------------------------------------------------------------
 # Parsers
