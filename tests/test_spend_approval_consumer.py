@@ -130,10 +130,22 @@ def test_preflight_cli_preserves_exact_decimal_in_ledger(tmp_path: Path, monkeyp
     ledger = tmp_path / "ledger.jsonl"
     monkeypatch.setattr(spend_guard, "LEDGER", ledger)
     monkeypatch.setattr(spend_guard, "WEIGHT_ROOT", tmp_path)
-    monkeypatch.setattr(sys, "argv", [
-        "spend_guard.py", "preflight", "--tag", "launch-1", "--budget-usd", budget,
-        "--approval-file", str(marker), "--config-sha256", "a" * 64,
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "spend_guard.py",
+            "preflight",
+            "--tag",
+            "launch-1",
+            "--budget-usd",
+            budget,
+            "--approval-file",
+            str(marker),
+            "--config-sha256",
+            "a" * 64,
+        ],
+    )
     spend_guard.main()
     assert json.loads(ledger.read_text())["budget_usd"] == budget
 
@@ -143,10 +155,20 @@ def test_preflight_cli_refuses_missing_expected_config(tmp_path: Path, monkeypat
     _marker(marker)
     ledger = tmp_path / "ledger.jsonl"
     monkeypatch.setattr(spend_guard, "LEDGER", ledger)
-    monkeypatch.setattr(sys, "argv", [
-        "spend_guard.py", "preflight", "--tag", "launch-1", "--budget-usd", "5",
-        "--approval-file", str(marker),
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "spend_guard.py",
+            "preflight",
+            "--tag",
+            "launch-1",
+            "--budget-usd",
+            "5",
+            "--approval-file",
+            str(marker),
+        ],
+    )
     with pytest.raises(SystemExit) as exc:
         spend_guard.main()
     assert exc.value.code == 2
