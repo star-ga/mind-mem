@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v5.0.3</code> &mdash; documentation and accountability follow-up for the 5.0.2 restoration, including captured local anticipation serving and its separate V2 serving receipt &mdash;
+  <strong>Current release:</strong> <code>v5.0.3</code> &mdash; preserves proposal reasons, screens all persisted proposal fields, and strengthens recall and local-serving evidence &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -65,7 +65,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v5.0.3** — a documentation and accountability follow-up. It carries the 5.0.2 restoration and governance fixes, updates the published release context, and records local anticipation serving separately from corpus recall attestation. 5.0.0 deleted 47 modules (14,711 LOC) because nothing imported them; that reasoning was wrong — **"nothing imports it" is evidence about wiring, never about worth** — and all 47 are back, with all 43 of their test files, being wired one at a time behind default-OFF flags. Two of them were never unreachable at all: an import scan cannot see shell dispatch. The gate that produced this now reports *not wired, deliberately waiting* (with the condition that flips it) separately from *not wired, no recorded decision*. The 5.0.0 governance guarantees are unchanged: no block reaches the store without a gate receipt, and `RECALL_ATTEST_v2` still binds the query to a rank-ordered digest of the served set.</sub>
+<sub>Current release: **v5.0.3** — preserves proposal reasons, screens all persisted proposal fields before audit recording, and marks recall proof explicitly unproven when derivation fails. Local anticipation answers receive a separate serving receipt when evidence is available. This release retains the 5.0.2 module restoration and governance fixes; see [CHANGELOG.md](CHANGELOG.md) for release history.</sub>
 
 ### Substrate Properties
 

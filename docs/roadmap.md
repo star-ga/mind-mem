@@ -9,9 +9,9 @@
 > layer, compliance primitives) is in
 > [`./roadmap-v4.md`](./roadmap-v4.md).
 
-## Current status — v5.0.3
+## Current source status — v5.0.3
 
-The current package release is **v5.0.3**. The published `mind-mem-4b`
+This source tree reports package version **v5.0.3**. The published `mind-mem-4b`
 checkpoint remains **v4.1.1**, with a reported **133/133** result (111 main and
 22 held-out probes, two using inference-time anchors). This is not a new
 independent evaluation. The weights were trained on 83 MCP tools.
