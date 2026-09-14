@@ -100,7 +100,7 @@ its rationale does not approve it.
 
 ## L5 — Continuous
 
-- **CI** on main pushes and pull requests — full pytest matrix (12,386 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
+- **CI** on main pushes and pull requests — full pytest matrix (12,389 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
 - **Release preflight** requires matching versions, mainline ancestry, passing
   CI for the exact commit, an unused package version, tests, current public
   documentation and readable code-scanning results before publishing.

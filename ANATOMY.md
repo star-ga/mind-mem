@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1643 | **Est. tokens:** ~4841876
-**Generated:** 2026-09-14 19:04 UTC
+**Files:** 1645 | **Est. tokens:** ~4842945
+**Generated:** 2026-09-14 19:12 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 725 | ~2146178 |
+| `tests/` | 727 | ~2147247 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1487,6 +1487,8 @@
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""
 - `test_indexed_namespace_acl.py` (~2754 tok, huge) — Namespace ACLs must guard indexed recall before any result processing."""
 - `test_indexed_source_admission.py` (~1124 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_indexed_source_hash_admission.py` (~598 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_indexed_source_status_overlay.py` (~471 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_validity_topk.py` (~2073 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ingest_tiers.py` (~4614 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ingestion_pipeline_wiring.py` (~6467 tok, huge) — The webhook ingest door — wiring proof for `mm ingest-serve` (5.0.1).

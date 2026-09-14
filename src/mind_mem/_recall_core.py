@@ -651,39 +651,26 @@ def _refresh_stale_index_sources(
     leg: str | None,
     allow: frozenset[str],
 ) -> list[dict]:
-    """Re-admit stale indexed rows against their claimed live sources.
+    """Re-admit every source-bound indexed row against its live source.
 
-    ``live_statuses`` is intentionally an ID map and therefore cannot tell an
-    empty map caused by a deleted source from a current index. Only enter this
-    source-bound path when the SQLite index is stale; scan results and a
-    current index retain their existing cheap path. A source which cannot be
-    resolved is withheld, while genuinely unbound legacy rows continue to the
-    existing status allow-list below.
+    ``live_statuses`` is intentionally an ID map and cannot distinguish a
+    current source from another namespace reusing the same ID.  A metadata
+    staleness check is also insufficient: an edit can preserve both file size
+    and ``mtime_ns``.  Therefore source-bound rows always take the exact
+    source identity path below.  A source which cannot be resolved is
+    withheld, while genuinely unbound legacy rows continue to the existing
+    status allow-list below.  Remote-vector rows have their own digest-bound
+    path in the caller.
     """
-    from .sqlite_index import DB_REL_PATH, is_stale
-
-    if not os.path.isfile(os.path.join(workspace, DB_REL_PATH)):
-        return items
-    try:
-        stale = is_stale(workspace)
-    except Exception as exc:  # pragma: no cover - defensive fail-closed path
-        _log.warning("indexed_source_staleness_check_failed", error=str(exc))
-        stale = True
-    if not stale:
-        return items
-
     from .admission import admit_read
 
     groups: dict[str, list[dict]] = {}
-    unbound: list[dict] = []
     for item in items:
         # Remote vector rows have their own source-digest admission below.
         if item.get("_remote_vector") is True:
             continue
         source = _indexed_source_ref(item)
-        if source is None:
-            unbound.append(item)
-        else:
+        if source is not None:
             groups.setdefault(source, []).append(item)
 
     admitted_by_key: dict[tuple[str, str], list[dict]] = {}
@@ -708,7 +695,6 @@ def _refresh_stale_index_sources(
     # Reconstruct the original ranking order. A queue keeps duplicate IDs in
     # one source deterministic while source identity prevents cross-namespace
     # rows from borrowing one another's live status or release decision.
-    unbound_iter = iter(unbound)
     refreshed: list[dict] = []
     for item in items:
         if item.get("_remote_vector") is True:
@@ -716,7 +702,7 @@ def _refresh_stale_index_sources(
             continue
         source = _indexed_source_ref(item)
         if source is None:
-            refreshed.append(next(unbound_iter))
+            refreshed.append(item)
             continue
         block_id = item.get("_id") or item.get("id")
         queue = admitted_by_key.get((source, block_id)) if isinstance(block_id, str) else None
@@ -756,10 +742,10 @@ def _withhold_inadmissible(
     non-servable item is dropped rather than surfaced.
     """
     # The indexed dispatch paths hand us hits whose ``status`` came from the
-    # index, which caches it. Refresh from the corpus BEFORE the fast path —
-    # a cached ``active`` the corpus has since flipped to ``quarantined``
-    # would otherwise take that path and be served. Empty (and free) whenever
-    # the index is current or absent.
+    # index, which caches it. Refresh source-bound rows from the canonical
+    # source BEFORE the fast path — a cached ``active`` the corpus has since
+    # flipped to ``quarantined`` would otherwise take that path and be served.
+    # Genuinely unbound legacy rows retain the existing ID status map.
     if workspace is not None:
         items = _refresh_stale_index_sources(
             items,
