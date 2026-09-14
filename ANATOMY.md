@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1608 | **Est. tokens:** ~4726159
-**Generated:** 2026-09-14 12:40 UTC
+**Files:** 1608 | **Est. tokens:** ~4726164
+**Generated:** 2026-09-14 12:43 UTC
 
 ## Token Budget Guide
 
@@ -80,7 +80,7 @@
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15393 |
-| `src/mind_mem/importers/` | 9 | ~30168 |
+| `src/mind_mem/importers/` | 9 | ~30173 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
 | `src/mind_mem/mcp/tools/` | 29 | ~118257 |
@@ -861,7 +861,7 @@
 
 - `__init__.py` (~1807 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_shared.py` (~947 tok, large) — # Copyright 2026 STARGA, Inc.
-- `engine.py` (~8954 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `engine.py` (~8959 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `fs_source.py` (~2914 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `note_parsers.py` (~3770 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `okf_source.py` (~1885 tok, huge) — # Copyright 2026 STARGA, Inc.

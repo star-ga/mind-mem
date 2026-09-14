@@ -607,7 +607,7 @@ def _chunk_anchor_metadata(records: Iterable[ImportRecord]) -> dict[str, Any]:
     """Return one canonical EvidenceChain metadata root for chunk anchors."""
     from hashlib import sha256
 
-    anchors = [
+    anchors: list[dict[str, Any]] = [
         {
             "document_hash": record.document_hash,
             "source": record.document_source,
