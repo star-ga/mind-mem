@@ -176,6 +176,29 @@ class TestNoteTreeLoading:
         shutil.copytree(VAULT, copy)
         assert load_note_tree(VAULT) == load_note_tree(str(copy))
 
+    def test_chunked_anchor_walk_rejects_symlink_but_default_walk_preserves_compatibility(self, tmp_path: Path) -> None:
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        target = tmp_path / "outside.md"
+        target.write_text("Valid source sentence. " * 100, encoding="utf-8")
+        link = tree / "link.md"
+        link.symlink_to(target)
+
+        assert load_note_tree(str(tree))[0].relative_path == "link.md"
+        with pytest.raises(ImportParseError, match="symlinked note"):
+            load_note_tree(str(tree), reject_symlinks=True)
+
+    def test_chunked_import_rejects_symlink_before_writing(self, tmp_path: Path, workspace: str) -> None:
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        target = tmp_path / "outside.md"
+        target.write_text("Valid source sentence. " * 100, encoding="utf-8")
+        (tree / "link.md").symlink_to(target)
+
+        with pytest.raises(ImportParseError, match="symlinked note"):
+            run_import(workspace, "markdown", str(tree), chunk_documents=True)
+        assert not (Path(workspace) / IMPORTED_CORPUS_FILE).exists()
+
     def test_a_file_is_not_a_note_tree(self) -> None:
         with pytest.raises(ImportParseError, match="not a directory"):
             load_note_tree(CHAT_SESSION)
@@ -251,7 +274,7 @@ class TestNoteTreeLoading:
 
         tree = tmp_path / "tree"
         tree.mkdir()
-        (tree / filename).write_text("Valid source sentence. " * 100)
+        (tree / filename).write_text("Valid source sentence. " * 100, encoding="utf-8")
         records = parse_payload("markdown", load_note_tree(str(tree)))
         with pytest.raises(ImportParseError, match="unambiguous anchor"):
             _chunk_import_records(records)
@@ -261,10 +284,10 @@ class TestNoteTreeLoading:
 
         tree = tmp_path / "tree"
         tree.mkdir()
-        (tree / "π report.md").write_text("Valid source sentence. " * 100)
+        (tree / "π report.md").write_text("Valid source sentence. " * 100, encoding="utf-8")
         ws = tmp_path / "workspace"
         ws.mkdir()
-        (ws / "mind-mem.json").write_text("{}")
+        (ws / "mind-mem.json").write_text("{}", encoding="utf-8")
         chunks = _chunk_import_records(parse_payload("markdown", load_note_tree(str(tree))))
         blocks = [build_import_block(_sanitized(chunk, str(ws))) for chunk in chunks]
         assert all(block["DocumentSource"] == "π report.md" for block in blocks)
@@ -275,8 +298,8 @@ class TestNoteTreeLoading:
 
         tree = tmp_path / "tree"
         tree.mkdir()
-        (tree / "small.md").write_text("small")
-        (tree / "grew.md").write_text("x" * 20)
+        (tree / "small.md").write_text("small", encoding="utf-8")
+        (tree / "grew.md").write_text("x" * 20, encoding="utf-8")
         monkeypatch.setattr(fs_source, "MAX_NOTE_BYTES", 10)
         monkeypatch.setattr(fs_source.os.path, "getsize", lambda _: 1)
         assert [note.relative_path for note in load_note_tree(str(tree))] == ["small.md"]
@@ -286,8 +309,8 @@ class TestNoteTreeLoading:
 
         tree = tmp_path / "tree"
         tree.mkdir()
-        (tree / "one.md").write_text("x" * 8)
-        (tree / "two.md").write_text("x" * 8)
+        (tree / "one.md").write_text("x" * 8, encoding="utf-8")
+        (tree / "two.md").write_text("x" * 8, encoding="utf-8")
         monkeypatch.setattr(fs_source, "MAX_TREE_BYTES", 10)
         monkeypatch.setattr(fs_source.os.path, "getsize", lambda _: 1)
         with pytest.raises(ImportParseError, match="tree too large"):
