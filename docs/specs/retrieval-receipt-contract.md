@@ -305,6 +305,10 @@ verify` commands. Their machine-readable profile is frozen in
 [`retrieval-receipt-local-v1.json`](retrieval-receipt-local-v1.json), with the
 canonical JSON vector in
 [`retrieval-receipt-canonical-vectors.json`](retrieval-receipt-canonical-vectors.json).
+The local hard bounds are 8 MiB for the ledger, 4 KiB for the head sidecar,
+100,000 rows, and 12 MiB for the complete package; export and offline verify
+enforce the same limits. The receipt file is fsynced before publication, while
+directory-entry fsync is best effort on platforms that support it.
 The commands cover local RE-A1 through RE-A8 controls; `portable_identity` and
 issuer trust remain explicitly unavailable, so this adapter does not close the
 independent CVS, signature, or 512-lineage profiles.

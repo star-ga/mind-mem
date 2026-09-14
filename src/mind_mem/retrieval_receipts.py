@@ -44,6 +44,7 @@ from .served_ledger import (
 
 __all__ = [
     "DEFAULT_MAX_LEDGER_BYTES",
+    "DEFAULT_MAX_HEAD_BYTES",
     "DEFAULT_MAX_PACKAGE_BYTES",
     "DEFAULT_MAX_ROWS",
     "RECEIPT_SCHEMA",
@@ -59,6 +60,7 @@ _PROFILE = "local-served-ledger-v1"
 _DEFAULT_MAX_MB = 8
 DEFAULT_MAX_LEDGER_BYTES = _DEFAULT_MAX_MB * 1024 * 1024
 DEFAULT_MAX_PACKAGE_BYTES = 12 * 1024 * 1024
+DEFAULT_MAX_HEAD_BYTES = 4096
 DEFAULT_MAX_ROWS = 100_000
 _REQUIRED_KEYS = frozenset({"schema", "profile", "manifest", "ledger_b64", "head_b64", "manifest_sha256"})
 _MANIFEST_KEYS = frozenset(
@@ -300,7 +302,7 @@ def export_receipt(
     try:
         with _append_lock(workspace):
             ledger_raw, ledger_identity = _read_stable(ledger, limit=max_bytes)
-            head_raw, head_identity = _read_stable(head_path, limit=4096, optional=True)
+            head_raw, head_identity = _read_stable(head_path, limit=DEFAULT_MAX_HEAD_BYTES, optional=True)
     except ReceiptError:
         raise
     except (OSError, ValueError) as exc:
@@ -464,14 +466,17 @@ def verify_receipt(
         or not isinstance(manifest.get("ledger_bytes"), int)
         or isinstance(manifest.get("ledger_bytes"), bool)
         or manifest.get("ledger_bytes", 0) <= 0
+        or manifest.get("ledger_bytes", 0) > DEFAULT_MAX_LEDGER_BYTES
         or not isinstance(manifest.get("ledger_rows"), int)
         or isinstance(manifest.get("ledger_rows"), bool)
         or manifest.get("ledger_rows", 0) <= 0
+        or manifest.get("ledger_rows", 0) > DEFAULT_MAX_ROWS
         or not valid_digest(manifest.get("ledger_sha256"))
         or not valid_identity(manifest.get("ledger_identity"), manifest.get("ledger_bytes"))
         or not isinstance(manifest.get("head_bytes"), int)
         or isinstance(manifest.get("head_bytes"), bool)
         or manifest.get("head_bytes", 0) <= 0
+        or manifest.get("head_bytes", 0) > DEFAULT_MAX_HEAD_BYTES
         or not valid_digest(manifest.get("head_sha256"))
         or not valid_identity(manifest.get("head_identity"), manifest.get("head_bytes"))
     ):

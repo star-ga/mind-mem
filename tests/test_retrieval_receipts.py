@@ -276,9 +276,40 @@ class TestReceiptCLI:
         vector = json.loads((root / "docs/specs/retrieval-receipt-canonical-vectors.json").read_text(encoding="utf-8"))
         assert schema["properties"]["schema"]["const"] == receipts.RECEIPT_SCHEMA
         assert schema["properties"]["profile"]["const"] == vector["profile"] == "local-served-ledger-v1"
+        manifest_schema = schema["properties"]["manifest"]["properties"]
+        assert manifest_schema["ledger_bytes"]["maximum"] == receipts.DEFAULT_MAX_LEDGER_BYTES
+        assert manifest_schema["head_bytes"]["maximum"] == receipts.DEFAULT_MAX_HEAD_BYTES
+        assert manifest_schema["ledger_rows"]["maximum"] == receipts.DEFAULT_MAX_ROWS
         canonical = receipts._canonical(vector["canonicalization"]["input"])
         assert canonical.decode("utf-8") == vector["canonicalization"]["output_utf8"]
         assert receipts._sha256(canonical) == vector["canonicalization"]["sha256"]
+
+        golden = vector["receipt_golden"]
+        package = golden["package"]
+        package_bytes = receipts._package_bytes(package)
+        assert package_bytes.decode("utf-8") == golden["package_utf8"]
+        assert receipts._sha256(package_bytes) == golden["package_sha256"]
+        report = receipts.verify_receipt(package)
+        assert report["status"] == golden["expected"]["status"]
+        assert report["rows_checked"] == golden["expected"]["rows_checked"]
+        assert package["manifest_sha256"] == golden["expected"]["manifest_sha256"]
+
+        altered = json.loads(json.dumps(package))
+        altered["ledger_b64"] = base64.b64encode(base64.b64decode(package["ledger_b64"]).replace(b'"seq":0', b'"seq":9', 1)).decode("ascii")
+        assert receipts.verify_receipt(altered)["status"] == "integrity_failed"
+        altered = json.loads(json.dumps(package))
+        altered["head_b64"] = base64.b64encode(b"0" * 64 + b"\n").decode("ascii")
+        assert receipts.verify_receipt(altered)["status"] == "integrity_failed"
+
+        for key, value in (
+            ("ledger_bytes", receipts.DEFAULT_MAX_LEDGER_BYTES + 1),
+            ("ledger_rows", receipts.DEFAULT_MAX_ROWS + 1),
+            ("head_bytes", receipts.DEFAULT_MAX_HEAD_BYTES + 1),
+        ):
+            altered = json.loads(json.dumps(package))
+            altered["manifest"][key] = value
+            altered["manifest_sha256"] = receipts._sha256(receipts._package_bytes(receipts._manifest_payload(altered)))
+            assert receipts.verify_receipt(altered)["status"] == "malformed", key
 
     def test_help_exposes_both_receipt_commands(self) -> None:
         parser = mm_cli.build_parser()
