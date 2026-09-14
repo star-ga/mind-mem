@@ -20,8 +20,9 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 TRAIN = REPO / "train"
@@ -90,7 +91,7 @@ def registered_tools() -> list[str]:
     return sorted(names)
 
 
-def _probe_prompts(values: Iterable[Iterable[Any]]) -> list[str]:
+def _probe_prompts(values: Iterable[Sequence[Any]]) -> list[str]:
     return [tuple_value[0] for tuple_value in values]
 
 
@@ -160,7 +161,10 @@ def _read_model_facts() -> dict[str, Any]:
     readme = (REPO / "train" / "README.md").read_text(encoding="utf-8")
     model_card = (REPO / "train" / "HF_MODEL_CARD_v4.md").read_text(encoding="utf-8")
     default_match = re.search(r"current default base is `([^`]+)`", readme)
-    trained_match = re.search(r"trained against an \*\*(\d+)-tool\*\* surface", model_card)
+    trained_match = re.search(
+        r"trained\s+against\s+an\s+(?:>\s*)?\*\*(\d+)-tool\*\*\s+surface",
+        model_card,
+    )
     if default_match is None or trained_match is None:
         raise SystemExit("could not bind base-model or trained-tool facts to source docs")
     return {

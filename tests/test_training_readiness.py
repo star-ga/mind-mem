@@ -49,11 +49,18 @@ def _manifest(corpus: Path, output: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _read_manifest(result: subprocess.CompletedProcess[str], output: Path) -> dict:
+    assert output.is_file(), (
+        f"manifest was not written (returncode={result.returncode}; stdout={result.stdout!r}; stderr={result.stderr!r})"
+    )
+    return json.loads(output.read_text(encoding="utf-8"))
+
+
 def test_manifest_flags_paraphrase_contamination_even_when_exact_holdout_is_unseen(generated_corpus: Path, tmp_path: Path) -> None:
     output = tmp_path / "manifest.json"
     result = _manifest(generated_corpus, output)
     assert result.returncode == 1, result.stdout + result.stderr
-    manifest = json.loads(output.read_text(encoding="utf-8"))
+    manifest = _read_manifest(result, output)
 
     surface = manifest["live_mcp_surface"]
     binding = manifest["evaluation_probe_binding"]
@@ -88,7 +95,7 @@ def test_manifest_fails_closed_when_a_holdout_prompt_is_added(generated_corpus: 
     output = tmp_path / "poisoned-manifest.json"
     result = _manifest(poisoned, output)
     assert result.returncode == 1, result.stdout + result.stderr
-    manifest = json.loads(output.read_text(encoding="utf-8"))
+    manifest = _read_manifest(result, output)
     binding = manifest["evaluation_probe_binding"]
     assert binding["holdout_exact_overlap_count"] == 1
     assert binding["holdout_exact_string_status"] == "FAIL"
