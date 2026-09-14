@@ -110,7 +110,10 @@ by its full description below.
 - [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from recent research on invisible-Unicode covert channels: payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (reported 100% receiver recovery at 0% monitor detection). Provenance recorded privately in `mind-internal`, per the no-public-attribution rule. Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
 - [x] **Memory reputation / trust scores** — shipped as the validity gate's FIFTH component, not a separate subsystem: `src/mind_mem/provenance_class.py` classifies a block `operator` > `agent-verified` > `agent-inferred` > `external-ingest` from the existing `ActorRole` / `ToolId` / `Source` fields, and `validity_gate.validity_components()` folds that weight into the composite `V`. No per-actor learned or anomaly scoring (determinism wedge). `trust_scores.apply_trust_scores` keeps the `actor_trust` field as a thin façade over that one component. Opt-in via `recall.validity_gate.provenance_class.enabled`; flag-off recall ordering is byte-identical. 48 tests.
 
-### Group E — Compliance (5 items — 4 shipped, 1 partial)
+### Group E — Compliance (5 items — 4 implemented, 1 partial)
+
+The redaction and export acceptance below applies to the 5.0.3 candidate;
+publication remains part of the release gates.
 
 - [x] **Pluggable redaction layer** — the configured in-tree detector chain and explicit `module:DetectorClass` extension run on the governed write door and the `compliance scan`, `redact`, `screen`, and export CLI doors. Raising or malformed detectors fail closed as the generic `compliance_detector_failed` refusal before persistence or output replacement; valid plugins redact and record detector provenance. The eight built-in detectors remain default and deterministic; external Python is operator-selected and is not sandboxed or independently proven deterministic. The original 2026-09-01 false shipped tick (“zero consumers”) is retained in this corrected entry; this acceptance is source-bound to `tests/test_compliance_redaction.py`, `tests/test_cli_detector_refusal.py`, and the 2026-09-14 focused receipt. RE3 signing and independent observation are separate requirements.
 - [x] **Compliance export pipeline** — `mm export --policy {full|redacted|metadata-only} --since --format --out` and the direct `compliance.export.build_bundle(...)` API require the opt-in `v4.compliance_export` flag, operate on admitted records, report withheld/undated exclusions, and emit deterministic `content_sha256`. The CLI matrix covers all three policies, both formats, and with/without `--since`; `redacted` removes detector findings and `metadata-only` retains provenance fields plus a digest of omitted content. This digest is content integrity evidence, not a signature or independent observation authority. The original 2026-09-01 false shipped tick (“no export verb/policy”) is retained in this corrected entry; RE3 signing/independent observation remains open.
@@ -2514,9 +2517,9 @@ default story is two laptops talking to each other.
 - [ ] **Distributed replication + consensus for governance** — `v4/federation.py` provides feature-gated local version vectors/conflict resolution, while `governance_raft.py` is a single-node pluggable facade. Real multi-node Raft audit-chain replication remains open.
 - [ ] **Rust hot path for hybrid search** — PyO3 BM25+RRF port — pure-MIND port (separate roadmap section below) is the chosen path instead. Marking as ⊘ superseded by Pure-MIND Core Port.
 
-### E. Compliance-sensitive opt-in extensions (8 shipped; residual RE3/transport scope tracked separately)
+### E. Compliance-sensitive opt-in extensions (8 implemented; residual RE3/transport scope tracked separately)
 
-**Shipped:**
+**Implemented (including the 5.0.3 candidate):**
 
 - [x] **Confidence / Evidence as first-class** — structured `Evidence` blocks with `confidence_score` ship; recall surfaces evidence chains.
 - [x] **Per-tenant audit chains** — `audit_chain.py` forks per tenant with isolated genesis + spec-hash binding.

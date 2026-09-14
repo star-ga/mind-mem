@@ -8,6 +8,9 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Added
 
+- An AsyncAPI 3.0 contract for the existing opt-in Redis Streams event
+  publisher, with regeneration and source/wire drift checks. Events remain
+  best-effort notifications; no consumer or delivery guarantee is introduced.
 - Opt-in `--receipt-envelope` output for ordinary recall, context packing and
   agent injection. Existing output formats remain the default. Ranked evidence
   and descriptive projection metadata have separate scopes; `--kernel` retains
@@ -50,6 +53,11 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Source-bound indexed results recheck admission against the current configured
+  corpus, including deletion and quarantine changes that preserve file size and
+  modification time. Duplicate IDs in different source files no longer borrow
+  each other's status. Indexed excerpts still require reindexing after content
+  edits; this change refreshes admission, not cached content.
 - Indexed MCP recall resources now use the shared ranked serving boundary.
   Blocks quarantined after indexing are withheld immediately,
   and the final ordered result IDs are recorded under the existing ledger
