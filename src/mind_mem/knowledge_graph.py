@@ -53,6 +53,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Mapping, Optional
+from urllib.parse import quote
 
 from .admission import require_admission
 from .graph_schema import stamp as stamp_schema_version
@@ -929,6 +930,45 @@ class KnowledgeGraph:
         # costs one string compare and never touches disk.
         self._ontology_mode: str = "off"
         self._ontology = None
+
+    @classmethod
+    def open_read_only(cls, db_path: str) -> "KnowledgeGraph":
+        """Open an existing graph without creating or migrating graph data.
+
+        The normal constructor is intentionally a writable store constructor:
+        it creates the parent, enables WAL, and installs the current schema.
+        Read surfaces must not use that path because even a malformed or
+        partially initialized database would be changed by a question.  This
+        factory binds SQLite's ``mode=ro`` URI and validates only the tables
+        needed by traversal; callers receive ``sqlite3.DatabaseError`` when
+        the file is not a usable graph. SQLite may update WAL shared-memory
+        coordination for a live graph; read-only here forbids logical database
+        writes and schema changes, not SQLite reader bookkeeping.
+        """
+        path = os.path.realpath(db_path)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(path)
+        uri = f"file:{quote(path, safe='/')}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=5.0, check_same_thread=False)
+        try:
+            tables = {str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()}
+            required = {"entities", "aliases", "edges"}
+            if not required.issubset(tables):
+                missing = ", ".join(sorted(required - tables))
+                raise sqlite3.DatabaseError(f"graph schema is incomplete; missing {missing}")
+        except Exception:
+            conn.close()
+            raise
+
+        graph = cls.__new__(cls)
+        graph._db_path = path
+        graph._lock = threading.RLock()
+        graph._conn = conn
+        graph._conn.row_factory = sqlite3.Row
+        graph.entities = EntityRegistry(graph._conn, graph._lock)
+        graph._ontology_mode = "off"
+        graph._ontology = None
+        return graph
 
     # ------------------------------------------------------------------
     # Edge CRUD

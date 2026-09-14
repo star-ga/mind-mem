@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>mind-mem local viewer</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<main><h1>mind-mem local viewer</h1><p class="note">Read-only view of admitted workspace memory.</p>
+<form id="search"><label for="query">Search admitted blocks</label><input id="query" maxlength="256" autocomplete="off"><button>Search</button></form>
+<form id="graph"><label for="entity">Graph entity</label><input id="entity" maxlength="512" autocomplete="off"><label for="depth">Depth</label><input id="depth" type="number" min="1" max="8" value="1"><button>Explore</button></form>
+<p id="status" role="status"></p><section><h2>Results</h2><ul id="results"></ul></section>
+<section><h2>Graph</h2><pre id="graph-output"></pre></section>
+</main><script src="/app.js" defer></script>
+</body></html>

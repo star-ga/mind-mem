@@ -1855,6 +1855,18 @@ def _cmd_http_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_view(args: argparse.Namespace) -> int:
+    """Launch the read-only local memory/graph viewer."""
+    from mind_mem.viewer import serve
+
+    try:
+        serve(_workspace(), args.host, args.port, args.agent_id)
+    except ValueError as exc:
+        print(f"mm view: {exc}", file=sys.stderr)
+        return 64
+    return 0
+
+
 def _cmd_daemon(args: argparse.Namespace) -> int:
     """Launch the v3.9 background daemon (auto-scheduled jobs). Blocks."""
     from mind_mem.daemon import run_daemon
@@ -4941,6 +4953,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_tls_arguments(p_http)
     p_http.set_defaults(func=_cmd_http_serve)
+
+    # view — local, read-only visual viewer
+    p_view = sub.add_parser(
+        "view",
+        help="Launch a read-only local viewer for admitted memory and graph data.",
+        description="Launch a read-only local viewer for admitted memory and graph data.",
+    )
+    p_view.add_argument("--host", default="127.0.0.1", help="Loopback bind host (remote hosts are unsupported).")
+    p_view.add_argument("--port", type=int, default=8765, help="TCP port (default: 8765; 0 selects an ephemeral port).")
+    p_view.add_argument("--agent-id", default=None, help="Optional existing agent identity for namespace-aware reads.")
+    p_view.set_defaults(func=_cmd_view)
 
     # daemon — v3.9 background scheduler (set-and-forget mode)
     p_daemon = sub.add_parser(
