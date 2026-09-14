@@ -20,6 +20,16 @@ All notable changes to MIND-Mem are documented in this file.
   unwritten; redact mode rewrites content fields and refuses changes to
   identity or provenance-class fields. Invalid redaction configuration now
   returns a structured refusal.
+- If fresh recall attestation derivation fails, replace carried proof in a
+  blocks-shaped envelope with an explicit `unproven` marker while retaining
+  results. This fallback also works when the served-ledger import is unavailable.
+
+### Changed
+
+- Align active release, test-function, client and model documentation with their
+  source authorities. Keep the reported model evaluation separate from a new
+  independent run and document its two inference-time anchors and trained-tool
+  coverage. Extend the documentation gate to catch the previously missed claims.
 
 ## [5.0.2] - 2026-09-13
 

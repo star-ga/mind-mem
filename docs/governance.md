@@ -45,6 +45,19 @@ The load-bearing layer. Every `recall` (read) or `propose_update` (write) flows 
 4. **Audit chain.** TAG_v1 NUL-separated hash preimages over Q16.16-scored entries. The chain is replayable: feed the same inputs to the same source-tree SHA and get the same hash.
 5. **At-rest encryption.** Optional authenticated encryption of on-disk block files (HMAC-SHA256 keystream + encrypt-then-MAC with a PBKDF2-derived key — *not* AES/SQLCipher; the FTS5/sqlite-vec recall index is not encrypted). Decryption is per-process; the running server is the only entity that can read the plaintext.
 
+### Proposal field screening
+
+`propose_update` preserves the supplied reason as `Rationale` in its staged
+signal. When redaction is enabled, screening covers the statement, rationale,
+tags, confidence and supplied provenance fields before any redaction audit
+metadata is recorded. A `reject` policy refuses matching content before the
+proposal is written. A `redact` policy may rewrite content fields, including
+purpose, but refuses a proposal if rewriting would change an identity or
+provenance class. `off` and `flag` retain their non-rewriting behavior.
+
+The signal still requires the ordinary governed approval process; retaining
+its rationale does not approve it.
+
 ## L5 — Continuous
 
 The drift-detection layer:

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1575 | **Est. tokens:** ~4669815
-**Generated:** 2026-09-14 07:00 UTC
+**Files:** 1575 | **Est. tokens:** ~4669983
+**Generated:** 2026-09-14 07:06 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206583 |
+| `docs/` | 93 | ~206751 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -462,7 +462,7 @@
 - `federation-setup.md` (~2406 tok, huge) — mind-mem federation & multi-machine setup
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `governance.md` (~1572 tok, huge) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~1740 tok, huge) — MIND-Mem — governance design (5 layers)
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `install-guide.md` (~2888 tok, huge) — Installation guide — every step + every option
