@@ -764,44 +764,22 @@ HITL gate deliberately refuses.
 
 ### Cross-cutting (deferred infrastructure)
 
-### Pure-MIND Core Port (long-horizon architectural goal — PLANNED, not started)
+### Pure-MIND Core Port — historical checkpoint
 
-**Gate (2026-08-30): the compiler first, and its Rust independence to 100%.**
-Do not begin the migration before that lands. The dependency is not a
-preference — it is what makes the port possible at all:
+The 2026-08-30 installed-toolchain snapshot reported four of eight prototypes
+passing frontend verification. Its missing-standard-library diagnosis and
+compiler feature inventory are historical; they do not describe the selected
+compiler tested on 2026-09-14. That later audit found three frontend passes and
+zero runnable scoring artifacts or shared libraries. Neither count establishes
+execution, numerical parity or consumer compatibility.
 
-- `--emit-shared` (cdylib) is **MLIR-only** today: `emit_shared_if_requested`
-  is `#[cfg(feature = "mlir-build")]` and lowers through `lower_to_mlir_compat`.
-  MLIR is being dropped in favour of the native emitter, so the one path that
-  can produce a loadable library is the one going away.
-- `--backend native` (RI-D Option A) writes a **standalone static ELF** and
-  accepts **exactly one** source file. mind-mem is a Python package: it must
-  `dlopen` a `.so` and call it over the C-ABI. A standalone ELF would mean a
-  subprocess per scoring call, which no retrieval hot path can carry.
-- `std.tensor` does not exist in the toolchain's `std/` (41 modules, no
-  `tensor.mind`), and all 8 real kernels import it.
-- Two tensor reductions are missing: `sum_all` (needed by `abstention`, `bm25`,
-  `category`) and `reduce_sum` (needed by `prefetch`).
-
-So the migration is **scheduled, not attempted**. When the native backend can
-emit a multi-file cdylib and the toolchain is Rust-independent, this section
-becomes executable work; until then, writing more `.mind` against a missing
-`std.tensor` only grows the pile of source nothing can compile — which is
-exactly how 18 TOML config files and 4 uncompilable kernels came to sit under a
-ticked "bench-gated" box.
-
-**Measured state of `mind/*.mind` (2026-08-30, installed `mindc`):**
-
-| | count | note |
-|---|---|---|
-| TOML config carrying a `.mind` extension | 18 | `[section]` + `key = value`; read as config, never compiled |
-| real MIND source | 8 | |
-| …of which compile clean (`--verify-only`) | 4 | `importance`, `ranking`, `reranker`, `rrf` |
-| …of which fail | 4 | 3 on `sum_all`, 1 on `reduce_sum` |
-
-No CI job compiles any of them, which is why the false tick survived: no gate
-could fail. A compile gate lands with the migration, not before — it would only
-pin a state the toolchain cannot yet satisfy.
+The current inventory, compiler dependencies and incremental acceptance gates
+are maintained in the [Pure-MIND Core Port section](#pure-mind-core-port-long-horizon-architectural-goal)
+and [`mind/README.md`](mind/README.md). Eighteen `.mind` files are INI-style
+configuration; eight are compiler-source prototypes. Keep the Python/C serving
+path until each replacement passes its consumer ABI, bit-identity and
+performance gates. Full compiler independence remains a separate required
+milestone in the MIND compiler roadmap.
 
 - *(the five Pure-MIND port steps are tracked in the “Pure-MIND Core Port”
   section below — they were listed twice and are now counted once. The
