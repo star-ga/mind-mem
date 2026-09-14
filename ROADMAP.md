@@ -110,11 +110,11 @@ by its full description below.
 - [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from recent research on invisible-Unicode covert channels: payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (reported 100% receiver recovery at 0% monitor detection). Provenance recorded privately in `mind-internal`, per the no-public-attribution rule. Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
 - [x] **Memory reputation / trust scores** — shipped as the validity gate's FIFTH component, not a separate subsystem: `src/mind_mem/provenance_class.py` classifies a block `operator` > `agent-verified` > `agent-inferred` > `external-ingest` from the existing `ActorRole` / `ToolId` / `Source` fields, and `validity_gate.validity_components()` folds that weight into the composite `V`. No per-actor learned or anomaly scoring (determinism wedge). `trust_scores.apply_trust_scores` keeps the `actor_trust` field as a thin façade over that one component. Opt-in via `recall.validity_gate.provenance_class.enabled`; flag-off recall ordering is byte-identical. 48 tests.
 
-### Group E — Compliance (5 items — 2 shipped, 3 open)
+### Group E — Compliance (5 items — 3 shipped, 2 open)
 
 - [~] **Pluggable redaction layer** — the stated blocker is GONE but completeness is unverified. `compliance/detectors.py` + `compliance/prewrite.py` exist and `screen(...)` IS called on the governed door (`mcp/tools/governance.py:328`, fail-closed on a malformed policy), so "no pre-write detector chain in-tree; the redaction flag is a name with no consumer" is false as written. **Not ticked:** this item is on the retracted-ticks lock from the 2026-09-01 audit (`tests/test_roadmap_ticks_gate.py`), which exists because it previously carried a confidently-worded false tick. Verified 2026-09-06 that the chain is wired. An explicit `module:DetectorClass` plugin reference is now validated and exercised through the governed door; the lock remains until the full item review and its retraction criteria are independently closed.
 - [~] **Compliance export pipeline** — the stated blocker is GONE but completeness is unverified. `mm export --policy {full|redacted|metadata-only} --since --format --out` runs (`compliance/export.py`), so "no `mm export` verb and no `--policy` option anywhere in `src/`" is false as written. **Not ticked** — retracted-ticks lock, see above. The surface exists; its behaviour against the full item text is NOT verified.
-- [~] **Provenance-rich blocks** — `compliance/provenance_policy.py` and the governed write door enforce the `off | recommended | required` policy for configured writes. Source-bound persistence and complete cross-backend coverage remain open; the required-provenance candidate is not part of this baseline. **Not ticked** — retracted-ticks lock, see above. Legacy export is a separate read surface and does not establish write provenance.
+- [x] **Provenance-rich blocks** — **SHIPPED in `2f2f351c` (2026-09-14).** `compliance/provenance_policy.py` and the governed write door enforce the `off | recommended | required` policy; required mode refuses missing, malformed, forged, or stale caller fields before admission. The landed block and supported stores retain the admitted provenance, while transactional refusal leaves prior state unchanged. `tests/test_e3_apply_provenance_refusal.py`, `tests/test_governance_provenance_gate.py`, and capture controls cover the write/apply seam. Legacy reads and `off`/`recommended` behavior remain supported; the retracted-ticks lock still governs any future historical checkbox correction.
 - [x] **Time-bounded and event-bounded recall** — **shipped** (`since` / `until` / `event_id` on `recall(...)`, applied in `_apply_post_filters`)
 - [x] **Vocabulary-bound fields** — **shipped** (`v4/vocabulary.py`, enforced by `v4/block_metadata.validate_block` on the `propose_update` door; opt-in behind both `v4.block_metadata` and `v4.vocabulary`)
 
@@ -303,7 +303,8 @@ self-modifies. We adopt the connectivity model, not the autonomy.
         measure) drives it against the real ~1469-block corpus to optimize the
         loop + compressor prompt.
       - [x] a bounded, opt-in `mm recompact` / dream-cycle pass 6 that clusters
-        via `find_similar` and routes results through `propose_update` (2026-09-14).
+        via `find_similar` and routes results through `propose_update` (commit
+        `942732ba`, 2026-09-14).
         Source block/file identities are revalidated after compression and before
         staging; malformed, duplicate, stale, forged, oversized, and unsafe text
         is refused. The result remains a review-only proposal with
@@ -2496,7 +2497,7 @@ default story is two laptops talking to each other.
 - [ ] **Distributed replication + consensus for governance** — `v4/federation.py` provides feature-gated local version vectors/conflict resolution, while `governance_raft.py` is a single-node pluggable facade. Real multi-node Raft audit-chain replication remains open.
 - [ ] **Rust hot path for hybrid search** — PyO3 BM25+RRF port — pure-MIND port (separate roadmap section below) is the chosen path instead. Marking as ⊘ superseded by Pure-MIND Core Port.
 
-### E. Compliance-sensitive opt-in extensions (partial — 5 shipped, 3 open)
+### E. Compliance-sensitive opt-in extensions (partial — 6 shipped, 2 open)
 
 **Shipped:**
 
@@ -2505,7 +2506,7 @@ default story is two laptops talking to each other.
 - [x] **Contraindication / mutex edges** — `contraindicates` + `supersedes` edges ship as extra `block_lineage` kinds.
 - [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters ship on `recall(...)` (v4.0.15) and are applied through `_apply_post_filters` in `_recall_core.py`, the single funnel every backend dispatch goes through, so the contract cannot diverge per backend. Was filed under **Open** while already shipped; moved up 2026-09-01.
 - [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies ship in `src/mind_mem/v4/vocabulary.py` and are enforced by `v4/block_metadata.validate_block(..., workspace=...)`, which `propose_update` calls on every proposal (`mcp/tools/governance.py`); reject-mode violations refuse the write, flag-mode violations warn and pass. Opt-in behind **two** flags — `v4.block_metadata` owns the door probe and `v4.vocabulary` owns the check, so the surface is inert unless both are on. `tests/test_v4_vocabulary.py` + `tests/test_vocabulary_wiring.py` collect 49 tests and `tests/test_block_metadata_wiring.py` adds 15 that pin the door itself. Was filed under **Open** with a sentence that denied its own wiring; settled 2026-09-01 by refusal rather than by grep — a proposal whose `confidence` value is outside a reject-mode workspace vocabulary comes back `error: schema_validation_rejection` and SIGNALS.md is byte-for-byte unchanged, against two controls (same proposal with both flags off is accepted, and an in-vocabulary value with both flags on is accepted).
-- [x] **Provenance-rich blocks** — the five fields and the off/recommended/required policy both ship. **SHIPPED — verified at HEAD 2026-09-07.** This line said the policy has "zero occurrences in `src/`"; that is no longer true. `src/mind_mem/compliance/provenance_policy.py` (193 lines) ships `POLICY_OFF`/`POLICY_RECOMMENDED`/`POLICY_REQUIRED` over the five fields, and a configured field outside the known five is a refusal rather than a quiet no-op.
+- [x] **Provenance-rich blocks** — the five fields and the off/recommended/required policy both ship. **SHIPPED — write/apply binding verified in `2f2f351c` (2026-09-14).** This line said the policy has "zero occurrences in `src/`"; that is no longer true. `src/mind_mem/compliance/provenance_policy.py` (193 lines) ships `POLICY_OFF`/`POLICY_RECOMMENDED`/`POLICY_REQUIRED` over the five fields, and a configured field outside the known five is a refusal rather than a quiet no-op.
 
 **Open:**
 
@@ -3805,11 +3806,10 @@ mislabelled eval set still produces confident numbers.
   This project already argues exactly that for `propose_update` versus "the model
   will remember"; the audit confirms we live by it everywhere else, particularly
   on any path where redaction, scoping, or exclusion is currently prompt-shaped.
-  Verified precondition: `scrub`/`redact` vocabulary occurs in essentially one
-  CLI file — not the write path, not the distillers, not compaction, not export.
-  That is not proof of a leak; it is proof there is **no enforcement layer to
-  point at**, which is exactly the condition under which a prompt-shaped property
-  survives unnoticed.
+  **Historical first-pass observation (2026-08-17):** `scrub`/`redact` vocabulary
+  occurred in essentially one CLI file. That observation described the pre-gate
+  tree; it is not a current claim that the write path, distillers, compaction,
+  export, or graph-answer paths lack enforcement.
   **The close condition is a mechanism, not a document.** The original scope
   ended at "a ranked list with a code-enforced replacement for each", which
   leaves every finding in the same unenforced state it was found in. The
@@ -3822,11 +3822,12 @@ mislabelled eval set still produces confident numbers.
   scan is unsupported, with the reasoning written into the source: *"An
   undefined/empty mutation list must NEVER make `equivalent` true — that was the
   forgery-by-absence path this fix closes."*
-  That is M5 solved structurally. Each audit finding should close by installing a
-  flag that **fails closed while unimplemented**, so an unenforced property is a
-  function returning 0 that gates the path — not a doc saying the property is
-  aspirational. A caller intending to rely on it must check and refuse. The
-  ranked list becomes the work queue for installing flags, not the deliverable.
+  This is the structural pattern used by the current gates. The summary/chat
+  output gate and graph-context binding (`1bbf8e5f`) is implemented in the current candidate;
+  semantic entailment remains **not established**, and the full inventory of
+  remote/vector model-output consumers is not exhaustive. A caller intending to
+  rely on an unimplemented property must still check and refuse; no documentation
+  alone upgrades an unproven semantic claim.
   Keep the audit and the remediation separate passes regardless: bundling them
   guarantees the sweep stops at the first interesting finding.
 
@@ -3865,11 +3866,12 @@ mislabelled eval set still produces confident numbers.
   two should share it. Do not build the harness before the eval set; a scorecard
   over a corpus with no ground truth is a number that means nothing.
 
-**Sequencing.** M1 and M5 first — both are cheap, both close silent-failure
-classes, neither needs new infrastructure. M2 next, since M3 depends on its
-measurement surface. M4 is the item with real product value and should be scoped
-as a spec before any code, because it changes write semantics on a governed
-store. M7 waits on the shared L1/M7 eval set.
+**Sequencing.** M1 and M5 structural gates are now implemented in the current
+candidate; retain the M5 semantic-entailment and inventory review as open work.
+M2 is next, since M3 depends on its measurement surface. M4 is the item with
+real product value and should be scoped as a spec before any code, because it
+changes write semantics on a governed store. M7 waits on the shared L1/M7 eval
+set.
 
 **The discipline that does not relax.** Everything here is a *retrieval-quality*
 or *write-policy* mechanism. None of it carries governance weight: a floor, a
@@ -3893,7 +3895,7 @@ here and were merely not yet applied to the store. Citation in `mind-internal`.
 Cross-repo: `autoresearch` ROADMAP (M6's dead-end-registry symmetry, and the
 ablation pattern applied to loop components).
 
-- **Status:** M1, M4, and M6 have implementation evidence in the current candidate; M2, M3, and M5 remain partial. M7 is explicitly blocked and must not be started before the eval set exists.
+- **Status:** M1, M4, and M6 have implementation evidence; M5 has implementation evidence for output screening and graph-context binding but remains partial because semantic entailment and complete remote/vector inventory are unverified. M2 and M3 remain partial. M7 is explicitly blocked and must not be started before the eval set exists.
 
 ---
 
@@ -3925,11 +3927,11 @@ seam N2 exploits.
 and its tests are present. `recall_smart_chunk.py` wires it into the BM25
 chunk-scoring path behind `retrieval.smart_chunking.enabled`; the actual
 flag-on score change and flag-off identity are covered by
-`tests/test_smart_chunker_wiring.py`. This resolves the claim that Group N
-has no implementation to extend. It does not establish N2: raw-document
-hash/span anchoring at ingestion and its existing-chain integration remain
-pending below. The required design still uses metadata on existing PROPOSE/APPLY
-records; it adds neither a parallel chain nor an evidence enum member.
+`tests/test_smart_chunker_wiring.py`. This resolves the historical claim that
+Group N had no implementation to extend. **N2 ingestion anchoring is now
+implemented in `e8e2c809`** for the opt-in Markdown/agentmem path, using raw
+source identity and existing PROPOSE/APPLY metadata; `b959afa6` is the separate
+symlink hardening follow-up. No parallel chain or evidence enum member was added.
 
 - [x] **N1 — Soft maximum as a distinct boundary control.** The chunker today has **SHIPPED — the checkbox contradicted the entry's own text, which already read "LANDED 2026-08-24".** `SmartChunkerConfig.soft_max_chunk_size` / `soft_max_boundary_score` (`src/mind_mem/smart_chunker.py`), consulted by `_merge_segments_into_chunks`, which also gave the previously-dead boundary scorer a caller.
   a hard ceiling (`max_chunk_size`, default 1500) and a merge floor
@@ -3986,90 +3988,32 @@ records; it adds neither a parallel chain nor an evidence enum member.
   never later). Worth deciding separately whether the ceiling should be documented
   as span-bounding or enforced on final text; N1 changes neither.
 
-- [ ] **N2 — Chunk-provenance anchoring: `(doc_hash, start_char, end_char)`.**
-  The external project's provenance story is *retention* — keep the source
-  elements around so a chunk can be traced back. This project can do the
-  strictly stronger thing, because it already has the offsets and the ecosystem
-  already has an evidence layer: anchor the triple
-  `(doc_hash, start_char, end_char)` so a chunk's preimage is not merely
-  *retrievable* but *provable*. A recalled chunk then carries a claim about
-  exactly which bytes of which document it came from, verifiable after the fact
-  against the source. Nothing in the current Python surface does this —
-  `doc_hash` and `source_hash` appear nowhere in `src/mind_mem/`, so chunk
-  metadata today records where a chunk came from only by convention.
-  **Architectural rails, non-negotiable:**
-  1. **mic@3 + MAP is the evidence layer; JSON stays the interop boundary.**
-     This item must not become a reason to treat mic@3 as a document-interchange
-     format. The anchor is a hash triple sealed into the existing evidence
-     surface — not a document envelope.
-  2. **No new repo, no new cross-repo seam.** This lands inside mind-mem's
-     existing evidence surface. The byte boundary remains the only cross-repo
-     coupling, per the Ecosystem Architecture Contract.
-  3. **The anchor is provenance, not governance.** Consistent with the rule
-     already recorded for attestation verdicts, trigger verdicts, Group L's
-     utility number, and Group M's floors: a provenance anchor records *where a
-     chunk came from*. It must never be read as a quality signal, must never
-     influence ranking, and must never gate approval.
-  **Fable verdict 2026-08-24: AMENDED.** Approved in shape, re-sequenced, and
-  corrected on three points. The review was conducted against this entry and an
-  independent re-verification of the code (the reviewer's sandbox restricted reads
-  to this repo), so the findings below are confirmed independently rather than
-  taken on the proposer's framing.
-  1. **Anchor in the EXISTING `EvidenceChain` — never a second chain.** A separate
-     provenance chain was rejected: it doubles the verify surface, splits the audit
-     story, and violates rail 2 in spirit. But **not one evidence record per chunk**:
-     `EvidenceChain` fsyncs every append, verifies every record at load, and hard-caps
-     at 1M entries (`_integrity_compromised` beyond it). Per-chunk records would flood
-     a chain built for low-volume human-gated decisions and brick verification with
-     mechanical data. Correct shape: the triple lives in **block/chunk metadata in the
-     store**, and is **sealed** into the chain via the `metadata` dict of the
-     governance records that already fire (PROPOSE/APPLY). The v3 evidence preimage
-     already hashes `metadata` (`evidence_objects.py:156-167`), so it becomes
-     tamper-evident for free — the same precedent as the existing `spec_hash`.
-     For bulk attestation, seal one **Merkle root** over a document's chunk anchors as
-     a single record (`verify_merkle` already exists on the MCP surface).
-  2. **`EvidenceAction` is closed and stays closed.** Seven-member `str` Enum;
-     `from_dict` does a strict `EvidenceAction(...)` lookup, so an unknown member is a
-     deserialization failure for every existing reader, and `_map_action` collapses
-     unknowns to APPLY. No `ANCHOR`/`INGEST` member. Rail 3 settles it: a provenance
-     record is not a governance *action*, so it rides in metadata of existing actions.
-     This also keeps old chains readable by old code.
-  3. **`doc_hash` binds RAW BYTES, not normalized text.** Same rule as mic@3
-     (`trace_hash` anchors canonical bytes, never lossy text): hash exactly the bytes
-     that entered the pipeline. Normalized-text hashing severs the tie to the on-disk
-     artifact and lets normalization drift silently invalidate anchors. **Coherence
-     requirement this creates:** `start_char`/`end_char` index into *decoded text* while
-     `doc_hash` covers *bytes*, so the triple is only verifiable if the bytes→text
-     derivation is pinned — UTF-8 explicitly, and any non-trivial extractor (PDF→text)
-     records its id+version in the same slot as (4).
-  4. **Record `(chunker_id, chunker_version, config_digest)` — and the proposer's
-     stated reason was wrong.** N1 does **not** invalidate existing anchors: an anchor
-     is a claim about bytes, and `doc[start:end]` under `doc_hash` verifies identically
-     regardless of which chunker produced it. What N1 changes is **re-derivability** —
-     without algorithm identity you can no longer re-run the chunker and reproduce the
-     same chunk set. That is the real reason to record it, and it upgrades the anchor
-     from "this span existed in this doc" to "this span is what chunker X.Y under
-     config C deterministically produces" — a property the N1 measurement already
-     proved holds. **`config_digest` is mandatory, not optional**, since
-     `soft_max_chunk_size`/`min`/`max` all move boundaries and version alone
-     under-specifies.
-  **Sequencing — N2 is NOT next.** Fable ordered: N3 (done) → **N1** → **wire the
-  chunker into the production ingest path** (its own reviewable change) → N2 as
-  metadata-sealing per above. Two independent reasons, both confirmed against the
-  code: (a) F1 — `smart_chunker` has **zero production importers** (only its two test
-  files), and the live ingest path (`block_parser.py`, `ingestion_pipeline.py`) carries
-  **no** offset, source-path, or doc-hash fields at all, so anchoring today would be
-  evidence about a code path nobody runs; and (b) today's chunker emits one
-  `(0, 1296)` chunk swallowing six headers, so sealing spans into an **append-only**
-  chain *before* fixing boundary policy would permanently record the known-bad
-  boundaries N1 is about to stop producing. **N2 remains gated on the wiring change
-  landing, not merely on this approval.**
-  **Correction to this entry as first written.** It said the anchor should be "sealed
-  into mic@3 + MAP". That named the wrong local artifact: `mic_map.py` is mind-mem's
-  mic@2/mic-b codec for **MIND IR dataflow graphs** ("MIC/MAP is for graphs" per its
-  own docstring), not a general evidence envelope. A chunk span is not a graph. Rail 1
-  is directionally right — evidence layer is evidence, JSON stays interop — but the
-  vehicle is `EvidenceChain` metadata sealing, per (1).
+- [x] **N2 — Chunk-provenance anchoring: `(doc_hash, start_char, end_char)`.**
+  **IMPLEMENTED in `e8e2c809` (2026-09-14); the symlink hardening follow-up is
+  `b959afa6` and remains separately identified until its final integration is
+  reviewed.** The opt-in importer path for Markdown and agentmem note trees
+  chunks decoded UTF-8 source text and records raw-byte `DocumentHash`, validated
+  `DocumentSource`, `DocumentStartChar`/`DocumentEndChar`, chunk index/total,
+  chunker id/version, and deterministic configuration digest. The importer
+  rejects ambiguous source identities, invalid bounds, stale hashes, wrong
+  encoding, and chunk/config mismatches before a block can be staged.
+
+  The existing evidence chain receives one canonical flat anchor-set digest and
+  one domain-separated batch Merkle root per import plan in the existing
+  proposal/apply metadata. No parallel ledger or new evidence action was added;
+  `EvidenceChain` remains the authority and the anchor remains provenance rather
+  than ranking or approval evidence. `tests/test_importers_quarantine.py` covers
+  the nonempty chunked-import path, exact raw-byte/hash and offset checks, Merkle
+  leaves/proofs, chain linkage, and mutation refusal. `b959afa6` adds the
+  source-file and symlink boundary controls; it is not a PDF or arbitrary
+  document-format claim.
+
+  **Limits:** this is opt-in and currently scoped to Markdown and agentmem note
+  trees. The importer does not claim PDF extraction coverage, portable external
+  witnessing, or semantic truth of imported text. `DocumentStartChar` and
+  `DocumentEndChar` index the pinned UTF-8 decoded source while `DocumentHash`
+  covers the raw bytes; non-UTF-8 or unsupported source adapters are refused.
+  Chunk anchoring does not influence recall ranking or governance admission.
 
 - [x] **N3 — Quadratic-accumulation audit of every PDF/document loader (defensive,
   independent of the above). — AUDITED 2026-08-24, no exposure found.** The external project's CVE-2026-33123 fix was a
@@ -4106,14 +4050,15 @@ records; it adds neither a parallel chain nor an evidence enum member.
 **no code adopted, no dependency added, and nothing named in any public
 artifact.** The external contribution is two framings — soft-versus-hard chunk
 boundaries, and chunk-level provenance retention — plus one transferable bug
-class. Every mechanism proposed above is either already implemented here and
-merely unwired (`_score_boundary`), already stronger here than in the external
-design (offset spans versus element retention), or sourced to this ecosystem's
-own evidence layer. Citation in `mind-internal`.
+class. Every mechanism described above is either implemented here (`_score_boundary`
+and the opt-in N2 importer), already stronger here than in the external design
+(offset spans versus element retention), or sourced to this ecosystem's own
+evidence layer. Citation in `mind-internal`.
 
-- **Status:** N3 and N1 have implementation evidence. N2 remains open behind
-  production importer wiring and raw-source identity; the separate N2 candidate
-  is not merged into this baseline.
+- **Status:** N1 and N2 have implementation evidence in the current candidate;
+  N2 is scoped to the opt-in Markdown/agentmem importer and its existing-chain
+  metadata. The `b959afa6` symlink hardening follow-up remains separately
+  identified pending final integration review. N3 is a closed negative finding.
 
 ---
 

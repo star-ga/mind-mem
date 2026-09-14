@@ -1,14 +1,15 @@
 # Design: M5 — enforcement in code, not in the prompt
 
-Status: Implemented candidate for core summary/chat paths; edge-answer
-context binding remains open (2026-09-14) · Owner: mind-mem · Roadmap: Group M / M5
+Status: Implemented structural gates for summary/chat and graph-answer paths;
+semantic entailment remains unestablished and the remote/vector inventory is not
+exhaustive (2026-09-14) · Owner: mind-mem · Roadmap: Group M / M5
 
 The current candidate has code-bound output screening, source admission, and
-strict citation checks on the summary and chat paths. This does not close the
-edge-grounded answer integration: its answer context still needs an
-independent binding acceptance before M5 can be called complete. The audit
-below remains the contract for finding and closing any additional
-prompt-only property.
+strict citation checks on summary, chat, and graph-answer paths. Graph context
+binding (`1bbf8e5f`) is implemented, but semantic entailment is not established,
+and this inventory does not claim exhaustive coverage of remote/vector
+model-output consumers. The audit below remains the contract for finding and closing any
+additional prompt-only property.
 
 ## The principle
 
@@ -35,11 +36,12 @@ guarantee.
 
 The historical first pass supported the concern rather than dismissing it:
 `scrub`/`redact` vocabulary appeared in essentially one place
-(`src/mind_mem/mm_cli.py`). The current candidate adds code-bound screening
-and source-admission checks for summary and chat outputs. The inventory below
-remains useful for the still-open edge-answer binding and any other path whose
-property is only prompt-shaped; the earlier absence of an enforcement layer is
-historical, not a claim about the current candidate.
+(`src/mind_mem/mm_cli.py`) on 2026-08-17. That was a pre-gate observation, not a
+current claim about the write path, distillers, compaction, export, or graph
+answers. The current candidate adds code-bound screening, source-admission
+checks, and graph-context binding. The inventory remains useful for any path
+whose property is only prompt-shaped; semantic entailment remains explicitly
+unestablished.
 
 ## Scope: what counts as a prompt-enforced property
 

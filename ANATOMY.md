@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1615 | **Est. tokens:** ~4753644
-**Generated:** 2026-09-14 13:04 UTC
+**Files:** 1615 | **Est. tokens:** ~4753682
+**Generated:** 2026-09-14 13:18 UTC
 
 ## Token Budget Guide
 
@@ -50,7 +50,7 @@
 | `docs/benchmarks/head-20260907/` | 8 | ~7240 |
 | `docs/benchmarks/memory-ab-420s-runs/` | 26 | ~84421 |
 | `docs/decisions/` | 1 | ~3174 |
-| `docs/design/` | 10 | ~17701 |
+| `docs/design/` | 10 | ~17739 |
 | `docs/evidence/5.0.2-f1/` | 12 | ~188585 |
 | `docs/plans/` | 1 | ~6134 |
 | `docs/security-baselines/` | 1 | ~18974 |
@@ -438,7 +438,7 @@
 - `m2-m3-namespace-retrieval-properties.md` (~2552 tok, huge) — Design: M2/M3 — namespace retrieval properties, asserted and tuned
 - `m4-closed-set-slots-implementation.md` (~720 tok, large) — M4 closed-set slots: implemented candidate write contract
 - `m4-closed-set-slots.md` (~2250 tok, huge) — Design: M4 — closed-set slots, structural contradiction prevention
-- `m5-enforcement-in-code-audit.md` (~2070 tok, huge) — Design: M5 — enforcement in code, not in the prompt
+- `m5-enforcement-in-code-audit.md` (~2108 tok, huge) — Design: M5 — enforcement in code, not in the prompt
 - `m6-negative-results.md` (~2171 tok, huge) — Design: M6 — negative results as a first-class recorded outcome
 - `recall-harness.md` (~1639 tok, huge) — Design: the recall harness — deterministic working memory for search agents
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
