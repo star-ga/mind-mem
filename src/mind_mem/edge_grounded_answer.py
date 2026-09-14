@@ -221,7 +221,11 @@ class EdgeGroundedContext:
 
 @dataclass(frozen=True)
 class GroundedAnswer:
-    """An answer plus the proof that it stayed inside the served edges."""
+    """An answer with graph-bound citation membership checks.
+
+    ``grounded`` reports structural citation checks, not semantic proof
+    that every sentence follows from the cited triples.
+    """
 
     context: EdgeGroundedContext
     text: str
@@ -459,21 +463,34 @@ def answer(
     context: Optional[EdgeGroundedContext] = None,
     **context_kwargs: Any,
 ) -> GroundedAnswer:
-    """Answer about *seed* using only the served edges, and prove it.
+    """Answer about *seed* and check citations against the current graph.
 
     ``generate_fn`` receives the serialised context **and nothing else**;
     whatever it returns is checked citation by citation. Any ``[[E-…]]``
     naming an edge that was not served is a fabrication: it is listed in
     ``fabricated_citations``, added to the context gaps, and
-    ``grounded`` is ``False``. An answer that cites nothing at all while
-    the graph did serve edges is likewise not grounded — an uncited claim
-    is exactly what this mode exists to make impossible to mistake for a
-    sourced one.
+    ``grounded`` is ``False``. Generated text without a citation is also
+    not grounded, including when the graph has no edges. These are
+    structural checks; citing a real edge does not prove the prose follows
+    from it.
+
+    An optional precomputed ``context`` is an asserted snapshot, not an
+    authority: it must match a fresh graph read with the same seed and
+    query options. The graph is rechecked after a generator returns, so a
+    changed context cannot receive a grounded result. These checks do not
+    provide a transaction spanning concurrent graph and corpus writes.
 
     With no generator the answer is :func:`_default_render` — the cited
     triples — and it is grounded by construction.
     """
-    ctx = context if context is not None else build_context(kg, seed, **context_kwargs)
+    # Freeze iterable options before reading twice; a generator expression
+    # must not silently turn the second read into a different query.
+    for name in ("predicates", "known_block_ids"):
+        if context_kwargs.get(name) is not None:
+            context_kwargs[name] = tuple(context_kwargs[name])
+    ctx = build_context(kg, seed, **context_kwargs)
+    if context is not None and context != ctx:
+        raise ValueError("provided context does not match the current graph query")
     if generate_fn is None:
         text = _default_render(ctx)
         cited = tuple(sorted(set(CITATION_RE.findall(text))))
@@ -489,6 +506,8 @@ def answer(
     text = generate_fn(ctx.serialize())
     if not isinstance(text, str):
         raise TypeError("generate_fn must return a string")
+    if build_context(kg, seed, **context_kwargs) != ctx:
+        raise ValueError("graph context changed during answer generation")
     cited_all = sorted(set(CITATION_RE.findall(text)))
     allowed = ctx.edge_ids
     fabricated = tuple(c for c in cited_all if c not in allowed)
@@ -496,7 +515,7 @@ def answer(
     extra_gaps: list[Gap] = []
     for bogus in fabricated:
         extra_gaps.append(Gap(GAP_FABRICATED_CITATION, f"{bogus} was cited but never served"))
-    if not cited_all and ctx.triples and text.strip():
+    if not cited_all:
         extra_gaps.append(Gap(GAP_UNCITED_ANSWER, "the answer cites no served edge"))
     final_ctx = (
         ctx

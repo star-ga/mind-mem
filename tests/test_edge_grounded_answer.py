@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Iterator
 
@@ -324,6 +325,64 @@ class TestCitationEnforcement:
     def test_generator_must_return_text(self, chain: KnowledgeGraph) -> None:
         with pytest.raises(TypeError):
             answer(chain, "starga", generate_fn=lambda _p: None)  # type: ignore[return-value,arg-type]
+
+
+class TestContextBinding:
+    @pytest.mark.parametrize("field,value", [("edge_id", UNSERVED_ID), ("object", "invented"), ("source_block_id", "D-FAKE")])
+    def test_caller_cannot_replace_served_evidence(self, chain, field, value):
+        ctx = build_context(chain, "starga")
+        forged = replace(ctx, triples=(replace(ctx.triples[0], **{field: value}), *ctx.triples[1:]))
+        called = []
+        with pytest.raises(ValueError, match="context.*graph"):
+            answer(chain, "starga", context=forged, generate_fn=lambda prompt: called.append(prompt) or "invented")
+        assert called == []
+
+    def test_valid_precomputed_context_uses_matching_query_options(self, chain):
+        ctx = build_context(chain, "starga", hops=1, predicates=["depends_on"], known_block_ids={BLOCK_A})
+        result = answer(
+            chain,
+            "starga",
+            context=ctx,
+            hops=1,
+            predicates=iter(["depends_on"]),
+            known_block_ids=iter([BLOCK_A]),
+            generate_fn=lambda _: f"STARGA depends on mindc [[{ctx.triples[0].edge_id}]]",
+        )
+        assert result.grounded
+        assert result.context == ctx
+
+    @pytest.mark.parametrize("query", [{"seed": "mindc"}, {"seed": "starga", "hops": 1}])
+    def test_context_cannot_bypass_seed_or_query_options(self, chain, query):
+        ctx = build_context(chain, "starga")
+        with pytest.raises(ValueError, match="context.*graph"):
+            answer(chain, context=ctx, **query)
+
+    def test_stale_context_is_rejected(self, chain):
+        ctx = build_context(chain, "starga")
+        chain.add_edge("starga", "depends_on", "runtime", source_block_id=BLOCK_C)
+        with pytest.raises(ValueError, match="context.*graph"):
+            answer(chain, "starga", context=ctx)
+        assert answer(chain, "starga").grounded
+
+    def test_graph_is_revalidated_after_generator(self, chain):
+        ctx = build_context(chain, "starga")
+
+        def generate(_):
+            chain.add_edge("starga", "depends_on", "runtime", source_block_id=BLOCK_C)
+            return f"STARGA depends on mindc [[{ctx.triples[0].edge_id}]]"
+
+        with pytest.raises(ValueError, match="graph.*changed"):
+            answer(chain, "starga", generate_fn=generate)
+
+    @pytest.mark.parametrize("text", ["STARGA owns the moon.", "", "  "])
+    def test_generator_cannot_claim_grounding_on_empty_graph(self, graph, text):
+        result = answer(graph, "starga", generate_fn=lambda _: text)
+        assert not result.grounded
+        assert GAP_UNCITED_ANSWER in _kinds(result.context)
+        # The deterministic renderer can still report a verified gap.
+        abstention = answer(graph, "starga")
+        assert abstention.grounded
+        assert GAP_UNKNOWN_ENTITY in _kinds(abstention.context)
 
 
 def chain_ids(kg: KnowledgeGraph) -> list[str]:
