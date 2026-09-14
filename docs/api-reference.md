@@ -62,7 +62,7 @@ Useful if you're writing a custom MCP config writer.
 
 ## MCP Server (103 tools, 8 resources)
 
-The MCP server exposes 103 distinct tools via JSON-RPC (102 `mcp.tool` registrations; the consolidated `recall` dispatcher shadows the base `recall`). See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
+The MCP server exposes 103 distinct tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
 
 ### Starting the Server
 
@@ -88,11 +88,20 @@ python3 mcp_server.py --workspace /path/to/workspace
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `propose_update` | Propose a decision or task (writes to SIGNALS.md) | `block_type`, `statement`, `rationale`, `tags`, `confidence` |
+| `propose_slot_update` | Stage a value for an explicitly declared closed slot; admin scope, separate approval required | `namespace`, `slot`, `value`, `rationale`, optional provenance fields |
 | `approve_apply` | Apply a staged proposal with contradiction check (dry_run default) | `proposal_id`, `dry_run` |
 | `rollback_proposal` | Rollback an applied proposal by receipt timestamp | `receipt_ts` |
 | `delete_memory_item` | Delete a block by ID from its source file | `block_id` |
 | `export_memory` | Export all blocks as JSONL | `format`, `include_metadata` |
 | `memory_evolution` | A-MEM metadata: importance, access patterns, keywords | `block_id`, `action` |
+
+`propose_slot_update` requires a workspace `closed_slots` declaration. Unknown
+slot names are refused; a changed occupied slot stages a superseding decision,
+and reasserting the same value leaves the corpus unchanged. Approval rechecks
+the current declaration, occupancy and configured write policies. See the
+[closed-slot contract](design/m4-closed-set-slots-implementation.md) for the
+configuration, provenance fields and refusal cases. Slot namespaces name sets
+of fields; they do not grant access to retrieval namespaces.
 
 #### Drift Detection
 

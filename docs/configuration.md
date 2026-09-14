@@ -1,10 +1,15 @@
 # Configuration Reference
 
-MIND-Mem is configured via `mind-mem.json` in your workspace root. This file is created automatically by `init_workspace.py` with sensible defaults. All keys are optional -- missing keys fall back to their documented defaults.
+MIND-Mem is configured via `mind-mem.json` in your workspace root. This file is created automatically by `init_workspace.py`. Missing features use their documented defaults; enabling a feature may require additional fields, such as the explicit day limits for content-category lifetimes.
 
 ---
 
 ## Full Configuration
+
+This example covers the common settings. Opt-in declarations, including
+[content-category lifetimes](content-lifecycle.md) and
+[closed slots](design/m4-closed-set-slots-implementation.md), are documented
+separately with their required fields.
 
 ```json
 {

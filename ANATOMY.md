@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1607 | **Est. tokens:** ~4714192
-**Generated:** 2026-09-14 11:36 UTC
+**Files:** 1607 | **Est. tokens:** ~4714665
+**Generated:** 2026-09-14 11:46 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 94 | ~209350 |
+| `docs/` | 94 | ~209823 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -335,7 +335,7 @@
 
 - `agent-comm.md` (~1251 tok, large) — Agent-to-agent messaging (`mm send` / `mm inbox`)
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
-- `api-reference.md` (~2679 tok, huge) — API Reference
+- `api-reference.md` (~2836 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1626 tok, huge) — Append-Only Audit Logs — Operator Runbook
 - `architecture.md` (~3506 tok, huge) — Architecture
 ### `docs/audit/`
@@ -421,12 +421,12 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `cli-reference.md` (~7082 tok, huge) — CLI Reference
+- `cli-reference.md` (~7321 tok, huge) — CLI Reference
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~17571 tok, huge) — Configuration Reference
+- `configuration.md` (~17648 tok, huge) — Configuration Reference
 - `content-lifecycle.md` (~865 tok, large) — Content-category lifetimes
 ### `docs/decisions/`
 

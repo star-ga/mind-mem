@@ -83,6 +83,28 @@ mm --help
 All commands read the workspace from the `MIND_MEM_WORKSPACE` environment variable
 (falls back to the current working directory).
 
+## Local retrieval receipts
+
+Capture the current nonempty served ledger and its head to a new file:
+
+```bash
+mm receipt export --out served-receipt.json
+mm receipt verify --input served-receipt.json
+```
+
+Export refuses an existing destination or symlink. Defaults bound the source
+to 8 MiB and 100,000 rows; verification reads at most 12 MiB. The verifier also
+accepts `--stdin` instead of `--input`. Use
+`--expected-manifest-sha256 <retained-digest>` when checking against a manifest
+digest retained independently of the package.
+
+A successful verification establishes internal consistency of this local
+snapshot, including supported V1/V2 row hashes. It does not establish issuer
+trust, portable occurrence identity, an external anchor or an independent
+witness. The package contains recorded IDs and hashes, so handle it according
+to the workspace's disclosure policy. See the
+[receipt contract](specs/retrieval-receipt-contract.md) for the exact scope.
+
 ---
 
 ## Core commands
