@@ -634,8 +634,97 @@ def _in_date_range(
 # ---------------------------------------------------------------------------
 
 
-#: Status stamped on every block ``mm import`` writes. Kept as a literal
-#: so recall never imports the importers package on the hot path; the
+def _indexed_source_ref(item: Mapping[str, Any]) -> str | None:
+    """Return an indexed row's claimed source, or ``None`` when unbound."""
+    for field in ("_source_file", "_source", "file"):
+        value = item.get(field)
+        if isinstance(value, str) and value.strip() and value != "?":
+            return value
+    return None
+
+
+def _refresh_stale_index_sources(
+    items: list[dict],
+    workspace: str,
+    *,
+    status_key: str,
+    leg: str | None,
+    allow: frozenset[str],
+) -> list[dict]:
+    """Re-admit stale indexed rows against their claimed live sources.
+
+    ``live_statuses`` is intentionally an ID map and therefore cannot tell an
+    empty map caused by a deleted source from a current index. Only enter this
+    source-bound path when the SQLite index is stale; scan results and a
+    current index retain their existing cheap path. A source which cannot be
+    resolved is withheld, while genuinely unbound legacy rows continue to the
+    existing status allow-list below.
+    """
+    from .sqlite_index import DB_REL_PATH, is_stale
+
+    if not os.path.isfile(os.path.join(workspace, DB_REL_PATH)):
+        return items
+    try:
+        stale = is_stale(workspace)
+    except Exception as exc:  # pragma: no cover - defensive fail-closed path
+        _log.warning("indexed_source_staleness_check_failed", error=str(exc))
+        stale = True
+    if not stale:
+        return items
+
+    from .admission import admit_read
+
+    groups: dict[str, list[dict]] = {}
+    unbound: list[dict] = []
+    for item in items:
+        # Remote vector rows have their own source-digest admission below.
+        if item.get("_remote_vector") is True:
+            continue
+        source = _indexed_source_ref(item)
+        if source is None:
+            unbound.append(item)
+        else:
+            groups.setdefault(source, []).append(item)
+
+    admitted_by_key: dict[tuple[str, str], list[dict]] = {}
+    for source, candidates in groups.items():
+        try:
+            decision = admit_read(
+                candidates,
+                workspace=workspace,
+                status_key=status_key,
+                allow=allow,
+                surface=leg or "indexed",
+                source_file=source,
+            )
+        except Exception as exc:  # source resolution failure must not serve cache
+            _log.warning("indexed_source_admission_failed", source=source, error=str(exc))
+            continue
+        for admitted in decision.admitted:
+            block_id = admitted.get("_id") or admitted.get("id")
+            if isinstance(block_id, str) and block_id:
+                admitted_by_key.setdefault((source, block_id), []).append(admitted)
+
+    # Reconstruct the original ranking order. A queue keeps duplicate IDs in
+    # one source deterministic while source identity prevents cross-namespace
+    # rows from borrowing one another's live status or release decision.
+    unbound_iter = iter(unbound)
+    refreshed: list[dict] = []
+    for item in items:
+        if item.get("_remote_vector") is True:
+            refreshed.append(item)
+            continue
+        source = _indexed_source_ref(item)
+        if source is None:
+            refreshed.append(next(unbound_iter))
+            continue
+        block_id = item.get("_id") or item.get("id")
+        queue = admitted_by_key.get((source, block_id)) if isinstance(block_id, str) else None
+        if queue:
+            refreshed.append(queue.pop(0))
+    return refreshed
+
+
 def _withhold_inadmissible(
     items: list[dict],
     workspace: str | None,
@@ -672,6 +761,13 @@ def _withhold_inadmissible(
     # would otherwise take that path and be served. Empty (and free) whenever
     # the index is current or absent.
     if workspace is not None:
+        items = _refresh_stale_index_sources(
+            items,
+            workspace,
+            status_key=status_key,
+            leg=leg,
+            allow=allow,
+        )
         from .content_lifecycle import filter_revoked_credentials
 
         items = filter_revoked_credentials(items, workspace)
