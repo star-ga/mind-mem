@@ -23,9 +23,7 @@ _SPEC.loader.exec_module(gate)
 def _source(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     package = tmp_path / "src" / "mind_mem"
     package.mkdir(parents=True)
-    (package / "protection.py").write_text(
-        "_CRITICAL_MODULES = ('recall.py', 'storage/sharded_pg.py')\n", encoding="utf-8"
-    )
+    (package / "protection.py").write_text("_CRITICAL_MODULES = ('recall.py', 'storage/sharded_pg.py')\n", encoding="utf-8")
     files = {"recall.py": b"source recall\n", "storage/sharded_pg.py": b"source pg\n"}
     for rel, data in files.items():
         path = package / rel
@@ -150,9 +148,7 @@ def test_manifest_size_limit_is_refused(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("limit", [1, 4])
-def test_archive_entry_count_limit_is_refused(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: int
-) -> None:
+def test_archive_entry_count_limit_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: int) -> None:
     source, digests = _source(tmp_path)
     monkeypatch.setattr(gate, "_MAX_ARCHIVE_ENTRIES", limit)
     with pytest.raises(gate.IntegrityGateError, match="entry count exceeds limit"):

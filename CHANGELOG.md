@@ -53,6 +53,14 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Include the generated integrity manifest in wheels and source distributions.
+  Strict mode refuses missing, malformed or incomplete manifests, and release
+  archives are checked against the designated critical source modules before upload.
+- Make OpenAPI and AsyncAPI exporters work from installed packages with explicit
+  artifact paths or standard output. Installed environments do not select an
+  enclosing checkout, and an empty event-source inventory refuses export.
+- Preserve valid source aliases within a namespace while refusing aliases that
+  cross namespace boundaries or leave the workspace.
 - Source-bound indexed results recheck admission against the current configured
   corpus, including deletion and quarantine changes that preserve file size and
   modification time. Duplicate IDs in different source files no longer borrow

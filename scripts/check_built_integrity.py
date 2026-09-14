@@ -111,6 +111,7 @@ def _manifest_bytes(raw: bytes, *, archive: Path) -> dict[str, str]:
     if len(raw) > _MAX_MANIFEST_BYTES:
         raise IntegrityGateError(f"{archive.name}: manifest exceeds size limit")
     try:
+
         def pairs_hook(items: list[tuple[str, Any]]) -> dict[str, Any]:
             seen: set[str] = set()
             for key, _ in items:
@@ -124,12 +125,7 @@ def _manifest_bytes(raw: bytes, *, archive: Path) -> dict[str, str]:
         raise
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise IntegrityGateError(f"{archive.name}: manifest is not valid UTF-8 JSON") from exc
-    if (
-        not isinstance(data, dict)
-        or type(data.get("version")) is not int
-        or data.get("version") != 1
-        or set(data) != {"version", "files"}
-    ):
+    if not isinstance(data, dict) or type(data.get("version")) is not int or data.get("version") != 1 or set(data) != {"version", "files"}:
         raise IntegrityGateError(f"{archive.name}: manifest must have exactly version=1 and files")
     files = data.get("files")
     if not isinstance(files, dict) or not files:
