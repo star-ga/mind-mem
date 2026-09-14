@@ -277,6 +277,10 @@ class TestAgentIdValidation(unittest.TestCase):
         with self.assertRaises(InvalidAgentIdError):
             NamespaceManager(self.td, agent_id="agent\x00name")
 
+    def test_non_string_rejected_with_typed_error(self) -> None:
+        with self.assertRaises(InvalidAgentIdError):
+            NamespaceManager(self.td, agent_id=0)  # type: ignore[arg-type]
+
     def test_whitespace_rejected(self) -> None:
         with self.assertRaises(InvalidAgentIdError):
             NamespaceManager(self.td, agent_id="agent name")

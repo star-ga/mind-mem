@@ -83,7 +83,8 @@ def _validate_agent_id(agent_id: str) -> str:
     """
     if not isinstance(agent_id, str) or not _AGENT_ID_RE.fullmatch(agent_id):
         # Don't echo the raw value back — it may contain control bytes.
-        raise InvalidAgentIdError(f"agent_id must match {_AGENT_ID_RE.pattern} (length {len(agent_id)} rejected)")
+        agent_id_len = len(agent_id) if isinstance(agent_id, str) else None
+        raise InvalidAgentIdError(f"agent_id must match {_AGENT_ID_RE.pattern} (length {agent_id_len} rejected)")
     return agent_id
 
 

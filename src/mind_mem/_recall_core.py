@@ -116,11 +116,26 @@ except ImportError:
 
 _log = get_logger("recall")
 
-# v3.9.x security: agent_id is interpolated into ``agents/{agent_id}/...``
-# filesystem paths. Restrict it to a flat identifier so path-traversal
-# sequences cannot escape the workspace. Same regex as in
-# ``namespaces.NamespaceManager``.
-_AGENT_ID_RE = re.compile(r"(?=.*[^.])[A-Za-z0-9_.-]{1,64}")
+
+def _validate_recall_agent_id(agent_id: object | None) -> None:
+    """Reject supplied identities before recall performs workspace work.
+
+    Empty strings retain the legacy recall behavior of an omitted identity.
+    Other values use the namespace module's single validation predicate so
+    malformed identities cannot fall through to workspace-level discovery.
+    """
+    if agent_id is None or agent_id == "":
+        return
+
+    from .namespaces import InvalidAgentIdError, _validate_agent_id
+
+    try:
+        _validate_agent_id(cast(str, agent_id))
+    except InvalidAgentIdError:
+        agent_id_len = len(agent_id) if isinstance(agent_id, str) else None
+        _log.warning("invalid_agent_id_rejected", agent_id_len=agent_id_len)
+        raise
+
 
 # ---------------------------------------------------------------------------
 # Config cache — mtime-based invalidation avoids re-reading mind-mem.json
@@ -987,6 +1002,8 @@ def recall(
             fixed number of ranked hits.  ``None`` (default) skips the
             whole path — output is unchanged, byte for byte.
     """
+    _validate_recall_agent_id(agent_id)
+
     # THE clock boundary. Resolved once, before any ranking work, and threaded
     # into every recency term below. Nothing downstream reads a clock of its
     # own — see mind_mem.scoring_instant for why that split is the product.
@@ -1324,17 +1341,13 @@ def recall(
     # (../, leading /, NUL bytes) would let a caller probe paths outside the
     # workspace; whitespace and shell metacharacters tighten the perimeter.
     ns_manager = None
-    if agent_id:
-        if not _AGENT_ID_RE.fullmatch(agent_id):
-            _log.warning("invalid_agent_id_rejected", agent_id_len=len(agent_id))
-            agent_id = None
-        else:
-            try:
-                from .namespaces import NamespaceManager
+    if agent_id is not None and agent_id != "":
+        try:
+            from .namespaces import NamespaceManager
 
-                ns_manager = NamespaceManager(workspace, agent_id=agent_id)
-            except ImportError:
-                _log.debug("namespaces_unavailable", agent_id=agent_id)
+            ns_manager = NamespaceManager(workspace, agent_id=agent_id)
+        except ImportError:
+            _log.debug("namespaces_unavailable", agent_id=agent_id)
 
     # Load all blocks with source file tracking.
     #

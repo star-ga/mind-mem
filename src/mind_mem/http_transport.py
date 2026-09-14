@@ -852,6 +852,7 @@ def _handle_query(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
     if persona is not None and not isinstance(persona, str):
         return (400, {"error": "persona must be a string"})
 
+    from .namespaces import InvalidAgentIdError
     from .personas import PERSONAS, PersonaError, apply_persona
     from .recall import recall as _recall
 
@@ -869,6 +870,8 @@ def _handle_query(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
             active_only=active_only,
             agent_id=agent_id,
         )
+    except InvalidAgentIdError:
+        return (400, {"error": "invalid agent_id"})
     except Exception as exc:
         _log.error("query_failed", extra={"error": str(exc)})
         return (500, {"error": "internal recall error"})
@@ -979,6 +982,7 @@ def _handle_walkthrough(workspace: str, body: dict[str, Any]) -> tuple[int, dict
     if agent_id is not None and not isinstance(agent_id, str):
         return (400, {"error": "agent_id must be a string"})
 
+    from .namespaces import InvalidAgentIdError
     from .walkthrough import compile_walkthrough
 
     try:
@@ -989,6 +993,8 @@ def _handle_walkthrough(workspace: str, body: dict[str, Any]) -> tuple[int, dict
             active_only=active_only,
             agent_id=agent_id,
         )
+    except InvalidAgentIdError:
+        return (400, {"error": "invalid agent_id"})
     except Exception as exc:
         _log.error("walkthrough_failed", extra={"error": str(exc)})
         return (500, {"error": "internal walkthrough error"})
