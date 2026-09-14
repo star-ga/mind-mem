@@ -991,8 +991,17 @@ must be `module:Class`, resolve to a concrete `Detector` with a unique stable
 objects. Malformed, unavailable, duplicate, colliding, or failing plugins
 refuse the governed write before persistence. The combined chain is ordered by
 detector name, and the detector name is retained in redaction results and
-audit provenance. Plugin code is an optional deployment concern; the core
-package remains dependency-free.
+audit provenance. A scan exception or malformed finding returns
+`compliance_detector_failed` from the governed proposal tool and its REST
+adapter, without writing the proposal or returning the plugin exception text.
+A missing or invalid plugin configuration returns `compliance_config_invalid`.
+
+Plugins execute operator-selected Python code with the hosting process's
+permissions; the loader is not a sandbox. Canonical ordering does not prove an
+external detector is deterministic or that it detects every sensitive value.
+Byte-identity claims for custom packs require separately validated deterministic
+plugins and pinned versions. The built-in pack remains deterministic, and the
+core package remains dependency-free.
 
 ## Compliance export (`v4.compliance_export`)
 

@@ -324,6 +324,7 @@ def propose_update(
     # Provenance is judged before redaction inside ``screen``: a write that is
     # refused for missing attribution is never scanned and never hashed, so a
     # refusal leaves no trace of content it declined to store.
+    from mind_mem.compliance.detectors import DetectorSpecError
     from mind_mem.compliance.prewrite import PreWritePolicy, screen
     from mind_mem.compliance.provenance_policy import ProvenanceConfigError, ProvenanceRequired
     from mind_mem.compliance.redaction import MODE_OFF, RedactionConfigError, RedactionRefused
@@ -373,6 +374,18 @@ def propose_update(
         metrics.inc("compliance_provenance_refusals")
         _log.warning("compliance_provenance_refused", block_type=block_type, detail=str(exc))
         return json.dumps({"error": "provenance_required", "reason": str(exc)}, indent=2)
+    except DetectorSpecError:
+        # A configured plugin that crashes or returns invalid findings did not
+        # complete screening. Refuse before any audit/proposal writes, using a
+        # stable response rather than exposing plugin exception text or input.
+        metrics.inc("compliance_detector_errors")
+        _log.warning("compliance_detector_failed", block_type=block_type)
+        return json.dumps(
+            {
+                "error": "compliance_detector_failed",
+                "reason": "Configured detector could not complete valid screening; proposal refused.",
+            }
+        )
     except RedactionRefused as exc:
         metrics.inc("compliance_redaction_refusals")
         _log.warning("compliance_redaction_refused", block_type=block_type, detail=str(exc))

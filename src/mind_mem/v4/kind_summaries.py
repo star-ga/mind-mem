@@ -245,11 +245,13 @@ def refresh_summary(workspace: str | Path, kind: str) -> KindSummary | None:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(blocks)")}
         if "kind" not in cols:
             return None
-        id_column = "id" if "id" in cols else "rowid"
-        rows = conn.execute(
-            f"SELECT {id_column}, content FROM blocks WHERE kind = ? ORDER BY {id_column}",
-            (kind,),
-        ).fetchall()
+        # Both schema forms use fixed SQL; the kind remains a bound value.
+        query = (
+            "SELECT id, content FROM blocks WHERE kind = ? ORDER BY id"
+            if "id" in cols
+            else "SELECT rowid, content FROM blocks WHERE kind = ? ORDER BY rowid"
+        )
+        rows = conn.execute(query, (kind,)).fetchall()
     indexed_rows = [(str(row[0]), row[1] if isinstance(row[1], str) else "") for row in rows]
     source_rows = _current_admitted_source_rows(workspace, indexed_rows)
     if not source_rows:

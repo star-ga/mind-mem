@@ -37,9 +37,10 @@ secrets. Provenance for the redaction as a whole is carried by the
 digests of the whole document, before and after — see
 :mod:`mind_mem.compliance.audit`.
 
-No clock, no IO, no randomness: scanning is a pure function of the text
-and the registry, which is what lets the export bundle be byte-identical
-across runs.
+The built-in detectors use no clock, IO or randomness: scanning is a pure
+function of the text and selected built-in chain. External plugins execute
+operator-selected Python code; canonical result ordering does not establish
+their determinism or sandbox their effects.
 
 An explicitly configured external detector is loaded through
 :func:`load_external_detector`. Its class creation is kept out of the

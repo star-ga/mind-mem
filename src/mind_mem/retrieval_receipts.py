@@ -307,7 +307,8 @@ def export_receipt(
         raise
     except (OSError, ValueError) as exc:
         raise ReceiptUnavailable(f"cannot acquire the evidence snapshot lock: {exc}") from exc
-    assert ledger_raw is not None
+    if ledger_raw is None:
+        raise ReceiptError("required served ledger snapshot is absent")
     rows = _decode_rows(ledger_raw, max_rows=max_rows)
     if head_raw is None:
         raise ReceiptError("head sidecar is absent for a non-empty ledger")

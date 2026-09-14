@@ -492,3 +492,76 @@ def test_public_anticipation_lookup_uses_the_captured_limit_after_disk_mutation(
     assert receipt.get("config_hash") == captured_hash, receipt
     rows = read_served_runs(workspace)
     assert rows[-1].pipeline_hash == captured_hash, rows
+
+
+@pytest.mark.parametrize("carried", [False, True])
+def test_anticipation_receipt_import_failure_clears_carried_proof(tmp_path, monkeypatch, carried):
+    import sys
+
+    from mind_mem.mcp.tools.recall import _record_anticipation_run
+
+    workspace = _seed_workspace(tmp_path / "anticipation-missing-ledger", anticipation=True)
+    envelope = {"backend": "anticipation_cache", "results": [{"_id": "D-001", "Statement": "Preserve the cached answer."}]}
+    if carried:
+        envelope["serving_receipt"] = {"served_proof": "recorded", "served_seq": 123, "run_id": "carried-proof"}
+    raw = json.dumps(envelope)
+    with monkeypatch.context() as missing:
+        missing.setitem(sys.modules, "mind_mem.served_ledger", None)
+        served = json.loads(
+            _record_anticipation_run(
+                raw,
+                workspace,
+                query=QUERY,
+                config_hash="1" * 64,
+                index_anchor="2" * 64,
+                scoring_instant="2026-09-14",
+                generation="PV:missing-ledger",
+            )
+        )
+    assert served["results"] == envelope["results"]
+    receipt = served["serving_receipt"]
+    assert receipt["served_proof"] == "unproven"
+    assert receipt["served_seq"] is None and receipt["served_row_hash"] is None
+    assert "run_id" not in receipt
+    assert "ModuleNotFoundError" in receipt["ledger_error"]
+    assert read_served_runs(workspace) == ()
+
+
+@pytest.mark.parametrize("raw", ["not json", "[]", '{"backend":"bm25","results":[]}'])
+def test_anticipation_receipt_ignores_non_anticipation_input_without_ledger(tmp_path, monkeypatch, raw):
+    import sys
+
+    from mind_mem.mcp.tools.recall import _record_anticipation_run
+
+    with monkeypatch.context() as missing:
+        missing.setitem(sys.modules, "mind_mem.served_ledger", None)
+        assert (
+            _record_anticipation_run(
+                raw,
+                str(tmp_path),
+                query=QUERY,
+                config_hash="1" * 64,
+                index_anchor="2" * 64,
+                scoring_instant="2026-09-14",
+                generation="PV:non-anticipation",
+            )
+            == raw
+        )
+
+
+def test_public_anticipation_import_failure_preserves_answer_without_record(tmp_path, monkeypatch):
+    import sys
+
+    workspace = _seed_workspace(tmp_path / "public-anticipation-missing-ledger", anticipation=True)
+    with use_workspace(workspace):
+        public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5)
+        before = read_served_runs(workspace)
+        assert before, "positive control: prefetch must create its normal ranked receipt"
+        with monkeypatch.context() as missing:
+            missing.setitem(sys.modules, "mind_mem.served_ledger", None)
+            served = json.loads(public.recall(QUERY, mode="auto", limit=5))
+    assert served["backend"] == "anticipation_cache"
+    assert served["results"]
+    assert served["serving_receipt"]["served_proof"] == "unproven"
+    assert served["serving_receipt"]["served_seq"] is None
+    assert read_served_runs(workspace) == before

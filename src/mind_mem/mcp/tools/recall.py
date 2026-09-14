@@ -196,21 +196,23 @@ def _record_anticipation_run(
     schema and fail-safe handling; this helper only supplies its canonical input
     digests and publishes the returned receipt beside ``anticipation``.
     """
+    # Validate the envelope before loading optional evidence machinery. The
+    # failure path must still replace carried proof if that machinery is absent.
+    try:
+        envelope = json.loads(raw_json)
+    except (ValueError, TypeError):
+        return raw_json
+    if not isinstance(envelope, dict) or envelope.get("backend") != "anticipation_cache":
+        return raw_json
     try:
         from mind_mem.recall_attestation import _served_ids
         from mind_mem.recall_digests import query_hash, run_id, served_set_digest
         from mind_mem.served_ledger import (
-            LEDGER_ERROR_KEY,
-            PROOF_UNPROVEN,
             SERVED_PROOF_KEY,
-            SERVED_ROW_HASH_KEY,
             SERVED_SEQ_KEY,
             attach_served_run,
         )
 
-        envelope = json.loads(raw_json)
-        if not isinstance(envelope, dict) or envelope.get("backend") != "anticipation_cache":
-            return raw_json
         results = envelope.get("results")
         if not isinstance(results, list):
             raise ValueError("anticipation envelope results must be a list")
@@ -250,27 +252,16 @@ def _record_anticipation_run(
         return json.dumps(envelope, indent=2, default=str)
     except Exception as exc:  # pragma: no cover — receipt must not break a cached answer
         _log.warning("anticipation_receipt_failed", error=str(exc))
-        try:
-            from mind_mem.served_ledger import (
-                LEDGER_ERROR_KEY,
-                PROOF_UNPROVEN,
-                SERVED_PROOF_KEY,
-                SERVED_ROW_HASH_KEY,
-                SERVED_SEQ_KEY,
-            )
-
-            envelope = json.loads(raw_json)
-            if isinstance(envelope, dict) and envelope.get("backend") == "anticipation_cache":
-                envelope["serving_receipt"] = {
-                    SERVED_SEQ_KEY: None,
-                    SERVED_ROW_HASH_KEY: None,
-                    SERVED_PROOF_KEY: PROOF_UNPROVEN,
-                    LEDGER_ERROR_KEY: f"anticipation receipt failed: {type(exc).__name__}: {exc}",
-                }
-                return json.dumps(envelope, indent=2, default=str)
-        except Exception:  # noqa: BLE001 — the fallback must never break recall
-            pass
-        return raw_json
+        # Match the shared unproven wire shape without importing the module
+        # whose failure may have brought us here. Replace, never merge, any
+        # carried receipt so a failed fresh record cannot retain old credit.
+        envelope["serving_receipt"] = {
+            "served_seq": None,
+            "served_row_hash": None,
+            "served_proof": "unproven",
+            "ledger_error": f"anticipation receipt failed: {type(exc).__name__}: {exc}",
+        }
+        return json.dumps(envelope, indent=2, default=str)
 
 
 def _record_anticipation_bundle(

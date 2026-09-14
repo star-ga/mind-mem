@@ -15,10 +15,9 @@ OFF feature into a syscall per item, which is a cost the build without
 the feature never paid. :meth:`PreWritePolicy.inert` is the caller's
 early-out for exactly that case.
 
-This module is the seam. Its in-tree callers today are the ``mm
-compliance`` verbs and the ``redacted`` export policy; the propose door
-is the next caller, and it is deliberately a separate change so that the
-door's own tests move with it.
+This module is the shared pre-write seam. The governed ``propose_update``
+tool and the ``mm compliance`` verbs call it. Compliance export resolves the
+same detector chain through its separate read-only redaction pass.
 
 Copyright STARGA, Inc.
 """

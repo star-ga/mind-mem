@@ -1211,7 +1211,8 @@ class PostgresBlockStore:
                         bm25_rows = cur.fetchall()  # [(id, rank), ...]
                     cos_rows: list[tuple[str, float]] = []
                     if do_vector:
-                        assert emb_lit is not None
+                        if emb_lit is None:
+                            raise BlockStoreError("vector execution requires a validated embedding literal")
                         cur.execute(cos_sql, (emb_lit, emb_lit, candidate_pool))
                         cos_rows = cur.fetchall()
 

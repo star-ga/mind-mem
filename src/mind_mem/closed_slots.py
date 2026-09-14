@@ -237,7 +237,8 @@ def _validate_slot_payload(
         raise SlotInvariantError("a closed-slot operation must contain exactly one block")
     block = slot_blocks[0]
     identity = _slot_fields(block)
-    assert identity is not None
+    if identity is None:
+        raise SlotInvariantError("closed-slot identity changed during payload validation")
     namespace, slot = identity
     declaration = require_slot(workspace, namespace, slot)
     if str(block.get("SlotSetVersion", "")) != str(declaration.version):

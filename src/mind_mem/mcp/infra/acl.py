@@ -123,8 +123,8 @@ def _record_auth_failure(exc: BaseException) -> None:
 
     try:
         metrics.inc("mcp_acl_introspection_failed_total")
-    except Exception:  # pragma: no cover - metrics are best effort
-        pass
+    except Exception as metric_exc:  # pragma: no cover - metrics are best effort
+        _log.warning("acl_failure_metric_unavailable", error_type=type(metric_exc).__name__)
     _log.warning("acl_introspection_failed", error_type=type(exc).__name__, scope="deny")
 
 

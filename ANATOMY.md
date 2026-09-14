@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1632 | **Est. tokens:** ~4821306
-**Generated:** 2026-09-14 17:34 UTC
+**Files:** 1633 | **Est. tokens:** ~4823580
+**Generated:** 2026-09-14 17:52 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 94 | ~212280 |
+| `docs/` | 94 | ~212434 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 238 | ~1084816 |
+| `src/mind_mem/` | 238 | ~1084880 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
-| `src/mind_mem/compliance/` | 7 | ~15387 |
+| `src/mind_mem/compliance/` | 7 | ~15436 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
-| `src/mind_mem/mcp/infra/` | 8 | ~16172 |
-| `src/mind_mem/mcp/tools/` | 29 | ~124379 |
+| `src/mind_mem/mcp/infra/` | 8 | ~16195 |
+| `src/mind_mem/mcp/tools/` | 29 | ~124494 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
-| `src/mind_mem/v4/` | 24 | ~96290 |
-| `tests/` | 719 | ~2134001 |
+| `src/mind_mem/v4/` | 24 | ~96321 |
+| `tests/` | 720 | ~2135839 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -430,7 +430,7 @@
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~18169 tok, huge) — Configuration Reference
+- `configuration.md` (~18323 tok, huge) — Configuration Reference
 - `content-lifecycle.md` (~865 tok, large) — Content-category lifetimes
 ### `docs/decisions/`
 
@@ -780,7 +780,7 @@
 - `block_provenance.py` (~2728 tok, huge) — Provenance-rich blocks — optional actor/session/tool/source metadata.
 - `block_store.py` (~18362 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `block_store_encrypted.py` (~5809 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~22590 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~22616 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~3138 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -796,7 +796,7 @@
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
 - `chat_memory.py` (~5472 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
-- `closed_slots.py` (~6806 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
+- `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `cognitive_forget.py` (~3179 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -806,11 +806,11 @@
 
 - `__init__.py` (~1055 tok, large) — # Copyright 2026 STARGA, Inc.
 - `audit.py` (~995 tok, large) — # Copyright 2026 STARGA, Inc.
-- `detectors.py` (~4220 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `detectors.py` (~4248 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `export.py` (~3347 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `prewrite.py` (~1552 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `prewrite.py` (~1547 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `provenance_policy.py` (~1878 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `redaction.py` (~2340 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `redaction.py` (~2366 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
 
 - `compressors.py` (~2253 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
@@ -900,7 +900,7 @@
 ### `src/mind_mem/mcp/infra/`
 
 - `__init__.py` (~838 tok, large) — MCP infrastructure compatibility exports, resolved only when requested.
-- `acl.py` (~6008 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
+- `acl.py` (~6031 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~1315 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
 - `http_auth.py` (~2032 tok, huge) — HTTP bearer-token authentication helpers for the MCP surface.
@@ -925,7 +925,7 @@
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~15632 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~15802 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~8695 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1835 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
@@ -938,7 +938,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~23011 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~22956 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1620 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -1000,7 +1000,7 @@
 - `resume_brief.py` (~2720 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retention_class.py` (~1840 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retrieval_graph.py` (~8339 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
-- `retrieval_receipts.py` (~6257 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `retrieval_receipts.py` (~6274 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
 - `review_batch.py` (~3102 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `review_cli.py` (~2207 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1115,7 +1115,7 @@
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `kernels.py` (~4057 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_backfill.py` (~3068 tok, huge) — The v4 kind-index build pass — ``mm kinds backfill``'s engine.
-- `kind_summaries.py` (~5314 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
+- `kind_summaries.py` (~5345 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
 - `logging_context.py` (~1424 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
 - `observability.py` (~2993 tok, huge) — v4 observability — counters, timers, histograms, exporters.
 - `pq.py` (~5255 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
@@ -1352,6 +1352,7 @@
 - `test_dedup_vector.py` (~1087 tok, large) — Tests for vector-enhanced cosine dedup (Layer 2b)."""
 - `test_dependency_audit_closure.py` (~1464 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
+- `test_detector_runtime_refusal.py` (~1068 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_dialogue_diversity.py` (~1519 tok, huge) — One conversation must not be able to occupy the whole answer.
 - `test_docs_claims.py` (~818 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_doctor_rebuild_cache_default_backend.py` (~1338 tok, large) — ``mm doctor --rebuild-cache`` must not crash on the DEFAULT markdown backend.
@@ -1652,7 +1653,7 @@
 - `test_ra1_empty_config_backend_binding.py` (~1677 tok, huge) — The captured empty policy must not fall back to a later backend choice."""
 - `test_ra1_engine_ranks_under_captured_context.py` (~1788 tok, huge) — The engine ranks under the CAPTURED config, not the file as it stands when a leg runs.
 - `test_ra1_kernel_cli_serving.py` (~3008 tok, huge) — Acceptance controls for the primary ``mm recall --kernel`` serving door.
-- `test_ra1_public_boundary_binding.py` (~5515 tok, huge) — Public axis/prefetch RA.1 boundaries must retain one request snapshot.
+- `test_ra1_public_boundary_binding.py` (~6285 tok, huge) — Public axis/prefetch RA.1 boundaries must retain one request snapshot.
 - `test_ra1_serving_receipt_binds_engine_config.py` (~3802 tok, huge) — The recorded receipt must bind the config the ENGINE consumed — and the binding must not
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.

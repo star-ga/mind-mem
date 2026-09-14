@@ -30,8 +30,9 @@ was removed. Per-value hashes are deliberately absent — see
 Deterministic by construction: the detector chain is name-ordered, the
 findings are canonically sorted and de-overlapped, and the replacement
 token is a function of the detector alone. The same text redacts to the
-same bytes on every run and every machine, which is what lets the export
-bundle claim byte-identity.
+same bytes on every run and every machine with the built-in detector pack.
+External packs need their own determinism validation; sorting their findings
+cannot make a nondeterministic detector reproducible.
 
 Copyright STARGA, Inc.
 """

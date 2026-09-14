@@ -37,6 +37,16 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Use explicit runtime invariant errors in slot, receipt and PostgreSQL vector
+  validation; retain fixed SQL for both supported summary-index schemas and
+  report unavailable authentication metrics while preserving denial.
+- Preserve cached anticipation answers while replacing carried receipts with
+  explicit unproven evidence if ledger imports or recording fail. The fallback
+  parses the envelope once and has no dependency on unavailable ledger code.
+- Refuse governed proposals with a structured `compliance_detector_failed`
+  response when a configured detector raises or returns malformed findings.
+  MCP and REST preserve the no-write boundary without exposing plugin exception
+  text. Valid input under the same plugin remains admissible.
 - REST admin actions carry the authenticated transport scope into governed MCP
   dispatch. Valid administrators can apply proposals without a process-wide
   admin setting; unauthenticated, user-scope and spoofed requests remain refused.
