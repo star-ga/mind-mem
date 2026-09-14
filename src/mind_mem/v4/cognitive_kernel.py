@@ -194,7 +194,7 @@ def is_kernel_registered(kind: KernelKind | str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _default_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
+def _default_kernel(workspace: str, query: str, **kwargs: Any) -> KernelResult:
     """Pass-through to v3 recall.
 
     Imports lazily so the v4 module doesn't pull the v3 recall stack at
@@ -215,7 +215,14 @@ def _default_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
         # than crash, so callers can detect the no-op case.
         return KernelResult(kernel=KernelKind.DEFAULT, hits=[], metadata={"degraded": True})
 
-    raw = _v3_recall(workspace, query)
+    # The CLI captures the scoring instant before invoking the strategy.  Keep
+    # direct callers byte-for-byte compatible (no keyword when they supplied
+    # none), while ensuring a captured instant governs the actual ranking.
+    scoring_instant = kwargs.get("scoring_instant")
+    if scoring_instant is None:
+        raw = _v3_recall(workspace, query)
+    else:
+        raw = _v3_recall(workspace, query, scoring_instant=scoring_instant)
     hits: list[KernelHit] = []
     for h in raw or []:
         if isinstance(h, dict):

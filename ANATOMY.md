@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1621 | **Est. tokens:** ~4782069
-**Generated:** 2026-09-14 15:31 UTC
+**Files:** 1622 | **Est. tokens:** ~4783789
+**Generated:** 2026-09-14 16:06 UTC
 
 ## Token Budget Guide
 
@@ -89,8 +89,8 @@
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
-| `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 712 | ~2118982 |
+| `src/mind_mem/v4/` | 24 | ~95985 |
+| `tests/` | 713 | ~2120494 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1099,7 +1099,7 @@
 - `block_metadata.py` (~3946 tok, huge) — v4 block metadata + schema-validation hooks.
 - `block_versioning.py` (~1861 tok, huge) — Block versioning + time-travel — reconstruct what a block said, and when.
 - `circuit_breaker.py` (~4577 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
-- `cognitive_kernel.py` (~2576 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
+- `cognitive_kernel.py` (~2678 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `embedding_pipeline.py` (~2377 tok, huge) — v4 embedding auto-derivation pipeline (Group A — closes the
 - `feature_flags.py` (~6336 tok, huge) — v4.0 feature-flag registry.
 - `federation.py` (~7339 tok, huge) — v4 federated cross-agent consistency (Group D).
@@ -1107,7 +1107,7 @@
 - `flag_registry.py` (~8516 tok, huge) — Three-state registry for every declared v4 feature flag.
 - `health.py` (~2475 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
-- `kernels.py` (~3819 tok, huge) — v4 kernel strategy implementations (Group A).
+- `kernels.py` (~3925 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_backfill.py` (~3068 tok, huge) — The v4 kind-index build pass — ``mm kinds backfill``'s engine.
 - `kind_summaries.py` (~5314 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
 - `logging_context.py` (~1424 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
@@ -1641,6 +1641,7 @@
 - `test_ra1_direct_python_snapshot.py` (~1713 tok, huge) — The public Python recall wrapper must snapshot policy before ranking."""
 - `test_ra1_empty_config_backend_binding.py` (~1677 tok, huge) — The captured empty policy must not fall back to a later backend choice."""
 - `test_ra1_engine_ranks_under_captured_context.py` (~1788 tok, huge) — The engine ranks under the CAPTURED config, not the file as it stands when a leg runs.
+- `test_ra1_kernel_cli_serving.py` (~1512 tok, huge) — Acceptance controls for the primary ``mm recall --kernel`` serving door.
 - `test_ra1_public_boundary_binding.py` (~5515 tok, huge) — Public axis/prefetch RA.1 boundaries must retain one request snapshot.
 - `test_ra1_serving_receipt_binds_engine_config.py` (~3802 tok, huge) — The recorded receipt must bind the config the ENGINE consumed — and the binding must not
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.

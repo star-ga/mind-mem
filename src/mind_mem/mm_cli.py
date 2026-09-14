@@ -65,13 +65,36 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
     """
     import mind_mem.v4.kernels  # noqa: F401 — importing IS the registration
     from mind_mem.admissibility import admissible
+    from mind_mem.recall import (
+        _derive_generation,
+        attest_and_record,
+        capture_policy_snapshot,
+        serving_scope,
+    )
+    from mind_mem.request_context import RequestContext, bind_request_context
+    from mind_mem.scoring_instant import format_scoring_instant, resolve_scoring_instant
     from mind_mem.storage import iter_blocks
     from mind_mem.v4.cognitive_kernel import KernelKind, available_kernels, mind_recall
     from mind_mem.v4.feature_flags import FeatureDisabledError
 
     ws = _workspace()
+    # Capture every policy coordinate before the kernel starts.  The v4 API
+    # remains a pure KernelResult; this CLI door owns the existing attestation
+    # and served-ledger attachment, just as the other serving doors do.
+    snap_config, snap_hash, snap_anchor = capture_policy_snapshot(ws)
+    scoring_instant = resolve_scoring_instant(None)
+    request_context = RequestContext(
+        workspace=ws,
+        config=snap_config if snap_config is not None else {},
+        config_hash=snap_hash,
+        index_anchor=snap_anchor,
+        scoring_instant=format_scoring_instant(scoring_instant),
+    )
     try:
-        result = mind_recall(ws, args.query, kernel=args.kernel)
+        with bind_request_context(request_context), serving_scope():
+            result = mind_recall(ws, args.query, kernel=args.kernel, scoring_instant=scoring_instant)
+            servable = admissible(iter_blocks(ws, active_only=False))
+            kept = [h for h in result.hits if h.block_id in servable]
     except (FeatureDisabledError, ValueError, KeyError) as exc:
         # FeatureDisabledError: flag off. ValueError: no such kernel name.
         # KeyError: a real kind with no strategy bound (``recent_first``).
@@ -79,9 +102,22 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
         print(f"mm recall --kernel: {exc}", file=sys.stderr)
         return 64
 
-    servable = admissible(iter_blocks(ws, active_only=False))
-    kept = [h for h in result.hits if h.block_id in servable]
     hits = [{"block_id": h.block_id, "score": h.score, "reason": h.reason} for h in kept][: args.limit]
+    # The attestation helper is the sole owner of digest derivation and ledger
+    # attachment.  Give it the exact final output IDs in output order; kernel
+    # metadata and score values remain explicitly outside that ID commitment.
+    attested_hits = [{"_id": hit["block_id"], "score": hit["score"]} for hit in hits]
+    attestation = attest_and_record(
+        ws,
+        args.query,
+        attested_hits,
+        backend="bm25",
+        scoring_instant=scoring_instant,
+        config=snap_config,
+        config_hash=snap_hash,
+        index_anchor=snap_anchor,
+        generation=_derive_generation(snap_config),
+    )
     payload = {
         "query": args.query,
         "kernel": result.kernel.value if isinstance(result.kernel, KernelKind) else str(result.kernel),
@@ -90,6 +126,7 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
         "count": len(hits),
         "hits": hits,
         "metadata": dict(result.metadata),
+        "attestation": attestation,
     }
     print(json.dumps(payload, indent=2, default=str))
     return 0
