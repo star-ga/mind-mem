@@ -238,6 +238,10 @@ class TestNoteTreeLoading:
         assert all(verify_document_anchor(block, str(tree)) for block in blocks)
         altered = dict(blocks[0], ChunkerConfigDigest="0" * 64)
         assert not verify_document_anchor(altered, str(tree))
+        shifted = dict(blocks[0], DocumentStartChar=blocks[0]["DocumentStartChar"] + 1)
+        assert not verify_document_anchor(shifted, str(tree))
+        assert not verify_document_anchor(dict(blocks[0], DocumentStartChar=True), str(tree))
+        assert not verify_document_anchor(dict(blocks[0], DocumentStartChar=" 0"), str(tree))
         source.write_bytes(raw + b"mutation")
         assert not verify_document_anchor(blocks[0], str(tree))
 

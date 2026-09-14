@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1608 | **Est. tokens:** ~4724624
-**Generated:** 2026-09-14 12:18 UTC
+**Files:** 1608 | **Est. tokens:** ~4725270
+**Generated:** 2026-09-14 12:31 UTC
 
 ## Token Budget Guide
 
@@ -80,7 +80,7 @@
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15393 |
-| `src/mind_mem/importers/` | 9 | ~29343 |
+| `src/mind_mem/importers/` | 9 | ~29881 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
 | `src/mind_mem/mcp/tools/` | 29 | ~118257 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95798 |
-| `tests/` | 700 | ~2083568 |
+| `tests/` | 700 | ~2083676 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -861,7 +861,7 @@
 
 - `__init__.py` (~1807 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_shared.py` (~947 tok, large) — # Copyright 2026 STARGA, Inc.
-- `engine.py` (~8218 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `engine.py` (~8756 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `fs_source.py` (~2825 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `note_parsers.py` (~3770 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `okf_source.py` (~1885 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1455,8 +1455,8 @@
 - `test_identity_seam_is_transport_neutral.py` (~5628 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_importers.py` (~5662 tok, huge) — Tests for the roadmap Group G migration importers (file-based subset).
 - `test_importers_field_injection.py` (~1609 tok, huge) — Regression gate: dump content cannot forge a second block field.
-- `test_importers_notes.py` (~7593 tok, huge) — Tests for the note-tree and transcript importers.
-- `test_importers_quarantine.py` (~6193 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
+- `test_importers_notes.py` (~7678 tok, huge) — Tests for the note-tree and transcript importers.
+- `test_importers_quarantine.py` (~6216 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
 - `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""

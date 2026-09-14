@@ -454,7 +454,7 @@ def test_cli_chunked_import_seals_one_anchor_root_and_release_stays_governed(tmp
     tree = tmp_path / "vault"
     tree.mkdir()
     source = tree / "long.md"
-    source.write_bytes(("# Source\r\n\r\n" + ("π evidence sentence. " * 120)).encode("utf-8"))
+    source.write_bytes(("# Source\r\n\r\n" + ("π evidence sentence. " * 120) + "\u202e hidden").encode("utf-8"))
     env = dict(os.environ)
     env["MIND_MEM_WORKSPACE"] = ws
     with patch.dict(os.environ, env, clear=True):
@@ -464,6 +464,7 @@ def test_cli_chunked_import_seals_one_anchor_root_and_release_stays_governed(tmp
     blocks = _imported_blocks(ws)
     assert len(blocks) == payload["imported"] >= 2
     assert all(block["Status"] == QUARANTINE_STATUS for block in blocks)
+    assert all("\u202e" not in block["Statement"] for block in blocks)
     assert all(verify_document_anchor(block, str(tree)) for block in blocks)
     evidence = [
         entry

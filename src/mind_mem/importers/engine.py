@@ -139,19 +139,53 @@ def verify_document_anchor(block: Mapping[str, Any], source_root: str) -> bool:
     path = os.path.abspath(os.path.join(root, *parts))
     if not path.startswith(root + os.sep) or os.path.realpath(path) != path or not os.path.isfile(path):
         return False
+
+    def strict_int(value: Any) -> int | None:
+        # BlockParser stores unknown scalar fields as strings on a round trip,
+        # so accept only the writer's canonical decimal representation. Do
+        # not let bools, floats, whitespace, signs, or arbitrary strings pass
+        # through ``int()`` and silently change the anchor contract.
+        if type(value) is int:
+            return value
+        if type(value) is str and re.fullmatch(r"0|[1-9][0-9]*", value):
+            return int(value)
+        return None
+
     try:
-        if os.path.getsize(path) > 64 * 1024 * 1024:
+        if os.path.getsize(path) > MAX_DUMP_BYTES:
             return False
         with open(path, "rb") as handle:
-            raw = handle.read()
+            raw = handle.read(MAX_DUMP_BYTES + 1)
+        if len(raw) > MAX_DUMP_BYTES:
+            return False
         text = raw.decode("utf-8")
-        start = int(block.get("DocumentStartChar"))
-        end = int(block.get("DocumentEndChar"))
-        index = int(block.get("ChunkIndex"))
-        total = int(block.get("ChunkTotal"))
+        start = strict_int(block.get("DocumentStartChar"))
+        end = strict_int(block.get("DocumentEndChar"))
+        index = strict_int(block.get("ChunkIndex"))
+        total = strict_int(block.get("ChunkTotal"))
+        if start is None or end is None or index is None or total is None:
+            return False
+        if total < 1 or index < 0 or index >= total:
+            return False
+        # Chunk offsets are generated from the decoded raw body, not the
+        # normalized/rendered block value. Re-run the fixed profile and bind
+        # both coordinates and total to that exact source, so an in-bounds
+        # offset mutation cannot pass merely because the file hash matches.
+        from ..smart_chunker import smart_chunk
+        from .fs_source import _raw_offset_for_normalized, parse_front_matter
+
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+        _front_matter, body = parse_front_matter(normalized)
+        body_start = _raw_offset_for_normalized(normalized, text, len(normalized) - len(body))
+        chunks = smart_chunk(text[body_start:], config=_document_chunk_config(), source=source)
+        expected = chunks[index] if index < len(chunks) else None
+        if expected is None or total != len(chunks):
+            return False
+        if start != body_start + expected.start_char or end != body_start + expected.end_char:
+            return False
     except (OSError, UnicodeDecodeError, TypeError, ValueError):
         return False
-    return hashlib.sha256(raw).hexdigest() == digest and 0 <= index < total and 0 <= start <= end <= len(text)
+    return hashlib.sha256(raw).hexdigest() == digest
 
 
 # ---------------------------------------------------------------------------
@@ -642,9 +676,15 @@ def run_import(
 
     if chunk_documents and resolved not in DIRECTORY_SYSTEMS:
         raise ImportParseError("--chunk-documents is supported only for markdown and agentmem note trees")
-    records = tuple(_sanitized(r, workspace) for r in parse_payload(resolved, load_source(resolved, path)))
+    records = tuple(parse_payload(resolved, load_source(resolved, path)))
     if chunk_documents:
+        # Chunk the source representation first. Sanitizing before this step
+        # leaves document_text untouched for anchor verification while the
+        # chunker still sees stripped invisible codepoints and can reinsert
+        # them into the rendered Statement. Final records are sanitized after
+        # their raw coordinates have been assigned.
         records = _chunk_import_records(records)
+    records = tuple(_sanitized(r, workspace) for r in records)
     parsed = len(records)
 
     skipped_near = 0
