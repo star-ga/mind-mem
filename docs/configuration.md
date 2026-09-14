@@ -839,10 +839,10 @@ unreachable (fail-open).
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `cache.enabled` | boolean | `true` | Set to `false` to bypass the cache entirely (useful for debugging recall changes). |
-| `cache.redis_url` | string \| null | `null` | Redis connection URL (e.g. `"redis://localhost:6379/0"`). When `null`, only the in-process LRU is used. |
+| `cache.redis_url` | string \| null | `null` | Optional Redis connection URL (e.g. `"redis://localhost:6379/0"`). When `null`, cache entries stay in the in-process LRU; Redis is not required for cache correctness. |
 | `cache.ttl_seconds` | integer | `300` | How long an entry keeps occupying a slot. A **memory** bound, not a freshness one: freshness comes from the governed-ledger head in the cache key (below), which retires an entry the moment the corpus it was computed against moves. |
 | `cache.lru_max_entries` | integer | `1024` | Max entries in the in-process LRU. Each entry is the serialized recall payload (~2-20KB typical). |
-| `cache.anticipation.enabled` | boolean | `false` | Group J anticipation cache: answer a recall from the local bundle store, with no store round-trip, when the novel-term gate says the local bundles can plausibly answer it. Off by default — an anticipation-served recall reads a bundle rather than the corpus, so it carries **no recall attestation** and says so in-band. |
+| `cache.anticipation.enabled` | boolean | `false` | Group J anticipation cache: answer a recall from the local bundle store, with no store round-trip, when the novel-term gate says the local bundles can plausibly answer it. Off by default — an anticipation-served recall reads a bundle rather than the corpus, so it carries **no `RECALL_ATTEST`**; it may carry a V2 local serving receipt bound to the captured request context. |
 | `cache.anticipation.novel_ratio_threshold` | float | `0.45` | Suppress the local hit above this share of query stems the bundles do not hold. Strict: a ratio exactly at the threshold is served. |
 | `cache.anticipation.min_corpus_stems` | integer | `200` | Distinct cached stems required before the ratio is trusted at all. Below this floor every query falls through to the store, so a cold cache resolves in the safe direction. |
 
@@ -859,8 +859,10 @@ Anticipation bundles also bind the raw configuration and schema that generated
 them. A configuration change retires the prior local generation even if the
 workspace's governed head has not moved. Active-only requests, explicit backend selections and filter-bearing
 requests bypass anticipation so their constraints reach the retrieval path.
-These bundles remain explicitly unattested; this cache change does not create
-a served-ledger certificate.
+These bundles remain outside the normal recall attestation because they do not
+read the corpus. A served anticipation hit may carry a V2 local serving receipt
+bound to the captured request context; that receipt records the local serve and
+does not certify a fresh corpus read or outcome credit.
 
 `index_anchor` is the workspace's governed-ledger head — the hash chain the
 governance gate appends to on every admitted write and delete. It is in the key because
