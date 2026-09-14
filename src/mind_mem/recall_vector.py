@@ -111,6 +111,19 @@ LOCAL_INDEX_SCHEMA = "mind-mem/local-vector-index@1"
 _LEGACY_EXCERPT_CHARS = 200
 
 
+def source_content_digest(block: dict[str, Any]) -> str:
+    """Digest canonical source fields used to authorize a remote hit.
+
+    Remote vector indexes are caches, not corpus authorities.  This digest
+    deliberately excludes tool-added ``_`` fields (source labels and parser
+    line numbers) so a freshly parsed row can be compared with the row that
+    was indexed.  It is a binding check, not a semantic-content verifier.
+    """
+    stable = {key: value for key, value in block.items() if not key.startswith("_")}
+    raw = json.dumps(stable, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
 def canonical_local_index(
     model: str | None,
     dimension: int | None,
@@ -1274,6 +1287,9 @@ class VectorBackend(RecallBackend):
                     "line": block.get("_line", 0),
                     "status": block.get("Status", ""),
                     "date": block.get("Date", ""),
+                    # A remote hit must be checked against the current
+                    # source row before it can cross the recall boundary.
+                    "source_digest": source_content_digest(block),
                 }
                 texts.append(self._augment_for_embedding(block, text))
                 block_metadata.append(meta)
@@ -1457,6 +1473,10 @@ class VectorBackend(RecallBackend):
                     "file": block.get("file", ""),
                     "line": block.get("line", 0),
                     "status": block.get("status", ""),
+                    # ``block`` is the already-normalized metadata record
+                    # assembled by ``index``; recomputing here would hash a
+                    # different shape than the canonical source row.
+                    "source_digest": block.get("source_digest"),
                 }
                 records.append(record)
 
@@ -1727,6 +1747,9 @@ class VectorBackend(RecallBackend):
                     "file": payload.get("file", "?"),
                     "line": payload.get("line", 0),
                     "status": payload.get("status", ""),
+                    "_source_file": payload.get("_source_file") or payload.get("file"),
+                    "_source_digest": payload.get("source_digest"),
+                    "_remote_vector": True,
                 }
             )
 
@@ -1795,6 +1818,9 @@ class VectorBackend(RecallBackend):
                     "file": fields.get("file", "?"),
                     "line": fields.get("line", 0),
                     "status": fields.get("status", ""),
+                    "_source_file": fields.get("_source_file") or fields.get("file"),
+                    "_source_digest": fields.get("source_digest"),
+                    "_remote_vector": True,
                 }
             )
 

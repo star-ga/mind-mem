@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1616 | **Est. tokens:** ~4760555
-**Generated:** 2026-09-14 14:05 UTC
+**Files:** 1617 | **Est. tokens:** ~4763385
+**Generated:** 2026-09-14 14:07 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1075058 |
+| `src/mind_mem/` | 237 | ~1075447 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 707 | ~2104613 |
+| `tests/` | 708 | ~2107054 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -986,7 +986,7 @@
 - `recall_cache.py` (~4957 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
 - `recall_digests.py` (~2101 tok, huge) — Canonical digests the recall attestation commits to.
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
-- `recall_vector.py` (~24014 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~24403 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `recompact_cli.py` (~4070 tok, huge) — Safe CLI orchestration for proposal-only memory recompaction.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `replay_check.py` (~4323 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1708,6 +1708,7 @@
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
 - `test_release_preflight_gates.py` (~5444 tok, huge) — Tests for the release-preflight gates.
+- `test_remote_vector_admission.py` (~2441 tok, huge) — Remote vector hits must be checked against the current corpus authority."""
 - `test_replay_check.py` (~4122 tok, huge) — Replay — does the ledger corroborate what one recall attestation claims?
 - `test_repo_task_generation.py` (~3390 tok, huge) — Tests for the real-repo A/B task generator.
 - `test_repo_task_mining_exclusion_scope.py` (~1303 tok, large) — The shared-service pre-exclusion must scan everything the harness executes.
