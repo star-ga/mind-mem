@@ -46,12 +46,14 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from mind_mem.spec._paths import default_artifact
+
 # The GENERATOR lives in the package (it must import the live app); the
 # ARTIFACT lives under sdk/ where an SDK consumer looks for it. So the path is
 # resolved from the repository root rather than from this file's directory —
 # the two deliberately no longer sit together.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-SPEC_PATH = _REPO_ROOT / "sdk" / "spec" / "openapi.json"
+_DEFAULT_ARTIFACT = default_artifact(__file__, "openapi.json")
+SPEC_PATH = _DEFAULT_ARTIFACT
 
 #: Placeholder substituted for ``info.version`` before the structural
 #: comparison. Never written to the artifact — ``--write`` stores the real
@@ -102,6 +104,8 @@ def load_committed_spec(path: Path | None = None) -> dict[str, Any]:
     reading the real artifact and report success.
     """
     resolved = SPEC_PATH if path is None else path
+    if resolved is None:
+        raise FileNotFoundError("no checkout artifact is available; pass --input or --path")
     loaded: Any = json.loads(resolved.read_text(encoding="utf-8"))
     if not isinstance(loaded, dict):
         raise ValueError(f"{resolved} does not contain a JSON object")
@@ -130,6 +134,8 @@ def write_spec(path: Path | None = None) -> str:
     ``path`` resolves ``SPEC_PATH`` at call time — see :func:`load_committed_spec`.
     """
     resolved = SPEC_PATH if path is None else path
+    if resolved is None:
+        raise RuntimeError("no checkout artifact is available; pass --output, --path, or --stdout")
     spec = build_live_spec()
     version = str(spec.get("info", {}).get("version", ""))
     text = canonical_json(spec, version=version)
@@ -143,18 +149,44 @@ def _main(argv: list[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true", help="regenerate the committed artifact")
     mode.add_argument("--check", action="store_true", help="fail when the artifact has drifted")
+    artifact = parser.add_mutually_exclusive_group()
+    artifact.add_argument("--input", type=Path, help="artifact to verify")
+    artifact.add_argument("--output", type=Path, help="artifact to write")
+    artifact.add_argument("--path", type=Path, help="artifact path (input for --check, output for --write)")
+    parser.add_argument("--stdout", action="store_true", help="write the generated artifact to stdout (with --write)")
     args = parser.parse_args(argv)
+    if args.stdout and not args.write:
+        parser.error("--stdout requires --write")
+    if args.write and args.input is not None:
+        parser.error("--input is only valid with --check")
+    if args.check and args.output is not None:
+        parser.error("--output is only valid with --write")
 
     if args.write:
-        write_spec()
-        print(f"wrote {SPEC_PATH}")
+        if args.stdout:
+            live = build_live_spec()
+            sys.stdout.write(canonical_json(live, version=str(live.get("info", {}).get("version", ""))))
+            return 0
+        target = args.output or args.path
+        try:
+            write_spec(target)
+        except (OSError, RuntimeError) as exc:
+            print(f"CANNOT WRITE SPEC: {exc}", file=sys.stderr)
+            return 1
+        print(f"wrote {target or SPEC_PATH}")
         return 0
 
-    live = build_live_spec()
+    target = args.input or args.path
     try:
-        committed = load_committed_spec()
-    except FileNotFoundError:
-        print(f"MISSING: {SPEC_PATH} does not exist. Run: python3 {Path(__file__).name} --write", file=sys.stderr)
+        live = build_live_spec()
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"CANNOT BUILD LIVE SPEC: {exc}", file=sys.stderr)
+        return 1
+    try:
+        committed = load_committed_spec(target)
+    except (FileNotFoundError, json.JSONDecodeError, ValueError) as exc:
+        shown = target or SPEC_PATH or "<no checkout artifact>"
+        print(f"MISSING OR INVALID: {shown}: {exc}\nPass --input/--path to verify an artifact", file=sys.stderr)
         return 1
 
     diff = structural_diff(committed, live)
@@ -162,7 +194,7 @@ def _main(argv: list[str] | None = None) -> int:
         sys.stderr.write(diff)
         print(
             "\nDRIFT: the committed OpenAPI artifact no longer matches the live routes.\n"
-            f"Regenerate with: python3 {Path(__file__)} --write",
+            f"Regenerate with: python3 {Path(__file__)} --write --output <path>",
             file=sys.stderr,
         )
         return 1
@@ -172,12 +204,12 @@ def _main(argv: list[str] | None = None) -> int:
     if committed_version != live_version:
         print(
             f"STALE VERSION: artifact says {committed_version!r}, package is {live_version!r}.\n"
-            f"Regenerate with: python3 {Path(__file__)} --write",
+            f"Regenerate with: python3 {Path(__file__)} --write --output <path>",
             file=sys.stderr,
         )
         return 1
 
-    print(f"ok: {SPEC_PATH} matches the live routes (version {live_version})")
+    print(f"ok: {target or SPEC_PATH} matches the live routes (version {live_version})")
     return 0
 
 

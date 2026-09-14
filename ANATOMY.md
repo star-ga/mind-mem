@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1649 | **Est. tokens:** ~4851666
-**Generated:** 2026-09-14 20:00 UTC
+**Files:** 1651 | **Est. tokens:** ~4853787
+**Generated:** 2026-09-14 20:01 UTC
 
 ## Token Budget Guide
 
@@ -69,7 +69,7 @@
 | `sdk/js/src/` | 5 | ~3113 |
 | `sdk/js/test/` | 2 | ~3654 |
 | `sdk/release/` | 3 | ~4640 |
-| `sdk/spec/` | 3 | ~6684 |
+| `sdk/spec/` | 3 | ~6848 |
 | `sdk/spec/fixtures/` | 7 | ~926 |
 | `security/` | 5 | ~24696 |
 | `skills/apply-proposal/` | 1 | ~345 |
@@ -85,13 +85,13 @@
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
 | `src/mind_mem/mcp/tools/` | 29 | ~124769 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
-| `src/mind_mem/spec/` | 3 | ~5381 |
+| `src/mind_mem/spec/` | 4 | ~6725 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 729 | ~2150888 |
+| `tests/` | 730 | ~2151501 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -679,7 +679,7 @@
 - `version.py` (~1702 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `sdk/spec/`
 
-- `README.md` (~804 tok, large) — API specifications
+- `README.md` (~968 tok, large) — API specifications
 - `asyncapi.json` (~835 tok, large) — Keys: asyncapi, channels, components, defaultContentType, info
 ### `sdk/spec/fixtures/`
 
@@ -1041,8 +1041,9 @@
 ### `src/mind_mem/spec/`
 
 - `__init__.py` (~215 tok, medium) — # Copyright 2026 STARGA, Inc.
-- `export_asyncapi.py` (~3376 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `export_openapi.py` (~1790 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `_paths.py` (~420 tok, medium) — # Copyright 2026 STARGA, Inc.
+- `export_asyncapi.py` (~3863 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `export_openapi.py` (~2227 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
 
 - `spec_binding.py` (~2883 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1796,7 +1797,8 @@
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_sdk_asyncapi_drift.py` (~1454 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_sdk_asyncapi_drift.py` (~1462 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_sdk_exporter_package_layout.py` (~605 tok, large) — The spec exporters must work after installation outside a checkout."""
 - `test_sdk_js_packaging.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.

@@ -16,6 +16,12 @@ mind-mem-openapi --check     # exit 1 if it has drifted
 (`python3 -m mind_mem.spec.export_openapi` is the same program; the console
 script is the route the reachability gate can see.)
 
+The default artifact path is available only from a verified repository
+checkout.  An installed wheel scans its own `mind_mem` package, but does not
+guess a path outside `site-packages`; use `--output PATH` (or `--stdout`) to
+export and `--input PATH` (or `--path PATH`) to verify a separately retained
+artifact.
+
 A committed spec is only worth having if something stops it disagreeing with
 the server, so it ships with three gates in
 `tests/test_sdk_openapi_drift.py`:
@@ -69,3 +75,9 @@ mind-mem-asyncapi --check
 `tests/test_sdk_asyncapi_drift.py` compares the complete committed document
 with the live source emitter inventory and validates a captured `XADD` record,
 including duplicate-key, malformed-body and unsanitised-payload refusals.
+
+The repository defaults above require a verified checkout.  In an installed
+wheel the exporter scans the package's actual event emitters and refuses a
+guessed `site-packages/sdk/` write.  Use `mind-mem-asyncapi --write --output
+PATH` (or `--write --stdout`) and `--check --input PATH` (or `--path PATH`) for
+an explicit artifact location.

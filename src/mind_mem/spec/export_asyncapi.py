@@ -12,6 +12,8 @@ Commands::
 
     python3 -m mind_mem.spec.export_asyncapi --write
     python3 -m mind_mem.spec.export_asyncapi --check
+    python3 -m mind_mem.spec.export_asyncapi --write --output /tmp/asyncapi.json
+    python3 -m mind_mem.spec.export_asyncapi --write --stdout
 
 The committed artifact is ``sdk/spec/asyncapi.json``.  The structural check
 compares the complete document, including the source-observed event kinds;
@@ -42,9 +44,11 @@ from mind_mem.event_fanout import (
     EVENT_TIER_PROMOTED,
     scrub_payload,
 )
+from mind_mem.spec._paths import default_artifact
+from mind_mem.spec._paths import source_root as resolve_source_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-SPEC_PATH = _REPO_ROOT / "sdk" / "spec" / "asyncapi.json"
+_DEFAULT_ARTIFACT = default_artifact(__file__, "asyncapi.json")
+SPEC_PATH = _DEFAULT_ARTIFACT
 DEFAULT_STREAM = "mind-mem:events"
 _WIRE_KEYS = frozenset({"kind", "payload", "workspace", "ts_wall"})
 _OBSERVED_EVENT_KINDS = (
@@ -87,7 +91,9 @@ def observed_event_kinds(source_root: Path | None = None) -> tuple[str, ...]:
     observed production emitters.  AST parsing keeps the check independent of
     comments and avoids treating documentation or tests as production wiring.
     """
-    root = _REPO_ROOT / "src" / "mind_mem" if source_root is None else source_root
+    root = resolve_source_root(__file__) if source_root is None else source_root
+    if not root.is_dir():
+        raise RuntimeError(f"event source root is missing or not a directory: {root}")
     found: set[str] = set()
     for path in sorted(root.rglob("*.py")):
         if path.name == "event_fanout.py":
@@ -212,6 +218,8 @@ def canonical_json(spec: dict[str, Any]) -> str:
 def load_committed_spec(path: Path | None = None) -> dict[str, Any]:
     """Load the committed artifact and require a JSON object."""
     resolved = SPEC_PATH if path is None else path
+    if resolved is None:
+        raise FileNotFoundError("no checkout artifact is available; pass --input or --path")
     loaded: Any = json.loads(resolved.read_text(encoding="utf-8"))
     if not isinstance(loaded, dict):
         raise ValueError(f"{resolved} does not contain a JSON object")
@@ -237,6 +245,8 @@ def structural_diff(committed: dict[str, Any], live: dict[str, Any]) -> str:
 def write_spec(path: Path | None = None) -> str:
     """Write the live contract and return its canonical text."""
     resolved = SPEC_PATH if path is None else path
+    if resolved is None:
+        raise RuntimeError("no checkout artifact is available; pass --output, --path, or --stdout")
     text = canonical_json(build_live_spec())
     resolved.parent.mkdir(parents=True, exist_ok=True)
     resolved.write_text(text, encoding="utf-8")
@@ -304,26 +314,51 @@ def _main(argv: list[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true", help="regenerate the committed artifact")
     mode.add_argument("--check", action="store_true", help="fail when the artifact has drifted")
+    artifact = parser.add_mutually_exclusive_group()
+    artifact.add_argument("--input", type=Path, help="artifact to verify")
+    artifact.add_argument("--output", type=Path, help="artifact to write")
+    artifact.add_argument("--path", type=Path, help="artifact path (input for --check, output for --write)")
+    parser.add_argument("--stdout", action="store_true", help="write the generated artifact to stdout (with --write)")
     args = parser.parse_args(argv)
+    if args.stdout and not args.write:
+        parser.error("--stdout requires --write")
+    if args.write and args.input is not None:
+        parser.error("--input is only valid with --check")
+    if args.check and args.output is not None:
+        parser.error("--output is only valid with --write")
     if args.write:
-        write_spec()
-        print(f"wrote {SPEC_PATH}")
+        if args.stdout:
+            sys.stdout.write(canonical_json(build_live_spec()))
+            return 0
+        target = args.output or args.path
+        try:
+            write_spec(target)
+        except (OSError, RuntimeError) as exc:
+            print(f"CANNOT WRITE SPEC: {exc}", file=sys.stderr)
+            return 1
+        print(f"wrote {target or SPEC_PATH}")
         return 0
+    target = args.input or args.path
     try:
-        committed = load_committed_spec()
+        committed = load_committed_spec(target)
     except (FileNotFoundError, json.JSONDecodeError, ValueError) as exc:
-        print(f"MISSING OR INVALID: {SPEC_PATH}: {exc}\nRun: python3 {Path(__file__)} --write", file=sys.stderr)
+        shown = target or SPEC_PATH or "<no checkout artifact>"
+        print(f"MISSING OR INVALID: {shown}: {exc}\nPass --input/--path to verify an artifact", file=sys.stderr)
         return 1
-    diff = structural_diff(committed, build_live_spec())
+    try:
+        diff = structural_diff(committed, build_live_spec())
+    except (OSError, RuntimeError, SyntaxError, ValueError) as exc:
+        print(f"CANNOT BUILD LIVE SPEC: {exc}", file=sys.stderr)
+        return 1
     if diff:
         sys.stderr.write(diff)
         print(
             "\nDRIFT: sdk/spec/asyncapi.json no longer matches the live event publisher.\n"
-            f"Regenerate with: python3 {Path(__file__)} --write",
+            f"Regenerate with: python3 {Path(__file__)} --write --output <path>",
             file=sys.stderr,
         )
         return 1
-    print(f"ok: {SPEC_PATH} matches the live outbound event contract")
+    print(f"ok: {target or SPEC_PATH} matches the live outbound event contract")
     return 0
 
 
