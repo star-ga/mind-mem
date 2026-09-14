@@ -1473,6 +1473,10 @@ class VectorBackend(RecallBackend):
                     "file": block.get("file", ""),
                     "line": block.get("line", 0),
                     "status": block.get("status", ""),
+                    # ``block`` is the already-normalized metadata record
+                    # assembled by ``index``; recomputing here would hash a
+                    # different shape than the canonical source row.
+                    "source_digest": block.get("source_digest"),
                 }
                 records.append(record)
 

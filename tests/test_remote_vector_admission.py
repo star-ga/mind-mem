@@ -45,7 +45,9 @@ def _workspace(
     }
 
 
-def _install_qdrant(monkeypatch, payload: dict) -> None:
+def _install_qdrant(monkeypatch, payload: dict | None = None):
+    stored_points = []
+
     class Hit:
         score = 0.99
 
@@ -56,37 +58,80 @@ def _install_qdrant(monkeypatch, payload: dict) -> None:
         def __init__(self, *, url):
             self.url = url
 
+        def delete_collection(self, _collection):
+            stored_points.clear()
+
+        def create_collection(self, **_kwargs):
+            return None
+
+        def upsert(self, *, collection_name, points: list):
+            del collection_name
+            stored_points[:] = points
+
         def search(self, **kwargs):
-            return [Hit(payload)]
+            del kwargs
+            rows = [point.payload for point in stored_points]
+            if payload is not None:
+                rows = [payload]
+            return [Hit(row) for row in rows]
 
     qdrant = types.ModuleType("qdrant_client")
     qdrant.QdrantClient = Client
     models = types.ModuleType("qdrant_client.models")
-    models.FieldCondition = object
-    models.Filter = object
-    models.MatchValue = object
+    class PointStruct:
+        def __init__(self, *, id, vector, payload):
+            self.id, self.vector, self.payload = id, vector, payload
+
+    class Filter:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class FieldCondition:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class MatchValue:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class VectorParams:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    models.PointStruct = PointStruct
+    models.VectorParams = VectorParams
+    models.Distance = types.SimpleNamespace(COSINE="cosine")
+    models.FieldCondition = FieldCondition
+    models.Filter = Filter
+    models.MatchValue = MatchValue
     monkeypatch.setitem(sys.modules, "qdrant_client", qdrant)
     monkeypatch.setitem(sys.modules, "qdrant_client.models", models)
+    return stored_points
 
 
-def _install_pinecone(monkeypatch, payload: dict) -> None:
+def _install_pinecone(monkeypatch, payload: dict | None = None):
+    records = []
+
     class Index:
+        def upsert_records(self, namespace, rows):
+            del namespace
+            records[:] = rows
+
         def search_records(self, *, namespace, query):
+            del namespace, query
+            rows = records or ([payload] if payload is not None else [])
             return {
                 "result": {
                     "hits": [
                         {
-                            "_id": payload.get("_id"),
-                            "_score": payload.get("score", 0.99),
-                            "fields": {
-                                "block_type": payload.get("type"),
-                                "excerpt": payload.get("excerpt"),
-                                "file": payload.get("file"),
-                                "line": payload.get("line"),
-                                "status": payload.get("status"),
-                                "source_digest": payload.get("source_digest"),
+                            "_id": row.get("_id"),
+                            "_score": row.get("score", 0.99),
+                            "fields": row if payload is not None else {
+                                **row,
+                                "block_type": row.get("block_type", row.get("type")),
                             },
                         }
+                        for row in rows
                     ]
                 }
             }
@@ -102,6 +147,7 @@ def _install_pinecone(monkeypatch, payload: dict) -> None:
     pinecone.Pinecone = Client
     monkeypatch.setitem(sys.modules, "pinecone", pinecone)
     monkeypatch.setenv("PINECONE_API_KEY", "fixture-key")
+    return records
 
 
 def _run(workspace: Path, monkeypatch, payload: dict, provider: str = "qdrant") -> list[dict]:
@@ -127,6 +173,28 @@ def test_pinecone_active_hit_with_matching_source_is_served_without_local_index(
     result = _run(workspace, monkeypatch, payload, provider="pinecone")
     assert [row["_id"] for row in result] == ["D-REMOTE-1"]
     assert not (workspace / ".mind-mem-vectors/index.json").exists()
+
+
+@pytest.mark.parametrize("provider", ["qdrant", "pinecone"])
+def test_index_transport_search_retain_source_digest(tmp_path, monkeypatch, provider):
+    workspace, expected = _workspace(tmp_path, provider=provider)
+    from mind_mem.recall_vector import VectorBackend
+
+    if provider == "qdrant":
+        captured = _install_qdrant(monkeypatch)
+    else:
+        captured = _install_pinecone(monkeypatch)
+    monkeypatch.setattr(VectorBackend, "_embed_for_provider", lambda self, texts: [[0.1, 0.2] for _ in texts])
+
+    backend = VectorBackend({"provider": provider, "dimension": 2})
+    backend.index(str(workspace))
+    assert captured, "index() must emit a transport record"
+    indexed = captured[0].payload if provider == "qdrant" else captured[0]
+    assert indexed["source_digest"] == expected["source_digest"]
+
+    result = recall(str(workspace), "canonical source", limit=10, rerank=False)
+    assert [row["_id"] for row in result] == [expected["_id"]]
+    assert result[0]["excerpt"] == "canonical source"
 
 
 @pytest.mark.parametrize("provider", ["qdrant", "pinecone"])
