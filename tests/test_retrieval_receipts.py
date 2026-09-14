@@ -6,6 +6,8 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -61,6 +63,7 @@ class TestReceiptRoundTrip:
             "schema": True,
             "profile": True,
             "manifest_shape": True,
+            "manifest_values": True,
             "manifest_scope": True,
             "manifest": True,
             "payload_encoding": True,
@@ -94,6 +97,71 @@ class TestReceiptRoundTrip:
 
 
 class TestReceiptIntegrity:
+    def test_manifest_values_cannot_be_rewritten_into_a_different_profile(self, tmp_path: Path) -> None:
+        ws = _workspace(tmp_path)
+        _append(ws)
+        package = _package_dict(receipts.export_receipt(ws))
+        for key, replacement in (
+            ("head_present", False),
+            ("ledger_relpath", "other.jsonl"),
+            ("ledger_identity", "not-an-identity"),
+            ("ledger_rows", 0),
+            ("head_bytes", True),
+        ):
+            altered = json.loads(json.dumps(package))
+            altered["manifest"][key] = replacement
+            altered["manifest_sha256"] = receipts._sha256(receipts._package_bytes(receipts._manifest_payload(altered)))
+            report = receipts.verify_receipt(altered)
+            assert report["status"] == "malformed", (key, report)
+            assert report["checks"]["manifest_values"] is False
+
+    def test_duplicate_keys_inside_a_ledger_row_are_rejected(self, tmp_path: Path) -> None:
+        ws = _workspace(tmp_path)
+        _append(ws)
+        package = _package_dict(receipts.export_receipt(ws))
+        raw = base64.b64decode(package["ledger_b64"])
+        duplicate = raw.replace(b'"seq":0', b'"seq":0,"seq":0', 1)
+        package["ledger_b64"] = base64.b64encode(duplicate).decode("ascii")
+        package["manifest"]["ledger_sha256"] = receipts._sha256(duplicate)
+        package["manifest"]["ledger_bytes"] = len(duplicate)
+        package["manifest"]["ledger_identity"]["size"] = len(duplicate)
+        package["manifest_sha256"] = receipts._sha256(receipts._package_bytes(receipts._manifest_payload(package)))
+        assert receipts.verify_receipt(package)["status"] == "integrity_failed"
+
+    def test_recursive_mapping_is_reported_as_malformed(self) -> None:
+        recursive: list[object] = []
+        recursive.append(recursive)
+        report = receipts.verify_receipt({"manifest": recursive})
+        assert report["status"] == "malformed"
+
+    def test_fifo_input_fails_without_blocking(self, tmp_path: Path) -> None:
+        fifo = tmp_path / "receipt.fifo"
+        if not hasattr(os, "mkfifo"):
+            pytest.skip("FIFO controls require POSIX")
+        os.mkfifo(fifo)
+        code = (
+            "from pathlib import Path; import mind_mem.retrieval_receipts as r; "
+            "print(r.verify_receipt(Path(__import__('sys').argv[1]))['status'])"
+        )
+        env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
+        result = subprocess.run(
+            [sys.executable, "-c", code, str(fifo)],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            env=env,
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == "unavailable"
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        ws = _workspace(workspace)
+        ledger = ws / ".mind-mem-ledger" / "served.jsonl"
+        os.mkfifo(ledger)
+        with pytest.raises(receipts.ReceiptUnavailable, match="regular file"):
+            receipts.export_receipt(ws)
+
     def test_changed_row_is_rejected_even_when_package_digest_is_updated(self, tmp_path: Path) -> None:
         ws = _workspace(tmp_path)
         _append(ws)

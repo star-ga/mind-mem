@@ -107,7 +107,7 @@ def _json_loads_unique(raw: bytes) -> Any:
         return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs)
     except ReceiptError:
         raise
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ReceiptError(f"receipt package is not valid UTF-8 JSON: {exc}") from exc
 
 
@@ -135,7 +135,7 @@ def _read_stable(path: Path, *, limit: int, optional: bool = False) -> tuple[byt
     if path.is_symlink():
         raise ReceiptUnavailable(f"evidence file must not be a symlink: {path}")
     try:
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
         with os.fdopen(os.open(path, flags), "rb") as handle:
             before = os.fstat(handle.fileno())
             if not stat.S_ISREG(before.st_mode):
@@ -162,7 +162,7 @@ def _read_package_path(path: Path, *, limit: int) -> bytes:
     if path.is_symlink():
         raise ReceiptUnavailable("receipt input must not be a symlink")
     try:
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
         with os.fdopen(os.open(path, flags), "rb") as handle:
             before = os.fstat(handle.fileno())
             if not stat.S_ISREG(before.st_mode):
@@ -197,8 +197,8 @@ def _decode_rows(raw: bytes, *, max_rows: int) -> tuple[dict[str, Any], ...]:
         if not line.strip():
             raise ReceiptError(f"ledger row {index} is blank")
         try:
-            value = json.loads(line)
-        except json.JSONDecodeError as exc:
+            value = _json_loads_unique(line.encode("utf-8"))
+        except ReceiptError as exc:
             raise ReceiptError(f"ledger row {index} is malformed JSON: {exc}") from exc
         if not isinstance(value, dict):
             raise ReceiptError(f"ledger row {index} is not a JSON object")
@@ -324,8 +324,11 @@ def _load_package(
     max_package_bytes: int,
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     if isinstance(package, Mapping):
-        value: Any = dict(package)
-        raw_size = len(_package_bytes(value))
+        try:
+            value: Any = dict(package)
+            raw_size = len(_package_bytes(value))
+        except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+            return None, {"status": "malformed", "reason": f"receipt package cannot be canonicalized: {exc}"}
     elif isinstance(package, Path):
         try:
             raw = _read_package_path(package, limit=max_package_bytes)
@@ -415,6 +418,46 @@ def verify_receipt(
             "reason": "manifest keys do not match the receipt schema",
         }
     checks["manifest_shape"] = True
+    identity_keys = frozenset({"device", "inode", "size", "mtime_ns"})
+
+    def valid_identity(candidate: Any, expected_size: Any) -> bool:
+        if not isinstance(candidate, dict) or set(candidate) != identity_keys:
+            return False
+        if any(not isinstance(candidate[key], int) or isinstance(candidate[key], bool) for key in identity_keys):
+            return False
+        return candidate["device"] >= 0 and candidate["inode"] >= 0 and candidate["size"] == expected_size and candidate["mtime_ns"] >= 0
+
+    def valid_digest(candidate: Any) -> bool:
+        return isinstance(candidate, str) and len(candidate) == 64 and all(char in "0123456789abcdef" for char in candidate)
+
+    if (
+        manifest.get("ledger_relpath") != LEDGER_RELPATH
+        or manifest.get("head_relpath") != HEAD_RELPATH
+        or manifest.get("head_present") is not True
+        or manifest.get("scope") != "local"
+        or manifest.get("portable_identity") != "unavailable"
+        or manifest.get("disclosure_profile") != "local-audit-v1"
+        or not isinstance(manifest.get("ledger_bytes"), int)
+        or isinstance(manifest.get("ledger_bytes"), bool)
+        or manifest.get("ledger_bytes", 0) <= 0
+        or not isinstance(manifest.get("ledger_rows"), int)
+        or isinstance(manifest.get("ledger_rows"), bool)
+        or manifest.get("ledger_rows", 0) <= 0
+        or not valid_digest(manifest.get("ledger_sha256"))
+        or not valid_identity(manifest.get("ledger_identity"), manifest.get("ledger_bytes"))
+        or not isinstance(manifest.get("head_bytes"), int)
+        or isinstance(manifest.get("head_bytes"), bool)
+        or manifest.get("head_bytes", 0) <= 0
+        or not valid_digest(manifest.get("head_sha256"))
+        or not valid_identity(manifest.get("head_identity"), manifest.get("head_bytes"))
+    ):
+        return {
+            "status": "malformed",
+            "scope": "local",
+            "checks": {**checks, "manifest_values": False},
+            "reason": "manifest values do not match the local receipt schema",
+        }
+    checks["manifest_values"] = True
     if (
         manifest.get("scope") != "local"
         or manifest.get("portable_identity") != "unavailable"
@@ -428,7 +471,7 @@ def verify_receipt(
         }
     checks["manifest_scope"] = True
     expected_hash = value.get("manifest_sha256")
-    if not isinstance(expected_hash, str) or len(expected_hash) != 64:
+    if not valid_digest(expected_hash):
         return {"status": "malformed", "scope": "local", "checks": {**checks, "manifest": False}, "reason": "manifest_sha256 is malformed"}
     actual_hash = _sha256(_package_bytes(_manifest_payload(value)))
     checks["manifest"] = actual_hash == expected_hash
