@@ -135,7 +135,9 @@ def _read_stable(path: Path, *, limit: int, optional: bool = False) -> tuple[byt
     if path.is_symlink():
         raise ReceiptUnavailable(f"evidence file must not be a symlink: {path}")
     try:
-        flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
+        # O_NONBLOCK is POSIX-only.  It is needed for the FIFO refusal
+        # control, while ordinary regular-file reads must remain portable.
+        flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
         with os.fdopen(os.open(path, flags), "rb") as handle:
             before = os.fstat(handle.fileno())
             if not stat.S_ISREG(before.st_mode):
@@ -162,7 +164,7 @@ def _read_package_path(path: Path, *, limit: int) -> bytes:
     if path.is_symlink():
         raise ReceiptUnavailable("receipt input must not be a symlink")
     try:
-        flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
+        flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
         with os.fdopen(os.open(path, flags), "rb") as handle:
             before = os.fstat(handle.fileno())
             if not stat.S_ISREG(before.st_mode):
@@ -180,6 +182,28 @@ def _read_package_path(path: Path, *, limit: int) -> bytes:
     if _stat_identity(before) != _stat_identity(after):
         raise ReceiptUnavailable("receipt package changed while read")
     return raw
+
+
+def _fsync_directory(path: Path) -> bool:
+    """Best-effort directory-entry flush following repository convention.
+
+    The receipt file itself is flushed before publication.  Directory
+    handles and directory fsync are unavailable on some platforms (notably
+    Windows), so this helper reports whether the stronger entry-ordering
+    flush was available without making receipt creation non-portable.
+    """
+    try:
+        directory_fd = os.open(os.fspath(path), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    except OSError:  # pragma: no cover - platform dependent
+        return False
+    try:
+        try:
+            os.fsync(directory_fd)
+        except OSError:  # pragma: no cover - platform/filesystem dependent
+            return False
+        return True
+    finally:
+        os.close(directory_fd)
 
 
 def _decode_rows(raw: bytes, *, max_rows: int) -> tuple[dict[str, Any], ...]:
@@ -555,14 +579,9 @@ def write_receipt(
         except OSError as exc:
             raise ReceiptError(f"cannot publish receipt without replacing an existing path: {exc}") from exc
         os.unlink(temporary)
-        try:
-            directory_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
-        except OSError as exc:
-            raise ReceiptError(f"receipt published but output directory was not durable: {exc}") from exc
+        # Match evidence_recovery/encryption: a directory flush strengthens
+        # crash ordering where supported, but is not a Windows precondition.
+        _fsync_directory(parent)
     except Exception:
         try:
             if os.path.exists(temporary):

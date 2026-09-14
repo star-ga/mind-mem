@@ -150,6 +150,7 @@ class TestReceiptIntegrity:
             text=True,
             timeout=2,
             env=env,
+            encoding="utf-8",
         )
         assert result.returncode == 0
         assert result.stdout.strip() == "unavailable"
@@ -296,6 +297,10 @@ class TestReceiptCLI:
         output = tmp_path / "receipt.json"
         monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
         monkeypatch.setattr(mm_cli, "_run_auto_update_hook", lambda args: None)
+        # Simulate a host without the optional POSIX open flags: regular
+        # source/package reads must still work when FIFO controls are absent.
+        monkeypatch.delattr(os, "O_NONBLOCK", raising=False)
+        monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
 
         assert mm_cli.main(["receipt", "export", "--out", str(output)]) == 0
         exported = json.loads(capsys.readouterr().out)
@@ -308,6 +313,34 @@ class TestReceiptCLI:
         output.write_text(json.dumps(corrupted), encoding="utf-8")
         assert mm_cli.main(["receipt", "verify", "--input", str(output)]) == 1
         assert json.loads(capsys.readouterr().out)["status"] == "integrity_failed"
+
+    def test_cli_applies_source_and_package_byte_bounds(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        ws = _workspace(tmp_path)
+        _append(ws)
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
+        monkeypatch.setattr(mm_cli, "_run_auto_update_hook", lambda args: None)
+
+        too_small = tmp_path / "too-small.json"
+        assert mm_cli.main(["receipt", "export", "--out", str(too_small), "--max-bytes", "1"]) == 1
+        assert "snapshot limit" in capsys.readouterr().err
+        assert not too_small.exists()
+
+        package = tmp_path / "package.json"
+        package.write_bytes(receipts.export_receipt(ws))
+        assert mm_cli.main(["receipt", "verify", "--input", str(package), "--max-package-bytes", "1"]) == 1
+        report = json.loads(capsys.readouterr().out)
+        assert report["status"] == "unavailable"
+
+    def test_export_schema_vector_matches_a_real_package(self, tmp_path: Path) -> None:
+        ws = _workspace(tmp_path)
+        _append(ws)
+        package = _package_dict(receipts.export_receipt(ws))
+        schema = json.loads((Path(__file__).parents[1] / "docs/specs/retrieval-receipt-local-v1.json").read_text(encoding="utf-8"))
+        assert set(package) == set(schema["required"])
+        assert package["schema"] == schema["properties"]["schema"]["const"]
+        assert receipts.verify_receipt(package)["status"] == "locally_consistent"
 
     def test_stdin_duplicate_keys_and_output_no_clobber(
         self,
@@ -356,3 +389,11 @@ class TestReceiptCLI:
         with pytest.raises(receipts.ReceiptError, match="already exists"):
             receipts.write_receipt(ws, link)
         assert target.read_bytes() == b"keep"
+
+    def test_write_receipt_survives_unavailable_directory_fsync(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        ws = _workspace(tmp_path)
+        _append(ws)
+        output = tmp_path / "receipt.json"
+        monkeypatch.setattr(receipts, "_fsync_directory", lambda path: False)
+        assert receipts.write_receipt(ws, output) > 0
+        assert receipts.verify_receipt(output)["status"] == "locally_consistent"
