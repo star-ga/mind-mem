@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1575 | **Est. tokens:** ~4670140
-**Generated:** 2026-09-14 07:42 UTC
+**Files:** 1577 | **Est. tokens:** ~4673913
+**Generated:** 2026-09-14 08:27 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 691 | ~2055418 |
+| `tests/` | 692 | ~2056312 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -100,7 +100,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 34 | ~76526 |
+| `train/` | 35 | ~79405 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -1771,6 +1771,7 @@
 - `test_train_eval_receipt.py` (~12987 tok, huge) — Publication-gate controls for the 4B evaluation attestation.
 - `test_train_mind_mem_4b.py` (~962 tok, large) — Smoke tests for benchmarks/train_mind_mem_4b.py.
 - `test_train_release_entrypoints.py` (~1486 tok, large) — Default-path integration for the staged training release entrypoints.
+- `test_training_readiness.py` (~894 tok, large) — Data-contract controls for the deterministic training corpus manifest."""
 - `test_trajectory.py` (~2396 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_trajectory_wiring.py` (~6650 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""
@@ -1880,6 +1881,7 @@
 - `ship_gguf_ollama_v4.1.1.py` (~1804 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
 - `spend_guard.py` (~2040 tok, huge) — spend_guard — mechanical interlock on cloud spend.
 - `train_qlora.py` (~1433 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
+- `training_readiness_manifest.py` (~2879 tok, huge) — Create a deterministic, source-bound training-readiness manifest.
 - `upload_to_hf.py` (~6912 tok, huge) — Push the retrained checkpoint + model card to star-ga/mind-mem-4b.
 ### `web/`
 

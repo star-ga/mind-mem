@@ -3,13 +3,16 @@
 
 This is intentionally a metadata-only check.  It reads a generated JSONL
 corpus and the probe definitions, but never imports an inference backend or
-loads model weights.  The main eval probes are training material by design;
-only the holdout probe strings must be absent from the corpus.
+loads model weights.  The main eval probes are training material by design.
+Exact holdout-string absence is only a narrow check: source provenance also
+identifies active holdout-targeted harvests, which make current material
+development data.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import importlib.util
 import json
@@ -46,6 +49,20 @@ def source_hashes() -> dict[str, str]:
     if missing:
         raise SystemExit(f"source file(s) missing: {', '.join(missing)}")
     return {name: sha256(REPO / name) for name in SOURCE_NAMES}
+
+
+def targeted_holdout_harvests() -> list[str]:
+    """Find active corpus calls whose name says they harvest holdout material."""
+    path = REPO / "train" / "build_corpus.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        name = node.func.id
+        if name.startswith("_harvest_") and "holdout" in name:
+            names.add(name)
+    return sorted(names)
 
 
 def git_commit() -> str:
@@ -163,7 +180,14 @@ def build_manifest(corpus: Path) -> dict[str, Any]:
     holdout_set = set(holdout)
     main_overlap = sorted(main_set & users)
     holdout_overlap = sorted(holdout_set & users)
+    targeted_harvests = targeted_holdout_harvests()
     tool_counts = {name: _mention_count(rows, name) for name in tools}
+    if targeted_harvests:
+        separation_status = "CONTAMINATED_DEVELOPMENT"
+    elif holdout_overlap:
+        separation_status = "EXACT_OVERLAP"
+    else:
+        separation_status = "READY"
     return {
         "schema": "mind-mem/training-readiness-manifest@1",
         "source_commit": git_commit(),
@@ -198,8 +222,19 @@ def build_manifest(corpus: Path) -> dict[str, Any]:
             "holdout_probe_count": len(holdout_set),
             "holdout_exact_overlap_count": len(holdout_overlap),
             "holdout_exact_overlaps": holdout_overlap,
+            "holdout_exact_string_status": "PASS" if not holdout_overlap else "FAIL",
             "holdout_is_exact_string_guard": True,
-            "training_eval_separation_status": "PASS" if not holdout_overlap else "FAIL",
+            "targeted_training_harvests": targeted_harvests,
+            "semantic_contamination_status": "CONFIRMED" if targeted_harvests else "NOT_DETECTED",
+            "training_eval_separation_status": separation_status,
+            "independence_ready": separation_status == "READY",
+            "future_independent_eval_protocol": [
+                "freeze the post-port source and generator before defining evaluation data",
+                "partition scenario families and canonical facts before any tuning",
+                "keep a locked holdout artifact outside the training generator and record its digest",
+                "run semantic-neighbor and source-provenance contamination review in addition to exact-string checks",
+                "permit model selection only on a separate development set; evaluate the locked holdout once",
+            ],
         },
         "model_facts": _read_model_facts(),
     }
@@ -234,7 +269,7 @@ def main() -> int:
     return (
         0
         if (
-            manifest["evaluation_probe_binding"]["training_eval_separation_status"] == "PASS"
+            manifest["evaluation_probe_binding"]["training_eval_separation_status"] == "READY"
             and manifest["live_mcp_surface"]["surface_coverage_status"] == "PASS"
         )
         else 1

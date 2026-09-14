@@ -49,10 +49,12 @@ def _manifest(corpus: Path, output: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_generated_corpus_covers_live_tools_and_keeps_holdout_unseen(generated_corpus: Path, tmp_path: Path) -> None:
+def test_manifest_flags_paraphrase_contamination_even_when_exact_holdout_is_unseen(
+    generated_corpus: Path, tmp_path: Path
+) -> None:
     output = tmp_path / "manifest.json"
     result = _manifest(generated_corpus, output)
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 1, result.stdout + result.stderr
     manifest = json.loads(output.read_text(encoding="utf-8"))
 
     surface = manifest["live_mcp_surface"]
@@ -60,7 +62,11 @@ def test_generated_corpus_covers_live_tools_and_keeps_holdout_unseen(generated_c
     assert surface["registered_tool_count"] == 102
     assert surface["tools_missing_from_corpus"] == []
     assert binding["holdout_exact_overlap_count"] == 0
-    assert binding["training_eval_separation_status"] == "PASS"
+    assert binding["holdout_exact_string_status"] == "PASS"
+    assert binding["targeted_training_harvests"] == ["_harvest_v4_retry2g_holdout_paraphrase"]
+    assert binding["semantic_contamination_status"] == "CONFIRMED"
+    assert binding["training_eval_separation_status"] == "CONTAMINATED_DEVELOPMENT"
+    assert binding["independence_ready"] is False
     assert binding["main_eval_is_training_overlap"] is True
     assert binding["main_eval_status"] == "TRAINING_OVERLAP"
 
@@ -87,4 +93,5 @@ def test_manifest_fails_closed_when_a_holdout_prompt_is_added(generated_corpus: 
     manifest = json.loads(output.read_text(encoding="utf-8"))
     binding = manifest["evaluation_probe_binding"]
     assert binding["holdout_exact_overlap_count"] == 1
-    assert binding["training_eval_separation_status"] == "FAIL"
+    assert binding["holdout_exact_string_status"] == "FAIL"
+    assert binding["training_eval_separation_status"] == "CONTAMINATED_DEVELOPMENT"
