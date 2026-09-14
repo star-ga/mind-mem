@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import count_mcp_tools
 from train import training_readiness_manifest as readiness
 
 REPO = Path(__file__).resolve().parents[1]
@@ -66,7 +67,23 @@ def test_manifest_flags_paraphrase_contamination_even_when_exact_holdout_is_unse
 
     surface = manifest["live_mcp_surface"]
     binding = manifest["evaluation_probe_binding"]
-    assert surface["registered_tool_count"] == 103
+    # Bind the manifest to the live AST registration inventory independently
+    # of the manifest's own ``registered_tools`` helper.  The four entity
+    # merge dispatchers were added after the 103-tool training-card claim;
+    # require their corpus coverage explicitly rather than freezing another
+    # stale total in this test.
+    live_tool_count = count_mcp_tools.count_tools()
+    assert surface["registered_tool_count"] == live_tool_count
+    live_tool_names = {name for path in count_mcp_tools._tool_source_files() for name in count_mcp_tools._tool_names(path)}
+    new_entity_merge_tools = {
+        "propose_entity_merge",
+        "list_entity_merge_proposals",
+        "approve_entity_merge",
+        "reverse_entity_merge",
+    }
+    assert new_entity_merge_tools <= live_tool_names
+    mention_counts = surface["examples_mentioning_tool"]
+    assert all(mention_counts.get(name, 0) > 0 for name in new_entity_merge_tools)
     assert surface["tools_missing_from_corpus"] == []
     assert binding["holdout_exact_overlap_count"] == 0
     assert binding["holdout_exact_string_status"] == "PASS"

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1633 | **Est. tokens:** ~4824873
-**Generated:** 2026-09-14 18:09 UTC
+**Files:** 1633 | **Est. tokens:** ~4825176
+**Generated:** 2026-09-14 18:12 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
-| `tests/` | 720 | ~2136757 |
+| `tests/` | 720 | ~2137060 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1691,7 +1691,7 @@
 - `test_recall_filter_pushdown.py` (~5733 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_filters_reach_the_surface.py` (~1901 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_format_cache_isolation.py` (~1682 tok, huge) — ``format`` is not in the recall-cache key, so it must not be applied inside it.
-- `test_recall_hot_path_5_0_2.py` (~4239 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_recall_hot_path_5_0_2.py` (~4311 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_intent_router.py` (~1212 tok, large) — Tests for IntentRouter integration in recall pipeline."""
 - `test_recall_large_workspace.py` (~343 tok, medium) — Tests for recall with large workspaces."""
 - `test_recall_limit.py` (~395 tok, medium) — Tests for recall limit parameter behavior."""
@@ -1844,7 +1844,7 @@
 - `test_train_eval_receipt.py` (~12987 tok, huge) — Publication-gate controls for the 4B evaluation attestation.
 - `test_train_mind_mem_4b.py` (~962 tok, large) — Smoke tests for benchmarks/train_mind_mem_4b.py.
 - `test_train_release_entrypoints.py` (~1486 tok, large) — Default-path integration for the staged training release entrypoints.
-- `test_training_readiness.py` (~1931 tok, huge) — Data-contract controls for the deterministic training corpus manifest."""
+- `test_training_readiness.py` (~2162 tok, huge) — Data-contract controls for the deterministic training corpus manifest."""
 - `test_trajectory.py` (~2396 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_trajectory_wiring.py` (~6650 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""

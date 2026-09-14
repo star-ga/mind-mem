@@ -211,15 +211,21 @@ def test_corpus_truncation_fires_an_in_band_degraded_marker(workspace: str, monk
     assert int(marker["blocks_total"]) > 3
 
 
-def test_untruncated_recall_carries_no_marker_and_stays_a_plain_list(workspace: str) -> None:
-    """The OFF path pays nothing: the engine returns the same plain ``list``
-    it always returned, and no marker is fabricated."""
+def test_untruncated_recall_is_list_compatible_without_a_marker(workspace: str) -> None:
+    """A complete result keeps the list API without fabricating degradation.
+
+    ``RecallResults`` is intentionally a list subclass: the shared carrier
+    preserves optional provenance across backend paths, while the complete
+    path must leave its degradation marker unset.  This checks the observable
+    contract without treating the carrier allocation as a performance claim.
+    """
     from mind_mem._recall_core import recall as engine_recall
 
     hits = engine_recall(workspace, "compiler evidence chain", limit=10, scoring_instant=_INSTANT)
     assert hits, "fixture produced no hits; the negative assertion below would be vacuous"
+    assert isinstance(hits, list)
+    assert list(hits) == hits, "the carrier must preserve the ordinary list result"
     assert getattr(hits, "degraded", None) is None
-    assert type(hits) is list, "the untruncated path must not pay for the marker"
 
 
 def test_truncation_marker_survives_the_hybrid_bm25_arm(workspace: str, monkeypatch) -> None:
