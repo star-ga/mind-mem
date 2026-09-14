@@ -6,6 +6,11 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Added
 
+- Opt-in `--receipt-envelope` output for ordinary recall, context packing and
+  agent injection. Existing output formats remain the default. Ranked evidence
+  and descriptive projection metadata have separate scopes; `--kernel` retains
+  its existing payload and cannot silently ignore the new envelope option.
+
 - A local `mm view` browser for admitted blocks and graph neighborhoods, with
   packaged assets and loopback IPv4/IPv6 serving. Unsupported namespace graph
   reads remain explicit, and displayed results are bounded to the documented

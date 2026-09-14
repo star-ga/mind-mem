@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1639 | **Est. tokens:** ~4836329
-**Generated:** 2026-09-14 18:18 UTC
+**Files:** 1640 | **Est. tokens:** ~4838698
+**Generated:** 2026-09-14 18:30 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~213059 |
+| `docs/` | 95 | ~213524 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 721 | ~2141139 |
+| `tests/` | 722 | ~2143043 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -426,7 +426,7 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `cli-reference.md` (~7539 tok, huge) — CLI Reference
+- `cli-reference.md` (~8004 tok, huge) — CLI Reference
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
@@ -1590,6 +1590,7 @@
 - `test_mm_cli_config_set.py` (~3637 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mm_cli_debug.py` (~3352 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mm_cli_keyfile_perms.py` (~1473 tok, large) — ``mm sign-model --generate-key`` and the permissions it claims.
+- `test_mm_cli_receipt_envelopes.py` (~1904 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mm_doctor_postgres_hint.py` (~1517 tok, huge) — Regression test: mm doctor must emit a clear hint when backend=postgres
 - `test_model_audit.py` (~3557 tok, huge) — Tests for ``mind_mem.model_audit`` — checkpoint static-security audit.
 - `test_model_audit_unreadable_files.py` (~1411 tok, large) — # Copyright 2026 STARGA, Inc.
