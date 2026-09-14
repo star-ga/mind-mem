@@ -37,11 +37,11 @@ Package is a flat `src/mind_mem/` — there is no `governance/` subpackage.
 | Tier decay (TTL + idle demotion) | `src/mind_mem/memory_tiers.py` (`TierPolicy`, `run_promotion_cycle`) | RA.0 collapsed three tier ladders to this one and deleted the other two. |
 | Delta-based snapshot rollback | `src/mind_mem/block_store.py` (`MANIFEST.json` write/read) | MANIFEST.json for O(manifest) restore. |
 
-### MCP server (103 tools, 8 resources)
+### MCP server (107 tools, 8 resources)
 
 | Component | Source | Notes |
 |---|---|---|
-| MCP server entry | `src/mind_mem/mcp_server.py` | 103 tools across recall / write / governance / observability / audit. |
+| MCP server entry | `src/mind_mem/mcp_server.py` | 107 tools across recall / write / governance / observability / audit. |
 | Native MCP integration (19 clients) | `src/mind_mem/hook_installer.py` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw + 10 more. |
 | Multi-backend LLM extractor | `src/mind_mem/llm_extractor.py` | ollama / openai-compatible / vLLM / exllamav2 backends selected by `backend="auto"`. |
 | Model provenance (audit / sign / verify) | `src/mind_mem/model_provenance.py`, `src/mind_mem/mcp/tools/model.py` | `audit_model_tool`, `sign_model_tool`, `verify_model_tool` are in the shipped tool surface — no feature flag — with 28 tests and their own `Audit Pinned Models` workflow. This row said "not yet shipped" while all three were counted in the tool badge. |
@@ -60,7 +60,7 @@ Kernel sources live in `mind/` (repo root), not `kernels/`.
 
 | Component | Source | Notes |
 |---|---|---|
-| `star-ga/mind-mem-4b` (v4.1.1) | `docs/mind-mem-4b-setup.md` / [HF model card](https://huggingface.co/star-ga/mind-mem-4b) | Q4_K_M @ 2.7GB via Ollama; reported 133/133 eval (111 main + 22 held-out, two using inference-time anchors). Trained on 83 MCP tools; the current server exposes 103 MCP tools. This is not a new independent evaluation. |
+| `star-ga/mind-mem-4b` (v4.1.1) | `docs/mind-mem-4b-setup.md` / [HF model card](https://huggingface.co/star-ga/mind-mem-4b) | Q4_K_M @ 2.7GB via Ollama; reported 133/133 eval (111 main + 22 held-out, two using inference-time anchors). Trained on 83 MCP tools; the current server exposes 107 MCP tools. This is not a new independent evaluation. |
 | Backend dispatcher | `src/mind_mem/llm_extractor.py` | `mind-mem.json` → `{"backend": "ollama", "model": "mind-mem:4b"}`. |
 
 ## Experimental (in-tree, behind feature flags)
@@ -80,7 +80,7 @@ completion percentage. The full roadmap and release history remain in
 
 | Area | Current status | Evidence and boundary |
 |---|---|---|
-| Current release work | Implemented in the candidate; release publication pending | The candidate contains the current governed recall, export, importer and receipt work. The 103-tool source count is current for this candidate; the published 5.0.2 package remains a separate release identity. |
+| Current release work | Implemented in the candidate; release publication pending | The candidate contains the current governed recall, export, importer and receipt work. The 107-tool source count is current for this candidate; the published 5.0.2 package remains a separate release identity. |
 | Pure-MIND core port | Planned; not started | `ROADMAP.md` describes the compiler and Rust-independence gate, missing `std.tensor`, and unresolved reductions before migration. Existing Python/native prototypes are not a completed Pure-MIND port. |
 | 4B retraining | Deferred until after the Pure-MIND port | Published weights remain trained on 83 tools and report 133/133 evaluation; the candidate exposes 103. A newer base, including Qwen3.8, is not asserted as available. Any post-port run requires a fresh corpus, rented GPU approval/funding, and new receipts. |
 | Ground-truth evaluation | Open and blocked | `docs/design/eval-set-ground-truth.md` requires 60+ labelled cases against a hash-pinned snapshot. The current 36-query pool is an unlabelled development pool, not an independent evaluation or a basis for tuning and release claims. |

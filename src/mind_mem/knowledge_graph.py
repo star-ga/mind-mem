@@ -44,6 +44,7 @@ produced it, and re-extraction needs both. Concurrency-safe.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import sqlite3
 import threading
@@ -101,6 +102,7 @@ class Predicate(str, Enum):
     JUSTIFIED_BY = "justified_by"  # decision <-> rationale
     OWNED_BY = "owned_by"  # commitment <-> owner
     EVIDENCED_BY = "evidenced_by"  # claim <-> evidence
+    SAME_AS = "same_as"  # governed reversible entity equivalence
 
     @classmethod
     def from_str(cls, name: str) -> "Predicate":
@@ -573,6 +575,7 @@ class Edge:
 PROPOSAL_STAGED = "staged"
 PROPOSAL_APPLIED = "applied"
 PROPOSAL_REJECTED = "rejected"
+MERGE_REVERSED = "reversed"
 
 #: Provenance markers stamped onto an edge's ``metadata.origin`` so the write
 #: path is auditable after the fact. ``approve_edge`` (the HITL propose→approve
@@ -649,6 +652,35 @@ def _edge_proposal_id(subject: str, predicate_value: str, object_: str, source_b
     return "EP-" + hashlib.sha256(preimage).hexdigest()[:16]
 
 
+def _entity_merge_proposal_id(winner_id: str, loser_id: str) -> str:
+    """Derive a stable id for one explicitly directed merge proposal."""
+    preimage = "\x00".join(("mm-entity-merge-v1", winner_id, loser_id)).encode("utf-8")
+    return "EMP-" + hashlib.sha256(preimage).hexdigest()[:16]
+
+
+def _validate_entity_merge_identity(proposal_id: str, proposal: "EntityMergeProposal") -> None:
+    """Validate the persisted proposal fields used to authorize a merge.
+
+    The proposal table is a persistence boundary: a row can be malformed or
+    edited independently of the Python staging method.  Approval and reversal
+    must therefore bind the row's primary key to its endpoint pair before
+    opening an admission scope.  This binds endpoint identity, not a claim
+    that the rationale is immutable; the admission content still records the
+    rationale currently present in the row.
+    """
+    if not isinstance(proposal_id, str) or proposal_id != proposal.proposal_id:
+        raise EntityMergeError("entity merge proposal identity is malformed")
+    if not all(isinstance(value, str) and value.strip() for value in (proposal.winner_id, proposal.loser_id)):
+        raise EntityMergeError("entity merge proposal endpoints are malformed")
+    if proposal.winner_id == proposal.loser_id:
+        raise EntityMergeError("entity merge proposal endpoints must be distinct")
+    if not isinstance(proposal.rationale, str) or sum(not char.isspace() for char in proposal.rationale) < 8:
+        raise EntityMergeError("entity merge proposal rationale is malformed")
+    expected = _entity_merge_proposal_id(proposal.winner_id, proposal.loser_id)
+    if proposal_id != expected:
+        raise EntityMergeError("entity merge proposal identity does not match its endpoints")
+
+
 @dataclass(frozen=True)
 class EdgeProposal:
     """A staged, human-review-gated typed edge.
@@ -683,6 +715,32 @@ class EdgeProposal:
             "valid_until": self.valid_until,
             "metadata": self.metadata,
         }
+
+
+@dataclass(frozen=True)
+class EntityMergeProposal:
+    """A staged, directed proposal to assert a reversible ``SAME_AS`` edge."""
+
+    proposal_id: str
+    winner_id: str
+    loser_id: str
+    rationale: str
+    status: str = PROPOSAL_STAGED
+    metadata: dict = field(default_factory=dict)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "proposal_id": self.proposal_id,
+            "winner_id": self.winner_id,
+            "loser_id": self.loser_id,
+            "rationale": self.rationale,
+            "status": self.status,
+            "metadata": self.metadata,
+        }
+
+
+class EntityMergeError(ValueError):
+    """A governed entity equivalence proposal cannot be safely applied."""
 
 
 # ---------------------------------------------------------------------------
@@ -828,6 +886,24 @@ class KnowledgeGraph:
         metadata         TEXT NOT NULL DEFAULT '{}'
     );
     CREATE INDEX IF NOT EXISTS idx_edge_proposals_status ON edge_proposals(status);
+    CREATE TABLE IF NOT EXISTS entity_merge_proposals (
+        proposal_id TEXT PRIMARY KEY,
+        winner_id TEXT NOT NULL,
+        loser_id TEXT NOT NULL,
+        rationale TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'staged',
+        metadata TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS idx_entity_merge_proposals_status
+        ON entity_merge_proposals(status);
+    CREATE TABLE IF NOT EXISTS entity_merge_lineage (
+        proposal_id TEXT PRIMARY KEY,
+        winner_id TEXT NOT NULL,
+        loser_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'applied',
+        same_as_source_block_id TEXT NOT NULL,
+        FOREIGN KEY (proposal_id) REFERENCES entity_merge_proposals(proposal_id)
+    );
     """
     )
 
@@ -963,6 +1039,8 @@ class KnowledgeGraph:
         import json as _json
 
         pred = predicate if isinstance(predicate, Predicate) else Predicate.from_str(predicate)
+        if pred.value == Predicate.SAME_AS.value:
+            raise EntityMergeError("SAME_AS edges require propose_entity_merge and admin approval")
         if not source_block_id or not source_block_id.strip():
             raise ValueError("source_block_id is required for provenance")
         # Before the admission check, and therefore before ``resolve``
@@ -1252,6 +1330,204 @@ class KnowledgeGraph:
         return updated
 
     # ------------------------------------------------------------------
+    # Governed entity equivalence (RA.4)
+    # ------------------------------------------------------------------
+
+    def propose_entity_merge(
+        self,
+        winner_id: str,
+        loser_id: str,
+        *,
+        rationale: str,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> EntityMergeProposal:
+        """Stage a directed, reversible ``SAME_AS`` assertion.
+
+        The names are exact registry ids: staging never resolves a surface
+        form, creates an entity, or changes source-of-truth graph rows.
+        """
+        if not isinstance(winner_id, str) or not winner_id.strip():
+            raise EntityMergeError("winner_id must be a non-empty entity id")
+        if not isinstance(loser_id, str) or not loser_id.strip():
+            raise EntityMergeError("loser_id must be a non-empty entity id")
+        winner, loser = winner_id.strip(), loser_id.strip()
+        if winner == loser:
+            raise EntityMergeError("winner_id and loser_id must be distinct")
+        if not isinstance(rationale, str) or sum(not char.isspace() for char in rationale) < 8:
+            raise EntityMergeError("entity merge rationale must be at least 8 non-whitespace characters")
+        with self._lock:
+            rows = self._conn.execute("SELECT id FROM entities WHERE id IN (?, ?)", (winner, loser)).fetchall()
+            if {str(row["id"]) for row in rows} != {winner, loser}:
+                raise EntityMergeError("winner_id and loser_id must name existing entities")
+            proposal_id = _entity_merge_proposal_id(winner, loser)
+            self._conn.execute(
+                "INSERT OR IGNORE INTO entity_merge_proposals "
+                "(proposal_id, winner_id, loser_id, rationale, status, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    proposal_id,
+                    winner,
+                    loser,
+                    rationale.strip(),
+                    PROPOSAL_STAGED,
+                    json.dumps(dict(metadata or {}), separators=(",", ":"), sort_keys=True, default=str),
+                ),
+            )
+            self._conn.commit()
+        proposal = self.get_entity_merge_proposal(proposal_id)
+        assert proposal is not None  # nosec B101 — inserted-or-ignored above
+        return proposal
+
+    def get_entity_merge_proposal(self, proposal_id: str) -> Optional[EntityMergeProposal]:
+        """Return one entity-equivalence proposal, if it exists."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT proposal_id, winner_id, loser_id, rationale, status, metadata FROM entity_merge_proposals WHERE proposal_id = ?",
+                (proposal_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            metadata = json.loads(row["metadata"] or "{}")
+        except (TypeError, ValueError):
+            metadata = {}
+        return EntityMergeProposal(
+            proposal_id=row["proposal_id"],
+            winner_id=row["winner_id"],
+            loser_id=row["loser_id"],
+            rationale=row["rationale"],
+            status=row["status"],
+            metadata=metadata if isinstance(metadata, dict) else {},
+        )
+
+    def list_entity_merge_proposals(self, *, status: Optional[str] = None) -> list[EntityMergeProposal]:
+        """List proposals in deterministic id order."""
+        with self._lock:
+            if status is None:
+                rows = self._conn.execute("SELECT proposal_id FROM entity_merge_proposals ORDER BY proposal_id").fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT proposal_id FROM entity_merge_proposals WHERE status = ? ORDER BY proposal_id",
+                    (status,),
+                ).fetchall()
+        return [proposal for row in rows if (proposal := self.get_entity_merge_proposal(row["proposal_id"])) is not None]
+
+    def approve_entity_merge(self, proposal_id: str) -> EntityMergeProposal:
+        """Apply a staged proposal by adding one governed ``SAME_AS`` edge.
+
+        Entity rows, aliases, observations, and source edges remain intact.
+        The edge is the reversible lineage record and the read-side
+        :meth:`same_as_component` method supplies the union-find view.
+        """
+        proposal = self.get_entity_merge_proposal(proposal_id)
+        if proposal is None:
+            raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
+        _validate_entity_merge_identity(proposal_id, proposal)
+        if proposal.status == PROPOSAL_APPLIED:
+            require_admission(proposal_id)
+            return proposal
+        if proposal.status in {PROPOSAL_REJECTED, MERGE_REVERSED}:
+            raise EntityMergeError(f"cannot approve entity merge in status {proposal.status!r}")
+        require_admission(proposal_id)
+        source_id = proposal_id.strip()
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                current = self.get_entity_merge_proposal(proposal_id)
+                if current is None:
+                    raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
+                _validate_entity_merge_identity(proposal_id, current)
+                if current.status == PROPOSAL_APPLIED:
+                    self._conn.commit()
+                    return current
+                if current.status != PROPOSAL_STAGED:
+                    raise EntityMergeError(f"cannot approve entity merge in status {current.status!r}")
+                ids = self._conn.execute("SELECT id FROM entities WHERE id IN (?, ?)", (current.winner_id, current.loser_id)).fetchall()
+                if {str(row["id"]) for row in ids} != {current.winner_id, current.loser_id}:
+                    raise EntityMergeError("entity merge references an entity that no longer exists")
+                conflict = self._conn.execute(
+                    "SELECT 1 FROM edges WHERE predicate = ? AND ((subject = ? AND object = ?) OR (subject = ? AND object = ?)) LIMIT 1",
+                    (Predicate.SAME_AS.value, current.winner_id, current.loser_id, current.loser_id, current.winner_id),
+                ).fetchone()
+                if conflict is not None:
+                    raise EntityMergeError("entity merge conflicts with an existing SAME_AS edge")
+                if current.loser_id in self.same_as_component(current.winner_id):
+                    raise EntityMergeError("entity merge would create a SAME_AS cycle")
+                stamped = stamp_schema_version({"origin": EDGE_ORIGIN_HITL_APPROVED, "merge_proposal_id": proposal_id})
+                self._conn.execute(
+                    "INSERT INTO edges (subject, predicate, object, source_block_id, confidence, "
+                    "valid_from, valid_until, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        current.winner_id,
+                        Predicate.SAME_AS.value,
+                        current.loser_id,
+                        source_id,
+                        1.0,
+                        None,
+                        None,
+                        json.dumps(stamped, separators=(",", ":"), sort_keys=True, default=str),
+                    ),
+                )
+                self._conn.execute(
+                    "INSERT INTO entity_merge_lineage "
+                    "(proposal_id, winner_id, loser_id, status, same_as_source_block_id) VALUES (?, ?, ?, ?, ?)",
+                    (proposal_id, current.winner_id, current.loser_id, PROPOSAL_APPLIED, source_id),
+                )
+                self._conn.execute(
+                    "UPDATE entity_merge_proposals SET status = ? WHERE proposal_id = ?",
+                    (PROPOSAL_APPLIED, proposal_id),
+                )
+                self._conn.commit()
+            except BaseException:
+                self._conn.rollback()
+                raise
+        updated = self.get_entity_merge_proposal(proposal_id)
+        assert updated is not None  # nosec B101 — committed above
+        return updated
+
+    def reverse_entity_merge(self, proposal_id: str) -> EntityMergeProposal:
+        """Retract the governed ``SAME_AS`` edge, restoring the raw view."""
+        proposal = self.get_entity_merge_proposal(proposal_id)
+        if proposal is None:
+            raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
+        _validate_entity_merge_identity(proposal_id, proposal)
+        if proposal.status == MERGE_REVERSED:
+            require_admission(proposal_id)
+            return proposal
+        if proposal.status != PROPOSAL_APPLIED:
+            raise EntityMergeError("only an applied entity merge can be reversed")
+        require_admission(proposal_id)
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                lineage = self._conn.execute(
+                    "SELECT winner_id, loser_id, status, same_as_source_block_id FROM entity_merge_lineage WHERE proposal_id = ?",
+                    (proposal_id,),
+                ).fetchone()
+                if lineage is None or lineage["status"] != PROPOSAL_APPLIED:
+                    raise EntityMergeError("entity merge lineage is missing or already reversed")
+                if (lineage["winner_id"], lineage["loser_id"]) != (proposal.winner_id, proposal.loser_id):
+                    raise EntityMergeError("entity merge proposal and lineage endpoints do not match")
+                exists = self._conn.execute(
+                    "SELECT 1 FROM edges WHERE subject = ? AND predicate = ? AND object = ? AND source_block_id = ?",
+                    (lineage["winner_id"], Predicate.SAME_AS.value, lineage["loser_id"], lineage["same_as_source_block_id"]),
+                ).fetchone()
+                if exists is None:
+                    raise EntityMergeError("entity merge SAME_AS edge is missing or changed")
+                self._conn.execute(
+                    "DELETE FROM edges WHERE subject = ? AND predicate = ? AND object = ? AND source_block_id = ?",
+                    (lineage["winner_id"], Predicate.SAME_AS.value, lineage["loser_id"], lineage["same_as_source_block_id"]),
+                )
+                self._conn.execute("UPDATE entity_merge_lineage SET status = ? WHERE proposal_id = ?", (MERGE_REVERSED, proposal_id))
+                self._conn.execute("UPDATE entity_merge_proposals SET status = ? WHERE proposal_id = ?", (MERGE_REVERSED, proposal_id))
+                self._conn.commit()
+            except BaseException:
+                self._conn.rollback()
+                raise
+        updated = self.get_entity_merge_proposal(proposal_id)
+        assert updated is not None  # nosec B101 — committed above
+        return updated
+
+    # ------------------------------------------------------------------
     # Relationship-aware view (roadmap §a — weight per relation, not flat)
     # ------------------------------------------------------------------
 
@@ -1324,6 +1600,7 @@ class KnowledgeGraph:
         direction: str = "both",
         predicate: "Predicate | str | None" = None,
         include_expired: bool = False,
+        include_equivalents: bool = False,
     ) -> list[Edge]:
         """Edges touching *entity*, resolved **without minting a row**.
 
@@ -1345,11 +1622,13 @@ class KnowledgeGraph:
         entity_id = self.entities.lookup(entity)
         if entity_id is None:
             return []
+        entity_ids = self.same_as_component(entity_id) if include_equivalents else (entity_id,)
         collected: list[Edge] = []
-        if direction in {"outgoing", "both"}:
-            collected.extend(self._query_edges(subject=entity_id, predicate=predicate, include_expired=include_expired))
-        if direction in {"incoming", "both"}:
-            collected.extend(self._query_edges(object_=entity_id, predicate=predicate, include_expired=include_expired))
+        for current_id in entity_ids:
+            if direction in {"outgoing", "both"}:
+                collected.extend(self._query_edges(subject=current_id, predicate=predicate, include_expired=include_expired))
+            if direction in {"incoming", "both"}:
+                collected.extend(self._query_edges(object_=current_id, predicate=predicate, include_expired=include_expired))
         seen: set[tuple[str, str, str, str]] = set()
         unique: list[Edge] = []
         for edge in collected:
@@ -1360,6 +1639,35 @@ class KnowledgeGraph:
             unique.append(edge)
         unique.sort(key=lambda e: (-e.confidence, e.subject, e.predicate.value, e.object, e.source_block_id))
         return unique
+
+    def same_as_component(self, entity: str) -> tuple[str, ...]:
+        """Return the deterministic union-find view of an entity.
+
+        ``SAME_AS`` edges are the sole source of equivalence. This read-only
+        traversal never rewrites entity IDs, aliases, observations, or source
+        edges; absent entities return an empty tuple and cyclic edges are safe.
+        """
+        with self._lock:
+            start = self.entities.lookup(entity)
+            if start is None and isinstance(entity, str):
+                row = self._conn.execute("SELECT id FROM entities WHERE id = ?", (entity,)).fetchone()
+                start = None if row is None else str(row["id"])
+            if start is None:
+                return ()
+            seen = {start}
+            queue = deque([start])
+            while queue:
+                node = queue.popleft()
+                rows = self._conn.execute(
+                    "SELECT subject, object FROM edges WHERE predicate = ? AND (subject = ? OR object = ?) ORDER BY subject, object",
+                    (Predicate.SAME_AS.value, node, node),
+                ).fetchall()
+                for row in rows:
+                    other = row["object"] if row["subject"] == node else row["subject"]
+                    if other not in seen:
+                        seen.add(other)
+                        queue.append(other)
+            return tuple(sorted(seen))
 
     def _query_edges(
         self,
@@ -1437,6 +1745,7 @@ class KnowledgeGraph:
         direction: str = "outgoing",
         include_expired: bool = False,
         max_results: int = 256,
+        resolve_same_as: bool = False,
     ) -> list[dict[str, Any]]:
         """Breadth-first N-hop expansion from *entity*.
 
@@ -1452,6 +1761,9 @@ class KnowledgeGraph:
                 whose ``valid_from`` has not been reached.
             max_results: Cap on returned neighbours (stops the traversal
                 once reached).
+            resolve_same_as: Treat each approved SAME_AS component as one
+                zero-hop state, so every component member contributes edges
+                at the current BFS level.
 
         Returns:
             List of dicts: ``{entity, hop, path}`` where ``path`` is the
@@ -1465,9 +1777,32 @@ class KnowledgeGraph:
             raise ValueError("direction must be 'outgoing', 'incoming', or 'both'")
 
         start = self.entities.resolve(entity)
-        seen: set[str] = {start}
-        queue: deque[tuple[str, int, tuple[str, ...]]] = deque()
-        queue.append((start, 0, (start,)))
+        component_cache: dict[str, tuple[str, ...]] = {}
+
+        def component_for(node: str) -> tuple[str, ...]:
+            """Return the equivalence component without charging a hop.
+
+            A resolved neighborhood treats SAME_AS as a quotient: every
+            member of the component supplies edges at the current BFS
+            level.  Caching the component for each member keeps a chain of
+            equivalent entities from repeatedly walking the same rows.
+            """
+            if not resolve_same_as:
+                return (node,)
+            cached = component_cache.get(node)
+            if cached is not None:
+                return cached
+            component = self.same_as_component(node)
+            for member in component:
+                component_cache[member] = component
+            return component
+
+        starts = component_for(start)
+        seen: set[str] = set(starts)
+        # The component is one logical start state.  Its members are all
+        # queried below, so enqueueing each member would duplicate work and
+        # make paths depend on the order of the SAME_AS rows.
+        queue: deque[tuple[str, int, tuple[str, ...]]] = deque([(start, 0, (start,))])
         out: list[dict[str, Any]] = []
 
         while queue and len(out) < max_results:
@@ -1475,24 +1810,30 @@ class KnowledgeGraph:
             if hop >= depth:
                 continue
             neighbours: list[tuple[str, str]] = []  # (next_node, predicate)
-            if direction in {"outgoing", "both"}:
-                for e in self._query_edges(
-                    subject=node,
-                    predicate=predicate,
-                    include_expired=include_expired,
-                ):
-                    neighbours.append((e.object, e.predicate.value))
-            if direction in {"incoming", "both"}:
-                for e in self._query_edges(
-                    object_=node,
-                    predicate=predicate,
-                    include_expired=include_expired,
-                ):
-                    neighbours.append((e.subject, e.predicate.value))
+            for source_id in component_for(node):
+                if direction in {"outgoing", "both"}:
+                    for e in self._query_edges(
+                        subject=source_id,
+                        predicate=predicate,
+                        include_expired=include_expired,
+                    ):
+                        neighbours.append((e.object, e.predicate.value))
+                if direction in {"incoming", "both"}:
+                    for e in self._query_edges(
+                        object_=source_id,
+                        predicate=predicate,
+                        include_expired=include_expired,
+                    ):
+                        neighbours.append((e.subject, e.predicate.value))
             for nxt, pred in neighbours:
-                if nxt in seen:
+                # SAME_AS is the quotient relation in this mode, so do not
+                # expose component-internal edges as ordinary neighbours.
+                if resolve_same_as and pred == Predicate.SAME_AS.value:
                     continue
-                seen.add(nxt)
+                target_component = component_for(nxt)
+                if any(member in seen for member in target_component):
+                    continue
+                seen.update(target_component)
                 new_path = path + (nxt,)
                 out.append({"entity": nxt, "hop": hop + 1, "path": list(new_path), "predicate": pred})
                 if len(out) >= max_results:
@@ -1650,6 +1991,8 @@ __all__ = [
     "Predicate",
     "Edge",
     "EdgeProposal",
+    "EntityMergeProposal",
+    "EntityMergeError",
     "EntityRegistry",
     "KnowledgeGraph",
     "GraphStats",
@@ -1661,6 +2004,7 @@ __all__ = [
     "PROPOSAL_STAGED",
     "PROPOSAL_APPLIED",
     "PROPOSAL_REJECTED",
+    "MERGE_REVERSED",
     "EDGE_ORIGIN_HITL_APPROVED",
     "EDGE_ORIGIN_DIRECT_ADMIN",
     "edge_id",

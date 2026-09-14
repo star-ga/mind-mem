@@ -164,7 +164,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
     alerting.py, governance_gate.py — governance: contradiction/drift
                           detection, proposals, audit chain, alerting hooks
   _recall_core.py, hybrid_recall.py, recall_vector.py — retrieval core
-  mcp_server.py         — MCP server monolith (103 tools, 8 resources)
+  mcp_server.py         — MCP server monolith (107 tools, 8 resources)
   mcp/                  — per-domain MCP tool modules (mcp.tools.*)
   inbox.py, entity_ingest.py, ingestion_pipeline.py — auto-ingestion.
                           ingestion_pipeline was deleted in 5.0.0 as an
@@ -200,7 +200,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   block_versioning.py   — block version history
   circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
   feature_flags.py      — 52 flags + is_enabled/require_enabled
-tests/                  — pytest suite (12,325 test functions incl. 376 v4 unit
+tests/                  — pytest suite (12,333 test functions incl. 376 v4 unit
                           + 38 concurrency + 22 paraphrase probes)
 mind/                   — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
@@ -240,7 +240,7 @@ docs/                   — User + integration docs (35+ files)
   11 with MCP configuration formats. `mm install-all` uses each client's
   supported integration. See `docs/client-integrations.md`.
 
-### MCP Tools (103)
+### MCP Tools (107)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, find_similar, prefetch, intent_classify,
@@ -266,7 +266,7 @@ name that no longer exists -- this list previously carried 11 ghosts
 
 ## Testing
 ```bash
-pytest                           # full suite (12,325 test functions)
+pytest                           # full suite (12,333 test functions)
 pytest tests/test_retrieval.py   # specific module
 pytest -x --tb=short             # stop on first failure
 python3 scripts/check_docs_alignment.py --print  # the test-function count (static; a run's count is machine-dependent)

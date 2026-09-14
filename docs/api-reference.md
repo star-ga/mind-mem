@@ -60,9 +60,9 @@ Useful if you're writing a custom MCP config writer.
 
 ---
 
-## MCP Server (103 tools, 8 resources)
+## MCP Server (107 tools, 8 resources)
 
-The MCP server exposes 103 distinct tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
+The MCP server exposes 107 distinct tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
 
 ### Starting the Server
 
@@ -180,6 +180,24 @@ structured `v4.lint is disabled` payload until the flag is set in
 |------|-------------|----------------|
 | `list_edge_proposals` | List typed-edge proposals, optionally filtered by status | `status` |
 | `reject_edge` | Reject a staged typed-edge proposal. No edge is written (ADMIN) | `proposal_id` |
+
+#### Governed Entity Equivalence
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `propose_entity_merge` | Stage a reversible equivalence between existing entity IDs; requires at least eight non-whitespace rationale characters | `winner_id`, `loser_id`, `rationale` |
+| `list_entity_merge_proposals` | List staged, applied or reversed merge proposals | `status`, `limit` |
+| `approve_entity_merge` | Approve one staged `SAME_AS` assertion (ADMIN) | `proposal_id` |
+| `reverse_entity_merge` | Retract the approved equivalence edge (ADMIN) | `proposal_id` |
+| `graph_query` | Traverse existing graph relationships; optionally resolve equivalence at each traversal level | `entity`, `depth`, `predicate`, `direction`, `limit`, `resolve_same_as` |
+
+Merging preserves both entity IDs, aliases, observations and original source
+edges. `graph_query(resolve_same_as=True)` opts into the derived equivalent
+neighborhood; reversal retracts the specific assertion. Generic edge-write
+tools cannot create `SAME_AS` relations. The [design note](design/ra4-entity-equivalence.md)
+describes the governance and persistence boundaries. Readers of a graph with
+this new predicate must support entity equivalence; older readers are not
+assumed compatible. Automatic resolution and REST merge routes are separate work.
 
 #### arch-mind Governance Wrappers
 

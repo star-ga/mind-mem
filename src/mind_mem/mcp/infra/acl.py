@@ -288,6 +288,8 @@ ADMIN_TOOLS = frozenset(
         # user-scope — staging + read never touch the graph.)
         "approve_edge",
         "reject_edge",
+        "approve_entity_merge",
+        "reverse_entity_merge",
         # Entity observation writes mutate the entity registry.
         "entity_add_observation",
         # lint_autofix STAGES a repair proposal in intelligence/proposed/ —
@@ -342,6 +344,8 @@ USER_TOOLS = frozenset(
         # source-of-truth write (approve_edge/reject_edge are admin-scoped).
         "propose_edge",
         "list_edge_proposals",
+        "propose_entity_merge",
+        "list_entity_merge_proposals",
         # Entity observations — read-only view of accreted per-entity facts.
         "entity_observations",
         "build_core",

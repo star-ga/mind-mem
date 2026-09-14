@@ -61,7 +61,7 @@ revision pointer, prior revisions pinned at `v4.1.0`, `v4.0.0-base`,
 > Both were wrong, and neither had an authority behind it. 83 is measured, not
 > asserted: it is `scripts/count_mcp_tools.py`'s AST rule — applied to
 > `git show v4.1.1:src/mind_mem/mcp/` for the trained revision and to the
-> current repository candidate for its 103-tool runtime count. The
+> current repository candidate for its 107-tool runtime count. The
 > **84** was that revision's *registration* total, which double-counts `recall`
 > (registered in both `public.py` and `recall.py`, and exposed once); the same
 > off-by-one produced v3.9's "81" and the "81 + 3 = 84" arithmetic

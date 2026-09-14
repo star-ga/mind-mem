@@ -173,7 +173,7 @@ See [Configuration Reference](configuration.md#extraction-llm-backend) for full 
 }
 ```
 
-Restart Claude Code. All 103 MCP tools (recall, recall_with_axis,
+Restart Claude Code. All 107 MCP tools (recall, recall_with_axis,
 verify_merkle, observe_signal, graph_query, build_core,
 agent_inject, etc.) become available.
 
@@ -187,7 +187,7 @@ mm install-all   # write hook + native MCP config for every detected client
 ```
 
 This installs **both** the text-hook (visibility + auto-capture) **and**
-the native MCP server entry (full 103-tool surface) for all 11 MCP-aware clients:
+the native MCP server entry (full 107-tool surface) for all 11 MCP-aware clients:
 Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, Copilot CLI,
 Grok Build, Vibe. Clients without MCP support (Claude Code hook-mode, Aider,
 OpenClaw variants) get the hook only.

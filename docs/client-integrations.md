@@ -14,7 +14,7 @@ mm install-all   # auto-configure each detected client: hook + native MCP regist
 
 **Since v3.1.0, `mm install-all` writes TWO things per MCP-aware client:**
 1. The **text-hook** (SessionStart/PostToolUse/Stop) for visibility and auto-capture.
-2. A **native MCP server entry** so the client gets the full 103-tool surface.
+2. A **native MCP server entry** so the client gets the full 107-tool surface.
 
 Pass `--no-mcp` to skip the MCP registration phase (hook-only, useful
 when you want to register a custom MCP endpoint yourself or for
@@ -120,7 +120,7 @@ winning** on a name clash:
 Both the **pip install** (`pip install "mind-mem[mcp]"`) and the
 **repo checkout** (`./install.sh`, an editable install) provide the
 canonical `mind-mem-mcp` console script (stdio transport by default,
-103 tools), so the stanza is identical either way:
+107 tools), so the stanza is identical either way:
 
 ```json
 {
@@ -142,7 +142,7 @@ canonical `mind-mem-mcp` console script (stdio transport by default,
 Use an absolute `command` path (e.g. `~/.local/bin/mind-mem-mcp`
 expanded) if Qwen Code's spawn PATH does not include the pip bin dir.
 Then restart Qwen Code and check `/mcp` — `mind-mem` should show
-connected with 103 tools. Verify independently with `mm doctor`.
+connected with 107 tools. Verify independently with `mm doctor`.
 
 ### Qwen Code gotchas (learned the hard way)
 

@@ -6,7 +6,7 @@
   <strong>Replayable memory for AI agents. Governed recall with canonical, hash-anchored audit evidence.</strong>
 </p>
 <p align="center">
-  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 103 MCP tools<br>
+  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 107 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
@@ -21,8 +21,8 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/test_functions-12%2C325-brightgreen?style=flat-square" alt="Test functions: 12,325">
-  <img src="https://img.shields.io/badge/MCP_tools-103-blue?style=flat-square" alt="MCP Tools: 103">
+  <img src="https://img.shields.io/badge/test_functions-12%2C333-brightgreen?style=flat-square" alt="Test functions: 12,333">
+  <img src="https://img.shields.io/badge/MCP_tools-107-blue?style=flat-square" alt="MCP Tools: 107">
   <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
   <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
@@ -40,7 +40,7 @@ MIND-Mem is a deterministic AI memory system: recall is defined by the **query, 
 
 `scoring_instant` is a UTC date and is the honest part of that claim: recency ranking is load-bearing for a coding agent, so it is not deleted, it is *named*. Omit it and it resolves to today in UTC — the one clock read on the whole path, taken once at the boundary, never inside the scoring loop. Its resolved value is bound into the recall attestation, so any attested run replays exactly by passing that date back.
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 103 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall uses the query, admitted corpus, configuration, `scoring_instant`, and execution providers. With those inputs held constant, the canonical audit/evidence encoding is byte-identical across replay; ranking scores remain standard floating-point, so this does not promise universal cross-provider result identity.
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 107 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall uses the query, admitted corpus, configuration, `scoring_instant`, and execution providers. With those inputs held constant, the canonical audit/evidence encoding is byte-identical across replay; ranking scores remain standard floating-point, so this does not promise universal cross-provider result identity.
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The scoring path itself is pure Python (`mind_kernels.py`): the wheel ships MIND-language kernel *sources* under `mind/` and no compiled kernel, and the optional native `libmindmem.so` is built from `lib/kernels.c` (C99). The substrate claim is the encoding, the gate and the chain — not the kernels, which are not compiled yet. The same query on the same workspace with the same admitted corpus, configuration, scoring instant and execution providers produces repeatable ranked recall; that recall's canonical audit/replay encoding is byte-identical under those held-constant conditions. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
@@ -247,11 +247,11 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (103 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 103 distinct tools and 8 read-only resources (6 static + 2 templated). Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
+### MCP Server (107 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 107 distinct tools and 8 read-only resources (6 static + 2 templated). Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
-### 74+ Structural Checks + 12,325 Test Functions
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 12,325 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
+### 74+ Structural Checks + 12,333 Test Functions
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 12,333 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -755,7 +755,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 103 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 107 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -862,9 +862,9 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Vector only | Hybrid | Graph + vector |
 | Governance (propose/review/apply) | Yes | No | No | No |
 | Contradiction detection | Yes | No | No | No |
-| Test functions | 12,325 test functions | - | - | - |
+| Test functions | 12,333 test functions | - | - | - |
 | LoCoMo benchmark (full 10-conv, Acc>=50)¹ | 73.8% | 66.9%² | 74.0% | - |
-| MCP tools | 103 distinct (`mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
+| MCP tools | 107 distinct (`mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
 
 ¹ Canonical MIND-Mem LoCoMo number — see
@@ -892,7 +892,7 @@ with this row.
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 103 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
+| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 107 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -938,7 +938,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
-| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **103 tools**   |
+| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **107 tools**   |
 | MIND `.mind` files (18 config + 8 source) |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **26 files**  |
 
 ### The Gap MIND-Mem Fills
@@ -1596,7 +1596,7 @@ tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 Two held-out probes use documented inference-time anchors. This is the
 published checkpoint's reported result, not a new independent evaluation or
 coverage of the full runtime surface. The weights were trained on 83 MCP tools.
-The current server exposes 103 MCP tools.
+The current server exposes 107 MCP tools.
 
 ### Platform Support
 

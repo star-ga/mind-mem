@@ -50,7 +50,7 @@ provides:
    Local stdio scope is a separate deployment setting.
 2. **Rate limits.** Client identifiers can key rate limits but do not grant
    namespace identity. Namespace access follows the workspace's explicit ACL.
-3. **Tool dispatch.** 103 MCP tools have typed schemas and capability checks.
+3. **Tool dispatch.** 107 MCP tools have typed schemas and capability checks.
 4. **Evidence scope.** Observability logs describe calls. Governed-write and
    serving receipts have their own explicit contracts; a logged invocation is
    not proof of successful execution or semantic correctness.
@@ -100,7 +100,7 @@ its rationale does not approve it.
 
 ## L5 — Continuous
 
-- **CI** on main pushes and pull requests — full pytest matrix (12,325 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
+- **CI** on main pushes and pull requests — full pytest matrix (12,333 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
 - **Release preflight** requires matching versions, mainline ancestry, passing
   CI for the exact commit, an unused package version, tests, current public
   documentation and readable code-scanning results before publishing.
