@@ -207,7 +207,25 @@ def _to_evidence(hits: Sequence[Any]) -> tuple[EvidenceItem, ...]:
     return tuple(items)
 
 
-def make_workspace_resolver(workspace: str) -> Callable[[str], bool]:
+def _servable_ids_for_agent(workspace: str, agent_id: str | None) -> set[str] | None:
+    """Resolve the same live namespace partition used by MCP retrieval."""
+    if not agent_id:
+        return None
+    try:
+        from .mcp.tools.recall import _servable_block_ids
+
+        return _servable_block_ids(workspace, agent_id)
+    except Exception as exc:  # pragma: no cover - fail closed for bound callers
+        _log.warning("chat_namespace_resolution_failed", error=str(exc))
+        return set()
+
+
+def make_workspace_resolver(
+    workspace: str,
+    agent_id: str | None = None,
+    *,
+    servable_ids: set[str] | None = None,
+) -> Callable[[str], bool]:
     """Build a ``block_id -> bool`` predicate backed by the block store.
 
     Results are memoised per resolver instance so validating an answer
@@ -220,6 +238,7 @@ def make_workspace_resolver(workspace: str) -> Callable[[str], bool]:
 
     cache: dict[str, bool] = {}
     store_box: list[Any] = []
+    allowed_ids = _servable_ids_for_agent(workspace, agent_id) if servable_ids is None else servable_ids
 
     def _store() -> Any:
         if not store_box:
@@ -232,6 +251,16 @@ def make_workspace_resolver(workspace: str) -> Callable[[str], bool]:
         key = block_id.strip()
         if key in cache:
             return cache[key]
+        if allowed_ids is not None and key not in allowed_ids:
+            cache[key] = False
+            return False
+        if allowed_ids is not None:
+            # The live namespace resolver already proved this ID's source,
+            # admission state, and ACL. The generic block store may omit
+            # shared/agent Markdown roots, so asking it again would turn a
+            # valid namespace-bound citation into a false rejection.
+            cache[key] = True
+            return True
         try:
             block = _store().get_by_id(key)
             found = bool(admit_read_one(block, workspace=workspace, surface="chat"))
@@ -359,6 +388,15 @@ def chat_with_memory(
         # seam with the historical three-argument contract. Public MCP calls
         # use the default path above, where the verified principal is bound.
         hits = recall_fn(workspace, asked, limit)
+
+    allowed_ids = _servable_ids_for_agent(workspace, agent_id)
+    if allowed_ids is not None:
+        # An injected recall function is an extension seam, not an ACL
+        # authority. Filter its returned evidence before any generator sees
+        # excerpts, so a custom function cannot smuggle a private block into
+        # the prompt even when it ignores ``agent_id``.
+        hits = [hit for hit in hits if isinstance(hit, dict) and str(hit.get("_id", "")) in allowed_ids]
+
     evidence = _to_evidence(hits or ())
 
     if not evidence:
@@ -404,7 +442,11 @@ def chat_with_memory(
         raise TypeError(f"generator must return str, got {type(answer).__name__}")
     answer = answer.strip()
 
-    active_resolver = resolver or make_workspace_resolver(workspace)
+    active_resolver = resolver or make_workspace_resolver(
+        workspace,
+        agent_id=agent_id,
+        servable_ids=allowed_ids,
+    )
     report = validate_answer(
         answer,
         resolver=active_resolver,

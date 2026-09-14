@@ -85,6 +85,36 @@ def test_persona_walkthrough_guardrails_and_chat_keep_verified_principal(monkeyp
         assert "D-BOB" not in rendered
     assert "D-ALICE" in {str(item.get("block_id")) for item in chatted.get("evidence", [])}
     assert "D-BOB" not in json.dumps(chatted)
+    assert chatted["grounded"] is True
+    assert chatted["rejected"] is False
+
+
+def test_chat_injected_recall_is_filtered_before_generator(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """An extension recall function cannot place a private excerpt in a prompt."""
+    from mind_mem.chat_memory import chat_with_memory
+
+    ws = _workspace(tmp_path)
+    _token(monkeypatch, "alice")
+    seen_prompts: list[str] = []
+
+    def generator(request: object) -> str:
+        seen_prompts.append(str(getattr(request, "prompt", "")))
+        return "private [[D-BOB]]"
+
+    with use_workspace(str(ws)):
+        result = chat_with_memory(
+            str(ws),
+            "aurora",
+            recall_fn=lambda _ws, _question, _limit: [
+                {"_id": "D-BOB", "excerpt": "private bob evidence", "file": "agents/bob/decisions/DECISIONS.md"}
+            ],
+            generator=generator,
+            agent_id="alice",
+            on_invalid="reject",
+        )
+    assert result.no_record is True
+    assert result.rejected is False
+    assert seen_prompts == []
 
 
 def test_similar_public_door_filters_seed_and_cooccurrence_neighbors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
