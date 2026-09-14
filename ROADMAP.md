@@ -203,6 +203,13 @@ Prioritize existing release and retrieval-correctness work first.
 - [ ] **RE.2 — local receipt export and verification** — extend existing export/verification conventions with a read-only adapter; distinguish repeated answers, redelivery, local consistency and unknown proof layers. Acceptance: RE-A1 through RE-A8 in the specification pass through the actual entry point, including mutation/failure controls; core dependencies, ranking and ordinary recall availability remain unchanged.
 - [ ] **RE.3 — optional independent evidence exchange** — define a profile with authenticated issuer binding, independently retained checkpoints and an explicit disclosure boundary. Acceptance: forged identity, replaced history and unauthorized disclosure fail; only the proof scope actually tested is advertised. Local audit remains useful without this profile.
 - [ ] **RE.4 — measured operator pilot** — demonstrate at least one real audit/debugging use over authentic retrieval events and publish source/artifact/hardware receipts with latency, throughput, memory and storage results. Freeze regression budgets before scoring; no external performance claim without matched baselines.
+- [ ] **RE.5 — canonical 512 lineage consumer** — required for canonical-lineage claims, independent of commercial demand. Consume the 512-MIND producer's versioned commitment that binds the immutable canonical root to decomposition, registry and implementation; preserve the distinct MIND language-spec identity. Bind and verify both root and implementation in actual verdict/event evidence. Acceptance: RE-A10 changed/missing-field and legacy-profile controls pass; no silent rehashing or metadata-only closure. Depends on the producer contract and implementation.
+
+For contracted retrieval, parties or delegated agents agree upstream. A bounded
+agreement arrives with the request; 512 enforces its constraints before retrieval
+and does not negotiate or invent terms. MIND-Mem serves only an admitted request,
+CVS records the event, and downstream systems aggregate and settle. Refusal stops
+the contracted retrieval; witnessing does not grant execution authority.
 
 **Conditional commercial branch — discovery, not committed release scope:**
 

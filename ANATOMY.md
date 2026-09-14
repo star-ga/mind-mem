@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1575 | **Est. tokens:** ~4697996
-**Generated:** 2026-09-14 08:46 UTC
+**Files:** 1575 | **Est. tokens:** ~4699413
+**Generated:** 2026-09-14 08:55 UTC
 
 ## Token Budget Guide
 
@@ -54,7 +54,7 @@
 | `docs/evidence/5.0.2-f1/` | 12 | ~188585 |
 | `docs/plans/` | 1 | ~6134 |
 | `docs/security-baselines/` | 1 | ~18974 |
-| `docs/specs/` | 1 | ~5457 |
+| `docs/specs/` | 1 | ~6874 |
 | `examples/` | 3 | ~1203 |
 | `hooks/` | 3 | ~1026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1211 |
@@ -511,7 +511,7 @@
 - `setup.md` (~2221 tok, huge) — Setup
 ### `docs/specs/`
 
-- `retrieval-receipt-contract.md` (~5457 tok, huge) — Retrieval receipt contract
+- `retrieval-receipt-contract.md` (~6874 tok, huge) — Retrieval receipt contract
 ### `docs/`
 
 - `status.md` (~1335 tok, large) — MIND-Mem — implementation status (alignment companion)
