@@ -20,8 +20,9 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 TRAIN = REPO / "train"
@@ -90,7 +91,7 @@ def registered_tools() -> list[str]:
     return sorted(names)
 
 
-def _probe_prompts(values: Iterable[Iterable[Any]]) -> list[str]:
+def _probe_prompts(values: Iterable[Sequence[Any]]) -> list[str]:
     return [tuple_value[0] for tuple_value in values]
 
 
@@ -156,18 +157,61 @@ def _mention_count(rows: list[dict[str, Any]], name: str) -> int:
     return count
 
 
+def _single_source_fact(label: str, values: list[str]) -> str:
+    cleaned = [value.strip() for value in values if value.strip()]
+    distinct = sorted(set(cleaned))
+    if not distinct:
+        raise SystemExit("could not bind base-model or trained-tool facts to source docs")
+    if len(distinct) != 1:
+        raise SystemExit(f"conflicting {label} facts in source docs: {distinct}")
+    return distinct[0]
+
+
 def _read_model_facts() -> dict[str, Any]:
     readme = (REPO / "train" / "README.md").read_text(encoding="utf-8")
     model_card = (REPO / "train" / "HF_MODEL_CARD_v4.md").read_text(encoding="utf-8")
-    default_match = re.search(r"current default base is `([^`]+)`", readme)
-    trained_match = re.search(r"trained against an \*\*(\d+)-tool\*\* surface", model_card)
-    if default_match is None or trained_match is None:
-        raise SystemExit("could not bind base-model or trained-tool facts to source docs")
+
+    # Use every supported occurrence. A first-match parser can silently bless a
+    # merge that leaves contradictory release facts in the two source docs.
+    default_values = re.findall(r"current default base is `([^`\n]+)`", readme)
+    default_base = _single_source_fact("default base-model", default_values)
+    trained_values = re.findall(
+        r"trained\s+against\s+an\s+(?:>\s*)?\*\*(\d+)-tool\*\*\s+surface",
+        model_card,
+    )
+    trained_tools = _single_source_fact("trained-tool count", trained_values)
+
+    # The card describes the published weights, while README describes the
+    # next training default. Keep those scopes separate: migrating to a new
+    # model must not require rewriting the old weights' provenance.
+    base_field_lines = re.findall(r"(?im)^\s*base_model\s*:(.*)$", model_card)
+    card_base_values: list[str] = []
+    for raw_value in base_field_lines:
+        value = raw_value.split("#", 1)[0].strip()
+        if value.startswith('"'):
+            try:
+                value = json.loads(value)
+            except (ValueError, TypeError):
+                raise SystemExit("could not bind base-model or trained-tool facts to source docs") from None
+            if not isinstance(value, str):
+                raise SystemExit("could not bind base-model or trained-tool facts to source docs")
+        elif value.startswith("'"):
+            if len(value) < 2 or not value.endswith("'"):
+                raise SystemExit("could not bind base-model or trained-tool facts to source docs")
+            value = value[1:-1].replace("''", "'")
+        elif value.startswith(("[", "{", "|", ">", "!", "&", "*")):
+            raise SystemExit("could not bind base-model or trained-tool facts to source docs")
+        if not value:
+            raise SystemExit("could not bind base-model or trained-tool facts to source docs")
+        card_base_values.append(value)
+    card_base = _single_source_fact("model-card base-model", card_base_values) if card_base_values else None
+
     return {
-        "base_model_default": default_match.group(1),
-        "base_model_requested": os.environ.get("MM_BASE_MODEL", default_match.group(1)),
+        "base_model_default": default_base,
+        "base_model_requested": os.environ.get("MM_BASE_MODEL", default_base),
+        "historical_model_card_base_model": card_base,
         "qwen3_8_availability": "UNVERIFIED",
-        "historical_model_card_trained_tool_count": int(trained_match.group(1)),
+        "historical_model_card_trained_tool_count": int(trained_tools),
         "historical_model_card_path": "train/HF_MODEL_CARD_v4.md",
     }
 
