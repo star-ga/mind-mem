@@ -184,7 +184,11 @@ def test_qdrant_rejects_duplicate_json_keys(qdrant_server: Any) -> None:
 def test_qdrant_rejects_deep_json_without_quarantine_write(qdrant_server: Any, tmp_path: Path) -> None:
     endpoint, handler = qdrant_server
     depth = 100_000
-    handler.response_override = b'{"status":"ok","result":{"points":' + b"[" * depth + b"]" * depth + b',"next_page_offset":null}}'
+    # Leave one nested array unclosed so this is malformed JSON on every
+    # supported interpreter.  A fully closed version is valid JSON whose
+    # points array contains a non-object point; decoder recursion limits then
+    # choose different downstream diagnostics across Python patch releases.
+    handler.response_override = b'{"status":"ok","result":{"points":' + b"[" * depth + b"]" * (depth - 1) + b"}}"
     workspace = _workspace(tmp_path)
 
     with pytest.raises(ImportParseError, match="not valid JSON"):

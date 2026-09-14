@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1655 | **Est. tokens:** ~4867724
-**Generated:** 2026-09-14 20:59 UTC
+**Files:** 1655 | **Est. tokens:** ~4867794
+**Generated:** 2026-09-14 23:56 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 732 | ~2157067 |
+| `tests/` | 732 | ~2157137 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1487,7 +1487,7 @@
 - `test_importers.py` (~5662 tok, huge) — Tests for the roadmap Group G migration importers (file-based subset).
 - `test_importers_field_injection.py` (~1609 tok, huge) — Regression gate: dump content cannot forge a second block field.
 - `test_importers_notes.py` (~8744 tok, huge) — Tests for the note-tree and transcript importers.
-- `test_importers_qdrant.py` (~3481 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_importers_qdrant.py` (~3551 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_importers_quarantine.py` (~6695 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
 - `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
