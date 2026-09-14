@@ -118,6 +118,16 @@ executed artifact identities. Changing the implementation changes its hash;
 the canonical root stays fixed unless a different constitution is explicitly
 selected under a new profile.
 
+The producer's v2 implementation commitment binds the canonical algorithm label
+and artifact digest. The complete `canonical_512_ref`, including its byte-format
+identifier and resolution provenance, is bound in the versioned event/reference
+layer. Changing only a locator or provenance record does not change the
+implementation hash unless that metadata is also a declared implementation
+manifest input; it changes or invalidates the event/reference commitment. A
+verifier must still resolve the exact canonical bytes and enforce the supported
+algorithm and byte-format profile. No reference metadata may silently override
+the committed artifact identity.
+
 The 512-MIND producer owns the versioned, domain-separated preimage and manifests.
 The receipt adapter consumes and verifies that binding; it must not invent a
 second implementation-hash algorithm. Use unambiguous typed/length-delimited
@@ -137,14 +147,23 @@ I13-governed non-causal structural witness.
 
 **Architectural separation adopted 2026-09-14; implementation pending.**
 CVS owns an environment-independent evidence protocol. MIND Witness is
-the MIND-specific adapter: it maps admitted MIND/MIND-Mem event evidence into
-that protocol, submits it with bounded retry behavior, and returns the scoped
+the MIND-specific adapter: its input is a tagged union of `admitted_event` and
+`governed_refusal` evidence. It maps either variant into the protocol, submits it
+with bounded retry behavior, and returns the scoped
 receipt/verification result. It must preserve original producer commitments and
 version references rather than rehashing rewritten fields as if they were the
 original evidence. Reuse the existing common evidence envelope on the MIND side
 and map it into the separately versioned CVS contract. CVS does not need to adopt
 MIND payload semantics, branding or runtime dependencies. Keep the two protocol
 owners explicit rather than forking either format silently.
+
+An `admitted_event` carries the permitted execution/serving evidence under its
+declared profile. A `governed_refusal` carries the refusal decision, reason and
+evidence/disclosure scope, with no served-answer fields or economic eligibility.
+It binds only the request/decision identities permitted by that privacy profile;
+it must not disclose protected data merely to explain a refusal. Preserve the
+variant tag in the CVS commitment. Mapping or replay cannot turn a refusal into
+an admitted event, a served answer or an eligible charge.
 
 The protocol must be usable by a non-MIND producer without a MIND compiler or
 runtime dependency. Its minimal contract covers versioned evidence submission,
@@ -370,7 +389,8 @@ The adapter also needs end-to-end tests exercising its actual entry point.
 | RE-A7 Governance isolation | Receipt export and verification leave corpus, ranking and tier state unchanged. | Mutation wiring receipt counts or payment into automatic promotion must fail the isolation gate. |
 | RE-A8 Bounds and concurrency | Bounded snapshot and concurrent exports produce consistent packages. | Oversized input, duplicate keys, mixed version, lost lock or resource exhaustion: explicit failure, no silent truncation. |
 | RE-A9 Optional economics | Agreed tariff and deduplicated set reproduce a manifest and totals. | No consent, exceeded authority, conflicting receipt, inexact arithmetic or replayed settlement: no eligible charge. |
-| RE-A10 Constitutional lineage | Recompute the producer's implementation commitment from the canonical root and manifests, then verify its binding into the actual event. | Changed root/decomposition/registry/implementation, swapped language or artifact identity, unknown legacy lineage or unbound side metadata: refuse a lineage-required claim. |
+| RE-A10 Constitutional lineage | Recompute the producer's implementation commitment from the canonical root and manifests, then verify the complete reference and its binding into the actual event. | Changed root/decomposition/registry/implementation, swapped language or artifact identity, unsupported algorithm/format, unbound provenance or unknown legacy lineage: refuse a lineage-required claim. |
+| RE-A11 Adapter outcome mapping | Export an admitted event and a governed refusal with their original variant and permitted evidence scope. | Changed variant, invented served-answer fields, protected-data disclosure or refusal promoted to economic eligibility: reject the mapping. |
 
 RE-A2 also covers an event appearing in both the retrieval-log and durable-ledger
 views: report source-labelled observations unless a proven occurrence join
@@ -382,6 +402,11 @@ the core evidence gates. Passing a verifier on synthetic files is useful parser
 coverage but does not prove a real retrieval was executed or validly admitted.
 RE-A10 is required for canonical-lineage claims regardless of whether money is
 involved. Ordinary local inspection must keep its weaker scope explicit.
+RE-A10 includes a provenance-only mutation: the implementation hash remains
+unchanged when provenance is not a manifest input, while verification against
+the original event/reference commitment fails. RE-A11 is required at the CVS
+adapter's actual entry point for RE.3; a valid refusal receipt proves neither
+successful retrieval nor payment eligibility.
 
 ## 8. Benchmarks and determinism claims
 
@@ -408,7 +433,7 @@ third-party model scores or differently scoped evidence records.
 | --- | --- | --- |
 | RE.1 | Freeze the smallest receipt contract and lifecycle rules. | Machine-readable schema, canonical vectors, coverage inventory and trust/disclosure decisions pass independent review. |
 | RE.2 | Implement the local export adapter and verifier over existing evidence. | RE-A1 through RE-A8 pass at the actual entry point; no runtime dependency or ranking change. |
-| RE.3 | Implement the independent CVS contract / MIND Witness adapter boundary. | A non-MIND producer and external verifier interoperate; issuer/checkpoint, observation-scope, custody, mapping-mutation and privacy controls pass. Local-only scope remains usable. |
+| RE.3 | Implement the independent CVS contract / MIND Witness adapter boundary. | A non-MIND producer and external verifier interoperate; RE-A11 plus issuer/checkpoint, observation-scope, custody, mapping-mutation and privacy controls pass. Local-only scope remains usable. |
 | RE.4 | Run a practical operator pilot and publish scoped results. | At least one actual audit/debugging task demonstrates utility; performance budgets and source/artifact evidence are recorded. |
 | RE.5 | Consume the required canonical 512 lineage profile. | Producer contract and manifest resolution are implemented; RE-A10 verifies authentic runtime verdict/event binding and rejects mutations. |
 | Commercial discovery | Identify a willing provider and consumer with an agreed metering problem. | Both parties accept the service and evidence model; compare the cost of receipt handling/batching with a simpler usage log or invoice. |
