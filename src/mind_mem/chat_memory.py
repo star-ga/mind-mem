@@ -57,8 +57,10 @@ script (:mod:`mind_mem.chat_cli`).
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import sqlite3
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
@@ -133,6 +135,11 @@ class ChatAnswer:
     # sealed by a ranked-recall attestation.
     attestation: dict[str, Any] | None = None
     attestation_scope: str | None = None
+    # Optional graph-grounded projection.  The graph edge ids and their
+    # provenance are carried here; answer citations remain block ids because
+    # this is the Group-B chat contract.  Structural citation membership is
+    # not semantic entailment.
+    graph_evidence: dict[str, Any] | None = None
 
     @property
     def semantic_verification(self) -> str:
@@ -140,7 +147,7 @@ class ChatAnswer:
         return SEMANTIC_VERIFICATION_NOT_ESTABLISHED
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "question": self.question,
             "answer": self.answer,
             "citations": list(self.citations),
@@ -158,6 +165,11 @@ class ChatAnswer:
             "attestation": self.attestation,
             "attestation_scope": self.attestation_scope,
         }
+        # Keep the historical default JSON shape byte/field compatible;
+        # graph metadata exists only when the caller opts into graph_seed.
+        if self.graph_evidence is not None:
+            payload["graph_evidence"] = self.graph_evidence
+        return payload
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +331,34 @@ def _admitted_blocks_for_agent(workspace: str, agent_id: str | None) -> dict[str
         return {}
 
 
+def _admitted_graph_blocks(workspace: str, agent_id: str | None) -> dict[str, dict[str, Any]]:
+    """Return the canonical admitted source projection for graph reads.
+
+    Bound callers use the namespace resolver, which carries principal ACL and
+    source identity. Operator/unbound callers still go through the configured
+    backend and the ordinary admission gate; the graph must never use the
+    raw markdown loader as a second, source-less authority.
+    """
+    bound = _admitted_blocks_for_agent(workspace, agent_id)
+    if bound is not None:
+        return bound
+    from .admissibility import admit_expansion_corpus
+    from .storage import _load_workspace_config, iter_blocks
+
+    config = _load_workspace_config(workspace, quiet=True)
+    admitted = admit_expansion_corpus(
+        iter_blocks(workspace, config=config, active_only=False),
+        workspace=workspace,
+    )
+    result: dict[str, dict[str, Any]] = {}
+    for block in admitted:
+        block_id = block.get("_id")
+        source = block.get("_source_file") or block.get("_source") or block.get("file")
+        if isinstance(block_id, str) and block_id and isinstance(source, str) and source:
+            result[block_id] = dict(block)
+    return result
+
+
 def make_workspace_resolver(
     workspace: str,
     agent_id: str | None = None,
@@ -417,6 +457,130 @@ def _build_prompt(question: str, category: str, facts: str) -> str:
     return _GROUNDING_RULES + body
 
 
+def _graph_evidence_payload(context: Any, *, error: str | None = None) -> dict[str, Any]:
+    """Serialize the optional graph projection without changing chat text.
+
+    Edge ids are evidence metadata, not ``chat_citations`` ids.  The latter
+    must remain source block ids so the existing workspace resolver can prove
+    each answer citation against the admitted corpus.
+    """
+    if error is not None:
+        return {
+            "status": "unproven",
+            "error": error,
+            "citation_scope": "source_block_id",
+            "semantic_verification": SEMANTIC_VERIFICATION_NOT_ESTABLISHED,
+        }
+    return {
+        "status": "served" if context.triples else "unproven",
+        "citation_scope": "source_block_id",
+        "semantic_verification": SEMANTIC_VERIFICATION_NOT_ESTABLISHED,
+        "context": context.as_dict(),
+    }
+
+
+def _graph_context_for_chat(
+    workspace: str,
+    seed: str,
+    *,
+    agent_id: str | None,
+) -> tuple[Any | None, dict[str, Any]]:
+    """Read a graph context and bind provenance to the live chat corpus."""
+    if not isinstance(seed, str) or not seed.strip():
+        raise ValueError("graph_seed must be a non-empty string")
+    if len(seed) > 512:
+        raise ValueError("graph_seed must be ≤512 characters")
+    from .edge_grounded_answer import build_context
+    from .knowledge_graph import KnowledgeGraph, default_db_path
+
+    db_path = default_db_path(workspace)
+    if not os.path.isfile(db_path):
+        return None, _graph_evidence_payload(None, error="knowledge graph is unavailable")
+    try:
+        admitted_blocks = _admitted_graph_blocks(workspace, agent_id)
+        admitted_ids = set(admitted_blocks)
+    except (OSError, ValueError, TypeError) as exc:
+        return None, _graph_evidence_payload(None, error=f"graph provenance unavailable: {exc}")
+    try:
+        graph = KnowledgeGraph.open_read_only(db_path)
+        try:
+            context = build_context(
+                graph,
+                seed.strip(),
+                known_block_ids=admitted_ids,
+                admitted_source_ids=admitted_ids,
+            )
+        finally:
+            graph.close()
+    except (OSError, ValueError, TypeError, sqlite3.Error) as exc:
+        return None, _graph_evidence_payload(None, error=f"knowledge graph unavailable: {exc}")
+    if not context.triples:
+        # An empty projected graph is a refusal, not a citable diagnostic
+        # context. In particular, a private, quarantined, or deleted source
+        # must not be distinguishable through graph gaps or counts.
+        return None, _graph_evidence_payload(None, error="graph provenance unavailable; answer withheld")
+    # Provenance is an admission boundary, not merely a diagnostic gap. The
+    # graph reader computes corroboration over every matching claim, including
+    # rows that are not themselves the traversed source. Require every
+    # traversed and corroborating document to be admitted before exposing any
+    # part of the context. Refusing the whole context prevents a private edge
+    # from influencing visible confidence, ranking, or traversal.
+    provenance_ids = _graph_provenance_ids(context)
+    support_ids = {
+        str(hit.get("_id"))
+        for hit in _graph_supporting_hits(workspace, context, agent_id=agent_id)
+        if isinstance(hit, dict) and isinstance(hit.get("_id"), str)
+    }
+    if provenance_ids - support_ids:
+        return None, _graph_evidence_payload(None, error="graph provenance unavailable; answer withheld")
+    return context, _graph_evidence_payload(context)
+
+
+def _graph_provenance_ids(context: Any) -> set[str]:
+    """Return every source document that can affect a graph context."""
+    ids: set[str] = set()
+    for triple in getattr(context, "triples", ()):
+        source_block_id = getattr(triple, "source_block_id", None)
+        if isinstance(source_block_id, str) and source_block_id.strip():
+            ids.add(source_block_id)
+        for block_id in getattr(triple, "corroborating_blocks", ()):
+            if isinstance(block_id, str) and block_id.strip():
+                ids.add(block_id)
+    return ids
+
+
+def _graph_support_fingerprint(hits: Sequence[dict[str, Any]]) -> str:
+    """Stable snapshot of canonical graph source documents for revalidation."""
+    return json.dumps(list(hits), sort_keys=True, ensure_ascii=False, default=str, separators=(",", ":"))
+
+
+def _graph_supporting_hits(
+    workspace: str,
+    context: Any,
+    *,
+    agent_id: str | None,
+) -> list[dict[str, Any]]:
+    """Load only canonical admitted documents named by served graph edges."""
+    source_ids = _graph_provenance_ids(context)
+    if not source_ids:
+        return []
+    allowed = _admitted_graph_blocks(workspace, agent_id)
+    candidates: dict[str, dict[str, Any] | None] = {}
+    candidates.update({key: value for key, value in allowed.items() if key in source_ids})
+    hits: list[dict[str, Any]] = []
+    for block_id in sorted(source_ids):
+        if block_id not in candidates or candidates[block_id] is None:
+            continue
+        block_value = candidates[block_id]
+        assert block_value is not None
+        block: dict[str, Any] = block_value
+        hit = dict(block)
+        hit["_id"] = block_id
+        hit["excerpt"] = str(block.get("excerpt") or block.get("content") or block.get("Statement") or block.get("Title") or "")
+        hits.append(hit)
+    return hits
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -437,6 +601,7 @@ def chat_with_memory(
     max_evidence_chars: int = 4000,
     agent_id: str | None = None,
     semantic_required: bool = False,
+    graph_seed: str | None = None,
 ) -> ChatAnswer:
     """Answer *question* from *workspace* with verified citations.
 
@@ -471,6 +636,10 @@ def chat_with_memory(
         semantic_required: Require a reviewed semantic entailment verifier.
             The current runtime has no such verifier, so ``True`` returns an
             explicit abstention before recall or generation.
+        graph_seed: Opt-in seed for a read-only edge-grounded projection.
+            When supplied, chat may cite only the canonical source documents
+            behind served edges. Missing graph/provenance is an explicit
+            abstention; the default block-recall path is unchanged.
 
     Returns:
         A :class:`ChatAnswer`. ``answer`` is either a grounded response
@@ -498,6 +667,11 @@ def chat_with_memory(
             semantic_required=True,
             attestation_scope="none",
         )
+
+    graph_context = None
+    graph_payload: dict[str, Any] | None = None
+    graph_source_ids: set[str] = set()
+    graph_support_snapshot = ""
 
     hits: Sequence[Any]
     if recall_fn is None:
@@ -548,6 +722,55 @@ def chat_with_memory(
             canonical_hits.append(canonical_hit)
         hits = canonical_hits
 
+    # Recall is an injectable seam and may change admission state. Construct
+    # the graph projection only after it returns, so traversal, corroboration,
+    # and source support all use the same current admitted snapshot.
+    if graph_seed is not None:
+        graph_context, graph_payload = _graph_context_for_chat(workspace, graph_seed, agent_id=agent_id)
+        if graph_context is None or not graph_context.triples:
+            detail = "graph evidence unavailable; answer withheld"
+            if graph_payload.get("error"):
+                detail = str(graph_payload["error"])
+            return ChatAnswer(
+                question=asked,
+                answer=NO_RECORD,
+                category=category or classify_question_category(asked),
+                grounded=False,
+                no_record=True,
+                rejected=True,
+                warnings=(detail,),
+                semantic_required=semantic_required,
+                graph_evidence=graph_payload,
+                attestation_scope="none",
+            )
+        graph_source_ids = {triple.source_block_id for triple in graph_context.triples}
+
+    if graph_context is not None:
+        # Replace every caller-supplied hit for a graph provenance id with
+        # the canonical admitted document. An extension may not relabel a
+        # valid id while changing the excerpt that the generator sees.
+        support_hits = _graph_supporting_hits(workspace, graph_context, agent_id=agent_id)
+        graph_support_snapshot = _graph_support_fingerprint(support_hits)
+        support_by_id = {str(hit["_id"]): hit for hit in support_hits}
+        base_hits = tuple(hit for hit in hits if not (isinstance(hit, dict) and str(hit.get("_id") or "") in graph_source_ids))
+        hits = base_hits + tuple(support_by_id.values())
+        evidence_ids = {str(hit.get("_id")) for hit in hits if isinstance(hit, dict) and isinstance(hit.get("_id"), str)}
+        if not graph_source_ids.issubset(evidence_ids):
+            # A graph edge without its current supporting document cannot be
+            # promoted into a Group-B answer, even if the edge row exists.
+            return ChatAnswer(
+                question=asked,
+                answer=NO_RECORD,
+                category=category or classify_question_category(asked),
+                grounded=False,
+                no_record=True,
+                rejected=True,
+                warnings=("graph provenance document unavailable; answer withheld",),
+                semantic_required=semantic_required,
+                graph_evidence=_graph_evidence_payload(None, error="graph provenance unavailable; answer withheld"),
+                attestation_scope="none",
+            )
+
     evidence = _to_evidence(hits or ())
 
     if not evidence:
@@ -562,11 +785,31 @@ def chat_with_memory(
             semantic_required=semantic_required,
             attestation=serving_attestation,
             attestation_scope=attestation_scope,
+            graph_evidence=graph_payload,
         )
 
     resolved_category = category or classify_question_category(asked)
     facts = _render_facts(evidence, max_evidence_chars)
     warnings: list[str] = []
+    graph_facts = ""
+
+    if graph_context is not None:
+        graph_lines = [
+            "Graph evidence is structural only; cite the supporting document id, not the edge id.",
+            "Every graph claim must be supported by one of these source documents:",
+        ]
+        for triple in graph_context.ranked_triples:
+            graph_lines.append(
+                f"- {triple.subject} {triple.predicate} {triple.object} "
+                f"(edge {triple.edge_id}; supporting document [[{triple.source_block_id}]])"
+            )
+        if graph_context.gaps:
+            graph_lines.append("Graph gaps (the graph does not establish):")
+            graph_lines.extend(f"- {gap.kind}: {gap.detail}" for gap in graph_context.gaps)
+        # Keep this separate while the optional chain-of-note condenser works
+        # on document evidence below; graph evidence must never disappear as
+        # a side effect of an unrelated prompt projection.
+        graph_facts = "\n".join(graph_lines)
 
     if condenser is not None:
         from .chain_of_note import chain_of_note_pack
@@ -588,6 +831,35 @@ def chat_with_memory(
         else:
             warnings.append("chain-of-note produced no anchored notes; used raw evidence")
 
+    if graph_context is not None:
+        latest_context, _latest_payload = _graph_context_for_chat(workspace, graph_seed or "", agent_id=agent_id)
+        latest_support = _graph_supporting_hits(workspace, latest_context, agent_id=agent_id) if latest_context is not None else []
+        if (
+            latest_context is None
+            or latest_context != graph_context
+            or _graph_support_fingerprint(latest_support) != graph_support_snapshot
+        ):
+            return ChatAnswer(
+                question=asked,
+                answer=NO_RECORD,
+                evidence=(),
+                category=resolved_category,
+                grounded=False,
+                no_record=True,
+                rejected=True,
+                warnings=("graph evidence changed during condensation; answer withheld",),
+                semantic_required=semantic_required,
+                attestation=serving_attestation,
+                attestation_scope=attestation_scope,
+                graph_evidence=_graph_evidence_payload(
+                    None,
+                    error="graph or provenance changed during condensation",
+                ),
+            )
+
+    if graph_facts:
+        facts = facts + "\n\n" + graph_facts
+
     prompt = _build_prompt(asked, resolved_category, facts)
     request = ChatRequest(question=asked, prompt=prompt, evidence=evidence, category=resolved_category)
 
@@ -595,6 +867,37 @@ def chat_with_memory(
     if not isinstance(answer, str):
         raise TypeError(f"generator must return str, got {type(answer).__name__}")
     answer = answer.strip()
+
+    if graph_context is not None:
+        latest_context, latest_payload = _graph_context_for_chat(workspace, graph_seed or "", agent_id=agent_id)
+        latest_support = _graph_supporting_hits(workspace, latest_context, agent_id=agent_id) if latest_context is not None else []
+        if (
+            latest_context is None
+            or latest_context != graph_context
+            or _graph_support_fingerprint(latest_support) != graph_support_snapshot
+        ):
+            # The pre-generation evidence may now be revoked or otherwise
+            # unavailable. Do not return the old context/evidence alongside a
+            # refusal: that would disclose a snapshot the second admission
+            # check has just invalidated.
+            changed_payload = _graph_evidence_payload(
+                None,
+                error="graph or provenance changed during generation",
+            )
+            return ChatAnswer(
+                question=asked,
+                answer=NO_RECORD,
+                evidence=(),
+                category=resolved_category,
+                grounded=False,
+                no_record=True,
+                rejected=True,
+                warnings=("graph evidence changed during generation; answer withheld",),
+                semantic_required=semantic_required,
+                attestation=serving_attestation,
+                attestation_scope=attestation_scope,
+                graph_evidence=changed_payload,
+            )
 
     active_resolver = resolver or make_workspace_resolver(
         workspace,
@@ -604,8 +907,11 @@ def chat_with_memory(
     report = validate_answer(
         answer,
         resolver=active_resolver,
-        evidence_ids=request.evidence_ids(),
-        require_in_evidence=require_in_evidence,
+        # In graph mode the only admissible citation set is the provenance
+        # document set behind the served edges. This prevents a generator
+        # from answering a graph question with an unrelated recalled block.
+        evidence_ids=graph_source_ids or request.evidence_ids(),
+        require_in_evidence=True if graph_context is not None else require_in_evidence,
     )
 
     if not report.ok:
@@ -624,6 +930,7 @@ def chat_with_memory(
             semantic_required=semantic_required,
             attestation=serving_attestation,
             attestation_scope=attestation_scope,
+            graph_evidence=graph_payload,
         )
 
     is_no_record = not report.citations
@@ -644,4 +951,5 @@ def chat_with_memory(
         semantic_required=semantic_required,
         attestation=serving_attestation,
         attestation_scope=attestation_scope,
+        graph_evidence=graph_payload,
     )

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1653 | **Est. tokens:** ~4860015
-**Generated:** 2026-09-14 20:41 UTC
+**Files:** 1654 | **Est. tokens:** ~4868427
+**Generated:** 2026-09-14 23:38 UTC
 
 ## Token Budget Guide
 
@@ -76,14 +76,14 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1091036 |
+| `src/mind_mem/` | 239 | ~1095052 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6657 |
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
-| `src/mind_mem/mcp/tools/` | 29 | ~124769 |
+| `src/mind_mem/mcp/tools/` | 29 | ~124845 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 4 | ~6845 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 731 | ~2153586 |
+| `tests/` | 732 | ~2157906 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -796,9 +796,9 @@
 - `chain_of_note.py` (~1512 tok, huge) — Chain-of-note evidence packing (v3.4.0).
 - `change_stream.py` (~3164 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `chat_citations.py` (~2480 tok, huge) — Citation extraction + validation for the conversational chat layer.
-- `chat_cli.py` (~1080 tok, large) — ``mind-mem-chat`` — ask a workspace a question, get cited answers.
+- `chat_cli.py` (~1135 tok, large) — ``mind-mem-chat`` — ask a workspace a question, get cited answers.
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
-- `chat_memory.py` (~6593 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
+- `chat_memory.py` (~10238 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
 - `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
@@ -836,7 +836,7 @@
 - `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
 - `dream_cycle.py` (~15033 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~5752 tok, huge) — mind-mem Semantic Belief Drift Detection.
-- `edge_grounded_answer.py` (~6115 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `edge_grounded_answer.py` (~6356 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
 - `entity_ingest.py` (~3309 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
 - `entity_prefetch.py` (~3078 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
@@ -888,7 +888,7 @@
 - `iterative_recall.py` (~2856 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4672 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kg_fusion.py` (~2131 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
-- `knowledge_graph.py` (~23028 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~23103 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lifecycle_evidence.py` (~4750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~2108 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
@@ -924,7 +924,7 @@
 - `audit.py` (~4247 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~2387 tok, huge) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~2915 tok, huge) — Calibration MCP tools — feedback (quality) + outcome attribution (utility).
-- `chat.py` (~1054 tok, large) — Chat surface — grounded question answering over the workspace.
+- `chat.py` (~1130 tok, large) — Chat surface — grounded question answering over the workspace.
 - `consolidation.py` (~7500 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
@@ -1514,6 +1514,7 @@
 - `test_issue_529_federation_client_hardening.py` (~1202 tok, large) — Regression for issue #529: FederationClient hardening.
 - `test_iter_active_blocks.py` (~2267 tok, huge) — Backend-aware active-block enumeration — ``storage.iter_active_blocks``.
 - `test_iter_blocks_encrypted_backend.py` (~1758 tok, huge) — Backend-aware enumeration on the ``encrypted`` block-store backend.
+- `test_k3_edge_chat.py` (~4320 tok, huge) — Production-caller controls for the optional K3 graph/chat bridge.
 - `test_kalman_belief.py` (~3728 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_kg_fusion.py` (~2013 tok, huge) — Typed-knowledge-graph fusion into recall (opt-in, default OFF).
 - `test_knowledge_graph.py` (~3753 tok, huge) — # Copyright 2026 STARGA, Inc.

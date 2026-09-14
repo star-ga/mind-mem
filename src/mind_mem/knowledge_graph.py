@@ -52,7 +52,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional
 from urllib.parse import quote
 
 from .admission import require_admission
@@ -1915,7 +1915,11 @@ class KnowledgeGraph:
     # Corroboration — an edge asserted by three blocks is not one edge
     # ------------------------------------------------------------------
 
-    def corroboration_index(self) -> dict[tuple[str, str, str], "Corroboration"]:
+    def corroboration_index(
+        self,
+        *,
+        source_block_ids: "Iterable[str] | None" = None,
+    ) -> dict[tuple[str, str, str], "Corroboration"]:
         """Every distinct triple, with the independent sources behind it.
 
         ``(subject, predicate, object)`` is the *claim*; ``source_block_id``
@@ -1931,8 +1935,11 @@ class KnowledgeGraph:
         is the "sidecar only, never in the sealed preimage" rule taken to
         its end: there is no sidecar to keep in sync.
         """
+        allowed = None if source_block_ids is None else frozenset(str(item) for item in source_block_ids)
         grouped: dict[tuple[str, str, str], list[Edge]] = {}
         for edge in self._all_edges():
+            if allowed is not None and edge.source_block_id not in allowed:
+                continue
             grouped.setdefault((edge.subject, edge.predicate.value, edge.object), []).append(edge)
         return {claim: Corroboration.from_edges(claim, edges) for claim, edges in sorted(grouped.items())}
 
