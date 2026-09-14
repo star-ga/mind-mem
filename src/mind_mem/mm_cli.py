@@ -4108,6 +4108,24 @@ _COMPLIANCE_BAD_REQUEST = 2
 _COMPLIANCE_REFUSED = 4
 
 
+def _compliance_detector_refusal(*, json_output: bool, target: str = "") -> int:
+    """Report a detector execution failure without exposing plugin details."""
+    if json_output:
+        payload: dict[str, object] = {
+            "error": "compliance_detector_failed",
+            "reason": "Configured detector could not complete valid screening; operation refused.",
+        }
+        if target:
+            payload["target"] = target
+        print(json.dumps(payload, indent=2))
+    else:
+        print(
+            "error: compliance_detector_failed: configured detector could not complete valid screening; operation refused.",
+            file=sys.stderr,
+        )
+    return _COMPLIANCE_REFUSED
+
+
 def _compliance_text(args: argparse.Namespace) -> tuple[str, str]:
     """``(text, label)`` for the ``--file`` / ``--text`` pair.
 
@@ -4159,6 +4177,7 @@ def _cmd_compliance_detectors(args: argparse.Namespace) -> int:
 
 def _cmd_compliance_scan(args: argparse.Namespace) -> int:
     """``mm compliance scan`` — report findings without changing or recording anything."""
+    from mind_mem.compliance.detectors import DetectorSpecError
     from mind_mem.compliance.redaction import MODE_FLAG, RedactionConfigError, redact, redaction_chain_for_workspace
 
     workspace = _workspace()
@@ -4178,7 +4197,10 @@ def _cmd_compliance_scan(args: argparse.Namespace) -> int:
 
     # Always MODE_FLAG: `scan` is the read-only verb, so it never rewrites
     # and never appends to the ledger, whatever the workspace's own mode is.
-    result = redact(text, mode=MODE_FLAG, detectors=chain)
+    try:
+        result = redact(text, mode=MODE_FLAG, detectors=chain)
+    except DetectorSpecError:
+        return _compliance_detector_refusal(json_output=args.json, target=label)
     if args.json:
         print(json.dumps({"target": label, "workspace_mode": mode, **result.to_dict()}, indent=2))
     else:
@@ -4198,6 +4220,7 @@ def _cmd_compliance_redact(args: argparse.Namespace) -> int:
     that runs both controls.
     """
     from mind_mem.compliance.audit import record_redaction
+    from mind_mem.compliance.detectors import DetectorSpecError
     from mind_mem.compliance.redaction import MODE_REDACT, RedactionConfigError, RedactionRefused, redact, redaction_chain_for_workspace
 
     workspace = _workspace()
@@ -4218,6 +4241,8 @@ def _cmd_compliance_redact(args: argparse.Namespace) -> int:
     target = args.target or label
     try:
         result = redact(text, mode=mode, detectors=chain)
+    except DetectorSpecError:
+        return _compliance_detector_refusal(json_output=args.json, target=target)
     except RedactionRefused as exc:
         # A `reject` workspace refused the text. The refusal is still an
         # event worth a ledger entry -- "we were asked to store this and
@@ -4255,6 +4280,7 @@ def _cmd_compliance_screen(args: argparse.Namespace) -> int:
     under a ``reject`` policy, and otherwise prints the text that may be
     written, having recorded the pass in the ledger.
     """
+    from mind_mem.compliance.detectors import DetectorSpecError
     from mind_mem.compliance.prewrite import PreWritePolicy, screen
     from mind_mem.compliance.provenance_policy import ProvenanceConfigError, ProvenanceRequired
     from mind_mem.compliance.redaction import RedactionConfigError, RedactionRefused
@@ -4298,6 +4324,8 @@ def _cmd_compliance_screen(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps({"target": target, "refused": "redaction", **exc.result.to_dict()}, indent=2))
         return _COMPLIANCE_REFUSED
+    except DetectorSpecError:
+        return _compliance_detector_refusal(json_output=args.json, target=target)
 
     if args.json:
         print(json.dumps({"target": target, "policy": policy.to_dict(), **screening.to_dict()}, indent=2))
@@ -4422,6 +4450,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
     """
     from datetime import date as _date
 
+    from mind_mem.compliance.detectors import DetectorSpecError
     from mind_mem.compliance.export import UnknownExportPolicyError, build_bundle, render_bundle
     from mind_mem.compliance.redaction import RedactionConfigError, redaction_chain_for_workspace
     from mind_mem.v4.feature_flags import FeatureDisabledError
@@ -4445,6 +4474,8 @@ def _cmd_export(args: argparse.Namespace) -> int:
     except FeatureDisabledError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return _COMPLIANCE_DISABLED
+    except DetectorSpecError:
+        return _compliance_detector_refusal(json_output=False)
     except (UnknownExportPolicyError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return _COMPLIANCE_BAD_REQUEST
