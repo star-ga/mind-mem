@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1576 | **Est. tokens:** ~4679493
-**Generated:** 2026-09-14 09:56 UTC
+**Files:** 1579 | **Est. tokens:** ~4685152
+**Generated:** 2026-09-14 10:08 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~207509 |
+| `docs/` | 94 | ~208374 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -74,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 233 | ~1069643 |
+| `src/mind_mem/` | 234 | ~1072066 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 691 | ~2055866 |
+| `tests/` | 692 | ~2058237 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -425,6 +425,7 @@
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~16654 tok, huge) — Configuration Reference
+- `content-lifecycle.md` (~865 tok, large) — Content-category lifetimes
 ### `docs/decisions/`
 
 - `author-identity.md` (~3174 tok, huge) — Commit author identity — policy, measured state, and the open decision
@@ -694,7 +695,7 @@
 - `accountability_dashboard.py` (~6663 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `accountability_views.py` (~10302 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `admissibility.py` (~5838 tok, huge) — What recall is allowed to serve — the servability allow-list.
-- `admission.py` (~11936 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `admission.py` (~12010 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `agent_bridge.py` (~5340 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `agent_messaging.py` (~2877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alert_urls.py` (~1873 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -784,6 +785,7 @@
 - `connection_manager.py` (~3185 tok, huge) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~2067 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
 - `consolidation_maturity_gate.py` (~2589 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `content_lifecycle.py` (~1516 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4893 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `core_export.py` (~8336 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -795,7 +797,7 @@
 - `data_marking.py` (~1133 tok, large) — # Copyright 2026 STARGA, Inc.
 - `dead_ends.py` (~3855 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
-- `dream_cycle.py` (~13464 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
+- `dream_cycle.py` (~13899 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~5752 tok, huge) — mind-mem Semantic Belief Drift Detection.
 - `edge_grounded_answer.py` (~5493 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
@@ -913,7 +915,7 @@
 - `mcp_server.py` (~1871 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
 - `memory_index.py` (~2925 tok, huge) — Auto-generated hierarchical index — ``index.md`` + ``log.md`` (Group C).
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `memory_tiers.py` (~6427 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `memory_tiers.py` (~6645 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `merkle_tree.py` (~3673 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mic_map.py` (~8384 tok, huge) — MIC/MAP — STARGA-native serialization for MIND IR graphs.
 - `mind_ffi.py` (~7638 tok, huge) — mind-mem FFI bridge — loads an optional native scoring library.
@@ -1089,7 +1091,7 @@
 - `validate.sh` (~1350 tok, large) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
 - `validate_py.py` (~5676 tok, huge) — Mind Mem Integrity Validator — canonical engine.
-- `validity_gate.py` (~4100 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
+- `validity_gate.py` (~4280 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
 - `vector_inertness.py` (~3125 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `verify_cli.py` (~10537 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `walkthrough.py` (~2449 tok, huge) — Dependency-ordered walkthrough — `compile_walkthrough` (v3.9.0 candidate).
@@ -1288,6 +1290,7 @@
 - `test_consolidation_index_path.py` (~2113 tok, huge) — Regression: consolidation tools must read the index the product writes.
 - `test_consolidation_maturity_gate.py` (~3750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_constants.py` (~371 tok, medium) — Tests for recall constants module."""
+- `test_content_lifecycle.py` (~2371 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_content_source_provenance.py` (~5229 tok, huge) — Tests for content-provenance tagging (roadmap T-001).
 - `test_context_core.py` (~3175 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_context_pack.py` (~2584 tok, huge) — Tests for context_pack rules: adjacency, diversity, pronoun rescue."""

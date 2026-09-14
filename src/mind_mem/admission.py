@@ -968,15 +968,21 @@ def admit_read(
     rows: list[Mapping[str, Any]] = list(items)
     if not rows:
         return ReadAdmission([], 0)
+    content_withheld = 0
     if workspace is not None:
+        from .content_lifecycle import filter_revoked_credentials
+
+        kept_content = filter_revoked_credentials([dict(r) for r in rows], workspace)
+        content_withheld = len(rows) - len(kept_content)
+        rows = kept_content
         rows = list(with_live_statuses([dict(r) for r in rows], live_statuses(workspace), status_key=status_key))
     if all(is_admissible_status(row.get(status_key)) for row in rows):
-        return ReadAdmission([dict(row) for row in rows], 0)
+        return ReadAdmission([dict(row) for row in rows], content_withheld)
     releases: frozenset[str] = frozenset()
     if workspace is not None:
         releases = workspace_release_ids(workspace)
     kept = admit_leg(rows, status_key=status_key, releases=releases, allow=allow, leg=surface or "read")
-    return ReadAdmission(kept, len(rows) - len(kept))
+    return ReadAdmission(kept, content_withheld + len(rows) - len(kept))
 
 
 def admit_read_one(

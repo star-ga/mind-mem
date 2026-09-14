@@ -419,10 +419,24 @@ class TierManager:
         Returns ``(demotions, evicted_block_ids)``.
         """
         current = now or datetime.now(timezone.utc)
+        # Semantic categories own their clock. Never let a later idle sweep
+        # silently override the durable decision/architecture/credential rule.
+        # Expiration is a review/demotion signal in recall and dream_cycle,
+        # not permission to delete a fact or its tier assignment.
+        from .content_lifecycle import live_content_blocks, workspace_policy
+        from .scoring_instant import resolve_scoring_instant
+
+        content_policy = workspace_policy(self._workspace) if self._workspace else None
+        content_blocks = live_content_blocks(self._workspace) if content_policy is not None and self._workspace else {}
         all_ids = self._all_tracked_ids()
         demotions: list[tuple[str, MemoryTier, MemoryTier]] = []
         evicted: list[str] = []
         for block_id in all_ids:
+            if (
+                content_policy is not None
+                and content_policy.evaluate(content_blocks.get(block_id, {}), as_of=resolve_scoring_instant(current)) is not None
+            ):
+                continue
             tier = self.get_tier(block_id)
             policy = self._policies.get(tier)
             if policy is None:

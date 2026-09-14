@@ -22,13 +22,16 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import date, datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any
 
 from .enums import INITIAL_STATUS, IngestTier
 from .observability import get_logger, metrics, timed
 
 _log = get_logger("dream_cycle")
+
+if TYPE_CHECKING:
+    from .content_lifecycle import ContentLifecyclePolicy
 
 
 def _utc_now() -> datetime:
@@ -650,8 +653,15 @@ def _pass_stale_detection_store(workspace: str, stale_days: int) -> list[StaleBl
 def pass_stale_detection(
     workspace: str,
     stale_days: int = 30,
+    *,
+    as_of: date | None = None,
 ) -> list[StaleBlock]:
     """Find blocks not updated in >stale_days (file mtime + embedded date)."""
+    from .content_lifecycle import workspace_policy
+
+    content_policy = workspace_policy(workspace)
+    if content_policy is not None:
+        return _pass_content_stale_detection(workspace, content_policy, stale_days, as_of=as_of)
     # Backend-aware (audit bug 11): a non-Markdown store has no file mtime, so
     # age blocks by their last-modified/embedded date instead.
     if not _is_markdown_backend(workspace):
@@ -711,6 +721,37 @@ def pass_stale_detection(
                 )
 
     _log.info("stale_detection_complete", stale=len(stale))
+    metrics.inc("dream_stale_blocks", len(stale))
+    return stale
+
+
+def _pass_content_stale_detection(
+    workspace: str, policy: ContentLifecyclePolicy, stale_days: int, *, as_of: date | None = None
+) -> list[StaleBlock]:
+    """Report semantic expiration without rewriting or evicting the corpus."""
+    from .content_lifecycle import live_content_blocks
+    from .scoring_instant import resolve_scoring_instant
+
+    today = resolve_scoring_instant(as_of)
+    stale: list[StaleBlock] = []
+    for block_id, block in live_content_blocks(workspace, active_only=True).items():
+        lifetime = policy.evaluate(block, as_of=today)
+        if lifetime is not None:
+            if not lifetime.needs_review:
+                continue
+            stamp = lifetime.valid_from or "unknown"
+            days = max(0, lifetime.age_days or 0)
+        else:
+            # Unclassified legacy facts retain the default stale interval.
+            stamp = _block_last_modified_date(block)
+            try:
+                days = (today - date.fromisoformat(stamp or "")).days
+            except ValueError:
+                continue
+            if days <= stale_days:
+                continue
+        stale.append(StaleBlock(block_id, str(block.get("_source_file") or block_id), stamp, days))
+    _log.info("stale_detection_complete", stale=len(stale), source="content_categories")
     metrics.inc("dream_stale_blocks", len(stale))
     return stale
 

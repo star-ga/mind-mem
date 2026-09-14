@@ -46,9 +46,20 @@ by its full description below.
   (they are measurements of the *current* weights), and re-verify `mm install-model`.
   Requires rented GPU — a 4B full fine-tune does not fit local hardware.
 
-### Governance — content-category decay policy (1 item, not started — needs a maintainer decision)
+### Governance — content-category decay policy (1 item, integration in progress)
 
-- [ ] **Category-based (not just recency-based) TTL for governed facts.**
+- [~] **Category-based (not just recency-based) TTL for governed facts.**
+  The opt-in implementation now uses explicit `ContentCategory` and
+  `ContentValidFrom` fields, configured infra/status lifetimes, durable
+  decision/architecture/credential categories, and the pinned recall date.
+  Recall validity, dream stale detection and workspace-aware tier decay
+  consume it; revoked credentials are withheld by recall and shared read
+  admission. No default lifetime is guessed. See
+  [the policy and acceptance controls](docs/content-lifecycle.md).
+  Namespace-specific source identity and the full transport sweep remain
+  integration checks before this item is closed.
+
+  Original requirement and rationale:
   `memory_tiers.py` already decays/evicts blocks by *access recency*
   (`TierPolicy.ttl_hours`, LRU-style demotion between `MemoryTier` levels) —
   a block nobody has touched in a while ages out regardless of what kind of
@@ -62,15 +73,9 @@ by its full description below.
   recalled and re-confirming itself, a decision/architecture-type fact
   should not decay just because nobody looked at it for a month, and a
   credential-type block should never auto-decay but must support an
-  explicit revoke. `v4/block_kinds.py` (`BlockKind`) already classifies
-  blocks by kind and could carry the category; `lineage_staleness.py`'s
-  generic `KIND_DECAY`-driven propagator (see the new `supersedes` edge,
-  this release) is the natural place to consume a per-category TTL once one
-  exists. **Not implemented this pass**: the category taxonomy and its
-  default TTLs are a product decision (wrong defaults silently
-  over-flag or under-flag real users' facts as stale), not a mechanical
-  wiring task, so it needs the maintainer's call rather than an agent's
-  guess. See `EVIDENCE.md` for the same caveat recorded against this item.
+  explicit revoke. Storage `BlockKind` and lineage `KIND_DECAY` classify
+  different things; neither supplies a fact's semantic lifetime. Numeric
+  TTLs remain an explicit deployment policy rather than inferred defaults.
 
 ### Group D — Network hardening (3 items; +1 shipped in v4.0.14)
 

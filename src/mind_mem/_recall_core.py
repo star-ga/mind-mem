@@ -582,6 +582,9 @@ def _withhold_inadmissible(
     # would otherwise take that path and be served. Empty (and free) whenever
     # the index is current or absent.
     if workspace is not None:
+        from .content_lifecycle import filter_revoked_credentials
+
+        items = filter_revoked_credentials(items, workspace)
         try:
             items = with_live_statuses(items, live_statuses(workspace), status_key=status_key)
         except Exception as exc:  # pragma: no cover — defensive
