@@ -937,7 +937,17 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
             }
         )
 
-    all_blocks: list[dict] = []
+    if type(max_blocks) is not int or max_blocks < 1:
+        return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "max_blocks must be a positive integer"})
+
+    from mind_mem.request_context import context_config_for
+    from mind_mem.storage import iter_blocks
+
+    # Use the registered corpus and its configured reader, including
+    # encrypted files and database records. A separate directory walk
+    # omitted released ingestion records and bypassed source confinement.
+    bound_config = context_config_for(ws)
+    all_blocks = iter_blocks(ws, config=dict(bound_config) if bound_config is not None else None, active_only=False)
 
     def _strip_internal(block: dict) -> dict:
         """Drop underscore-prefixed metadata unless ``include_metadata``."""
@@ -947,33 +957,6 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
             if key.startswith("_") and key not in ("_id", "_source_file"):
                 del block[key]
         return block
-
-    if _is_markdown_backend(ws):
-        # Default Markdown / encrypted path — byte-for-byte unchanged.
-        for subdir in CORPUS_DIRS:
-            dir_path = os.path.join(ws, subdir)
-            if not os.path.isdir(dir_path):
-                continue
-            for fn in sorted(os.listdir(dir_path)):
-                if not fn.endswith(".md"):
-                    continue
-                filepath = os.path.join(dir_path, fn)
-                try:
-                    blocks = parse_file(filepath)
-                except (OSError, ValueError) as exc:
-                    _log.warning("export_parse_failed", file=fn, error=str(exc))
-                    continue
-                for block in blocks:
-                    block["_source_file"] = f"{subdir}/{fn}"
-                    all_blocks.append(_strip_internal(block))
-    else:
-        # Audit bug #5: a non-Markdown backend (e.g. Postgres) keeps its
-        # blocks of record in the store, not in local Markdown files.
-        # Export every block (active + inactive, matching the markdown
-        # path which exports all parsed blocks) from the configured store.
-        store = get_block_store(ws)
-        for block in store.get_all(active_only=False):
-            all_blocks.append(_strip_internal(block))
 
     # EGRESS GATE. Export used to hand out every parsed block verbatim,
     # quarantined ones included -- the same defect class as ``get_block``
@@ -985,7 +968,7 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
     # ``snapshot()``, which is a backup surface with its own governance, not a
     # tool that serves unadmitted content to whoever calls it.
     decision = admit_read(all_blocks, workspace=ws, surface="export_memory")
-    all_blocks = decision.admitted
+    all_blocks = [_strip_internal(block) for block in decision.admitted]
     withheld = decision.withheld
     if withheld:
         _log.info("export_memory_withheld", withheld=withheld)
