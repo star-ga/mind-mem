@@ -189,6 +189,7 @@ assert 'mind_mem.mcp.infra.acl' not in sys.modules
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -300,9 +301,9 @@ def test_read_grants_cannot_add_unregistered_corpus_files(tmp_path: Path) -> Non
     ws = _workspace(tmp_path)
     _write_block(ws / "agents/bob/credentials.md", "D-NOT-CORPUS", "not a registered corpus source")
     policy_path = ws / "mind-mem-acl.json"
-    policy = json.loads(policy_path.read_text())
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
     policy["agents"]["alice"]["read"].extend(["agents/bob/credentials.md", "agents/bob/decisions/DECISIONS.md"])
-    policy_path.write_text(json.dumps(policy))
+    policy_path.write_text(json.dumps(policy), encoding="utf-8")
     visible = admitted_namespace_blocks(str(ws), "alice")
     assert visible is not None
     assert "D-BOB" in visible

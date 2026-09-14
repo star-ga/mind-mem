@@ -149,6 +149,14 @@ identity remain the legacy unbound stdio/operator path. Each observed tool
 call captures its authentication metadata once, so nested calls cannot switch
 principal partway through a request.
 
+`default_policy: "deny"` gives an unmatched principal no namespace access.
+The `"read"` default permits shared reads. Exact, pattern, and `"*"` entries
+take precedence over that fallback; explicit empty `read` grants deny reads.
+Authenticated consolidation previews, staleness expansion, and project profiles
+use the same admitted namespace corpus as recall, including live source status.
+Consolidation suggestions and profile text are rebuilt from canonical source
+blocks rather than cached index content.
+
 ### OIDC Configuration
 
 Set these **environment variables** when `api.auth.mode` is `"oidc"` or `"combined"`:

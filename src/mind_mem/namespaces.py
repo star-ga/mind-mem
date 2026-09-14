@@ -197,6 +197,11 @@ class NamespaceManager:
             fallback: dict[str, Any] = agents["*"]
             return fallback
 
+        # An explicit default deny applies only when no exact/pattern/wildcard
+        # grant matched. Missing/default-read configurations retain shared read.
+        if self._acl.get("default_policy") == "deny":
+            return {"namespaces": [], "write": [], "read": []}
+
         # Ultimate fallback: read-only shared
         return {"namespaces": ["shared"], "write": [], "read": ["shared"]}
 

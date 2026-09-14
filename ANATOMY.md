@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1621 | **Est. tokens:** ~4782105
-**Generated:** 2026-09-14 15:47 UTC
+**Files:** 1622 | **Est. tokens:** ~4784683
+**Generated:** 2026-09-14 16:05 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 94 | ~211182 |
+| `docs/` | 94 | ~211309 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1078103 |
+| `src/mind_mem/` | 237 | ~1078172 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~15770 |
-| `src/mind_mem/mcp/tools/` | 29 | ~122165 |
+| `src/mind_mem/mcp/tools/` | 29 | ~122708 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 712 | ~2118982 |
+| `tests/` | 713 | ~2120821 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -426,7 +426,7 @@
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~18042 tok, huge) — Configuration Reference
+- `configuration.md` (~18169 tok, huge) — Configuration Reference
 - `content-lifecycle.md` (~865 tok, large) — Content-category lifetimes
 ### `docs/decisions/`
 
@@ -916,7 +916,7 @@
 - `benchmark.py` (~2387 tok, huge) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~2915 tok, huge) — Calibration MCP tools — feedback (quality) + outcome attribution (utility).
 - `chat.py` (~967 tok, large) — Chat surface — grounded question answering over the workspace.
-- `consolidation.py` (~6957 tok, huge) — Memory-consolidation MCP tools.
+- `consolidation.py` (~7500 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -956,7 +956,7 @@
 - `mrs.py` (~5273 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~3184 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `namespace_retrieval.py` (~5478 tok, huge) — Configuration and enforcement for namespace retrieval properties.
-- `namespaces.py` (~5138 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
+- `namespaces.py` (~5207 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
 - `novel_term_gate.py` (~1729 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `observability.py` (~3828 tok, huge) — mind-mem Observability Module. Zero external deps.
 - `observation_axis.py` (~3925 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1209,7 +1209,7 @@
 - `test_accountability_views.py` (~6320 tok, huge) — RA.2 — precision and waste as derived views, and the four refusals that shape them.
 - `test_acl_tool_coverage.py` (~2384 tok, huge) — ACL coverage invariant for the MCP tool surface.
 - `test_active_only_filter.py` (~312 tok, medium) — Tests for active_only recall filter."""
-- `test_adjacent_public_acl.py` (~3508 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
+- `test_adjacent_public_acl.py` (~3523 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
 - `test_admissibility_unreadable_status.py` (~1104 tok, large) — An unreadable ``Status`` must be withheld on the stale-index path too.
 - `test_admission_seam.py` (~12891 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_admit_proposal_openers.py` (~3596 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1322,6 +1322,7 @@
 - `test_consensus_vote_wiring.py` (~4142 tok, huge) — Restore-44 slice 5 — ``consensus_vote`` wired into ``conflict_resolver``.
 - `test_consolidation_index_path.py` (~2113 tok, huge) — Regression: consolidation tools must read the index the product writes.
 - `test_consolidation_maturity_gate.py` (~3750 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_consolidation_namespace_acl.py` (~1752 tok, huge) — Consolidation previews must use the caller's canonical admitted corpus."""
 - `test_constants.py` (~371 tok, medium) — Tests for recall constants module."""
 - `test_content_lifecycle.py` (~3227 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_content_source_provenance.py` (~5229 tok, huge) — Tests for content-provenance tagging (roadmap T-001).
@@ -1526,7 +1527,7 @@
 - `test_mcp_integration.py` (~5530 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_list_cores.py` (~3407 tok, huge) — ``list_cores`` — the read side of the ``.mmcore`` lifecycle, previously unpinned.
 - `test_mcp_list_evidence.py` (~4569 tok, huge) — ``list_evidence`` — the audit family's only *reader* of the evidence chain.
-- `test_mcp_namespace_direct_get.py` (~4831 tok, huge) — Namespace-selected MCP direct reads remain ACL- and admission-bound."""
+- `test_mcp_namespace_direct_get.py` (~4840 tok, huge) — Namespace-selected MCP direct reads remain ACL- and admission-bound."""
 - `test_mcp_ontology_load.py` (~4897 tok, huge) — ``ontology_load`` -- the MCP door onto the OWL-lite schema layer.
 - `test_mcp_ontology_validate.py` (~4754 tok, huge) — ``ontology_validate`` — the MCP tool, as distinct from the ontology library.
 - `test_mcp_pipeline.py` (~1495 tok, large) — Tests for the v3.9.0 pipeline-hash MCP tools."""
@@ -1685,7 +1686,7 @@
 - `test_recall_metadata.py` (~1345 tok, large) — Tests for A-MEM block metadata integration in recall pipeline."""
 - `test_recall_pgvector_engagement.py` (~2392 tok, huge) — Regression tests for the Postgres pgvector recall-engagement audit.
 - `test_recall_post_filters.py` (~310 tok, medium) — recall() applies lifecycle/event_id/min_maturity on EVERY dispatch path.
-- `test_recall_postgres_backend.py` (~3838 tok, huge) — Backend-aware recall dispatch — Postgres parity (audit bug 1).
+- `test_recall_postgres_backend.py` (~3901 tok, huge) — Backend-aware recall dispatch — Postgres parity (audit bug 1).
 - `test_recall_priority.py` (~414 tok, medium) — Tests for priority boost in recall."""
 - `test_recall_quality_locomo.py` (~2613 tok, huge) — LoCoMo recall-quality regression gate.
 - `test_recall_query_id_join.py` (~7740 tok, huge) — RA.1's residual, closed: the recall envelope publishes the run identity.

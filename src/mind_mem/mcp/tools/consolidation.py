@@ -52,6 +52,14 @@ def _index_db_path(ws: str) -> str:
 _NO_TELEMETRY: dict[str, Any] = {"access_count": 0, "last_accessed": None, "connection_count": 0}
 
 
+def _request_canonical_blocks(workspace: str) -> dict[str, dict[str, Any]] | None:
+    from mind_mem.namespace_retrieval import admitted_namespace_blocks
+
+    from ..infra.acl import authenticated_agent_id
+
+    return admitted_namespace_blocks(workspace, authenticated_agent_id())
+
+
 def _load_access_telemetry(ws: str) -> dict[str, dict[str, Any]]:
     """Access telemetry for *ws*, read from the store the writer writes.
 
@@ -156,6 +164,14 @@ def plan_consolidation(
 
     from mind_mem.block_metadata import compute_importance, keep_value
 
+    # Authenticated previews operate on the same canonical namespace corpus as
+    # recall and chat. Index membership and cached JSON are not read authority.
+    # An empty admitted partition must stay empty, not fall back to the index.
+    try:
+        canonical_blocks = _request_canonical_blocks(ws)
+    except (OSError, ValueError):
+        return json.dumps({"error": "consolidation_source_unavailable"})
+
     db_path = _index_db_path(ws)
     # One moment for the whole plan: the importance of a block decays with
     # time since last access, and the staleness checks compare against the
@@ -164,7 +180,10 @@ def plan_consolidation(
     now = _dt.datetime.now(_dt.timezone.utc)
     telemetry = _load_access_telemetry(ws)
     blocks: list[BlockCognition] = []
-    if os.path.isfile(db_path):
+    source_rows: list[dict[str, Any]] = []
+    if canonical_blocks is not None:
+        source_rows = [canonical_blocks[block_id] for block_id in sorted(canonical_blocks)]
+    elif os.path.isfile(db_path):
         conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
         conn.row_factory = _sqlite3.Row
         try:
@@ -174,44 +193,38 @@ def plan_consolidation(
             # date to compare against and fell through to True.
             rows = conn.execute("SELECT id AS block_id, status, date AS created_at FROM blocks").fetchall()
 
-            # ADMISSION GATE. Selecting ``status`` is not filtering on it. This
-            # leg emitted nothing at all until the telemetry read was fixed, so
-            # it had never disclosed anything; the moment it can emit, a
-            # USER-scope tool naming a QUARANTINED or PENDING block id would
-            # tell a caller that a withheld block exists. Every other
-            # block-reading leg in the package filters here -- including the
-            # ``granularity_align`` leg in this same file -- and this one is
-            # now one of them.
-            from mind_mem.admissibility import admit_corpus
-
-            for r in admit_corpus([{"_id": r["block_id"], "Status": r["status"], "_row": r} for r in rows], workspace=ws):
-                r = r["_row"]
-                tel = telemetry.get(r["block_id"], _NO_TELEMETRY)
-                try:
-                    blocks.append(
-                        BlockCognition(
-                            block_id=r["block_id"],
-                            importance=keep_value(
-                                compute_importance(
-                                    access_count=tel["access_count"],
-                                    last_accessed=tel["last_accessed"],
-                                    connection_count=tel["connection_count"],
-                                    now=now,
-                                )
-                            ),
-                            last_accessed=tel["last_accessed"],
-                            access_count=tel["access_count"],
-                            created_at=r["created_at"] or None,
-                            size_bytes=0,
-                            lifecycle=BlockLifecycle.ACTIVE,
-                        )
-                    )
-                except ValueError:
-                    continue
+            source_rows = [{"_id": r["block_id"], "Status": r["status"], "Date": r["created_at"]} for r in rows]
         finally:
             conn.close()
     else:
         _log.warning("consolidation_index_missing", tool="plan_consolidation", path=db_path)
+
+    from mind_mem.admissibility import admit_corpus
+
+    for source in admit_corpus(source_rows, workspace=ws):
+        block_id = source["_id"]
+        tel = telemetry.get(block_id, _NO_TELEMETRY)
+        try:
+            blocks.append(
+                BlockCognition(
+                    block_id=block_id,
+                    importance=keep_value(
+                        compute_importance(
+                            access_count=tel["access_count"],
+                            last_accessed=tel["last_accessed"],
+                            connection_count=tel["connection_count"],
+                            now=now,
+                        )
+                    ),
+                    last_accessed=tel["last_accessed"],
+                    access_count=tel["access_count"],
+                    created_at=source.get("Date") or None,
+                    size_bytes=0,
+                    lifecycle=BlockLifecycle.ACTIVE,
+                )
+            )
+        except ValueError:
+            continue
 
     payload: dict[str, Any] = {
         "config": {
@@ -235,7 +248,7 @@ def plan_consolidation(
         # identical to the pre-gate implementation.
         payload["plan"] = _plan(blocks, config=cfg, now=now).as_dict()
         if granularity_on:
-            payload["granularity_align"] = _granularity_section(db_path, granularity, workspace=ws)
+            payload["granularity_align"] = _granularity_section(db_path, granularity, workspace=ws, canonical_blocks=canonical_blocks)
         return json.dumps(payload, indent=2)
 
     from mind_mem.consolidation_maturity_gate import (
@@ -251,14 +264,14 @@ def plan_consolidation(
 
     gate = MaturityGate(
         gate_cfg,
-        block_meta=_load_block_meta(db_path),
+        block_meta=_load_block_meta(db_path) if canonical_blocks is None else canonical_blocks,
         contradicted_ids=collect_contradicted_block_ids(ws),
     )
     decision = gate.evaluate(blocks)
     payload["plan"] = _plan(blocks, config=cfg, gate=gate, now=now).as_dict()
     payload["maturity_gate"] = {"min_maturity": gate_cfg.min_maturity, **decision.as_dict()}
     if granularity_on:
-        payload["granularity_align"] = _granularity_section(db_path, granularity, workspace=ws)
+        payload["granularity_align"] = _granularity_section(db_path, granularity, workspace=ws, canonical_blocks=canonical_blocks)
     return json.dumps(payload, indent=2)
 
 
@@ -382,7 +395,26 @@ def _bounded_int(raw: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, value))
 
 
-def _load_granularity_blocks(db_path: str, limit: int, *, workspace: str | None = None) -> list[dict[str, Any]]:
+def _granularity_block(block_id: str, status: str, tags: str, raw: dict[str, Any]) -> dict[str, Any]:
+    text = " ".join(str(raw[field]) for field in _GRANULARITY_TEXT_FIELDS if isinstance(raw.get(field), str) and raw[field])
+    entry: dict[str, Any] = {
+        "_id": block_id,
+        "content": text,
+        "tags": tags or str(raw.get("Tags") or ""),
+        "Status": status or str(raw.get("Status") or ""),
+    }
+    if "Maturity" in raw:
+        entry["Maturity"] = raw["Maturity"]
+    return entry
+
+
+def _load_granularity_blocks(
+    db_path: str,
+    limit: int,
+    *,
+    workspace: str | None = None,
+    canonical_blocks: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """Read the block text granularity alignment compares. Flag-gated caller only.
 
     Top-level blocks only (``parent_id = ''``): the sub-blocks are extracted
@@ -409,6 +441,15 @@ def _load_granularity_blocks(db_path: str, limit: int, *, workspace: str | None 
     import sqlite3 as _sqlite3
 
     blocks: list[dict[str, Any]] = []
+    if canonical_blocks is not None:
+        for block_id in sorted(canonical_blocks):
+            raw = canonical_blocks[block_id]
+            if raw.get("_parent_id") or raw.get("parent_id"):
+                continue
+            blocks.append(_granularity_block(block_id, str(raw.get("Status") or ""), "", raw))
+            if len(blocks) >= limit:
+                break
+        return blocks
     if not os.path.isfile(db_path):
         return blocks
     try:
@@ -443,20 +484,17 @@ def _load_granularity_blocks(db_path: str, limit: int, *, workspace: str | None 
             raw = {}
         if not isinstance(raw, dict):
             raw = {}
-        text = " ".join(str(raw[field]) for field in _GRANULARITY_TEXT_FIELDS if isinstance(raw.get(field), str) and raw[field])
-        entry: dict[str, Any] = {
-            "_id": r["id"],
-            "content": text,
-            "tags": r["tags"] or str(raw.get("Tags") or ""),
-            "Status": r["status"] or str(raw.get("Status") or ""),
-        }
-        if "Maturity" in raw:
-            entry["Maturity"] = raw["Maturity"]
-        blocks.append(entry)
+        blocks.append(_granularity_block(r["id"], r["status"], r["tags"], raw))
     return blocks
 
 
-def _granularity_section(db_path: str, settings: dict[str, Any], *, workspace: str | None = None) -> dict[str, Any]:
+def _granularity_section(
+    db_path: str,
+    settings: dict[str, Any],
+    *,
+    workspace: str | None = None,
+    canonical_blocks: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Build the proposal-only merge-candidate section of the plan.
 
     Runs only with ``v4.granularity_align`` on. Every value here is a pure
@@ -480,7 +518,7 @@ def _granularity_section(db_path: str, settings: dict[str, Any], *, workspace: s
     max_candidates = _bounded_int(settings.get("max_candidates", _GRANULARITY_MAX_CANDIDATES), _GRANULARITY_MAX_CANDIDATES, 0, 500)
     max_blocks = _bounded_int(settings.get("max_blocks", _GRANULARITY_MAX_BLOCKS), _GRANULARITY_MAX_BLOCKS, 1, 5000)
 
-    blocks = _load_granularity_blocks(db_path, max_blocks, workspace=workspace)
+    blocks = _load_granularity_blocks(db_path, max_blocks, workspace=workspace, canonical_blocks=canonical_blocks)
     candidates = find_merge_candidates(blocks, min_similarity=min_similarity, max_candidates=max_candidates)
 
     entries: list[dict[str, Any]] = []
@@ -527,6 +565,13 @@ def propagate_staleness(seed_block_ids: str, max_hops: int = 3) -> str:
     if not (0 <= max_hops <= 8):
         return json.dumps({"error": "max_hops must be in [0, 8]"})
 
+    try:
+        canonical_blocks = _request_canonical_blocks(ws)
+    except (OSError, ValueError):
+        return json.dumps({"error": "consolidation_source_unavailable"})
+    if canonical_blocks is not None:
+        seeds = [block_id for block_id in seeds if block_id in canonical_blocks]
+
     adjacency: dict[str, list[str]] = {}
     db_path = _index_db_path(ws)
     if os.path.isfile(db_path):
@@ -535,6 +580,8 @@ def propagate_staleness(seed_block_ids: str, max_hops: int = 3) -> str:
         try:
             rows = conn.execute("SELECT src, dst FROM xref_edges").fetchall()
             for r in rows:
+                if canonical_blocks is not None and (r["src"] not in canonical_blocks or r["dst"] not in canonical_blocks):
+                    continue
                 adjacency.setdefault(r["src"], []).append(r["dst"])
                 adjacency.setdefault(r["dst"], []).append(r["src"])
         finally:
@@ -570,9 +617,26 @@ def project_profile(name: str = "", top_k: int = 10) -> str:
         return json.dumps({"error": "top_k must be in [0, 100]"})
     project_name = name.strip() or os.path.basename(os.path.realpath(ws))
 
+    try:
+        canonical_blocks = _request_canonical_blocks(ws)
+    except (OSError, ValueError):
+        return json.dumps({"error": "consolidation_source_unavailable"})
     blocks: list[dict] = []
     db_path = _index_db_path(ws)
-    if os.path.isfile(db_path):
+    if canonical_blocks is not None:
+        for block_id in sorted(canonical_blocks)[:50000]:
+            raw = canonical_blocks[block_id]
+            blocks.append(
+                {
+                    **raw,
+                    "_id": block_id,
+                    "type": raw.get("type") or raw.get("Type") or "",
+                    "file": raw.get("_source_file") or "",
+                    "date": raw.get("Date") or "",
+                    "statement": raw.get("Statement") or raw.get("statement") or "",
+                }
+            )
+    elif os.path.isfile(db_path):
         conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
         conn.row_factory = _sqlite3.Row
         try:

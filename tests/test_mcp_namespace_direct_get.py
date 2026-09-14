@@ -140,9 +140,9 @@ def test_authenticated_id_only_root_read_requires_explicit_acl(monkeypatch, tmp_
     assert "private root canary" not in json.dumps(denied)
 
     policy_path = ws / "mind-mem-acl.json"
-    policy = json.loads(policy_path.read_text())
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
     policy["agents"]["alice"]["read"].append("decisions")
-    policy_path.write_text(json.dumps(policy))
+    policy_path.write_text(json.dumps(policy), encoding="utf-8")
     with use_workspace(str(ws)):
         allowed = json.loads(get_block("D-ROOT-PRIVATE"))
     assert allowed["found"] is True
