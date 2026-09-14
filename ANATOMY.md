@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1618 | **Est. tokens:** ~4766741
-**Generated:** 2026-09-14 14:27 UTC
+**Files:** 1618 | **Est. tokens:** ~4766849
+**Generated:** 2026-09-14 14:31 UTC
 
 ## Token Budget Guide
 
@@ -54,7 +54,7 @@
 | `docs/evidence/5.0.2-f1/` | 12 | ~188585 |
 | `docs/plans/` | 1 | ~6134 |
 | `docs/security-baselines/` | 1 | ~18974 |
-| `docs/specs/` | 3 | ~10624 |
+| `docs/specs/` | 3 | ~10732 |
 | `examples/` | 3 | ~1203 |
 | `hooks/` | 3 | ~1026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1211 |
@@ -516,7 +516,7 @@
 ### `docs/specs/`
 
 - `retrieval-receipt-canonical-vectors.json` (~1558 tok, huge) — Keys: profile, canonicalization, receipt_golden, rules
-- `retrieval-receipt-contract.md` (~8496 tok, huge) — Retrieval receipt contract
+- `retrieval-receipt-contract.md` (~8604 tok, huge) — Retrieval receipt contract
 - `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 

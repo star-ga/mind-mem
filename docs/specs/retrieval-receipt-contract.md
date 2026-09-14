@@ -1,12 +1,15 @@
 # Retrieval receipt contract
 
-Status: **Draft specification, 2026-09-14. Implementation not started.**
+Status: **Partially implemented in the 5.0.3 candidate, 2026-09-14.**
 Owner: STARGA Inc. Canonical milestones: [Group RE](../../ROADMAP.md#group-re--portable-retrieval-evidence).
 
-This specification defines a proposed export and verification boundary over
-MIND-Mem's existing serving evidence. It does not introduce a payment requirement
-for ordinary memory use. The field names and interfaces below are proposed;
-they are not currently available CLI commands, MCP tools, or a published wire API.
+This specification defines an export and verification boundary over MIND-Mem's
+existing serving evidence. The bounded local profile is implemented as
+`mm receipt export` and `mm receipt verify`; its schema and canonical vectors
+are linked in section 4. The portable occurrence, independent witness and
+constitutional-lineage profiles remain proposed. Candidate implementation is
+not evidence of release publication or deployment. Ordinary memory use has no
+payment requirement.
 
 ## 1. Purpose and priority
 
@@ -309,8 +312,10 @@ The local hard bounds are 8 MiB for the ledger, 4 KiB for the head sidecar,
 100,000 rows, and 12 MiB for the complete package; export and offline verify
 enforce the same limits. The receipt file is fsynced before publication, while
 directory-entry fsync is best effort on platforms that support it.
-The commands cover local RE-A1 through RE-A8 controls; `portable_identity` and
-issuer trust remain explicitly unavailable, so this adapter does not close the
+The commands exercise the local subset of RE-A1 through RE-A8, with entry-point
+controls in [`test_retrieval_receipts.py`](../../tests/test_retrieval_receipts.py).
+The full acceptance table below remains open: `portable_identity` and issuer
+trust are explicitly unavailable, and this adapter does not close the
 independent CVS, signature, or 512-lineage profiles.
 
 The report must distinguish `unsupported`, `malformed`, `unavailable`,
@@ -385,7 +390,9 @@ custody model, monetary price or funded deployment is selected here.
 
 ## 7. Required acceptance evidence
 
-These are future acceptance cases, not a claim that the new adapter passes them.
+This is the full acceptance contract, not a claim that the local adapter passes
+every profile. Its implemented subset does not establish portable continuity,
+issuer trust or independent observation.
 Reuse [served-ledger tests](../../tests/test_served_ledger.py),
 [V1/V2 compatibility tests](../../tests/test_served_ledger_v2_compat.py), and
 [attestation isolation tests](../../tests/test_recall_attestation_v2.py).
