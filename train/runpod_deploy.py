@@ -20,6 +20,11 @@ Requires:
     - SSH key at ~/.ssh/runpod_key{,.pub}
     - HF write token at /tmp/hf_write_token
     - Corpus built at /data/checkpoints/mm-workspace/train-output/corpus.jsonl
+
+Approval scope: R2 binds the exact tag, decimal budget and requested provider
+configuration. It is not a billing cap or complete R1-R4 preflight. An existing
+pod's actual configuration and immutable corpus/model/source identities still
+need independent verification before a funded run.
 """
 
 from __future__ import annotations
@@ -436,9 +441,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--budget-usd",
-        type=float,
         default=None,
-        help="approved USD budget; required for provisioning",
+        help="exact positive decimal USD budget; required for provisioning",
     )
     parser.add_argument(
         "--print-approval-config",

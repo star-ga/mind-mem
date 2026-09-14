@@ -1,4 +1,4 @@
-"""spend_guard — mechanical interlock on cloud spend.
+"""spend_guard — launch approval checks and operator run records.
 
 What this prevents (and why it exists):
   v4.0.x retry-2c through retry-2h burned ~$48 over 4 days because no
@@ -6,9 +6,7 @@ What this prevents (and why it exists):
   next-run-on-same-pod, or (b) spinning the next pod before the previous
   run's eval result was locked in.
 
-  Interlock rules (all must pass before a launch is authorized; the
-  provisioning entrypoint enforces the R2 approval binding, while this
-  command performs the complete preflight):
+  Operating rules for a complete launch interlock:
 
     R1.  Previous-run weights must be SCP'd locally AND sha256-verified
          against the pod copy. Record in .run-ledger.jsonl.
@@ -27,9 +25,10 @@ Usage:
       --approval-file ~/mind-mem-budget-approvals/retry2j.yml \\
       --prev-run-tag retry2i
 
-  The marker contains exact ``tag:`` and ``budget_usd:`` lines and may
-  include ``config_sha256:``.  RunPod provisioning requires that digest and
-  binds it to the explicit non-secret launch configuration.
+  Also pass --config-sha256 from runpod_deploy.py --print-approval-config.
+  The marker contains exact ``tag:``, ``budget_usd:`` and ``config_sha256:``
+  lines. Both entrypoints require the digest; RunPod compares it with the
+  explicit non-secret requested launch configuration.
 
   # Only if all 4 checks pass:
   python3 train/runpod_deploy.py ...
@@ -39,11 +38,20 @@ Usage:
       --pod-id vgpy7ctbzcrxq7 \\
       --local-weights /data/checkpoints/mm-workspace/full-ft.retry2j-...
 
+Implementation scope:
+  runpod_deploy.py enforces R2 before launch. This separate preflight checks
+  R1/R3 against operator ledger fields; those fields do not independently prove
+  remote termination or checkpoint provenance. Existing-pod identity, immutable
+  training inputs, one-time approval consumption and a runtime billing ceiling
+  are not implemented here. This is not full launch readiness.
+
 Ledger:
   <repo>/.run-ledger.jsonl (append-only, JSONL)
   One line per run with: tag, started_at, pod_id, budget_usd, spend_usd,
   weights_local_path, weights_local_sha256, weights_pod_sha256,
   hash_match, pod_terminated_at, eval_summary, status.
+  New budget_usd values are decimal strings to retain exact amounts;
+  historical numeric rows remain readable.
 """
 from __future__ import annotations
 
@@ -109,7 +117,7 @@ def parse_approval_file(path: Path) -> SpendApproval:
         if key in fields:
             raise ApprovalError(f"approval field {key!r} is duplicated")
         fields[key] = value
-    if set(fields) - {"tag", "budget_usd", "config_sha256"} or set(fields) < {"tag", "budget_usd"}:
+    if set(fields) - {"tag", "budget_usd", "config_sha256"} or not {"tag", "budget_usd"} <= set(fields):
         raise ApprovalError("approval must contain exactly tag and budget_usd, with optional config_sha256")
     tag = fields["tag"]
     if _TAG.fullmatch(tag) is None:
@@ -129,7 +137,7 @@ def validate_approval(
     path: Path,
     *,
     expected_tag: str,
-    expected_budget_usd: float,
+    expected_budget_usd: str | int | float | Decimal,
     expected_config_sha256: str | None = None,
     require_config: bool = False,
 ) -> SpendApproval:
@@ -157,7 +165,7 @@ def launch_config_sha256(**config: object) -> str:
 
 
 def _now() -> str:
-    return _dt.datetime.now(_dt.UTC).isoformat()
+    return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
 def _read_ledger() -> list[dict]:
@@ -224,11 +232,14 @@ def preflight(args) -> None:
             f"Create with budget_usd={args.budget_usd}, tag={args.tag} "
             "and re-run preflight.")
     try:
+        if not getattr(args, "config_sha256", None):
+            raise ApprovalError("expected config_sha256 is required")
         parsed = validate_approval(
             approval,
             expected_tag=args.tag,
             expected_budget_usd=args.budget_usd,
             expected_config_sha256=getattr(args, "config_sha256", None),
+            require_config=True,
         )
     except ApprovalError as exc:
         _refuse("R2", str(exc))
@@ -237,7 +248,9 @@ def preflight(args) -> None:
     entry = {
         "tag": args.tag,
         "started_at": _now(),
-        "budget_usd": args.budget_usd,
+        # New rows retain decimal text rather than a rounded JSON float.
+        # Historical numeric rows remain readable by _read_ledger.
+        "budget_usd": str(parsed.budget_usd),
         "prev_run_tag": args.prev_run_tag,
         "approval_sha256": parsed.marker_sha256,
         "config_sha256": parsed.config_sha256,
@@ -303,12 +316,12 @@ def main() -> None:
 
     p = sub.add_parser("preflight")
     p.add_argument("--tag", required=True)
-    p.add_argument("--budget-usd", required=True, type=float)
+    p.add_argument("--budget-usd", required=True, help="exact positive decimal USD amount")
     p.add_argument("--approval-file", required=True)
     p.add_argument(
         "--config-sha256",
-        default=None,
-        help="optional expected SHA-256 of the explicit launch configuration",
+        required=True,
+        help="expected SHA-256 of the explicit launch configuration",
     )
     p.add_argument("--prev-run-tag", default=None,
                    help="None on the first run; required from second run on")

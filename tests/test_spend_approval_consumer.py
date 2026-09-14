@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -53,6 +54,16 @@ def test_parser_requires_exact_fields_and_rejects_prefix_or_comment_attacks(tmp_
             spend_guard.validate_approval(marker, expected_tag="launch-1", expected_budget_usd=5.0)
 
 
+@pytest.mark.parametrize("missing", ["tag", "budget_usd"])
+def test_parser_refuses_missing_required_field_with_config(tmp_path: Path, missing: str) -> None:
+    fields = {"tag": "launch-1", "budget_usd": "5", "config_sha256": "a" * 64}
+    del fields[missing]
+    marker = tmp_path / "approval.yml"
+    marker.write_text("".join(f"{key}: {value}\n" for key, value in fields.items()), encoding="utf-8")
+    with pytest.raises(spend_guard.ApprovalError, match="exactly tag and budget_usd"):
+        spend_guard.parse_approval_file(marker)
+
+
 def test_spend_guard_preflight_uses_same_parser_and_records_marker_digest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     approval = tmp_path / "approval.yml"
     _marker(approval, config="a" * 64)
@@ -97,6 +108,49 @@ def test_runpod_refuses_missing_approval_before_provision(tmp_path: Path, monkey
     with pytest.raises(SystemExit, match="approval file cannot be read"):
         runpod_deploy.main()
     assert created == []
+
+
+@pytest.mark.parametrize("approved,requested", [("100000000000000000000", "100000000000000000001"), ("5", "5.0000000000000001")])
+def test_runpod_preserves_decimal_budget_before_comparison(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, approved: str, requested: str
+) -> None:
+    monkeypatch.setenv("MM_BASE_MODEL", "offline-test-base")
+    marker = tmp_path / "approval.yml"
+    _marker(marker, budget=approved, config=_digest())
+    monkeypatch.setattr(sys, "argv", _argv(marker, requested))
+    monkeypatch.setattr(runpod_deploy, "provision", lambda **_kwargs: pytest.fail("must not provision"))
+    with pytest.raises(SystemExit, match="does not match requested"):
+        runpod_deploy.main()
+
+
+def test_preflight_cli_preserves_exact_decimal_in_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    marker = tmp_path / "approval.yml"
+    budget = "5.0000000000000001"
+    _marker(marker, budget=budget, config="a" * 64)
+    ledger = tmp_path / "ledger.jsonl"
+    monkeypatch.setattr(spend_guard, "LEDGER", ledger)
+    monkeypatch.setattr(spend_guard, "WEIGHT_ROOT", tmp_path)
+    monkeypatch.setattr(sys, "argv", [
+        "spend_guard.py", "preflight", "--tag", "launch-1", "--budget-usd", budget,
+        "--approval-file", str(marker), "--config-sha256", "a" * 64,
+    ])
+    spend_guard.main()
+    assert json.loads(ledger.read_text())["budget_usd"] == budget
+
+
+def test_preflight_cli_refuses_missing_expected_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    marker = tmp_path / "approval.yml"
+    _marker(marker)
+    ledger = tmp_path / "ledger.jsonl"
+    monkeypatch.setattr(spend_guard, "LEDGER", ledger)
+    monkeypatch.setattr(sys, "argv", [
+        "spend_guard.py", "preflight", "--tag", "launch-1", "--budget-usd", "5",
+        "--approval-file", str(marker),
+    ])
+    with pytest.raises(SystemExit) as exc:
+        spend_guard.main()
+    assert exc.value.code == 2
+    assert not ledger.exists()
 
 
 def test_runpod_refuses_unbound_marker_before_provision(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
