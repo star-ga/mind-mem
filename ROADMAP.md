@@ -2695,23 +2695,23 @@ compiler's bootstrap/front-end now self-hosts (byte-identical native-ELF
 fixed point), with full-toolchain self-hosting on the `mind` roadmap, so
 this is a real trajectory, not a category boundary.
 
-**Already MIND today:** the hot scoring/decision kernels ship as
-`.mind` and compile via `mindc` — `bm25`, `rrf`, `reranker`,
-`abstention`, `adversarial`, `answer`, `category`, `cognitive`,
-`cross_encoder`, `ensemble`, `evidence`, `governance`. These run with
-a pure-Python fallback, so the kernel boundary is already proven and
-non-load-bearing for availability.
+**Verified inventory:** `mind/` contains eight compiler-source prototypes and
+18 INI-style configuration files. The latter are read by Python and are not
+compiled MIND kernels. The serving implementations remain Python, with an
+optional C library from `lib/kernels.c` loaded through `mind_ffi.py`. No wheel
+ships that library. See [`mind/README.md`](mind/README.md) for the source/ABI
+inventory; neither prototype verification nor a C-library test establishes a
+Pure-MIND replacement.
 
-**Gating dependency (updated — the compiler-side blocker has shipped):**
-`mindc` library-emit / stable C-ABI (cdylib output + FFI surface) landed
-upstream in 0.2.6 (`pub fn`→C export, RFC 0002/0003 cdylib seam) and 0.3.0
-(`--emit-shared`, struct-ABI lowering) — see `star-ga/mind-nerve`'s ROADMAP
-for a sibling consumer already tracking this as mindc-side SHIPPED. The
-remaining gap is entirely on this repo's side: the port work itself hasn't
-started. Until the governance/core-retrieval/I/O layers below are actually
-ported, the I/O shell (MCP transport, SQLite/Postgres/Redis adapters, HTTP,
-external model clients) stays Python — by sequencing choice, not by a
-missing compiler capability.
+**Compiler and consumer gates:** shared-library emission is a compiler surface,
+but the selected compiler must include its required build features and support
+the exact consumer ABI. The tensor prototypes, native symbol/argument contracts,
+numerical semantics and production calling paths still need a complete
+compile-to-execution proof. A compiler release number alone does not close
+those gates. The native C ABI tests compile the current C source and call the
+real `ctypes` bridge; they protect the existing backend while migration proceeds.
+The I/O shell (MCP, storage adapters, HTTP and external model clients) remains
+Python until its own port steps pass the gates below.
 
 **Sequencing (incremental, never a big-bang rewrite):**
 
