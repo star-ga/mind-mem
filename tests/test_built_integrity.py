@@ -48,6 +48,7 @@ def _archives(
     wheel_files: dict[str, bytes] | None = None,
     omit_sdist: bool = False,
     duplicate_wheel_name: str | None = None,
+    symlink_wheel_name: str | None = None,
 ) -> Path:
     dist = tmp_path / "dist"
     dist.mkdir()
@@ -69,6 +70,10 @@ def _archives(
             zf.writestr(name, data)
         if duplicate_wheel_name:
             zf.writestr(duplicate_wheel_name, b"duplicate")
+        if symlink_wheel_name:
+            link = zipfile.ZipInfo(symlink_wheel_name)
+            link.external_attr = 0o120777 << 16
+            zf.writestr(link, b"target")
     if not omit_sdist:
         sdist = dist / "mind_mem-1.0.tar.gz"
         with tarfile.open(sdist, "w:gz") as tf:
@@ -117,6 +122,12 @@ def test_duplicate_archive_entry_is_refused(tmp_path: Path) -> None:
     source, digests = _source(tmp_path)
     with pytest.raises(gate.IntegrityGateError, match="duplicate archive entry"):
         gate.verify_dist(_archives(tmp_path, digests, duplicate_wheel_name="mind_mem/recall.py"), source)
+
+
+def test_symlink_archive_entry_is_refused(tmp_path: Path) -> None:
+    source, digests = _source(tmp_path)
+    with pytest.raises(gate.IntegrityGateError, match="non-regular archive entry"):
+        gate.verify_dist(_archives(tmp_path, digests, symlink_wheel_name="mind_mem/link.py"), source)
 
 
 def test_missing_manifest_is_refused(tmp_path: Path) -> None:

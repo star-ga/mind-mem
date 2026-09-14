@@ -29,6 +29,9 @@ from typing import Any, Iterable, Mapping
 
 _MANIFEST = "_integrity_manifest.json"
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
+_MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
+_MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
+_MAX_ENTRY_BYTES = 16 * 1024 * 1024
 
 
 class IntegrityGateError(ValueError):
@@ -103,15 +106,12 @@ def _normal_path(name: str) -> str:
 
 def _manifest_bytes(raw: bytes, *, archive: Path) -> dict[str, str]:
     try:
-        pairs: list[tuple[str, Any]] = []
-
         def pairs_hook(items: list[tuple[str, Any]]) -> dict[str, Any]:
             seen: set[str] = set()
             for key, _ in items:
                 if key in seen:
                     raise IntegrityGateError(f"{archive.name}: duplicate manifest key {key!r}")
                 seen.add(key)
-            pairs.extend(items)
             return dict(items)
 
         data = json.loads(raw.decode("utf-8"), object_pairs_hook=pairs_hook)
@@ -119,7 +119,12 @@ def _manifest_bytes(raw: bytes, *, archive: Path) -> dict[str, str]:
         raise
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise IntegrityGateError(f"{archive.name}: manifest is not valid UTF-8 JSON") from exc
-    if not isinstance(data, dict) or data.get("version") != 1 or set(data) != {"version", "files"}:
+    if (
+        not isinstance(data, dict)
+        or type(data.get("version")) is not int
+        or data.get("version") != 1
+        or set(data) != {"version", "files"}
+    ):
         raise IntegrityGateError(f"{archive.name}: manifest must have exactly version=1 and files")
     files = data.get("files")
     if not isinstance(files, dict) or not files:
@@ -135,38 +140,74 @@ def _manifest_bytes(raw: bytes, *, archive: Path) -> dict[str, str]:
     return out
 
 
+def _archive_name(raw: str, *, directory: bool) -> str:
+    """Normalize a file or conventional single-trailing-slash directory."""
+    if directory:
+        if raw.endswith("//"):
+            raise IntegrityGateError(f"archive directory path is not canonical: {raw!r}")
+        raw = raw.rstrip("/")
+        if not raw:
+            raise IntegrityGateError(f"archive directory path is not canonical: {raw!r}")
+    return _normal_path(raw)
+
+
 def _archive_entries(path: Path) -> dict[str, bytes]:
-    """Read regular archive entries once and reject duplicate names."""
+    """Read regular archive entries once, with bounded sizes and no links."""
     entries: dict[str, bytes] = {}
+    try:
+        if path.stat().st_size > _MAX_ARCHIVE_BYTES:
+            raise IntegrityGateError(f"{path.name}: archive exceeds size limit")
+    except OSError as exc:
+        raise IntegrityGateError(f"{path.name}: cannot stat archive") from exc
+    uncompressed = 0
     if path.name.endswith(".whl"):
         try:
             with zipfile.ZipFile(path) as archive:
                 for info in archive.infolist():
-                    if info.is_dir():
-                        continue
-                    name = _normal_path(info.filename)
+                    directory = info.is_dir()
+                    name = _archive_name(info.filename, directory=directory)
                     if name in entries:
                         raise IntegrityGateError(f"{path.name}: duplicate archive entry {name!r}")
-                    if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                    entries[name] = b""
+                    if directory:
                         continue
+                    mode = (info.external_attr >> 16) & 0o170000
+                    if mode not in (0, 0o100000):
+                        raise IntegrityGateError(f"{path.name}: non-regular archive entry {name!r}")
+                    if info.file_size < 0 or info.file_size > _MAX_ENTRY_BYTES:
+                        raise IntegrityGateError(f"{path.name}: archive entry exceeds size limit: {name!r}")
+                    uncompressed += info.file_size
+                    if uncompressed > _MAX_UNCOMPRESSED_BYTES:
+                        raise IntegrityGateError(f"{path.name}: uncompressed archive exceeds size limit")
                     entries[name] = archive.read(info)
-        except (OSError, zipfile.BadZipFile) as exc:
+        except IntegrityGateError:
+            raise
+        except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
             raise IntegrityGateError(f"{path.name}: cannot read wheel: {exc}") from exc
     elif path.name.endswith(".tar.gz"):
         try:
             with tarfile.open(path, mode="r:gz") as archive:
                 for info in archive.getmembers():
-                    if info.isdir():
-                        continue
-                    name = _normal_path(info.name)
+                    directory = info.isdir()
+                    name = _archive_name(info.name, directory=directory)
                     if name in entries:
                         raise IntegrityGateError(f"{path.name}: duplicate archive entry {name!r}")
-                    if not info.isfile():
+                    entries[name] = b""
+                    if directory:
                         continue
+                    if not info.isfile():
+                        raise IntegrityGateError(f"{path.name}: non-regular archive entry {name!r}")
+                    if info.size < 0 or info.size > _MAX_ENTRY_BYTES:
+                        raise IntegrityGateError(f"{path.name}: archive entry exceeds size limit: {name!r}")
+                    uncompressed += info.size
+                    if uncompressed > _MAX_UNCOMPRESSED_BYTES:
+                        raise IntegrityGateError(f"{path.name}: uncompressed archive exceeds size limit")
                     handle = archive.extractfile(info)
                     if handle is None:
                         raise IntegrityGateError(f"{path.name}: cannot read regular entry {name!r}")
                     entries[name] = handle.read()
+        except IntegrityGateError:
+            raise
         except (OSError, tarfile.TarError) as exc:
             raise IntegrityGateError(f"{path.name}: cannot read sdist: {exc}") from exc
     else:  # pragma: no cover - callers select known suffixes
