@@ -19,16 +19,14 @@ them into hard faults):
 4. **Import-path guard** — a world-writable package directory on POSIX
    is reported as a warning and, under ``MIND_MEM_INTEGRITY=strict``,
    refuses the import (prevents trivial file-swap).
-5. **Frozen constants** — critical thresholds (``AUTH_HEADER``,
-   ``AUDIT_TAG``) exposed as immutable module attributes so patches
-   visible in source are detectable.
+5. **Published constants** — ``AUTH_HEADER`` and ``AUDIT_TAG`` expose
+   stable identifiers for consumers to check. Python annotations do not
+   make module attributes immutable.
 
-The manifest is *optional* — in development or editable installs there
-is no manifest and the hash layer has nothing to check. The remaining
-layers still report: an absent manifest is silent, but a manifest that
-is present and unreadable is a warning like any other, because deleting
-or truncating one must never be a way to turn a strict-mode check into a
-pass. Wheels built via the release workflow
+The manifest is optional in the default development mode. Explicit strict
+mode requires a valid manifest covering every critical module, even in an
+editable install. Deleting, truncating or emptying a manifest must not turn
+a strict-mode check into a pass. Wheels built via the release workflow
 (`scripts/build_integrity_manifest.py`) bake the manifest in.
 """
 
@@ -54,6 +52,7 @@ _log = logging.getLogger("mind_mem.protection")
 
 _MANIFEST_FILENAME = "_integrity_manifest.json"
 _STRICT_ENV = "MIND_MEM_INTEGRITY"
+_MAX_MANIFEST_BYTES = 1_048_576
 
 _CRITICAL_MODULES: Final[tuple[str, ...]] = (
     "recall.py",
@@ -124,16 +123,40 @@ def _load_manifest() -> tuple[dict[str, str] | None, str]:
     so it is reported rather than folded into the absent case.
     """
     path = _manifest_path()
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        return None, "integrity manifest present but not a regular file"
     if not path.is_file():
         return None, ""
+
+    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate manifest key")
+            result[key] = value
+        return result
+
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        with path.open("rb") as stream:
+            raw = stream.read(_MAX_MANIFEST_BYTES + 1)
+        if len(raw) > _MAX_MANIFEST_BYTES:
+            return None, "integrity manifest exceeds size limit"
+        data = json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object)
+    except (OSError, ValueError) as exc:
         return None, f"integrity manifest present but unreadable: {type(exc).__name__}"
     files = data.get("files") if isinstance(data, dict) else None
     if not isinstance(files, dict):
         return None, "integrity manifest present but malformed: no 'files' mapping"
-    return {k: v for k, v in files.items() if isinstance(v, str)}, ""
+    if set(data) != {"version", "files"} or type(data["version"]) is not int or data["version"] != 1:
+        return None, "integrity manifest present but malformed: unsupported schema"
+    if not files:
+        return None, "integrity manifest present but malformed: empty 'files' mapping"
+    for rel, digest in files.items():
+        if not rel or any(c in rel for c in ("\\", ":", "\x00")) or any(part in {"", ".", ".."} for part in rel.split("/")):
+            return None, "integrity manifest present but malformed: noncanonical module path"
+        if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            return None, "integrity manifest present but malformed: invalid module digest"
+    return files, ""
 
 
 def _world_writable(path: Path) -> bool:
@@ -161,13 +184,15 @@ def verify_integrity() -> IntegrityReport:
     manifest, manifest_error = _load_manifest()
     if manifest_error:
         warnings.append(manifest_error)
+    elif strict and manifest is None:
+        warnings.append("strict mode requires an integrity manifest")
 
     mismatched: list[str] = []
     missing: list[str] = []
     extra: list[str] = []
     checked = 0
 
-    # A missing manifest is normal (dev/editable install) and leaves the
+    # A missing manifest is normal in default development mode and leaves the
     # hash layer with nothing to check — but the other layers still have a
     # verdict to deliver. Returning early here would skip both the
     # warnings rule below and the strict-mode raise, which is how a
@@ -176,21 +201,27 @@ def verify_integrity() -> IntegrityReport:
     if manifest is not None:
         for rel, expected in manifest.items():
             path = root / rel
+            if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+                warnings.append(f"critical module is outside the package: {rel}")
+                continue
             if not path.is_file():
                 missing.append(rel)
                 continue
-            actual = _sha256(path)
+            try:
+                actual = _sha256(path)
+            except OSError:
+                warnings.append(f"critical module is unreadable: {rel}")
+                continue
             checked += 1
             if actual != expected:
                 mismatched.append(rel)
 
         manifest_keys = set(manifest.keys())
-        discovered = {str(p.relative_to(root)).replace(os.sep, "/") for p in root.rglob("*.py") if p.is_file()}
-        # Only report "extra" critical files — unexpected additions to the
-        # tracked set. Ignore freshly-added modules outside the manifest.
-        extra = sorted(rel for rel in _CRITICAL_MODULES if rel in discovered and rel not in manifest_keys)
+        # Every declared critical module needs coverage, even when both its
+        # manifest entry and the file have been removed.
+        extra = sorted(set(_CRITICAL_MODULES) - manifest_keys)
 
-    ok = not mismatched and not missing and not warnings
+    ok = not mismatched and not missing and not extra and not warnings
 
     report = IntegrityReport(
         ok=ok,
@@ -208,15 +239,17 @@ def verify_integrity() -> IntegrityReport:
 
     if not ok:
         _log.warning(
-            "protection.integrity_mismatch mode=%s mismatched=%d missing=%d warnings=%d",
+            "protection.integrity_mismatch mode=%s mismatched=%d missing=%d uncovered=%d warnings=%d",
             mode,
             len(mismatched),
             len(missing),
+            len(extra),
             len(warnings),
         )
         if strict:
             raise RuntimeError(
-                f"mind-mem integrity check failed (strict mode): mismatched={mismatched} missing={missing} warnings={warnings}",
+                f"mind-mem integrity check failed (strict mode): mismatched={mismatched} "
+                f"missing={missing} uncovered={extra} warnings={warnings}",
             )
 
     return report

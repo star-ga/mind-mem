@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1648 | **Est. tokens:** ~4848856
-**Generated:** 2026-09-14 19:47 UTC
+**Files:** 1649 | **Est. tokens:** ~4851004
+**Generated:** 2026-09-14 19:55 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~72692 |
+| `./` | 37 | ~72699 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
@@ -62,7 +62,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9632 |
-| `scripts/` | 21 | ~66860 |
+| `scripts/` | 21 | ~66907 |
 | `sdk/go/` | 11 | ~9890 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4864 |
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1090441 |
+| `src/mind_mem/` | 239 | ~1090902 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 728 | ~2148727 |
+| `tests/` | 729 | ~2150360 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -147,7 +147,7 @@
 - `install.sh` (~5444 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
-- `pyproject.toml` (~3752 tok, huge) — [project]
+- `pyproject.toml` (~3759 tok, huge) — [project]
 - `requirements-optional.in` (~54 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
 - `requirements-optional.txt` (~22642 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
@@ -611,7 +611,7 @@
 - `anatomy-hook.sh` (~237 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `build_integrity_manifest.py` (~634 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
+- `build_integrity_manifest.py` (~681 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `check_author_identity.sh` (~1880 tok, huge) — check_author_identity.sh — enforce the single-author identity rule.
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
@@ -714,7 +714,7 @@
 - `mcp_server.py` (~280 tok, medium) — Wheel-level compatibility module for `mind_mem.mcp_server`.
 ### `src/mind_mem/`
 
-- `__init__.py` (~982 tok, large) — # Mind Mem — Memory + Immune System for AI agents
+- `__init__.py` (~1030 tok, large) — # Mind Mem — Memory + Immune System for AI agents
 - `_mic_map_accel.pyx` (~1136 tok, large) — # cython: language_level=3, boundscheck=False, wraparound=False, cdivision=True
 - `_recall_constants.py` (~3418 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2609 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
@@ -982,7 +982,7 @@
 - `preimage.py` (~1329 tok, large) — # Copyright 2026 STARGA, Inc.
 - `project_key.py` (~3151 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `project_profile.py` (~1681 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `protection.py` (~1959 tok, huge) — Runtime protection layer for mind-mem (v3.3.0+).
+- `protection.py` (~2372 tok, huge) — Runtime protection layer for mind-mem (v3.3.0+).
 - `provenance_class.py` (~2682 tok, huge) — Provenance class — the FIFTH deterministic component of the validity gate.
 - `py.typed` (~0 tok, tiny)
 - `q1616.py` (~562 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1499,6 +1499,7 @@
 - `test_injection_framing_e2e.py` (~4777 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_install_script.py` (~750 tok, large) — # pip --user honours PYTHONUSERBASE on every platform; without it a
 - `test_integration.py` (~1386 tok, large) — Integration test: full mind-mem lifecycle init → capture → scan → recall."""
+- `test_integrity_manifest_refusals.py` (~1633 tok, huge) — An absent, incomplete or substituted manifest cannot satisfy strict mode."""
 - `test_intel_scan.py` (~5959 tok, huge) — Tests for intel_scan.py — contradiction detection, drift analysis, impact graph."""
 - `test_intent_classify.py` (~328 tok, medium) — Tests for intent classification."""
 - `test_intent_router.py` (~1176 tok, large) — Tests for 9-type intent router."""

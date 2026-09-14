@@ -7,9 +7,8 @@ modules listed in ``mind_mem.protection._CRITICAL_MODULES`` with SHA-256;
 the runtime verifier (``mind_mem.protection.verify_integrity``)
 recomputes the same hashes at import and flags any mismatch.
 
-No-op (and exits 0) in development: editable installs never build the
-manifest, so the verifier stays in fail-open mode and local edits don't
-trip it.
+Editable installs do not invoke this script automatically. Explicit invocation
+bakes the manifest and refuses missing critical modules before replacing it.
 """
 
 from __future__ import annotations
@@ -34,11 +33,12 @@ def build(package_root: Path, out_path: Path | None = None) -> Path:
     from mind_mem.protection import _CRITICAL_MODULES  # noqa: PLC0415
 
     files: dict[str, str] = {}
+    if not _CRITICAL_MODULES:
+        raise ValueError("cannot build an empty critical-module manifest")
     for rel in _CRITICAL_MODULES:
         path = package_root / rel
-        if not path.is_file():
-            print(f"[skip] {rel} (not present)", file=sys.stderr)
-            continue
+        if path.is_symlink() or not path.resolve().is_relative_to(package_root.resolve()) or not path.is_file():
+            raise ValueError(f"critical module missing or outside package: {rel}")
         files[rel] = _sha256(path)
 
     manifest = {

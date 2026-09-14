@@ -62,12 +62,16 @@ __version__ = "5.0.3"
 
 # Best-effort import-time integrity check. Fails open unless
 # MIND_MEM_INTEGRITY=strict, so editable installs and source checkouts
-# are unaffected.
+# remain unaffected unless strict verification is explicitly requested.
 try:
     verify_integrity()
 except RuntimeError:
     raise
-except Exception as exc:  # pragma: no cover — never block import on check bugs
+except Exception as exc:  # pragma: no cover — unexpected verifier failure
+    from .protection import _strict
+
+    if _strict():
+        raise RuntimeError("mind-mem integrity verifier failed (strict mode)") from exc
     import logging as _logging
 
     _logging.getLogger("mind_mem").debug("integrity_check_skipped: %s", exc)
