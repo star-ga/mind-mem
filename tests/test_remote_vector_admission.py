@@ -150,7 +150,14 @@ def _install_pinecone(monkeypatch, payload: dict | None = None):
     return records
 
 
-def _run(workspace: Path, monkeypatch, payload: dict, provider: str = "qdrant") -> list[dict]:
+def _run(
+    workspace: Path,
+    monkeypatch,
+    payload: dict,
+    provider: str = "qdrant",
+    *,
+    include_pending: bool = False,
+) -> list[dict]:
     if provider == "qdrant":
         _install_qdrant(monkeypatch, payload)
     else:
@@ -158,7 +165,7 @@ def _run(workspace: Path, monkeypatch, payload: dict, provider: str = "qdrant") 
     from mind_mem.recall_vector import VectorBackend
 
     monkeypatch.setattr(VectorBackend, "embed", lambda self, texts: [[0.1, 0.2] for _ in texts])
-    return recall(str(workspace), "canonical source", limit=10, rerank=False)
+    return recall(str(workspace), "canonical source", limit=10, rerank=False, include_pending=include_pending)
 
 
 def test_remote_active_hit_with_matching_source_is_served_without_local_index(tmp_path, monkeypatch):
@@ -220,6 +227,15 @@ def test_remote_payload_cannot_serve_revoked_credential(tmp_path, monkeypatch, p
     workspace, payload = _workspace(tmp_path, status="revoked", credential=True, provider=provider)
     result = _run(workspace, monkeypatch, payload, provider=provider)
     assert result == []
+
+
+@pytest.mark.parametrize("provider", ["qdrant", "pinecone"])
+def test_pending_remote_hit_requires_explicit_include_pending(tmp_path, monkeypatch, provider):
+    workspace, payload = _workspace(tmp_path, status="pending", provider=provider)
+    assert _run(workspace, monkeypatch, payload, provider=provider) == []
+    result = _run(workspace, monkeypatch, payload, provider=provider, include_pending=True)
+    assert [row["_id"] for row in result] == ["D-REMOTE-1"]
+    assert result[0]["status"] == "pending"
 
 
 def test_remote_same_id_with_foreign_source_or_digest_is_refused(tmp_path, monkeypatch):

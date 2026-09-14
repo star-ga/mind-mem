@@ -646,6 +646,7 @@ def _withhold_inadmissible(
                                 valid,
                                 workspace=workspace,
                                 status_key=status_key,
+                                allow=allow,
                                 surface=leg or "vector_remote",
                                 source_file=source,
                             ).admitted

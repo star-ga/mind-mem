@@ -27,6 +27,10 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Remote Qdrant and Pinecone hits now carry and verify a canonical
+  `source_digest`, then rebuild served content and status from the current
+  admitted source. Existing remote indexes must be rebuilt to add this field;
+  it is source admission evidence, not authentication of the remote service.
 - Optional LLM recall enrichment rejects malformed fields, non-finite or
   out-of-range confidence, undeclared categories and claims absent from the
   model's source window. Configured redaction screens model input and output;
