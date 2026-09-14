@@ -4,6 +4,8 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## [5.0.3] - 2026-09-14
+
 ### Added
 
 - Opt-in `--receipt-envelope` output for ordinary recall, context packing and
@@ -19,11 +21,6 @@ All notable changes to MIND-Mem are documented in this file.
   callers to join evidence to its serving event. The receipt scope excludes
   generated prose, persona annotations and canonicalized fields. Missing,
   inconsistent and custom-callback evidence remains explicitly unproven.
-
-## [5.0.3] - 2026-09-14
-
-### Added
-
 - Governed, reversible entity equivalence through staged `SAME_AS` proposals
   and an opt-in graph union view. Original entities and source edges remain
   intact. Admin approval and reversal validate persisted identity and lineage;
@@ -71,8 +68,9 @@ All notable changes to MIND-Mem are documented in this file.
   parses the envelope once and has no dependency on unavailable ledger code.
 - Refuse governed proposals with a structured `compliance_detector_failed`
   response when a configured detector raises or returns malformed findings.
-  MCP and REST preserve the no-write boundary without exposing plugin exception
-  text. Valid input under the same plugin remains admissible.
+  MCP, REST and CLI operations preserve the no-write boundary without exposing
+  plugin exception text. CLI refusals retain existing files; valid input under
+  the same plugin remains admissible.
 - REST admin actions carry the authenticated transport scope into governed MCP
   dispatch. Valid administrators can apply proposals without a process-wide
   admin setting; unauthenticated, user-scope and spoofed requests remain refused.
