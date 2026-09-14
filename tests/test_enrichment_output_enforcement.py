@@ -104,6 +104,13 @@ def test_default_off_keeps_all_bytes_and_makes_no_model_call(tmp_path, monkeypat
     assert calls == []
 
 
+def test_enabled_unavailable_backend_cannot_keep_old_unvalidated_annotations(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm, "is_available", lambda *a, **k: False)
+    block = {"_id": "D-1", "excerpt": "Alice works on MIND.", "llm_facts": [fact("UNVALIDATED")], "score": 1.0}
+    result = llm.enrich_block(block, enabled=True, workspace=str(tmp_path))
+    assert result == {"_id": "D-1", "excerpt": "Alice works on MIND.", "score": 1.0}
+
+
 @pytest.mark.parametrize("mode", ["reject", "redact"])
 def test_configured_redaction_before_model_and_no_stale_annotations(tmp_path, monkeypatch, mode):
     (tmp_path / "mind-mem.json").write_text(

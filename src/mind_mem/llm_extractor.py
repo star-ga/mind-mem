@@ -931,7 +931,9 @@ def enrich_block(
 ) -> dict:
     """Add LLM-extracted metadata to a memory block.
 
-    When disabled or no LLM is available, returns the block unchanged.
+    When disabled, returns the block unchanged. When enabled, clears previous
+    optional model annotations before regeneration, including on backend
+    unavailability or refusal. Ranked source fields remain unchanged.
 
     Args:
         block: A recall result dict (must have "excerpt" or "content" key).

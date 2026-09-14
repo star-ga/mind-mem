@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1602 | **Est. tokens:** ~4713853
-**Generated:** 2026-09-14 11:13 UTC
+**Files:** 1602 | **Est. tokens:** ~4714001
+**Generated:** 2026-09-14 11:17 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 235 | ~1079332 |
+| `src/mind_mem/` | 235 | ~1079369 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 696 | ~2068828 |
+| `tests/` | 696 | ~2068939 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -884,7 +884,7 @@
 - `lineage_staleness.py` (~2108 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `lint.py` (~3856 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lint_autofix.py` (~2148 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `llm_extractor.py` (~10336 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
+- `llm_extractor.py` (~10373 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~5228 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `maintenance_migrate.py` (~2109 tok, huge) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
 - `maturity_breadth_scan.py` (~3027 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1358,7 +1358,7 @@
 - `test_embed_last_resort_is_cache_only.py` (~1235 tok, large) — The last-resort embedding fallback must not perform an unbounded download.
 - `test_embedding_augmentation_probe.py` (~1685 tok, huge) — M1 — the embed-vs-store exposure, measured rather than assumed.
 - `test_encryption.py` (~2848 tok, huge) — Tests for mind-mem encryption at rest."""
-- `test_enrichment_output_enforcement.py` (~1380 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_enrichment_output_enforcement.py` (~1491 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_entity_ingest.py` (~4122 tok, huge) — Tests for the entity_ingest module — extraction, filtering, signal generation."""
 - `test_entity_observations.py` (~1975 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_entity_prefetch.py` (~1674 tok, huge) — v3.3.0 Tier 3 #8 — entity-graph prefetch.

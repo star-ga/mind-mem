@@ -1887,8 +1887,16 @@ file.
 - [x] **Two config keys documented in `docs/configuration.md`** —
   `cache.redis_url` and `retrieval.tier_boost` appear in the
   v3.2.0 docs; verified as part of the v3.2.1 release checklist.
-- [ ] **Dependency CVE bumps** — **THE TRACKING CONDITION FIRED; measured
-  2026-09-07.** This item was kept "in case a future ``fastmcp`` release
+- [x] **Dependency CVE bumps** — the reported dependency floors and non-vacuous
+  audit are implemented. The hosted security run for source `41d18eda` on
+  2026-09-14 audited **158 resolved packages with zero reported vulnerabilities**;
+  its `pip-audit-results` artifact was independently downloaded and hash-checked.
+  Evidence: security workflow run `34827240912` in `star-ga/mind-mem`.
+  `pyproject.toml` and the security workflow match the published 5.0.2 source
+  `508e52f8`. This closes the measured remediation; future advisories remain
+  subject to the continuing CI audit.
+
+  **Historical finding, measured 2026-09-07.** This item was kept "in case a future ``fastmcp`` release
   reintroduces either", and one did: ``fastmcp`` 3.4.7 requires
   ``fastmcp-slim[client,server]==3.4.7`` *unconditionally*, and both of those
   extras require ``authlib>=1.6.11`` (``importlib.metadata.requires``, checked
@@ -1941,8 +1949,9 @@ file.
   version that matters** — an earlier note in this session read the 3.14 copy
   and understated the exposure.
 
-  Stays open: bumping these is the remaining work, and the repaired job has not
-  yet run against a release.
+  The versions in this historical table describe the original exposure, not
+  the current resolved environment. The verified 2026-09-14 audit above
+  supersedes the earlier pending-bump status.
 
 v3.2.1 CI-plumbing fixes (shipped):
 
