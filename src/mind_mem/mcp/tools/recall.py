@@ -198,7 +198,7 @@ def _record_anticipation_run(
     """
     try:
         from mind_mem.recall_attestation import _served_ids
-        from mind_mem.recall_digests import query_hash, served_set_digest
+        from mind_mem.recall_digests import query_hash, run_id, served_set_digest
         from mind_mem.served_ledger import (
             LEDGER_ERROR_KEY,
             PROOF_UNPROVEN,
@@ -235,6 +235,17 @@ def _record_anticipation_run(
             serve_kind="anticipation",
             generation=generation,
         )
+        # ``seq`` identifies this occurrence; ``run_id`` identifies the answer
+        # and is the only key the outcome join accepts. Publish the derived
+        # identity only after the shared attachment helper confirms that a row
+        # exists. An unproven local answer must remain ineligible for outcome
+        # credit even though its content digests are available.
+        if record.get(SERVED_PROOF_KEY) == "recorded" and record.get(SERVED_SEQ_KEY) is not None:
+            record["run_id"] = run_id(
+                query_hash=record["query_hash"],
+                served_digest=record["results_digest"],
+                pipeline_hash=record["config_hash"],
+            )
         envelope["serving_receipt"] = record
         return json.dumps(envelope, indent=2, default=str)
     except Exception as exc:  # pragma: no cover — receipt must not break a cached answer
