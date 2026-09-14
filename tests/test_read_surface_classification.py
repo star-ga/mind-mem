@@ -106,6 +106,11 @@ CLASSIFICATION: dict[str, str] = {
     "anchor_root": NO_CONTENT,
     "approve_apply": NO_CONTENT,
     "approve_edge": NO_CONTENT,
+    # Entity-equivalence proposal responses carry graph/proposal metadata
+    # (including the operator-supplied rationale), not workspace block
+    # content. They still belong in the registry sweep so a new proposal door
+    # cannot escape classification by living beside graph_query.
+    "approve_entity_merge": NO_CONTENT,
     "arch_baseline": NO_CONTENT,
     "arch_check_rules": NO_CONTENT,
     "arch_delta": NO_CONTENT,
@@ -156,6 +161,7 @@ CLASSIFICATION: dict[str, str] = {
     "list_contradictions": NO_CONTENT,
     "list_cores": NO_CONTENT,
     "list_edge_proposals": NO_CONTENT,
+    "list_entity_merge_proposals": NO_CONTENT,
     "list_evidence": NO_CONTENT,
     "list_mind_kernels": NO_CONTENT,
     "load_core": NO_CONTENT,
@@ -174,6 +180,7 @@ CLASSIFICATION: dict[str, str] = {
     "project_profile": NO_CONTENT,
     "propagate_staleness": NO_CONTENT,
     "propose_edge": NO_CONTENT,
+    "propose_entity_merge": NO_CONTENT,
     "propose_update": NO_CONTENT,
     "reindex": NO_CONTENT,
     "reindex_dirty": NO_CONTENT,
@@ -183,6 +190,7 @@ CLASSIFICATION: dict[str, str] = {
     "resume_brief": NO_CONTENT,
     "retrieval_diagnostics": NO_CONTENT,
     "rollback_proposal": NO_CONTENT,
+    "reverse_entity_merge": NO_CONTENT,
     "scan": NO_CONTENT,
     "sign_model_tool": NO_CONTENT,
     "signal_stats": NO_CONTENT,
@@ -301,6 +309,7 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "add_block_edge": ({"src": QUARANTINED_ID, "dst": PENDING_ID, "kind": "derives"},),
     "approve_apply": ({"proposal_id": "no-such-proposal", "dry_run": True},),
     "approve_edge": ({"proposal_id": "no-such-proposal"},),
+    "approve_entity_merge": ({"proposal_id": "no-such-entity-merge"},),
     # The fixture path is required, not optional: without it these four bound
     # nothing and every call died in ``TypeError: ... missing 1 required
     # positional argument`` before the tool body ran. Four "no canary" rows
@@ -320,9 +329,11 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "ontology_load": ({"spec": "{}"},),
     "propose_slot_update": ({"namespace": "profile", "slot": "status", "value": "swept", "rationale": "sweep rationale"},),
     "propose_edge": ({"subject": "a", "predicate": "relates_to", "object": "b", "source_block_id": QUARANTINED_ID},),
+    "propose_entity_merge": ({"winner_id": "a", "loser_id": "b", "rationale": "swept merge rationale"},),
     "reject_edge": ({"proposal_id": "no-such-proposal"},),
     "reject_proposal": ({"proposal_id": "no-such-proposal", "reason": "swept"},),
     "rollback_proposal": ({"receipt_ts": "1970-01-01T00:00:00Z", "reason": "swept"},),
+    "reverse_entity_merge": ({"proposal_id": "no-such-entity-merge"},),
     "sign_model_tool": ({"path": WS},),
     "vault_sync": ({"vault_root": WS, "block_id": QUARANTINED_ID, "relative_path": "swept.md", "body": "swept"},),
     "agent_inject": (
@@ -372,7 +383,10 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "get_mind_kernel": ({"name": "recall"},),
     "governance_health_bench": ({},),
     "graph": ({"action": "stats"},),
-    "graph_query": ({"entity": "frost", "depth": 2},),
+    "graph_query": (
+        {"entity": "frost", "depth": 2},
+        {"entity": "frost", "depth": 2, "resolve_same_as": True},
+    ),
     "graph_stats": ({},),
     "hybrid_search": (
         {"query": "architecture decision", "limit": 10},
@@ -386,6 +400,7 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "list_contradictions": ({},),
     "list_cores": ({},),
     "list_edge_proposals": ({},),
+    "list_entity_merge_proposals": ({}, {"status": "all", "limit": 16}),
     "list_evidence": ({"limit": 50},),
     "list_mind_kernels": ({},),
     "load_core": ({"filename": "sweep-1.0.mmcore"},),

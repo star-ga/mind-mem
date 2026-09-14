@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1625 | **Est. tokens:** ~4796521
-**Generated:** 2026-09-14 16:59 UTC
+**Files:** 1625 | **Est. tokens:** ~4796735
+**Generated:** 2026-09-14 17:09 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 715 | ~2125483 |
+| `tests/` | 715 | ~2125697 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1650,7 +1650,7 @@
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
 - `test_read_surface_admission.py` (~6331 tok, huge) — Every read surface, swept with a three-status canary.
-- `test_read_surface_classification.py` (~8993 tok, huge) — The registry-wide read-surface classification — the committed table.
+- `test_read_surface_classification.py` (~9207 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~4156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_resources.py` (~7355 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall.py` (~3898 tok, huge) — Tests for recall.py — zero external deps (stdlib unittest)."""
