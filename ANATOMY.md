@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1625 | **Est. tokens:** ~4790041
-**Generated:** 2026-09-14 16:46 UTC
+**Files:** 1625 | **Est. tokens:** ~4790047
+**Generated:** 2026-09-14 16:48 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 238 | ~1079918 |
+| `src/mind_mem/` | 238 | ~1079924 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -827,7 +827,7 @@
 - `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
 - `dream_cycle.py` (~15033 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~5752 tok, huge) — mind-mem Semantic Belief Drift Detection.
-- `edge_grounded_answer.py` (~6109 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `edge_grounded_answer.py` (~6115 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
 - `entity_ingest.py` (~3309 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
 - `entity_prefetch.py` (~3078 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).

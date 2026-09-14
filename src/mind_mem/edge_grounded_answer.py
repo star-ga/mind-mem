@@ -535,7 +535,7 @@ def answer(
             fabricated_citations=(),
             grounded=True,
             generator="none",
-            semantic_required=False,
+            semantic_required=semantic_required,
         )
 
     text = generate_fn(ctx.serialize())
@@ -570,7 +570,7 @@ def answer(
         fabricated_citations=fabricated,
         grounded=not extra_gaps,
         generator="injected",
-        semantic_required=False,
+        semantic_required=semantic_required,
     )
 
 
