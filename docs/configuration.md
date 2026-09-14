@@ -109,6 +109,46 @@ The `api.auth` section controls how the REST API authenticates requests.
 | --- | --- | --- | --- |
 | `api.auth.mode` | string | `"bearer"` | Auth strategy. Valid values: `"bearer"` (env-var tokens), `"oidc"` (JWT SSO), `"api_keys"` (mmk_live_* keys), `"combined"` (bearer + api_keys, OIDC via /v1/auth/oidc/callback). |
 
+### MCP Static-token Namespace Identity
+
+The MCP HTTP server's built-in static verifier assigns the user and admin
+credentials the verified principals `mind-mem-user` and `mind-mem-admin`.
+Their `client_id` values identify rate-limit buckets; `client_id` alone is
+never a namespace identity. A custom token verifier must provide a verified
+`sub` (or `agent_id`) claim for a namespaced call. A present token without a
+verified principal is refused rather than treated as an unbound operator.
+
+Namespace visibility remains an explicit workspace policy. For example, a
+deployment that gives the static user shared read access and the static admin
+shared plus agent read/write access can use:
+
+```json
+{
+  "default_policy": "read",
+  "agents": {
+    "mind-mem-user": {
+      "namespaces": ["shared"],
+      "read": ["shared"],
+      "write": []
+    },
+    "mind-mem-admin": {
+      "namespaces": ["shared", "agents/*"],
+      "read": ["shared", "agents/*"],
+      "write": ["shared", "agents/*"]
+    }
+  }
+}
+```
+
+When migrating from a verifier that used an arbitrary `client_id` as an
+agent name, add the verified subject and an explicit matching entry to
+`mind-mem-acl.json`; do not rely on the client id fallback. Existing root-level
+corpus paths also need explicit read coverage if the deployment intends the
+static principals to see them. Calls with no token and no pre-bound transport
+identity remain the legacy unbound stdio/operator path. Each observed tool
+call captures its authentication metadata once, so nested calls cannot switch
+principal partway through a request.
+
 ### OIDC Configuration
 
 Set these **environment variables** when `api.auth.mode` is `"oidc"` or `"combined"`:
