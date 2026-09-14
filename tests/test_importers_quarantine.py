@@ -476,6 +476,40 @@ def test_cli_chunked_import_seals_one_anchor_root_and_release_stays_governed(tmp
     assert metadata["chunk_anchor_schema"] == "MM_CHUNK_ANCHOR_v1"
     assert metadata["chunk_anchor_count"] == len(blocks)
     assert metadata["chunk_anchor_encoding"] == "utf-8"
+    # Independently reconstruct leaves from persisted block metadata, not
+    # from the importer's in-memory records or its sealing helper.
+    import hashlib
+
+    from mind_mem.merkle_tree import MerkleTree
+
+    anchors = [
+        {
+            "block_id": block["_id"],
+            "document_hash": block["DocumentHash"],
+            "source": block["DocumentSource"],
+            "start_char": int(block["DocumentStartChar"]),
+            "end_char": int(block["DocumentEndChar"]),
+            "chunk_index": int(block["ChunkIndex"]),
+            "chunk_total": int(block["ChunkTotal"]),
+            "chunker_id": block["ChunkerId"],
+            "chunker_version": block["ChunkerVersion"],
+            "chunker_config_digest": block["ChunkerConfigDigest"],
+        }
+        for block in blocks
+    ]
+    anchors.sort(key=lambda item: (item["source"], item["chunk_index"], item["block_id"]))
+    digests = [hashlib.sha256(json.dumps(anchor, sort_keys=True, separators=(",", ":")).encode()).hexdigest() for anchor in anchors]
+    tree = MerkleTree()
+    tree.build([(anchor["block_id"], digest) for anchor, digest in zip(anchors, digests)])
+    assert metadata["chunk_anchor_merkle_root"] == tree.root_hash
+    assert metadata["chunk_anchor_merkle_profile"] == "mind-mem.merkle_tree.sha3-512.v1"
+    for anchor, digest in zip(anchors, digests):
+        proof = tree.get_proof(anchor["block_id"])
+        assert tree.verify_proof(anchor["block_id"], digest, proof, metadata["chunk_anchor_merkle_root"])
+        changed = {**anchor, "start_char": anchor["start_char"] + 1}
+        changed_digest = hashlib.sha256(json.dumps(changed, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        assert not tree.verify_proof(anchor["block_id"], changed_digest, proof, metadata["chunk_anchor_merkle_root"])
+        assert not tree.verify_proof("IMP-OTHER-1", digest, proof, metadata["chunk_anchor_merkle_root"])
 
     proposal_id = propose_import_release(ws, payload["block_ids"], system="markdown", batch=payload["batch"], now=FIXED_NOW)
     applied = _approve(ws, proposal_id, dry_run=False)

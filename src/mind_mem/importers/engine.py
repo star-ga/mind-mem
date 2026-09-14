@@ -604,11 +604,19 @@ def _chunk_import_records(records: Iterable[ImportRecord]) -> tuple[ImportRecord
 
 
 def _chunk_anchor_metadata(records: Iterable[ImportRecord]) -> dict[str, Any]:
-    """Return one canonical EvidenceChain metadata root for chunk anchors."""
+    """Seal a canonical anchor-set digest and Merkle root in one existing event.
+
+    Leaves bind the imported block ID to SHA-256 of its canonical anchor
+    object. The existing MerkleTree applies its domain-separated SHA3-512
+    leaf/node rules; this is independent of the live corpus-index tree.
+    """
     from hashlib import sha256
+
+    from ..merkle_tree import MerkleTree
 
     anchors: list[dict[str, Any]] = [
         {
+            "block_id": block_id_for(record),
             "document_hash": record.document_hash,
             "source": record.document_source,
             "start_char": record.document_start_char,
@@ -624,11 +632,21 @@ def _chunk_anchor_metadata(records: Iterable[ImportRecord]) -> dict[str, Any]:
     ]
     if not anchors:
         return {}
-    anchors.sort(key=lambda item: (str(item["source"]), int(item["chunk_index"])))
+    anchors.sort(key=lambda item: (str(item["source"]), int(item["chunk_index"]), str(item["block_id"])))
     canonical = json.dumps(anchors, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    tree = MerkleTree()
+    tree.build(
+        [
+            (str(anchor["block_id"]), sha256(json.dumps(anchor, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest())
+            for anchor in anchors
+        ]
+    )
     return {
         "chunk_anchor_schema": _CHUNK_ANCHOR_SCHEMA,
         "chunk_anchor_root": sha256(canonical).hexdigest(),
+        "chunk_anchor_merkle_root": tree.root_hash,
+        "chunk_anchor_merkle_profile": "mind-mem.merkle_tree.sha3-512.v1",
+        "chunk_anchor_leaf_digest": "sha256-canonical-json",
         "chunk_anchor_count": len(anchors),
         "chunk_anchor_encoding": "utf-8",
         "chunk_anchor_config_digest": anchors[0]["chunker_config_digest"],
