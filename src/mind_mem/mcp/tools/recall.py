@@ -702,18 +702,26 @@ def _apply_attestation(
     resolves the CURRENT pipeline config hash / index anchor / vector flags, and
     stamps ``envelope["attestation"]`` with a freshly derived
     :class:`RecallAttestation`. Never touches the block store. Failure to derive
-    must never break recall — it is logged and the envelope returned unchanged.
+    must never break recall — it is logged, the results are retained, and any
+    carried proof is replaced with an explicit unproven marker.
     """
+    try:
+        envelope = json.loads(raw_json)
+    except (TypeError, ValueError) as exc:
+        # There is no structured attestation to preserve when the producer
+        # returned malformed JSON. Keep the answer path's non-raising contract.
+        _log.warning("recall_attestation_input_invalid", error=str(exc))
+        return raw_json
+    if not isinstance(envelope, dict) or "results" not in envelope:
+        # Not a blocks-shaped recall envelope (e.g. format="bundle"): skip.
+        return raw_json
+    results = envelope.get("results")
+    if not isinstance(results, list):
+        return raw_json
+
     try:
         from mind_mem.recall_attestation import derive_recall_attestation_for_workspace
 
-        envelope = json.loads(raw_json)
-        if not isinstance(envelope, dict) or "results" not in envelope:
-            # Not a blocks-shaped recall envelope (e.g. format="bundle"): skip.
-            return raw_json
-        results = envelope.get("results")
-        if not isinstance(results, list):
-            return raw_json
         ws = _workspace()
         carrier = _AttestationInput(results)
         degraded = envelope.get("degraded")
@@ -739,27 +747,16 @@ def _apply_attestation(
         return json.dumps(envelope, indent=2, default=str)
     except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
         _log.warning("recall_attestation_apply_failed", error=str(exc))
-        try:
-            from mind_mem.served_ledger import (
-                LEDGER_ERROR_KEY,
-                PROOF_UNPROVEN,
-                SERVED_PROOF_KEY,
-                SERVED_ROW_HASH_KEY,
-                SERVED_SEQ_KEY,
-            )
-
-            envelope = json.loads(raw_json)
-            if isinstance(envelope, dict) and isinstance(envelope.get("results"), list):
-                envelope["attestation"] = {
-                    SERVED_SEQ_KEY: None,
-                    SERVED_ROW_HASH_KEY: None,
-                    SERVED_PROOF_KEY: PROOF_UNPROVEN,
-                    LEDGER_ERROR_KEY: f"attestation derivation failed: {type(exc).__name__}: {exc}",
-                }
-                return json.dumps(envelope, indent=2, default=str)
-        except Exception:  # noqa: BLE001 — the fallback must never break recall
-            pass
-        return raw_json
+        # This marker is intentionally dependency-free: the ledger module is
+        # the dependency most likely to be unavailable on this failure path.
+        # Remove any carried proof before publishing the unproven result.
+        envelope["attestation"] = {
+            "served_seq": None,
+            "served_row_hash": None,
+            "served_proof": "unproven",
+            "ledger_error": f"attestation derivation failed: {type(exc).__name__}: {exc}",
+        }
+        return json.dumps(envelope, indent=2, default=str)
 
 
 def _record_served_run(raw_json: str, ws: str, *, generation: str | None) -> str:
