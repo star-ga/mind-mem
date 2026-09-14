@@ -352,6 +352,10 @@ def test_explicit_workspace_binds_v4_flags_during_approval(tmp_path: Path, monke
     from mind_mem.spec_binding import SpecBindingManager
     from mind_mem.v4 import block_metadata
 
+    # Registration deliberately uses the ambient resolver. This test controls
+    # that resolver through WORKSPACE, so clear the higher-priority CONFIG
+    # override before installing the validator and then switching workspaces.
+    monkeypatch.delenv("MIND_MEM_CONFIG", raising=False)
     explicit = tmp_path / "explicit"
     ambient = tmp_path / "ambient"
     init(str(explicit))

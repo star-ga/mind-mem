@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1607 | **Est. tokens:** ~4714665
-**Generated:** 2026-09-14 11:46 UTC
+**Files:** 1607 | **Est. tokens:** ~4714828
+**Generated:** 2026-09-14 11:50 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 236 | ~1066706 |
+| `src/mind_mem/` | 236 | ~1066709 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15393 |
@@ -86,11 +86,11 @@
 | `src/mind_mem/mcp/tools/` | 29 | ~118183 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
-| `src/mind_mem/storage/` | 2 | ~11515 |
+| `src/mind_mem/storage/` | 2 | ~11603 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~93132 |
-| `tests/` | 699 | ~2079235 |
+| `tests/` | 699 | ~2079307 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -813,7 +813,7 @@
 - `connection_manager.py` (~3185 tok, huge) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~2067 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
 - `consolidation_maturity_gate.py` (~2589 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `content_lifecycle.py` (~2927 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `content_lifecycle.py` (~2930 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4893 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `core_export.py` (~8336 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1039,7 +1039,7 @@
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
-- `__init__.py` (~5402 tok, huge) — Storage factory for mind-mem block stores (v3.2.0).
+- `__init__.py` (~5490 tok, huge) — Storage factory for mind-mem block stores (v3.2.0).
 - `sharded_pg.py` (~6113 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
 ### `src/mind_mem/`
 
@@ -1498,7 +1498,7 @@
 - `test_locomo_suite.py` (~2743 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
 - `test_m2_m3_namespace_contract.py` (~3147 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
-- `test_m4_closed_set_slots.py` (~5765 tok, huge) — M4 closed-set slots: declaration, staging, and governed supersession."""
+- `test_m4_closed_set_slots.py` (~5837 tok, huge) — M4 closed-set slots: declaration, staging, and governed supersession."""
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.

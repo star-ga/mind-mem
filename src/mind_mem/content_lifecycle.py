@@ -106,7 +106,7 @@ def workspace_policy(workspace: str) -> ContentLifecyclePolicy | None:
 
     config = context_config_for(workspace)
     if config is None:
-        config = _load_workspace_config(workspace)
+        config = _load_workspace_config(workspace, quiet=True)
     recall = config.get("recall", {})
     return ContentLifecyclePolicy.from_recall_config(recall) if isinstance(recall, Mapping) else None
 

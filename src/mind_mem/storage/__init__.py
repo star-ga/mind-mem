@@ -44,7 +44,7 @@ _MARKDOWN_BACKENDS: frozenset[str] = frozenset({"markdown", "encrypted"})
 _log = get_logger("storage")
 
 
-def _load_workspace_config(workspace: str) -> dict[str, Any]:
+def _load_workspace_config(workspace: str, *, quiet: bool = False) -> dict[str, Any]:
     """Load ``mind-mem.json`` from *workspace*; empty dict on failure.
 
     The empty dict is a *degrade*, and the degrade is load-bearing: with
@@ -59,6 +59,10 @@ def _load_workspace_config(workspace: str) -> dict[str, Any]:
 
     Never raises: every caller (including the never-raising
     :func:`_backend_name`) depends on that.
+
+    ``quiet`` is for optional policy probes that do not select a store. Store
+    selection keeps the default warning; merely checking whether an inactive
+    feature runs must not report a storage-backend fallback that never occurred.
     """
     config_path = os.path.join(os.path.abspath(workspace), "mind-mem.json")
     if not os.path.isfile(config_path):
@@ -67,20 +71,22 @@ def _load_workspace_config(workspace: str) -> dict[str, Any]:
         with open(config_path, encoding="utf-8") as fh:
             raw: Any = json.load(fh)
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        _log.warning(
-            "workspace_config_unreadable",
-            path=config_path,
-            error=f"{type(exc).__name__}: {exc}",
-            effect="falling back to the default markdown block store",
-        )
+        if not quiet:
+            _log.warning(
+                "workspace_config_unreadable",
+                path=config_path,
+                error=f"{type(exc).__name__}: {exc}",
+                effect="falling back to the default markdown block store",
+            )
         return {}
     if not isinstance(raw, dict):
-        _log.warning(
-            "workspace_config_not_an_object",
-            path=config_path,
-            found=type(raw).__name__,
-            effect="falling back to the default markdown block store",
-        )
+        if not quiet:
+            _log.warning(
+                "workspace_config_not_an_object",
+                path=config_path,
+                found=type(raw).__name__,
+                effect="falling back to the default markdown block store",
+            )
         return {}
     return raw
 
