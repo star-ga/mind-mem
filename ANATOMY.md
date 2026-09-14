@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1602 | **Est. tokens:** ~4713914
-**Generated:** 2026-09-14 11:12 UTC
+**Files:** 1602 | **Est. tokens:** ~4715007
+**Generated:** 2026-09-14 11:19 UTC
 
 ## Token Budget Guide
 
@@ -83,14 +83,14 @@
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
-| `src/mind_mem/mcp/tools/` | 29 | ~117342 |
+| `src/mind_mem/mcp/tools/` | 29 | ~117359 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11515 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
-| `src/mind_mem/v4/` | 24 | ~94218 |
-| `tests/` | 696 | ~2068457 |
+| `src/mind_mem/v4/` | 24 | ~94648 |
+| `tests/` | 696 | ~2069103 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -912,7 +912,7 @@
 - `agent.py` (~3001 tok, huge) — Agent-bridge + vault MCP tools.
 - `arch_mind.py` (~3475 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
 - `audit.py` (~4247 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
-- `benchmark.py` (~2370 tok, huge) — Benchmark + category-summary MCP tools.
+- `benchmark.py` (~2387 tok, huge) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~2915 tok, huge) — Calibration MCP tools — feedback (quality) + outcome attribution (utility).
 - `chat.py` (~943 tok, large) — Chat surface — grounded question answering over the workspace.
 - `consolidation.py` (~6920 tok, huge) — Memory-consolidation MCP tools.
@@ -1106,7 +1106,7 @@
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `kernels.py` (~3819 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_backfill.py` (~3063 tok, huge) — The v4 kind-index build pass — ``mm kinds backfill``'s engine.
-- `kind_summaries.py` (~4089 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
+- `kind_summaries.py` (~4519 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
 - `logging_context.py` (~1424 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
 - `observability.py` (~2993 tok, huge) — v4 observability — counters, timers, histograms, exporters.
 - `pq.py` (~5255 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
@@ -1494,7 +1494,7 @@
 - `test_llm_noise_profile_wiring.py` (~7741 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_locomo_suite.py` (~2743 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
-- `test_m5_enforcement_boundaries.py` (~892 tok, large) — M5 output enforcement controls for summaries and evidence scope."""
+- `test_m5_enforcement_boundaries.py` (~1538 tok, huge) — M5 output enforcement controls for summaries and evidence scope."""
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.

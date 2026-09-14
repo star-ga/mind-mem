@@ -117,6 +117,7 @@ def _kind_summaries_section(ws: str) -> list[dict] | None:
                 "source_ids": list(s.source_ids),
                 "source_digest": s.source_digest,
                 "enforcement": s.enforcement,
+                "semantic_verification": s.semantic_verification,
             }
             for s in list_summaries(ws)
         ]

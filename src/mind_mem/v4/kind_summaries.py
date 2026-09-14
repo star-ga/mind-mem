@@ -48,14 +48,21 @@ import datetime as _dt
 import hashlib
 import json
 import sqlite3
-import unicodedata
 from collections.abc import Callable, Iterable
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..codepoint_sanitize import sanitize_codepoints
 from ..compliance.prewrite import PreWritePolicy, screen
-from .feature_flags import flag_config, require_enabled
+from .feature_flags import (
+    FeatureDisabledError,
+    flag_config,
+    flag_config_for_workspace,
+    is_enabled_for_workspace,
+    require_enabled,
+    require_implemented,
+)
 
 __all__ = [
     "FLAG",
@@ -88,10 +95,9 @@ _MIN_MAX_CHARS: int = 64
 class KindSummary:
     """Read-only summary record for one kind.
 
-    ``enforcement`` is ``verified`` only for the built-in deterministic
-    summariser. Installed callables are bounded and screened, but their
-    semantic claims cannot be proven by this adapter and are therefore
-    exposed as ``unverified`` to every reader.
+    ``enforcement`` names the output path (``deterministic_extract`` or
+    ``unverified_plugin``); ``semantic_verification`` is explicit because
+    neither path proves the truth of a summary's claims.
     """
 
     kind: str
@@ -100,7 +106,8 @@ class KindSummary:
     updated_at: str
     source_ids: tuple[str, ...] = ()
     source_digest: str = ""
-    enforcement: str = "unverified"
+    enforcement: str = "legacy_unverified"
+    semantic_verification: str = "not_established"
 
 
 class SummaryOutputError(ValueError):
@@ -179,14 +186,15 @@ CREATE TABLE IF NOT EXISTS kind_summaries (
     updated_at   TEXT NOT NULL,
     source_ids   TEXT NOT NULL DEFAULT '[]',
     source_digest TEXT NOT NULL DEFAULT '',
-    enforcement  TEXT NOT NULL DEFAULT 'unverified'
+    enforcement  TEXT NOT NULL DEFAULT 'legacy_unverified',
+    semantic_verification TEXT NOT NULL DEFAULT 'not_established'
 );
 """
 
 
 def ensure_kind_summary_schema(workspace: str | Path) -> None:
     """Idempotent. Creates the ``kind_summaries`` table."""
-    require_enabled(FLAG)
+    _require_summary_enabled(workspace)
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
@@ -198,7 +206,8 @@ def ensure_kind_summary_schema(workspace: str | Path) -> None:
         for name, ddl in (
             ("source_ids", "TEXT NOT NULL DEFAULT '[]'"),
             ("source_digest", "TEXT NOT NULL DEFAULT ''"),
-            ("enforcement", "TEXT NOT NULL DEFAULT 'unverified'"),
+            ("enforcement", "TEXT NOT NULL DEFAULT 'legacy_unverified'"),
+            ("semantic_verification", "TEXT NOT NULL DEFAULT 'not_established'"),
         ):
             if name not in columns:
                 conn.execute(f"ALTER TABLE kind_summaries ADD COLUMN {name} {ddl}")
@@ -226,7 +235,7 @@ def refresh_summary(workspace: str | Path, kind: str) -> KindSummary | None:
     ``INSERT OR REPLACE`` and commits. Not safe to point at a workspace
     you only mean to read.
     """
-    require_enabled(FLAG)
+    _require_summary_enabled(workspace)
     ensure_kind_summary_schema(workspace)
     db = Path(workspace) / "index.db"
     if not db.is_file():
@@ -246,21 +255,18 @@ def refresh_summary(workspace: str | Path, kind: str) -> KindSummary | None:
     blocks = [content for _, content in source_rows]
     source_ids = tuple(block_id for block_id, _ in source_rows)
     source_digest = _source_digest(source_rows)
-    summary = _active_summariser(blocks)
-    summary, enforcement = _screen_summary(
-        summary,
-        workspace=workspace,
-        kind=kind,
-        source_digest=source_digest,
-        trusted=_active_summariser is default_summariser,
-    )
+    summariser = _active_summariser
+    summary = summariser(blocks)
+    summary = _screen_summary(summary, workspace=workspace, kind=kind, source_digest=source_digest)
+    enforcement = "deterministic_extract" if summariser is default_summariser else "unverified_plugin"
+    semantic_verification = "not_established"
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
     with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         conn.execute(
             """INSERT OR REPLACE INTO kind_summaries
-               (kind, summary, block_count, updated_at, source_ids, source_digest, enforcement)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (kind, summary, len(source_rows), now, json.dumps(source_ids), source_digest, enforcement),
+               (kind, summary, block_count, updated_at, source_ids, source_digest, enforcement, semantic_verification)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (kind, summary, len(source_rows), now, json.dumps(source_ids), source_digest, enforcement, semantic_verification),
         )
         conn.commit()
     return KindSummary(
@@ -271,12 +277,13 @@ def refresh_summary(workspace: str | Path, kind: str) -> KindSummary | None:
         source_ids=source_ids,
         source_digest=source_digest,
         enforcement=enforcement,
+        semantic_verification=semantic_verification,
     )
 
 
 def get_summary(workspace: str | Path, kind: str) -> KindSummary | None:
     """Return the stored summary for ``kind``, or ``None`` if absent."""
-    require_enabled(FLAG)
+    _require_summary_enabled(workspace)
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
@@ -284,9 +291,9 @@ def get_summary(workspace: str | Path, kind: str) -> KindSummary | None:
         if not _table_exists(conn, "kind_summaries"):
             return None
         columns = {row[1] for row in conn.execute("PRAGMA table_info(kind_summaries)")}
-        if {"source_ids", "source_digest", "enforcement"} <= columns:
+        if {"source_ids", "source_digest", "enforcement", "semantic_verification"} <= columns:
             row = conn.execute(
-                """SELECT kind, summary, block_count, updated_at, source_ids, source_digest, enforcement
+                """SELECT kind, summary, block_count, updated_at, source_ids, source_digest, enforcement, semantic_verification
                    FROM kind_summaries WHERE kind = ?""",
                 (kind,),
             ).fetchone()
@@ -295,23 +302,27 @@ def get_summary(workspace: str | Path, kind: str) -> KindSummary | None:
                 "SELECT kind, summary, block_count, updated_at FROM kind_summaries WHERE kind = ?",
                 (kind,),
             ).fetchone()
-            row = (*old, "[]", "", "unverified") if old is not None else None
+            row = (*old, "[]", "", "legacy_unverified", "not_established") if old is not None else None
     if row is None:
         return None
-    return KindSummary(
-        kind=row[0],
-        summary=row[1],
-        block_count=int(row[2]),
-        updated_at=row[3],
-        source_ids=_decode_source_ids(row[4]),
-        source_digest=str(row[5] or ""),
-        enforcement=str(row[6] or "unverified"),
+    return _screen_stored_summary(
+        KindSummary(
+            kind=row[0],
+            summary=row[1],
+            block_count=int(row[2]),
+            updated_at=row[3],
+            source_ids=_decode_source_ids(row[4]),
+            source_digest=str(row[5] or ""),
+            enforcement=str(row[6] or "legacy_unverified"),
+            semantic_verification=str(row[7] or "not_established"),
+        ),
+        workspace,
     )
 
 
 def list_summaries(workspace: str | Path) -> list[KindSummary]:
     """Return every stored summary, ordered by kind."""
-    require_enabled(FLAG)
+    _require_summary_enabled(workspace)
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
@@ -319,25 +330,29 @@ def list_summaries(workspace: str | Path) -> list[KindSummary]:
         if not _table_exists(conn, "kind_summaries"):
             return []
         columns = {row[1] for row in conn.execute("PRAGMA table_info(kind_summaries)")}
-        if {"source_ids", "source_digest", "enforcement"} <= columns:
+        if {"source_ids", "source_digest", "enforcement", "semantic_verification"} <= columns:
             rows = conn.execute(
-                """SELECT kind, summary, block_count, updated_at, source_ids, source_digest, enforcement
+                """SELECT kind, summary, block_count, updated_at, source_ids, source_digest, enforcement, semantic_verification
                    FROM kind_summaries ORDER BY kind"""
             ).fetchall()
         else:
             rows = [
-                (*row, "[]", "", "unverified")
+                (*row, "[]", "", "legacy_unverified", "not_established")
                 for row in conn.execute("SELECT kind, summary, block_count, updated_at FROM kind_summaries ORDER BY kind").fetchall()
             ]
     return [
-        KindSummary(
-            kind=r[0],
-            summary=r[1],
-            block_count=int(r[2]),
-            updated_at=r[3],
-            source_ids=_decode_source_ids(r[4]),
-            source_digest=str(r[5] or ""),
-            enforcement=str(r[6] or "unverified"),
+        _screen_stored_summary(
+            KindSummary(
+                kind=r[0],
+                summary=r[1],
+                block_count=int(r[2]),
+                updated_at=r[3],
+                source_ids=_decode_source_ids(r[4]),
+                source_digest=str(r[5] or ""),
+                enforcement=str(r[6] or "legacy_unverified"),
+                semantic_verification=str(r[7] or "not_established"),
+            ),
+            workspace,
         )
         for r in rows
     ]
@@ -371,36 +386,52 @@ def _screen_summary(
     workspace: str | Path,
     kind: str,
     source_digest: str,
-    trusted: bool,
-) -> tuple[str, str]:
-    """Validate and prewrite-screen output before opening the write transaction."""
+) -> str:
+    """Validate and prewrite-screen output before the SQLite write."""
     if not isinstance(summary, str):
         raise SummaryOutputError(f"summariser must return str, got {type(summary).__name__}")
-    cap = _max_chars()
+    cap = _max_chars(workspace)
     if len(summary) > cap:
         raise SummaryOutputError(f"summary exceeds configured max_chars ({len(summary)} > {cap})")
-    if "\x00" in summary or any((ord(char) < 32 and char not in "\r\n\t") or unicodedata.category(char) == "Cs" for char in summary):
-        raise SummaryOutputError("summary contains unsafe control characters")
-
-    # This is the same prewrite door as other governed writes.  The synthetic
-    # provenance is about the derived operation itself, never a claim about
-    # who authored the source blocks.  ``record=False`` keeps refresh side
-    # effects limited to its own SQLite row.
-    provenance = {
-        "ActorId": "kind_summaries",
-        "ActorRole": "derived-summary",
-        "SessionId": source_digest,
-        "ToolId": "v4.kind_summaries",
-        "Purpose": f"refresh kind {kind}",
-    }
+    clean = sanitize_codepoints(summary)
+    if clean != summary:
+        raise SummaryOutputError("summary contains unsafe invisible or control codepoints")
+    policy = PreWritePolicy.resolve(str(workspace))
+    if policy.provenance_policy == "required":
+        raise SummaryOutputError("summary provenance policy requires caller attribution; refresh has no caller context")
     screened = screen(
         summary,
-        policy=PreWritePolicy.resolve(str(workspace)),
-        provenance=provenance,
+        policy=policy,
+        provenance={},
         target=f"kind_summaries/{kind}",
         record=False,
     )
-    return screened.text, "verified" if trusted else "unverified"
+    return screened.text
+
+
+def _screen_stored_summary(record: KindSummary, workspace: str | Path) -> KindSummary:
+    """Apply current redaction policy before exposing an old stored row."""
+    text = _screen_summary(record.summary, workspace=workspace, kind=record.kind, source_digest=record.source_digest)
+    if text == record.summary:
+        return record
+    return KindSummary(
+        kind=record.kind,
+        summary=text,
+        block_count=record.block_count,
+        updated_at=record.updated_at,
+        source_ids=record.source_ids,
+        source_digest=record.source_digest,
+        enforcement=record.enforcement,
+        semantic_verification=record.semantic_verification,
+    )
+
+
+def _require_summary_enabled(workspace: str | Path) -> None:
+    """Require the summary flag from the explicit workspace configuration."""
+    require_implemented(FLAG)
+    if is_enabled_for_workspace(str(workspace), FLAG):
+        return
+    raise FeatureDisabledError(f"mind-mem v4 surface '{FLAG}' is disabled for workspace {workspace}")
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
@@ -411,14 +442,14 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 
-def _max_chars() -> int:
+def _max_chars(workspace: str | Path | None = None) -> int:
     """Configured summary cap, or :data:`DEFAULT_MAX_CHARS`.
 
     Reads ``v4.kind_summaries.max_chars``. A non-numeric or absent value
     falls back to the default; anything below :data:`_MIN_MAX_CHARS` is
     raised to it.
     """
-    raw = flag_config(FLAG)
+    raw = flag_config(FLAG) if workspace is None else flag_config_for_workspace(str(workspace), FLAG)
     if not isinstance(raw, dict):
         return DEFAULT_MAX_CHARS
     v = raw.get("max_chars", DEFAULT_MAX_CHARS)
