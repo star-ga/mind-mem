@@ -24,6 +24,7 @@ is an explicit :class:`ImportParseError`.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from dataclasses import dataclass
@@ -91,6 +92,9 @@ class SourceNote:
     relative_path: str
     front_matter: Mapping[str, str]
     body: str
+    raw_sha256: str = ""
+    raw_body: str = ""
+    raw_body_start_char: int = 0
 
     @property
     def stem(self) -> str:
@@ -242,21 +246,43 @@ def load_note_tree(
             if len(collected) >= MAX_TREE_FILES:
                 raise ImportParseError(f"note tree has more than {MAX_TREE_FILES} notes: {path}")
             try:
-                with open(full, "r", encoding="utf-8") as handle:
-                    text = handle.read()
+                with open(full, "rb") as handle:
+                    raw_bytes = handle.read()
+                text = raw_bytes.decode("utf-8")
             except UnicodeDecodeError as exc:
                 raise ImportParseError(f"note is not valid UTF-8: {os.path.relpath(full, root)}") from exc
             except OSError as exc:
                 raise ImportParseError(f"cannot read note {os.path.relpath(full, root)}: {exc}") from exc
-            front_matter, body = parse_front_matter(text.replace("\r\n", "\n").replace("\r", "\n"))
+            normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+            front_matter, body = parse_front_matter(normalized)
+            normalized_body_start = len(normalized) - len(body)
+            raw_body_start = _raw_offset_for_normalized(normalized, text, normalized_body_start)
             collected.append(
                 SourceNote(
                     relative_path=os.path.relpath(full, root).replace(os.sep, "/"),
                     front_matter=front_matter,
                     body=body,
+                    raw_sha256=hashlib.sha256(raw_bytes).hexdigest(),
+                    raw_body=text[raw_body_start:],
+                    raw_body_start_char=raw_body_start,
                 )
             )
 
     if not collected:
         raise ImportParseError(f"no markdown notes found under {path} (looked for {', '.join(NOTE_EXTENSIONS)})")
     return tuple(sorted(collected, key=lambda note: note.relative_path))
+
+
+def _raw_offset_for_normalized(normalized: str, raw: str, offset: int) -> int:
+    """Map an LF-normalized character offset back to decoded raw text."""
+    if offset <= 0:
+        return 0
+    normalized_index = 0
+    raw_index = 0
+    while normalized_index < offset and raw_index < len(raw):
+        if raw.startswith("\r\n", raw_index):
+            raw_index += 2
+        else:
+            raw_index += 1
+        normalized_index += 1
+    return raw_index

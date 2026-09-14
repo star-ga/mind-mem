@@ -8,6 +8,7 @@ credential, no stub server.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -27,6 +28,7 @@ from mind_mem.importers import (
     ImportParseError,
     provenance_token,
     run_import,
+    verify_document_anchor,
 )
 from mind_mem.importers.fs_source import (
     MAX_TREE_FILES,
@@ -154,7 +156,20 @@ class TestNoteTreeLoading:
         assert not any("/.obsidian/" in path or path.startswith(".obsidian/") for path in paths)
 
     def test_notes_carry_no_filesystem_timestamps(self) -> None:
-        assert set(SourceNote.__dataclass_fields__) == {"relative_path", "front_matter", "body"}
+        assert {"relative_path", "front_matter", "body"}.issubset(SourceNote.__dataclass_fields__)
+        assert not {"mtime", "ctime", "atime"} & set(SourceNote.__dataclass_fields__)
+
+    def test_notes_carry_raw_utf8_identity_and_crlf_body_offset(self, tmp_path: Path) -> None:
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        raw = "---\r\ntitle: café\r\n---\r\nπ line\r\nsecond\r\n".encode("utf-8")
+        path = tree / "unicode.md"
+        path.write_bytes(raw)
+        note = load_note_tree(str(tree))[0]
+        decoded = raw.decode("utf-8")
+        assert note.raw_sha256 == hashlib.sha256(raw).hexdigest()
+        assert note.raw_body == "π line\r\nsecond\r\n"
+        assert decoded[note.raw_body_start_char :] == note.raw_body
 
     def test_two_copies_of_a_tree_load_identically(self, tmp_path: Path) -> None:
         copy = tmp_path / "copy"
@@ -207,6 +222,24 @@ class TestNoteTreeLoading:
 
     def test_default_ceilings_are_sane(self) -> None:
         assert MAX_TREE_FILES >= 1000
+
+    def test_chunked_import_anchor_verifies_then_detects_source_mutation(self, tmp_path: Path) -> None:
+        from mind_mem.importers.engine import _chunk_import_records, build_import_block
+
+        raw = ("# Heading\r\n\r\n" + ("π source sentence. " * 120)).encode("utf-8")
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        source = tree / "long.md"
+        source.write_bytes(raw)
+        record = parse_payload("markdown", load_note_tree(str(tree)))[0]
+        chunks = _chunk_import_records((record,))
+        assert len(chunks) >= 2
+        blocks = [build_import_block(chunk) for chunk in chunks]
+        assert all(verify_document_anchor(block, str(tree)) for block in blocks)
+        altered = dict(blocks[0], ChunkerConfigDigest="0" * 64)
+        assert not verify_document_anchor(altered, str(tree))
+        source.write_bytes(raw + b"mutation")
+        assert not verify_document_anchor(blocks[0], str(tree))
 
 
 # ---------------------------------------------------------------------------

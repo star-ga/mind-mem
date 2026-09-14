@@ -56,6 +56,7 @@ from .engine import (
     load_source,
     provenance_token,
     run_import,
+    verify_document_anchor,
 )
 from .quarantine import (
     MAX_RELEASE_BLOCKS,
@@ -112,6 +113,7 @@ __all__ = [
     "quarantined_import_ids",
     "resolve_system",
     "run_import",
+    "verify_document_anchor",
 ]
 
 # Systems whose export is a local file or a local directory — the

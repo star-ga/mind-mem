@@ -126,6 +126,10 @@ def parse_markdown_vault(payload: Any) -> tuple[ImportRecord, ...]:
                 metadata=_note_metadata(note, structural),
                 created_at=first_str(front, ("created", "created_at", "date")),
                 links=wikilink_targets(body),
+                document_hash=note.raw_sha256,
+                document_source=note.relative_path,
+                document_text=note.raw_body,
+                document_start_char=note.raw_body_start_char,
             )
         )
     if not records:
@@ -186,6 +190,10 @@ def parse_agent_memory(payload: Any) -> tuple[ImportRecord, ...]:
                 metadata=_note_metadata(note, structural),
                 created_at=first_str(front, ("created", "created_at", "date")),
                 links=links,
+                document_hash=note.raw_sha256,
+                document_source=note.relative_path,
+                document_text=note.raw_body,
+                document_start_char=note.raw_body_start_char,
             )
         )
     if not records:

@@ -62,6 +62,16 @@ class ImportRecord:
     metadata: Mapping[str, str] = field(default_factory=dict)
     created_at: str = ""
     links: tuple[str, ...] = ()
+    document_hash: str = ""
+    document_source: str = ""
+    document_text: str = ""
+    document_start_char: int = 0
+    document_end_char: int | None = None
+    chunk_index: int | None = None
+    chunk_total: int | None = None
+    chunker_id: str = ""
+    chunker_version: str = ""
+    chunker_config_digest: str = ""
 
 
 @dataclass(frozen=True)

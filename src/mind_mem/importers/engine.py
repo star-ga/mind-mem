@@ -22,10 +22,12 @@ than one proposal per block.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 from collections.abc import Mapping
+from dataclasses import asdict
 from typing import Any, Iterable
 
 from ..block_provenance import attach_provenance
@@ -52,6 +54,8 @@ __all__ = [
     "IMPORT_BLOCK_TYPE",
     "MAX_DUMP_BYTES",
     "build_import_block",
+    "chunk_config_digest",
+    "verify_document_anchor",
     "load_dump",
     "load_source",
     "provenance_token",
@@ -75,6 +79,79 @@ MAX_DUMP_BYTES = 64 * 1024 * 1024
 def provenance_token(system: str) -> str:
     """Canonical provenance marker every imported block carries."""
     return f"imported:{system}"
+
+
+_CHUNK_ANCHOR_SCHEMA = "MM_CHUNK_ANCHOR_v1"
+_CHUNKER_ID = "mind-mem.smart_chunker"
+_CHUNKER_VERSION = "1"
+
+
+def _document_chunk_config() -> Any:
+    """Return the deterministic, non-LLM importer chunk configuration."""
+    from ..smart_chunker import SmartChunkerConfig
+
+    return SmartChunkerConfig(
+        max_chunk_size=1500,
+        soft_max_chunk_size=0,
+        soft_max_boundary_score=0.5,
+        min_chunk_size=100,
+        overlap_sentences=1,
+        preserve_code_blocks=True,
+        llm_refine=False,
+    )
+
+
+def chunk_config_digest() -> str:
+    """Digest the exact importer chunk configuration used for anchors."""
+    config = _document_chunk_config()
+    encoded = json.dumps(asdict(config), sort_keys=True, separators=(",", ":")).encode("utf-8")
+    from hashlib import sha256
+
+    return sha256(encoded).hexdigest()
+
+
+def verify_document_anchor(block: Mapping[str, Any], source_root: str) -> bool:
+    """Verify a chunk's raw-byte hash and decoded-character bounds.
+
+    ``Statement`` is the rendered corpus value and may be normalized by the
+    Markdown block format. This check therefore verifies the independent
+    source identity and coordinates, rather than pretending the rendered
+    value is a lossless copy of the source slice.
+    """
+    source = block.get("DocumentSource")
+    digest = block.get("DocumentHash")
+    encoding = block.get("DocumentEncoding")
+    if not isinstance(source, str) or not source or not isinstance(digest, str) or len(digest) != 64:
+        return False
+    if encoding != "utf-8" or any(c not in "0123456789abcdefABCDEF" for c in digest):
+        return False
+    if block.get("ChunkerId") != _CHUNKER_ID or block.get("ChunkerVersion") != _CHUNKER_VERSION:
+        return False
+    if block.get("ChunkerConfigDigest") != chunk_config_digest():
+        return False
+    if not isinstance(source_root, str) or not source_root.strip() or "\x00" in source:
+        return False
+    normalized = source.replace("\\", "/")
+    parts = normalized.split("/")
+    if normalized.startswith("/") or any(part in {"", ".", ".."} for part in parts):
+        return False
+    root = os.path.realpath(source_root)
+    path = os.path.abspath(os.path.join(root, *parts))
+    if not path.startswith(root + os.sep) or os.path.realpath(path) != path or not os.path.isfile(path):
+        return False
+    try:
+        if os.path.getsize(path) > 64 * 1024 * 1024:
+            return False
+        with open(path, "rb") as handle:
+            raw = handle.read()
+        text = raw.decode("utf-8")
+        start = int(block.get("DocumentStartChar"))
+        end = int(block.get("DocumentEndChar"))
+        index = int(block.get("ChunkIndex"))
+        total = int(block.get("ChunkTotal"))
+    except (OSError, UnicodeDecodeError, TypeError, ValueError):
+        return False
+    return hashlib.sha256(raw).hexdigest() == digest and 0 <= index < total and 0 <= start <= end <= len(text)
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +356,24 @@ def build_import_block(record: ImportRecord, *, batch: str = "") -> dict[str, An
         # on the floor). Rendered bare rather than as `[[name]]` so the
         # block parser cannot mistake the value for an inline list.
         block["Links"] = ", ".join(_as_field_value(str(link)) for link in record.links)
+    if record.chunk_index is not None:
+        # These fields identify a slice in the decoded source document. The
+        # Statement above is the corpus rendering and may be normalized by
+        # the block format; it is deliberately not used as the source slice.
+        block.update(
+            {
+                "DocumentHash": _as_field_value(record.document_hash),
+                "DocumentSource": _as_field_value(record.document_source),
+                "DocumentEncoding": "utf-8",
+                "DocumentStartChar": record.document_start_char,
+                "DocumentEndChar": record.document_end_char,
+                "ChunkIndex": record.chunk_index,
+                "ChunkTotal": record.chunk_total,
+                "ChunkerId": _as_field_value(record.chunker_id),
+                "ChunkerVersion": _as_field_value(record.chunker_version),
+                "ChunkerConfigDigest": _as_field_value(record.chunker_config_digest),
+            }
+        )
     return attach_provenance(
         block,
         actor_id=record.system,
@@ -296,6 +391,7 @@ def _write_batch(
     system: str,
     transform_hash: str,
     store: Any,
+    anchor_metadata: Mapping[str, Any] | None = None,
 ) -> list[str]:
     """Write a planned import batch under one governance admission.
 
@@ -308,6 +404,9 @@ def _write_batch(
 
     planned_ids = [block_id for block_id, _record in plan]
     written: list[str] = []
+    metadata: dict[str, Any] = {"system": system, "batch": batch, "blocks": len(planned_ids)}
+    if anchor_metadata:
+        metadata.update(anchor_metadata)
     with get_gate(workspace).admit_batch(
         action="INGEST",
         batch_id=batch,
@@ -316,7 +415,7 @@ def _write_batch(
         tier=IngestTier.EXTERNAL_INGEST,
         actor=f"importer:{system}",
         target_file=IMPORTED_CORPUS_FILE,
-        metadata={"system": system, "batch": batch, "blocks": len(planned_ids)},
+        metadata=metadata,
     ):
         for _block_id, record in plan:
             block = build_import_block(record, batch=batch)
@@ -411,6 +510,81 @@ def _materialize_link_edges(workspace: str, records: Iterable[ImportRecord]) -> 
     return written
 
 
+def _chunk_import_records(records: Iterable[ImportRecord]) -> tuple[ImportRecord, ...]:
+    """Split markdown records and attach source anchors.
+
+    The chunker is deterministic and explicitly configured without LLM
+    refinement. Records from JSON dump importers have no source-note fields
+    and pass through unchanged; ``run_import`` rejects that combination
+    before this helper is called for non-note systems.
+    """
+    from ..smart_chunker import smart_chunk
+
+    config = _document_chunk_config()
+    digest = chunk_config_digest()
+    out: list[ImportRecord] = []
+    for record in records:
+        if not record.document_hash or not record.document_text:
+            out.append(record)
+            continue
+        chunks = smart_chunk(record.document_text, config=config, source=record.document_source)
+        total = len(chunks)
+        for chunk in chunks:
+            out.append(
+                ImportRecord(
+                    system=record.system,
+                    external_id=f"{record.external_id}#chunk-{chunk.index}",
+                    text=chunk.text,
+                    metadata=record.metadata,
+                    created_at=record.created_at,
+                    links=record.links,
+                    document_hash=record.document_hash,
+                    document_source=record.document_source,
+                    document_text=record.document_text,
+                    document_start_char=record.document_start_char + chunk.start_char,
+                    document_end_char=record.document_start_char + chunk.end_char,
+                    chunk_index=chunk.index,
+                    chunk_total=total,
+                    chunker_id=_CHUNKER_ID,
+                    chunker_version=_CHUNKER_VERSION,
+                    chunker_config_digest=digest,
+                )
+            )
+    return tuple(out)
+
+
+def _chunk_anchor_metadata(records: Iterable[ImportRecord]) -> dict[str, Any]:
+    """Return one canonical EvidenceChain metadata root for chunk anchors."""
+    from hashlib import sha256
+
+    anchors = [
+        {
+            "document_hash": record.document_hash,
+            "source": record.document_source,
+            "start_char": record.document_start_char,
+            "end_char": record.document_end_char,
+            "chunk_index": record.chunk_index,
+            "chunk_total": record.chunk_total,
+            "chunker_id": record.chunker_id,
+            "chunker_version": record.chunker_version,
+            "chunker_config_digest": record.chunker_config_digest,
+        }
+        for record in records
+        if record.chunk_index is not None
+    ]
+    if not anchors:
+        return {}
+    anchors.sort(key=lambda item: (str(item["source"]), int(item["chunk_index"])))
+    canonical = json.dumps(anchors, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {
+        "chunk_anchor_schema": _CHUNK_ANCHOR_SCHEMA,
+        "chunk_anchor_root": sha256(canonical).hexdigest(),
+        "chunk_anchor_count": len(anchors),
+        "chunk_anchor_encoding": "utf-8",
+        "chunk_anchor_config_digest": anchors[0]["chunker_config_digest"],
+    }
+
+
 def run_import(
     workspace: str,
     system: str,
@@ -420,6 +594,7 @@ def run_import(
     dedup_threshold: float = 0.85,
     link_edges: bool = False,
     dry_run: bool = False,
+    chunk_documents: bool = False,
 ) -> ImportResult:
     """Import the source at *path* into *workspace*, quarantined.
 
@@ -445,6 +620,9 @@ def run_import(
             flag only decides whether the lineage graph is also written,
             so flag-off output is byte-identical.
         dry_run: Parse + plan without writing any block.
+        chunk_documents: Opt-in deterministic smart chunking for markdown
+            and agentmem note trees. Chunks carry UTF-8 source anchors and
+            remain quarantined until the normal release workflow.
 
     Raises:
         UnsupportedSystemError: *system* has no file-based importer.
@@ -462,7 +640,11 @@ def run_import(
 
     from .parsers import parse_payload
 
+    if chunk_documents and resolved not in DIRECTORY_SYSTEMS:
+        raise ImportParseError("--chunk-documents is supported only for markdown and agentmem note trees")
     records = tuple(_sanitized(r, workspace) for r in parse_payload(resolved, load_source(resolved, path)))
+    if chunk_documents:
+        records = _chunk_import_records(records)
     parsed = len(records)
 
     skipped_near = 0
@@ -499,12 +681,23 @@ def run_import(
         plan.append((block_id, record))
 
     batch = batch_id_for(resolved, (block_id for block_id, _ in plan))
+    anchor_metadata = _chunk_anchor_metadata(record for _block_id, record in plan)
 
     planned_ids = [block_id for block_id, _record in plan]
     if dry_run or store is None:
         written.extend(planned_ids)
     else:
-        written.extend(_write_batch(workspace, plan, batch=batch, system=resolved, transform_hash=transform_hash, store=store))
+        written.extend(
+            _write_batch(
+                workspace,
+                plan,
+                batch=batch,
+                system=resolved,
+                transform_hash=transform_hash,
+                store=store,
+                anchor_metadata=anchor_metadata,
+            )
+        )
 
     linked = 0
     if link_edges and not dry_run and records:
@@ -611,4 +804,14 @@ def _sanitized(record: ImportRecord, workspace: str) -> ImportRecord:
         metadata=clean_fields["metadata"],
         created_at=str(clean_fields["created_at"]),
         links=tuple(clean_fields["links"]),
+        document_hash=record.document_hash,
+        document_source=record.document_source,
+        document_text=record.document_text,
+        document_start_char=record.document_start_char,
+        document_end_char=record.document_end_char,
+        chunk_index=record.chunk_index,
+        chunk_total=record.chunk_total,
+        chunker_id=record.chunker_id,
+        chunker_version=record.chunker_version,
+        chunker_config_digest=record.chunker_config_digest,
     )
