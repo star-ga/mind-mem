@@ -114,7 +114,7 @@ by its full description below.
 
 - [~] **Pluggable redaction layer** — the stated blocker is GONE but completeness is unverified. `compliance/detectors.py` + `compliance/prewrite.py` exist and `screen(...)` IS called on the governed door (`mcp/tools/governance.py:328`, fail-closed on a malformed policy), so "no pre-write detector chain in-tree; the redaction flag is a name with no consumer" is false as written. **Not ticked:** this item is on the retracted-ticks lock from the 2026-09-01 audit (`tests/test_roadmap_ticks_gate.py`), which exists because it previously carried a confidently-worded false tick. Verified 2026-09-06 that the chain is wired. An explicit `module:DetectorClass` plugin reference is now validated and exercised through the governed door; the lock remains until the full item review and its retraction criteria are independently closed.
 - [~] **Compliance export pipeline** — the stated blocker is GONE but completeness is unverified. `mm export --policy {full|redacted|metadata-only} --since --format --out` runs (`compliance/export.py`), so "no `mm export` verb and no `--policy` option anywhere in `src/`" is false as written. **Not ticked** — retracted-ticks lock, see above. The surface exists; its behaviour against the full item text is NOT verified.
-- [~] **Provenance-rich blocks** — the stated blocker is GONE but enforcement is unverified. `compliance/provenance_policy.py` carries the `off | recommended | required` policy, so "zero occurrences in `src/`" is false as written. **Not ticked** — retracted-ticks lock, see above. That the policy EXISTS is verified; that it actually makes the fields required is NOT.
+- [~] **Provenance-rich blocks** — `compliance/provenance_policy.py` and the governed write door enforce the `off | recommended | required` policy for configured writes. Source-bound persistence and complete cross-backend coverage remain open; the required-provenance candidate is not part of this baseline. **Not ticked** — retracted-ticks lock, see above. Legacy export is a separate read surface and does not establish write provenance.
 - [x] **Time-bounded and event-bounded recall** — **shipped** (`since` / `until` / `event_id` on `recall(...)`, applied in `_apply_post_filters`)
 - [x] **Vocabulary-bound fields** — **shipped** (`v4/vocabulary.py`, enforced by `v4/block_metadata.validate_block` on the `propose_update` door; opt-in behind both `v4.block_metadata` and `v4.vocabulary`)
 
@@ -2014,7 +2014,7 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (same model as answerer 
 - [x] **Probabilistic truth score** — shipped in `src/mind_mem/truth_score.py` (commit `e98c144`). Bayesian posterior ``prior × age_decay − contradiction_mass + access_bonus``, clamped [0.01, 0.99]. Exposed via ``annotate_results(results, contradiction_graph=…)``; caller surfaces as ``block.truth_score``. Feeds into EvidenceBundle confidence. 22 tests.
 - [x] **Streaming ingest + back-pressure queue** — shipped in `src/mind_mem/streaming.py` (commit `9956b7a`). Bounded mpsc deque with drop-oldest policy + per-client token bucket. ``build_queue_from_config`` opt-in via ``streaming.enabled``. Thread-safe multi-producer. 14 tests including a 4-thread concurrency test.
 - [x] **Consensus voting** — shipped in `src/mind_mem/consensus_vote.py` (commit `f644096`). ``reach_consensus(votes, quorum_threshold, min_votes)`` returns a typed ``ConsensusDecision(winner, margin, confidence, reason, vote_counts)``; trust weights pulled from ``Vote.trust_weight`` or ``namespaces.<id>.trust_weight``; 0-weight excludes. **Wired 5.0.1** into `conflict_resolver.analyze_contradiction`'s `manual_review` fallback behind `governance.consensus.enabled` (default off); votes read from `intelligence/VOTES.md` through `admit_corpus`, winner staged as a `pending-review` proposal, never applied. 41 tests.
-- [ ] **mind-mem-4b v2 retrain — rebase to Qwen3.8-4B + catch up to the current surface** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **NOT required by the v4.5.0 recall-noise fix or the v4.6.0 validity gate** — both are backend / flag-gated and add no MCP tool, and the 4b is only the swappable KG-extraction/dispatch model (recall + hybrid *scoring* is the `mind/*.mind` kernels + Python, never the 4b). The refresh is warranted because the current 4b was trained knowing **83** tools while the live surface is now **102** (the typed-edge KG tools — `propose_edge` / `approve_edge` / `reject_edge` / `list_edge_proposals` / `entity_add_observation` — landed in v4.3/v4.4 *after* the 4b was trained). Proposed model = **full retrain on a Qwen3.8-4B base**, subject to verifying the base checkpoint's availability and suitability before training (current base: Qwen3.5-4B) over the surface + v3.2.x dispatchers + v3.3.0/v4.x retrieval shapes (incl. the validity-gate config, OKF v0.2, and hybrid fusion-provenance fields) + LoCoMo replay. **Sequencing (operator decision 2026-08-18): deferred to AFTER the full Pure-MIND port** — do the Qwen3.8-4B rebase + retrain once, over the *post-port* tool/surface, bundled with that milestone rather than now. The current 4b remains the swappable KG-extraction/dispatch model (never on the recall-scoring path — that is the `mind/*.mind` kernels + Python). The runtime continues to execute its registered tools, but the checkpoint's evaluation does not establish dispatch competence over the full current surface; the 83-versus-102 counts alone are not a tool-set compatibility proof. Runpod H200 kickoff (~$55, 8-12 hr external GPU) runs on operator approval at that time.
+- [ ] **mind-mem-4b v2 retrain — rebase to Qwen3.8-4B + catch up to the current surface** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **NOT required by the v4.5.0 recall-noise fix or the v4.6.0 validity gate** — both are backend / flag-gated and add no MCP tool, and the 4b is only the swappable KG-extraction/dispatch model (recall + hybrid *scoring* is the `mind/*.mind` kernels + Python, never the 4b). The refresh is warranted because the current 4b was trained knowing **83** tools while the live surface is now **103** (the typed-edge KG tools — `propose_edge` / `approve_edge` / `reject_edge` / `list_edge_proposals` / `entity_add_observation` — landed in v4.3/v4.4 *after* the 4b was trained). Proposed model = **full retrain on a Qwen3.8-4B base**, subject to verifying the base checkpoint's availability and suitability before training (current base: Qwen3.5-4B) over the surface + v3.2.x dispatchers + v3.3.0/v4.x retrieval shapes (incl. the validity-gate config, OKF v0.2, and hybrid fusion-provenance fields) + LoCoMo replay. **Sequencing (operator decision 2026-08-18): deferred to AFTER the full Pure-MIND port** — do the Qwen3.8-4B rebase + retrain once, over the *post-port* tool/surface, bundled with that milestone rather than now. The current 4b remains the swappable KG-extraction/dispatch model (never on the recall-scoring path — that is the `mind/*.mind` kernels + Python). The runtime continues to execute its registered tools, but the checkpoint's evaluation does not establish dispatch competence over the full current surface; the 83-versus-103 counts alone are not a tool-set compatibility proof. The current training-readiness corpus is development data with evaluation-target overlap; it does not establish an independent holdout or a retrain result. Runpod H200 kickoff (~$55, 8-12 hr external GPU) runs on operator approval at that time.
 
 **Estimated (v3.3.0):** ~2400 lines retrieval (Tier 1+2+3) + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`, `mind-mem[rerank-ensemble]` (Tier 4).
 
@@ -2522,7 +2522,7 @@ default story is two laptops talking to each other.
 
 - [ ] **JavaScript / TypeScript SDK** — client code ships in-tree at `sdk/js/`; the npm publish as `@star-ga/mind-mem-client` is the open step. Tracked.
 - [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
-- [ ] **OpenAPI + AsyncAPI specs** — **HALF SHIPPED 2026-09-06:** OpenAPI 3.1.0 ships at `sdk/spec/openapi.json` (13 paths, version-gated by `tests/test_sdk_openapi_drift.py`); AsyncAPI is still unpublished, which is why this stays open. Original text: declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
+- [ ] **OpenAPI + AsyncAPI specs** — **HALF SHIPPED 2026-09-06:** OpenAPI 3.1.0 ships at `sdk/spec/openapi.json` (13 paths, version-gated by `tests/test_sdk_openapi_drift.py`); AsyncAPI is still unpublished, and no public asynchronous event transport is in the current product, which is why this stays open. Original text: declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
 - [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Endpoint-backed (pinecone / weaviate / qdrant) still deferred — they need a live endpoint + API credential.
 
 ### F. Anti-patterns explicitly forbidden
@@ -3736,7 +3736,7 @@ mislabelled eval set still produces confident numbers.
   *store's own API shape*, not a 512-mind bug: nothing in the surface offers an
   embed-vs-store split for a caller to use.
 
-- [ ] **M2 — Namespace-property round-trip test.** Assert *empirically*, per
+- [~] **M2 — Namespace-property round-trip test.** The current candidate asserts *empirically*, per
   namespace, what is reachable by search versus only by direct get, with the
   retrieval scores printed. The external work does this as three probes with
   visible output rather than as a README claim, which is the right instinct: an
@@ -3745,7 +3745,7 @@ mislabelled eval set still produces confident numbers.
   but nothing asserts retrieval reachability as a *tested property*. Cheap: a few
   lines per namespace, and it belongs in CI next to the existing quality gate.
 
-- [ ] **M3 — Per-namespace relevance floors.** A single similarity threshold
+- [~] **M3 — Per-namespace relevance floors.** The current candidate accepts and applies declared per-namespace floors, but numeric calibration remains open. A single similarity threshold
   across differently-shaped namespaces is wrong in both directions. An unbounded,
   mostly-irrelevant corpus needs a floor to suppress noise; a small bounded
   per-entity record needs *no* floor, because a floor drops the one durable fact
@@ -3755,7 +3755,7 @@ mislabelled eval set still produces confident numbers.
   rather than a vibe, and any floor we set should carry the same kind of
   measurement. Depends on M2 for the measurement surface.
 
-- [ ] **M4 — Enum-keyed upsert slots inside the governed path (best product
+- [x] **M4 — Enum-keyed upsert slots inside the governed path (best product
   value).** For *bounded* fact spaces, prevent contradiction structurally instead
   of detecting it after the fact. File each fact under a topic slug drawn from a
   **closed set**, so a second statement on the same topic collides by
@@ -3793,7 +3793,7 @@ mislabelled eval set still produces confident numbers.
   one-off. So M4 should cite `drift.mind` as its precedent; the external tutorial
   contributed the framing and none of the mechanism.
 
-- [ ] **M5 — Enforcement-in-code audit, closing with capability flags
+- [~] **M5 — Enforcement-in-code audit, closing with capability flags
   (rescoped 2026-08-17).** Sweep for every place a governance or privacy property
   in this project rests on an *instruction to a model* rather than on code that
   executes. The principle in one line: a summarizer is *told* not to include
@@ -3889,8 +3889,7 @@ here and were merely not yet applied to the store. Citation in `mind-internal`.
 Cross-repo: `autoresearch` ROADMAP (M6's dead-end-registry symmetry, and the
 ablation pattern applied to loop components).
 
-- **Status:** Proposed 2026-08-17. M1/M5 are actionable now. M7 is explicitly
-  blocked and must not be started before the eval set exists.
+- **Status:** M1, M4, and M6 have implementation evidence in the current candidate; M2, M3, and M5 remain partial. M7 is explicitly blocked and must not be started before the eval set exists.
 
 ---
 
@@ -4108,10 +4107,9 @@ merely unwired (`_score_boundary`), already stronger here than in the external
 design (offset spans versus element retention), or sourced to this ecosystem's
 own evidence layer. Citation in `mind-internal`.
 
-- **Status:** Proposed 2026-08-24. N3 closed (negative finding). N2 reviewed by
-  Fable 2026-08-24: **AMENDED + approved in shape, re-sequenced behind N1 and a
-  chunker-wiring change.** N1 is the actionable next item and carries no
-  architectural risk.
+- **Status:** N3 and N1 have implementation evidence. N2 remains open behind
+  production importer wiring and raw-source identity; the separate N2 candidate
+  is not merged into this baseline.
 
 ---
 

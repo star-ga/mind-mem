@@ -1,6 +1,14 @@
 # Design: M5 — enforcement in code, not in the prompt
 
-Status: Draft (2026-08-17) · Owner: mind-mem · Roadmap: Group M / M5
+Status: Implemented candidate for core summary/chat paths; edge-answer
+context binding remains open (2026-09-14) · Owner: mind-mem · Roadmap: Group M / M5
+
+The current candidate has code-bound output screening, source admission, and
+strict citation checks on the summary and chat paths. This does not close the
+edge-grounded answer integration: its answer context still needs an
+independent binding acceptance before M5 can be called complete. The audit
+below remains the contract for finding and closing any additional
+prompt-only property.
 
 ## The principle
 
@@ -25,12 +33,13 @@ classifier, an export. Each one passes content through a model, and each is
 a place where "the model was asked not to" can quietly stand in for a
 guarantee.
 
-A first pass over the source supports the concern rather than dismissing
-it. `scrub`/`redact` vocabulary appears in essentially one place
-(`src/mind_mem/mm_cli.py`) — not in the write path, not in the distillers,
-not in the compaction or export paths. That is not proof of a leak; it is
-proof that **there is no enforcement layer to point at**, which is the
-condition under which prompt-shaped properties survive unnoticed.
+The historical first pass supported the concern rather than dismissing it:
+`scrub`/`redact` vocabulary appeared in essentially one place
+(`src/mind_mem/mm_cli.py`). The current candidate adds code-bound screening
+and source-admission checks for summary and chat outputs. The inventory below
+remains useful for the still-open edge-answer binding and any other path whose
+property is only prompt-shaped; the earlier absence of an enforcement layer is
+historical, not a claim about the current candidate.
 
 ## Scope: what counts as a prompt-enforced property
 

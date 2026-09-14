@@ -1,9 +1,11 @@
 # Design: M4 — closed-set slots, structural contradiction prevention
 
-Status: Draft (2026-08-17) · Owner: mind-mem · Roadmap: Group M / M4
+Status: Implemented candidate (2026-09-14); this document remains the
+contract · Owner: mind-mem · Roadmap: Group M / M4
 
-**This item changes write semantics on a governed store. It is specified
-before any code is written, and the spec is the deliverable.**
+**This item changes write semantics on a governed store. This document is the
+contract; the candidate implementation and its acceptance evidence are
+maintained separately.**
 
 ## The two ways to keep memory from contradicting itself
 
@@ -153,8 +155,8 @@ mode this design exists to prevent, executed at scale.
 
 ## Done when
 
-*(Spec-stage completion. Implementation is a separate item gated on this
-document being accepted.)*
+*(The specification is complete. The implementation remains acceptance-gated
+by its source-bound controls and deployment backend scope.)*
 
 - The slot-declaration format is specified, including versioning and the
   rejection rule.
