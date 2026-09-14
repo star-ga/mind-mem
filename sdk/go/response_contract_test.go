@@ -85,7 +85,7 @@ func TestActualServerDiagnosticContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !health.WorkspaceExists || health.APIVersion == "" || health.WorkspaceSchemaVersion == "" {
+	if health.WorkspaceExists == nil || !*health.WorkspaceExists || health.Workspace == nil || health.APIVersion == "" || health.WorkspaceSchemaVersion == "" {
 		t.Fatalf("lost health fields: %+v", health)
 	}
 	c, close = contractServer(t, "scan")
@@ -100,5 +100,17 @@ func TestActualServerDiagnosticContracts(t *testing.T) {
 	}
 	if counts["active"] != 1 || scan.Backend != "markdown" {
 		t.Fatalf("lost scan checks: %+v", scan)
+	}
+}
+
+func TestPublicHealthPreservesAbsence(t *testing.T) {
+	c, close := contractServer(t, "health_public")
+	defer close()
+	health, err := c.Health(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if health.APIVersion == "" || health.WorkspaceExists != nil || health.Workspace != nil {
+		t.Fatalf("public health must omit private workspace fields: %+v", health)
 	}
 }

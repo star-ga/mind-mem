@@ -66,10 +66,19 @@ def test_sdk_envelopes_are_produced_by_current_rest(tmp_path: Path, monkeypatch)
             elif name == "block":
                 assert actual["found"] and actual["block"]["Statement"] == fixture["block"]["Statement"]
 
+        # Anonymous health is intentionally public but does not disclose the
+        # workspace. Client types must represent absence rather than false.
+        response = client.get("/v1/health")
+        assert response.status_code == 200
+        public_health = response.json()
+        fixture = json.loads((ROOT / "sdk/spec/fixtures/health_public.json").read_text(encoding="utf-8"))
+        _shape_contains(public_health, fixture, "health_public")
+        assert "workspace" not in public_health and "workspace_exists" not in public_health
+
 
 def test_go_module_carries_the_same_contract_fixtures() -> None:
     fixtures = list((ROOT / "sdk/spec/fixtures").glob("*.json"))
-    assert {path.stem for path in fixtures} == {"recall", "block", "health", "contradictions", "scan"}
+    assert {path.stem for path in fixtures} == {"recall", "block", "health", "health_public", "contradictions", "scan"}
     for path in fixtures:
         assert path.read_bytes() == (ROOT / "sdk/go/testdata/contract" / path.name).read_bytes()
 

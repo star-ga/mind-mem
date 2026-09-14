@@ -46,8 +46,9 @@ export interface HealthResult extends Envelope {
   status: string;
   api_version: string;
   schema_version: string;
-  workspace: string;
-  workspace_exists: boolean;
+  /** Present only when the server authenticates the health request. */
+  workspace?: string;
+  workspace_exists?: boolean;
 }
 export interface ScanResult extends Envelope {
   backend: string;

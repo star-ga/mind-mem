@@ -42,3 +42,18 @@ it("preserves actual REST envelopes, ranked hits and evidence", async () => {
     globalThis.fetch = original;
   }
 });
+
+
+it("represents anonymous health without private workspace fields", async () => {
+  const fixture = JSON.parse(readFileSync("../spec/fixtures/health_public.json", "utf8"));
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(fixture), { status: 200 });
+  try {
+    const health = await new MindMemClient("http://fixture.invalid").health();
+    assert.ok(health.api_version);
+    assert.equal(health.workspace, undefined);
+    assert.equal(health.workspace_exists, undefined);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

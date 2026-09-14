@@ -72,11 +72,11 @@ type ContradictionsResult struct {
 
 type HealthResult struct {
 	RawResponse
-	Status                 string `json:"status"`
-	APIVersion             string `json:"api_version"`
-	Workspace              string `json:"workspace"`
-	WorkspaceExists        bool   `json:"workspace_exists"`
-	WorkspaceSchemaVersion string `json:"schema_version"`
+	Status                 string  `json:"status"`
+	APIVersion             string  `json:"api_version"`
+	Workspace              *string `json:"workspace,omitempty"`
+	WorkspaceExists        *bool   `json:"workspace_exists,omitempty"`
+	WorkspaceSchemaVersion string  `json:"schema_version"`
 }
 
 type ScanResult struct {
