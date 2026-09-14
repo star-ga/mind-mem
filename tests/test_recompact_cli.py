@@ -94,6 +94,20 @@ def test_staging_uses_existing_governed_proposal_service(monkeypatch, blocks, tm
     assert calls[0]["content_source"] == "agent"
 
 
+def test_staging_refuses_writer_truncation(monkeypatch, tmp_path):
+    payload = {
+        "status": "proposal",
+        "text": "x" * 501,
+        "source_ids": ["DEC-001", "DEC-002"],
+        "mode": "recompact",
+        "input_digest": "a" * 64,
+    }
+    staged = recompact_cli.stage_recompact_proposal(str(tmp_path), payload)
+    assert staged["write"] == "refused"
+    assert "governed statement limit" in staged["error"]
+    assert not (tmp_path / "intelligence" / "SIGNALS.md").exists()
+
+
 def test_unbounded_compressor_output_is_rejected_before_proposal(monkeypatch, blocks):
     _install_blocks(monkeypatch, blocks)
 

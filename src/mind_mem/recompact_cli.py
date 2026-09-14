@@ -20,6 +20,7 @@ from typing import Any
 from .recompaction import RecompactionConfig, recompact_cluster
 
 _MAX_COMPRESSED_CHARS = 10_000
+_MAX_PROPOSAL_CHARS = 500  # capture.append_signals' governed statement limit
 _BLOCK_ID = re.compile(r"^[A-Z]+-[a-zA-Z0-9_.-]+$")
 
 
@@ -157,6 +158,13 @@ def stage_recompact_proposal(workspace: str, payload: dict[str, Any]) -> dict[st
 
     if payload.get("status") != "proposal":
         return {**payload, "write": "skipped_no_change"}
+    text = payload.get("text")
+    if not isinstance(text, str) or len(text) > _MAX_PROPOSAL_CHARS:
+        return {
+            **payload,
+            "write": "refused",
+            "error": f"proposal text exceeds governed statement limit of {_MAX_PROPOSAL_CHARS} characters",
+        }
     source_ids = [str(item) for item in payload["source_ids"]]
     rationale = (
         f"{payload['mode']} fixed-point proposal from {len(source_ids)} active blocks; "
@@ -170,7 +178,7 @@ def stage_recompact_proposal(workspace: str, payload: dict[str, Any]) -> dict[st
     with use_workspace(workspace):
         raw = propose_update(
             "task",
-            str(payload["text"]),
+            text,
             rationale=rationale,
             tags=tags,
             confidence="medium",

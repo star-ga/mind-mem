@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1577 | **Est. tokens:** ~4678001
-**Generated:** 2026-09-14 12:15 UTC
+**Files:** 1577 | **Est. tokens:** ~4678213
+**Generated:** 2026-09-14 12:16 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 234 | ~1072912 |
+| `src/mind_mem/` | 234 | ~1073000 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15308 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 692 | ~2058334 |
+| `tests/` | 692 | ~2058458 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -950,7 +950,7 @@
 - `recall_digests.py` (~2101 tok, huge) — Canonical digests the recall attestation commits to.
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `recall_vector.py` (~24008 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
-- `recompact_cli.py` (~2168 tok, huge) — Safe CLI orchestration for proposal-only memory recompaction.
+- `recompact_cli.py` (~2256 tok, huge) — Safe CLI orchestration for proposal-only memory recompaction.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `replay_check.py` (~4323 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `request_context.py` (~2388 tok, huge) — One immutable policy context per request, consumed by the engine itself.
@@ -1654,7 +1654,7 @@
 - `test_recall_vector.py` (~5496 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_recall_wire_owner.py` (~3251 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_workspace_zero_index_probe.py` (~917 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_recompact_cli.py` (~1329 tok, large) — Production-path controls for the proposal-only H1 recompaction command."""
+- `test_recompact_cli.py` (~1453 tok, large) — Production-path controls for the proposal-only H1 recompaction command."""
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
