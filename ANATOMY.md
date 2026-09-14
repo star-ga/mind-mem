@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1595 | **Est. tokens:** ~4697030
-**Generated:** 2026-09-14 10:35 UTC
+**Files:** 1595 | **Est. tokens:** ~4697043
+**Generated:** 2026-09-14 10:36 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 694 | ~2062188 |
+| `tests/` | 694 | ~2062201 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1741,7 +1741,7 @@
 - `test_sdk_js_packaging.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_sdk_response_contract.py` (~957 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_sdk_response_contract.py` (~970 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_route_conformance.py` (~1778 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_live_request_parity.py` (~5192 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sec02_route_scope_parity.py` (~2287 tok, huge) — # Copyright 2026 STARGA, Inc.

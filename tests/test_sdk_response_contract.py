@@ -38,7 +38,7 @@ def _shape_contains(actual, fixture, path="response") -> None:
 def test_sdk_envelopes_are_produced_by_current_rest(tmp_path: Path, monkeypatch) -> None:
     init(str(tmp_path))
     (tmp_path / "decisions/DECISIONS.md").write_text(
-        "[D-20260914-001]\nDate: 2026-09-14\nStatus: active\nStatement: Orchid is the SDK contract sentinel.\n\n"
+        "[D-20260914-001]\nDate: 2026-09-14\nStatus: active\nStatement: Orchid is the SDK contract sentinel.\n\n", encoding="utf-8"
     )
     token = "fixture-sdk-contract-token"
     monkeypatch.setenv("MIND_MEM_TOKEN", token)
@@ -57,7 +57,7 @@ def test_sdk_envelopes_are_produced_by_current_rest(tmp_path: Path, monkeypatch)
             response = client.request(method, path, headers={"Authorization": "Bearer " + token}, json=body)
             assert response.status_code == 200, response.text
             actual = response.json()
-            fixture = json.loads((ROOT / "sdk/spec/fixtures" / f"{name}.json").read_text())
+            fixture = json.loads((ROOT / "sdk/spec/fixtures" / f"{name}.json").read_text(encoding="utf-8"))
             _shape_contains(actual, fixture, name)
             if name == "recall":
                 assert actual["count"] == 1
@@ -75,7 +75,7 @@ def test_go_module_carries_the_same_contract_fixtures() -> None:
 
 
 def test_contract_gate_rejects_the_old_nested_recall_shape() -> None:
-    fixture = json.loads((ROOT / "sdk/spec/fixtures/recall.json").read_text())
+    fixture = json.loads((ROOT / "sdk/spec/fixtures/recall.json").read_text(encoding="utf-8"))
     old = dict(fixture)
     old["results"] = [{"block": {"id": "D-20260914-001", "content": "Orchid"}, "score": 1.0, "rank": 1}]
     with pytest.raises(AssertionError, match="_id disappeared"):
