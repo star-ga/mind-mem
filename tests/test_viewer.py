@@ -171,7 +171,7 @@ def test_unsupported_method_still_rejects_bad_origin(tmp_path: Path) -> None:
 def test_static_asset_uses_text_content_and_no_remote_dependency() -> None:
     from importlib.resources import files
 
-    app = files("mind_mem").joinpath("viewer_static", "app.js").read_text()
+    app = files("mind_mem").joinpath("viewer_static", "app.js").read_text(encoding="utf-8")
     assert "textContent" in app
     assert "innerHTML" not in app
     assert "http://" not in app and "https://" not in app
@@ -184,6 +184,7 @@ def test_mm_view_help_is_real_cli_entrypoint() -> None:
         capture_output=True,
         text=True,
         timeout=10,
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stderr
     assert "read-only local viewer" in result.stdout

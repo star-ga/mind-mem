@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1648 | **Est. tokens:** ~4848809
-**Generated:** 2026-09-14 19:25 UTC
+**Files:** 1648 | **Est. tokens:** ~4848856
+**Generated:** 2026-09-14 19:47 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~213558 |
+| `docs/` | 95 | ~213579 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 728 | ~2148701 |
+| `tests/` | 728 | ~2148727 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -426,7 +426,7 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `cli-reference.md` (~8004 tok, huge) — CLI Reference
+- `cli-reference.md` (~8025 tok, huge) — CLI Reference
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
@@ -1758,7 +1758,7 @@
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.
 - `test_reranker_model_cache.py` (~1909 tok, huge) — Reranker weights load once per process, not once per query.
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
-- `test_resource_ranked_serving.py` (~839 tok, large) — Indexed MCP recall must use the live admitted serving boundary."""
+- `test_resource_ranked_serving.py` (~855 tok, large) — Indexed MCP recall must use the live admitted serving boundary."""
 - `test_rest_admin_gate_api_key_only.py` (~2102 tok, huge) — The REST admin gate must fire in an API-key-only deployment.
 - `test_rest_admin_scope_handoff.py` (~1246 tok, large) — Real REST -> observed-MCP admin scope handoff controls (RA.4).
 - `test_rest_api.py` (~4353 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
@@ -1925,7 +1925,7 @@
 - `test_vector_index_shape_contract.py` (~4682 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vector_inertness.py` (~1607 tok, huge) — The vector-leg honesty gauge.
 - `test_verify_cli.py` (~4647 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_viewer.py` (~2414 tok, huge) — Actual socket and CLI controls for the read-only local viewer."""
+- `test_viewer.py` (~2424 tok, huge) — Actual socket and CLI controls for the read-only local viewer."""
 - `test_vocabulary_wiring.py` (~2980 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_walkthrough.py` (~2441 tok, huge) — Tests for the v3.9 dependency-ordered walkthrough."""
 - `test_watcher.py` (~2037 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""

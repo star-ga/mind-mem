@@ -44,6 +44,7 @@ The sections below this index cover the frequently-used verbs in depth.
 | `mm skill` | Self-improving skill optimization subcommands. |
 | `mm serve` | Launch the mind-mem REST API server (requires mind-mem[api]). |
 | `mm http-serve` | Launch the v3.9 stdlib HTTP transport (zero dependencies; minimal endpoint surface). |
+| `mm view` | Launch a read-only local viewer for admitted memory and graph data. |
 | `mm daemon` | Launch the v3.9 background daemon — runs configured jobs on internal intervals. |
 | `mm inbox-watch` | Watch an inbox directory; route files by extension into the workspace. |
 | `mm ingest-serve` | Serve POST /ingest and drain accepted events into QUARANTINED blocks. Requires v4.ingest_serve in mind-mem.json; off by default. |

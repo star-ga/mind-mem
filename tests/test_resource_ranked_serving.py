@@ -31,7 +31,7 @@ def workspace(tmp_path: Path) -> Path:
 def test_ranked_resource_preserves_list_and_records_exact_order(workspace: Path, indexed: bool) -> None:
     if indexed:
         config_path = workspace / "mind-mem.json"
-        config = json.loads(config_path.read_text())
+        config = json.loads(config_path.read_text(encoding="utf-8"))
         config["recall"]["backend"] = "sqlite"
         config_path.write_text(json.dumps(config), encoding="utf-8")
         assert build_index(str(workspace))["blocks_indexed"] == 1
@@ -47,7 +47,7 @@ def test_ranked_resource_preserves_list_and_records_exact_order(workspace: Path,
 
 def test_indexed_resource_rechecks_admission_after_quarantine(workspace: Path) -> None:
     config_path = workspace / "mind-mem.json"
-    config = json.loads(config_path.read_text())
+    config = json.loads(config_path.read_text(encoding="utf-8"))
     config["recall"]["backend"] = "sqlite"
     config_path.write_text(json.dumps(config), encoding="utf-8")
     assert build_index(str(workspace))["blocks_indexed"] == 1
@@ -55,7 +55,7 @@ def test_indexed_resource_rechecks_admission_after_quarantine(workspace: Path) -
     with use_workspace(str(workspace)):
         before = json.loads(resources.get_recall("resource canary architecture"))
         assert [hit["_id"] for hit in before] == ["D-20260914-001"]
-        path.write_text(path.read_text().replace("Status: active", "Status: quarantined"), encoding="utf-8")
+        path.write_text(path.read_text(encoding="utf-8").replace("Status: active", "Status: quarantined"), encoding="utf-8")
         after = json.loads(resources.get_recall("resource canary architecture"))
     assert after == []
     rows = read_served_runs(workspace)
@@ -67,7 +67,7 @@ def test_indexed_resource_rechecks_admission_after_quarantine(workspace: Path) -
 
 def test_resource_honors_explicit_ledger_opt_out(workspace: Path) -> None:
     config_path = workspace / "mind-mem.json"
-    config = json.loads(config_path.read_text())
+    config = json.loads(config_path.read_text(encoding="utf-8"))
     config["served_ledger"]["enabled"] = False
     config["recall"]["backend"] = "sqlite"
     config_path.write_text(json.dumps(config), encoding="utf-8")
