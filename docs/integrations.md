@@ -4,12 +4,12 @@
 > tree, the public PyPI artifact, or a published benchmark file in
 > `benchmarks/`. Nothing here is a customer-relationship claim about
 > any AI vendor — the integrations described are *software-level*
-> (the named tool talks to MIND-Mem via the Model Context Protocol),
+> (clients use their configured MCP connection or local integration),
 > not commercial.
 
 ## What MIND-Mem actually ships
 
-### Native MCP integration with 17 AI development tools
+### Native integration with 19 clients (11 MCP-aware clients)
 
 MIND-Mem speaks the [Model Context Protocol](https://modelcontextprotocol.io/).
 Any MCP-compatible client connects with one command:
@@ -75,10 +75,11 @@ MIND-Mem's recall pipeline is provider-agnostic. Tested against:
 - Mistral Large
 - Local: Ollama, vLLM, llama.cpp endpoints
 
-The "compatibility" claim is at the API contract level — the same
-MIND-Mem server returns the same answers regardless of which LLM is
-asking. We do not use any provider's commercial relationship as a
-positioning artefact.
+Compatibility is at the API contract level: clients use the same server
+interface. Replay also requires the same query, admitted corpus,
+configuration, scoring instant, execution providers and dependencies.
+Different client models can generate different queries. Provider compatibility
+does not imply a commercial relationship.
 
 ## Reproducible benchmarks
 

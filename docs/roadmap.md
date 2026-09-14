@@ -9,6 +9,16 @@
 > layer, compliance primitives) is in
 > [`./roadmap-v4.md`](./roadmap-v4.md).
 
+## Current status — v5.0.2
+
+The current package release is **v5.0.2**. The published `mind-mem-4b`
+checkpoint remains **v4.1.1**, with a reported **133/133** result (111 main and
+22 held-out probes, two using inference-time anchors). This is not a new
+independent evaluation. The weights were trained on 83 MCP tools.
+The current server exposes 102 MCP tools. See
+[`mind-mem-4b-setup.md`](mind-mem-4b-setup.md) and the
+[published model card](https://huggingface.co/star-ga/mind-mem-4b).
+
 ## Current planning
 
 Use the [canonical roadmap](../ROADMAP.md) for current implementation status
@@ -23,7 +33,7 @@ Billing and settlement remain optional
 future adapters behind demonstrated demand. They do not block release readiness,
 Pure-MIND migration, or model training.
 
-## v3.12.1 (Historical — released 2026-05-10)
+## v3.12.1 (Historical release record — released 2026-05-10)
 
 `mind-mem-4b` v3.12.0-fullft retrain on Qwen3.5-4B (H200 SXM,
 full-FT bf16) at **95/95 = 100%** across ten eval categories

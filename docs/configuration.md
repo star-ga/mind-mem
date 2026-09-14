@@ -864,9 +864,10 @@ a served-ledger certificate.
 
 `index_anchor` is the workspace's governed-ledger head — the hash chain the
 governance gate appends to on every admitted write and delete. It is in the key because
-it is the coordinate that names *which corpus* an answer belongs to: recall is
-deterministic given (corpus, config, `scoring_instant`), and a governed write
-moves the head. With the head in the key, an entry computed against a
+it is the coordinate that names *which corpus* an answer belongs to. Replay
+also fixes the query, configuration, `scoring_instant`, execution providers
+and dependencies; the cache key does not fingerprint mutable external providers.
+A governed write moves the head. With the head in the key, an entry computed against a
 superseded corpus is unresolvable — no invalidation call to remember, and so no
 write door (CLI, HTTP transport, apply engine, federation replication) that can
 forget to make one. The explicit `invalidate()` the governance tools still call

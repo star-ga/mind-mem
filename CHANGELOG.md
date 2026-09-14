@@ -11,6 +11,25 @@ All notable changes to MIND-Mem are documented in this file.
   from a recall attestation asserting a corpus read. Unresolved ledger heads,
   malformed answers and unavailable serving evidence stay explicitly unproven;
   policy changes during cache lookup cannot change the captured result limit.
+- Preserve the reason supplied to `propose_update` as `Rationale` in the
+  staged signal. The tool previously required this field but discarded it
+  when serializing the proposal.
+- Apply a proposal's configured redaction policy to its rationale, tags,
+  purpose, confidence and provenance as well as its statement. Screen all
+  fields before recording audit metadata. Reject mode leaves refused content
+  unwritten; redact mode rewrites content fields and refuses changes to
+  identity or provenance-class fields. Invalid redaction configuration now
+  returns a structured refusal.
+- If fresh recall attestation derivation fails, replace carried proof in a
+  blocks-shaped envelope with an explicit `unproven` marker while retaining
+  results. This fallback also works when the served-ledger import is unavailable.
+
+### Changed
+
+- Align active release, test-function, client and model documentation with their
+  source authorities. Keep the reported model evaluation separate from a new
+  independent run and document its two inference-time anchors and trained-tool
+  coverage. Extend the documentation gate to catch the previously missed claims.
 
 ## [5.0.2] - 2026-09-13
 

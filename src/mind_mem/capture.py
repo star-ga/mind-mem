@@ -331,6 +331,8 @@ def _signal_block(sig: dict, sig_id: str, date_str: str) -> dict[str, Any]:
         block["Object"] = _one_line(str(structure["object"]))
     if structure.get("tags"):
         block["Tags"] = ", ".join(str(tag) for tag in structure["tags"])
+    if structure.get("rationale"):
+        block["Rationale"] = _one_line(str(structure["rationale"]))
 
     # Provenance fields (Group E + T-001 ContentSource) — optional, written
     # only when the caller attached them (e.g. propose_update).

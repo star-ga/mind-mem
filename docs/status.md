@@ -60,7 +60,7 @@ Kernel sources live in `mind/` (repo root), not `kernels/`.
 
 | Component | Source | Notes |
 |---|---|---|
-| `star-ga/mind-mem-4b` (fully trained) | `docs/mind-mem-4b-setup.md` | Q4_K_M @ 2.7GB via Ollama. |
+| `star-ga/mind-mem-4b` (v4.1.1) | `docs/mind-mem-4b-setup.md` / [HF model card](https://huggingface.co/star-ga/mind-mem-4b) | Q4_K_M @ 2.7GB via Ollama; reported 133/133 eval (111 main + 22 held-out, two using inference-time anchors). Trained on 83 MCP tools; the current server exposes 102 MCP tools. This is not a new independent evaluation. |
 | Backend dispatcher | `src/mind_mem/llm_extractor.py` | `mind-mem.json` → `{"backend": "ollama", "model": "mind-mem:4b"}`. |
 
 ## Experimental (in-tree, behind feature flags)
