@@ -473,6 +473,20 @@ class TestRecordScopes:
         historical = "No revision exposed 96 distinct tools: historical surface went 80 → 83 → 89."
         assert cmt.scan_doc_claims([historical]) == []
         assert scan(historical, rel="train/HF_MODEL_CARD_v4.md") == []
+        line = "Historical tool migration 81 -> 84; currently 102 MCP tools."
+        assert _cmt_claims(line) == [(1, 102)]
+        findings = scan(line, auth=make_authorities(live_tools=103))
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "102", "103")]
+        correct = "Historical tool migration 81 -> 84; currently 103 MCP tools."
+        assert scan(correct, auth=make_authorities(live_tools=103)) == []
+        line = "Historical migration 81 -> 84; weights know 83 MCP tools; live server exposes 102 MCP tools."
+        assert _cmt_claims(line) == [(1, 102)]
+        findings = scan(line, auth=make_authorities(live_tools=103))
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "102", "103")]
+        line = "Release v5.0.3 migration 81 -> 84; current server exposes 102 MCP tools."
+        assert _cmt_claims(line) == [(1, 102)]
+        findings = scan(line, auth=make_authorities(live_tools=103, version="5.0.3"))
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "102", "103")]
 
 
 class TestOtherClaims:
@@ -761,6 +775,10 @@ class TestTableCellToolClaims:
     def test_a_transition_row_is_a_record_not_a_claim(self):
         body = "| Item | MIND-Mem |\n|------|----------|\n| MCP tools | 89 -> 102 |\n"
         assert _cmt_claims(body) == []
+        mixed = "| Feature | History | MIND-Mem |\n|---------|---------|----------|\n| MCP tools | 81 -> 84 | 102 |\n"
+        assert _cmt_claims(mixed) == [(3, 102)]
+        findings = cda.scan_text("docs/comparison.md", mixed.splitlines(), make_authorities(live_tools=103))
+        assert [(f.lineno, f.kind, f.claimed, f.actual) for f in findings] == [(3, "tools", "102", "103")]
 
     def test_the_alignment_gate_sees_the_same_cell(self):
         findings = cda.scan_text("docs/comparison.md", self.COMPARISON.splitlines(), make_authorities())

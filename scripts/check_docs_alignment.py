@@ -583,7 +583,7 @@ def _tool_scope_span(rel: str, line: str, start: int, end: int) -> str:
 
 def _tool_scope(rel: str, line: str, match: re.Match[str]) -> str:
     """``"trained"`` or ``"live"`` for one tool-count claim."""
-    return _tool_scope_span(rel, line, match.start(), match.end())
+    return _tool_scope_span(rel, line, match.start("n"), match.end("n"))
 
 
 def _flag_expected(rel: str, line: str, match: re.Match[str], auth: Authorities) -> int | None:
@@ -628,7 +628,7 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
                 findings.append(
                     Finding(rel, lineno, "version", match.group("n"), auth.version, match.group(0), match.start("n"), match.end("n"))
                 )
-    if historical or cmt.is_historical_numeric_transition_line(line):
+    if historical:
         # Version-scoped records retain their historical numbers.
         return findings
     if _RECORD_ATTRIBUTION.match(line) and _SCOPE_VERSION.search(line):
@@ -663,7 +663,9 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
         (
             "tools",
             _TOOL_PATTERNS,
-            lambda m: None if cmt.is_numeric_transition_claim(line, m.start("n"), m.end("n")) else _tool_expected(rel, tool_line, m, auth),
+            lambda m: (
+                None if cmt.is_historical_transition_claim(line, m.start("n"), m.end("n")) else _tool_expected(rel, tool_line, m, auth)
+            ),
         ),
         ("flags", _FLAG_PATTERNS, lambda m: _flag_expected(rel, line, m, auth)),
         (

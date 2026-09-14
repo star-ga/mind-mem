@@ -175,6 +175,10 @@ _TRANSITION_RECORD_MARKER = re.compile(
     r"\b(?:histor(?:y|ical)|drift|release|record|changelog|migration|previous|prior)\b",
     re.IGNORECASE,
 )
+_TRANSITION_LIVE_MARKER = re.compile(
+    r"\b(?:current(?:ly)?|live|now|today|present(?:ly)?|exposes|ships)\b",
+    re.IGNORECASE,
+)
 
 
 def is_numeric_transition_claim(line: str, start: int, end: int) -> bool:
@@ -193,6 +197,22 @@ def is_numeric_transition_claim(line: str, start: int, end: int) -> bool:
 def is_historical_numeric_transition_line(line: str) -> bool:
     """Whether a line explicitly records a historical numeric transition."""
     return _NUMERIC_TRANSITION.search(line) is not None and _TRANSITION_RECORD_MARKER.search(line) is not None
+
+
+def is_historical_transition_claim(line: str, start: int, end: int) -> bool:
+    """Whether one count claim belongs to a historical transition record.
+
+    A transition marker can share a line with a separate current claim.  Only
+    claims participating in the transition, or claims with no nearby present
+    scope, receive the historical exemption.
+    """
+    if is_numeric_transition_claim(line, start, end):
+        return True
+    if not is_historical_numeric_transition_line(line):
+        return False
+    lo = max(0, start - _VERSION_PROXIMITY)
+    hi = min(len(line), end + _VERSION_PROXIMITY)
+    return _TRANSITION_LIVE_MARKER.search(line, lo, hi) is None
 
 
 # ---------------------------------------------------------------------------
@@ -315,11 +335,7 @@ def table_tool_claims(lines: list[str]) -> list[tuple[int, int, int, int]]:
                 if column == 0 or (ours is not None and column != ours):
                     continue
                 cell = _TABLE_CELL_COUNT.match(text)
-                if (
-                    cell is not None
-                    and not is_historical_numeric_transition_line(line)
-                    and not is_numeric_transition_claim(line, start + cell.start(1), start + cell.end(1))
-                ):
+                if cell is not None and not is_numeric_transition_claim(line, start + cell.start(1), start + cell.end(1)):
                     claims.append((idx + 1, start + cell.start(1), start + cell.end(1), int(cell.group(1))))
         # A row can carry a scope marker of its own ("| MCP tools (trained) |"),
         # so table claims are filtered by the caller, which knows both counts.
@@ -398,15 +414,13 @@ def _doc_files() -> list[Path]:
 def _scan_line_claims(line: str, lineno: int) -> list[tuple[int, int, int, int, str]]:
     """``(lineno, start, end, value, excerpt)`` for every tool claim on one line."""
     found: list[tuple[int, int, int, int, str]] = []
-    if is_historical_numeric_transition_line(line):
-        return found
     for regex in (_CLAIM_RE, _BADGE_RE, _HEADING_RE, _DISTINCT_RE):
         for match in regex.finditer(line):
             # Checked PER CLAIM, not per line -- see _version_qualifies.
             if (
                 _version_qualifies(line, match)
-                or is_trained_claim(line, match.start(), match.end())
-                or is_numeric_transition_claim(line, match.start(1), match.end(1))
+                or is_trained_claim(line, match.start(1), match.end(1))
+                or is_historical_transition_claim(line, match.start(1), match.end(1))
             ):
                 continue
             found.append((lineno, match.start(1), match.end(1), int(match.group(1)), match.group(0)))
