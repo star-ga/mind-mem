@@ -389,6 +389,90 @@ def always_injected_hits(
     return selected, {"count": len(selected), "cap": min(cap_total, _MAX_ALWAYS_ITEMS), "content_type": "behavior"}
 
 
+def admitted_namespace_blocks(workspace: str, agent_id: str | None) -> dict[str, dict[str, Any]] | None:
+    """Read canonical admitted sources for one principal without MCP imports.
+
+    Discovery follows the corpus registry under the workspace, shared, flat
+    agent and declared custom roots. ACL grants select registered sources;
+    they cannot create new corpus paths. Ambiguous IDs are withheld because
+    similarity and chat citations address blocks by ID alone.
+    """
+    if not agent_id:
+        return None
+
+    from ._recall_core import _indexed_hit_is_readable
+    from .admissibility import admit_corpus
+    from .content_lifecycle import _safe_source_path
+    from .corpus_registry import discover_corpus_files
+    from .namespaces import InvalidAgentIdError, NamespaceManager, _validate_agent_id
+    from .request_context import context_config_for
+    from .storage import _MARKDOWN_BACKENDS, _backend_name, _corpus_parse_fn, _load_workspace_config, iter_blocks
+
+    manager = NamespaceManager(workspace, agent_id=agent_id)
+    bound = context_config_for(workspace)
+    config = dict(bound) if bound is not None else _load_workspace_config(workspace, quiet=True)
+    backend = _backend_name(workspace, config)
+    local = backend in _MARKDOWN_BACKENDS
+    if not local:
+        blocks = iter_blocks(workspace, config=config, active_only=False)
+    else:
+        root = os.path.realpath(workspace)
+        roots = ["", "shared", *declared_custom_namespaces(config)]
+        agents = os.path.join(root, "agents")
+        if not os.path.islink(agents) and os.path.isdir(agents):
+            with os.scandir(agents) as entries:
+                for entry in sorted(entries, key=lambda item: item.name):
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+                    try:
+                        _validate_agent_id(entry.name)
+                    except InvalidAgentIdError:
+                        continue
+                    roots.append("agents/" + entry.name)
+
+        sources: dict[str, str] = {}
+        for namespace in dict.fromkeys(roots):
+            namespace_path = os.path.join(root, *namespace.split("/")) if namespace else root
+            if os.path.islink(namespace_path) or os.path.realpath(namespace_path) != namespace_path:
+                continue
+            for _label, rel in discover_corpus_files(namespace_path):
+                source = "/".join(part for part in (namespace, rel.replace(os.sep, "/")) if part)
+                if not manager.can_read(source):
+                    continue
+                path = _safe_source_path(workspace, source)
+                if path is not None:
+                    sources[source] = path
+        reader = _corpus_parse_fn(workspace, backend, sources=sources)
+        blocks = []
+        for source, path in sources.items():
+            try:
+                parsed = reader(path)
+            except (OSError, UnicodeDecodeError, ValueError):
+                continue
+            for block in parsed:
+                block["_source_file"] = source
+                blocks.append(block)
+
+    by_id: dict[str, dict[str, Any]] = {}
+    duplicates: set[str] = set()
+    for block in admit_corpus(blocks, workspace=workspace):
+        block_id = block.get("_id")
+        source_claim = block.get("_source_file") or block.get("_source") or block.get("file")
+        if not isinstance(block_id, str) or not block_id or not isinstance(source_claim, str):
+            continue
+        if not _indexed_hit_is_readable(workspace, {"file": source_claim}, manager, check_realpath=local):
+            continue
+        if block_id in by_id:
+            duplicates.add(block_id)
+        else:
+            canonical = dict(block)
+            canonical["_source_file"] = source_claim
+            by_id[block_id] = canonical
+    for block_id in duplicates:
+        by_id.pop(block_id, None)
+    return by_id
+
+
 __all__ = [
     "REACHABILITY_SEARCHABLE",
     "REACHABILITY_DIRECT_ONLY",
@@ -401,4 +485,5 @@ __all__ = [
     "filter_search_hits",
     "namespace_search_allowed",
     "always_injected_hits",
+    "admitted_namespace_blocks",
 ]

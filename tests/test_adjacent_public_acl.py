@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -85,6 +88,110 @@ def test_persona_walkthrough_guardrails_and_chat_keep_verified_principal(monkeyp
         assert "D-BOB" not in rendered
     assert "D-ALICE" in {str(item.get("block_id")) for item in chatted.get("evidence", [])}
     assert "D-BOB" not in json.dumps(chatted)
+    assert chatted["grounded"] is True
+    assert chatted["rejected"] is False
+
+
+def test_chat_injected_recall_is_filtered_before_generator(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """An extension recall function cannot place a private excerpt in a prompt."""
+    from mind_mem.chat_memory import chat_with_memory
+
+    ws = _workspace(tmp_path)
+    _token(monkeypatch, "alice")
+    seen_prompts: list[str] = []
+
+    def generator(request: object) -> str:
+        seen_prompts.append(str(getattr(request, "prompt", "")))
+        return "private [[D-BOB]]"
+
+    with use_workspace(str(ws)):
+        result = chat_with_memory(
+            str(ws),
+            "aurora",
+            recall_fn=lambda _ws, _question, _limit: [
+                {"_id": "D-BOB", "excerpt": "private bob evidence", "file": "agents/bob/decisions/DECISIONS.md"}
+            ],
+            generator=generator,
+            agent_id="alice",
+            on_invalid="reject",
+        )
+    assert result.no_record is True
+    assert result.rejected is False
+    assert seen_prompts == []
+
+
+def test_chat_rebuilds_allowed_id_content_from_canonical_block(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """An allowed ID cannot carry an extension-supplied private excerpt."""
+    from mind_mem.chat_memory import chat_with_memory
+
+    ws = _workspace(tmp_path)
+    _token(monkeypatch, "alice")
+    seen_prompts: list[str] = []
+
+    def generator(request: object) -> str:
+        prompt = str(getattr(request, "prompt", ""))
+        seen_prompts.append(prompt)
+        return "canonical [[D-ALICE]]"
+
+    with use_workspace(str(ws)):
+        result = chat_with_memory(
+            str(ws),
+            "aurora",
+            recall_fn=lambda _ws, _question, _limit: [
+                {
+                    "_id": "D-ALICE",
+                    "excerpt": "private relabeled payload",
+                    "file": "agents/alice/decisions/DECISIONS.md",
+                    "Date": "private metadata payload",
+                }
+            ],
+            generator=generator,
+            agent_id="alice",
+            on_invalid="reject",
+        )
+    assert result.grounded is True
+    assert seen_prompts and "alice aurora evidence" in seen_prompts[0]
+    assert "private relabeled payload" not in seen_prompts[0]
+    assert "private metadata payload" not in json.dumps(result.to_dict())
+
+
+def test_chat_core_import_does_not_load_optional_mcp_transport(tmp_path: Path) -> None:
+    """Actually answer through the bound core with MCP imports unavailable."""
+    ws = _workspace(tmp_path)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import importlib.abc
+import sys
+
+class NoMcp(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.startswith('fastmcp') or fullname == 'mcp' or fullname.startswith('mcp.'):
+            raise ImportError('MCP transport deliberately unavailable')
+        return None
+
+sys.meta_path.insert(0, NoMcp())
+from mind_mem.chat_memory import chat_with_memory
+result = chat_with_memory(sys.argv[1], 'aurora', agent_id='alice', on_invalid='reject')
+assert result.grounded and not result.rejected and not result.no_record, result
+assert 'D-ALICE' in result.answer and 'D-SHARED' in result.answer, result
+assert 'D-BOB' not in str(result)
+assert not any(k.startswith('mind_mem.mcp.tools') for k in sys.modules)
+assert 'mind_mem.mcp.infra.acl' not in sys.modules
+""",
+            str(ws),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_similar_public_door_filters_seed_and_cooccurrence_neighbors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -128,20 +235,29 @@ def test_kind_similarity_filters_private_partition_neighbors(monkeypatch: pytest
     assert denied["similar"] == []
 
 
-def test_similarity_enumerates_an_explicitly_acl_granted_other_agent_namespace(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_similarity_enumerates_an_explicitly_acl_granted_other_agent_namespace(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """An ACL grant to another agent is included by the namespace resolver."""
     ws = _workspace(tmp_path)
     acl_config = json.loads((ws / "mind-mem-acl.json").read_text(encoding="utf-8"))
     acl_config["agents"]["alice"]["read"].append("agents/bob")
-    acl_config["agents"]["alice"]["namespaces"].append("agents/bob")
     (ws / "mind-mem-acl.json").write_text(json.dumps(acl_config), encoding="utf-8")
     _token(monkeypatch, "alice")
     with use_workspace(str(ws)):
         servable = recall_tools._servable_block_ids(str(ws), "alice")
     assert servable is not None
     assert {"D-SHARED", "D-ALICE", "D-BOB"}.issubset(servable)
+
+
+def test_similarity_accepts_an_exact_file_read_grant(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A read ACL may name one corpus file instead of its parent namespace."""
+    ws = _workspace(tmp_path)
+    acl_config = json.loads((ws / "mind-mem-acl.json").read_text(encoding="utf-8"))
+    acl_config["agents"]["alice"]["read"] = ["shared", "agents/alice/decisions/DECISIONS.md"]
+    acl_config["agents"]["alice"]["namespaces"] = ["shared"]
+    (ws / "mind-mem-acl.json").write_text(json.dumps(acl_config), encoding="utf-8")
+    _token(monkeypatch, "alice")
+    servable = recall_tools._servable_block_ids(str(ws), "alice")
+    assert servable is not None and "D-ALICE" in servable
 
 
 def test_indexed_metadata_cannot_claim_postgres_authority_over_acl(tmp_path: Path) -> None:
@@ -160,3 +276,55 @@ def test_indexed_metadata_cannot_claim_postgres_authority_over_acl(tmp_path: Pat
     assert _indexed_hit_is_readable(str(ws), hit, manager)
     hit["file"] = "agents/bob/decisions/DECISIONS.md"
     assert not _indexed_hit_is_readable(str(ws), hit, manager)
+
+
+def test_canonical_namespace_reader_refuses_shared_symlink_into_private_source(tmp_path: Path) -> None:
+    from mind_mem.namespace_retrieval import admitted_namespace_blocks
+
+    ws = _workspace(tmp_path)
+    shared = ws / "shared/decisions/DECISIONS.md"
+    shared.unlink()
+    try:
+        shared.symlink_to(ws / "agents/bob/decisions/DECISIONS.md")
+    except (OSError, NotImplementedError):
+        pytest.skip("host does not support symlink controls")
+    visible = admitted_namespace_blocks(str(ws), "alice")
+    assert visible is not None
+    assert set(visible) == {"D-ALICE"}
+    assert "D-BOB" in (admitted_namespace_blocks(str(ws), "bob") or {})
+
+
+def test_read_grants_cannot_add_unregistered_corpus_files(tmp_path: Path) -> None:
+    from mind_mem.namespace_retrieval import admitted_namespace_blocks
+
+    ws = _workspace(tmp_path)
+    _write_block(ws / "agents/bob/credentials.md", "D-NOT-CORPUS", "not a registered corpus source")
+    policy_path = ws / "mind-mem-acl.json"
+    policy = json.loads(policy_path.read_text())
+    policy["agents"]["alice"]["read"].extend(["agents/bob/credentials.md", "agents/bob/decisions/DECISIONS.md"])
+    policy_path.write_text(json.dumps(policy))
+    visible = admitted_namespace_blocks(str(ws), "alice")
+    assert visible is not None
+    assert "D-BOB" in visible
+    assert "D-NOT-CORPUS" not in visible
+
+
+def test_registered_chat_returns_grounded_authorized_citations(monkeypatch, tmp_path: Path) -> None:
+    from fastmcp.server.auth import AccessToken
+
+    from mind_mem.mcp.tools.chat import chat_with_memory
+
+    ws = _workspace(tmp_path)
+    monkeypatch.setattr(
+        acl,
+        "get_access_token",
+        lambda: AccessToken(token="fixture", client_id="fixture", scopes=["user"], claims={"sub": "alice"}),
+    )
+    with use_workspace(str(ws)):
+        result = json.loads(chat_with_memory("aurora", limit=10))
+    assert result["grounded"] is True
+    assert result["rejected"] is False
+    assert result["no_record"] is False
+    assert "D-ALICE" in result["answer"]
+    assert "D-SHARED" in result["answer"]
+    assert "D-BOB" not in json.dumps(result)

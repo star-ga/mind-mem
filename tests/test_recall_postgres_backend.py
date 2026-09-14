@@ -293,6 +293,7 @@ class TestPostgresRecallLive:
 
         from mind_mem.mcp.infra import acl
         from mind_mem.mcp.infra.workspace import use_workspace
+        from mind_mem.mcp.tools.chat import chat_with_memory
         from mind_mem.mcp.tools.recall import recall as public_recall
 
         ws, store = pg_workspace
@@ -320,7 +321,11 @@ class TestPostgresRecallLive:
             )
             with use_workspace(ws):
                 payload = json.loads(public_recall("aurora database", backend="hybrid", limit=10))
+                chat = json.loads(chat_with_memory("aurora database", limit=10))
             assert {hit["_id"] for hit in payload["results"]} == {expected}
+            assert chat["grounded"] is True and chat["rejected"] is False
+            assert {hit["block_id"] for hit in chat["evidence"]} == {expected}
+            assert expected in chat["answer"]
 
     def test_recall_date_post_filter_applies_on_pg(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
         """The since/until post-filter contract must hold on the PG path."""

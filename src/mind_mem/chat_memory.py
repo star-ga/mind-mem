@@ -207,7 +207,30 @@ def _to_evidence(hits: Sequence[Any]) -> tuple[EvidenceItem, ...]:
     return tuple(items)
 
 
-def make_workspace_resolver(workspace: str) -> Callable[[str], bool]:
+def _servable_ids_for_agent(workspace: str, agent_id: str | None) -> set[str] | None:
+    blocks = _admitted_blocks_for_agent(workspace, agent_id)
+    return None if blocks is None else set(blocks)
+
+
+def _admitted_blocks_for_agent(workspace: str, agent_id: str | None) -> dict[str, dict[str, Any]] | None:
+    """Resolve the same live namespace partition used by MCP retrieval."""
+    if not agent_id:
+        return None
+    try:
+        from .namespace_retrieval import admitted_namespace_blocks
+
+        return admitted_namespace_blocks(workspace, agent_id) or {}
+    except Exception as exc:  # pragma: no cover - fail closed for bound callers
+        _log.warning("chat_namespace_resolution_failed", error=str(exc))
+        return {}
+
+
+def make_workspace_resolver(
+    workspace: str,
+    agent_id: str | None = None,
+    *,
+    servable_ids: set[str] | None = None,
+) -> Callable[[str], bool]:
     """Build a ``block_id -> bool`` predicate backed by the block store.
 
     Results are memoised per resolver instance so validating an answer
@@ -220,6 +243,7 @@ def make_workspace_resolver(workspace: str) -> Callable[[str], bool]:
 
     cache: dict[str, bool] = {}
     store_box: list[Any] = []
+    allowed_ids = _servable_ids_for_agent(workspace, agent_id) if servable_ids is None else servable_ids
 
     def _store() -> Any:
         if not store_box:
@@ -232,6 +256,16 @@ def make_workspace_resolver(workspace: str) -> Callable[[str], bool]:
         key = block_id.strip()
         if key in cache:
             return cache[key]
+        if allowed_ids is not None and key not in allowed_ids:
+            cache[key] = False
+            return False
+        if allowed_ids is not None:
+            # The live namespace resolver already proved this ID's source,
+            # admission state, and ACL. The generic block store may omit
+            # shared/agent Markdown roots, so asking it again would turn a
+            # valid namespace-bound citation into a false rejection.
+            cache[key] = True
+            return True
         try:
             block = _store().get_by_id(key)
             found = bool(admit_read_one(block, workspace=workspace, surface="chat"))
@@ -352,6 +386,7 @@ def chat_with_memory(
     _validate_inputs(workspace, question, limit, on_invalid)
     asked = question.strip()
 
+    hits: Sequence[Any]
     if recall_fn is None:
         hits = _default_recall(workspace, asked, limit, agent_id=agent_id)
     else:
@@ -359,6 +394,40 @@ def chat_with_memory(
         # seam with the historical three-argument contract. Public MCP calls
         # use the default path above, where the verified principal is bound.
         hits = recall_fn(workspace, asked, limit)
+
+    allowed_blocks = _admitted_blocks_for_agent(workspace, agent_id)
+    if allowed_blocks is not None:
+        # An injected recall function is an extension seam, not an ACL
+        # authority. Filter its returned evidence before any generator sees
+        # excerpts, so a custom function cannot smuggle private or relabeled
+        # content into the prompt even when it ignores ``agent_id``. Rebuild
+        # content fields from the canonical admitted block; an extension must
+        # provide the matching source coordinate to be usable on this path.
+        canonical_hits: list[dict[str, Any]] = []
+        for hit in hits:
+            if not isinstance(hit, dict):
+                continue
+            block_id = hit.get("_id")
+            canonical = allowed_blocks.get(str(block_id))
+            source = hit.get("_source_file") or hit.get("file")
+            canonical_source = canonical.get("_source_file") if canonical else None
+            if canonical is None or not isinstance(source, str) or source != canonical_source:
+                continue
+            if any(hit[field] != canonical_source for field in ("file", "_source_file") if field in hit):
+                continue
+            canonical_hit = {
+                "_id": str(block_id),
+                "_source_file": canonical_source,
+                "file": canonical_source,
+                "score": hit.get("score", 0.0),
+            }
+            canonical_hit["excerpt"] = str(canonical.get("excerpt") or canonical.get("Statement") or canonical.get("Title") or "")
+            for field in ("Statement", "Title", "Date", "Status"):
+                if field in canonical:
+                    canonical_hit[field] = canonical[field]
+            canonical_hits.append(canonical_hit)
+        hits = canonical_hits
+
     evidence = _to_evidence(hits or ())
 
     if not evidence:
@@ -404,7 +473,11 @@ def chat_with_memory(
         raise TypeError(f"generator must return str, got {type(answer).__name__}")
     answer = answer.strip()
 
-    active_resolver = resolver or make_workspace_resolver(workspace)
+    active_resolver = resolver or make_workspace_resolver(
+        workspace,
+        agent_id=agent_id,
+        servable_ids=None if allowed_blocks is None else set(allowed_blocks),
+    )
     report = validate_answer(
         answer,
         resolver=active_resolver,

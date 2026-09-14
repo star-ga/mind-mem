@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1621 | **Est. tokens:** ~4779048
-**Generated:** 2026-09-14 15:06 UTC
+**Files:** 1621 | **Est. tokens:** ~4782069
+**Generated:** 2026-09-14 15:31 UTC
 
 ## Token Budget Guide
 
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1076269 |
+| `src/mind_mem/` | 237 | ~1078103 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
-| `src/mind_mem/mcp/infra/` | 8 | ~15417 |
-| `src/mind_mem/mcp/tools/` | 29 | ~123067 |
+| `src/mind_mem/mcp/infra/` | 8 | ~15770 |
+| `src/mind_mem/mcp/tools/` | 29 | ~122165 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 712 | ~2117246 |
+| `tests/` | 712 | ~2118982 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -789,7 +789,7 @@
 - `chat_citations.py` (~2480 tok, huge) — Citation extraction + validation for the conversational chat layer.
 - `chat_cli.py` (~1080 tok, large) — ``mind-mem-chat`` — ask a workspace a question, get cited answers.
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
-- `chat_memory.py` (~4195 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
+- `chat_memory.py` (~5039 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
 - `closed_slots.py` (~6806 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
@@ -894,7 +894,7 @@
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 ### `src/mind_mem/mcp/infra/`
 
-- `__init__.py` (~485 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
+- `__init__.py` (~838 tok, large) — MCP infrastructure compatibility exports, resolved only when requested.
 - `acl.py` (~5606 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~1315 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
@@ -933,7 +933,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~23913 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~23011 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1620 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -955,7 +955,7 @@
 - `model_signing.py` (~2998 tok, huge) — Ed25519 manifest signing for ``mm audit-model`` checkpoints.
 - `mrs.py` (~5273 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~3184 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `namespace_retrieval.py` (~4488 tok, huge) — Configuration and enforcement for namespace retrieval properties.
+- `namespace_retrieval.py` (~5478 tok, huge) — Configuration and enforcement for namespace retrieval properties.
 - `namespaces.py` (~5138 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
 - `novel_term_gate.py` (~1729 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `observability.py` (~3828 tok, huge) — mind-mem Observability Module. Zero external deps.
@@ -1209,7 +1209,7 @@
 - `test_accountability_views.py` (~6320 tok, huge) — RA.2 — precision and waste as derived views, and the four refusals that shape them.
 - `test_acl_tool_coverage.py` (~2384 tok, huge) — ACL coverage invariant for the MCP tool surface.
 - `test_active_only_filter.py` (~312 tok, medium) — Tests for active_only recall filter."""
-- `test_adjacent_public_acl.py` (~1857 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
+- `test_adjacent_public_acl.py` (~3508 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
 - `test_admissibility_unreadable_status.py` (~1104 tok, large) — An unreadable ``Status`` must be withheld on the stale-index path too.
 - `test_admission_seam.py` (~12891 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_admit_proposal_openers.py` (~3596 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1685,7 +1685,7 @@
 - `test_recall_metadata.py` (~1345 tok, large) — Tests for A-MEM block metadata integration in recall pipeline."""
 - `test_recall_pgvector_engagement.py` (~2392 tok, huge) — Regression tests for the Postgres pgvector recall-engagement audit.
 - `test_recall_post_filters.py` (~310 tok, medium) — recall() applies lifecycle/event_id/min_maturity on EVERY dispatch path.
-- `test_recall_postgres_backend.py` (~3753 tok, huge) — Backend-aware recall dispatch — Postgres parity (audit bug 1).
+- `test_recall_postgres_backend.py` (~3838 tok, huge) — Backend-aware recall dispatch — Postgres parity (audit bug 1).
 - `test_recall_priority.py` (~414 tok, medium) — Tests for priority boost in recall."""
 - `test_recall_quality_locomo.py` (~2613 tok, huge) — LoCoMo recall-quality regression gate.
 - `test_recall_query_id_join.py` (~7740 tok, huge) — RA.1's residual, closed: the recall envelope publishes the run identity.
