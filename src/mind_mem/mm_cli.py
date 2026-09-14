@@ -4228,6 +4228,41 @@ def _cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_recompact(args: argparse.Namespace) -> int:
+    """Build a bounded H1 proposal; staging still requires operator review."""
+    from mind_mem.recompact_cli import RecompactError, compressor_for, make_recompact_proposal, stage_recompact_proposal
+    from mind_mem.recompaction import RecompactionConfig
+
+    workspace = os.path.realpath(args.workspace or _workspace())
+    try:
+        payload = make_recompact_proposal(
+            workspace,
+            args.block_id,
+            compressor=compressor_for(args.compressor, args.model),
+            config=RecompactionConfig(max_iterations=args.max_iterations, min_retention_ratio=args.min_retention_ratio),
+            limit=args.limit,
+            dream=args.dream,
+        )
+        if args.stage:
+            provenance = {
+                key: value
+                for key, value in {
+                    "actor_id": args.actor_id,
+                    "actor_role": args.actor_role,
+                    "session_id": args.session_id,
+                    "tool_id": args.tool_id,
+                    "purpose": args.purpose,
+                }.items()
+                if value
+            }
+            payload = stage_recompact_proposal(workspace, payload, provenance=provenance)
+    except (RecompactError, OSError, ValueError) as exc:
+        print(json.dumps({"status": "refused", "error": str(exc)}, sort_keys=True))
+        return 1
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 1 if payload.get("write") == "refused" else 0
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -5458,6 +5493,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", default="-", help="Write the bundle here ('-' for stdout). With a path, the envelope is printed instead."
     )
     p_export.set_defaults(func=_cmd_export)
+
+    p_recompact = sub.add_parser(
+        "recompact",
+        help="Build a bounded similarity-cluster recompaction proposal (dry-run by default).",
+    )
+    p_recompact.add_argument("block_id", help="Active block ID whose similarity cluster should be re-read.")
+    p_recompact.add_argument("--workspace", default=None, help="Workspace to read (default: $MIND_MEM_WORKSPACE or cwd).")
+    p_recompact.add_argument("--limit", type=int, default=5, help="Maximum similar active blocks to include (1-50).")
+    p_recompact.add_argument("--max-iterations", type=int, default=6, help="Fixed-point pass bound.")
+    p_recompact.add_argument("--min-retention-ratio", type=float, default=0.25, help="Minimum output/source-body ratio.")
+    p_recompact.add_argument(
+        "--compressor", choices=("echo", "ollama"), default="echo", help="Local control or explicit local Ollama model."
+    )
+    p_recompact.add_argument("--model", default=None, help="Local Ollama model (required for --compressor ollama).")
+    p_recompact.add_argument("--dream", action="store_true", help="Label this opt-in sleep proposal; it is never auto-applied.")
+    p_recompact.add_argument("--stage", action="store_true", help="Stage through propose_update; it is never auto-applied.")
+    p_recompact.add_argument("--actor-id", default="", help="Caller-supplied ActorId for a staged proposal.")
+    p_recompact.add_argument("--actor-role", default="", help="Caller-supplied ActorRole for a staged proposal.")
+    p_recompact.add_argument("--session-id", default="", help="Caller-supplied SessionId for a staged proposal.")
+    p_recompact.add_argument("--tool-id", default="", help="Caller-supplied ToolId for a staged proposal.")
+    p_recompact.add_argument("--purpose", default="", help="Caller-supplied Purpose for a staged proposal.")
+    p_recompact.set_defaults(func=_cmd_recompact)
 
     # compliance — redaction chain, pre-write door, provenance policy
     p_comp = sub.add_parser("compliance", help="Redaction detectors, the pre-write screening door, and the provenance policy.")

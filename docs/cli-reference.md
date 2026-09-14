@@ -256,6 +256,19 @@ enforces it (raising `DailyTokenCapExceeded` *before* the model is called):
 { "usage": { "daily_token_cap": 200000 } }
 ```
 
+### `mm recompact BLOCK_ID`
+
+Build a bounded, proposal-only recompaction over the selected block's active
+similarity cluster. The default `echo` compressor is local and deterministic;
+`--compressor ollama --model MODEL` is an explicit local-model opt-in. `--stage`
+routes the result through `propose_update` but never approves or applies it.
+Before staging, the command verifies the source IDs, source-file digests,
+cluster digest, output digest, limits, and text controls. A changed or forged
+payload is refused. Staged writes use only caller-supplied provenance flags
+(`--actor-id`, `--actor-role`, `--session-id`, `--tool-id`, `--purpose`), and a
+required workspace policy refuses when those fields are absent. Results carry
+`semantic_verification: not_established`.
+
 ### `mm detect`
 
 Auto-detect installed AI coding clients and print JSON.

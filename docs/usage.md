@@ -118,10 +118,20 @@ mm status
 
 # Build a fixed-point sleep proposal for one active block (dry-run by default)
 mm recompact DEC-20260101-001
-mm recompact DEC-20260101-001 --compressor ollama --model llama3.2 --stage
+mm recompact DEC-20260101-001 --compressor ollama --model llama3.2 --stage \
+  --actor-id operator-1 --actor-role operator --session-id session-1 \
+  --tool-id "mm recompact" --purpose "review a bounded sleep proposal"
 # The opt-in dream-cycle spelling accepts explicit seeds and still stages only
 # through propose_update; it never approves or applies a proposal.
 python3 -m mind_mem.dream_cycle "$MIND_MEM_WORKSPACE" --dry-run --recompact DEC-20260101-001
+
+Staging re-reads every active source block and hashes its workspace-relative
+source file both after compression and immediately before the governed write.
+Stale, forged, duplicate, malformed, oversized, or control-character payloads
+are refused. The compressor output is a review proposal with
+`semantic_verification: not_established`; no factual or byte-identity claim is
+made. Under a required provenance policy, pass the five caller-supplied
+provenance flags above; the command never invents an actor or session.
 
 # Webhook ingest door (requires "v4": { "ingest_serve": { "enabled": true } })
 mm ingest-serve --port 8788           # POST /ingest -> QUARANTINED blocks
