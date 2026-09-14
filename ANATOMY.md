@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1607 | **Est. tokens:** ~4716665
-**Generated:** 2026-09-14 12:27 UTC
+**Files:** 1608 | **Est. tokens:** ~4718357
+**Generated:** 2026-09-14 12:49 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~93132 |
-| `tests/` | 699 | ~2080374 |
+| `tests/` | 700 | ~2082066 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1353,6 +1353,7 @@
 - `test_drift_detector.py` (~3914 tok, huge) — Tests for mind-mem semantic belief drift detection (drift_detector.py)."""
 - `test_drift_detector_encrypted_backend.py` (~1531 tok, huge) — Drift detection over an ``encrypted`` block-store backend.
 - `test_dsn_redaction.py` (~542 tok, large) — Tests for DSN password redaction in mm_cli.
+- `test_e3_apply_provenance_refusal.py` (~1692 tok, huge) — Public apply keeps provenance refusals structured and transactional."""
 - `test_edge_cases.py` (~4078 tok, huge) — Edge-case and stress tests for mind-mem — block_parser, recall, and MCP server."""
 - `test_edge_corroboration.py` (~3178 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_edge_grounded_answer.py` (~4262 tok, huge) — # Copyright 2026 STARGA, Inc.

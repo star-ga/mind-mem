@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Final, Optional
 
 # Import block parser from same directory
+from .admission import GovernanceBypassError, current_admission
 from .backup_restore import WAL
 from .block_parser import get_by_id, parse_blocks, parse_file
 from .block_store import (
@@ -696,6 +697,14 @@ def restore_snapshot(ws, snap_dir, *, action=RESTORE_VERB, actor="apply_engine",
     """
     from .governance_gate import get_gate
 
+    # A failed required-provenance apply still has to restore the bytes its
+    # first operation changed. Reuse the immutable provenance bound to the
+    # active proposal scope for this nested RESTAMP admission; otherwise the
+    # rollback itself is refused for missing provenance and masks the original
+    # write refusal.
+    active_receipt = current_admission()
+    restore_provenance = dict(active_receipt.provenance) if active_receipt is not None else None
+
     files, source = _manifest_files(snap_dir)
     digest = _manifest_digest(snap_dir, files, source)
     reinstated = _block_ids_in_snapshot(snap_dir, files)
@@ -738,6 +747,7 @@ def restore_snapshot(ws, snap_dir, *, action=RESTORE_VERB, actor="apply_engine",
         actor=actor,
         target_file=_snapshot_target_file(ws, snap_dir),
         metadata=door_metadata,
+        provenance=restore_provenance,
     ) as receipt:
         _store_for(ws).restore(snap_dir)
         _log.info(
@@ -902,7 +912,7 @@ def execute_op(ws, op, *, store=None):
             return _op_supersede_decision(filepath, op, store=store, ws=ws)
         else:
             return False, f"Unknown op: {op_type}"
-    except (OSError, IOError, ValueError, KeyError, IndexError) as e:
+    except (OSError, IOError, ValueError, KeyError, IndexError, GovernanceBypassError) as e:
         return False, f"Op {op_type} failed: {e}"
 
 
