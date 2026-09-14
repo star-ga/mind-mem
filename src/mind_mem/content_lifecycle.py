@@ -208,8 +208,13 @@ def content_block_for(records: Mapping[ContentIdentity, dict[str, Any]], block: 
     else:
         block_id = str(block.get("_id") or block.get("id") or "")
         identity = content_identity(block)
-    if identity is not None and identity in records:
-        return records[identity]
+    if identity is not None:
+        return records.get(identity, {})
+    if isinstance(block, Mapping) and any(block.get(key) not in (None, "") for key in ("_source_file", "_source", "file")):
+        # A caller supplied a source claim, but it is malformed or absent
+        # from the live corpus.  Falling back by ID would let a forged path
+        # borrow another namespace's lifecycle state.
+        return {}
     matches = [row for key, row in records.items() if key[2] == block_id]
     return matches[0] if len(matches) == 1 else {}
 
@@ -228,6 +233,12 @@ def filter_revoked_credentials(items: list[dict], workspace: str) -> list[dict]:
     kept: list[dict] = []
     for item in items:
         current = content_block_for(blocks, item)
+        source_claimed = any(item.get(key) not in (None, "") for key in ("_source_file", "_source", "file"))
+        if source_claimed and not current:
+            # Cached/indexed rows are only trustworthy when the claimed source
+            # can be re-read and bound to a live parsed row.  Refuse unresolved
+            # source claims even when stale metadata omits ContentCategory.
+            continue
         # A credential without a source identity cannot be checked against
         # the governing bytes.  Withhold it rather than allowing an indexed
         # row with forged/missing metadata to bypass revocation.

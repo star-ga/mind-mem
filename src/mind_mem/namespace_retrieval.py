@@ -34,6 +34,8 @@ def _properties(config: Mapping[str, Any] | None) -> Mapping[str, Any]:
     if not isinstance(recall, Mapping):
         return {}
     props = recall.get("namespace_properties")
+    if props is not None and not isinstance(props, Mapping):
+        raise ValueError("recall.namespace_properties must be an object")
     return props if isinstance(props, Mapping) else {}
 
 
@@ -41,7 +43,11 @@ def namespace_for_path(path: object) -> str:
     """Map a workspace-relative source path to its namespace identity."""
     if not isinstance(path, str):
         return "workspace"
-    cleaned = path.replace("\\", "/").lstrip("./")
+    cleaned = path.replace("\\", "/")
+    if cleaned.startswith("./"):
+        cleaned = cleaned[2:]
+    if cleaned.startswith("/") or ".." in cleaned.split("/"):
+        return "workspace"
     parts = [part for part in cleaned.split("/") if part]
     if not parts:
         return "workspace"
@@ -163,6 +169,11 @@ def namespace_search_allowed(path: object, config: Mapping[str, Any] | None) -> 
 
 def filter_search_hits(hits: list[dict[str, Any]], config: Mapping[str, Any] | None) -> list[dict[str, Any]]:
     """Remove direct-only/always-injected namespaces and apply declared floors."""
+    # Preserve the historical unconfigured pipeline byte-for-byte.  In
+    # particular, do not require backend source metadata or add marker keys
+    # unless a namespace declaration actually opts into this surface.
+    if not _properties(config):
+        return hits
     out: list[dict[str, Any]] = []
     global_floor = _global_floor(config)
     for hit in hits:
@@ -176,6 +187,8 @@ def filter_search_hits(hits: list[dict[str, Any]], config: Mapping[str, Any] | N
         if declaration["reachability"] in {REACHABILITY_DIRECT_ONLY, REACHABILITY_ALWAYS_INJECTED}:
             continue
         floor = declaration.get("floor", FLOOR_INHERIT_GLOBAL)
+        floor_override = floor == FLOOR_NONE or isinstance(floor, (int, float))
+        hit["_namespace_floor_override"] = floor_override
         hit["_namespace_floor_none"] = floor == FLOOR_NONE
         threshold = global_floor if floor == FLOOR_INHERIT_GLOBAL else None if floor == FLOOR_NONE else float(floor)
         if threshold is not None:
@@ -193,12 +206,18 @@ def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tu
     from .admissibility import admit_corpus
     from .block_parser import parse_file
     from .block_store import MarkdownBlockStore
+    from .namespaces import NamespaceManager
 
     selected: list[dict[str, Any]] = []
+    selected_identities: set[tuple[str, str, str]] = set()
+    remaining_global = _MAX_ALWAYS_ITEMS
+    acl = NamespaceManager(workspace)
     declarations = _properties(config)
     import glob
 
     for namespace, raw in declarations.items():
+        if remaining_global <= 0:
+            break
         if namespace == "defaults" or not isinstance(namespace, str) or not isinstance(raw, Mapping):
             continue
         declaration = declaration_for(config, namespace)
@@ -229,6 +248,12 @@ def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tu
             if not namespace_root.startswith(root + os.sep) or not os.path.isdir(namespace_root) or os.path.islink(candidate):
                 continue
             actual_namespace = os.path.relpath(namespace_root, root).replace(os.sep, "/")
+            # Apply the same namespace ACL before reading a configured source.
+            # The workspace-level manager permits all in-workspace paths; an
+            # agent-scoped caller therefore cannot use an always declaration as
+            # a second, wider discovery mechanism.
+            if not acl.can_read(actual_namespace):
+                continue
             try:
                 store = MarkdownBlockStore(namespace_root)
                 blocks: list[dict[str, Any]] = []
@@ -241,7 +266,7 @@ def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tu
             # Bind the namespace prefix before the shared revocation check;
             # otherwise a duplicate credential ID in the root corpus could
             # decide the status of this explicitly configured source.
-            from .content_lifecycle import filter_revoked_credentials
+            from .content_lifecycle import content_identity, filter_revoked_credentials
 
             for block in blocks:
                 source = block.get("_source_file") or ""
@@ -254,11 +279,18 @@ def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tu
             blocks = filter_revoked_credentials(blocks, workspace)
             namespace_count = 0
             for block in blocks:
+                if remaining_global <= 0:
+                    break
                 kind = str(block.get("Type", block.get("type", ""))).strip().lower()
                 if kind not in {"behavior", "behaviour"}:
                     continue
                 block_id = block.get("_id") or block.get("id")
                 if not isinstance(block_id, str) or not block_id:
+                    continue
+                identity = content_identity(block)
+                if identity is None or identity in selected_identities:
+                    continue
+                if not acl.can_read(str(block.get("_source_file") or "")):
                     continue
                 excerpt = block.get("Statement") or block.get("Summary") or block.get("Description") or ""
                 selected.append(
@@ -273,7 +305,9 @@ def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tu
                         "_namespace_reachability": REACHABILITY_ALWAYS_INJECTED,
                     }
                 )
+                selected_identities.add(identity)
                 namespace_count += 1
+                remaining_global -= 1
                 if namespace_count >= cap:
                     break
             matched += min(namespace_count, cap)
@@ -302,7 +336,7 @@ def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tu
                 ]
             )
             cap_total += declared_cap * len(matches)
-    return selected, {"count": len(selected), "cap": cap_total, "content_type": "behavior"}
+    return selected, {"count": len(selected), "cap": min(cap_total, _MAX_ALWAYS_ITEMS), "content_type": "behavior"}
 
 
 __all__ = [

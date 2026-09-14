@@ -288,12 +288,11 @@ def knee_cutoff(
 
     best_cut = max(min_results, best_cut)
 
-    # Also filter by absolute minimum score
-    # A namespace may explicitly declare ``floor: none``.  Preserve that
-    # declaration through the global knee stage; applying ``min_score`` here
-    # would make the setting ineffective after the earlier namespace filter.
+    # Also filter by absolute minimum score.  An explicit namespace floor
+    # (numeric or ``none``) owns this threshold; applying the global minimum
+    # after it would silently override the declaration.
     filtered = [
-        r for r in results[:best_cut] if r.get("score", 0) >= min_score or r.get("_namespace_floor_none") is True
+        r for r in results[:best_cut] if r.get("score", 0) >= min_score or r.get("_namespace_floor_override") is True
     ]
     return filtered if filtered else results[:min_results]
 

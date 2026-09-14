@@ -10,7 +10,7 @@ from mind_mem.block_store import MarkdownBlockStore
 from mind_mem.init_workspace import init
 from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.mcp.tools.recall import pack_recall_budget
-from mind_mem.namespace_retrieval import declaration_for, filter_search_hits
+from mind_mem.namespace_retrieval import declaration_for, filter_search_hits, namespace_for_path
 
 
 def _block(path: Path, block_id: str, block_type: str, statement: str) -> None:
@@ -130,6 +130,36 @@ def test_malformed_namespace_declaration_fails_closed_and_missing_source_is_reje
         cfg,
     )
     assert len(knee_cutoff(hits, min_results=1, min_score=0.9)) == 2
+
+
+def test_namespace_filter_is_a_noop_without_explicit_properties() -> None:
+    hits = [{"_id": "legacy", "score": 0.01}]
+    assert filter_search_hits(hits, {}) == hits
+    assert "_namespace_floor_override" not in hits[0]
+    assert namespace_for_path(".mind-mem-index/index.db") == "workspace"
+
+
+def test_numeric_namespace_floor_replaces_global_floor() -> None:
+    cfg = {
+        "recall": {
+            "min_score": 0.9,
+            "namespace_properties": {
+                "workspace": {
+                    "reachability": "searchable",
+                    "floor": 0.1,
+                    "evidence": {"fixture": "recorded"},
+                }
+            },
+        }
+    }
+    hits = filter_search_hits(
+        [
+            {"_id": "a", "score": 0.2, "file": "decisions/DECISIONS.md"},
+            {"_id": "b", "score": 0.15, "file": "decisions/DECISIONS.md"},
+        ],
+        cfg,
+    )
+    assert [item["_id"] for item in knee_cutoff(hits, min_results=1, min_score=0.9)] == ["a", "b"]
 
 
 def test_pack_allows_empty_query_only_for_configured_always_namespace(tmp_path: Path, monkeypatch) -> None:

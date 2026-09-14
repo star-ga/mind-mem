@@ -171,6 +171,14 @@ def test_revoked_credentials_are_withheld_by_generic_corpus_admission(tmp_path: 
     assert admit_corpus(rows, workspace=workspace) == []
 
 
+def test_forged_source_cannot_borrow_another_id_lifecycle_row(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    rows = [{"_id": "D-20260901-004", "_source_file": "agents/other/DECISIONS.md", "Status": "active", "score": 1.0}]
+    from mind_mem.content_lifecycle import filter_revoked_credentials
+
+    assert filter_revoked_credentials(rows, workspace) == []
+
+
 def test_compliance_export_door_applies_revocation_before_serialization(tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
     corpus = Path(workspace) / "decisions/DECISIONS.md"
