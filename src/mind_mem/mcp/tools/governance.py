@@ -1085,7 +1085,17 @@ def list_contradictions() -> str:
 
 @mcp_tool_observe
 @_traced("propose_slot_update")
-def propose_slot_update(namespace: str, slot: str, value: str, rationale: str) -> str:
+def propose_slot_update(
+    namespace: str,
+    slot: str,
+    value: str,
+    rationale: str,
+    actor_id: str = "",
+    actor_role: str = "",
+    session_id: str = "",
+    tool_id: str = "",
+    purpose: str = "",
+) -> str:
     """Stage a closed-slot update for review by ``approve_apply``.
 
     Closed slots are opt-in, authored in ``mind-mem.json``, and reject
@@ -1095,9 +1105,23 @@ def propose_slot_update(namespace: str, slot: str, value: str, rationale: str) -
     """
     ws = _workspace()
     from mind_mem.closed_slots import ClosedSlotError, stage_slot_update
+    from mind_mem.compliance.provenance_policy import ProvenanceRequired
 
     try:
-        result = stage_slot_update(ws, namespace, slot, value, rationale=rationale)
+        result = stage_slot_update(
+            ws,
+            namespace,
+            slot,
+            value,
+            rationale=rationale,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            session_id=session_id,
+            tool_id=tool_id,
+            purpose=purpose,
+        )
+    except ProvenanceRequired as exc:
+        return json.dumps({"error": "provenance_required", "reason": str(exc), "namespace": namespace, "slot": slot}, indent=2)
     except ClosedSlotError as exc:
         return json.dumps({"error": str(exc), "namespace": namespace, "slot": slot}, indent=2)
     metrics.inc("mcp_slot_proposals")

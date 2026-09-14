@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -130,3 +131,88 @@ def test_approval_gate_records_supersession_lineage(tmp_path: Path, monkeypatch:
     assert "SupersededBy: D-" in decisions
     assert "Supersedes: D-" in decisions
     assert decisions.count("SlotName: status") == 2
+
+
+def test_decorated_slot_stage_runs_provenance_gate_and_accepts_attribution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The public admin tool cannot bypass the ordinary pre-write door."""
+    from mind_mem.init_workspace import init
+    from mind_mem.mcp.tools import governance
+    from mind_mem.spec_binding import SpecBindingManager
+
+    init(str(tmp_path))
+    config_path = tmp_path / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config.update(
+        {
+            "governance_mode": "propose",
+            "closed_slots": _decl(),
+            "v4": {"provenance": {"enabled": True, "policy": "required", "fields": ["ActorId"]}},
+        }
+    )
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+
+    refused = json.loads(governance.propose_slot_update("profile", "status", "active", "the profile is active"))
+    assert refused["error"] == "provenance_required"
+    assert "ProposalId: P-" not in (tmp_path / "intelligence/proposed/EDITS_PROPOSED.md").read_text(encoding="utf-8")
+
+    admitted = json.loads(
+        governance.propose_slot_update(
+            "profile",
+            "status",
+            "active",
+            "the profile is active",
+            actor_id="agent-7",
+        )
+    )
+    assert admitted["status"] == "staged"
+    staged = (tmp_path / "intelligence/proposed/EDITS_PROPOSED.md").read_text(encoding="utf-8")
+    assert "ActorId: agent-7" in staged
+
+
+def test_apply_rejects_slot_proposal_after_declaration_changes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Approval revalidates the authored declaration under the apply lock."""
+    from mind_mem.init_workspace import init
+    from mind_mem.mcp.tools import governance
+    from mind_mem.spec_binding import SpecBindingManager
+
+    init(str(tmp_path))
+    config_path = tmp_path / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config.update({"governance_mode": "propose", "closed_slots": _decl()})
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+
+    staged = json.loads(governance.propose_slot_update.__wrapped__("profile", "status", "active", "the profile is active"))
+    changed = json.loads(config_path.read_text(encoding="utf-8"))
+    changed["closed_slots"]["namespaces"]["profile"]["version"] = 2
+    changed["closed_slots"]["namespaces"]["profile"]["slots"] = ["tier"]
+    config_path.write_text(json.dumps(changed), encoding="utf-8")
+    SpecBindingManager(str(config_path)).rebind(str(config_path))
+
+    result = json.loads(governance.approve_apply.__wrapped__(staged["proposal_id"], dry_run=False))
+    assert result["status"] == "failed"
+    assert "SlotName: status" not in (tmp_path / "decisions/DECISIONS.md").read_text(encoding="utf-8")
+
+
+def test_apply_rejects_multi_block_payload_containing_a_slot(tmp_path: Path) -> None:
+    """A slot operation cannot smuggle a second parsed block past the guard."""
+    from mind_mem.closed_slots import SlotInvariantError, _validate_slot_payload
+
+    ws = _workspace(tmp_path, declarations=_decl())
+    slot = {
+        "_id": "D-20260914-001",
+        "Statement": "active",
+        "Status": "active",
+        "SlotNamespace": "profile",
+        "SlotName": "status",
+        "SlotSetVersion": "1",
+        "SlotValueDigest": hashlib.sha256(b"active").hexdigest(),
+    }
+    ordinary = {"_id": "D-20260914-002", "Statement": "free form", "Status": "active"}
+    with pytest.raises(SlotInvariantError, match="exactly one block"):
+        _validate_slot_payload(str(ws), [slot, ordinary], active_blocks=[])

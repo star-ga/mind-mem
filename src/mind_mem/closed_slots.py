@@ -50,6 +50,116 @@ class SlotInvariantError(ClosedSlotError):
     """The store contains more than one active occupant for one slot."""
 
 
+def _screen_slot_write(
+    workspace: str,
+    namespace: str,
+    slot: str,
+    value: str,
+    rationale: str,
+    provenance: Mapping[str, str] | None,
+) -> tuple[str, str, dict[str, str]]:
+    """Run the same pre-write controls as ``propose_update``.
+
+    Slot staging is a governed write proposal, so it must not be a second
+    door around compliance, sanitisation, or the quality gate.  This helper
+    is deliberately shared by the staging path and keeps the default-off
+    path inert apart from the existing configuration probe.
+    """
+    from .apply_engine import _sanitize_reason_for_markdown
+    from .compliance.prewrite import PreWritePolicy, screen
+    from .compliance.provenance_policy import ProvenanceConfigError, ProvenanceRequired
+    from .compliance.redaction import MODE_OFF, RedactionConfigError
+
+    cleaned_value = _sanitize_reason_for_markdown(value.strip())
+    cleaned_rationale = _sanitize_reason_for_markdown(rationale.strip())
+    supplied = {key: val for key, val in (provenance or {}).items() if val}
+    try:
+        policy = PreWritePolicy.resolve(workspace)
+        results = {
+            "statement": screen(
+                cleaned_value, policy=policy, provenance=supplied, target=f"decision.slot.{namespace}.{slot}", record=False
+            ),
+            "rationale": screen(
+                cleaned_rationale, policy=policy, provenance=supplied, target=f"decision.slot.{namespace}.{slot}.rationale", record=False
+            ),
+        }
+    except (ProvenanceConfigError, RedactionConfigError) as exc:
+        raise SlotConfigError(f"compliance_config_invalid: {exc}") from exc
+    except ProvenanceRequired:
+        # Preserve the ordinary proposal door's typed refusal so the MCP
+        # facade can return its stable ``provenance_required`` envelope.
+        raise
+
+    # A redaction policy may rewrite the statement, but the slot digest must
+    # describe exactly what is stored.  Carry the screened text forward and
+    # retain the same field names as the ordinary proposal door.
+    result_value = results["statement"].text
+    result_rationale = results["rationale"].text
+    if policy.redaction_mode != MODE_OFF:
+        from .compliance.audit import record_redaction
+
+        for field, result in results.items():
+            record_redaction(
+                workspace, result.redaction, target=f"decision.slot.{namespace}.{slot}.{field}", agent=supplied.get("ActorId", "")
+            )
+
+    from .mcp.infra.config import _get_quality_gate_mode
+    from .quality_gate import validate_block
+
+    qg_mode = _get_quality_gate_mode(workspace)
+    if qg_mode != "off":
+        from .mcp.tools.governance import _recent_statements
+
+        verdict = validate_block(result_value, strict=qg_mode == "strict", recent=_recent_statements(workspace))
+        if not verdict.accept:
+            raise ClosedSlotError(f"quality_gate_rejection: {', '.join(verdict.reasons)}")
+    return result_value, result_rationale, supplied
+
+
+def _validate_slot_payload(
+    workspace: str,
+    blocks: list[dict[str, Any]],
+    *,
+    active_blocks: list[dict[str, Any]],
+    target: dict[str, Any] | None = None,
+) -> tuple[str, str] | None:
+    """Validate a slot payload at the source-of-truth write boundary."""
+    slot_blocks = [block for block in blocks if _slot_fields(block) is not None]
+    if not slot_blocks:
+        return None
+    if len(blocks) != 1:
+        raise SlotInvariantError("a closed-slot operation must contain exactly one block")
+    block = slot_blocks[0]
+    identity = _slot_fields(block)
+    assert identity is not None
+    namespace, slot = identity
+    declaration = require_slot(workspace, namespace, slot)
+    if str(block.get("SlotSetVersion", "")) != str(declaration.version):
+        raise SlotConfigError(
+            f"closed-slot {namespace}/{slot} declaration version changed: "
+            f"proposal={block.get('SlotSetVersion')!r}, current={declaration.version}"
+        )
+    expected_digest = hashlib.sha256(str(block.get("Statement", "")).encode("utf-8")).hexdigest()
+    if block.get("SlotValueDigest") != expected_digest:
+        raise SlotInvariantError(f"closed-slot {namespace}/{slot} value digest does not match Statement")
+    if target is None:
+        occupants = [item for item in active_blocks if _slot_fields(item) == identity]
+        if len(occupants) > 1:
+            raise SlotInvariantError(f"slot {namespace}/{slot} has multiple active occupants")
+        if occupants:
+            raise SlotInvariantError(f"closed-slot {namespace}/{slot} already has an active occupant")
+    else:
+        old_identity = _slot_fields(target)
+        if old_identity != identity:
+            raise SlotInvariantError("closed-slot identity does not match target")
+        if target.get("Status") != "active":
+            raise SlotInvariantError("closed-slot target is no longer active")
+        occupants = [item for item in active_blocks if item.get("_id") != target.get("_id") and _slot_fields(item) == identity]
+        if occupants:
+            raise SlotInvariantError(f"closed-slot {namespace}/{slot} already has another active occupant")
+    return identity
+
+
 @dataclass(frozen=True)
 class SlotDeclaration:
     """One authored version of a closed namespace."""
@@ -235,6 +345,11 @@ def stage_slot_update(
     value: str,
     *,
     rationale: str,
+    actor_id: str = "",
+    actor_role: str = "",
+    session_id: str = "",
+    tool_id: str = "",
+    purpose: str = "",
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Stage a new or superseding slot proposal; never changes source truth."""
@@ -248,6 +363,20 @@ def stage_slot_update(
     if not isinstance(rationale, str) or len(rationale.strip()) < 8:
         raise ClosedSlotError("rationale must be at least 8 non-whitespace characters")
     declaration = require_slot(workspace, namespace, slot)
+    value, rationale, provenance = _screen_slot_write(
+        workspace,
+        namespace,
+        slot,
+        value,
+        rationale,
+        {
+            "ActorId": actor_id,
+            "ActorRole": actor_role,
+            "SessionId": session_id,
+            "ToolId": tool_id,
+            "Purpose": purpose,
+        },
+    )
     stamp = now or datetime.now(timezone.utc)
     date_iso = stamp.astimezone(timezone.utc).strftime("%Y-%m-%d")
     date_compact = date_iso.replace("-", "")
@@ -300,6 +429,7 @@ def stage_slot_update(
             "SlotSetVersion": str(declaration.version),
             "SlotValueDigest": hashlib.sha256(value.encode("utf-8")).hexdigest(),
         }
+        block.update(provenance)
         # Proposal block serialization is line based; omit the renderer's
         # terminal newline so parsing the staged text preserves the exact
         # fingerprinted operation payload.
@@ -328,10 +458,23 @@ def stage_slot_update(
             "SlotName": slot,
             "SlotSetVersion": str(declaration.version),
         }
+        proposal.update(provenance)
         proposal["Fingerprint"] = compute_fingerprint(proposal)
         errors = validate_proposal(proposal)
         if errors:
             raise ClosedSlotError(f"generated slot proposal failed validation: {errors}")
+        # Keep slot staging subject to the same bounded proposal admission as
+        # ordinary ``propose_update`` calls.  In particular, a closed-set
+        # helper must not become an unbounded backlog or duplicate-fingerprint
+        # side door around governance.
+        from .apply_engine import check_backlog_limit, check_fingerprint_dedup
+
+        backlog_count, over_limit = check_backlog_limit(workspace)
+        if over_limit:
+            raise ClosedSlotError(f"proposal backlog limit exceeded ({backlog_count} staged)")
+        duplicate, duplicate_id = check_fingerprint_dedup(workspace, proposal)
+        if duplicate:
+            raise PendingSlotProposalError(f"proposal fingerprint already staged as {duplicate_id}")
         if f"Fingerprint: {proposal['Fingerprint']}" in existing_text:
             raise PendingSlotProposalError(f"an identical proposal is already staged: {proposal_id}")
         with open(proposal_path, "a", encoding="utf-8") as handle:
@@ -361,4 +504,5 @@ __all__ = [
     "load_slot_declarations",
     "require_slot",
     "stage_slot_update",
+    "_validate_slot_payload",
 ]

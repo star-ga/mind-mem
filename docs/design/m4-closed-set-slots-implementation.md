@@ -1,4 +1,4 @@
-# M4 closed-set slots: shipped write contract
+# M4 closed-set slots: implemented candidate write contract
 
 M4 is opt-in per workspace. The declaration lives in `mind-mem.json`:
 
@@ -23,9 +23,14 @@ returns a structured error for an undeclared namespace or member. A malformed
 section also fails closed. A workspace without `closed_slots` keeps the normal
 free-form `propose_update` path.
 
-`propose_slot_update(namespace, slot, value, rationale)` writes only a staged
-proposal in `intelligence/proposed/EDITS_PROPOSED.md`. A reviewer must call the
-existing `approve_apply(proposal_id, dry_run=False)` gate. The proposal appends
+`propose_slot_update(namespace, slot, value, rationale, ...)` writes only a
+staged proposal in `intelligence/proposed/EDITS_PROPOSED.md`. Optional
+provenance parameters use the same `ActorId`, `ActorRole`, `SessionId`,
+`ToolId`, and `Purpose` fields as `propose_update`; when the workspace requires
+provenance, the proposal is refused until its configured fields are supplied.
+Staging also runs the configured pre-write sanitisation/compliance and quality
+gates, plus the normal proposal backlog and fingerprint budgets. A reviewer
+must call the existing `approve_apply(proposal_id, dry_run=False)` gate. The proposal appends
 a decision block when the slot has no active occupant. A differing value uses
 the existing atomic, snapshot-backed `supersede_decision` operation: the old
 block remains with `Status: superseded` and `SupersededBy`, and the successor
@@ -44,3 +49,10 @@ it is not a key and does not change confidence or ranking.
 The valid-slot check is a structural boundary, not a truth oracle: a caller
 can still choose the wrong *valid* member. Review, reversal, and the existing
 proposal evidence remain necessary.
+
+The approval write boundary re-reads the declaration and checks its version,
+the slot value digest, active occupancy, and one-block payload shape. A stale
+proposal, duplicate active occupant, digest mismatch, or multi-block payload
+containing slot metadata is refused before mutation. These checks also apply
+to the legacy filesystem executor; ordinary unslotted operations retain their
+existing behavior.

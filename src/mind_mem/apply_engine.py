@@ -887,7 +887,7 @@ def execute_op(ws, op, *, store=None):
 
     try:
         if op_type == "append_block":
-            return _op_append_block(filepath, op, store=store)
+            return _op_append_block(filepath, op, store=store, ws=ws)
         elif op_type == "insert_after_block":
             return _op_insert_after_block(filepath, op)
         elif op_type == "update_field":
@@ -899,14 +899,14 @@ def execute_op(ws, op, *, store=None):
         elif op_type == "replace_range":
             return _op_replace_range(filepath, op)
         elif op_type == "supersede_decision":
-            return _op_supersede_decision(filepath, op, store=store)
+            return _op_supersede_decision(filepath, op, store=store, ws=ws)
         else:
             return False, f"Unknown op: {op_type}"
     except (OSError, IOError, ValueError, KeyError, IndexError) as e:
         return False, f"Op {op_type} failed: {e}"
 
 
-def _op_append_block(filepath, op, store=None):
+def _op_append_block(filepath, op, store=None, ws=None):
     """Append a new block at end of file.
 
     v3.2.2: when ``store`` is provided, parses ``patch`` as block
@@ -930,8 +930,29 @@ def _op_append_block(filepath, op, store=None):
         for block in blocks:
             if not block.get("_id"):
                 return False, "append_block: parsed block is missing '_id'"
+        if ws is not None:
+            from .closed_slots import ClosedSlotError, _validate_slot_payload
+
+            try:
+                active = store.get_all(active_only=True) if store is not None else parse_file(filepath)
+                _validate_slot_payload(ws, blocks, active_blocks=active)
+            except ClosedSlotError as exc:
+                return False, f"append_block: {exc}"
+        for block in blocks:
             store.write_block(block)
         return True, f"append_block: wrote {len(blocks)} block(s) via BlockStore"
+
+    if ws is not None:
+        from .closed_slots import ClosedSlotError, _validate_slot_payload
+
+        try:
+            blocks = parse_blocks(patch)
+            active = parse_file(filepath)
+            _validate_slot_payload(ws, blocks, active_blocks=active)
+        except ClosedSlotError as exc:
+            return False, f"append_block: {exc}"
+        except Exception as exc:
+            return False, f"append_block: parse failed: {exc}"
 
     with open(filepath, "a", encoding="utf-8") as f:
         f.write(f"\n{patch}\n")
@@ -1315,7 +1336,7 @@ def _slot_identity(block: dict[str, Any]) -> tuple[str, str] | None:
     return None
 
 
-def _op_supersede_decision(filepath, op, store=None):
+def _op_supersede_decision(filepath, op, store=None, ws=None):
     """Atomic supersede: append new block + mark old as superseded.
 
     v3.2.2: when ``store`` is provided, both phases route through
@@ -1364,16 +1385,13 @@ def _op_supersede_decision(filepath, op, store=None):
         if not new_blocks or not all(b.get("_id") for b in new_blocks):
             return False, "supersede_decision: new_block missing or has no '_id'"
 
-        new_slot = _slot_identity(new_blocks[0])
-        if new_slot is not None:
-            old_slot = _slot_identity(old)
-            if old_slot != new_slot:
-                return False, "supersede_decision: closed-slot identity does not match target"
-            if old.get("Status") != "active":
-                return False, "supersede_decision: closed-slot target is no longer active"
-            for active in store.get_all(active_only=True):
-                if active.get("_id") != target and _slot_identity(active) == new_slot:
-                    return False, f"supersede_decision: closed-slot {new_slot[0]}/{new_slot[1]} already has another active occupant"
+        if ws is not None:
+            from .closed_slots import ClosedSlotError, _validate_slot_payload
+
+            try:
+                _validate_slot_payload(ws, new_blocks, active_blocks=store.get_all(active_only=True), target=old)
+            except ClosedSlotError as exc:
+                return False, f"supersede_decision: {exc}"
 
         successor_id = str(new_blocks[0].get("_id"))
         old["Status"] = "superseded"
@@ -1391,15 +1409,13 @@ def _op_supersede_decision(filepath, op, store=None):
         new_parsed = parse_blocks(new_block)
     except Exception as exc:
         return False, f"supersede_decision: parse failed: {exc}"
-    new_slot = _slot_identity(new_parsed[0]) if len(new_parsed) == 1 else None
-    if new_slot is not None:
-        old_slot = _slot_identity(old)
-        if old_slot != new_slot:
-            return False, "supersede_decision: closed-slot identity does not match target"
-        if old.get("Status") != "active":
-            return False, "supersede_decision: closed-slot target is no longer active"
-        if any(_slot_identity(block) == new_slot and block.get("_id") != target and block.get("Status") == "active" for block in blocks):
-            return False, f"supersede_decision: closed-slot {new_slot[0]}/{new_slot[1]} already has another active occupant"
+    if ws is not None:
+        from .closed_slots import ClosedSlotError, _validate_slot_payload
+
+        try:
+            _validate_slot_payload(ws, new_parsed, active_blocks=blocks, target=old)
+        except ClosedSlotError as exc:
+            return False, f"supersede_decision: {exc}"
 
     # Build the complete new file content in memory, then write atomically.
     # Reading the file once here avoids two separate read-modify-write cycles.
