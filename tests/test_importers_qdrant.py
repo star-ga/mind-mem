@@ -181,6 +181,21 @@ def test_qdrant_rejects_duplicate_json_keys(qdrant_server: Any) -> None:
         scroll_qdrant(endpoint, "notes")
 
 
+def test_qdrant_rejects_deep_json_without_quarantine_write(qdrant_server: Any, tmp_path: Path) -> None:
+    endpoint, handler = qdrant_server
+    depth = 100_000
+    handler.response_override = b'{"status":"ok","result":{"points":' + b"[" * depth + b"]" * depth + b',"next_page_offset":null}}'
+    workspace = _workspace(tmp_path)
+
+    with pytest.raises(ImportParseError, match="not valid JSON"):
+        run_import(workspace, "qdrant", "", endpoint=endpoint, collection="notes")
+
+    assert not (Path(workspace) / "memory" / "IMPORTED.md").exists()
+    from mind_mem.audit_chain import AuditChain
+
+    assert AuditChain(workspace).entries() == []
+
+
 def test_qdrant_enforces_response_and_record_bounds(qdrant_server: Any) -> None:
     endpoint, handler = qdrant_server
     with pytest.raises(ImportParseError, match="response exceeds"):

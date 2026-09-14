@@ -95,7 +95,7 @@ def _api_key(api_key_env: str | None) -> str | None:
 def _decode_page(raw: bytes, page: int) -> tuple[list[Mapping[str, Any]], Any]:
     try:
         payload = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
-    except (UnicodeDecodeError, json.JSONDecodeError, _DuplicateKeyError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, _DuplicateKeyError) as exc:
         if isinstance(exc, _DuplicateKeyError):
             raise ImportParseError(f"qdrant page {page} contains duplicate JSON object keys") from exc
         raise ImportParseError(f"qdrant page {page} is not valid JSON") from exc
