@@ -11,9 +11,10 @@ Every answer this module returns satisfies all three of:
 
 1. **Every claim sentence carries at least one citation.** A sentence
    with no ``[[block_id]]`` is an uncited claim and fails validation.
-2. **Every cited id resolves in the workspace.** Ids are resolved
-   through the configured block store; a fabricated id can never
-   survive. Unresolvable ids either raise :class:`~mind_mem.chat_citations.CitationError`
+2. **Every cited id resolves in the workspace and recalled evidence by default.**
+   Ids are resolved through the configured block store; a fabricated or
+   out-of-evidence id cannot survive the default strict mode. Unresolvable
+   ids either raise :class:`~mind_mem.chat_citations.CitationError`
    (``on_invalid="raise"``, the default) or are rejected into the
    no-record answer (``on_invalid="reject"``).
 3. **Empty recall returns the literal string** ``"no record found"``.
@@ -297,7 +298,7 @@ def chat_with_memory(
     category: str | None = None,
     condenser: Callable[[str], str] | None = None,
     on_invalid: str = "raise",
-    require_in_evidence: bool = False,
+    require_in_evidence: bool = True,
     max_evidence_chars: int = 4000,
 ) -> ChatAnswer:
     """Answer *question* from *workspace* with verified citations.
@@ -325,9 +326,10 @@ def chat_with_memory(
             :class:`~mind_mem.chat_citations.CitationError` on an
             ungrounded answer; ``"reject"`` returns a ``rejected``
             :class:`ChatAnswer` carrying the no-record string.
-        require_in_evidence: Also fail when a citation resolves in the
-            workspace but was not among the recalled evidence. Default
-            ``False``.
+        require_in_evidence: Require every citation to be among recalled
+            evidence. The default is ``True``. Pass ``False`` only for the
+            explicit legacy advisory mode; such an answer is never marked
+            grounded when it cites outside the evidence.
         max_evidence_chars: Cap on the rendered evidence block.
 
     Returns:
@@ -412,6 +414,9 @@ def chat_with_memory(
         )
 
     is_no_record = not report.citations
+    advisory_out_of_scope = bool(report.out_of_evidence) and not require_in_evidence
+    if advisory_out_of_scope:
+        warnings.append("legacy advisory mode: citation outside recalled evidence; answer is ungrounded")
     _log.info("chat_answered", citations=len(report.citations), evidence=len(evidence))
     return ChatAnswer(
         question=asked,
@@ -420,7 +425,7 @@ def chat_with_memory(
         evidence=evidence,
         category=resolved_category,
         report=report,
-        grounded=True,
+        grounded=not advisory_out_of_scope,
         no_record=is_no_record,
         warnings=tuple(warnings),
     )

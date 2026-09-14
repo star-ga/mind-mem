@@ -230,8 +230,10 @@ class TestFabricatedCitations:
             "deploys",
             generator=cite_outsider,
             recall_fn=only_first_decision,
+            require_in_evidence=False,
         )
-        assert lenient.grounded is True
+        assert lenient.grounded is False
+        assert any("advisory mode" in warning for warning in lenient.warnings)
         assert outsider in lenient.report.out_of_evidence
 
         strict = chat_with_memory(
@@ -567,6 +569,14 @@ class TestCli:
 # ---------------------------------------------------------------------------
 # MCP surface
 # ---------------------------------------------------------------------------
+
+
+class TestEvidenceScopeDefaults:
+    def test_cli_is_strict_by_default_and_advisory_is_explicit(self):
+        from mind_mem.chat_cli import build_parser
+
+        assert build_parser().parse_args(["question"]).require_in_evidence is True
+        assert build_parser().parse_args(["question", "--allow-out-of-evidence"]).require_in_evidence is False
 
 
 class TestMcpTool:

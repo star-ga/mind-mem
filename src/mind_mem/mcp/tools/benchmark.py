@@ -114,6 +114,9 @@ def _kind_summaries_section(ws: str) -> list[dict] | None:
                 "block_count": s.block_count,
                 "updated_at": s.updated_at,
                 "summary": s.summary,
+                "source_ids": list(s.source_ids),
+                "source_digest": s.source_digest,
+                "enforcement": s.enforcement,
             }
             for s in list_summaries(ws)
         ]
