@@ -1,6 +1,14 @@
 # Design: M2/M3 — namespace retrieval properties, asserted and tuned
 
-Status: Draft (2026-08-17) · Owner: mind-mem · Roadmap: Group M / M2, M3
+Status: Implemented candidate for M2; M3 declaration shipped, calibration open
+(2026-09-14) · Owner: mind-mem · Roadmap: Group M / M2, M3
+
+The current candidate implements the namespace reachability declaration and
+the source-bound admission path used by its round-trip controls. The evidence
+covers the configured workspace, shared, and agent namespaces; arbitrary
+custom-namespace direct-get coverage and hosted PostgreSQL execution remain
+open. Per-namespace floor declarations are accepted and filtered, but their
+numeric values are not calibrated or enabled without corpus evaluation.
 
 Two items in one document because M3 cannot be evaluated without M2's
 measurement surface, and specifying them apart invites building the floor
@@ -57,13 +65,16 @@ Some are meant to be fetched directly and never surfaced by search at all —
 an always-injected namespace that leaks into search results pollutes every
 query with content that was never meant to compete for a slot.
 
-Today that distinction lives in configuration and in intent. Nothing
-asserts it. An index-configuration regression would not fail a test; it
-would quietly change what recall returns, and the change would look like
+Historically that distinction lived in configuration and in intent. The
+current candidate adds source-bound admission and round-trip controls for
+the configured workspace, shared, and agent namespaces. Arbitrary custom
+namespace direct-get coverage and hosted PostgreSQL execution remain open;
+an index-configuration regression outside the covered set can still look like
 ordinary ranking drift.
 
 The prior art demonstrates the check in three lines, and the demonstration
-is the part worth taking — not the storage engine. They write to an
+is the part worth taking — not the storage engine. The current controls use
+the same falsifiable shape. They write to an
 unindexed namespace and then probe it three ways:
 
 - a keyword-matching search → **0 hits**
