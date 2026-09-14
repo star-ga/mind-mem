@@ -73,6 +73,10 @@ from .chat_citations import (
 )
 from .chat_generators import ChatRequest, EvidenceItem, Generator, extractive_generator
 from .observability import get_logger
+from .semantic_capability import (
+    SEMANTIC_VERIFICATION_NOT_ESTABLISHED,
+    semantic_entailment_verification_available,
+)
 
 _log = get_logger("chat_memory")
 
@@ -122,6 +126,12 @@ class ChatAnswer:
     no_record: bool = False
     rejected: bool = False
     warnings: tuple[str, ...] = ()
+    semantic_required: bool = False
+
+    @property
+    def semantic_verification(self) -> str:
+        """The runtime-derived semantic status; generators cannot set it."""
+        return SEMANTIC_VERIFICATION_NOT_ESTABLISHED
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -135,6 +145,10 @@ class ChatAnswer:
             "no_record": self.no_record,
             "rejected": self.rejected,
             "warnings": list(self.warnings),
+            # This is derived by the serving layer, never copied from a
+            # generator or caller-supplied payload.
+            "semantic_verification": SEMANTIC_VERIFICATION_NOT_ESTABLISHED,
+            "semantic_required": self.semantic_required,
         }
 
 
@@ -143,7 +157,13 @@ class ChatAnswer:
 # ---------------------------------------------------------------------------
 
 
-def _validate_inputs(workspace: str, question: str, limit: int, on_invalid: str) -> None:
+def _validate_inputs(
+    workspace: str,
+    question: str,
+    limit: int,
+    on_invalid: str,
+    semantic_required: bool,
+) -> None:
     """Fail fast and loudly on malformed caller input."""
     if not isinstance(workspace, str) or not workspace.strip():
         raise ValueError("workspace must be a non-empty string")
@@ -157,6 +177,8 @@ def _validate_inputs(workspace: str, question: str, limit: int, on_invalid: str)
         raise ValueError(f"limit must be an int in 1..{MAX_LIMIT}, got {limit!r}")
     if on_invalid not in _ON_INVALID_MODES:
         raise ValueError(f"on_invalid must be one of {_ON_INVALID_MODES}, got {on_invalid!r}")
+    if not isinstance(semantic_required, bool):
+        raise ValueError(f"semantic_required must be a bool, got {semantic_required!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -342,6 +364,7 @@ def chat_with_memory(
     require_in_evidence: bool = True,
     max_evidence_chars: int = 4000,
     agent_id: str | None = None,
+    semantic_required: bool = False,
 ) -> ChatAnswer:
     """Answer *question* from *workspace* with verified citations.
 
@@ -373,6 +396,9 @@ def chat_with_memory(
             explicit legacy advisory mode; such an answer is never marked
             grounded when it cites outside the evidence.
         max_evidence_chars: Cap on the rendered evidence block.
+        semantic_required: Require a reviewed semantic entailment verifier.
+            The current runtime has no such verifier, so ``True`` returns an
+            explicit abstention before recall or generation.
 
     Returns:
         A :class:`ChatAnswer`. ``answer`` is either a grounded response
@@ -383,8 +409,22 @@ def chat_with_memory(
         CitationError: The answer failed the grounding contract and
             ``on_invalid="raise"``.
     """
-    _validate_inputs(workspace, question, limit, on_invalid)
+    _validate_inputs(workspace, question, limit, on_invalid, semantic_required)
     asked = question.strip()
+
+    if semantic_required and not semantic_entailment_verification_available():
+        _log.info("chat_semantic_verification_unavailable")
+        return ChatAnswer(
+            question=asked,
+            answer=NO_RECORD,
+            category=category or classify_question_category(asked),
+            report=None,
+            grounded=False,
+            no_record=True,
+            rejected=True,
+            warnings=("semantic verification unavailable; answer withheld",),
+            semantic_required=True,
+        )
 
     hits: Sequence[Any]
     if recall_fn is None:
@@ -439,6 +479,7 @@ def chat_with_memory(
             report=CitationReport(ok=True),
             grounded=True,
             no_record=True,
+            semantic_required=semantic_required,
         )
 
     resolved_category = category or classify_question_category(asked)
@@ -498,6 +539,7 @@ def chat_with_memory(
             no_record=True,
             rejected=True,
             warnings=tuple(warnings) + (report.summary(),),
+            semantic_required=semantic_required,
         )
 
     is_no_record = not report.citations
@@ -515,4 +557,5 @@ def chat_with_memory(
         grounded=not advisory_out_of_scope,
         no_record=is_no_record,
         warnings=tuple(warnings),
+        semantic_required=semantic_required,
     )

@@ -81,7 +81,15 @@ python3 mcp_server.py --workspace /path/to/workspace
 | `find_similar` | Vector similarity search from a block ID | `block_id`, `limit` |
 | `intent_classify` | Classify query intent (WHY/WHEN/ENTITY/WHAT/HOW/LIST/VERIFY/COMPARE/TRACE) | `query` |
 | `prefetch` | Pre-assemble context from conversation signals | `signals`, `limit` |
+| `chat_with_memory` | Answer from admitted memory with structural citation checks; `semantic_required=True` abstains while no entailment verifier is available | `question`, `limit`, `generator`, `semantic_required` |
 | `retrieval_diagnostics` | Pipeline diagnostics: stage rejection rates, intent distribution | `last_n`, `max_age_days` |
+
+Chat and graph answers expose `semantic_verification: "not_established"`.
+Their `grounded` field describes structural citation checks, not proof that
+every sentence follows from its evidence. Python chat and graph callers can
+require semantic verification with `semantic_required=True`; the graph CLI
+offers `mm graph-answer ENTITY --semantic-required --json`. The current runtime
+refuses the requested answer before generation when that capability is missing.
 
 #### Memory Management
 

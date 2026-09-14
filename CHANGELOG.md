@@ -32,6 +32,9 @@ All notable changes to MIND-Mem are documented in this file.
   not establish independent CVS witnessing, settlement or canonical 512 lineage.
 - Training-readiness manifests that measure tool coverage and dataset overlap;
   eval-targeted harvests are explicitly development data, not independent tests.
+- Explicit semantic-capability reporting for chat and graph answers. Their
+  structural citation checks retain existing behavior; `semantic_required`
+  requests abstain before generation because no entailment verifier is shipped.
 
 ### Fixed
 

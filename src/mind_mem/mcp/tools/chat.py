@@ -42,6 +42,7 @@ def chat_with_memory(
     generator: str = "extractive",
     on_invalid: str = "reject",
     require_in_evidence: bool = True,
+    semantic_required: bool = False,
 ) -> str:
     """Answer *question* from workspace memory with verified citations.
 
@@ -56,10 +57,14 @@ def chat_with_memory(
         require_in_evidence: Require citations to be among recalled evidence.
             Defaults to ``True``. Pass ``False`` only for explicit legacy
             advisory mode; out-of-evidence answers remain ungrounded.
+        semantic_required: Require semantic entailment verification. The
+            current runtime has no verifier, so the tool returns an explicit
+            abstention without invoking a generator.
 
     Returns:
         JSON string of the :class:`~mind_mem.chat_memory.ChatAnswer`
-        payload — ``answer``, ``citations``, ``evidence``, ``report``.
+        payload — ``answer``, ``citations``, ``evidence``, ``report``, and
+        the derived ``semantic_verification`` status.
         Empty recall yields ``answer == "no record found"``.
     """
     if not isinstance(question, str) or not question.strip():
@@ -91,6 +96,7 @@ def chat_with_memory(
             limit=limit,
             on_invalid=on_invalid,
             require_in_evidence=bool(require_in_evidence),
+            semantic_required=semantic_required,
             agent_id=authenticated_agent_id(),
         )
     except CitationError as exc:

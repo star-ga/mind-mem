@@ -3837,9 +3837,13 @@ mislabelled eval set still produces confident numbers.
   This is the structural pattern used by the current gates. The summary/chat
   output gates and graph-context binding (`1bbf8e5f`) are implemented in the current candidate;
   semantic entailment remains **not established**, and the full inventory of
-  remote/vector model-output consumers is not exhaustive. A caller intending to
-  rely on an unimplemented property must still check and refuse; no documentation
-  alone upgrades an unproven semantic claim.
+  remote/vector model-output consumers is not exhaustive. Chat and graph answers
+  now expose this status through a runtime-derived field and one unavailable
+  capability predicate. `semantic_required` requests on the Python/MCP chat and
+  graph API/CLI paths abstain before generation. Actual authenticated MCP and
+  contradictory-but-cited prose controls distinguish that refusal from existing
+  structural grounding. This closes the bounded semantic-capability finding,
+  not the remaining consumer inventory or semantic verifier implementation.
   Keep the audit and the remediation separate passes regardless: bundling them
   guarantees the sweep stops at the first interesting finding.
 

@@ -62,7 +62,9 @@ provides:
    for canonical source admission. Complete surface review remains tracked in M5.
 2. **Analysis.** Contradiction and drift detectors are explicit mechanisms;
    their existence does not mean every request executes a scan or that every
-   semantic contradiction is detectable.
+   semantic contradiction is detectable. Chat and graph answers expose
+   `semantic_verification: "not_established"`; callers requiring entailment
+   verification receive an explicit abstention before generation.
 3. **Governed changes.** `propose_update` stages a signal. Proposal approval and
    application are separate governed operations. Required-provenance profiles
    validate attribution without inventing missing legacy fields.
@@ -98,7 +100,7 @@ its rationale does not approve it.
 
 ## L5 — Continuous
 
-- **CI** on main pushes and pull requests — full pytest matrix (12,308 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
+- **CI** on main pushes and pull requests — full pytest matrix (12,316 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
 - **Release preflight** requires matching versions, mainline ancestry, passing
   CI for the exact commit, an unused package version, tests, current public
   documentation and readable code-scanning results before publishing.

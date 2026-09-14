@@ -60,6 +60,10 @@ from typing import Any, Callable, Iterable, Optional, Sequence
 from .graph_schema import version_of as schema_version_of
 from .knowledge_graph import Corroboration, Edge, KnowledgeGraph, Predicate, _parse_iso8601, edge_id
 from .knowledge_graph import _is_live as _window_contains
+from .semantic_capability import (
+    SEMANTIC_VERIFICATION_NOT_ESTABLISHED,
+    semantic_entailment_verification_available,
+)
 
 #: How a claim cites its supporting edge. Matches :func:`edge_id`'s output
 #: (``E-`` + 16 hex) so a citation cannot name anything the graph could
@@ -225,6 +229,11 @@ class GroundedAnswer:
 
     ``grounded`` reports structural citation checks, not semantic proof
     that every sentence follows from the cited triples.
+
+    ``semantic_verification`` is always derived from the runtime capability
+    boundary and is ``"not_established"`` until an actual entailment verifier
+    exists. ``semantic_required`` therefore produces an explicit refusal while
+    that capability is unavailable.
     """
 
     context: EdgeGroundedContext
@@ -233,6 +242,13 @@ class GroundedAnswer:
     fabricated_citations: tuple[str, ...]
     grounded: bool
     generator: str
+    semantic_required: bool = False
+    refused: bool = False
+
+    @property
+    def semantic_verification(self) -> str:
+        """The runtime-derived semantic status; generators cannot set it."""
+        return SEMANTIC_VERIFICATION_NOT_ESTABLISHED
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -241,6 +257,9 @@ class GroundedAnswer:
             "fabricated_citations": list(self.fabricated_citations),
             "grounded": self.grounded,
             "generator": self.generator,
+            "semantic_verification": SEMANTIC_VERIFICATION_NOT_ESTABLISHED,
+            "semantic_required": self.semantic_required,
+            "refused": self.refused,
             "context": self.context.as_dict(),
         }
 
@@ -461,6 +480,7 @@ def answer(
     *,
     generate_fn: Optional[Callable[[str], str]] = None,
     context: Optional[EdgeGroundedContext] = None,
+    semantic_required: bool = False,
     **context_kwargs: Any,
 ) -> GroundedAnswer:
     """Answer about *seed* and check citations against the current graph.
@@ -483,6 +503,9 @@ def answer(
     With no generator the answer is :func:`_default_render` — the cited
     triples — and it is grounded by construction.
     """
+    if not isinstance(semantic_required, bool):
+        raise ValueError(f"semantic_required must be a bool, got {semantic_required!r}")
+
     # Freeze iterable options before reading twice; a generator expression
     # must not silently turn the second read into a different query.
     for name in ("predicates", "known_block_ids"):
@@ -491,6 +514,17 @@ def answer(
     ctx = build_context(kg, seed, **context_kwargs)
     if context is not None and context != ctx:
         raise ValueError("provided context does not match the current graph query")
+    if semantic_required and not semantic_entailment_verification_available():
+        return GroundedAnswer(
+            context=ctx,
+            text="semantic verification unavailable; answer withheld",
+            citations=(),
+            fabricated_citations=(),
+            grounded=False,
+            generator="semantic-required-refusal",
+            semantic_required=True,
+            refused=True,
+        )
     if generate_fn is None:
         text = _default_render(ctx)
         cited = tuple(sorted(set(CITATION_RE.findall(text))))
@@ -501,6 +535,7 @@ def answer(
             fabricated_citations=(),
             grounded=True,
             generator="none",
+            semantic_required=semantic_required,
         )
 
     text = generate_fn(ctx.serialize())
@@ -535,6 +570,7 @@ def answer(
         fabricated_citations=fabricated,
         grounded=not extra_gaps,
         generator="injected",
+        semantic_required=semantic_required,
     )
 
 

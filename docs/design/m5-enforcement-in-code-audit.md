@@ -11,6 +11,15 @@ and this inventory does not claim exhaustive coverage of remote/vector
 model-output consumers. The audit below remains the contract for finding and closing any
 additional prompt-only property.
 
+The chat and graph-answer responses now expose this boundary directly. Their
+`grounded` field remains a structural citation-membership result, while
+`semantic_verification` is derived as `"not_established"` until an actual
+entailment verifier is installed. Callers that require semantic verification
+can request `semantic_required`; the Python, MCP, and graph-answer CLI paths
+then abstain before generation while the capability predicate is false. This
+does not turn citation membership into an entailment claim or close the wider
+M5 inventory.
+
 ## The principle
 
 A prompt is a request. Code is what holds.
