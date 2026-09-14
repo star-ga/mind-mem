@@ -170,6 +170,25 @@ class TestRecallWithPersona:
         assert out["attestation"]["served_proof"] == "recorded"
         assert len(read_served_runs(workspace)) == 1
 
+    def test_persona_preserves_unproven_scope_for_unproven_receipt(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        from mind_mem.mcp.tools import recall as recall_tools
+        from mind_mem.mcp.tools.walkthrough_persona import recall_with_persona
+
+        marker = {
+            "served_seq": None,
+            "served_row_hash": None,
+            "served_proof": "unproven",
+            "ledger_error": "injected proof dependency failure",
+        }
+        monkeypatch.setattr(
+            recall_tools,
+            "_recall_impl",
+            lambda *args, **kwargs: json.dumps({"results": [{"_id": "D-20260101-001", "score": 1.0}], "attestation": marker}),
+        )
+        out = json.loads(recall_with_persona("authentication", persona="brief"))
+        assert out["attestation"] == marker
+        assert out["attestation_scope"] == "unproven"
+
     def test_technical_persona_promotes_governance(self, workspace: str) -> None:
         from mind_mem.mcp.tools.walkthrough_persona import recall_with_persona
 

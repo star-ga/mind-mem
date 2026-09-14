@@ -225,8 +225,10 @@ def _ranked_attestation(
     """Accept only a coherent default serving carrier; never trust extensions.
 
     Chat canonicalizes evidence fields before generation, so the receipt's
-    scope is the ranked recall list.  The internal hash check prevents a
-    malformed or forged carrier from being presented as proof.
+    scope is the ranked recall list.  The internal checks establish structural
+    consistency for the trusted default serving boundary; they do not
+    authenticate an arbitrary caller-generated payload.  Custom recall
+    functions therefore remain explicitly unproven.
     """
     candidate = getattr(hits, "attestation", None)
     if not isinstance(candidate, dict):
@@ -236,6 +238,17 @@ def _ranked_attestation(
         return dict(candidate), "unproven"
     if candidate.get("served_proof") != "recorded":
         return _unproven_attestation("ranked attestation has an unknown proof status"), "unproven"
+
+    # RecallAttestation.from_dict intentionally owns only the hash-bound
+    # fields.  These serving fields are the ledger join, so validate them at
+    # this response boundary instead of accepting a structurally valid but
+    # unjoinable ``recorded`` claim.
+    served_seq = candidate.get("served_seq")
+    served_row_hash = candidate.get("served_row_hash")
+    if not isinstance(served_seq, int) or isinstance(served_seq, bool) or served_seq < 0:
+        return _unproven_attestation("recorded ranked attestation has no valid served sequence"), "unproven"
+    if not isinstance(served_row_hash, str) or re.fullmatch(r"[0-9a-f]{64}", served_row_hash) is None:
+        return _unproven_attestation("recorded ranked attestation has no valid served row hash"), "unproven"
 
     ids: list[str] = []
     for hit in hits:
@@ -252,7 +265,7 @@ def _ranked_attestation(
             raise ValueError("ranked attestation hash is inconsistent")
         if parsed.result_count != len(ids) or parsed.results_digest != served_set_digest(ids):
             raise ValueError("ranked attestation does not bind the returned evidence ids")
-    except (TypeError, ValueError, KeyError) as exc:
+    except (TypeError, ValueError, KeyError, AttributeError) as exc:
         return _unproven_attestation(f"ranked attestation refused: {exc}"), "unproven"
     return dict(candidate), "ranked_recall_evidence"
 

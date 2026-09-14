@@ -73,6 +73,7 @@ def test_persona_walkthrough_guardrails_and_chat_keep_verified_principal(monkeyp
     """Every adjacent public door reaches the ACL-bound ranked core."""
     from mind_mem.mcp.tools import chat as chat_tools
     from mind_mem.mcp.tools import guardrails, walkthrough_persona
+    from mind_mem.served_ledger import read_served_runs
 
     ws = _workspace(tmp_path)
     _token(monkeypatch, "alice")
@@ -80,7 +81,9 @@ def test_persona_walkthrough_guardrails_and_chat_keep_verified_principal(monkeyp
         persona = json.loads(walkthrough_persona.recall_with_persona.__wrapped__("aurora", persona="brief", limit=10))
         walkthrough = json.loads(walkthrough_persona.compile_truth_walkthrough.__wrapped__("aurora", limit=10))
         guarded = json.loads(guardrails.recall_with_guardrails.__wrapped__("aurora", limit=10))
+        rows_before_chat = len(read_served_runs(str(ws)))
         chatted = json.loads(chat_tools.chat_with_memory.__wrapped__("aurora", limit=10))
+        rows_after_chat = len(read_served_runs(str(ws)))
 
     for envelope in (persona, walkthrough, guarded):
         rendered = json.dumps(envelope)
@@ -90,6 +93,9 @@ def test_persona_walkthrough_guardrails_and_chat_keep_verified_principal(monkeyp
     assert "D-BOB" not in json.dumps(chatted)
     assert chatted["grounded"] is True
     assert chatted["rejected"] is False
+    assert chatted["attestation"]["served_proof"] == "recorded"
+    assert chatted["attestation_scope"] == "ranked_recall_evidence"
+    assert rows_after_chat == rows_before_chat + 1
 
 
 def test_chat_injected_recall_is_filtered_before_generator(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
