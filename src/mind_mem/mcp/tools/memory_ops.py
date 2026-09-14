@@ -1089,11 +1089,10 @@ def get_block(block_id: str, namespace: str = "") -> str:
         )
 
     if selected_namespace is None and block is not None:
-        # The historical ID-only form remains available for workspace rows,
-        # but a non-Markdown backend may return a namespaced source directly.
-        # Do not let that backend-only shape bypass the ACL that selected
-        # namespace reads enforce.  A source path is metadata, so an invalid
-        # or outside-workspace path is treated as unresolved and refused.
+        # Omitted selectors retain operator compatibility. An authenticated
+        # caller must still have an ACL grant for the actual source, including
+        # root-level corpus files; omitting a selector cannot widen a grant.
+        # A non-Markdown backend may return a namespaced source directly.
         from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
         from mind_mem.namespace_retrieval import namespace_for_path
         from mind_mem.namespaces import InvalidAgentIdError, NamespaceManager
@@ -1109,14 +1108,23 @@ def get_block(block_id: str, namespace: str = "") -> str:
         if "\x00" in rel_source or ".." in rel_source.split("/"):
             return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
         source_namespace = namespace_for_path(rel_source)
-        if source_namespace is not None and source_namespace != "workspace":
-            bound_agent = current_agent_id.get()
+        bound_agent = current_agent_id.get()
+        is_bound = bound_agent not in {None, "", UNATTRIBUTED}
+        if is_bound or (source_namespace is not None and source_namespace != "workspace"):
             try:
                 manager = NamespaceManager(ws, agent_id=None if bound_agent in {None, "", UNATTRIBUTED} else bound_agent)
             except InvalidAgentIdError:
                 return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
             if not manager.can_read(rel_source):
                 return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+            if is_bound:
+                from mind_mem._recall_core import _indexed_hit_is_readable
+
+                # ``where`` comes from our selected resolver, never a block
+                # field. Database coordinates are logical paths; local paths
+                # also require confinement and the resolved-target ACL.
+                if not _indexed_hit_is_readable(ws, {"file": rel_source}, manager, check_realpath=where != "store"):
+                    return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
 
     # EGRESS GATE. Resolution above says whether the bytes EXIST; this says
     # whether this caller may see them. ``get_block`` is a USER-scope tool and

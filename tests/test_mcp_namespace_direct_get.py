@@ -122,6 +122,33 @@ def test_legacy_id_only_root_resolution_remains_available(tmp_path: Path) -> Non
     assert MarkdownBlockStore(str(ws)).get_by_id("D-LEGACY-1") is not None
 
 
+def test_authenticated_id_only_root_read_requires_explicit_acl(monkeypatch, tmp_path: Path) -> None:
+    from fastmcp.server.auth import AccessToken
+
+    from mind_mem.mcp.infra import acl
+
+    ws = _workspace(tmp_path)
+    _block(ws / "decisions/DECISIONS.md", "D-ROOT-PRIVATE", "private root canary")
+    monkeypatch.setattr(
+        acl,
+        "get_access_token",
+        lambda: AccessToken(token="fixture", client_id="fixture", scopes=["user"], claims={"sub": "alice"}),
+    )
+    with use_workspace(str(ws)):
+        denied = json.loads(get_block("D-ROOT-PRIVATE"))
+    assert denied.get("error") == "namespace access denied"
+    assert "private root canary" not in json.dumps(denied)
+
+    policy_path = ws / "mind-mem-acl.json"
+    policy = json.loads(policy_path.read_text())
+    policy["agents"]["alice"]["read"].append("decisions")
+    policy_path.write_text(json.dumps(policy))
+    with use_workspace(str(ws)):
+        allowed = json.loads(get_block("D-ROOT-PRIVATE"))
+    assert allowed["found"] is True
+    assert allowed["block"]["Statement"] == "private root canary"
+
+
 def test_selected_namespace_status_does_not_borrow_duplicate_root_id(tmp_path: Path) -> None:
     """A stale root index cannot make a quarantined namespace row readable."""
     ws = _workspace(tmp_path)
