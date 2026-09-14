@@ -5,9 +5,14 @@ Status: Implemented candidate for M2; M3 declaration shipped, calibration open
 
 The current candidate implements the namespace reachability declaration and
 the source-bound admission path used by its round-trip controls. The evidence
-covers the configured workspace, shared, and agent namespaces; arbitrary
-custom-namespace direct-get coverage and hosted PostgreSQL execution remain
-open. Per-namespace floor declarations are accepted and filtered, but their
+covers the configured workspace, shared, agent, and explicitly declared
+top-level custom namespaces. MCP `get_block(namespace=...)` resolves the
+selected namespace under the caller's bound identity and admission policy.
+Encrypted custom files use the configured storage reader. A configured
+PostgreSQL backend returning no results or failing cannot fall back to local
+Markdown shadows; the empty-result case has a real PostgreSQL regression.
+These controls do not establish every hosted deployment's reachability.
+Per-namespace floor declarations are accepted and filtered, but their
 numeric values are not calibrated or enabled without corpus evaluation.
 
 Two items in one document because M3 cannot be evaluated without M2's
@@ -24,7 +29,10 @@ The retrieval-only configuration lives under `recall.namespace_properties`; it
 does not alter ACLs, admission, trust weights, or any ledger schema. A missing
 section uses the defaults below. Exact namespace keys win over glob patterns;
 `workspace` names ordinary top-level corpus paths, `shared` names the shared
-namespace, and `agents/<id>` names one agent namespace.
+namespace, and `agents/<id>` names one agent namespace. An exact top-level
+custom name registers that namespace's corpus paths; traversal, absolute
+paths, and undeclared custom selectors are refused. The `workspace` selector
+resolves the workspace root, even if a directory named `workspace` exists.
 
 ```json
 {
@@ -67,10 +75,11 @@ query with content that was never meant to compete for a slot.
 
 Historically that distinction lived in configuration and in intent. The
 current candidate adds source-bound admission and round-trip controls for
-the configured workspace, shared, and agent namespaces. Arbitrary custom
-namespace direct-get coverage and hosted PostgreSQL execution remain open;
-an index-configuration regression outside the covered set can still look like
-ordinary ranking drift.
+the configured workspace, shared, agent, and declared custom namespaces.
+The fixtures cover direct-only and searchable custom roots, duplicate IDs,
+source-bound release, ACL denial, symlink escape, encrypted sources, and
+configured-backend failure. Hosted deployment conformance beyond these
+fixtures remains a separate verification task.
 
 The prior art demonstrates the check in three lines, and the demonstration
 is the part worth taking — not the storage engine. The current controls use

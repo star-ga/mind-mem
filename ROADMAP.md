@@ -3751,12 +3751,13 @@ mislabelled eval set still produces confident numbers.
 
 - [~] **M2 — Namespace-property round-trip test.** The current candidate asserts *empirically*, per
   namespace, what is reachable by search versus only by direct get, with the
-  retrieval scores printed. The external work does this as three probes with
-  visible output rather than as a README claim, which is the right instinct: an
-  index-configuration regression currently degrades recall silently instead of
-  failing loudly. `NamespaceManager` (`namespaces.py:93`) governs read/write ACLs
-  but nothing asserts retrieval reachability as a *tested property*. Cheap: a few
-  lines per namespace, and it belongs in CI next to the existing quality gate.
+  retrieval scores printed. Workspace, shared, agent, and explicitly declared
+  top-level custom roots have direct-get/search controls; the MCP selector
+  binds admission to the requested namespace and caller identity. The candidate
+  also covers encrypted custom files and refuses local Markdown fallback when
+  configured PostgreSQL is empty or unavailable. The empty-result refusal has
+  a real PostgreSQL control. These tests now assert reachability alongside ACLs;
+  a complete hosted deployment matrix remains open.
 
 - [~] **M3 — Per-namespace relevance floors.** The current candidate accepts and applies declared per-namespace floors, but numeric calibration remains open. A single similarity threshold
   across differently-shaped namespaces is wrong in both directions. An unbounded,
