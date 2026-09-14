@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1619 | **Est. tokens:** ~4768862
-**Generated:** 2026-09-14 14:32 UTC
+**Files:** 1620 | **Est. tokens:** ~4771903
+**Generated:** 2026-09-14 14:46 UTC
 
 ## Token Budget Guide
 
@@ -82,7 +82,7 @@
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
-| `src/mind_mem/mcp/infra/` | 8 | ~13973 |
+| `src/mind_mem/mcp/infra/` | 8 | ~15417 |
 | `src/mind_mem/mcp/tools/` | 29 | ~121450 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 710 | ~2111096 |
+| `tests/` | 711 | ~2112693 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -894,13 +894,13 @@
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 ### `src/mind_mem/mcp/infra/`
 
-- `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
-- `acl.py` (~4433 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
+- `__init__.py` (~485 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
+- `acl.py` (~5606 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~1315 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
 - `http_auth.py` (~2032 tok, huge) — HTTP bearer-token authentication helpers for the MCP surface.
-- `observability.py` (~2374 tok, huge) — Observability + DB-busy helpers for the MCP surface.
-- `rate_limit.py` (~1035 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
+- `observability.py` (~2497 tok, huge) — Observability + DB-busy helpers for the MCP surface.
+- `rate_limit.py` (~1147 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
 - `workspace.py` (~2237 tok, huge) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
 
@@ -1514,6 +1514,7 @@
 - `test_mcp_anchor_tools.py` (~2280 tok, huge) — The external-anchor tools wired onto the audit family in 5.0.0.
 - `test_mcp_arch_mind_tools.py` (~2320 tok, huge) — Tests for the arch-mind MCP tool wrapper.
 - `test_mcp_audit_verify_chain.py` (~2980 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_mcp_auth_snapshot.py` (~1597 tok, huge) — Request authentication is resolved once at the observed MCP boundary."""
 - `test_mcp_compiled_truth_add_evidence.py` (~3677 tok, huge) — The one compiled-truth tool that WRITES, and the only one nothing tested.
 - `test_mcp_compiled_truth_contradictions.py` (~4713 tok, huge) — ``compiled_truth_contradictions`` — the detective half of the truth pages.
 - `test_mcp_compiled_truth_load.py` (~4697 tok, huge) — The compiled-truth read tool -- registered since v3.2.0, never tested.

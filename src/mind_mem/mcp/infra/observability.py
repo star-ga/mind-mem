@@ -27,7 +27,7 @@ import time
 
 from mind_mem.observability import get_logger, log_context_active, metrics
 
-from .acl import ADMIN_TOOLS, USER_TOOLS, _get_request_scope, check_tool_acl
+from .acl import ADMIN_TOOLS, USER_TOOLS, _get_request_scope, bind_auth_snapshot, check_tool_acl
 from .constants import MCP_SCHEMA_VERSION
 from .rate_limit import _get_client_id, _get_client_rate_limiter
 
@@ -83,7 +83,7 @@ def mcp_tool_observe(fn):
     """
 
     @functools.wraps(fn)
-    def _observed(*args, **kwargs):
+    def _observed_body(*args, **kwargs):
         tool_name = fn.__name__
 
         # Rate limit enforcement (#475): per-client sliding window
@@ -194,6 +194,16 @@ def mcp_tool_observe(fn):
                 metrics.inc("mcp_tool_success")
             else:
                 metrics.inc("mcp_tool_failure")
+
+    @functools.wraps(fn)
+    def _observed(*args, **kwargs):
+        # Resolve token, scope, principal and rate identity once.  The
+        # snapshot remains bound through the body and is reset in the
+        # contextmanager's finally block, including early ACL returns.
+        with bind_auth_snapshot() as auth:
+            if auth.status == "denied":
+                return check_tool_acl(fn.__name__, "deny")
+            return _observed_body(*args, **kwargs)
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
