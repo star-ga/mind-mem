@@ -21,8 +21,17 @@ def repository_root(module_file: str | Path) -> Path | None:
     """
     resolved = Path(module_file).resolve()
     for candidate in (resolved.parent, *resolved.parents):
-        if (candidate / "pyproject.toml").is_file() and (candidate / "src" / "mind_mem").is_dir() and (candidate / "sdk" / "spec").is_dir():
-            return candidate
+        source_package = candidate / "src" / "mind_mem"
+        if not ((candidate / "pyproject.toml").is_file() and source_package.is_dir() and (candidate / "sdk" / "spec").is_dir()):
+            continue
+        # An environment installed below a checkout inherits the checkout's
+        # markers through its parents.  It is still an installed package and
+        # must not scan or write the checkout's SDK artifacts.
+        try:
+            resolved.relative_to(source_package)
+        except ValueError:
+            continue
+        return candidate
     return None
 
 

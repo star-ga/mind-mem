@@ -116,6 +116,8 @@ def observed_event_kinds(source_root: Path | None = None) -> tuple[str, ...]:
                 found.add(kind.value)
             elif isinstance(kind, ast.Name) and kind.id in _EVENT_CONSTANTS:
                 found.add(_EVENT_CONSTANTS[kind.id])
+    if not found:
+        raise RuntimeError(f"no production event emitters found under {root}")
     return tuple(sorted(found))
 
 

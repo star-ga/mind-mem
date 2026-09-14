@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from mind_mem.spec import export_asyncapi
+from mind_mem.spec._paths import repository_root
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -63,3 +64,22 @@ def test_installed_asyncapi_scans_package_and_requires_explicit_artifact(tmp_pat
 def test_missing_emitter_root_is_a_failure_not_an_empty_inventory(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="missing or not a directory"):
         export_asyncapi.observed_event_kinds(tmp_path / "does-not-exist")
+
+
+def test_empty_emitter_root_is_not_a_valid_schema(tmp_path: Path) -> None:
+    source = tmp_path / "mind_mem"
+    source.mkdir()
+    (source / "empty.py").write_text("VALUE = 1\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="no production event emitters"):
+        export_asyncapi.observed_event_kinds(source)
+
+
+def test_installed_package_below_checkout_does_not_bind_checkout_artifact(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    module = checkout / ".venv/lib/python3.12/site-packages/mind_mem/spec/export_asyncapi.py"
+    module.parent.mkdir(parents=True)
+    module.touch()
+    (checkout / "pyproject.toml").touch()
+    (checkout / "src/mind_mem").mkdir(parents=True)
+    (checkout / "sdk/spec").mkdir(parents=True)
+    assert repository_root(module) is None

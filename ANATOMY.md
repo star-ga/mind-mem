@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1651 | **Est. tokens:** ~4853787
-**Generated:** 2026-09-14 20:01 UTC
+**Files:** 1651 | **Est. tokens:** ~4854120
+**Generated:** 2026-09-14 20:04 UTC
 
 ## Token Budget Guide
 
@@ -85,13 +85,13 @@
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
 | `src/mind_mem/mcp/tools/` | 29 | ~124769 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
-| `src/mind_mem/spec/` | 4 | ~6725 |
+| `src/mind_mem/spec/` | 4 | ~6845 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 730 | ~2151501 |
+| `tests/` | 730 | ~2151714 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1041,8 +1041,8 @@
 ### `src/mind_mem/spec/`
 
 - `__init__.py` (~215 tok, medium) — # Copyright 2026 STARGA, Inc.
-- `_paths.py` (~420 tok, medium) — # Copyright 2026 STARGA, Inc.
-- `export_asyncapi.py` (~3863 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `_paths.py` (~516 tok, large) — # Copyright 2026 STARGA, Inc.
+- `export_asyncapi.py` (~3887 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `export_openapi.py` (~2227 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
 
@@ -1798,7 +1798,7 @@
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_asyncapi_drift.py` (~1462 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_sdk_exporter_package_layout.py` (~605 tok, large) — The spec exporters must work after installation outside a checkout."""
+- `test_sdk_exporter_package_layout.py` (~818 tok, large) — The spec exporters must work after installation outside a checkout."""
 - `test_sdk_js_packaging.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
