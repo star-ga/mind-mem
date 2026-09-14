@@ -131,6 +131,21 @@ recall behaves exactly as before — no feature flag is even read. Kernel hits
 pass the same admission gate as recall, so a quarantined block reached through
 the lineage graph is withheld and counted under `withheld`.
 
+Add `--receipt-envelope` when a machine consumer needs the existing serving
+receipt on stdout:
+
+```bash
+mm recall "authentication strategy" --receipt-envelope
+```
+
+The opt-in JSON object has `result`, `ranked_recall_evidence`, and
+`projection`. The evidence field carries the receipt already attached by the
+serving path; it is `unproven` when that receipt is missing, degraded, or could
+not be recorded. The projection reports `final_included_ids` and any dropped
+IDs. It does not seal packed context or rendered agent text, and it makes no
+additional claim for custom or vector execution. Without the flag, `mm recall`
+continues to print its existing JSON list.
+
 ### `mm context <query>`
 
 Recall + token-budget-pack results into a context snippet (JSON).
@@ -139,6 +154,11 @@ Recall + token-budget-pack results into a context snippet (JSON).
 mm context "deadline" --max-tokens 2000
 ```
 
+`--receipt-envelope` preserves the existing packed JSON under `result` and
+adds the ranked receipt plus the pack's included/dropped IDs. The ranked
+receipt describes the recall set before token packing; the rendered context
+projection remains explicitly unsealed.
+
 ### `mm inject <query>`
 
 Render a context snippet in the format expected by a specific agent.
@@ -146,6 +166,11 @@ Render a context snippet in the format expected by a specific agent.
 ```
 mm inject "auth decisions" --agent claude-code
 ```
+
+`--receipt-envelope` emits the rendered text under `result.rendered_text` and
+adds the ranked receipt and injection IDs. The rendered text is data for the
+caller and is never presented as receipt-sealed. The default command remains
+the existing agent-formatted text stream.
 
 ### `mm resume`
 

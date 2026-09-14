@@ -48,6 +48,71 @@ def _workspace() -> str:
 # ---------------------------------------------------------------------------
 
 
+def _result_ids(results: object) -> list[str]:
+    """Return IDs already present in a served result/projection."""
+    if not isinstance(results, (list, tuple)):
+        return []
+    ids: list[str] = []
+    for result in results:
+        if not isinstance(result, Mapping):
+            continue
+        block_id = result.get("_id") or result.get("block_id") or result.get("id")
+        if block_id is not None:
+            ids.append(str(block_id))
+    return ids
+
+
+def _ranked_recall_evidence(results: object) -> dict[str, Any]:
+    """Expose the existing receipt without deriving or upgrading evidence."""
+    attestation = getattr(results, "attestation", None)
+    degraded = getattr(results, "degraded", None)
+    if not isinstance(attestation, dict):
+        return {
+            "status": "unproven",
+            "attestation": None,
+            "reason": "serving receipt unavailable",
+        }
+    if degraded is not None or attestation.get("served_proof") != "recorded":
+        degraded_reason = degraded.get("reason") if isinstance(degraded, dict) else None
+        return {
+            "status": "unproven",
+            "attestation": attestation,
+            "reason": degraded_reason or attestation.get("ledger_error") or "recall result is degraded or unproven",
+        }
+    return {"status": "recorded", "attestation": attestation}
+
+
+def _receipt_envelope(
+    surface: str,
+    query: str,
+    results: object,
+    response: object,
+    *,
+    final_included_ids: list[str],
+    dropped_ids: list[str] | None = None,
+    projection_kind: str,
+) -> dict[str, Any]:
+    """Build an opt-in CLI envelope around the one existing ranked receipt.
+
+    The ranked attestation commits to the recall IDs only. Projection fields
+    describe packing/rendering and deliberately do not claim that packed or
+    rendered text is independently sealed.
+    """
+    return {
+        "schema": "mind-mem/cli-receipt-envelope@1",
+        "surface": surface,
+        "query": query,
+        "result": response,
+        "ranked_recall_evidence": _ranked_recall_evidence(results),
+        "projection": {
+            "kind": projection_kind,
+            "final_included_ids": final_included_ids,
+            "dropped_ids": dropped_ids or [],
+            "rendered_text_attested": False,
+        },
+    }
+
+
 def _cmd_kernel_recall(args: argparse.Namespace) -> int:
     """``mm recall --kernel <name>`` — route through a v4 cognitive kernel.
 
@@ -171,7 +236,23 @@ def _cmd_recall(args: argparse.Namespace) -> int:
         since=getattr(args, "since", None),
         until=getattr(args, "until", None),
     )
-    print(json.dumps(results, indent=2, default=str))
+    if getattr(args, "receipt_envelope", False):
+        print(
+            json.dumps(
+                _receipt_envelope(
+                    "recall",
+                    args.query,
+                    results,
+                    list(results),
+                    final_included_ids=_result_ids(results),
+                    projection_kind="ranked_recall",
+                ),
+                indent=2,
+                default=str,
+            )
+        )
+    else:
+        print(json.dumps(results, indent=2, default=str))
     return 0
 
 
@@ -189,7 +270,24 @@ def _cmd_context(args: argparse.Namespace) -> int:
         "dropped": packed.dropped,
         **packed.as_dict(),
     }
-    print(json.dumps(payload, indent=2, default=str))
+    if getattr(args, "receipt_envelope", False):
+        print(
+            json.dumps(
+                _receipt_envelope(
+                    "context",
+                    args.query,
+                    results,
+                    payload,
+                    final_included_ids=_result_ids(packed.included),
+                    dropped_ids=_result_ids(packed.dropped),
+                    projection_kind="context_pack",
+                ),
+                indent=2,
+                default=str,
+            )
+        )
+    else:
+        print(json.dumps(payload, indent=2, default=str))
     return 0
 
 
@@ -201,7 +299,24 @@ def _cmd_inject(args: argparse.Namespace) -> int:
     results = recall(_workspace(), args.query, limit=args.limit, active_only=False)
     if not isinstance(results, list):
         results = [results] if isinstance(results, dict) else []
-    print(fmt.inject(args.agent, args.query, results), end="")
+    rendered = fmt.inject(args.agent, args.query, results)
+    if getattr(args, "receipt_envelope", False):
+        print(
+            json.dumps(
+                _receipt_envelope(
+                    "inject",
+                    args.query,
+                    results,
+                    {"rendered_text": rendered},
+                    final_included_ids=_result_ids(results),
+                    projection_kind="agent_injection",
+                ),
+                indent=2,
+                default=str,
+            )
+        )
+    else:
+        print(rendered, end="")
     return 0
 
 
@@ -4414,6 +4529,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_recall.add_argument("--limit", type=int, default=10)
     p_recall.add_argument("--active-only", action="store_true")
     p_recall.add_argument(
+        "--receipt-envelope",
+        action="store_true",
+        help="Wrap the ranked result and its existing serving receipt in an opt-in JSON envelope.",
+    )
+    p_recall.add_argument(
         "--since",
         default=None,
         help="ISO-8601 lower bound on block Date (inclusive). E.g. --since 2026-01-01.",
@@ -4443,6 +4563,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_ctx.add_argument("query")
     p_ctx.add_argument("--limit", type=int, default=20)
     p_ctx.add_argument("--max-tokens", type=int, default=2000)
+    p_ctx.add_argument(
+        "--receipt-envelope",
+        action="store_true",
+        help="Wrap the packed result with its ranked receipt and projection IDs; rendered text is not sealed.",
+    )
     p_ctx.set_defaults(func=_cmd_context)
 
     # inject
@@ -4457,6 +4582,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target agent (claude-code, codex, gemini, cursor, windsurf, aider, generic)",
     )
     p_inj.add_argument("--limit", type=int, default=10)
+    p_inj.add_argument(
+        "--receipt-envelope",
+        action="store_true",
+        help="Emit JSON with the ranked receipt and injection projection IDs; rendered text is not sealed.",
+    )
     p_inj.set_defaults(func=_cmd_inject)
 
     # resume — TASK-FRAME continuity (v4.10.1)
