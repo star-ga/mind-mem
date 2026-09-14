@@ -175,6 +175,8 @@ def test_connected_component_and_forged_proposal_refuse_with_access_tokens(ws, m
         )
 
     monkeypatch.setattr(acl, "get_access_token", token)
+    padded = json.loads(propose_entity_merge("a", "b", "a b c d e   "))
+    assert "non-whitespace" in padded["error"]
     for winner, loser in (("a", "b"), ("b", "c")):
         staged = json.loads(propose_entity_merge(winner, loser, "reviewed entity relation"))
         assert staged["status"] == "staged"
@@ -199,3 +201,40 @@ def test_connected_component_and_forged_proposal_refuse_with_access_tokens(ws, m
     assert "identity" in forged["error"]
     with KnowledgeGraph(db) as kg:
         assert kg._conn.execute("SELECT COUNT(*) FROM edges WHERE predicate = 'same_as'").fetchone()[0] == 2
+
+
+def test_graph_query_expands_equivalence_at_each_bounded_hop(ws, monkeypatch):
+    """A SAME_AS component supplies edges at the current BFS level."""
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        for entity in ("a", "b", "c", "d"):
+            kg.entities.resolve(entity)
+        # SAME_AS is deliberately not a generic edge-door write.  This is a
+        # small persisted read fixture for the approved-edge representation.
+        for subject, predicate, object_, source in (
+            ("a", "related_to", "b", "SRC-AB"),
+            ("b", "same_as", "c", "EMP-BC"),
+            ("c", "related_to", "d", "SRC-CD"),
+        ):
+            kg._conn.execute(
+                "INSERT INTO edges(subject, predicate, object, source_block_id, confidence, metadata) VALUES (?, ?, ?, ?, 1.0, '{}')",
+                (subject, predicate, object_, source),
+            )
+        kg._conn.commit()
+
+    monkeypatch.setattr(
+        acl,
+        "get_access_token",
+        lambda: AccessToken(
+            token="fixture-graph-query",
+            client_id="fixture-client",
+            scopes=["user"],
+            claims={"sub": "fixture-user"},
+        ),
+    )
+    resolved = json.loads(graph_query("a", depth=2, resolve_same_as=True))
+    assert [(item["entity"], item["hop"], item["predicate"]) for item in resolved["neighbors"]] == [
+        ("b", 1, "related_to"),
+        ("d", 2, "related_to"),
+    ]
+    plain = json.loads(graph_query("a", depth=2, resolve_same_as=False))
+    assert [item["entity"] for item in plain["neighbors"]] == ["b", "c"]

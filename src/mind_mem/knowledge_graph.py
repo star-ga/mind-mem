@@ -674,7 +674,7 @@ def _validate_entity_merge_identity(proposal_id: str, proposal: "EntityMergeProp
         raise EntityMergeError("entity merge proposal endpoints are malformed")
     if proposal.winner_id == proposal.loser_id:
         raise EntityMergeError("entity merge proposal endpoints must be distinct")
-    if not isinstance(proposal.rationale, str) or len(proposal.rationale.strip()) < 8:
+    if not isinstance(proposal.rationale, str) or sum(not char.isspace() for char in proposal.rationale) < 8:
         raise EntityMergeError("entity merge proposal rationale is malformed")
     expected = _entity_merge_proposal_id(proposal.winner_id, proposal.loser_id)
     if proposal_id != expected:
@@ -1353,7 +1353,7 @@ class KnowledgeGraph:
         winner, loser = winner_id.strip(), loser_id.strip()
         if winner == loser:
             raise EntityMergeError("winner_id and loser_id must be distinct")
-        if not isinstance(rationale, str) or len(rationale.strip()) < 8:
+        if not isinstance(rationale, str) or sum(not char.isspace() for char in rationale) < 8:
             raise EntityMergeError("entity merge rationale must be at least 8 non-whitespace characters")
         with self._lock:
             rows = self._conn.execute("SELECT id FROM entities WHERE id IN (?, ?)", (winner, loser)).fetchall()
@@ -1761,6 +1761,9 @@ class KnowledgeGraph:
                 whose ``valid_from`` has not been reached.
             max_results: Cap on returned neighbours (stops the traversal
                 once reached).
+            resolve_same_as: Treat each approved SAME_AS component as one
+                zero-hop state, so every component member contributes edges
+                at the current BFS level.
 
         Returns:
             List of dicts: ``{entity, hop, path}`` where ``path`` is the
@@ -1774,11 +1777,32 @@ class KnowledgeGraph:
             raise ValueError("direction must be 'outgoing', 'incoming', or 'both'")
 
         start = self.entities.resolve(entity)
-        starts = self.same_as_component(start) if resolve_same_as else (start,)
+        component_cache: dict[str, tuple[str, ...]] = {}
+
+        def component_for(node: str) -> tuple[str, ...]:
+            """Return the equivalence component without charging a hop.
+
+            A resolved neighborhood treats SAME_AS as a quotient: every
+            member of the component supplies edges at the current BFS
+            level.  Caching the component for each member keeps a chain of
+            equivalent entities from repeatedly walking the same rows.
+            """
+            if not resolve_same_as:
+                return (node,)
+            cached = component_cache.get(node)
+            if cached is not None:
+                return cached
+            component = self.same_as_component(node)
+            for member in component:
+                component_cache[member] = component
+            return component
+
+        starts = component_for(start)
         seen: set[str] = set(starts)
-        queue: deque[tuple[str, int, tuple[str, ...]]] = deque()
-        for component_id in starts:
-            queue.append((component_id, 0, (component_id,)))
+        # The component is one logical start state.  Its members are all
+        # queried below, so enqueueing each member would duplicate work and
+        # make paths depend on the order of the SAME_AS rows.
+        queue: deque[tuple[str, int, tuple[str, ...]]] = deque([(start, 0, (start,))])
         out: list[dict[str, Any]] = []
 
         while queue and len(out) < max_results:
@@ -1786,24 +1810,30 @@ class KnowledgeGraph:
             if hop >= depth:
                 continue
             neighbours: list[tuple[str, str]] = []  # (next_node, predicate)
-            if direction in {"outgoing", "both"}:
-                for e in self._query_edges(
-                    subject=node,
-                    predicate=predicate,
-                    include_expired=include_expired,
-                ):
-                    neighbours.append((e.object, e.predicate.value))
-            if direction in {"incoming", "both"}:
-                for e in self._query_edges(
-                    object_=node,
-                    predicate=predicate,
-                    include_expired=include_expired,
-                ):
-                    neighbours.append((e.subject, e.predicate.value))
+            for source_id in component_for(node):
+                if direction in {"outgoing", "both"}:
+                    for e in self._query_edges(
+                        subject=source_id,
+                        predicate=predicate,
+                        include_expired=include_expired,
+                    ):
+                        neighbours.append((e.object, e.predicate.value))
+                if direction in {"incoming", "both"}:
+                    for e in self._query_edges(
+                        object_=source_id,
+                        predicate=predicate,
+                        include_expired=include_expired,
+                    ):
+                        neighbours.append((e.subject, e.predicate.value))
             for nxt, pred in neighbours:
-                if nxt in seen:
+                # SAME_AS is the quotient relation in this mode, so do not
+                # expose component-internal edges as ordinary neighbours.
+                if resolve_same_as and pred == Predicate.SAME_AS.value:
                     continue
-                seen.add(nxt)
+                target_component = component_for(nxt)
+                if any(member in seen for member in target_component):
+                    continue
+                seen.update(target_component)
                 new_path = path + (nxt,)
                 out.append({"entity": nxt, "hop": hop + 1, "path": list(new_path), "predicate": pred})
                 if len(out) >= max_results:
