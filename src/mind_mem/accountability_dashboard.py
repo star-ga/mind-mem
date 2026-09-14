@@ -174,7 +174,7 @@ def _admitted_blocks(workspace: str) -> list[dict]:
     except Exception as exc:  # pragma: no cover — a missing corpus is an empty one
         _log.debug("dashboard_corpus_read_failed", error=str(exc))
         blocks = []
-    return admit_corpus(blocks)
+    return admit_corpus(blocks, workspace=workspace)
 
 
 def _tier_name(value: Any) -> str:

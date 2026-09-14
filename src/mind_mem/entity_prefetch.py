@@ -220,7 +220,7 @@ def prefetch_entity_blocks(
     # This tier reads ``entities/`` itself rather than the shared corpus,
     # so it needs the rule applied to its own load: a withheld entity block
     # is not a prefetch candidate.
-    entity_blocks = admit_corpus(_load_entity_blocks(workspace))
+    entity_blocks = admit_corpus(_load_entity_blocks(workspace), workspace=workspace)
     if not entity_blocks:
         return []
 

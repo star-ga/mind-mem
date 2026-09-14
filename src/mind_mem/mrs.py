@@ -370,7 +370,7 @@ def collect_corpus_counts(workspace: str) -> CorpusCounts:
                 block[_SOURCE_KEY] = source
             parsed.extend(blocks)
 
-    admitted = admit_corpus(parsed)
+    admitted = admit_corpus(parsed, workspace=workspace)
     admitted_ids = {str(block.get("_id") or "") for block in admitted}
     admitted_ids.discard("")
 

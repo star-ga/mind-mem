@@ -306,7 +306,7 @@ def workspace_admitted_ids(workspace: str) -> frozenset[str]:
     from .storage import iter_blocks
 
     blocks = iter_blocks(workspace, active_only=False)
-    return frozenset(str(b["_id"]) for b in admit_corpus(blocks) if b.get("_id"))
+    return frozenset(str(b["_id"]) for b in admit_corpus(blocks, workspace=workspace) if b.get("_id"))
 
 
 def run_harvest_job(

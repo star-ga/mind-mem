@@ -148,6 +148,15 @@ DEFAULT_CONFIG = {
     "governance_mode": "detect_only",
     "recall": {
         "backend": "bm25",
+        # Retrieval-only namespace declarations.  Normal workspace corpus
+        # files and ACL-visible shared/agent files remain searchable unless
+        # an operator explicitly declares another reachability property.
+        "namespace_properties": {
+            "defaults": {"reachability": "searchable", "floor": "inherit-global"},
+            "workspace": {"reachability": "searchable", "floor": "inherit-global"},
+            "shared": {"reachability": "searchable", "floor": "inherit-global"},
+            "agents/*": {"reachability": "searchable", "floor": "inherit-global"},
+        },
     },
     "proposal_budget": {
         "per_run": 3,

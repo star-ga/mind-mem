@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from mind_mem._recall_core import recall
-from mind_mem.content_lifecycle import ContentLifecyclePolicy
+from mind_mem.content_lifecycle import ContentLifecyclePolicy, content_identity, live_content_blocks
 from mind_mem.dream_cycle import pass_stale_detection
 from mind_mem.init_workspace import init
 from mind_mem.memory_tiers import DemotionReason, MemoryTier, TierManager
@@ -61,7 +61,7 @@ def test_actual_recall_uses_semantic_lifetime_and_pinned_clock(tmp_path: Path, m
         # FTS5 otherwise clamps its IDF to tiny values rounded to zero.
         # Do not inject artificial scores into the production query path.
         corpus = Path(workspace) / "decisions/DECISIONS.md"
-        with corpus.open("a") as handle:
+        with corpus.open("a", encoding="utf-8") as handle:
             for seq in range(10, 20):
                 handle.write(f"\n[D-20260901-{seq:03d}]\nStatus: active\nStatement: unrelated violet control {seq}\n")
         build_index(workspace)
@@ -140,6 +140,72 @@ def test_credential_revocation_is_not_overridden_by_durability(tmp_path: Path) -
     assert "D-20260901-004" not in {hit["_id"] for hit in hits}
 
 
+def test_lifetime_metadata_is_bound_to_namespace_source_when_ids_repeat(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    shared = Path(workspace) / "shared" / "decisions"
+    shared.mkdir(parents=True)
+    shared.joinpath("DECISIONS.md").write_text(
+        "[D-20260901-001]\nStatus: active\nContentCategory: status\nContentValidFrom: 2026-09-01\nStatement: shared copy\n\n",
+        encoding="utf-8",
+    )
+    root_row = {"_id": "D-20260901-001", "_source_file": "decisions/DECISIONS.md"}
+    shared_row = {"_id": "D-20260901-001", "_source_file": "shared/decisions/DECISIONS.md"}
+    records = live_content_blocks(workspace, blocks=[root_row, shared_row])
+    assert sum(key[2] == "D-20260901-001" for key in records) == 2
+    assert content_identity(root_row) != content_identity(shared_row)
+    hit = {**shared_row, "Status": "active", "score": 1.0}
+    assert apply_validity_gate([hit], workspace, CFG, scoring_instant=NOW) == 1
+    assert hit["validity"]["content_lifecycle"]["state"] == "stale"
+
+
+def test_revoked_credentials_are_withheld_by_generic_corpus_admission(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    corpus = Path(workspace) / "decisions/DECISIONS.md"
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"),
+        encoding="utf-8",
+    )
+    from mind_mem.admissibility import admit_corpus
+
+    rows = [{"_id": "D-20260901-004", "_source_file": "decisions/DECISIONS.md", "Status": "active", "ContentCategory": "credential"}]
+    assert admit_corpus(rows, workspace=workspace) == []
+
+
+def test_forged_source_cannot_borrow_another_id_lifecycle_row(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    rows = [{"_id": "D-20260901-004", "_source_file": "agents/other/DECISIONS.md", "Status": "active", "score": 1.0}]
+    from mind_mem.content_lifecycle import filter_revoked_credentials
+
+    assert filter_revoked_credentials(rows, workspace) == []
+
+
+def test_compliance_export_door_applies_revocation_before_serialization(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    corpus = Path(workspace) / "decisions/DECISIONS.md"
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"),
+        encoding="utf-8",
+    )
+    from mind_mem.compliance.export import load_admitted_blocks
+
+    admitted, withheld = load_admitted_blocks(workspace)
+    assert withheld == 1
+    assert "D-20260901-004" not in {row["_id"] for row in admitted}
+
+
+def test_accountability_waste_does_not_name_revoked_credentials(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    corpus = Path(workspace) / "decisions/DECISIONS.md"
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"),
+        encoding="utf-8",
+    )
+    from mind_mem.accountability_views import waste_view
+
+    report = waste_view(workspace)
+    assert "D-20260901-004" not in report.unserved_ids
+
+
 def test_public_direct_fetch_withholds_revoked_credential_but_serves_decision(tmp_path: Path, monkeypatch) -> None:
     from mind_mem.mcp.tools import memory_ops
 
@@ -164,7 +230,8 @@ def test_current_corpus_renewal_changes_the_result_without_reindex(tmp_path: Pat
     assert apply_validity_gate([copy.deepcopy(hit)], workspace, CFG, scoring_instant=NOW) == 1
     corpus = Path(workspace) / "decisions/DECISIONS.md"
     corpus.write_text(
-        corpus.read_text(encoding="utf-8").replace("ContentValidFrom: 2026-09-12", "ContentValidFrom: 2026-09-14"), encoding="utf-8"
+        corpus.read_text(encoding="utf-8").replace("ContentValidFrom: 2026-09-12", "ContentValidFrom: 2026-09-14"),
+        encoding="utf-8",
     )
     renewed = copy.deepcopy(hit)
     assert apply_validity_gate([renewed], workspace, CFG, scoring_instant=NOW) == 0

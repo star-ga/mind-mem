@@ -965,7 +965,7 @@ def admit_read(
     """
     from .admissibility import admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
 
-    rows: list[Mapping[str, Any]] = list(items)
+    rows: list[dict[str, Any]] = [dict(item) for item in items]
     if not rows:
         return ReadAdmission([], 0)
     content_withheld = 0

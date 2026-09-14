@@ -121,7 +121,7 @@ def apply_validity_gate(
             today in UTC.
     """
     vg_cfg = cfg.get("validity_gate")
-    from .content_lifecycle import ContentLifecyclePolicy, live_content_blocks
+    from .content_lifecycle import ContentLifecyclePolicy, content_block_for, live_content_blocks
 
     content_policy = ContentLifecyclePolicy.from_recall_config(cfg)
     if not isinstance(vg_cfg, dict) or not vg_cfg.get("enabled", False):
@@ -141,6 +141,10 @@ def apply_validity_gate(
     provenance_enabled = _provenance_enabled(vg_cfg)
     confirmed_ids = _load_confirmed_ids(workspace, block_ids, scoring_instant=scoring_instant) if provenance_enabled else frozenset()
     content_blocks = live_content_blocks(workspace) if content_policy is not None else {}
+    if content_policy is not None and hits:
+        # Add exact source-bound rows for namespace/index hits while retaining
+        # the unique-ID fallback used by legacy callers without source fields.
+        content_blocks.update(live_content_blocks(workspace, blocks=hits))
     if content_policy is not None:
         from .scoring_instant import resolve_scoring_instant
 
@@ -161,7 +165,7 @@ def apply_validity_gate(
         )
         hit["validity"] = components
         lifetime = (
-            content_policy.evaluate(content_blocks.get(hit.get("_id", ""), {}), as_of=content_date) if content_policy is not None else None
+            content_policy.evaluate(content_block_for(content_blocks, hit), as_of=content_date) if content_policy is not None else None
         )
         if lifetime is not None:
             components["content_lifecycle"] = lifetime.as_dict()

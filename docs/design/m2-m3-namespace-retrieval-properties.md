@@ -10,6 +10,46 @@ policy before there is any way to tell whether a floor helps.
 
 ## M2 — assert each namespace's reachability empirically
 
+### Shipped declaration shape
+
+The retrieval-only configuration lives under `recall.namespace_properties`; it
+does not alter ACLs, admission, trust weights, or any ledger schema. A missing
+section uses the defaults below. Exact namespace keys win over glob patterns;
+`workspace` names ordinary top-level corpus paths, `shared` names the shared
+namespace, and `agents/<id>` names one agent namespace.
+
+```json
+{
+  "recall": {
+    "namespace_properties": {
+      "defaults": {"reachability": "searchable", "floor": "inherit-global"},
+      "workspace": {"reachability": "searchable", "floor": "inherit-global"},
+      "shared": {"reachability": "searchable", "floor": "inherit-global"},
+      "agents/*": {"reachability": "searchable", "floor": "inherit-global"},
+      "direct": {"reachability": "direct-only", "floor": "none"},
+      "always": {
+        "reachability": "always-injected",
+        "floor": "none",
+        "max_items": 4,
+        "content_type": "behavior"
+      }
+    }
+  }
+}
+```
+
+`direct-only` and `always-injected` entries are removed before scoring, so
+they cannot enter matched or broad search, IDF, graph rescue, or indexed-backend
+results. Direct storage APIs remain available to an ACL-authorized caller. The
+search filter is also applied to SQLite, provider, and Postgres-shaped hits
+after their backend returns, closing a backend bypass.
+
+An `always-injected` entry is read only by the real `pack_recall_budget` path.
+It must declare `max_items` (1–32) and `content_type: "behavior"`; only admitted
+Behavior blocks are prepended to the bounded pack. This is a fixed token budget
+charge and is reported in `always_injected`; non-Behavior or withheld blocks are
+never surfaced.
+
 ### The failure this closes
 
 Namespaces differ in how they are meant to be reached. Some are searched.
@@ -79,6 +119,13 @@ retrieved content it was meant to supplement.
 ---
 
 ## M3 — relevance floors as a per-namespace property
+
+The implementation accepts `floor: "none"`, `floor: "inherit-global"`, or a
+numeric floor in the declaration. A numeric value is ignored unless the same
+declaration carries a non-empty `evidence` field describing the separation
+measurement; no optimal threshold is invented. The floor is enforced on the
+score-producing result list for scan and indexed paths, while the existing
+`recall.min_score` remains the inherited global value.
 
 ### The observation
 

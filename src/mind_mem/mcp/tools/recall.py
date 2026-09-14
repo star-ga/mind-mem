@@ -1274,28 +1274,51 @@ def pack_recall_budget(
     from mind_mem.cognitive_forget import pack_to_budget
     from mind_mem.multi_modal import flag_enabled as _multimodal_enabled
     from mind_mem.multi_modal import pack_cost
+    from mind_mem.namespace_retrieval import always_injected_hits
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
 
-    if not isinstance(query, str) or not query.strip():
-        return json.dumps({"error": "query must be a non-empty string"})
+    if not isinstance(query, str):
+        return json.dumps({"error": "query must be a string"})
     if max_tokens <= 0 or max_tokens > 1_000_000:
         return json.dumps({"error": "max_tokens must be in [1, 1_000_000]"})
     if limit < 1 or limit > 500:
         return json.dumps({"error": "limit must be in [1, 500]"})
 
-    raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
+    from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+
+    bound_agent = current_agent_id.get()
+    always_results, always_meta = always_injected_hits(
+        ws,
+        _load_config(ws),
+        agent_id=None if bound_agent == UNATTRIBUTED else bound_agent,
+    )
+    if not query.strip() and not always_results:
+        return json.dumps({"error": "query must be a non-empty string"})
     attestation: dict[str, Any] | None = None
-    if isinstance(raw, dict):
-        results = raw.get("results", []) or []
-        attestation = raw.get("attestation")
-    elif isinstance(raw, list):
-        results = raw
+    if query.strip():
+        raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
+        if isinstance(raw, dict):
+            results = raw.get("results", []) or []
+            attestation = raw.get("attestation")
+        elif isinstance(raw, list):
+            results = raw
+        else:
+            results = []
     else:
+        # A supplement-only pack has no ranked query to attest or execute.
+        # Keep the explicit unproven supplement marker below and avoid invoking
+        # the ranked engine for an otherwise valid empty-query request.
         results = []
+
+    # Always-injected declarations are a bounded behaviour-only supplement to
+    # the ranked answer. They are loaded through the same admission predicate
+    # and are prepended so the existing packer treats them as highest priority.
+    # An absent declaration returns an empty list and preserves the old output.
+    results = always_results + results
 
     # None keeps the char-count estimator that has always priced this pack,
     # so the flag-off call is unchanged down to the token.
@@ -1366,6 +1389,16 @@ def pack_recall_budget(
     except Exception as exc:
         _log.debug("pack_sufficiency_skipped", error=str(exc))
 
+    supplemental_evidence = (
+        {
+            "status": "unproven",
+            "scope": "always_injected_supplement",
+            "count": len(always_results),
+            "reason": "the existing recall attestation covers ranked recall only; the configured supplement was loaded separately",
+        }
+        if always_results
+        else None
+    )
     return json.dumps(
         {
             "query": query,
@@ -1374,12 +1407,14 @@ def pack_recall_budget(
             **packed.as_dict(),
             **({"sufficiency": sufficiency} if sufficiency else {}),
             **({"context_budget": budget} if budget is not None else {}),
-            # The record for the RECALL underneath the pack, surfaced rather
-            # than dropped. It commits to the ranking the recall served, which
-            # is ``included`` + ``dropped`` — packing is a budget decision
-            # taken after the fact, and re-deriving a record over ``included``
-            # alone would attest a ranking the engine never produced.
+            **({"always_injected": always_meta} if always_meta.get("cap", 0) else {}),
+            # The record for the RECALL underneath the pack is surfaced rather
+            # than dropped. It commits to ranked recall only. If an
+            # always-injected supplement was prepended, ``supplemental_evidence``
+            # makes the boundary explicit instead of implying that this
+            # attestation covers the combined packed list.
             "attestation": attestation,
+            **({"supplemental_evidence": supplemental_evidence} if supplemental_evidence else {}),
             "_schema_version": "1.0",
         },
         indent=2,

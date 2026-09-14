@@ -106,7 +106,7 @@ def _load_consensus_votes(ws: str) -> dict[str, list[Vote]]:
         return {}
 
     votes: dict[str, list[Vote]] = {}
-    for block in admit_corpus(blocks):
+    for block in admit_corpus(blocks, workspace=ws):
         contradiction = _vote_field(block, "Contradiction")
         agent = _vote_field(block, "Agent")
         choice = _vote_field(block, "Choice")

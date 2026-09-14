@@ -423,7 +423,7 @@ class TierManager:
         # silently override the durable decision/architecture/credential rule.
         # Expiration is a review/demotion signal in recall and dream_cycle,
         # not permission to delete a fact or its tier assignment.
-        from .content_lifecycle import live_content_blocks, workspace_policy
+        from .content_lifecycle import content_block_for, live_content_blocks, workspace_policy
         from .scoring_instant import resolve_scoring_instant
 
         content_policy = workspace_policy(self._workspace) if self._workspace else None
@@ -434,7 +434,7 @@ class TierManager:
         for block_id in all_ids:
             if (
                 content_policy is not None
-                and content_policy.evaluate(content_blocks.get(block_id, {}), as_of=resolve_scoring_instant(current)) is not None
+                and content_policy.evaluate(content_block_for(content_blocks, block_id), as_of=resolve_scoring_instant(current)) is not None
             ):
                 continue
             tier = self.get_tier(block_id)

@@ -734,7 +734,8 @@ def _pass_content_stale_detection(
 
     today = resolve_scoring_instant(as_of)
     stale: list[StaleBlock] = []
-    for block_id, block in live_content_blocks(workspace, active_only=True).items():
+    for _identity, block in live_content_blocks(workspace, active_only=True).items():
+        block_id = str(block.get("_id") or "")
         lifetime = policy.evaluate(block, as_of=today)
         if lifetime is not None:
             if not lifetime.needs_review:

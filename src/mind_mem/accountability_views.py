@@ -799,7 +799,7 @@ def waste_view(workspace: str) -> WasteView:
     except Exception as exc:  # pragma: no cover — a missing corpus is an empty one
         _log.debug("accountability_corpus_read_failed", error=str(exc))
         blocks = []
-    admitted = admit_corpus(blocks)
+    admitted = admit_corpus(blocks, workspace=workspace)
     admitted_ids = [str(block.get("_id") or "") for block in admitted]
 
     runs = observed_runs(workspace)
