@@ -3909,24 +3909,15 @@ better than the external project's convention of retaining copies of the source
 elements in chunk metadata: it is cheaper, and it is *anchorable*. That is the
 seam N2 exploits.
 
-- [ ] **BLOCKED BY THE 5.0.0 SWEEP — Group N has no subject any more.**
-  Both N items are about `smart_chunker`, and Fable's own N2 verdict recorded
-  the reason it is now gone: *"`smart_chunker` has zero production importers
-  (only its two test files)"*. The reachability sweep deleted it on exactly
-  that evidence, along with both test files.
-
-  So N1 (soft maximum) and N2 (chunk-provenance anchoring) are not "next" —
-  they are proposals about a module the product no longer ships. Fable's
-  sequencing already put a prerequisite ahead of them (*"wire the chunker into
-  the production ingest path — its own reviewable change"*), and that
-  prerequisite is now the whole question: **does this product chunk at all?**
-
-  Re-open only after that is answered. If ingestion needs chunking, the chunker
-  returns through the front door with a production caller, and N1/N2 follow
-  as designed — the N2 verdict below (anchor in the EXISTING EvidenceChain via
-  the metadata dict of PROPOSE/APPLY records, never a second chain and never
-  one record per chunk; `doc_hash` over RAW BYTES; `EvidenceAction` stays
-  closed) remains the right design and is preserved verbatim.
+**The 5.0.0 deletion blocker was reversed in 5.0.1.** `smart_chunker.py`
+and its tests are present. `recall_smart_chunk.py` wires it into the BM25
+chunk-scoring path behind `retrieval.smart_chunking.enabled`; the actual
+flag-on score change and flag-off identity are covered by
+`tests/test_smart_chunker_wiring.py`. This resolves the claim that Group N
+has no implementation to extend. It does not establish N2: raw-document
+hash/span anchoring at ingestion and its existing-chain integration remain
+pending below. The required design still uses metadata on existing PROPOSE/APPLY
+records; it adds neither a parallel chain nor an evidence enum member.
 
 - [x] **N1 — Soft maximum as a distinct boundary control.** The chunker today has **SHIPPED — the checkbox contradicted the entry's own text, which already read "LANDED 2026-08-24".** `SmartChunkerConfig.soft_max_chunk_size` / `soft_max_boundary_score` (`src/mind_mem/smart_chunker.py`), consulted by `_merge_segments_into_chunks`, which also gave the previously-dead boundary scorer a caller.
   a hard ceiling (`max_chunk_size`, default 1500) and a merge floor
@@ -4581,10 +4572,12 @@ evidence.
   record. Absorbs Group M's enum-keyed upsert slots: building those without the
   embed split wires slots into writes while leaving reads broken.
 
-- [ ] **3. Lifecycle deaths in the evidence chain** — `DEMOTE`/`ARCHIVE`/`FORGET`
-  as chained, replayable events, folding in RA.4's retention class. A governed
-  memory whose FORGET path is un-evidenced has a hole exactly where the
-  differentiator lives.
+- [x] **3. Lifecycle deaths in the evidence chain** — the opt-in
+  `lifecycle_evidence.py` consumer records DEMOTE / ARCHIVE / FORGET on real
+  tier and compaction transitions using the existing ROLLBACK action plus
+  additive lifecycle metadata. `tests/test_lifecycle_evidence.py` verifies
+  the transition, both ledger links and default-off behavior. Retention-class
+  and alias-merge work remains separately tracked under RA.4.
 
 - [ ] **4. Enforcement-in-code audit** — every claim in README/CLAUDE.md mapped to
   a test that enforces it, plus the same reachability pass applied to the 98-tool
@@ -4593,8 +4586,9 @@ evidence.
   cut it. This is the institutional fix for the over-building lesson, not another
   one-time sweep.
 
-- [ ] **5. Chunk provenance** — see Group N: BLOCKED, the sweep deleted its
-  subject. Re-opens only if this product turns out to chunk at all.
+- [ ] **5. Chunk provenance** — duplicate of Group N / N2. The chunker is
+  restored and wired into recall; ingestion-time raw-document hash/span
+  anchoring remains open. Count this work once.
 
 ## Reachability sweep — 5.0.0 (2026-08-31)
 
