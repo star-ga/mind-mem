@@ -167,13 +167,28 @@ build if a ledger is added there and not described here.
 | `hash_chain` | `memory/hash_chain_v2.db` | The SHA3-512 append-only chain of record: **what the gate admitted**. Q16.16 fixed-point in the hash preimage, byte-identical across architectures. | 2 |
 | `evidence_chain` | `memory/evidence_chain.jsonl` | Structured governance evidence: **why** an admission was allowed, and by whom. | 4 |
 | `audit_sidecar` | `.mind-mem-audit/chain.jsonl` | The field-granular sidecar (`audit_chain.py`) — which fields of a block changed, per operation. | 7 |
-| `served_ledger` | `.mind-mem-ledger/served.jsonl` | **What recall actually served** (`served_ledger.py`): one append-only row per served run, no verdict and no score. On by default since 5.0.2. | 8 |
+| `served_ledger` | `.mind-mem-ledger/served.jsonl` | **Recorded serving events** (`served_ledger.py`): V1/V2 append-only rows, no verdict and no score. V2 distinguishes corpus-attested and local-anticipation serving. On by default since 5.0.2; recording failure can leave a serve unrecorded. | 8 |
 
 They are separate on purpose and are not interchangeable: the first says a
 write landed, the second says it was allowed, the third says which fields
 moved, and the fourth says what a reader was later shown. A verification that
 walked one and reported on "the audit chain" would be answering a different
 question from the one asked.
+
+The [retrieval receipt contract](specs/retrieval-receipt-contract.md) proposes
+a read-only export and verifier over this existing evidence. `run_id` identifies
+an answer and may repeat; a portable occurrence also needs a provisioned ledger
+identity, sequence and row binding. Local chain consistency is distinct from
+independently retained history. The new interface is a draft, not a shipped
+receipt service. Optional economic adapters consume agreed, eligible events
+downstream and have no authority over retrieval ranking or governed writes.
+
+The adopted target architecture gives CVS an environment-independent evidence
+contract, with MIND Witness as the MIND event/artifact adapter and 512-MIND as
+the admissibility layer. Independent verification, observation and custody need
+explicit proof profiles; an internal signed self-report is not an independent
+execution witness. This separation and canonical-lineage integration are open
+implementation work in Group RE, not properties inferred from the current ledger.
 
 Further rows in the same report are **not** ledgers
 (`verify_cli.NON_LEDGER_CHECKS`): `spec_binding` compares the live

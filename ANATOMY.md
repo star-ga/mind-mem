@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1575 | **Est. tokens:** ~4670140
-**Generated:** 2026-09-14 07:42 UTC
+**Files:** 1576 | **Est. tokens:** ~4679026
+**Generated:** 2026-09-14 09:50 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206908 |
+| `docs/` | 93 | ~207509 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -54,6 +54,7 @@
 | `docs/evidence/5.0.2-f1/` | 12 | ~188585 |
 | `docs/plans/` | 1 | ~6134 |
 | `docs/security-baselines/` | 1 | ~18974 |
+| `docs/specs/` | 1 | ~8285 |
 | `examples/` | 3 | ~1203 |
 | `hooks/` | 3 | ~1026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1211 |
@@ -318,7 +319,7 @@
 - `MHS_DEVICE_MEMORY.md` (~524 tok, large) — MHS / Device Memory Boundary
 - `MIND_CONFIG_VS_MIND_LANG.md` (~743 tok, large) — Pipeline configuration and MIND language sources
 - `POST-V4.4.0-ROADMAP-PLAN.md` (~1905 tok, huge) — mind-mem — Post-v4.4.0 Roadmap Plan (reference)
-- `ROADMAP-RETRIEVAL-ACCOUNTABILITY.md` (~2736 tok, huge) — Group R — Retrieval Accountability (memory as rent, not storage)
+- `ROADMAP-RETRIEVAL-ACCOUNTABILITY.md` (~2861 tok, huge) — Group R — Retrieval Accountability (memory as rent, not storage)
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2267 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `SOTA_GAP_RULING_2026-09-03.md` (~8053 tok, huge) — mind-mem SOTA gap ruling — architecture seat, 2026-09-03
 ### `docs/adr/`
@@ -334,7 +335,7 @@
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~2679 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1626 tok, huge) — Append-Only Audit Logs — Operator Runbook
-- `architecture.md` (~3226 tok, huge) — Architecture
+- `architecture.md` (~3506 tok, huge) — Architecture
 ### `docs/audit/`
 
 - `GROUP-R-AUDIT-2026-08-28.md` (~4973 tok, huge) — Group R — Independent Architecture Audit
@@ -498,7 +499,7 @@
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `review.md` (~1647 tok, huge) — `mm review` — batch approval for the HITL queue
 - `roadmap-v4.md` (~11235 tok, huge) — mind-mem v4.0 — Design Rationale
-- `roadmap.md` (~14205 tok, huge) — Roadmap
+- `roadmap.md` (~14401 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-audit-sow.md` (~3353 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
 ### `docs/security-baselines/`
@@ -508,6 +509,11 @@
 
 - `security-model.md` (~823 tok, large) — Security Model
 - `setup.md` (~2221 tok, huge) — Setup
+### `docs/specs/`
+
+- `retrieval-receipt-contract.md` (~8285 tok, huge) — Retrieval receipt contract
+### `docs/`
+
 - `status.md` (~1397 tok, large) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide

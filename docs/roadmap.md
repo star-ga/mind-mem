@@ -19,6 +19,20 @@ The current server exposes 102 MCP tools. See
 [`mind-mem-4b-setup.md`](mind-mem-4b-setup.md) and the
 [published model card](https://huggingface.co/star-ga/mind-mem-4b).
 
+## Current planning
+
+Use the [canonical roadmap](../ROADMAP.md) for current implementation status
+and the [changelog](../CHANGELOG.md) for release history. The versioned entries
+below are historical planning records, not the current release declaration.
+
+The [retrieval receipt contract](specs/retrieval-receipt-contract.md) is a draft
+for portable evidence built over the existing served ledger. [Group RE](../ROADMAP.md#group-re--portable-retrieval-evidence)
+tracks schema/identity, export/verification, the independent CVS / MIND Witness
+contract, a measured operator pilot, and the required canonical-lineage consumer.
+Billing and settlement remain optional
+future adapters behind demonstrated demand. They do not block release readiness,
+Pure-MIND migration, or model training.
+
 ## v3.12.1 (Historical release record — released 2026-05-10)
 
 `mind-mem-4b` v3.12.0-fullft retrain on Qwen3.5-4B (H200 SXM,

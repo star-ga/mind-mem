@@ -32,6 +32,13 @@
 > R.0 (wire the ladder onto one DB) is new and blocks everything else.
 > The text below is kept for the diagnosis of *intent*, not as an implementation spec.
 
+> **2026-09-14 extension:** the [retrieval receipt contract](specs/retrieval-receipt-contract.md)
+> specifies a proposed export/verifier over existing serving evidence. Its core
+> use is audit and debugging; commercial aggregation and settlement are optional
+> and demand-gated. Follow [Group RE](../ROADMAP.md#group-re--portable-retrieval-evidence)
+> for that work. This does not revive the superseded promotion or deletion rules
+> below, and it does not change RA.1's partial implementation status.
+
 # Group R — Retrieval Accountability (memory as rent, not storage)
 
 > **Status:** proposed 2026-08-28. Not started. Every code reference below

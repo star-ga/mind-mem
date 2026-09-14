@@ -118,6 +118,7 @@ Output:
 - [`docs/mind-mem-4b-setup.md`](docs/mind-mem-4b-setup.md) — download + run the `star-ga/mind-mem-4b` full-FT model locally (transformers, exllamav2, vLLM, llama.cpp, Ollama, **MindLLM**)
 - [`docs/companion-tools.md`](docs/companion-tools.md) — **companion tools** that complement (not compete with) mind-mem: [MindLLM](https://github.com/star-ga/MindLLM) for deterministic + evidence-chained inference, [GitNexus](https://github.com/h4ckf0r0day/GitNexus) for code knowledge-graph
 - [`ROADMAP.md`](ROADMAP.md) — feature roadmap (genuinely-open items at the top; bulk of v3.2.0→v4.0.0 shipped)
+- [`docs/specs/retrieval-receipt-contract.md`](docs/specs/retrieval-receipt-contract.md) — **draft** portable retrieval-evidence contract and acceptance gates; optional billing and settlement remain demand-gated
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes for every published version
 
 ---

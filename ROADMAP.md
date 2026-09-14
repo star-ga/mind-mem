@@ -180,17 +180,57 @@ files are in play. The original R.1 would have been a no-op.
 > The claim is **deterministic given (corpus, config, scoring_instant)** — not
 > "deterministic" unqualified.
 >
-> Still open, and stated rather than implied: the attestation preimage describes
-> the served set only by its **cardinality**. Binding the instant worked because
-> it was the last hidden input, not because cardinality is sufficient. The
-> structural fix is to bind a served-ids-in-rank-order digest — precisely the
-> digest **RA.1** already computes for `run_id`. Reuse it there; do not mint a
-> second one.
+> **Source correction, 2026-09-14:** the cardinality-only limitation described
+> here is historical. `recall_attestation.py` now binds the ordered results
+> digest and derives `run_id` through `recall_digests.py`, the same canonical
+> owner used by RA.1. Group RE must preserve this encoding rather than invent
+> another served-result hash. Identity of admitted inputs remains a prerequisite
+> for replay; this is not a claim about arbitrary external providers.
 
 > Explicitly **not** building: outcome-weighted online reranking; any auto-written
 > constraints file without HITL (`guardrails.py:43-50` provenance refusal exists
 > because a ranker-bypass primitive is an injection vector); LLM-judged salience at
 > ingest; a fourth tier system.
+
+### Group RE — Portable retrieval evidence
+
+**Draft specification, 2026-09-14:** [retrieval receipt contract](docs/specs/retrieval-receipt-contract.md).
+The core use is portable audit/debugging evidence over the existing RA.1 ledger.
+This adds no second serving ledger and does not tick RA.1 or any migration item.
+Prioritize existing release and retrieval-correctness work first.
+
+- [ ] **RE.1 — freeze the receipt contract** — reuse canonical digests and V1/V2 rows; specify portable occurrence identity, restart/move/clone/recovery rules, disclosure, trust, bounded wire schema and exact golden vectors. Inventory every actual serving path and record unsupported/missing evidence honestly. Acceptance: independent review plus committed schema and vectors; this draft alone does not close the item.
+- [ ] **RE.2 — local receipt export and verification** — extend existing export/verification conventions with a read-only adapter; distinguish repeated answers, redelivery, local consistency and unknown proof layers. Acceptance: RE-A1 through RE-A8 in the specification pass through the actual entry point, including mutation/failure controls; core dependencies, ranking and ordinary recall availability remain unchanged.
+- [ ] **RE.3 — independent CVS / MIND Witness contract** — implement the adopted architectural split: CVS owns a substrate-neutral evidence contract; MIND Witness maps canonical MIND events/artifact context into it; 512-MIND owns admissibility and may require evidence under explicit policy. Acceptance: a non-MIND producer and external verifier interoperate; mapping mutations, forged identity, producer-controlled witness keys/history and unauthorized disclosure cannot pass independent-evidence claims. Distinguish received self-reports from independently observed execution. Local audit remains useful at its own scope.
+- [ ] **RE.4 — measured operator pilot** — demonstrate at least one real audit/debugging use over authentic retrieval events and publish source/artifact/hardware receipts with latency, throughput, memory and storage results. Freeze regression budgets before scoring; no external performance claim without matched baselines.
+- [ ] **RE.5 — canonical 512 lineage consumer** — required for canonical-lineage claims, independent of commercial demand. Consume the 512-MIND producer's versioned commitment that binds the immutable canonical root to decomposition, registry and implementation; preserve the distinct MIND language-spec identity. Bind and verify both root and implementation in actual verdict/event evidence. Acceptance: RE-A10 changed/missing-field and legacy-profile controls pass; no silent rehashing or metadata-only closure. Depends on the producer contract and implementation.
+
+For contracted retrieval, parties or delegated agents agree upstream. A bounded
+agreement arrives with the request; 512 enforces its constraints before retrieval
+and does not negotiate or invent terms. MIND-Mem serves only an admitted request,
+CVS records the event, and downstream systems aggregate and settle. Refusal stops
+the contracted retrieval; witnessing does not grant execution authority.
+
+**Architectural split adopted, 2026-09-14:** CVS owns an environment-independent
+protocol; MIND Witness is the MIND adapter. Reuse existing evidence envelopes,
+preserve producer commitments, and demonstrate a non-MIND producer before
+claiming platform independence. Standalone commercial deployment is supported by
+the architecture; launch and operating terms remain separate delivery decisions.
+Protocol separation alone does not establish independent observation or
+key/history custody. RE.3 owns this contract, not a second serving ledger.
+
+**Conditional commercial branch — discovery, not committed release scope:**
+
+| Extension | Activation and acceptance |
+| --- | --- |
+| Demand validation | A willing provider and consumer agree on a metered service, evidence requirements and delegated authority; compare against a simpler usage log or invoice. Defer if there is no material unmet need. |
+| Billable-unit adapter | Only after that demand gate: bind accepted terms, exact occurrence set, retry/deduplication policy, calculation version, units, rounding, corrections and totals. RE-A9 and independent arithmetic vectors must pass. |
+| Settlement adapter | Only after an authorized arrangement is selected: distinguish pending, failed and confirmed outcomes, reconcile retries and preserve voluntary spending limits. No payment network or funded deployment is selected. |
+
+Receipts measure and record; downstream agreed bundling may form a billable unit.
+A receipt does not force payment. These commercial extensions are not release,
+Pure-MIND migration or model-training prerequisites, and are not included as
+committed delivery checkboxes. Payment cannot buy retrieval rank or automatic trust.
 
 ### Group H — Evolving memory graph (prior-art-informed, 2026-05-29)
 
