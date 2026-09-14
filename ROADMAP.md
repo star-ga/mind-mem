@@ -97,11 +97,13 @@ by its full description below.
 
 ### Group C — KG governance / UX (6 items)
 
-- [x] **AI lint with auto-fix** — `lint_autofix(workspace, finding_id)` **ships** as a
-  Python API (`src/mind_mem/lint_autofix.py`: turns one lint finding into a governed
-  proposal; `UnknownFindingError` / `NotAutofixableError` rather than a silent no-op),
-  covered by `tests/test_lint_autofix.py`. Open half: it is not exposed as an MCP tool,
-  so today it is reachable from Python and from `lint.py`, not from an agent session.
+- [x] **AI lint with auto-fix** — the Python API, registered `lint` / `lint_autofix`
+  MCP tools, and `mm lint --fix <finding_id>` are wired behind opt-in `v4.lint`.
+  Reading findings requires user scope; staging a repair requires admin scope.
+  The repair remains a proposal until the separate approval gate applies it.
+  `tests/test_lint_wiring.py` exercises registration, actual role refusal,
+  CLI staging and the lint-to-approval path; `tests/test_lint_autofix.py`
+  covers typed refusal and proposal construction.
 - *(tracked below — see “Local visual viewer” in the status section; listed twice, counted once)*
 - [x] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
 - *(tracked below — see “Adversarial / poisoning defense” in the status section; listed twice, counted once)*

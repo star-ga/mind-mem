@@ -427,6 +427,20 @@ Controls the LLM used for memory extraction from transcripts and text. Added mul
 | `extraction.backend` | string | `"ollama"` | LLM backend. See Backend Values below. |
 | `extraction.ollama_url` | string | `""` | Ollama endpoint for extraction (v4.3.1). Accepts `host:port` or a full `http[s]://` URL. Precedence: this key > `OLLAMA_HOST` env var > `http://localhost:11434`. |
 
+Recall enrichment additionally requires `extraction.enrich_on_recall: true`
+(default `false`). It validates bounded entity/fact fields and closed category
+vocabularies. Names and claims must be literal spans of the first 2,000 source
+characters supplied to the model. Configured redaction screens that input before
+the model call and screens returned annotation fields before serving. A rejected
+or malformed annotation is withheld; it cannot replace the ranked excerpt.
+
+`llm_enrichment` records the input digest, block/file identity and validation
+scope. Its `semantic_verification` remains `not_established`: a source span
+does not prove truth, entailment or the model's classification. These annotations
+are an `unproven_supplement`, outside the ranked recall attestation. Standalone
+`extract_entities` / `extract_facts` return bounded model proposals; they do not
+authorize writes or certify semantic correctness.
+
 ### Backend Values
 
 | Value | Description | Typical setup |

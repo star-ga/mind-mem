@@ -30,11 +30,14 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import math
 import os
 import re
 import time
+import unicodedata
 from typing import Any, NamedTuple
 
 _log = logging.getLogger("mind_mem.llm_extractor")
@@ -50,6 +53,68 @@ _USAGE_OPERATION = "extraction"
 #: small; the cap keeps a misconfigured endpoint from streaming into the
 #: availability check.
 _PROBE_READ_LIMIT = 64 * 1024
+
+_ENTITY_TYPES = frozenset({"person", "place", "date", "organization", "decision", "tool", "project"})
+_FACT_CATEGORIES = frozenset({"identity", "event", "preference", "relation", "negation", "plan", "state"})
+_MAX_EXTRACTION_ITEMS = 32
+
+
+def validate_extraction_output(rows: object, kind: str, *, source: str | None = None) -> list[dict]:
+    """Validate model proposals; optional source binding admits literal spans only.
+
+    Closed vocabularies and a source span do not prove a claim's truth, its
+    classification, or semantic entailment. The serving consumer labels those
+    properties unverified. Standalone extraction returns proposals, never writes.
+    """
+    if kind not in {"entities", "facts"} or not isinstance(rows, list):
+        return []
+
+    def bounded(value: object, limit: int, *, empty: bool = False) -> bool:
+        return (
+            isinstance(value, str)
+            and (empty or bool(value.strip()))
+            and len(value) <= limit
+            and not any(unicodedata.category(c) in {"Cc", "Cf", "Cs"} for c in value)
+        )
+
+    out: list[dict] = []
+    for row in rows[:_MAX_EXTRACTION_ITEMS]:
+        if not isinstance(row, dict):
+            continue
+        field = "name" if kind == "entities" else "claim"
+        value = row.get(field)
+        label = row.get("type" if kind == "entities" else "category")
+        vocabulary = _ENTITY_TYPES if kind == "entities" else _FACT_CATEGORIES
+        if (
+            not isinstance(value, str)
+            or not bounded(value, 512 if kind == "entities" else 2000)
+            or not isinstance(label, str)
+            or label not in vocabulary
+        ):
+            continue
+        if source is not None and value not in source:
+            continue
+        if kind == "entities":
+            context = row.get("context", "")
+            if not bounded(context, 512, empty=True):
+                continue
+            if source is not None and context and context not in source:
+                context = ""
+            item: dict[str, Any] = {"name": value, "type": label, "context": context}
+        else:
+            confidence = row.get("confidence", 0.5)
+            if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+                continue
+            if not 0.0 <= confidence <= 1.0 or not math.isfinite(confidence):
+                continue
+            item = {"claim": value, "confidence": float(confidence), "category": label}
+        if source is not None:
+            start = source.index(value)
+            item["source_span"] = {"start": start, "end": start + len(value), "unit": "unicode-codepoints"}
+        if item not in out:
+            out.append(item)
+    return out
+
 
 # ---------------------------------------------------------------------------
 # Config loading
@@ -639,6 +704,7 @@ each with keys: "name" (string), "type" (one of: person, place, date, \
 organization, decision, tool, project), "context" (short phrase).
 
 Only return the JSON array, no explanation.
+Copy each name and context verbatim from the text; do not add outside facts.
 
 Text: {text}
 
@@ -679,17 +745,7 @@ def extract_entities(
         _record_extraction_feedback(model, "entities", len(text), 0, _latency_ms, workspace=workspace)
         return []
     entities = _parse_json_from_response(response)
-    # Validate required keys
-    validated = []
-    for ent in entities:
-        if "name" in ent and "type" in ent:
-            validated.append(
-                {
-                    "name": str(ent["name"]),
-                    "type": str(ent["type"]),
-                    "context": str(ent.get("context", "")),
-                }
-            )
+    validated = validate_extraction_output(entities, "entities")
     _record_extraction_feedback(model, "entities", len(text), len(validated), _latency_ms, workspace=workspace)
     return validated
 
@@ -705,6 +761,7 @@ objects, each with keys: "claim" (string, one sentence), "confidence" \
 negation, plan, state).
 
 Only return the JSON array, no explanation.
+Copy each claim verbatim from the text; do not paraphrase or add outside facts.
 
 Text: {text}
 
@@ -745,23 +802,7 @@ def extract_facts(
         _record_extraction_feedback(model, "facts", len(text), 0, _latency_ms, workspace=workspace)
         return []
     facts = _parse_json_from_response(response)
-    # Validate required keys
-    validated = []
-    for fact in facts:
-        if "claim" in fact:
-            conf = fact.get("confidence", 0.5)
-            try:
-                conf = float(conf)
-            except (ValueError, TypeError):
-                conf = 0.5
-            conf = max(0.0, min(1.0, conf))
-            validated.append(
-                {
-                    "claim": str(fact["claim"]),
-                    "confidence": conf,
-                    "category": str(fact.get("category", "state")),
-                }
-            )
+    validated = validate_extraction_output(facts, "facts")
     _record_extraction_feedback(model, "facts", len(text), len(validated), _latency_ms, workspace=workspace)
     return validated
 
@@ -905,16 +946,45 @@ def enrich_block(
     if not enabled:
         return block
     text = block.get("excerpt", block.get("content", ""))
-    if not text:
+    if not isinstance(text, str) or not text:
         return block
+    # Clear only our optional annotations before attempting regeneration, so a
+    # failed/refused model call cannot retain a previous unvalidated answer.
+    for field in ("llm_entities", "llm_facts", "llm_enrichment"):
+        block.pop(field, None)
+    from .compliance.redaction import MODE_OFF, redact, redaction_chain_for_workspace, resolve_mode
+
+    mode = resolve_mode(workspace) if workspace is not None else MODE_OFF
+    detectors = redaction_chain_for_workspace(workspace) if workspace is not None and mode != MODE_OFF else ()
+    # The source supplied to the optional model is screened as well as its
+    # returned annotations. This does not alter the ranked excerpt itself.
+    text = redact(text[:2000], mode=mode, detectors=detectors).text
     if not is_available(backend, ollama_url=ollama_url):
         return block
     entities = extract_entities(text, model=model, backend=backend, workspace=workspace, ollama_url=ollama_url)
     facts = extract_facts(text, model=model, backend=backend, workspace=workspace, ollama_url=ollama_url)
+    entities = validate_extraction_output(entities, "entities", source=text)
+    facts = validate_extraction_output(facts, "facts", source=text)
+    # A new detector match in model output is a refusal, never an unchecked
+    # rewrite after source-span validation. Publish both lists atomically.
+    for item in entities + facts:
+        for value in item.values():
+            if isinstance(value, str) and redact(value, mode=mode, detectors=detectors).changed:
+                raise ValueError("llm enrichment output requires redaction; refusing annotations")
     if entities:
         block["llm_entities"] = entities
     if facts:
         block["llm_facts"] = facts
+    block["llm_enrichment"] = {
+        "status": "source_spans_validated" if entities or facts else "no_admissible_annotations",
+        "source_block_id": block.get("_id", block.get("id")),
+        "source_file": block.get("file", block.get("_source_file")),
+        "input_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "input_scope": "first_2000_characters_after_configured_redaction",
+        "semantic_verification": "not_established",
+        "classification": "model_proposed",
+        "evidence_status": "unproven_supplement",
+    }
     return block
 
 

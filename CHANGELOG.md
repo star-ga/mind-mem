@@ -4,6 +4,12 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+- Optional LLM recall enrichment now rejects malformed fields, non-finite or
+  out-of-range confidence, undeclared categories and claims absent from the
+  model's source window. Configured redaction screens model input and output;
+  annotations carry source-span metadata and explicitly remain unproven for
+  semantic correctness and outside the ranked recall attestation.
+
 ## [5.0.3] - 2026-09-14
 
 ### Fixed
