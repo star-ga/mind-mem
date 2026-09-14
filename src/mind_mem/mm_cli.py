@@ -1938,6 +1938,7 @@ def _cmd_graph_answer(args: argparse.Namespace) -> int:
             include_expired=args.include_expired,
             as_of=args.as_of or None,
             known_block_ids=corpus_block_ids(ws),
+            semantic_required=getattr(args, "semantic_required", False),
         )
         context = result.context
     finally:
@@ -5027,6 +5028,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_gans.add_argument("--context", action="store_true", help="Print the serialised triple context instead of the answer.")
     p_gans.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    p_gans.add_argument(
+        "--semantic-required",
+        action="store_true",
+        help="Require semantic entailment verification; abstain when no verifier is available.",
+    )
     p_gans.set_defaults(func=_cmd_graph_answer)
 
     # pipeline-status — v3.9 hash-of-code invalidation inspection
