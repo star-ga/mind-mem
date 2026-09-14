@@ -12,8 +12,11 @@ from .acl import (
     _ADMIN_SCOPES,
     ADMIN_TOOLS,
     USER_TOOLS,
+    AuthSnapshot,
     _get_request_scope,
+    bind_auth_snapshot,
     check_tool_acl,
+    current_auth_snapshot,
 )
 from .config import (
     _DEFAULT_LIMITS,
@@ -46,6 +49,9 @@ __all__ = [
     "_ADMIN_SCOPES",
     "check_tool_acl",
     "_get_request_scope",
+    "AuthSnapshot",
+    "bind_auth_snapshot",
+    "current_auth_snapshot",
     "SlidingWindowRateLimiter",
     "_init_rate_limiter",
     "_get_client_rate_limiter",

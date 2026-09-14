@@ -207,3 +207,39 @@ def test_authenticated_agent_id_rejects_invalid_verified_subject(monkeypatch: py
     monkeypatch.setattr(acl, "get_access_token", lambda: SimpleNamespace(claims={"sub": "../bob"}))
     with pytest.raises(Exception):
         acl.authenticated_agent_id()
+
+
+def test_registered_recall_freezes_auth_through_retrieval_and_resets_after_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A late no-token result must never turn Alice's call into operator recall."""
+    from unittest.mock import Mock
+
+    from fastmcp.server.auth import AccessToken
+
+    from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+
+    ws = _workspace(tmp_path)
+
+    def token(subject: str):
+        return AccessToken(token="test-fixture", client_id="common-client", scopes=["user"], claims={"sub": subject})
+
+    alice_reads = Mock(side_effect=[token("alice"), None])
+    monkeypatch.setattr(acl, "get_access_token", alice_reads)
+    with use_workspace(str(ws)):
+        alice = json.loads(public_tools.recall("aurora", mode="bm25", limit=10))
+    assert {hit["_id"] for hit in alice["results"]} == {"D-ALICE", "D-SHARED"}
+    assert alice_reads.call_count == 1
+    assert current_agent_id.get() == UNATTRIBUTED
+    assert acl.current_auth_snapshot() is None
+
+    monkeypatch.setattr(acl, "get_access_token", Mock(side_effect=RuntimeError("private-provider-detail")))
+    with use_workspace(str(ws)):
+        denied = json.loads(public_tools.recall("aurora", mode="bm25", limit=10))
+    assert denied["scope"] == "deny"
+    assert "private-provider-detail" not in json.dumps(denied)
+    assert current_agent_id.get() == UNATTRIBUTED
+    assert acl.current_auth_snapshot() is None
+
+    monkeypatch.setattr(acl, "get_access_token", lambda: token("bob"))
+    with use_workspace(str(ws)):
+        bob = json.loads(public_tools.recall("aurora", mode="bm25", limit=10))
+    assert {hit["_id"] for hit in bob["results"]} == {"D-BOB", "D-SHARED"}

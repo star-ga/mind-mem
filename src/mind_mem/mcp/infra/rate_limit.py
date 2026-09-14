@@ -101,6 +101,16 @@ def _get_client_id() -> str:
     clients (Claude Code + Cursor + …) don't collide on a single
     ``"default"`` bucket and starve each other (issue #513 / N-03).
     """
+    # An observed MCP call has already resolved its token in acl.py.  Reuse
+    # that snapshot so a provider that returns a token on the first read and
+    # ``None`` on a later read cannot move the call into an unrelated bucket.
+    from .acl import current_auth_snapshot
+
+    snapshot = current_auth_snapshot()
+    if snapshot is not None:
+        if snapshot.client_id:
+            return snapshot.client_id
+        return f"pid-{os.getpid()}"
     try:
         token = get_access_token()
         if token is not None and token.client_id:

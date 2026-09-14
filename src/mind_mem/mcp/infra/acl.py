@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import Any, Iterator
 
 from fastmcp.server.dependencies import get_access_token
 
@@ -25,45 +28,172 @@ from mind_mem.scopes import ADMIN_SCOPES  # the single definition
 _log = get_logger("mcp_server")
 
 
+@dataclass(frozen=True)
+class AuthSnapshot:
+    """The one authentication lookup used by an observed tool call.
+
+    ``status`` is intentionally small and internal: ``authenticated`` has a
+    validated namespace principal, ``unbound`` is the legitimate no-token
+    stdio case, and ``denied`` covers an unavailable or malformed authority.
+    Keeping this in a task-local context prevents a later token lookup from
+    changing the identity after rate/scope admission has already happened.
+    """
+
+    status: str
+    principal: str | None = None
+    scope: str | None = None
+    client_id: str | None = None
+
+
+_AUTH_SNAPSHOT: ContextVar[AuthSnapshot | None] = ContextVar("mcp_auth_snapshot", default=None)
+
+
+def current_auth_snapshot() -> AuthSnapshot | None:
+    """Return the request snapshot, if the MCP observer has bound one."""
+
+    return _AUTH_SNAPSHOT.get()
+
+
+def _snapshot_from_token(*, require_principal: bool = True) -> AuthSnapshot:
+    """Resolve token metadata once, without exposing provider failures.
+
+    The built-in HTTP static map supplies verified ``sub`` claims for
+    ``mind-mem-user`` and ``mind-mem-admin``. Custom providers must provide a
+    verified subject (or ``agent_id`` claim); an arbitrary client id is only a
+    rate-limit key. Namespace access still follows each workspace's explicit
+    ``mind-mem-acl.json`` grants.
+    """
+
+    try:
+        access_token = get_access_token()
+    except Exception as exc:
+        _record_auth_failure(exc)
+        return AuthSnapshot("denied")
+
+    if access_token is None:
+        from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+
+        bound = current_agent_id.get()
+        if bound != UNATTRIBUTED:
+            return AuthSnapshot("authenticated", bound)
+        return AuthSnapshot("unbound")
+
+    try:
+        claims: Any = getattr(access_token, "claims", None)
+        if not isinstance(claims, dict):
+            claims = {}
+        # Namespace identity must come from a verified subject claim.  The
+        # token client_id remains a rate-limit identity and is never promoted
+        # into a namespace principal by itself.
+        candidate = claims.get("sub") or getattr(access_token, "subject", None)
+        if not candidate:
+            candidate = claims.get("agent_id")
+        if not isinstance(candidate, str) or not candidate:
+            if not require_principal:
+                raw_scopes = getattr(access_token, "scopes", ())
+                token_scopes = set(raw_scopes or ())
+                scope = "admin" if token_scopes & _ADMIN_SCOPES else "user"
+                client_id = getattr(access_token, "client_id", None)
+                if not isinstance(client_id, str) or not client_id:
+                    client_id = None
+                return AuthSnapshot("scoped", None, scope, client_id)
+            raise ValueError("authenticated token has no namespace principal")
+        from mind_mem.namespaces import _validate_agent_id
+
+        principal = _validate_agent_id(candidate)
+        from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+
+        bound = current_agent_id.get()
+        if bound != UNATTRIBUTED and bound != principal:
+            raise ValueError("authenticated identity conflicts with bound transport identity")
+        raw_scopes = getattr(access_token, "scopes", ())
+        token_scopes = set(raw_scopes or ())
+        scope = "admin" if token_scopes & _ADMIN_SCOPES else "user"
+        client_id = getattr(access_token, "client_id", None)
+        if not isinstance(client_id, str) or not client_id:
+            client_id = None
+        return AuthSnapshot("authenticated", principal, scope, client_id)
+    except Exception as exc:
+        _record_auth_failure(exc)
+        return AuthSnapshot("denied")
+
+
+def _record_auth_failure(exc: BaseException) -> None:
+    """Record an auth failure without including credentials or payloads."""
+
+    try:
+        metrics.inc("mcp_acl_introspection_failed_total")
+    except Exception:  # pragma: no cover - metrics are best effort
+        pass
+    _log.warning("acl_introspection_failed", error_type=type(exc).__name__, scope="deny")
+
+
+@contextmanager
+def bind_auth_snapshot() -> Iterator[AuthSnapshot]:
+    """Bind one auth snapshot and its principal for a complete tool call."""
+
+    existing = current_auth_snapshot()
+    if existing is not None:
+        # Consolidated tools can invoke another decorated callable. Reusing
+        # the outer frame is essential: a second provider lookup could return
+        # different metadata and split one logical request across principals.
+        yield existing
+        return
+
+    snapshot = _snapshot_from_token()
+    snapshot_token = _AUTH_SNAPSHOT.set(snapshot)
+    try:
+        from mind_mem.audit_context import UNATTRIBUTED, bind_current_agent, current_agent_id
+
+        bound = current_agent_id.get()
+        if snapshot.status == "authenticated" and snapshot.principal:
+            if bound != UNATTRIBUTED and bound != snapshot.principal:
+                # Normally caught during resolution; retain a defensive
+                # check for a provider that mutates token metadata mid-call.
+                yield AuthSnapshot("denied")
+            elif bound == UNATTRIBUTED:
+                with bind_current_agent(snapshot.principal):
+                    yield snapshot
+            else:
+                yield snapshot
+        else:
+            yield snapshot
+    finally:
+        _AUTH_SNAPSHOT.reset(snapshot_token)
+
+
 def authenticated_agent_id() -> str | None:
     """Return the transport-authenticated namespace principal, if present.
 
     ``X-MindMem-Actor`` is a provenance claim and is deliberately not read
     here.  FastMCP exposes the already-verified access token to tool code;
     static and JWT providers carry the subject in ``claims['sub']`` (or the
-    token subject), while the static development map also has a client id.
+    token subject). A token's client id is retained for rate limiting and is
+    never treated as a namespace principal.
     Direct stdio calls have no access token and retain the existing
     workspace-level behavior.  A pre-bound internal transport context wins so
     REST/gRPC adapters and source-bound tests use the same principal seam.
     """
+    snapshot = current_auth_snapshot()
     from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
 
     bound = current_agent_id.get()
-    if bound and bound != UNATTRIBUTED:
+    if snapshot is None and bound and bound != UNATTRIBUTED:
         return bound
 
     # ``None`` is the SDK's explicit no-request result (stdio and legacy
-    # operator calls).  An exception means an authenticated transport could
+    # operator calls). An exception means an authenticated transport could
     # not be inspected; propagating it keeps the public recall body from
     # silently becoming workspace-wide after an authn failure.
-    access_token = get_access_token()
-    if access_token is None:
+    if snapshot is None:
+        snapshot = _snapshot_from_token()
+    if snapshot.status == "denied":
+        raise ValueError("authentication context unavailable")
+    if snapshot.status == "authenticated":
+        return snapshot.principal
+    if snapshot.status == "unbound":
         return None
-
-    claims: Any = getattr(access_token, "claims", None)
-    if not isinstance(claims, dict):
-        claims = {}
-    candidate = claims.get("sub") or getattr(access_token, "subject", None)
-    if not candidate:
-        candidate = claims.get("agent_id") or getattr(access_token, "client_id", None)
-    if not isinstance(candidate, str) or not candidate:
-        raise ValueError("authenticated token has no namespace principal")
-
-    # Namespace IDs are path-bearing authorization inputs. Reuse the one
-    # validator rather than allowing provider metadata to bypass it.
-    from mind_mem.namespaces import _validate_agent_id
-
-    return _validate_agent_id(candidate)
+    raise ValueError("authenticated token has no namespace principal")
 
 
 # ACL COVERAGE INVARIANT (pinned by tests/test_acl_tool_coverage.py):
@@ -380,27 +510,9 @@ def _get_request_scope() -> str | None:
     branch (stdio, unauthenticated HTTP) and still returns ``None`` so
     the caller's default-scope policy applies.
     """
-    try:
-        access_token = get_access_token()
-    except Exception as exc:
-        # First-4-char token prefix is safe to log (entropy < 24 bits)
-        # and lets operators correlate failures without exposing the
-        # full credential.
-        try:
-            from .observability import metrics
-
-            metrics.inc("mcp_acl_introspection_failed_total")
-        except Exception:  # nosec B110 — metric counter increment; outer except already handles the real auth failure
-            pass
-        _log.warning(
-            "acl_introspection_failed",
-            error_type=type(exc).__name__,
-            scope="deny",
-        )
+    snapshot = current_auth_snapshot()
+    if snapshot is None:
+        snapshot = _snapshot_from_token(require_principal=False)
+    if snapshot.status == "denied":
         return "deny"
-
-    if access_token is None:
-        return None
-
-    token_scopes = set(access_token.scopes or [])
-    return "admin" if token_scopes & _ADMIN_SCOPES else "user"
+    return snapshot.scope
