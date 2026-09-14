@@ -210,6 +210,7 @@ def make_workspace_resolver(workspace: str) -> Callable[[str], bool]:
     resolves to ``False`` (fail-closed): an id we cannot prove exists is
     treated as fabricated.
     """
+    from .admission import admit_read_one
     from .storage import get_block_store
 
     cache: dict[str, bool] = {}
@@ -227,7 +228,8 @@ def make_workspace_resolver(workspace: str) -> Callable[[str], bool]:
         if key in cache:
             return cache[key]
         try:
-            found = _store().get_by_id(key) is not None
+            block = _store().get_by_id(key)
+            found = bool(admit_read_one(block, workspace=workspace, surface="chat"))
         except Exception as exc:  # pragma: no cover — fail-closed on store errors
             _log.warning("chat_resolver_failed", block_id=key, error=str(exc))
             found = False

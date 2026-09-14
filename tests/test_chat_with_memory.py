@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -253,6 +254,28 @@ class TestFabricatedCitations:
         assert resolver("") is False
         assert resolver(None) is False
         assert resolver("D-20260301-001") is True
+
+    def test_resolver_withholds_a_block_quarantined_after_recall(self, workspace):
+        decisions = Path(workspace) / "decisions" / "DECISIONS.md"
+
+        def only_first_decision(ws, question, limit):
+            return [{"_id": "D-20260301-001", "excerpt": "Deploys run on Friday", "score": 1.0}]
+
+        def quarantine_then_answer(request: ChatRequest) -> str:
+            text = decisions.read_text(encoding="utf-8")
+            decisions.write_text(text.replace("Status: active", "Status: quarantined", 1), encoding="utf-8")
+            return "The deployment is Friday [[D-20260301-001]]."
+
+        result = chat_with_memory(
+            workspace,
+            "when do deploys run?",
+            recall_fn=only_first_decision,
+            generator=quarantine_then_answer,
+            on_invalid="reject",
+        )
+        assert result.rejected is True
+        assert result.grounded is False
+        assert result.answer == NO_RECORD
 
 
 # ---------------------------------------------------------------------------

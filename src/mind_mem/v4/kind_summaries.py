@@ -89,6 +89,7 @@ DEFAULT_MAX_CHARS: int = 4000
 #: Floor for a configured ``max_chars`` — a cap below this produces
 #: summaries too short to be a table of contents at all.
 _MIN_MAX_CHARS: int = 64
+_ENFORCEMENT_VALUES = frozenset({"deterministic_extract", "unverified_plugin", "legacy_unverified"})
 
 
 @dataclass(frozen=True)
@@ -249,15 +250,23 @@ def refresh_summary(workspace: str | Path, kind: str) -> KindSummary | None:
             f"SELECT {id_column}, content FROM blocks WHERE kind = ? ORDER BY {id_column}",
             (kind,),
         ).fetchall()
-    source_rows = [(str(row[0]), row[1] if isinstance(row[1], str) else "") for row in rows]
+    indexed_rows = [(str(row[0]), row[1] if isinstance(row[1], str) else "") for row in rows]
+    source_rows = _current_admitted_source_rows(workspace, indexed_rows)
     if not source_rows:
         return None
     blocks = [content for _, content in source_rows]
     source_ids = tuple(block_id for block_id, _ in source_rows)
     source_digest = _source_digest(source_rows)
     summariser = _active_summariser
-    summary = summariser(blocks)
-    summary = _screen_summary(summary, workspace=workspace, kind=kind, source_digest=source_digest)
+    summary = (
+        default_summariser(blocks, max_chars=_max_chars(workspace))
+        if summariser is default_summariser
+        else summariser(blocks)
+    )
+    post_source_rows = _current_admitted_source_rows(workspace, indexed_rows)
+    if post_source_rows != source_rows:
+        raise SummaryOutputError("summary sources changed during generation")
+    summary = _screen_summary(summary, workspace=workspace, kind=kind, source_digest=source_digest, record=True)
     enforcement = "deterministic_extract" if summariser is default_summariser else "unverified_plugin"
     semantic_verification = "not_established"
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
@@ -305,19 +314,19 @@ def get_summary(workspace: str | Path, kind: str) -> KindSummary | None:
             row = (*old, "[]", "", "legacy_unverified", "not_established") if old is not None else None
     if row is None:
         return None
-    return _screen_stored_summary(
-        KindSummary(
-            kind=row[0],
-            summary=row[1],
-            block_count=int(row[2]),
-            updated_at=row[3],
-            source_ids=_decode_source_ids(row[4]),
-            source_digest=str(row[5] or ""),
-            enforcement=str(row[6] or "legacy_unverified"),
-            semantic_verification=str(row[7] or "not_established"),
-        ),
-        workspace,
+    record = KindSummary(
+        kind=row[0],
+        summary=row[1],
+        block_count=int(row[2]),
+        updated_at=row[3],
+        source_ids=_decode_source_ids(row[4]),
+        source_digest=str(row[5] or ""),
+        enforcement=_normalise_enforcement(row[6]),
+        semantic_verification="not_established",
     )
+    if not _stored_sources_current(workspace, record):
+        return None
+    return _screen_stored_summary(record, workspace)
 
 
 def list_summaries(workspace: str | Path) -> list[KindSummary]:
@@ -340,21 +349,23 @@ def list_summaries(workspace: str | Path) -> list[KindSummary]:
                 (*row, "[]", "", "legacy_unverified", "not_established")
                 for row in conn.execute("SELECT kind, summary, block_count, updated_at FROM kind_summaries ORDER BY kind").fetchall()
             ]
-    return [
-        _screen_stored_summary(
-            KindSummary(
-                kind=r[0],
-                summary=r[1],
-                block_count=int(r[2]),
-                updated_at=r[3],
-                source_ids=_decode_source_ids(r[4]),
-                source_digest=str(r[5] or ""),
-                enforcement=str(r[6] or "legacy_unverified"),
-                semantic_verification=str(r[7] or "not_established"),
-            ),
-            workspace,
+    records = [
+        KindSummary(
+            kind=r[0],
+            summary=r[1],
+            block_count=int(r[2]),
+            updated_at=r[3],
+            source_ids=_decode_source_ids(r[4]),
+            source_digest=str(r[5] or ""),
+            enforcement=_normalise_enforcement(r[6]),
+            semantic_verification="not_established",
         )
         for r in rows
+    ]
+    return [
+        _screen_stored_summary(record, workspace)
+        for record in records
+        if _stored_sources_current(workspace, record)
     ]
 
 
@@ -370,6 +381,49 @@ def _source_digest(rows: Iterable[tuple[str, str]]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _current_admitted_source_rows(
+    workspace: str | Path,
+    indexed_rows: Iterable[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    """Resolve side-index rows against the current admitted corpus.
+
+    ``blocks`` is a derived kind index and deliberately has no governance
+    status.  Never hand its cached text to a summariser without checking the
+    canonical corpus first: a block can have been quarantined or revoked
+    since the kind backfill wrote this row.  The canonical text is used for
+    the digest as well, so a stale side-index copy cannot masquerade as a
+    current source snapshot.
+    """
+    from ..admission import admit_read
+    from ..storage import iter_blocks
+    from .kind_backfill import _block_text
+
+    raw = iter_blocks(str(workspace), active_only=False)
+    admitted = admit_read(raw, workspace=str(workspace), status_key="Status", surface="kind_summary").admitted
+    by_id: dict[str, dict] = {}
+    duplicate_ids: set[str] = set()
+    for candidate in admitted:
+        block_id = str(candidate.get("_id", "")).strip()
+        if not block_id:
+            continue
+        if block_id in by_id:
+            duplicate_ids.add(block_id)
+        else:
+            by_id[block_id] = candidate
+    if duplicate_ids:
+        raise SummaryOutputError(
+            "summary source identity is ambiguous for block id(s): " + ", ".join(sorted(duplicate_ids))
+        )
+
+    result: list[tuple[str, str]] = []
+    for block_id, _cached_text in indexed_rows:
+        block: dict | None = by_id.get(block_id)
+        if block is None:
+            raise SummaryOutputError(f"summary source is absent or not admitted: {block_id}")
+        result.append((block_id, _block_text(block)))
+    return result
+
+
 def _decode_source_ids(raw: object) -> tuple[str, ...]:
     try:
         values = json.loads(raw) if isinstance(raw, str) else raw
@@ -380,12 +434,32 @@ def _decode_source_ids(raw: object) -> tuple[str, ...]:
     return tuple(values)
 
 
+def _normalise_enforcement(raw: object) -> str:
+    """Keep mutable row metadata from becoming a semantic proof claim."""
+    value = str(raw or "legacy_unverified")
+    return value if value in _ENFORCEMENT_VALUES else "legacy_unverified"
+
+
+def _stored_sources_current(workspace: str | Path, record: KindSummary) -> bool:
+    """Require a bound, currently admitted source snapshot before serving."""
+    if not record.source_ids or not record.source_digest:
+        return False
+    if len(set(record.source_ids)) != len(record.source_ids):
+        return False
+    try:
+        current = _current_admitted_source_rows(workspace, ((source_id, "") for source_id in record.source_ids))
+    except Exception:  # noqa: BLE001 - inability to prove admission withholds the row
+        return False
+    return _source_digest(current) == record.source_digest
+
+
 def _screen_summary(
     summary: object,
     *,
     workspace: str | Path,
     kind: str,
     source_digest: str,
+    record: bool,
 ) -> str:
     """Validate and prewrite-screen output before the SQLite write."""
     if not isinstance(summary, str):
@@ -404,14 +478,21 @@ def _screen_summary(
         policy=policy,
         provenance={},
         target=f"kind_summaries/{kind}",
-        record=False,
+        agent="kind_summaries",
+        record=record,
     )
     return screened.text
 
 
 def _screen_stored_summary(record: KindSummary, workspace: str | Path) -> KindSummary:
     """Apply current redaction policy before exposing an old stored row."""
-    text = _screen_summary(record.summary, workspace=workspace, kind=record.kind, source_digest=record.source_digest)
+    text = _screen_summary(
+        record.summary,
+        workspace=workspace,
+        kind=record.kind,
+        source_digest=record.source_digest,
+        record=False,
+    )
     if text == record.summary:
         return record
     return KindSummary(

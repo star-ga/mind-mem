@@ -58,13 +58,17 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Workspace with both flags ON and a WAL-mode ``index.db`` already seeded."""
     cfg = {"v4": {"block_kinds": {"enabled": True}, "kind_summaries": {"enabled": True}}}
     (tmp_path / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
+    (tmp_path / "entities").mkdir()
+    (tmp_path / "entities" / "ENTITIES.md").write_text(
+        "[D-b1]\nName: head\nStatus: active\n\n---\n", encoding="utf-8"
+    )
     monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
 
     seed = sqlite3.connect(tmp_path / "index.db")
     try:
         seed.execute("PRAGMA journal_mode=WAL")
         seed.execute("CREATE TABLE IF NOT EXISTS blocks (id TEXT PRIMARY KEY, content TEXT, kind TEXT NOT NULL DEFAULT 'unspecified')")
-        seed.execute("INSERT OR REPLACE INTO blocks (id, content, kind) VALUES ('b1', 'head\nrest', 'entity')")
+        seed.execute("INSERT OR REPLACE INTO blocks (id, content, kind) VALUES ('D-b1', 'head\nrest', 'entity')")
         seed.commit()
     finally:
         seed.close()
@@ -86,11 +90,11 @@ def _no_gc() -> Iterator[None]:
 def _exercise(ws: Path) -> None:
     """Call every public entry point of both modules once."""
     ensure_block_kind_column(ws)
-    get_block_kind(ws, "b1")
+    get_block_kind(ws, "D-b1")
     list_blocks_by_kind(ws, BlockKind.ENTITY)
     ensure_block_kind_tags_table(ws)
-    set_block_kinds(ws, "b1", [BlockKind.ENTITY, BlockKind.CODE])
-    get_block_kind_tags(ws, "b1")
+    set_block_kinds(ws, "D-b1", [BlockKind.ENTITY, BlockKind.CODE])
+    get_block_kind_tags(ws, "D-b1")
     ensure_kind_summary_schema(ws)
     refresh_summary(ws, "entity")
     get_summary(ws, "entity")
@@ -184,7 +188,7 @@ def test_writes_still_commit_before_the_close(workspace: Path) -> None:
 
     probe = sqlite3.connect(workspace / "index.db")
     try:
-        tags = {r[0] for r in probe.execute("SELECT kind FROM block_kind_tags WHERE block_id = 'b1'")}
+        tags = {r[0] for r in probe.execute("SELECT kind FROM block_kind_tags WHERE block_id = 'D-b1'")}
         summaries = probe.execute("SELECT kind, block_count FROM kind_summaries").fetchall()
     finally:
         probe.close()
@@ -193,7 +197,7 @@ def test_writes_still_commit_before_the_close(workspace: Path) -> None:
     assert summaries == [("entity", 1)]
 
     # And through the module's own readers.
-    assert get_block_kind_tags(workspace, "b1") == {BlockKind.ENTITY, BlockKind.CODE}
+    assert get_block_kind_tags(workspace, "D-b1") == {BlockKind.ENTITY, BlockKind.CODE}
     stored = get_summary(workspace, "entity")
     assert stored is not None and stored.block_count == 1
 
@@ -206,13 +210,13 @@ def test_failed_write_rolls_back_and_still_closes(workspace: Path) -> None:
     its rollback behaviour when a close is layered on top of it.
     """
     ensure_block_kind_tags_table(workspace)
-    set_block_kinds(workspace, "b1", [BlockKind.ENTITY])
+    set_block_kinds(workspace, "D-b1", [BlockKind.ENTITY])
 
     with _no_gc():
         with pytest.raises(ValueError):
             # 'not-a-kind' fails BlockKind() validation, aborting the call.
-            set_block_kinds(workspace, "b1", [BlockKind.CODE, "not-a-kind"])
-        tags = get_block_kind_tags(workspace, "b1")
+            set_block_kinds(workspace, "D-b1", [BlockKind.CODE, "not-a-kind"])
+        tags = get_block_kind_tags(workspace, "D-b1")
         surviving = _sidecars(workspace)
 
     assert tags == {BlockKind.ENTITY}, "the failed call must not have changed the tag set"
