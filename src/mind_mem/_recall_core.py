@@ -1120,6 +1120,30 @@ def recall(
                 from .hybrid_recall import _merge_leg_markers
 
                 _degraded_marker = _merge_leg_markers(_degraded_marker, dict(_backend_marker))
+            # A PostgreSQL workspace has a database as its source of record.
+            # An empty result is a valid database answer, and a database
+            # outage is an error; neither may fall through to the local
+            # Markdown/custom-namespace walk below.  The generic fallback is
+            # retained for the historical optional recall backends.
+            if isinstance(_cfg_backend, PostgresRecallBackend) and not backend_hits:
+                return _project_recall_carrier(
+                    _apply_post_filters(
+                        backend_hits,
+                        since=since,
+                        until=until,
+                        lifecycle=lifecycle,
+                        event_id=event_id,
+                        min_maturity=min_maturity,
+                        limit=limit,
+                        workspace=workspace,
+                        as_of=as_of,
+                        guardrail_context=_guardrail_ctx,
+                        guardrail_policy=_guardrail_policy,
+                        admission_allow=_admission_allow,
+                    ),
+                    backend_hits,
+                    degraded=_degraded_marker,
+                )
             if backend_hits:
                 backend_hits = filter_search_hits(backend_hits, _get_config(workspace))
                 backend_hits = _apply_validity_and_resort(backend_hits, workspace, _indexed_recall_cfg, _scoring_instant)
@@ -1139,6 +1163,11 @@ def recall(
                 )
                 return _project_recall_carrier(filtered, filtered, degraded=_degraded_marker)
         except Exception as exc:
+            if isinstance(_cfg_backend, PostgresRecallBackend):
+                # A configured source-of-record failure must remain visible;
+                # scanning local files would disclose a shadow corpus and
+                # falsely report a successful database-backed recall.
+                raise
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
 
     # Load .mind kernel overrides if available
@@ -1494,6 +1523,7 @@ def recall(
         custom_namespaces = declared_custom_namespaces(_get_config(workspace))
     except ValueError:
         custom_namespaces = ()
+    custom_files: list[tuple[str, str, str, str]] = []
     for namespace in custom_namespaces:
         namespace_path = os.path.join(workspace_real, namespace)
         if os.path.islink(namespace_path):
@@ -1516,17 +1546,37 @@ def recall(
             if candidate_real in seen_corpus_realpaths:
                 continue
             seen_corpus_realpaths.add(candidate_real)
-            try:
-                blocks = parse_file(candidate_real)
-            except (OSError, UnicodeDecodeError, ValueError) as e:
-                _log.debug("custom_namespace_parse_failed", namespace=namespace, file=rel_path, error=str(e))
-                continue
-            if active_only:
-                blocks = get_active(blocks)
-            for b in blocks:
-                b["_source_file"] = rel_path
-                b["_source_label"] = f"{label}@{namespace}"
-                all_blocks.append(b)
+            custom_files.append((namespace, label, rel_path, candidate_real))
+
+    # Use the same configured corpus reader as the storage layer.  In
+    # particular, an encrypted custom file must be decrypted here; a direct
+    # ``parse_file`` call treats ciphertext as an empty Markdown document.
+    # Pass the complete custom source set so encrypted-reader selection sees
+    # ciphertext even when the root corpus is still plaintext.
+    if custom_files:
+        from .storage import _backend_name, _corpus_parse_fn
+
+        custom_config = _get_config(workspace)
+        custom_backend = _backend_name(workspace, custom_config)
+        custom_parse = _corpus_parse_fn(
+            workspace,
+            custom_backend,
+            sources=[rel_path for _namespace, _label, rel_path, _path in custom_files],
+        )
+    else:
+        custom_parse = None
+    for namespace, label, rel_path, candidate_real in custom_files:
+        try:
+            blocks = custom_parse(candidate_real) if custom_parse is not None else []
+        except (OSError, UnicodeDecodeError, ValueError) as e:
+            _log.debug("custom_namespace_parse_failed", namespace=namespace, file=rel_path, error=str(e))
+            continue
+        if active_only:
+            blocks = get_active(blocks)
+        for b in blocks:
+            b["_source_file"] = rel_path
+            b["_source_label"] = f"{label}@{namespace}"
+            all_blocks.append(b)
 
     # Admissibility, once, over the whole corpus — after BOTH load loops so
     # the release decisions are visible whichever file order they arrived in,

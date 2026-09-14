@@ -122,3 +122,42 @@ def test_custom_symlink_root_is_refused_and_not_recalled(tmp_path: Path) -> None
     assert _get(ws, "D-ESCAPE-1", "custom", "alice")["error"] == "namespace access denied"
     hits = recall(str(ws), "custom escape statement", agent_id="alice", limit=10, rerank=False)
     assert all(hit["_id"] != "D-ESCAPE-1" for hit in hits)
+
+
+def test_encrypted_custom_namespace_recall_uses_configured_reader(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from mind_mem.encryption import EncryptionManager, has_magic
+
+    ws = _workspace(tmp_path, "searchable")
+    config_path = ws / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["block_store"] = {"backend": "encrypted"}
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    passphrase = "m2-custom-encrypted-fixture"
+    monkeypatch.setenv("MIND_MEM_ENCRYPTION_PASSPHRASE", passphrase)
+    custom_file = ws / "custom/decisions/DECISIONS.md"
+    EncryptionManager(str(ws), passphrase).encrypt_file(str(custom_file))
+    assert has_magic(custom_file.read_bytes())
+
+    hits = recall(str(ws), "custom namespace statement", agent_id="alice", limit=10, rerank=False)
+    assert any(hit["_id"] == "D-CUSTOM-1" for hit in hits)
+
+
+def test_postgres_empty_or_failed_recall_does_not_scan_custom_shadow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from mind_mem import _recall_core
+
+    ws = _workspace(tmp_path, "searchable")
+    config_path = ws / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["block_store"] = {"backend": "postgres", "dsn": "postgresql://fixture.invalid/db"}
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    query = "custom namespace statement"
+
+    monkeypatch.setattr(_recall_core.PostgresRecallBackend, "search", lambda *_args, **_kwargs: [])
+    assert recall(str(ws), query, agent_id="alice", limit=10, rerank=False) == []
+
+    def unavailable(*_args: object, **_kwargs: object) -> list[dict]:
+        raise RuntimeError("configured postgres unavailable")
+
+    monkeypatch.setattr(_recall_core.PostgresRecallBackend, "search", unavailable)
+    with pytest.raises(RuntimeError, match="configured postgres unavailable"):
+        recall(str(ws), query, agent_id="alice", limit=10, rerank=False)
