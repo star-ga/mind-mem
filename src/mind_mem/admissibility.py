@@ -79,6 +79,7 @@ __all__ = [
     "RELEASE_FIELD",
     "admissible",
     "admit_corpus",
+    "admit_expansion_corpus",
     "admit_leg",
     "count_unresolved",
     "is_admissible_status",
@@ -338,6 +339,56 @@ def admit_corpus(
         rows = filter_revoked_credentials(rows, workspace)
     releases = release_ids(rows)
     return [dict(b) for b in rows if _admitted(b, status_key, releases, allow)]
+
+
+def admit_expansion_corpus(
+    blocks: Sequence[Mapping[str, Any]],
+    *,
+    workspace: str | None,
+    status_key: str = "Status",
+    allow: frozenset[str] = frozenset(),
+) -> list[dict]:
+    """Return an admitted corpus with source-ambiguous IDs removed.
+
+    Graph and knowledge-graph expansion resolve an edge to a block through
+    an ID map.  A duplicate ID from two source identities would otherwise
+    make that map choose whichever row happened to be last.  Only the
+    workspace-bound expansion path has enough authority to enforce this
+    boundary; the no-workspace helpers retain their historical pre-admitted
+    contract.  This function adds no lifecycle or ACL rule: it only removes
+    IDs whose source identity cannot be unique after :func:`admit_corpus`.
+    """
+    rows = admit_corpus(blocks, status_key=status_key, allow=allow, workspace=workspace)
+    if workspace is None or not rows:
+        return rows
+
+    from .content_lifecycle import content_identity
+
+    identities: dict[str, set[object]] = {}
+    counts: dict[str, int] = {}
+    for row in rows:
+        bid = _block_id(row)
+        if not bid:
+            continue
+        identity = content_identity(row)
+        # A missing or malformed source is itself ambiguous once the same ID
+        # appears more than once; it cannot be allowed to borrow a sibling's
+        # source-bound lifecycle state.
+        identities.setdefault(bid, set()).add(identity)
+        counts[bid] = counts.get(bid, 0) + 1
+    # Even repeated rows from one source are unsafe to resolve by dict
+    # insertion order.  Source identities remain collected for the shared
+    # identity boundary and diagnostics, while the ID map rejects every
+    # duplicate visible row conservatively.
+    ambiguous = {bid for bid, count in counts.items() if count > 1}
+    if ambiguous:
+        source_aliases = sum(1 for values in identities.values() if len(values) > 1)
+        _log.warning(
+            "expansion_ambiguous_block_ids_withheld",
+            count=len(ambiguous),
+            source_aliases=source_aliases,
+        )
+    return [row for row in rows if _block_id(row) not in ambiguous]
 
 
 def admit_leg(

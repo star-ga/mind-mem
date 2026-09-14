@@ -78,9 +78,7 @@ def test_graph_expansion_rechecks_current_workspace_revocation(tmp_path: Path) -
 
     source = Path(workspace) / "decisions/DECISIONS.md"
     source.write_text(
-        source.read_text(encoding="utf-8").replace(
-            "Status: active\nStatement: credential", "Status: revoked\nStatement: credential"
-        ),
+        source.read_text(encoding="utf-8").replace("Status: active\nStatement: credential", "Status: revoked\nStatement: credential"),
         encoding="utf-8",
     )
     after_revoke = graph_expand(seeds, _corpus(), workspace=workspace, max_hops=1)
@@ -137,3 +135,104 @@ def test_direct_helpers_preserve_pre_admitted_legacy_contract() -> None:
     # pure helper callers keep their historical behavior and do not gain a
     # hidden filesystem read.
     assert [row["_id"] for row in graph_expand(seeds, corpus, max_hops=1)] == [SEED, NEIGHBOUR]
+
+
+def _duplicate_corpus(order: tuple[str, str] = ("alice", "bob")) -> list[dict]:
+    rows = {
+        "alice": {
+            "_id": NEIGHBOUR,
+            "Status": "active",
+            "ContentCategory": "decision",
+            "Statement": "Alice source",
+            "_source_file": "agents/alice/NOTES.md",
+        },
+        "bob": {
+            "_id": NEIGHBOUR,
+            "Status": "active",
+            "ContentCategory": "decision",
+            "Statement": "Bob source",
+            "_source_file": "agents/bob/NOTES.md",
+        },
+    }
+    return [_corpus()[0], *(rows[name] for name in order)]
+
+
+def test_workspace_graph_withholds_duplicate_source_ids_in_any_order(tmp_path: Path) -> None:
+    from mind_mem.graph_recall import graph_expand
+
+    expected = [SEED]
+    first = graph_expand(
+        [{"_id": SEED, "score": 1.0}],
+        _duplicate_corpus(),
+        workspace=str(tmp_path),
+        max_hops=1,
+    )
+    reversed_rows = graph_expand(
+        [{"_id": SEED, "score": 1.0}],
+        _duplicate_corpus(("bob", "alice")),
+        workspace=str(tmp_path),
+        max_hops=1,
+    )
+    assert [row["_id"] for row in first] == expected
+    assert [row["_id"] for row in reversed_rows] == expected
+
+
+def test_workspace_graph_keeps_unique_source_and_does_not_add_seed_siblings(tmp_path: Path) -> None:
+    from mind_mem.graph_recall import graph_expand
+
+    unique = {
+        "_id": NEIGHBOUR,
+        "Status": "active",
+        "ContentCategory": "decision",
+        "Statement": "one authorized source",
+        "_source_file": "agents/alice/NOTES.md",
+    }
+    out = graph_expand(
+        [{"_id": SEED, "score": 1.0}],
+        [_corpus()[0], unique],
+        workspace=str(tmp_path),
+        max_hops=1,
+    )
+    assert [row["_id"] for row in out] == [SEED, NEIGHBOUR]
+
+    seeded_duplicate = graph_expand(
+        [{"_id": NEIGHBOUR, "score": 1.0}],
+        _duplicate_corpus(),
+        workspace=str(tmp_path),
+        max_hops=1,
+    )
+    assert [row["_id"] for row in seeded_duplicate] == [NEIGHBOUR]
+
+
+def test_workspace_kg_withholds_duplicate_source_id_before_edge_resolution(tmp_path: Path, admitted) -> None:
+    from mind_mem.kg_fusion import kg_expand
+    from mind_mem.knowledge_graph import KnowledgeGraph
+
+    db_path = tmp_path / "kg.db"
+    kg = KnowledgeGraph(str(db_path))
+    try:
+        kg.add_edge("starga", "depends_on", "mindc", source_block_id=NEIGHBOUR)
+        out = kg_expand(
+            [{"_id": SEED, "score": 1.0}],
+            _duplicate_corpus(),
+            kg,
+            "starga",
+            workspace=str(tmp_path),
+            max_hops=1,
+        )
+    finally:
+        kg.close()
+    assert [row["_id"] for row in out] == [SEED]
+
+
+def test_entity_prefetch_withholds_duplicate_entity_ids(tmp_path: Path) -> None:
+    from mind_mem.entity_prefetch import prefetch_entity_blocks
+
+    entities = tmp_path / "entities"
+    entities.mkdir()
+    for name, statement in (("alice", "Alice source"), ("bob", "Bob source")):
+        (entities / f"{name}.md").write_text(
+            f"[{NEIGHBOUR}]\nType: Person\nName: Alice\nStatement: {statement}\n",
+            encoding="utf-8",
+        )
+    assert prefetch_entity_blocks("Alice", str(tmp_path), max_hops=0) == []

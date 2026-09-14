@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1622 | **Est. tokens:** ~4783485
-**Generated:** 2026-09-14 15:50 UTC
+**Files:** 1622 | **Est. tokens:** ~4784850
+**Generated:** 2026-09-14 16:03 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1078265 |
+| `src/mind_mem/` | 237 | ~1078826 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 713 | ~2120236 |
+| `tests/` | 713 | ~2121040 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -722,7 +722,7 @@
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `accountability_dashboard.py` (~6668 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `accountability_views.py` (~10307 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `admissibility.py` (~5894 tok, huge) — What recall is allowed to serve — the servability allow-list.
+- `admissibility.py` (~6440 tok, huge) — What recall is allowed to serve — the servability allow-list.
 - `admission.py` (~13245 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `agent_bridge.py` (~5340 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `agent_messaging.py` (~2877 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -830,7 +830,7 @@
 - `edge_grounded_answer.py` (~5738 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
 - `entity_ingest.py` (~3309 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
-- `entity_prefetch.py` (~3073 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
+- `entity_prefetch.py` (~3078 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
 - `enums.py` (~3698 tok, huge) — Centralised enum definitions for mind-mem.
 - `error_codes.py` (~1918 tok, huge) — mind-mem Error Codes — structured error classification.
 - `event_fanout.py` (~4850 tok, huge) — Governance event fan-out (v4.0 prep).
@@ -849,7 +849,7 @@
 - `governance_raft.py` (~2474 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
 - `granularity_align.py` (~3714 tok, huge) — Granularity / abstraction alignment — named merge operation (Group H, v4.0.x).
 - `graph_ingest.py` (~7386 tok, huge) — Corpus → typed knowledge-graph ingestion (HITL-gated).
-- `graph_recall.py` (~4629 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
+- `graph_recall.py` (~4634 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `graph_schema.py` (~2082 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `guardrail_patterns.py` (~1463 tok, large) — # Copyright 2026 STARGA, Inc.
 - `guardrail_surface.py` (~1704 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -878,7 +878,7 @@
 - `interaction_signals.py` (~4425 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `iterative_recall.py` (~2856 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4672 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `kg_fusion.py` (~2126 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
+- `kg_fusion.py` (~2131 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
 - `knowledge_graph.py` (~17602 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lifecycle_evidence.py` (~4750 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1408,7 +1408,7 @@
 - `test_frames_disclosure.py` (~3138 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_fts5_bm25_weights.py` (~391 tok, medium) — bm25() weights must align 1:1 with the indexed blocks_fts columns.
 - `test_fts_fallback.py` (~4472 tok, huge) — Tests for FTS fallback behavior, recall envelope structure, block size cap,
-- `test_gov1_expansion_admission.py` (~1254 tok, large) — Workspace-bound admission controls for graph and KG result splicing."""
+- `test_gov1_expansion_admission.py` (~2058 tok, huge) — Workspace-bound admission controls for graph and KG result splicing."""
 - `test_governance_bench.py` (~815 tok, large) — Tests for mind-mem governance benchmark suite."""
 - `test_governance_concurrency.py` (~1368 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_governance_provenance_gate.py` (~1314 tok, large) — Governance receipt scopes enforce the workspace provenance policy."""

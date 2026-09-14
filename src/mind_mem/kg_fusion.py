@@ -33,7 +33,7 @@ import re
 from collections import deque
 from typing import Any, Optional
 
-from .admissibility import admit_corpus, count_unresolved
+from .admissibility import admit_expansion_corpus, count_unresolved
 from .feature_gate import FeatureGate, FieldSpec, strict_int, strict_number
 from .knowledge_graph import EntityRegistry, KnowledgeGraph
 from .observability import get_logger
@@ -165,7 +165,7 @@ def kg_expand(
 
     # Same rule as the cross-reference walk: this leg appends raw corpus
     # blocks, so only admissible ones may be resolvable from an edge.
-    corpus = admit_corpus(corpus, workspace=workspace)
+    corpus = admit_expansion_corpus(corpus, workspace=workspace)
     id_to_block = {str(b.get("_id")): b for b in corpus if b.get("_id")}
     if not id_to_block:
         return results
