@@ -397,7 +397,12 @@ def list_entity_merge_proposals(status: str = "staged", limit: int = 64) -> str:
 def approve_entity_merge(proposal_id: str) -> str:
     """Approve a staged entity-equivalence proposal (admin-scope)."""
     from mind_mem.governance_gate import GovernanceBypassError, get_gate
-    from mind_mem.knowledge_graph import PROPOSAL_REJECTED, EntityMergeError, KnowledgeGraph
+    from mind_mem.knowledge_graph import (
+        PROPOSAL_REJECTED,
+        EntityMergeError,
+        KnowledgeGraph,
+        _validate_entity_merge_identity,
+    )
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -413,6 +418,7 @@ def approve_entity_merge(proposal_id: str) -> str:
             return json.dumps({"error": f"unknown entity merge proposal: {pid!r}"})
         if proposal.status == PROPOSAL_REJECTED:
             return json.dumps({"error": f"cannot approve a rejected proposal: {pid!r}"})
+        _validate_entity_merge_identity(pid, proposal)
         content = f"{proposal.winner_id}\tSAME_AS\t{proposal.loser_id}\t{proposal.rationale}"
         with get_gate(ws).admit_proposal(
             proposal_id=pid,
@@ -437,7 +443,12 @@ def approve_entity_merge(proposal_id: str) -> str:
 def reverse_entity_merge(proposal_id: str) -> str:
     """Retract an approved entity-equivalence edge (admin-scope)."""
     from mind_mem.governance_gate import GovernanceBypassError, get_gate
-    from mind_mem.knowledge_graph import PROPOSAL_APPLIED, EntityMergeError, KnowledgeGraph
+    from mind_mem.knowledge_graph import (
+        PROPOSAL_APPLIED,
+        EntityMergeError,
+        KnowledgeGraph,
+        _validate_entity_merge_identity,
+    )
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -453,6 +464,7 @@ def reverse_entity_merge(proposal_id: str) -> str:
             return json.dumps({"error": f"unknown entity merge proposal: {pid!r}"})
         if proposal.status != PROPOSAL_APPLIED:
             return json.dumps({"error": "only an applied entity merge can be reversed"})
+        _validate_entity_merge_identity(pid, proposal)
         with get_gate(ws).admit_proposal(
             proposal_id=pid,
             content=f"REVERSE\t{proposal.winner_id}\tSAME_AS\t{proposal.loser_id}",

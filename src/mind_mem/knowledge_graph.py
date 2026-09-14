@@ -658,6 +658,29 @@ def _entity_merge_proposal_id(winner_id: str, loser_id: str) -> str:
     return "EMP-" + hashlib.sha256(preimage).hexdigest()[:16]
 
 
+def _validate_entity_merge_identity(proposal_id: str, proposal: "EntityMergeProposal") -> None:
+    """Validate the persisted proposal fields used to authorize a merge.
+
+    The proposal table is a persistence boundary: a row can be malformed or
+    edited independently of the Python staging method.  Approval and reversal
+    must therefore bind the row's primary key to its endpoint pair before
+    opening an admission scope.  This binds endpoint identity, not a claim
+    that the rationale is immutable; the admission content still records the
+    rationale currently present in the row.
+    """
+    if not isinstance(proposal_id, str) or proposal_id != proposal.proposal_id:
+        raise EntityMergeError("entity merge proposal identity is malformed")
+    if not all(isinstance(value, str) and value.strip() for value in (proposal.winner_id, proposal.loser_id)):
+        raise EntityMergeError("entity merge proposal endpoints are malformed")
+    if proposal.winner_id == proposal.loser_id:
+        raise EntityMergeError("entity merge proposal endpoints must be distinct")
+    if not isinstance(proposal.rationale, str) or len(proposal.rationale.strip()) < 8:
+        raise EntityMergeError("entity merge proposal rationale is malformed")
+    expected = _entity_merge_proposal_id(proposal.winner_id, proposal.loser_id)
+    if proposal_id != expected:
+        raise EntityMergeError("entity merge proposal identity does not match its endpoints")
+
+
 @dataclass(frozen=True)
 class EdgeProposal:
     """A staged, human-review-gated typed edge.
@@ -1398,6 +1421,7 @@ class KnowledgeGraph:
         proposal = self.get_entity_merge_proposal(proposal_id)
         if proposal is None:
             raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
+        _validate_entity_merge_identity(proposal_id, proposal)
         if proposal.status == PROPOSAL_APPLIED:
             require_admission(proposal_id)
             return proposal
@@ -1411,6 +1435,7 @@ class KnowledgeGraph:
                 current = self.get_entity_merge_proposal(proposal_id)
                 if current is None:
                     raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
+                _validate_entity_merge_identity(proposal_id, current)
                 if current.status == PROPOSAL_APPLIED:
                     self._conn.commit()
                     return current
@@ -1425,6 +1450,8 @@ class KnowledgeGraph:
                 ).fetchone()
                 if conflict is not None:
                     raise EntityMergeError("entity merge conflicts with an existing SAME_AS edge")
+                if current.loser_id in self.same_as_component(current.winner_id):
+                    raise EntityMergeError("entity merge would create a SAME_AS cycle")
                 stamped = stamp_schema_version({"origin": EDGE_ORIGIN_HITL_APPROVED, "merge_proposal_id": proposal_id})
                 self._conn.execute(
                     "INSERT INTO edges (subject, predicate, object, source_block_id, confidence, "
@@ -1462,6 +1489,7 @@ class KnowledgeGraph:
         proposal = self.get_entity_merge_proposal(proposal_id)
         if proposal is None:
             raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
+        _validate_entity_merge_identity(proposal_id, proposal)
         if proposal.status == MERGE_REVERSED:
             require_admission(proposal_id)
             return proposal
@@ -1477,6 +1505,8 @@ class KnowledgeGraph:
                 ).fetchone()
                 if lineage is None or lineage["status"] != PROPOSAL_APPLIED:
                     raise EntityMergeError("entity merge lineage is missing or already reversed")
+                if (lineage["winner_id"], lineage["loser_id"]) != (proposal.winner_id, proposal.loser_id):
+                    raise EntityMergeError("entity merge proposal and lineage endpoints do not match")
                 exists = self._conn.execute(
                     "SELECT 1 FROM edges WHERE subject = ? AND predicate = ? AND object = ? AND source_block_id = ?",
                     (lineage["winner_id"], Predicate.SAME_AS.value, lineage["loser_id"], lineage["same_as_source_block_id"]),

@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 
 import pytest
+from fastmcp.server.auth import AccessToken
 
+import mind_mem.mcp.infra.acl as acl
 from mind_mem.knowledge_graph import KnowledgeGraph, default_db_path
 from mind_mem.mcp.tools.graph import (
     approve_entity_merge,
@@ -153,3 +156,46 @@ def test_generic_same_as_edge_door_is_refused(ws, monkeypatch):
     out = json.loads(graph_add_edge("winner", "same_as", "loser", "UNSAFE"))
     assert "propose_entity_merge" in out["error"]
     assert not os.path.exists(default_db_path(ws))
+
+
+def test_connected_component_and_forged_proposal_refuse_with_access_tokens(ws, monkeypatch):
+    """Approval binds both the verified caller and persisted proposal identity."""
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        for entity in ("a", "b", "c"):
+            kg.entities.resolve(entity)
+
+    current = {"scope": "user"}
+
+    def token():
+        return AccessToken(
+            token="fixture-entity-merge",
+            client_id="fixture-client",
+            scopes=[current["scope"]],
+            claims={"sub": "fixture-admin" if current["scope"] == "admin" else "fixture-user"},
+        )
+
+    monkeypatch.setattr(acl, "get_access_token", token)
+    for winner, loser in (("a", "b"), ("b", "c")):
+        staged = json.loads(propose_entity_merge(winner, loser, "reviewed entity relation"))
+        assert staged["status"] == "staged"
+        current["scope"] = "admin"
+        assert json.loads(approve_entity_merge(staged["proposal_id"]))["status"] == "applied"
+        current["scope"] = "user"
+
+    cycle = json.loads(propose_entity_merge("c", "a", "reviewed cycle relation"))
+    assert cycle["status"] == "staged"
+    current["scope"] = "admin"
+    cycle_result = json.loads(approve_entity_merge(cycle["proposal_id"]))
+    assert "cycle" in cycle_result["error"]
+
+    db = default_db_path(ws)
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO entity_merge_proposals (proposal_id, winner_id, loser_id, rationale, status, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+            ("EMP-FORGED", "a", "c", "forged persisted relation", "staged", "{}"),
+        )
+        conn.commit()
+    forged = json.loads(approve_entity_merge("EMP-FORGED"))
+    assert "identity" in forged["error"]
+    with KnowledgeGraph(db) as kg:
+        assert kg._conn.execute("SELECT COUNT(*) FROM edges WHERE predicate = 'same_as'").fetchone()[0] == 2

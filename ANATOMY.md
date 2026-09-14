@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1625 | **Est. tokens:** ~4794621
-**Generated:** 2026-09-14 16:35 UTC
+**Files:** 1625 | **Est. tokens:** ~4795688
+**Generated:** 2026-09-14 16:51 UTC
 
 ## Token Budget Guide
 
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1082419 |
+| `src/mind_mem/` | 237 | ~1082927 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~15804 |
-| `src/mind_mem/mcp/tools/` | 29 | ~124248 |
+| `src/mind_mem/mcp/tools/` | 29 | ~124312 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 715 | ~2124567 |
+| `tests/` | 715 | ~2125062 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -880,7 +880,7 @@
 - `iterative_recall.py` (~2856 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4672 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kg_fusion.py` (~2131 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
-- `knowledge_graph.py` (~21126 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~21634 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lifecycle_evidence.py` (~4750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~2108 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
@@ -922,7 +922,7 @@
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `governance.py` (~15652 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
-- `graph.py` (~8631 tok, huge) — Knowledge-graph + causal-graph MCP tools.
+- `graph.py` (~8695 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1835 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `lineage.py` (~725 tok, large) — MCP wrapping for the v3.11.0 typed block-lineage graph (Pattern 3).
@@ -1523,7 +1523,7 @@
 - `test_mcp_compiled_truth_contradictions.py` (~4713 tok, huge) — ``compiled_truth_contradictions`` — the detective half of the truth pages.
 - `test_mcp_compiled_truth_load.py` (~4697 tok, huge) — The compiled-truth read tool -- registered since v3.2.0, never tested.
 - `test_mcp_db_error_backstop.py` (~1717 tok, huge) — The MCP tool decorator must not let a backend DB error crash the server.
-- `test_mcp_entity_merge.py` (~1688 tok, huge) — Governed RA.4 entity equivalence controls.
+- `test_mcp_entity_merge.py` (~2183 tok, huge) — Governed RA.4 entity equivalence controls.
 - `test_mcp_export_corpus_boundary.py` (~923 tok, large) — MCP export must use the same configured, admitted corpus as other exports.
 - `test_mcp_graph_hitl.py` (~1868 tok, huge) — MCP-surface tests for the HITL typed-edge flow + provenance (v4.4.0 Finding 1)
 - `test_mcp_http_gate_matches_enforcement.py` (~2695 tok, huge) — The MCP HTTP startup gate must agree with what actually enforces auth.
