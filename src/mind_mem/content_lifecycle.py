@@ -255,9 +255,7 @@ def filter_revoked_credentials(items: list[dict], workspace: str) -> list[dict]:
             # to serve; never resolve the ambiguity in the permissive way.
             candidates = [row for key, row in blocks.items() if key[2] == str(item.get("_id") or "")]
             if any(
-                row.get("ContentCategory") == "credential"
-                and str(row.get("Status", "")).strip().lower() == "revoked"
-                for row in candidates
+                row.get("ContentCategory") == "credential" and str(row.get("Status", "")).strip().lower() == "revoked" for row in candidates
             ):
                 continue
         kept.append(item)

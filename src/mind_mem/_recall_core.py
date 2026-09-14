@@ -291,9 +291,7 @@ def knee_cutoff(
     # Also filter by absolute minimum score.  An explicit namespace floor
     # (numeric or ``none``) owns this threshold; applying the global minimum
     # after it would silently override the declaration.
-    filtered = [
-        r for r in results[:best_cut] if r.get("score", 0) >= min_score or r.get("_namespace_floor_override") is True
-    ]
+    filtered = [r for r in results[:best_cut] if r.get("score", 0) >= min_score or r.get("_namespace_floor_override") is True]
     return filtered if filtered else results[:min_results]
 
 
@@ -1503,11 +1501,7 @@ def recall(
     # and always-injected content cannot affect IDF, graph rescue, or ranking.
     _before_namespace = len(all_blocks)
     _namespace_config = _get_config(workspace)
-    all_blocks = [
-        block
-        for block in all_blocks
-        if namespace_search_allowed(block.get("_source_file", ""), _namespace_config)
-    ]
+    all_blocks = [block for block in all_blocks if namespace_search_allowed(block.get("_source_file", ""), _namespace_config)]
     _stage_counts["namespace_excluded"] = _before_namespace - len(all_blocks)
 
     # The scan leg's push-down: the five filters decide the CANDIDATE POOL,

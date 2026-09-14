@@ -433,9 +433,7 @@ def _load_granularity_blocks(db_path: str, limit: int, *, workspace: str | None 
     # _recall_core, hybrid_recall); this one is now one of them.
     from mind_mem.admissibility import admit_corpus
 
-    admitted = admit_corpus(
-        [{"_id": r["id"], "Status": r["status"], "_row": r} for r in rows], workspace=workspace
-    )
+    admitted = admit_corpus([{"_id": r["id"], "Status": r["status"], "_row": r} for r in rows], workspace=workspace)
 
     for _entry in admitted:
         r = _entry["_row"]

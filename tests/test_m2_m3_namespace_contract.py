@@ -84,9 +84,7 @@ def test_indexed_result_cannot_bypass_direct_only_declaration(tmp_path: Path, mo
     monkeypatch.setattr(
         sqlite_index,
         "query_index",
-        lambda *args, **kwargs: [
-            {"_id": "INDEXED-DIRECT", "score": 9.0, "file": "decisions/DECISIONS.md", "line": 1, "status": "active"}
-        ],
+        lambda *args, **kwargs: [{"_id": "INDEXED-DIRECT", "score": 9.0, "file": "decisions/DECISIONS.md", "line": 1, "status": "active"}],
     )
     hits = recall(str(ws), "private marker", limit=10, rerank=False)
     print(json.dumps({"indexed_ids_and_scores": [(x["_id"], x["score"]) for x in hits]}, sort_keys=True))

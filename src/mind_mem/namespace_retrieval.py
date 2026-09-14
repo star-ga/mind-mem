@@ -17,9 +17,7 @@ from typing import Any
 REACHABILITY_SEARCHABLE = "searchable"
 REACHABILITY_DIRECT_ONLY = "direct-only"
 REACHABILITY_ALWAYS_INJECTED = "always-injected"
-REACHABILITIES = frozenset(
-    {REACHABILITY_SEARCHABLE, REACHABILITY_DIRECT_ONLY, REACHABILITY_ALWAYS_INJECTED}
-)
+REACHABILITIES = frozenset({REACHABILITY_SEARCHABLE, REACHABILITY_DIRECT_ONLY, REACHABILITY_ALWAYS_INJECTED})
 FLOOR_NONE = "none"
 FLOOR_INHERIT_GLOBAL = "inherit-global"
 DEFAULT_DECLARATION = {"reachability": REACHABILITY_SEARCHABLE, "floor": FLOOR_INHERIT_GLOBAL}
@@ -53,11 +51,7 @@ def namespace_for_path(path: object) -> str | None:
         cleaned = cleaned[2:]
     if not cleaned or "\x00" in cleaned:
         return None
-    if (
-        cleaned.startswith("/")
-        or (len(cleaned) >= 2 and cleaned[0].isalpha() and cleaned[1] == ":")
-        or ".." in cleaned.split("/")
-    ):
+    if cleaned.startswith("/") or (len(cleaned) >= 2 and cleaned[0].isalpha() and cleaned[1] == ":") or ".." in cleaned.split("/"):
         return None
     parts = cleaned.split("/")
     if not parts or any(part in {"", ".", ".."} for part in parts):
@@ -140,10 +134,7 @@ def _merge_valid(target: dict[str, Any], candidate: Mapping[str, Any]) -> None:
 
 def _validate_declaration(candidate: Mapping[str, Any], name: str) -> None:
     """Reject malformed declarations instead of silently using a weaker one."""
-    if "reachability" in candidate and (
-        not isinstance(candidate["reachability"], str)
-        or candidate["reachability"] not in REACHABILITIES
-    ):
+    if "reachability" in candidate and (not isinstance(candidate["reachability"], str) or candidate["reachability"] not in REACHABILITIES):
         raise ValueError(f"namespace_properties.{name}.reachability is invalid")
     if "floor" in candidate:
         floor = candidate["floor"]
@@ -324,9 +315,7 @@ def always_injected_hits(
                 source = block.get("_source_file") or ""
                 source = str(source).replace("\\", "/").strip("/")
                 block["_source_file"] = (
-                    source
-                    if source == actual_namespace or source.startswith(actual_namespace + "/")
-                    else f"{actual_namespace}/{source}"
+                    source if source == actual_namespace or source.startswith(actual_namespace + "/") else f"{actual_namespace}/{source}"
                 )
             blocks = filter_revoked_credentials(blocks, workspace)
             namespace_count = 0

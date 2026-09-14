@@ -451,7 +451,9 @@ def verify_receipt(
             return False
         if any(not isinstance(candidate[key], int) or isinstance(candidate[key], bool) for key in identity_keys):
             return False
-        return candidate["device"] >= 0 and candidate["inode"] >= 0 and candidate["size"] == expected_size and candidate["mtime_ns"] >= 0
+        return bool(
+            candidate["device"] >= 0 and candidate["inode"] >= 0 and candidate["size"] == expected_size and candidate["mtime_ns"] >= 0
+        )
 
     def valid_digest(candidate: Any) -> bool:
         return isinstance(candidate, str) and len(candidate) == 64 and all(char in "0123456789abcdef" for char in candidate)
