@@ -164,11 +164,16 @@ def _validate_inputs(workspace: str, question: str, limit: int, on_invalid: str)
 # ---------------------------------------------------------------------------
 
 
-def _default_recall(workspace: str, question: str, limit: int) -> list[dict[str, Any]]:
+def _default_recall(
+    workspace: str,
+    question: str,
+    limit: int,
+    agent_id: str | None = None,
+) -> list[dict[str, Any]]:
     """Recall through the workspace's configured backend."""
     from .recall import recall as recall_engine
 
-    return list(recall_engine(workspace, question, limit=limit))
+    return list(recall_engine(workspace, question, limit=limit, agent_id=agent_id))
 
 
 def _to_evidence(hits: Sequence[Any]) -> tuple[EvidenceItem, ...]:
@@ -302,6 +307,7 @@ def chat_with_memory(
     on_invalid: str = "raise",
     require_in_evidence: bool = True,
     max_evidence_chars: int = 4000,
+    agent_id: str | None = None,
 ) -> ChatAnswer:
     """Answer *question* from *workspace* with verified citations.
 
@@ -346,7 +352,13 @@ def chat_with_memory(
     _validate_inputs(workspace, question, limit, on_invalid)
     asked = question.strip()
 
-    hits = (recall_fn or _default_recall)(workspace, asked, limit)
+    if recall_fn is None:
+        hits = _default_recall(workspace, asked, limit, agent_id=agent_id)
+    else:
+        # Injected recall functions are a deliberate low-level test/extension
+        # seam with the historical three-argument contract. Public MCP calls
+        # use the default path above, where the verified principal is bound.
+        hits = recall_fn(workspace, asked, limit)
     evidence = _to_evidence(hits or ())
 
     if not evidence:

@@ -792,10 +792,18 @@ class HybridBackend:
         # and filter each candidate leg before admission/reranking/fusion.
         agent_id = kwargs.pop("agent_id", None)
         namespace_manager = None
+        check_source_realpath = True
         if agent_id:
             from .namespaces import NamespaceManager
+            from .request_context import context_config_for
+            from .storage import _backend_name
 
             namespace_manager = NamespaceManager(workspace, agent_id=agent_id)
+            bound_config = context_config_for(workspace)
+            # The selected store owns source identity. PostgreSQL paths are
+            # logical coordinates even when an unrelated local symlink has
+            # the same name. Never derive this authority from a hit field.
+            check_source_realpath = _backend_name(workspace, dict(bound_config) if bound_config is not None else None) != "postgres"
 
         def _filter_agent(results: list[dict]) -> list[dict]:
             if not agent_id:
@@ -807,6 +815,7 @@ class HybridBackend:
                 results,
                 agent_id=agent_id,
                 namespace_manager=namespace_manager,
+                check_realpath=check_source_realpath,
             )
 
         # Audit R-6: detect_query_type is called from the expansion

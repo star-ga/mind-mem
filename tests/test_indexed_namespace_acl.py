@@ -138,7 +138,10 @@ def test_indexed_acl_filters_private_and_malformed_sources_before_processing(mon
     assert [hit["score"] for hit in legacy] == [9.0, 8.0, 7.0, 6.5, 3.0]
 
 
-def test_indexed_acl_rejects_shared_symlink_into_private_namespace(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+@pytest.mark.parametrize("source_authority", [None, "configured_postgres"])
+def test_indexed_acl_rejects_shared_symlink_into_private_namespace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source_authority: str | None
+) -> None:
     workspace = _workspace(tmp_path)
     shared_decisions = workspace / "shared/decisions"
     private_decisions = workspace / "agents/bob/decisions"
@@ -149,11 +152,10 @@ def test_indexed_acl_rejects_shared_symlink_into_private_namespace(monkeypatch: 
     except (OSError, NotImplementedError) as exc:
         pytest.skip(f"directory symlink unavailable: {exc}")
 
-    monkeypatch.setattr(
-        sqlite_index,
-        "query_index",
-        lambda *args, **kwargs: [_hit("BOB-VIA-SHARED-LINK", "shared/decisions/DECISIONS.md")],
-    )
+    hit = _hit("BOB-VIA-SHARED-LINK", "shared/decisions/DECISIONS.md")
+    if source_authority is not None:
+        hit["_source_authority"] = source_authority
+    monkeypatch.setattr(sqlite_index, "query_index", lambda *args, **kwargs: [hit])
     assert recall(str(workspace), "indexed", agent_id="alice", rerank=False) == []
     assert recall(str(workspace), "indexed", agent_id="unlisted", rerank=False) == []
 

@@ -76,6 +76,8 @@ def chat_with_memory(
     from mind_mem.chat_generators import GeneratorError, resolve_generator
     from mind_mem.chat_memory import chat_with_memory as _chat
 
+    from ..infra.acl import authenticated_agent_id
+
     try:
         gen = resolve_generator(generator)
     except ValueError as exc:
@@ -89,6 +91,7 @@ def chat_with_memory(
             limit=limit,
             on_invalid=on_invalid,
             require_in_evidence=bool(require_in_evidence),
+            agent_id=authenticated_agent_id(),
         )
     except CitationError as exc:
         _log.warning("chat_with_memory_ungrounded", reason=str(exc))

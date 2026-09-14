@@ -286,6 +286,42 @@ class TestPostgresRecallLive:
         hits = recall(ws, "Postgres backend tuning", limit=2)
         assert len(hits) <= 2
 
+    def test_hybrid_public_acl_uses_database_sources_despite_local_shadow(
+        self, pg_workspace: tuple[str, PostgresBlockStore], monkeypatch, tmp_path: Path
+    ) -> None:
+        from fastmcp.server.auth import AccessToken
+
+        from mind_mem.mcp.infra import acl
+        from mind_mem.mcp.infra.workspace import use_workspace
+        from mind_mem.mcp.tools.recall import recall as public_recall
+
+        ws, store = pg_workspace
+        workspace = Path(ws)
+        (workspace / "mind-mem-acl.json").write_text(
+            json.dumps({"agents": {"alice": {"read": ["shared"]}, "bob": {"read": ["agents/bob"]}}})
+        )
+        for block_id, source, text in (
+            ("D-PG-PUBLIC", "shared/decisions/DECISIONS.md", "aurora database public"),
+            ("D-PG-PRIVATE", "agents/bob/decisions/DECISIONS.md", "aurora database private"),
+        ):
+            store.write_block({"_id": block_id, "_source_file": source, "Statement": text, "Status": "active"})
+        outside = tmp_path / "unrelated-host-files"
+        outside.mkdir()
+        try:
+            (workspace / "shared").symlink_to(outside, target_is_directory=True)
+        except OSError:
+            pytest.skip("local symlink control requires host symlink support")
+
+        for principal, expected in (("alice", "D-PG-PUBLIC"), ("bob", "D-PG-PRIVATE")):
+            monkeypatch.setattr(
+                acl,
+                "get_access_token",
+                lambda p=principal: AccessToken(token="fixture", client_id=p, scopes=["user"], claims={"sub": p}),
+            )
+            with use_workspace(ws):
+                payload = json.loads(public_recall("aurora database", backend="hybrid", limit=10))
+            assert {hit["_id"] for hit in payload["results"]} == {expected}
+
     def test_recall_date_post_filter_applies_on_pg(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
         """The since/until post-filter contract must hold on the PG path."""
         ws, store = pg_workspace
