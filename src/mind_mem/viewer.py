@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import sqlite3
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -56,8 +57,9 @@ class ViewerState:
             from .storage import iter_blocks
 
             result = iter_blocks(self.workspace, active_only=True)
-        # The viewer is a bounded diagnostic surface.  Keep source order and
-        # make truncation explicit in the API rather than reading unbounded data.
+        # Limit the searchable/displayed window while preserving source order.
+        # Admission still enumerates the configured corpus before this slice;
+        # this is not a bound on backend I/O or process memory.
         return result[:MAX_BLOCKS]
 
     def by_id(self, block_id: str) -> dict[str, Any] | None:
@@ -104,17 +106,17 @@ class ViewerHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _origin_allowed(self) -> bool:
         host = self.headers.get("Host", "")
         server_port = int(getattr(self.server, "server_port", 0))
-        expected_host = f"{self.bound_host}:{server_port}"
+        authority_host = f"[{self.bound_host}]" if self.bound_host == "::1" else self.bound_host
+        expected_host = f"{authority_host}:{server_port}"
         valid_hosts = {expected_host}
         if self.bound_host == "127.0.0.1":
             valid_hosts.add(f"localhost:{server_port}")
-        if self.bound_host == "::1":
-            valid_hosts.add(f"[::1]:{server_port}")
         if host not in valid_hosts:
             return False
         origin = self.headers.get("Origin")
@@ -224,7 +226,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
         self._reject_method()
 
     def _reject_method(self) -> None:
-        """Reject every non-GET method through the same guarded JSON path."""
+        """Reject registered non-GET methods through the guarded JSON path."""
         if not self._origin_allowed():
             self._reject(HTTPStatus.FORBIDDEN, "host or origin is not allowed")
             return
@@ -232,7 +234,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
 
     # BaseHTTPRequestHandler's default 501 response is HTML and omits the
     # viewer security headers.  Keep the local surface consistently JSON and
-    # read-only for every method a client can send.
+    # read-only for the common methods listed below.
     do_PUT = _reject_method
     do_DELETE = _reject_method
     do_PATCH = _reject_method
@@ -303,6 +305,10 @@ class ViewerServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
 
+class _IPv6ViewerServer(ViewerServer):
+    address_family = socket.AF_INET6
+
+
 def make_server(workspace: str, host: str = "127.0.0.1", port: int = 8765, agent_id: str | None = None) -> ViewerServer:
     """Build the local viewer server without starting a thread."""
     if host not in _LOOPBACK:
@@ -318,7 +324,8 @@ def make_server(workspace: str, host: str = "127.0.0.1", port: int = 8765, agent
         (ViewerHandler,),
         {"state": ViewerState(workspace, agent_id), "bound_host": host},
     )
-    server = ViewerServer((host, port), handler)
+    server_type = _IPv6ViewerServer if host == "::1" else ViewerServer
+    server = server_type((host, port), handler)
     return server
 
 

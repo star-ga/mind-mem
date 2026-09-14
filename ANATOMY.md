@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1628 | **Est. tokens:** ~4794359
-**Generated:** 2026-09-14 17:50 UTC
+**Files:** 1629 | **Est. tokens:** ~4795608
+**Generated:** 2026-09-14 17:58 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 94 | ~211309 |
+| `docs/` | 95 | ~211934 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 238 | ~1083030 |
+| `src/mind_mem/` | 238 | ~1083130 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 715 | ~2124769 |
+| `tests/` | 715 | ~2125293 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -473,6 +473,7 @@
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `install-guide.md` (~2914 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1567 tok, huge) — Integrations
+- `local-viewer.md` (~625 tok, large) — Local memory viewer
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1625 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1770 tok, huge) — MCP Integration Guide
@@ -880,7 +881,7 @@
 - `iterative_recall.py` (~2856 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4672 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kg_fusion.py` (~2131 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
-- `knowledge_graph.py` (~18054 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~18086 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1944 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lifecycle_evidence.py` (~4750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~2108 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
@@ -1126,7 +1127,7 @@
 - `validity_gate.py` (~4353 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
 - `vector_inertness.py` (~3125 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `verify_cli.py` (~10537 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `viewer.py` (~3683 tok, huge) — Read-only local memory and graph viewer.
+- `viewer.py` (~3751 tok, huge) — Read-only local memory and graph viewer.
 ### `src/mind_mem/viewer_static/`
 
 - `app.js` (~563 tok, large)
@@ -1903,7 +1904,7 @@
 - `test_vector_index_shape_contract.py` (~4682 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vector_inertness.py` (~1607 tok, huge) — The vector-leg honesty gauge.
 - `test_verify_cli.py` (~4647 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_viewer.py` (~1890 tok, huge) — Actual socket and CLI controls for the read-only local viewer."""
+- `test_viewer.py` (~2414 tok, huge) — Actual socket and CLI controls for the read-only local viewer."""
 - `test_vocabulary_wiring.py` (~2980 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_walkthrough.py` (~2441 tok, huge) — Tests for the v3.9 dependency-ordered walkthrough."""
 - `test_watcher.py` (~2037 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""

@@ -187,3 +187,50 @@ def test_mm_view_help_is_real_cli_entrypoint() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "read-only local viewer" in result.stdout
+
+
+def test_head_has_no_body_on_the_wire(tmp_path: Path) -> None:
+    server = make_server(str(_workspace(tmp_path)), port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with socket.create_connection(("127.0.0.1", server.server_port), timeout=3) as connection:
+            connection.sendall(f"HEAD /api/blocks HTTP/1.1\r\nHost: 127.0.0.1:{server.server_port}\r\nConnection: close\r\n\r\n".encode())
+            response = b""
+            while chunk := connection.recv(4096):
+                response += chunk
+    finally:
+        server.shutdown()
+        thread.join(timeout=3)
+        server.server_close()
+    headers, separator, body = response.partition(b"\r\n\r\n")
+    assert separator and headers.startswith(b"HTTP/1.0 405")
+    assert b"Content-Security-Policy:" in headers
+    assert body == b""
+
+
+def test_ipv6_loopback_server_serves_actual_admitted_data(tmp_path: Path) -> None:
+    if not socket.has_ipv6:
+        pytest.skip("IPv6 unavailable in this Python build")
+    # A kernel without IPv6 is distinguishable from a factory using the wrong
+    # address family: establish kernel support before testing the actual server.
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as probe:
+            probe.bind(("::1", 0))
+    except OSError:
+        pytest.skip("IPv6 loopback unavailable in this environment")
+    server = make_server(str(_workspace(tmp_path)), host="::1", port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection("::1", server.server_port, timeout=3)
+        connection.request("GET", "/api/search?q=viewer", headers={"Origin": f"http://[::1]:{server.server_port}"})
+        response = connection.getresponse()
+        body = response.read()
+        assert response.status == 200
+        assert json.loads(body)["hits"][0]["_id"] == "D-20260914-001"
+        connection.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=3)
+        server.server_close()

@@ -857,7 +857,7 @@ class KnowledgeGraph:
 
     @classmethod
     def open_read_only(cls, db_path: str) -> "KnowledgeGraph":
-        """Open an existing graph without creating, migrating, or journaling it.
+        """Open an existing graph without creating or migrating graph data.
 
         The normal constructor is intentionally a writable store constructor:
         it creates the parent, enables WAL, and installs the current schema.
@@ -865,7 +865,9 @@ class KnowledgeGraph:
         partially initialized database would be changed by a question.  This
         factory binds SQLite's ``mode=ro`` URI and validates only the tables
         needed by traversal; callers receive ``sqlite3.DatabaseError`` when
-        the file is not a usable graph.
+        the file is not a usable graph. SQLite may update WAL shared-memory
+        coordination for a live graph; read-only here forbids logical database
+        writes and schema changes, not SQLite reader bookkeeping.
         """
         path = os.path.realpath(db_path)
         if not os.path.isfile(path):
@@ -873,10 +875,7 @@ class KnowledgeGraph:
         uri = f"file:{quote(path, safe='/')}?mode=ro"
         conn = sqlite3.connect(uri, uri=True, timeout=5.0, check_same_thread=False)
         try:
-            tables = {
-                str(row[0])
-                for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
-            }
+            tables = {str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()}
             required = {"entities", "aliases", "edges"}
             if not required.issubset(tables):
                 missing = ", ".join(sorted(required - tables))
