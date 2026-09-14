@@ -40,6 +40,17 @@ The CLI's shared-library option is `--emit-shared OUTPUT`, with one source input
 Keep the existing implementation until the replacement exports the required
 symbols and passes actual consumer, numerical parity and performance gates.
 
+The 2026-09-14 audit used the selected compiler's complete standard library
+and tested all eight sources. Only `rrf`, `ranking` and `importance` passed
+frontend verification. The other five failed on unsupported reductions or
+unresolved symbolic shapes; `reranker` exposed a compiler panic. No source
+produced a shared library or runnable scoring implementation. Successful
+MIC/evidence serialization for three prototypes is not an execution proof.
+The compiler build used for this bounded result reported `mind 0.10.2`, with
+SHA256 `d9f468ed3c356f47f74d08e5a2b22ab13969c1652442d2aa6c13fd4eac24a3cc`.
+This identifies the measurement; another build reporting the same version
+must be verified separately.
+
 ## Pipeline configuration
 
 The configuration files are `adversarial`, `answer`, `cognitive`, `cross_encoder`,

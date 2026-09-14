@@ -2739,18 +2739,21 @@ Python until its own port steps pass the gates below.
 
 **Sequencing (incremental, never a big-bang rewrite):**
 
-- [ ] Hot scoring kernels in pure MIND (`mind/*.mind`) — **claim corrected
-  2026-08-30, measured with the installed `mindc`.** Of the 26 `mind/*.mind`
-  files only **8 are MIND source**; the other 18 are TOML configuration wearing
-  a `.mind` extension (they open with `[section]` headers and `key = value`, and
-  are read as config, never compiled). Of the 8 real kernels **4 compile**
-  (`importance`, `ranking`, `reranker`, `rrf`) and **4 do not**: `abstention` /
-  `bm25` / `category` need `sum_all`, `prefetch` needs `reduce_sum` — neither
-  exists — and the `std.tensor` module all 8 import is absent from the
-  toolchain's `std/` entirely. **No CI job compiles any of them, which is why
-  "bench-gated" survived as a tick: no gate could fail.** A compile gate lands
-  WITH the migration, not before, since it would otherwise pin a state the
-  toolchain cannot satisfy. Blocked on the toolchain.
+- [ ] Hot scoring kernels in pure MIND (`mind/*.mind`) — **re-audited
+  2026-09-14 against the selected compiler and its complete standard library.**
+  There are **8 compiler sources** and **18 INI-style configuration files**.
+  `rrf`, `ranking` and `importance` pass frontend verification; the other five
+  fail on unsupported reductions or unresolved symbolic shapes. **Zero of
+  eight produced a runnable scoring implementation or shared library.**
+  Verification and MIC/evidence emission alone do not establish execution,
+  exported symbols, numerical parity or performance. The earlier four-kernel
+  compile count and missing-standard-library diagnosis are historical and do
+  not describe this audit. Remaining compiler dependencies include structured
+  rejection of unsupported shapes, reduction/call support and the exact tensor
+  parameter ABI. Promotion requires a CI compile-and-execute gate over the
+  consumer ABI, reference bit identity and the standing performance cap.
+  See [`mind/README.md`](mind/README.md); keep Python/C serving until those
+  gates pass.
 - [ ] Governance / decision / boundary layer in pure MIND — recall
       scoring orchestration, quality-gate, ACL, contradiction and
       decision rules (best fit for MIND's systems-programming surface;

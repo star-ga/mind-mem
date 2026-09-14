@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1620 | **Est. tokens:** ~4773983
-**Generated:** 2026-09-14 14:51 UTC
+**Files:** 1620 | **Est. tokens:** ~4774159
+**Generated:** 2026-09-14 14:52 UTC
 
 ## Token Budget Guide
 
@@ -61,7 +61,7 @@
 | `intelligence/` | 1 | ~113 |
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2451 |
-| `mind/` | 27 | ~9456 |
+| `mind/` | 27 | ~9632 |
 | `scripts/` | 21 | ~66860 |
 | `sdk/go/` | 11 | ~9890 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
@@ -571,7 +571,7 @@
 - `kernels.c` (~2451 tok, huge)
 ### `mind/`
 
-- `README.md` (~677 tok, large) — MIND kernels and pipeline configuration
+- `README.md` (~853 tok, large) — MIND kernels and pipeline configuration
 - `abstention.mind` (~215 tok, medium) — Confidence gating: decide whether to abstain from answering
 - `adversarial.mind` (~156 tok, small)
 - `answer.mind` (~1294 tok, large)
