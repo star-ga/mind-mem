@@ -6978,7 +6978,8 @@ def _harvest_v4_retry2e_holdout_targeted() -> Iterator[dict]:
 
 
 # retry-2g holdout patch (2026-05-11): paraphrase coverage for the 2 holdout
-# misses on retry-2g (109/109 + 20/22 = 129/131).
+# misses on retry-2g (109/109 + 20/22 = 129/131). These prompts deliberately
+# use non-verbatim wording; the exact strings belong only to eval_holdout.py.
 #
 # Miss A: "How does an operator change the workspace eviction policy at runtime
 #         without restarting?" → model said "edit mind-mem.json", missed
@@ -6997,7 +6998,7 @@ def _harvest_v4_retry2e_holdout_targeted() -> Iterator[dict]:
 _V4_RETRY2G_HOLDOUT_PARAPHRASE: list[tuple[str, str]] = [
     # ===== set_active_policy under "operator/runtime/without restart" =====
     (
-        "How does an operator change the workspace eviction policy at runtime without restarting?",
+        "How can an operator switch the workspace eviction policy while the process stays running?",
         "Call `set_active_policy(policy)`. It swaps the workspace-wide default eviction policy "
         "in-process; no daemon restart, no config-file edit, no reindex. "
         "`plan_eviction(policy=None)` resolves `None` to `active_policy()` on every call, so the "
@@ -7045,7 +7046,7 @@ _V4_RETRY2G_HOLDOUT_PARAPHRASE: list[tuple[str, str]] = [
     ),
     # ===== FallbackPolicy four-value enumeration under "every legal value" =====
     (
-        "Enumerate every legal value of the v4 FallbackPolicy enum.",
+        "List the members of the v4 FallbackPolicy enum, including its error-raising option.",
         "Four values, all defined in `src/mind_mem/v4/surprise_retrieval.py`: "
         "`FallbackPolicy.NEUTRAL` (returns 0.5 — default, preserves prior behaviour), "
         "`FallbackPolicy.PROMOTE` (returns 1.0 — bias toward tier promotion), "
