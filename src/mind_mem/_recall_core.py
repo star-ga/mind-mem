@@ -11,7 +11,7 @@ import sys
 from abc import ABC, abstractmethod
 from collections import Counter
 from datetime import date
-from typing import Any, Mapping, cast
+from typing import TYPE_CHECKING, Any, Mapping, cast
 
 from ._recall_constants import (
     _STOPWORDS,
@@ -83,6 +83,9 @@ from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 from .telemetry import traced as _traced
 from .validity_gate import apply_validity_gate
 
+if TYPE_CHECKING:
+    from .namespaces import NamespaceManager
+
 # A-MEM block metadata (optional — graceful degradation if unavailable)
 try:
     from .block_metadata import BlockMetadataManager
@@ -141,7 +144,7 @@ def _validate_recall_agent_id(agent_id: object | None) -> None:
 def _indexed_hit_is_readable(
     workspace: str,
     hit: Mapping[str, Any],
-    namespace_manager: Any,
+    namespace_manager: NamespaceManager,
     *,
     check_realpath: bool = True,
 ) -> bool:
@@ -198,7 +201,7 @@ def _filter_indexed_hits_for_agent(
     hits: list[dict],
     *,
     agent_id: str | None,
-    namespace_manager: Any,
+    namespace_manager: NamespaceManager | None,
     check_realpath: bool = True,
 ) -> list[dict]:
     """Apply namespace ACL before indexed hits reach validity or ranking work."""
