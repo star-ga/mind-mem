@@ -128,18 +128,35 @@ def test_kind_similarity_filters_private_partition_neighbors(monkeypatch: pytest
     assert denied["similar"] == []
 
 
-def test_configured_postgres_source_uses_namespace_coordinate_without_local_file(tmp_path: Path) -> None:
-    """A DB-only PG row is ACL-checked by source coordinate, not host files."""
-    from mind_mem._recall_core import _indexed_hit_is_readable, _pg_block_to_hit
+def test_similarity_enumerates_an_explicitly_acl_granted_other_agent_namespace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An ACL grant to another agent is included by the namespace resolver."""
+    ws = _workspace(tmp_path)
+    acl_config = json.loads((ws / "mind-mem-acl.json").read_text(encoding="utf-8"))
+    acl_config["agents"]["alice"]["read"].append("agents/bob")
+    acl_config["agents"]["alice"]["namespaces"].append("agents/bob")
+    (ws / "mind-mem-acl.json").write_text(json.dumps(acl_config), encoding="utf-8")
+    _token(monkeypatch, "alice")
+    with use_workspace(str(ws)):
+        servable = recall_tools._servable_block_ids(str(ws), "alice")
+    assert servable is not None
+    assert {"D-SHARED", "D-ALICE", "D-BOB"}.issubset(servable)
+
+
+def test_indexed_metadata_cannot_claim_postgres_authority_over_acl(tmp_path: Path) -> None:
+    """A source marker cannot override the authenticated namespace ACL."""
+    from mind_mem._recall_core import _indexed_hit_is_readable
     from mind_mem.namespaces import NamespaceManager
 
     ws = _workspace(tmp_path)
-    hit = _pg_block_to_hit(
-        {"_id": "D-ALICE", "_source_file": "agents/alice/decisions/DECISIONS.md", "Statement": "db-only"},
-        1.0,
-    )
+    hit = {
+        "_id": "D-ALICE",
+        "_source_file": "agents/alice/decisions/DECISIONS.md",
+        "file": "agents/alice/decisions/DECISIONS.md",
+        "_source_authority": "configured_postgres",
+    }
     manager = NamespaceManager(str(ws), agent_id="alice")
-    assert hit["_source_authority"] == "configured_postgres"
     assert _indexed_hit_is_readable(str(ws), hit, manager)
     hit["file"] = "agents/bob/decisions/DECISIONS.md"
     assert not _indexed_hit_is_readable(str(ws), hit, manager)

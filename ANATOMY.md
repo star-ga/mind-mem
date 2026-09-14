@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1620 | **Est. tokens:** ~4771829
-**Generated:** 2026-09-14 14:53 UTC
+**Files:** 1620 | **Est. tokens:** ~4772304
+**Generated:** 2026-09-14 14:59 UTC
 
 ## Token Budget Guide
 
@@ -83,14 +83,14 @@
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13973 |
-| `src/mind_mem/mcp/tools/` | 29 | ~122640 |
+| `src/mind_mem/mcp/tools/` | 29 | ~122928 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 711 | ~2112766 |
+| `tests/` | 711 | ~2112953 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -933,7 +933,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~23625 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~23913 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1620 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -1209,7 +1209,7 @@
 - `test_accountability_views.py` (~6320 tok, huge) — RA.2 — precision and waste as derived views, and the four refusals that shape them.
 - `test_acl_tool_coverage.py` (~2384 tok, huge) — ACL coverage invariant for the MCP tool surface.
 - `test_active_only_filter.py` (~312 tok, medium) — Tests for active_only recall filter."""
-- `test_adjacent_public_acl.py` (~1670 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
+- `test_adjacent_public_acl.py` (~1857 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
 - `test_admissibility_unreadable_status.py` (~1104 tok, large) — An unreadable ``Status`` must be withheld on the stale-index path too.
 - `test_admission_seam.py` (~12891 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_admit_proposal_openers.py` (~3596 tok, huge) — # Copyright 2026 STARGA, Inc.

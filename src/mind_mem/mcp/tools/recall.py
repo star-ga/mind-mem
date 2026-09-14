@@ -1641,9 +1641,10 @@ def _servable_block_ids(ws: str, agent_id: str | None) -> set[str] | None:
         return set(admissible(iter_blocks(ws, active_only=False)))
 
     # Use the configured backend's admission reader for database/encrypted
-    # stores. A Markdown workspace has explicit shared/agent corpus roots that
-    # the generic storage enumeration intentionally does not walk; enumerate
-    # those same registered paths as the ranked scan does.
+    # stores. A Markdown workspace has explicit namespace roots that the
+    # generic storage enumeration intentionally does not walk; resolve those
+    # roots through NamespaceManager so an ACL grant to another agent or an
+    # explicitly configured namespace is neither missed nor guessed.
     from mind_mem._recall_core import CORPUS_FILES
     from mind_mem.admissibility import admit_corpus
     from mind_mem.block_parser import parse_file
@@ -1661,12 +1662,27 @@ def _servable_block_ids(ws: str, agent_id: str | None) -> set[str] | None:
         workspace_prefix = workspace_real + os.sep
         paths: list[tuple[str, str]] = list(discover_corpus_files(ws))
         for label, rel_path in CORPUS_FILES.items():
-            paths.extend(
-                (
-                    (f"{label}@shared", os.path.join("shared", rel_path)),
-                    (f"{label}@{agent_id}", os.path.join("agents", agent_id, rel_path)),
-                )
-            )
+            # ``resolve_corpus_paths`` expands the authenticated policy's
+            # exact and wildcard namespace entries and applies can_read to
+            # every candidate. It is the same registry used by namespace
+            # aware callers, rather than a second own-agent-only list.
+            for candidate in manager.resolve_corpus_paths(rel_path):
+                candidate_rel = os.path.relpath(candidate, workspace_real).replace(os.sep, "/")
+                paths.append((f"{label}@{candidate_rel.split('/', 1)[0]}", candidate_rel))
+
+        # A custom top-level namespace is a separate explicit declaration. It
+        # is admitted only when both the declaration and the ACL authorize it;
+        # no arbitrary workspace directory is promoted into the corpus.
+        from mind_mem.namespace_retrieval import declared_custom_namespaces
+
+        try:
+            custom_namespaces = declared_custom_namespaces(_load_config(ws))
+        except ValueError:
+            custom_namespaces = ()
+        for namespace in custom_namespaces:
+            for label, local_rel_path in discover_corpus_files(os.path.join(workspace_real, namespace)):
+                rel_path = os.path.join(namespace, local_rel_path).replace(os.sep, "/")
+                paths.append((f"{label}@{namespace}", rel_path))
         blocks: list[dict[str, Any]] = []
         seen: set[str] = set()
         for label, rel_path in paths:

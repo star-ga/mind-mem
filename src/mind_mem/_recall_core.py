@@ -167,13 +167,6 @@ def _indexed_hit_is_readable(
     if not namespace_manager.can_read(source):
         return False
 
-    # Postgres rows are sourced from the configured database authority. Their
-    # relative ``file_path`` is a namespace coordinate, not a path that this
-    # recall host can resolve; requiring a local file would withhold valid
-    # DB-only rows. The path has already passed the traversal/ACL checks above.
-    if hit.get("_source_authority") == "configured_postgres":
-        return True
-
     workspace_real = os.path.realpath(workspace)
     try:
         resolved = os.path.realpath(os.path.join(workspace_real, source))
@@ -409,11 +402,6 @@ def _pg_block_to_hit(block: dict[str, Any], score: float) -> dict[str, Any]:
         "file": block.get("_source_file", "?") or "?",
         "line": int(block.get("_line", 0) or 0),
         "status": block.get("Status", "") or "",
-        # This source path is authoritative Postgres metadata, not a local
-        # filesystem claim. The ACL still validates its relative namespace,
-        # while the indexed-hit gate must not resolve it against this host's
-        # filesystem (a DB-only deployment has no such file).
-        "_source_authority": "configured_postgres",
     }
     # Pass through the fields the recall post-filters operate on so the
     # date / lifecycle / event_id / min_maturity contract works on PG too.
