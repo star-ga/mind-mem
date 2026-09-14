@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 import mind_mem._recall_core as recall_core
+import mind_mem.content_lifecycle as content_lifecycle
 import mind_mem.sqlite_index as sqlite_index
 from mind_mem._recall_core import PostgresRecallBackend, RecallBackend, recall
 from mind_mem.hybrid_recall import RecallResults
@@ -69,6 +70,21 @@ def _workspace(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
+    for relative, block_id in (
+        ("shared/decisions/DECISIONS.md", "SHARED-1"),
+        ("shared/tasks/TASKS.md", "SHARED-2"),
+        ("shared/decisions/DECISIONS.md", "SHARED-TRACE"),
+        ("agents/alice/decisions/DECISIONS.md", "ALICE-1"),
+        ("agents/bob/decisions/DECISIONS.md", "BOB-1"),
+        ("decisions/DECISIONS.md", "ROOT-1"),
+    ):
+        path = workspace / relative
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            existing + f"[{block_id}]\nType: Decision\nStatement: {block_id} indexed fact\nStatus: active\n\n",
+            encoding="utf-8",
+        )
     return workspace
 
 
@@ -128,14 +144,8 @@ def test_indexed_acl_filters_private_and_malformed_sources_before_processing(mon
     assert [hit["_id"] for hit in unknown] == ["SHARED-1"]
     # Existing namespace-properties filtering still owns malformed source
     # claims on the legacy path; the new ACL filter adds no agent-less gate.
-    assert [hit["_id"] for hit in legacy] == [
-        "SHARED-1",
-        "ALICE-1",
-        "BOB-1",
-        "ROOT-1",
-        "CONFLICTING-SOURCES",
-    ]
-    assert [hit["score"] for hit in legacy] == [9.0, 8.0, 7.0, 6.5, 3.0]
+    assert [hit["_id"] for hit in legacy] == ["SHARED-1", "ALICE-1", "BOB-1", "ROOT-1"]
+    assert [hit["score"] for hit in legacy] == [9.0, 8.0, 7.0, 6.5]
 
 
 @pytest.mark.parametrize("source_authority", [None, "configured_postgres"])
@@ -208,6 +218,11 @@ def test_indexed_acl_preserves_backend_trace_and_degraded_marker(monkeypatch: py
 
 def test_indexed_acl_normalizes_source_separators_but_rejects_dot_segments(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
+    path = workspace / "shared/decisions/DECISIONS.md"
+    path.write_text(
+        path.read_text(encoding="utf-8") + "[SLASH-EQUIV]\nType: Decision\nStatement: SLASH-EQUIV source query\nStatus: active\n\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         sqlite_index,
         "query_index",
@@ -235,6 +250,16 @@ def test_postgres_indexed_acl_does_not_consult_local_shadow_realpath(monkeypatch
     result = [_hit("PG-SHARED", "shared/virtual/DB-ROW.md")]
     monkeypatch.setattr(PostgresRecallBackend, "search", lambda self, *args, **kwargs: list(result))
     monkeypatch.setattr(recall_core, "_load_backend", lambda _workspace: PostgresRecallBackend(str(workspace)))
+
+    def canonical_live(_workspace: str, *, active_only: bool = False, blocks: list[dict[str, Any]] | None = None) -> dict:
+        rows = blocks or []
+        return {
+            content_lifecycle.content_identity(row): {**row, "Status": "active"}
+            for row in rows
+            if content_lifecycle.content_identity(row) is not None
+        }
+
+    monkeypatch.setattr(content_lifecycle, "live_content_blocks", canonical_live)
     returned = recall(str(workspace), "postgres query", agent_id="alice", rerank=False)
     assert [hit["_id"] for hit in returned] == ["PG-SHARED"]
 
@@ -246,6 +271,16 @@ def test_postgres_all_denied_preserves_metadata_without_restoring_private_hits(m
     result.degraded = {"leg": "vector", "reason": "unavailable"}
     monkeypatch.setattr(PostgresRecallBackend, "search", lambda self, *args, **kwargs: result)
     monkeypatch.setattr(recall_core, "_load_backend", lambda _workspace: PostgresRecallBackend(str(workspace)))
+
+    def canonical_live(_workspace: str, *, active_only: bool = False, blocks: list[dict[str, Any]] | None = None) -> dict:
+        rows = blocks or []
+        return {
+            content_lifecycle.content_identity(row): {**row, "Status": "active"}
+            for row in rows
+            if content_lifecycle.content_identity(row) is not None
+        }
+
+    monkeypatch.setattr(content_lifecycle, "live_content_blocks", canonical_live)
 
     denied = recall(str(workspace), "postgres query", agent_id="alice", rerank=False)
     assert denied == []

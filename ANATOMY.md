@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1649 | **Est. tokens:** ~4851004
-**Generated:** 2026-09-14 19:55 UTC
+**Files:** 1649 | **Est. tokens:** ~4851589
+**Generated:** 2026-09-14 19:56 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1090902 |
+| `src/mind_mem/` | 239 | ~1091036 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 729 | ~2150360 |
+| `tests/` | 729 | ~2150811 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -821,7 +821,7 @@
 - `connection_manager.py` (~3185 tok, huge) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~2067 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
 - `consolidation_maturity_gate.py` (~2589 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `content_lifecycle.py` (~3158 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `content_lifecycle.py` (~3292 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4893 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `core_export.py` (~8336 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1487,7 +1487,7 @@
 - `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""
-- `test_indexed_namespace_acl.py` (~2754 tok, huge) — Namespace ACLs must guard indexed recall before any result processing."""
+- `test_indexed_namespace_acl.py` (~3205 tok, huge) — Namespace ACLs must guard indexed recall before any result processing."""
 - `test_indexed_source_admission.py` (~1124 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_source_hash_admission.py` (~598 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_source_status_overlay.py` (~471 tok, medium) — # Copyright 2026 STARGA, Inc.

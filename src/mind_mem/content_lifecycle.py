@@ -134,7 +134,12 @@ def content_identity(block: Mapping[str, Any]) -> ContentIdentity | None:
 
 
 def _safe_source_path(workspace: str, source: str) -> str | None:
-    """Resolve one corpus source without following a symlinked path."""
+    """Resolve one source, allowing only same-namespace in-workspace aliases.
+
+    Following a shared-to-shared alias preserves the source namespace. Links
+    into another namespace or outside the workspace remain refused before any
+    bytes are parsed.
+    """
     if not isinstance(source, str) or not source or "\x00" in source:
         return None
     normalized = source.replace("\\", "/")
@@ -143,9 +148,16 @@ def _safe_source_path(workspace: str, source: str) -> str | None:
         return None
     root = os.path.realpath(workspace)
     candidate = os.path.abspath(os.path.join(root, *parts))
-    if not candidate.startswith(root + os.sep) or os.path.realpath(candidate) != candidate:
+    resolved = os.path.realpath(candidate)
+    if not candidate.startswith(root + os.sep) or not resolved.startswith(root + os.sep):
         return None
-    return candidate if os.path.isfile(candidate) else None
+    from .namespace_retrieval import namespace_for_path
+
+    source_namespace = namespace_for_path(normalized)
+    resolved_namespace = namespace_for_path(os.path.relpath(resolved, root).replace(os.sep, "/"))
+    if source_namespace is None or resolved_namespace != source_namespace:
+        return None
+    return resolved if os.path.isfile(resolved) else None
 
 
 def _identity_blocks(blocks: list[dict[str, Any]], workspace: str) -> dict[ContentIdentity, dict[str, Any]]:
