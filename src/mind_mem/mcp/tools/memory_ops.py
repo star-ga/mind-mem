@@ -1126,6 +1126,9 @@ def get_block(block_id: str, namespace: str = "") -> str:
     # Namespace resolution carries a source identity.  Admission must refresh
     # status from that exact source, because the workspace-wide id map can
     # otherwise borrow the status of a duplicate id in another namespace.
+    admission_source = (block or {}).get("_source_file") or (block or {}).get("_source") or (block or {}).get("file")
+    if not isinstance(admission_source, str):
+        admission_source = None
     decision = admit_read_one(
         block,
         workspace=ws,
@@ -1135,7 +1138,7 @@ def get_block(block_id: str, namespace: str = "") -> str:
         # with a duplicate id can inherit the workspace-wide status of a
         # different namespace. Rows without a source retain the old ID-only
         # behavior; a claimed source is always bound to that source.
-        source_file=(block or {}).get("_source_file") if block is not None else None,
+        source_file=admission_source,
     )
     admitted = decision.sole
     if admitted is not None:

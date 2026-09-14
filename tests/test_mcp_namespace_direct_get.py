@@ -258,8 +258,8 @@ def test_non_markdown_omitted_selector_still_binds_private_source_status(monkeyp
     from mind_mem.mcp.tools import memory_ops
 
     rows = [
-        {"_id": "D-DUP-2", "_source_file": "agents/alice/decisions/DECISIONS.md", "Statement": "private", "Status": "quarantined"},
-        {"_id": "D-DUP-2", "_source_file": "decisions/DECISIONS.md", "Statement": "root", "Status": "active"},
+        {"_id": "D-DUP-2", "file": "agents/alice/decisions/DECISIONS.md", "Statement": "private", "Status": "quarantined"},
+        {"_id": "D-DUP-2", "file": "decisions/DECISIONS.md", "Statement": "root", "Status": "active"},
     ]
 
     class Store:
