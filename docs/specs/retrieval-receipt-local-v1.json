@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mind-mem.local/specs/retrieval-receipt-local-v1.json",
+  "title": "mind-mem local served-ledger retrieval receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "profile", "manifest", "ledger_b64", "head_b64", "manifest_sha256"],
+  "properties": {
+    "schema": {"const": "mind-mem/retrieval-receipt/1"},
+    "profile": {"const": "local-served-ledger-v1"},
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ledger_relpath", "head_relpath", "ledger_bytes", "ledger_rows", "ledger_sha256", "ledger_identity", "head_present", "head_bytes", "head_sha256", "head_identity", "scope", "portable_identity", "disclosure_profile"],
+      "properties": {
+        "ledger_relpath": {"const": ".mind-mem-ledger/served.jsonl"},
+        "head_relpath": {"const": ".mind-mem-ledger/served.head"},
+        "ledger_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608},
+        "ledger_rows": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "ledger_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ledger_identity": {"$ref": "#/$defs/fileIdentity"},
+        "head_present": {"const": true},
+        "head_bytes": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "head_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "head_identity": {"$ref": "#/$defs/fileIdentity"},
+        "scope": {"const": "local"},
+        "portable_identity": {"const": "unavailable"},
+        "disclosure_profile": {"const": "local-audit-v1"}
+      }
+    },
+    "ledger_b64": {"type": "string", "pattern": "^[A-Za-z0-9+/]*={0,2}$"},
+    "head_b64": {"type": "string", "pattern": "^[A-Za-z0-9+/]*={0,2}$"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device", "inode", "size", "mtime_ns"],
+      "properties": {
+        "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 0},
+        "size": {"type": "integer", "minimum": 1},
+        "mtime_ns": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

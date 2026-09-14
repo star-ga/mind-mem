@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1597 | **Est. tokens:** ~4697575
-**Generated:** 2026-09-14 10:50 UTC
+**Files:** 1601 | **Est. tokens:** ~4711230
+**Generated:** 2026-09-14 10:52 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 94 | ~209101 |
+| `docs/` | 94 | ~209120 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -54,7 +54,7 @@
 | `docs/evidence/5.0.2-f1/` | 12 | ~188585 |
 | `docs/plans/` | 1 | ~6134 |
 | `docs/security-baselines/` | 1 | ~18974 |
-| `docs/specs/` | 1 | ~8285 |
+| `docs/specs/` | 3 | ~10624 |
 | `examples/` | 3 | ~1203 |
 | `hooks/` | 3 | ~1026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1211 |
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 234 | ~1072069 |
+| `src/mind_mem/` | 235 | ~1078319 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 694 | ~2062401 |
+| `tests/` | 695 | ~2067448 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -421,7 +421,7 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `cli-reference.md` (~7063 tok, huge) — CLI Reference
+- `cli-reference.md` (~7082 tok, huge) — CLI Reference
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
@@ -514,7 +514,9 @@
 - `setup.md` (~2221 tok, huge) — Setup
 ### `docs/specs/`
 
-- `retrieval-receipt-contract.md` (~8285 tok, huge) — Retrieval receipt contract
+- `retrieval-receipt-canonical-vectors.json` (~1558 tok, huge) — Keys: profile, canonicalization, receipt_golden, rules
+- `retrieval-receipt-contract.md` (~8496 tok, huge) — Retrieval receipt contract
+- `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 
 - `status.md` (~1397 tok, large) — MIND-Mem — implementation status (alignment companion)
@@ -990,6 +992,7 @@
 - `resume_brief.py` (~2720 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retention_class.py` (~1840 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retrieval_graph.py` (~8339 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
+- `retrieval_receipts.py` (~6250 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
 - `review_batch.py` (~3102 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `review_cli.py` (~2207 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1720,6 +1723,7 @@
 - `test_retention_class.py` (~2883 tok, huge) — RA.4 — the retention class, and the two things it must refuse to be.
 - `test_retrieval_diagnostics.py` (~2428 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
+- `test_retrieval_receipts.py` (~5047 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_retrieval_trace.py` (~978 tok, large) — Tests for v3.3.0 per-feature retrieval attribution."""
 - `test_retrieval_trace_wiring.py` (~3142 tok, huge) — ``retrieval_trace`` wired into the live recall pipeline.
 - `test_review_batch.py` (~2787 tok, huge) — # Copyright 2026 STARGA, Inc.

@@ -4177,6 +4177,52 @@ def _cmd_compliance_provenance(args: argparse.Namespace) -> int:
     return 1 if (policy == POLICY_REQUIRED and rows) else 0
 
 
+def _cmd_receipt_export(args: argparse.Namespace) -> int:
+    """Capture the local served-ledger receipt to a new file."""
+    from mind_mem.retrieval_receipts import RECEIPT_SCHEMA, ReceiptError, write_receipt
+
+    try:
+        written = write_receipt(
+            _workspace(),
+            args.out,
+            max_bytes=args.max_bytes,
+            max_rows=args.max_rows,
+        )
+    except (ReceiptError, OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps({"bytes": written, "schema": RECEIPT_SCHEMA, "status": "exported"}, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+def _cmd_receipt_verify(args: argparse.Namespace) -> int:
+    """Verify a receipt package from a regular file or bounded stdin."""
+    from mind_mem.retrieval_receipts import DEFAULT_MAX_PACKAGE_BYTES, ReceiptError, verify_receipt
+
+    try:
+        if not isinstance(args.max_package_bytes, int) or args.max_package_bytes <= 0 or args.max_package_bytes > DEFAULT_MAX_PACKAGE_BYTES:
+            report = {
+                "checks": {},
+                "reason": f"max_package_bytes must be a positive integer no greater than {DEFAULT_MAX_PACKAGE_BYTES}",
+                "scope": "local",
+                "status": "malformed",
+            }
+        else:
+            if args.stdin:
+                source: bytes | Path = sys.stdin.buffer.read(args.max_package_bytes + 1)
+            else:
+                source = Path(args.input)
+            report = verify_receipt(
+                source,
+                expected_manifest_sha256=args.expected_manifest_sha256,
+                max_package_bytes=args.max_package_bytes,
+            )
+    except (ReceiptError, OSError, ValueError) as exc:
+        report = {"checks": {}, "reason": str(exc), "scope": "local", "status": "unavailable"}
+    print(json.dumps(report, sort_keys=True, separators=(",", ":")))
+    return 0 if report.get("status") == "locally_consistent" else 1
+
+
 def _cmd_export(args: argparse.Namespace) -> int:
     """``mm export`` — write a deterministic compliance bundle.
 
@@ -5458,6 +5504,41 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", default="-", help="Write the bundle here ('-' for stdout). With a path, the envelope is printed instead."
     )
     p_export.set_defaults(func=_cmd_export)
+
+    # receipt — local RE.1 snapshot export and offline RE.2 verification
+    p_receipt = sub.add_parser(
+        "receipt",
+        help="Capture and verify bounded local served-ledger evidence.",
+    )
+    rsub = p_receipt.add_subparsers(dest="receipt_cmd", required=True)
+    r_export = rsub.add_parser(
+        "export",
+        help="Capture a non-empty locally consistent served ledger to a new file.",
+    )
+    r_export.add_argument("--out", required=True, help="New output path; existing files and symlinks are refused.")
+    r_export.add_argument("--max-bytes", type=int, default=8 * 1024 * 1024, help="Maximum source ledger bytes.")
+    r_export.add_argument("--max-rows", type=int, default=100_000, help="Maximum source ledger rows.")
+    r_export.set_defaults(func=_cmd_receipt_export)
+
+    r_verify = rsub.add_parser(
+        "verify",
+        help="Verify a receipt from --input or bounded stdin and print JSON status.",
+    )
+    r_verify_source = r_verify.add_mutually_exclusive_group(required=True)
+    r_verify_source.add_argument("--input", help="Regular, non-symlink receipt package path.")
+    r_verify_source.add_argument("--stdin", action="store_true", help="Read the receipt package from stdin.")
+    r_verify.add_argument(
+        "--max-package-bytes",
+        type=int,
+        default=12 * 1024 * 1024,
+        help="Maximum package bytes read from the file or stdin.",
+    )
+    r_verify.add_argument(
+        "--expected-manifest-sha256",
+        default=None,
+        help="Optional independently retained manifest digest; mismatch is integrity_failed.",
+    )
+    r_verify.set_defaults(func=_cmd_receipt_verify)
 
     # compliance — redaction chain, pre-write door, provenance policy
     p_comp = sub.add_parser("compliance", help="Redaction detectors, the pre-write screening door, and the provenance policy.")
