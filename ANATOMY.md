@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1620 | **Est. tokens:** ~4771903
-**Generated:** 2026-09-14 14:46 UTC
+**Files:** 1620 | **Est. tokens:** ~4772297
+**Generated:** 2026-09-14 14:51 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 94 | ~210788 |
+| `docs/` | 94 | ~211182 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -426,7 +426,7 @@
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~17648 tok, huge) — Configuration Reference
+- `configuration.md` (~18042 tok, huge) — Configuration Reference
 - `content-lifecycle.md` (~865 tok, large) — Content-category lifetimes
 ### `docs/decisions/`
 
