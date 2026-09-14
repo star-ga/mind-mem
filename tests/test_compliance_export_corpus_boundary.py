@@ -131,9 +131,7 @@ def test_database_failure_does_not_fall_back_to_markdown_export(tmp_path, monkey
     import mind_mem.storage as storage
 
     ws = _workspace(tmp_path / "workspace", backend="postgres")
-    (Path(ws) / "decisions/DECISIONS.md").write_text(
-        "[D-EXPORT-1]\nStatus: active\nStatement: wrong-backend-canary\n", encoding="utf-8"
-    )
+    (Path(ws) / "decisions/DECISIONS.md").write_text("[D-EXPORT-1]\nStatus: active\nStatement: wrong-backend-canary\n", encoding="utf-8")
 
     class Store:
         def get_all(self, *, active_only=False):

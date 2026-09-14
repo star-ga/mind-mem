@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1609 | **Est. tokens:** ~4722724
-**Generated:** 2026-09-14 12:06 UTC
+**Files:** 1609 | **Est. tokens:** ~4722721
+**Generated:** 2026-09-14 12:07 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 701 | ~2084220 |
+| `tests/` | 701 | ~2084217 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1300,7 +1300,7 @@
 - `test_competitive_intel.py` (~1881 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compiled_truth.py` (~4665 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
 - `test_compliance_export.py` (~4108 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_compliance_export_corpus_boundary.py` (~1550 tok, huge) — Export reads the configured corpus, including released ingestion records.
+- `test_compliance_export_corpus_boundary.py` (~1547 tok, huge) — Export reads the configured corpus, including released ingestion records.
 - `test_compliance_provenance.py` (~3329 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compliance_redaction.py` (~6835 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compressors.py` (~2757 tok, huge) — Tests for compressors.py — real Compressor implementations.
