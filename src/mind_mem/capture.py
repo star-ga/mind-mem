@@ -449,6 +449,18 @@ def append_signals(
         ]
         if not blocks:
             return 0
+        # Bind the gate's side mapping to the payload that will actually be
+        # persisted. Otherwise required provenance can pass the gate while
+        # _signal_block emits no corresponding fields.
+        if provenance:
+            for block in blocks:
+                for prov_param, prov_field in PROVENANCE_FIELDS.items():
+                    prov_val = provenance.get(prov_param, provenance.get(prov_field))
+                    if prov_val is None:
+                        continue
+                    prov_clean = clean_provenance_value(prov_param, prov_val)
+                    if prov_clean:
+                        block[prov_field] = prov_clean
 
         from .governance_gate import get_gate
         from .storage import get_block_store

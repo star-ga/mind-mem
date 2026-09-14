@@ -441,7 +441,12 @@ def _render_proposal(proposal: Mapping[str, Any]) -> str:
         + f"\nFingerprint: {proposal['Fingerprint']}\nStatus: {proposal['Status']}\n"
         f"SlotNamespace: {proposal['SlotNamespace']}\nSlotName: {proposal['SlotName']}\n"
         f"SlotSetVersion: {proposal['SlotSetVersion']}\n"
-        f"FilesTouched:\n{touched}\nSources:\n{sources}\n"
+        + "".join(
+            f"{field}: {proposal[field]}\n"
+            for field in ("ActorId", "ActorRole", "SessionId", "ToolId", "Purpose")
+            if proposal.get(field)
+        )
+        + f"FilesTouched:\n{touched}\nSources:\n{sources}\n"
     )
 
 

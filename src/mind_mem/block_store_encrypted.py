@@ -44,6 +44,7 @@ from typing import Any, Iterator, Optional, cast
 
 from .admission import require_admission, require_delete_admission, require_restore_admission
 from .block_parser import get_active, get_by_id, parse_file
+from .block_provenance import extract_provenance
 from .block_store import BlockStore, BlockStoreError, MarkdownBlockStore, _resolve_block_file
 from .corpus_registry import CORPUS_DIRS
 from .observability import get_logger
@@ -185,7 +186,7 @@ class EncryptedBlockStore:
         # encrypted store must not get a laxer write surface than one
         # holding the plain store. It runs BEFORE the unseal so an
         # ungated caller cannot make this wrapper drop plaintext on disk.
-        require_admission(str(block_id), status=block.get("Status"))
+        require_admission(str(block_id), status=block.get("Status"), provenance=extract_provenance(block))
         with self._decrypted_target(str(block_id)):
             return self._inner.write_block(block)
 

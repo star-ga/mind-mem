@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from mind_mem.admission import UngatedWriteError
 from mind_mem.compliance.provenance_policy import ProvenanceRequired
 from mind_mem.enums import IngestTier
 from mind_mem.governance_gate import evict_gate, get_gate
@@ -78,6 +79,30 @@ def test_required_policy_accepts_explicit_attribution_and_lands_block(tmp_path: 
         store.write_block(block)
 
     assert store.get_by_id(str(block["_id"])) is not None
+
+
+@pytest.mark.parametrize("mutation", ("missing", "mismatch"))
+def test_required_policy_binds_attribution_to_the_persisted_block(tmp_path: Path, mutation: str) -> None:
+    init(str(tmp_path))
+    _set_policy(tmp_path, "required")
+    block = _block()
+    if mutation == "missing":
+        del block["ActorRole"]
+    else:
+        block["ActorId"] = "forged"
+    store = get_block_store(str(tmp_path))
+
+    with pytest.raises(UngatedWriteError, match="provenance does not match"):
+        with get_gate(str(tmp_path)).admit_block(
+            "INGEST",
+            str(block["_id"]),
+            str(block["Statement"]),
+            tier=IngestTier.EXTERNAL_INGEST,
+            provenance=PROVENANCE,
+        ):
+            store.write_block(block)
+
+    assert store.get_by_id(str(block["_id"])) is None
 
 
 def test_off_policy_preserves_legacy_direct_gate_write(tmp_path: Path) -> None:

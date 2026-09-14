@@ -125,6 +125,7 @@ from .admission import (
     GovernanceBypassError,
     UngatedDeleteError,
     UngatedWriteError,
+    _canonical_provenance,
     _open_admission,
 )
 from .audit_context import current_agent
@@ -1553,6 +1554,7 @@ class GovernanceGate:
             actor=actor or _current_agent(),
             operation=operation,
             evidence_id=evidence_id,
+            provenance=_canonical_provenance(provenance),
         )
 
     def _check_provenance(self, provenance: Optional[Mapping[str, object]]) -> None:
@@ -1563,7 +1565,6 @@ class GovernanceGate:
         must pass it explicitly; missing attribution under ``required`` is
         refused before evidence or the hash chain is touched.
         """
-        from .block_provenance import PROVENANCE_FIELDS
         from .compliance.provenance_policy import (
             POLICY_OFF,
             require_provenance,
@@ -1572,11 +1573,7 @@ class GovernanceGate:
         )
 
         supplied = provenance or {}
-        canonical = {
-            PROVENANCE_FIELDS[key] if key in PROVENANCE_FIELDS else key: value
-            for key, value in supplied.items()
-            if key in PROVENANCE_FIELDS or key in PROVENANCE_FIELDS.values()
-        }
+        canonical = dict(_canonical_provenance(supplied))
         policy = resolve_policy(self._ws)
         required = resolve_required_fields(self._ws) if policy != POLICY_OFF else ()
         require_provenance(

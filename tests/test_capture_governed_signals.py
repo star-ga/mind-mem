@@ -33,6 +33,7 @@ reachable.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import sqlite3
@@ -107,6 +108,44 @@ class _Workspace(unittest.TestCase):
 
 
 class TestTheHealthyPathIsGoverned(_Workspace):
+    def test_explicit_provenance_is_bound_to_the_landed_signal(self) -> None:
+        config_path = os.path.join(self.ws, "mind-mem.json")
+        with open(config_path, encoding="utf-8") as handle:
+            config = json.load(handle)
+        config.setdefault("v4", {})["provenance"] = {"enabled": True, "policy": "required"}
+        with open(config_path, "w", encoding="utf-8") as handle:
+            json.dump(config, handle)
+        from mind_mem.governance_gate import evict_gate
+
+        evict_gate(self.ws)
+        provenance = {
+            "actor_id": "agent-1",
+            "actor_role": "operator",
+            "session_id": "session-1",
+            "tool_id": "capture",
+            "purpose": "capture control",
+        }
+        self.assertEqual(
+            capture.append_signals(
+                self.ws,
+                [_signal("We decided to bind capture attribution")],
+                "2026-09-02",
+                provenance=provenance,
+            ),
+            1,
+        )
+        block = MarkdownBlockStore(self.ws).get_by_id("SIG-20260902-001")
+        self.assertIsNotNone(block)
+        assert block is not None  # nosec B101 - narrowed after the positive write
+        for field, value in {
+            "ActorId": "agent-1",
+            "ActorRole": "operator",
+            "SessionId": "session-1",
+            "ToolId": "capture",
+            "Purpose": "capture control",
+        }.items():
+            self.assertEqual(block.get(field), value)
+
     def test_one_signal_mints_one_block_and_one_row_in_each_ledger(self) -> None:
         self.assertEqual(self.sig_blocks(), [], "a fresh workspace already holds SIG blocks; the fixture is wrong")
         chain_before, evidence_before = self.chain_rows(), self.evidence_rows()

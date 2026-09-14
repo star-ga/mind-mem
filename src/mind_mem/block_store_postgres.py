@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 from .admissibility import is_admissible_status
 from .admission import require_admission, require_delete_admission, require_restore_admission
+from .block_provenance import extract_provenance
 from .block_store import (  # noqa: F401  (BlockStoreError re-exported for convenience)
     BlockStoreError,
     resolve_snapshot_target,
@@ -1372,7 +1373,7 @@ class PostgresBlockStore:
             UngatedWriteError: no governance admission is open for this
                 block. See :mod:`mind_mem.admission`.
         """
-        require_admission(str(block.get("_id") or ""), status=block.get("Status"))
+        require_admission(str(block.get("_id") or ""), status=block.get("Status"), provenance=extract_provenance(block))
         self._ensure_schema()
         pool = self._get_pool()
         block_id, file_path, content, metadata_json = _block_to_row(block)

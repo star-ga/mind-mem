@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from ..admission import require_admission, require_delete_admission, require_restore_admission
+from ..block_provenance import extract_provenance
 from ..block_store import BlockStoreError, resolve_snapshot_target, validate_snap_id
 
 _log = logging.getLogger("mind_mem.storage.sharded_pg")
@@ -207,7 +208,7 @@ class ShardedPostgresBlockStore:
         tenant_id: str | None = None,
         namespace: str | None = None,
     ) -> str:
-        require_admission(str(block.get("_id") or ""), status=block.get("Status"))
+        require_admission(str(block.get("_id") or ""), status=block.get("Status"), provenance=extract_provenance(block))
         tid = tenant_id or str(block.get("_tenant") or self._default_tenant)
         # The payload's own ``_namespace`` is part of the routing key,
         # so a read that does not name the same namespace has to fan
