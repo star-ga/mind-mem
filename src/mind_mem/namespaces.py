@@ -275,18 +275,22 @@ class NamespaceManager:
                         return True
         return False
 
-    def resolve_corpus_paths(self, rel_path: str) -> list[str]:
+    def resolve_corpus_paths(self, rel_path: str, *, policy: str = "read") -> list[str]:
         """Resolve a relative path to all accessible copies across namespaces.
 
         For recall: returns absolute paths to the file in each namespace
-        the agent can read.
+        the agent can read. ``policy`` defaults to the read ACL because
+        ``namespaces`` is a legacy visibility hint and may be broader or
+        narrower than the actual read grant.
 
         Example:
             resolve_corpus_paths("decisions/DECISIONS.md")
             → ["/ws/shared/decisions/DECISIONS.md", "/ws/agents/coder-1/decisions/DECISIONS.md"]
         """
+        if policy not in {"read", "namespaces"}:
+            raise ValueError("policy must be 'read' or 'namespaces'")
         paths = []
-        accessible = self._agent_policy.get("namespaces", [])
+        accessible = self._agent_policy.get(policy, [])
 
         for ns in accessible:
             if "*" in ns:

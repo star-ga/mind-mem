@@ -165,7 +165,6 @@ def test_similarity_enumerates_an_explicitly_acl_granted_other_agent_namespace(
     ws = _workspace(tmp_path)
     acl_config = json.loads((ws / "mind-mem-acl.json").read_text(encoding="utf-8"))
     acl_config["agents"]["alice"]["read"].append("agents/bob")
-    acl_config["agents"]["alice"]["namespaces"].append("agents/bob")
     (ws / "mind-mem-acl.json").write_text(json.dumps(acl_config), encoding="utf-8")
     _token(monkeypatch, "alice")
     with use_workspace(str(ws)):

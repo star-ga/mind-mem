@@ -1666,7 +1666,7 @@ def _servable_block_ids(ws: str, agent_id: str | None) -> set[str] | None:
             # exact and wildcard namespace entries and applies can_read to
             # every candidate. It is the same registry used by namespace
             # aware callers, rather than a second own-agent-only list.
-            for candidate in manager.resolve_corpus_paths(rel_path):
+            for candidate in manager.resolve_corpus_paths(rel_path, policy="read"):
                 candidate_rel = os.path.relpath(candidate, workspace_real).replace(os.sep, "/")
                 paths.append((f"{label}@{candidate_rel.split('/', 1)[0]}", candidate_rel))
 
