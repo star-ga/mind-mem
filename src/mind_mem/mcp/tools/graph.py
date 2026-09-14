@@ -86,6 +86,8 @@ def graph_add_edge(
         pred = Predicate.from_str(predicate)
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
+    if pred.value == "same_as":
+        return json.dumps({"error": "SAME_AS edges require propose_entity_merge and admin approval"})
 
     # Outside the scope, exactly as ``delete_memory_item`` keeps its
     # routing refusals outside one: an edge this door cannot even name
@@ -165,6 +167,8 @@ def propose_edge(
         pred = Predicate.from_str(predicate)
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
+    if pred.value == "same_as":
+        return json.dumps({"error": "SAME_AS edges require propose_entity_merge and admin approval"})
 
     kg = KnowledgeGraph(_kg_path(ws))
     try:
@@ -334,6 +338,141 @@ def list_edge_proposals(status: str = "staged", limit: int = 64) -> str:
 
 
 @mcp_tool_observe
+def propose_entity_merge(winner_id: str, loser_id: str, rationale: str) -> str:
+    """Stage an explicit winner/loser ``SAME_AS`` proposal (user-scope)."""
+    from mind_mem.knowledge_graph import EntityMergeError, KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    if not all(isinstance(value, str) and value.strip() for value in (winner_id, loser_id)):
+        return json.dumps({"error": "winner_id and loser_id must be non-empty entity ids"})
+    if not isinstance(rationale, str):
+        return json.dumps({"error": "rationale must be a string"})
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        proposal = kg.propose_entity_merge(winner_id, loser_id, rationale=rationale)
+    except (EntityMergeError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps({**proposal.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp_tool_observe
+def list_entity_merge_proposals(status: str = "staged", limit: int = 64) -> str:
+    """List governed entity-equivalence proposals (user-scope)."""
+    from mind_mem.knowledge_graph import (
+        MERGE_REVERSED,
+        PROPOSAL_APPLIED,
+        PROPOSAL_REJECTED,
+        PROPOSAL_STAGED,
+        KnowledgeGraph,
+    )
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    valid = {PROPOSAL_STAGED, PROPOSAL_APPLIED, PROPOSAL_REJECTED, MERGE_REVERSED, "all"}
+    if status not in valid:
+        return json.dumps({"error": f"status must be one of {sorted(valid)}"})
+    if not isinstance(limit, int) or not (1 <= limit <= 256):
+        return json.dumps({"error": "limit must be in [1, 256]"})
+    if not os.path.isfile(_kg_path(ws)):
+        return json.dumps({"status": status, "count": 0, "proposals": [], "_schema_version": "1.0"}, indent=2)
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        proposals = kg.list_entity_merge_proposals(status=None if status == "all" else status)[:limit]
+    finally:
+        kg.close()
+    return json.dumps(
+        {"status": status, "count": len(proposals), "proposals": [p.as_dict() for p in proposals], "_schema_version": "1.0"},
+        indent=2,
+    )
+
+
+@mcp_tool_observe
+def approve_entity_merge(proposal_id: str) -> str:
+    """Approve a staged entity-equivalence proposal (admin-scope)."""
+    from mind_mem.governance_gate import GovernanceBypassError, get_gate
+    from mind_mem.knowledge_graph import PROPOSAL_REJECTED, EntityMergeError, KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    if not isinstance(proposal_id, str) or not proposal_id.strip():
+        return json.dumps({"error": "proposal_id must be a non-empty string"})
+    pid = proposal_id.strip()
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        proposal = kg.get_entity_merge_proposal(pid)
+        if proposal is None:
+            return json.dumps({"error": f"unknown entity merge proposal: {pid!r}"})
+        if proposal.status == PROPOSAL_REJECTED:
+            return json.dumps({"error": f"cannot approve a rejected proposal: {pid!r}"})
+        content = f"{proposal.winner_id}\tSAME_AS\t{proposal.loser_id}\t{proposal.rationale}"
+        with get_gate(ws).admit_proposal(
+            proposal_id=pid,
+            content=content,
+            actor="",
+            metadata={
+                "door": "mcp.approve_entity_merge",
+                "operation": "entity_merge",
+                "winner_id": proposal.winner_id,
+                "loser_id": proposal.loser_id,
+            },
+        ):
+            updated = kg.approve_entity_merge(pid)
+    except (EntityMergeError, KeyError, ValueError, GovernanceBypassError) as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps({"approved": pid, **updated.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp_tool_observe
+def reverse_entity_merge(proposal_id: str) -> str:
+    """Retract an approved entity-equivalence edge (admin-scope)."""
+    from mind_mem.governance_gate import GovernanceBypassError, get_gate
+    from mind_mem.knowledge_graph import PROPOSAL_APPLIED, EntityMergeError, KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    if not isinstance(proposal_id, str) or not proposal_id.strip():
+        return json.dumps({"error": "proposal_id must be a non-empty string"})
+    pid = proposal_id.strip()
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        proposal = kg.get_entity_merge_proposal(pid)
+        if proposal is None:
+            return json.dumps({"error": f"unknown entity merge proposal: {pid!r}"})
+        if proposal.status != PROPOSAL_APPLIED:
+            return json.dumps({"error": "only an applied entity merge can be reversed"})
+        with get_gate(ws).admit_proposal(
+            proposal_id=pid,
+            content=f"REVERSE\t{proposal.winner_id}\tSAME_AS\t{proposal.loser_id}",
+            actor="",
+            metadata={
+                "door": "mcp.reverse_entity_merge",
+                "operation": "entity_merge_reverse",
+                "winner_id": proposal.winner_id,
+                "loser_id": proposal.loser_id,
+            },
+        ):
+            updated = kg.reverse_entity_merge(pid)
+    except (EntityMergeError, KeyError, ValueError, GovernanceBypassError) as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps({"reversed": pid, **updated.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp_tool_observe
 def entity_add_observation(entity: str, fact: str) -> str:
     """Append an accreted fact to an entity's observation list (ADMIN-scope).
 
@@ -417,6 +556,7 @@ def graph_query(
     predicate: str = "",
     direction: str = "outgoing",
     limit: int = 64,
+    resolve_same_as: bool = False,
 ) -> str:
     """N-hop traversal from *entity*."""
     from mind_mem.knowledge_graph import KnowledgeGraph, Predicate
@@ -451,6 +591,7 @@ def graph_query(
             predicate=pred_obj,
             direction=direction,
             max_results=limit,
+            resolve_same_as=resolve_same_as,
         )
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
@@ -461,6 +602,7 @@ def graph_query(
             "entity": entity,
             "depth": depth,
             "direction": direction,
+            "resolve_same_as": bool(resolve_same_as),
             "neighbors": neighbours,
             "_schema_version": "1.0",
         },
@@ -758,6 +900,10 @@ def register(mcp) -> None:
     mcp.tool(approve_edge)
     mcp.tool(reject_edge)
     mcp.tool(list_edge_proposals)
+    mcp.tool(propose_entity_merge)
+    mcp.tool(list_entity_merge_proposals)
+    mcp.tool(approve_entity_merge)
+    mcp.tool(reverse_entity_merge)
     mcp.tool(entity_add_observation)
     mcp.tool(entity_observations)
     mcp.tool(graph_query)

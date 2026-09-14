@@ -32,7 +32,7 @@ MIND-Mem's request-time surface is the MCP server. Every MCP tool call flows thr
 
 1. **Auth check.** `X-MindMem-Token` header validated against the configured token list.
 2. **Rate limit.** Sliding-window per-token + global; the limiter primitive is shared with 512-mind.
-3. **Tool dispatch.** 103 MCP tools, each with a typed input schema. Schema mismatch rejects with a structured error.
+3. **Tool dispatch.** 107 MCP tools, each with a typed input schema. Schema mismatch rejects with a structured error.
 4. **Audit chain entry.** The request is recorded with the calling `auth_hash` (when supplied) so a downstream auditor can replay.
 
 ## L4 — Retrieval-time
@@ -62,7 +62,7 @@ its rationale does not approve it.
 
 The drift-detection layer:
 
-- **CI** on every push and PR — full pytest matrix (12,299 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
+- **CI** on every push and PR — full pytest matrix (12,305 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
 - **PyPI release** on tag push via OIDC trusted publishing (no long-lived tokens).
 - **LoCoMo benchmark snapshot** per release; regression on any axis (mean / adversarial / temporal) is documented in CHANGELOG.
 
