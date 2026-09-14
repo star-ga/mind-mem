@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1615 | **Est. tokens:** ~4754718
-**Generated:** 2026-09-14 13:14 UTC
+**Files:** 1615 | **Est. tokens:** ~4754712
+**Generated:** 2026-09-14 13:16 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1074637 |
+| `src/mind_mem/` | 237 | ~1074631 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -791,7 +791,7 @@
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
 - `chat_memory.py` (~4088 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
-- `closed_slots.py` (~6812 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
+- `closed_slots.py` (~6806 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `cognitive_forget.py` (~3179 tok, huge) — # Copyright 2026 STARGA, Inc.

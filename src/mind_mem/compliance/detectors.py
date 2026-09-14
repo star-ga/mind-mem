@@ -101,7 +101,6 @@ class Finding:
     function of its input rather than of dict iteration order.
     """
 
-
     start: int
     end: int
     detector: str

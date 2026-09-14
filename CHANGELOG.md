@@ -4,15 +4,47 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
-- Optional LLM recall enrichment now rejects malformed fields, non-finite or
-  out-of-range confidence, undeclared categories and claims absent from the
-  model's source window. Configured redaction screens model input and output;
-  annotations carry source-span metadata and explicitly remain unproven for
-  semantic correctness and outside the ranked recall attestation.
-
 ## [5.0.3] - 2026-09-14
 
+### Added
+
+- Opt-in closed-set fact slots with workspace-bound approval checks, explicit
+  namespace reachability declarations and semantic-lifetime policies. Numeric
+  relevance-floor calibration still requires the labelled evaluation corpus.
+- `mm recompact` proposes bounded replacements from currently admitted source
+  blocks. Dry runs are the default; staging uses the existing governed proposal
+  path. Source changes, revoked credentials and malformed model output refuse
+  staging. No model-quality improvement or automatic approval is claimed.
+- Opt-in document chunking for Markdown and agent-memory imports. Persisted
+  anchors bind raw UTF-8 source hashes, character offsets and chunker/configuration
+  identity. Existing import evidence seals a batch Merkle root; source symlinks
+  and unverifiable paths are refused. Anchors establish provenance only.
+- Local retrieval receipt export and verification commands with bounded input,
+  canonical vectors and source-bound serving identity. These local receipts do
+  not establish independent CVS witnessing, settlement or canonical 512 lineage.
+- Training-readiness manifests that measure tool coverage and dataset overlap;
+  eval-targeted harvests are explicitly development data, not independent tests.
+
 ### Fixed
+
+- Optional LLM recall enrichment rejects malformed fields, non-finite or
+  out-of-range confidence, undeclared categories and claims absent from the
+  model's source window. Configured redaction screens model input and output;
+  annotations remain unproven for semantic correctness and outside the ranked
+  recall attestation.
+- Summary and chat reads recheck current source admission. Graph answers bind
+  caller context to the current graph and refuse changes during generation;
+  citation membership does not prove semantic entailment.
+- Direct namespace reads retain caller ACLs, source identity and current release
+  decisions across supported storage backends. MCP and compliance exports use
+  the configured corpus reader, confine paths before reading, and apply admission
+  before truncating results.
+- Required-provenance write profiles bind caller-supplied fields to the actual
+  stored block. Refused apply operations return structured failures and restore
+  prior writes. Existing legacy reads remain supported without invented attribution.
+- JavaScript and Go clients match the served response contracts, including public
+  health responses. The staged npm artifact is built and consumer-tested before
+  publication; registry publication is a separate release step.
 
 - Local anticipation-cache answers now record a V2 serving receipt bound to
   their ordered result IDs and captured request context. They remain distinct
