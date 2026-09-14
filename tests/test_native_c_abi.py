@@ -133,6 +133,12 @@ def test_rrf_empty_vectors_are_a_valid_empty_result(production_kernel: MindMemKe
         # -- k > n (fast path) --
         ([float("nan"), 2.0], 3, [False, True]),
         ([float("inf"), float("-inf"), float("nan")], 5, [True, False, False]),
+        # -- missing edge controls: negative k, signed-zero tie, empty input
+        # with positive k, and under-filled all-ineligible partial selection --
+        ([1.0, -2.0], -1, [False, False]),
+        ([-0.0, 0.0, -1.0], 1, [True, False, False]),
+        ([], 4, []),
+        ([float("nan"), float("-inf")], 1, [False, False]),
     ],
 )
 def test_top_k_mask_boundaries_and_input_order_ties(production_kernel: MindMemKernel, scores: list[float], k: int, expected: list[bool]):
