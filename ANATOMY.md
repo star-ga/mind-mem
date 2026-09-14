@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1575 | **Est. tokens:** ~4670032
-**Generated:** 2026-09-14 07:20 UTC
+**Files:** 1575 | **Est. tokens:** ~4674167
+**Generated:** 2026-09-14 09:59 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206800 |
+| `docs/` | 93 | ~207528 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -76,7 +76,7 @@
 | `src/mind_mem/` | 233 | ~1069624 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
-| `src/mind_mem/compliance/` | 7 | ~13934 |
+| `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 691 | ~2055418 |
+| `tests/` | 691 | ~2057372 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -423,7 +423,7 @@
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~16577 tok, huge) — Configuration Reference
+- `configuration.md` (~17265 tok, huge) — Configuration Reference
 ### `docs/decisions/`
 
 - `author-identity.md` (~3174 tok, huge) — Commit author identity — policy, measured state, and the open decision
@@ -497,7 +497,7 @@
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `review.md` (~1647 tok, huge) — `mm review` — batch approval for the HITL queue
-- `roadmap-v4.md` (~11235 tok, huge) — mind-mem v4.0 — Design Rationale
+- `roadmap-v4.md` (~11275 tok, huge) — mind-mem v4.0 — Design Rationale
 - `roadmap.md` (~14200 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-audit-sow.md` (~3353 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
@@ -764,13 +764,13 @@
 - `compiled_truth.py` (~8420 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
 ### `src/mind_mem/compliance/`
 
-- `__init__.py` (~1041 tok, large) — # Copyright 2026 STARGA, Inc.
+- `__init__.py` (~1055 tok, large) — # Copyright 2026 STARGA, Inc.
 - `audit.py` (~995 tok, large) — # Copyright 2026 STARGA, Inc.
-- `detectors.py` (~3136 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `export.py` (~3268 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `detectors.py` (~4220 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `export.py` (~3347 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prewrite.py` (~1552 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `provenance_policy.py` (~1878 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `redaction.py` (~2064 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `redaction.py` (~2340 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
 
 - `compressors.py` (~2253 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
@@ -1261,9 +1261,9 @@
 - `test_companion_baseline_attestation.py` (~5756 tok, huge) — A legacy recovery anchor may be bound forward, never blessed.
 - `test_competitive_intel.py` (~1881 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compiled_truth.py` (~4665 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
-- `test_compliance_export.py` (~3734 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_compliance_export.py` (~4108 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compliance_provenance.py` (~3329 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_compliance_redaction.py` (~5255 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_compliance_redaction.py` (~6835 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compressors.py` (~2757 tok, huge) — Tests for compressors.py — real Compressor implementations.
 - `test_concurrency_stress.py` (~4169 tok, huge) — Concurrency and performance stress tests for recall engine.
 - `test_concurrent_integration.py` (~10941 tok, huge) — Integration tests for concurrent access and partial failure in mind-mem.

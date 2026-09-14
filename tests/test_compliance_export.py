@@ -218,6 +218,38 @@ class TestAdmission:
 
 
 class TestPolicies:
+    def test_direct_api_honors_the_workspace_detector_chain(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The Python export door must match ``mm export`` plugin selection."""
+        package = tmp_path / "export_plugin"
+        package.mkdir()
+        (package / "__init__.py").write_text("", encoding="utf-8")
+        (package / "detector.py").write_text(
+            "from mind_mem.compliance.detectors import CATEGORY_SECRET, Detector, Finding\n"
+            "class CorpDetector(Detector):\n"
+            "    name = 'corp_export'\n"
+            "    category = CATEGORY_SECRET\n"
+            "    def scan(self, text):\n"
+            "        marker = 'CORP-'\n"
+            "        start = text.find(marker)\n"
+            "        return [] if start < 0 else [Finding(start, start + 13, self.name, self.category)]\n",
+            encoding="utf-8",
+        )
+        monkeypatch.syspath_prepend(str(tmp_path))
+        block = ACTIVE_BLOCK.replace(SECRET, "CORP-12345678")
+        ws = _workspace(
+            tmp_path / "workspace",
+            blocks=block,
+            redaction={
+                "enabled": True,
+                "detectors": [],
+                "plugins": ["export_plugin.detector:CorpDetector"],
+            },
+        )
+
+        bundle = build_bundle(ws, policy="redacted")
+        assert bundle.records[0]["fields"]["Body"].endswith("[REDACTED:corp_export]")
+        assert bundle.envelope["redaction"]["detectors"] == ["corp_export"]
+
     def test_full_is_verbatim(self, tmp_path: Path) -> None:
         ws = _workspace(tmp_path, blocks=ACTIVE_BLOCK)
         fields = build_bundle(ws, policy="full").records[0]["fields"]

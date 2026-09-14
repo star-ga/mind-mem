@@ -896,6 +896,70 @@ mutating the workspace.
 
 ---
 
+## Redaction Detectors (`v4.redaction`)
+
+Redaction is off unless the flag is explicitly enabled. The shipped detector
+pack is selected by `detectors` (all eight when omitted). A workspace may name
+an external zero-argument `Detector` subclass explicitly with `plugins`:
+
+```json
+{
+  "v4": {
+    "redaction": {
+      "enabled": true,
+      "mode": "reject",
+      "detectors": ["email", "secret_key_prefix"],
+      "plugins": ["acme_memory_policy.detectors:CustomerTokenDetector"]
+    }
+  }
+}
+```
+
+Plugin modules are imported only for references present in this list; there is
+no installed-package scan or ambient entry-point discovery. Each reference
+must be `module:Class`, resolve to a concrete `Detector` with a unique stable
+`name` and `pii` or `secret` category, and return a list of valid `Finding`
+objects. Malformed, unavailable, duplicate, colliding, or failing plugins
+refuse the governed write before persistence. The combined chain is ordered by
+detector name, and the detector name is retained in redaction results and
+audit provenance. Plugin code is an optional deployment concern; the core
+package remains dependency-free.
+
+## Compliance export (`v4.compliance_export`)
+
+The export surface is disabled unless this flag is enabled for the workspace.
+When enabled, `mm export` and the equivalent Python API build a deterministic
+bundle over admitted blocks:
+
+```json
+{
+  "v4": {
+    "compliance_export": { "enabled": true }
+  }
+}
+```
+
+`full` retains every field, `redacted` runs string values through the resolved
+detector chain, and `metadata-only` retains IDs, status/date/tag fields, the
+five provenance fields, and a `ContentSha256` for the omitted content. The
+`--since YYYY-MM-DD` filter uses `Date`, then `Updated`, then `Created`; blocks
+without a readable date are excluded and counted as `undated_excluded`. The
+envelope reports `withheld_count`, redaction findings/detector names when
+applicable, and a deterministic `content_sha256` over the record section.
+This digest detects changed or truncated content; it is not a cryptographic
+signature or an independent observation authority.
+
+## Provenance policy (`v4.provenance`)
+
+The governed `propose_update` door recognizes five provenance fields: `ActorId`,
+`ActorRole`, `SessionId`, `ToolId`, and `Purpose`. The flag is off by default;
+`recommended` admits a write and reports missing fields, while `required`
+refuses a write before persistence when any configured field is absent. The
+required list defaults to all five and may be narrowed to known field names;
+unknown names or malformed policy configuration are refusals. Existing blocks
+can be inspected with `mm compliance provenance --json`, which reports the
+admitted corpus and blocks missing required provenance.
+
 ## Producer Backpressure (`v4.backpressure`)
 
 A producer loop that outruns the store grows its queue until the process is

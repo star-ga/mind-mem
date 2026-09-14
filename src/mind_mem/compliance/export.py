@@ -52,8 +52,8 @@ from datetime import date
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from ..v4.feature_flags import FeatureDisabledError, is_enabled_for_workspace
-from .detectors import Detector, resolve_detectors
-from .redaction import MODE_REDACT, RedactionResult, redact
+from .detectors import Detector
+from .redaction import MODE_REDACT, RedactionResult, redact, redaction_chain_for_workspace
 
 __all__ = [
     "BUNDLE_SCHEMA",
@@ -275,7 +275,11 @@ def build_bundle(
         raise ValueError(f"unknown export format {fmt!r}; expected one of {list(FORMATS)}")
 
     chosen = resolve_export_policy(policy)
-    chain = resolve_detectors(None) if detectors is None else tuple(detectors)
+    # The direct Python API is a real export door too.  Resolve the same
+    # workspace chain used by ``mm export`` when a caller does not inject one;
+    # otherwise a configured plugin (or declared built-in subset) would be
+    # silently ignored by this path while the CLI applied it.
+    chain = redaction_chain_for_workspace(workspace) if detectors is None else tuple(detectors)
     admitted, withheld = load_admitted_blocks(workspace)
 
     kept: list[Mapping[str, Any]] = []
