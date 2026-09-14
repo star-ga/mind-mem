@@ -269,6 +269,19 @@ def test_public_anticipation_positive_is_explicitly_unattested(tmp_path: Path) -
     assert receipt.get("index_anchor") == row.index_anchor, receipt
     assert receipt.get("scoring_instant") == row.scoring_instant, receipt
     assert receipt.get("served_context_digest") == row.context_digest, receipt
+    assert receipt.get("run_id") == row.run_id, receipt
+    assert len(receipt["run_id"]) == 64, receipt
+
+    # The local answer is not a corpus-read attestation, but its recorded
+    # occurrence is still eligible for the existing explicit outcome join.
+    # This proves the receipt is directly usable by a caller and that it names
+    # the same answer identity as the row rather than asking callers to
+    # reimplement the run-id preimage.
+    from mind_mem.outcome_attribution import report_outcome
+
+    outcome = report_outcome(workspace, [ids[0]], "success", run_id=receipt["run_id"])
+    assert outcome["run_id"] == row.run_id, outcome
+    assert outcome["block_ids"] == [ids[0]], outcome
     config = json.loads((Path(workspace) / "mind-mem.json").read_text(encoding="utf-8"))
     config_hash = current_pipeline_hash(workspace)
     generation = prefetch.anticipation_generation_identity(config, str(MCP_SCHEMA_VERSION))
@@ -382,6 +395,7 @@ def test_public_anticipation_receipt_respects_disabled_ledger(tmp_path: Path) ->
     receipt = served.get("serving_receipt")
     assert receipt.get("served_proof") == "unproven", receipt
     assert receipt.get("ledger_error") == "disabled", receipt
+    assert "run_id" not in receipt, receipt
     assert read_served_runs(workspace) == ()
 
 
@@ -407,6 +421,7 @@ def test_public_anticipation_receipt_reports_a_corrupt_ledger(tmp_path: Path) ->
     assert receipt.get("served_seq") is None, receipt
     assert receipt.get("served_row_hash") is None, receipt
     assert receipt.get("ledger_error") and receipt.get("ledger_error") != "disabled", receipt
+    assert "run_id" not in receipt, receipt
 
 
 def test_public_anticipation_receipt_refuses_unresolved_config_hash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
