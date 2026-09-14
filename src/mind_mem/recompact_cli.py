@@ -15,7 +15,7 @@ import json
 import re
 import unicodedata
 from collections.abc import Callable
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -119,10 +119,12 @@ def _source_record(workspace: str, block: dict[str, Any]) -> dict[str, Any]:
 def _active_cluster(workspace: str, source_ids: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Reload source blocks and source bytes for a proposal identity check."""
 
+    from .admission import admit_read
     from .storage import iter_active_blocks
 
     active: dict[str, dict[str, Any]] = {}
-    for block in iter_active_blocks(workspace):
+    rows = admit_read(iter_active_blocks(workspace), workspace=workspace, surface="recompact").admitted
+    for block in rows:
         block_id = block.get("_id")
         if not isinstance(block_id, str) or not _BLOCK_ID.fullmatch(block_id):
             raise RecompactError("active corpus contains a malformed block id")
@@ -187,10 +189,12 @@ def resolve_similarity_cluster(
         raise RecompactError(f"invalid block_id: {block_id!r}")
     if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
         raise RecompactError("limit must be an integer in [1, 50]")
+    from .admission import admit_read
     from .storage import iter_active_blocks
 
     blocks: dict[str, dict[str, Any]] = {}
-    for block in iter_active_blocks(workspace):
+    rows = admit_read(iter_active_blocks(workspace), workspace=workspace, surface="recompact").admitted
+    for block in rows:
         candidate_id = block.get("_id")
         if not isinstance(candidate_id, str) or not _BLOCK_ID.fullmatch(candidate_id):
             raise RecompactError("active corpus contains a malformed block id")
@@ -201,6 +205,7 @@ def resolve_similarity_cluster(
     if target is None:
         raise RecompactError(f"active block not found: {block_id}")
 
+    scope: AbstractContextManager[Any]
     if finder is None:
         from .mcp.infra.workspace import use_workspace
         from .mcp.tools.recall import find_similar

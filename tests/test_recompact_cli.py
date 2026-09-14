@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from mind_mem import recompact_cli
+from mind_mem.admission import ReadAdmission
 from mind_mem.mm_cli import main
 from mind_mem.recompaction import RecompactionConfig
 
@@ -169,6 +170,99 @@ def test_recompaction_rechecks_sources_after_compressor(monkeypatch, blocks, tmp
     with pytest.raises(recompact_cli.RecompactError, match="source changed"):
         recompact_cli.make_recompact_proposal(
             str(tmp_path), "DEC-001", compressor=mutating, config=RecompactionConfig(min_retention_ratio=0), finder=_finder
+        )
+
+
+def test_recompact_applies_workspace_read_admission_before_compressor(monkeypatch, tmp_path):
+    import mind_mem.admission as admission
+    import mind_mem.storage as storage
+
+    rows = [
+        {
+            "_id": "DEC-001",
+            "body": "active decision with enough retained context",
+            "Status": "active",
+            "_source_file": "decisions/DECISIONS.md",
+            "_line": 1,
+        },
+        {
+            "_id": "CRED-REVOKED",
+            "body": "revoked credential must never reach a compressor",
+            "Status": "revoked",
+            "ContentCategory": "credential",
+            "_source_file": "memory/notes.md",
+            "_line": 1,
+        },
+    ]
+    for row in rows:
+        source = tmp_path / str(row["_source_file"])
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(str(row["body"]) + "\n", encoding="utf-8")
+    monkeypatch.setattr(storage, "iter_active_blocks", lambda _workspace: [dict(row) for row in rows])
+
+    def current_admission(items, *, workspace, surface):
+        assert workspace == str(tmp_path)
+        assert surface == "recompact"
+        kept = [dict(item) for item in items if not (item.get("ContentCategory") == "credential" and item.get("Status") == "revoked")]
+        return ReadAdmission(kept, len(items) - len(kept))
+
+    monkeypatch.setattr(admission, "admit_read", current_admission)
+    calls = []
+    with pytest.raises(recompact_cli.RecompactError, match="outside the active corpus"):
+        recompact_cli.make_recompact_proposal(
+            str(tmp_path),
+            "DEC-001",
+            compressor=lambda text, blocks: calls.append(blocks) or text,
+            config=RecompactionConfig(min_retention_ratio=0),
+            finder=lambda *_: {"similar": [{"block_id": "CRED-REVOKED"}]},
+        )
+    assert calls == []
+
+
+def test_recompact_rechecks_workspace_admission_after_compressor(monkeypatch, tmp_path):
+    import mind_mem.admission as admission
+    import mind_mem.storage as storage
+
+    rows = [
+        {
+            "_id": "DEC-001",
+            "body": "active decision with enough retained context",
+            "Status": "active",
+            "_source_file": "decisions/DECISIONS.md",
+            "_line": 1,
+        },
+        {
+            "_id": "DEC-002",
+            "body": "active companion with enough retained context",
+            "Status": "active",
+            "_source_file": "memory/notes.md",
+            "_line": 1,
+        },
+    ]
+    for row in rows:
+        source = tmp_path / str(row["_source_file"])
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(str(row["body"]) + "\n", encoding="utf-8")
+    monkeypatch.setattr(storage, "iter_active_blocks", lambda _workspace: [dict(row) for row in rows])
+    revoked = {"value": False}
+
+    def current_admission(items, *, workspace, surface):
+        assert workspace == str(tmp_path)
+        assert surface == "recompact"
+        kept = [dict(item) for item in items if not (revoked["value"] and item.get("_id") == "DEC-002")]
+        return ReadAdmission(kept, len(items) - len(kept))
+
+    monkeypatch.setattr(admission, "admit_read", current_admission)
+
+    def mutating(_text, _blocks):
+        revoked["value"] = True
+        return "active reviewed proposal"
+
+    with pytest.raises(recompact_cli.RecompactError, match="disappeared from the active corpus"):
+        recompact_cli.make_recompact_proposal(
+            str(tmp_path), "DEC-001", compressor=mutating,
+            config=RecompactionConfig(min_retention_ratio=0),
+            finder=lambda *_: {"similar": [{"block_id": "DEC-002"}]},
         )
 
 
