@@ -916,6 +916,7 @@ def admit_read(
     status_key: str = "Status",
     allow: frozenset[str] = frozenset(),
     surface: Optional[str] = None,
+    source_file: Optional[str] = None,
 ) -> ReadAdmission:
     """The subset of *items* a read surface may serve, and how many it may not.
 
@@ -952,6 +953,10 @@ def admit_read(
             is the precedent), never a default.
         surface: Name recorded on the withheld metric, for the same
             reason ``admit_leg`` takes ``leg``.
+        source_file: Optional canonical source for a namespace-selected
+            row.  When present, status is refreshed from that source identity
+            and workspace-wide release IDs are not applied, since an ID-only
+            release could belong to a duplicate in another namespace.
 
     Returns:
         A :class:`ReadAdmission`. ``withheld`` is the number of items
@@ -975,11 +980,34 @@ def admit_read(
         kept_content = filter_revoked_credentials([dict(r) for r in rows], workspace)
         content_withheld = len(rows) - len(kept_content)
         rows = list(kept_content)
-        rows = list(with_live_statuses([dict(r) for r in rows], live_statuses(workspace), status_key=status_key))
+        if source_file is None:
+            rows = list(with_live_statuses([dict(r) for r in rows], live_statuses(workspace), status_key=status_key))
+        else:
+            # A namespace-selected row has an explicit source identity.  The
+            # workspace-wide ``id -> status`` map is unsafe here: two
+            # namespaces may legitimately reuse an id, and an active row in
+            # one source must never refresh a quarantined row in another.
+            # Re-read the claimed source through the same source-bound
+            # lifecycle helper used for credential revocation.  An unresolved
+            # source is withheld rather than falling back to the cached status.
+            from .content_lifecycle import content_identity, live_content_blocks
+
+            live = live_content_blocks(workspace, blocks=rows)
+            source_rows: list[dict[str, Any]] = []
+            for row in rows:
+                identity = content_identity(row)
+                current = live.get(identity) if identity is not None else None
+                if current is None or (source_file and (current.get("_source_file") or "") != source_file):
+                    content_withheld += 1
+                    continue
+                refreshed = dict(row)
+                refreshed[status_key] = current.get("Status")
+                source_rows.append(refreshed)
+            rows = source_rows
     if all(is_admissible_status(row.get(status_key)) for row in rows):
         return ReadAdmission([dict(row) for row in rows], content_withheld)
     releases: frozenset[str] = frozenset()
-    if workspace is not None:
+    if workspace is not None and source_file is None:
         releases = workspace_release_ids(workspace)
     kept = admit_leg(rows, status_key=status_key, releases=releases, allow=allow, leg=surface or "read")
     return ReadAdmission(kept, content_withheld + len(rows) - len(kept))
@@ -992,6 +1020,7 @@ def admit_read_one(
     status_key: str = "Status",
     allow: frozenset[str] = frozenset(),
     surface: Optional[str] = None,
+    source_file: Optional[str] = None,
 ) -> ReadAdmission:
     """:func:`admit_read` for a surface that resolved exactly one block.
 
@@ -1003,4 +1032,11 @@ def admit_read_one(
     """
     if block is None:
         return ReadAdmission([], 0)
-    return admit_read([block], workspace=workspace, status_key=status_key, allow=allow, surface=surface)
+    return admit_read(
+        [block],
+        workspace=workspace,
+        status_key=status_key,
+        allow=allow,
+        surface=surface,
+        source_file=source_file,
+    )

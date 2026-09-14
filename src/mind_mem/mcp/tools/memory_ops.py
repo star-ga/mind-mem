@@ -30,7 +30,7 @@ from typing import Any
 
 from mind_mem.admission import AdmissionReceipt, admit_read, admit_read_one
 from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file
-from mind_mem.corpus_registry import CORPUS_DIRS
+from mind_mem.corpus_registry import CORPUS_DIRS, discover_corpus_files
 from mind_mem.mind_ffi import get_mind_dir
 from mind_mem.mind_ffi import is_available as mind_kernel_available
 from mind_mem.mind_ffi import is_protected as mind_kernel_protected
@@ -1086,6 +1086,36 @@ def get_block(block_id: str, namespace: str = "") -> str:
             indent=2,
         )
 
+    if selected_namespace is None and block is not None:
+        # The historical ID-only form remains available for workspace rows,
+        # but a non-Markdown backend may return a namespaced source directly.
+        # Do not let that backend-only shape bypass the ACL that selected
+        # namespace reads enforce.  A source path is metadata, so an invalid
+        # or outside-workspace path is treated as unresolved and refused.
+        from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+        from mind_mem.namespace_retrieval import namespace_for_path
+        from mind_mem.namespaces import InvalidAgentIdError, NamespaceManager
+
+        source = block.get("_source_file") or block.get("_source") or block.get("file")
+        rel_source = source.replace("\\", "/") if isinstance(source, str) else ""
+        if rel_source and os.path.isabs(rel_source):
+            source_real = os.path.realpath(rel_source)
+            workspace_real = os.path.realpath(ws)
+            if source_real != workspace_real and not source_real.startswith(workspace_real + os.sep):
+                return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+            rel_source = os.path.relpath(source_real, workspace_real).replace(os.sep, "/")
+        if "\x00" in rel_source or ".." in rel_source.split("/"):
+            return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+        source_namespace = namespace_for_path(rel_source)
+        if source_namespace is not None and source_namespace.startswith("agents/"):
+            bound_agent = current_agent_id.get()
+            try:
+                manager = NamespaceManager(ws, agent_id=None if bound_agent in {None, "", UNATTRIBUTED} else bound_agent)
+            except InvalidAgentIdError:
+                return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+            if not manager.can_read(rel_source):
+                return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+
     # EGRESS GATE. Resolution above says whether the bytes EXIST; this says
     # whether this caller may see them. ``get_block`` is a USER-scope tool and
     # it used to answer the first question only, so a quarantined inbox drop
@@ -1093,7 +1123,15 @@ def get_block(block_id: str, namespace: str = "") -> str:
     # ``recall`` withheld the same block. One resolved block, one decision,
     # taken here rather than at each of the three resolution sites, because
     # three decisions is how the third one gets forgotten.
-    decision = admit_read_one(block, workspace=ws, surface="get_block")
+    # Namespace resolution carries a source identity.  Admission must refresh
+    # status from that exact source, because the workspace-wide id map can
+    # otherwise borrow the status of a duplicate id in another namespace.
+    decision = admit_read_one(
+        block,
+        workspace=ws,
+        surface="get_block",
+        source_file=(block or {}).get("_source_file") if selected_namespace is not None else None,
+    )
     admitted = decision.sole
     if admitted is not None:
         metrics.inc("mcp_get_block")
@@ -1226,28 +1264,29 @@ def _resolve_block_in_namespace(ws: str, block_id: str, namespace: str) -> tuple
                 continue
             matches.append(dict(block))
     elif os.path.isdir(root):
-        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-            dirnames[:] = sorted(name for name in dirnames if not os.path.islink(os.path.join(dirpath, name)))
-            for filename in sorted(filenames):
-                if not filename.endswith(".md"):
-                    continue
-                path = os.path.join(dirpath, filename)
-                real = os.path.realpath(path)
-                if not real.startswith(workspace_root + os.sep) or os.path.islink(path):
-                    continue
-                rel = os.path.relpath(path, ws).replace(os.sep, "/")
-                if namespace_for_path(rel) != namespace:
-                    continue
-                if not manager.can_read(rel):
-                    continue
-                try:
-                    blocks = parse_file(path)
-                except (OSError, UnicodeDecodeError, ValueError, BlockCorruptedError):
-                    continue
-                for block in blocks:
-                    if block.get("_id") == block_id:
-                        block["_source_file"] = rel
-                        matches.append(block)
+        # Resolve only files registered by corpus_registry.  An unrestricted
+        # recursive ``.md`` walk would make arbitrary namespace files part of
+        # the public corpus and would bypass the store's source boundary.
+        for _label, local_rel in discover_corpus_files(root):
+            path = os.path.join(root, *local_rel.split("/"))
+            if not os.path.isfile(path) or os.path.islink(path):
+                continue
+            real = os.path.realpath(path)
+            if not real.startswith(workspace_root + os.sep):
+                continue
+            rel = os.path.relpath(path, ws).replace(os.sep, "/")
+            if namespace_for_path(rel) != namespace:
+                continue
+            if not manager.can_read(rel):
+                continue
+            try:
+                blocks = parse_file(path)
+            except (OSError, UnicodeDecodeError, ValueError, BlockCorruptedError):
+                continue
+            for block in blocks:
+                if block.get("_id") == block_id:
+                    block["_source_file"] = rel
+                    matches.append(block)
 
     if len(matches) > 1:
         return None, "ambiguous"
