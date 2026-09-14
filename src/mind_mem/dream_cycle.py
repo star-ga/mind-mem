@@ -743,7 +743,7 @@ def _pass_content_stale_detection(
             days = max(0, lifetime.age_days or 0)
         else:
             # Unclassified legacy facts retain the default stale interval.
-            stamp = _block_last_modified_date(block)
+            stamp = _block_last_modified_date(block) or ""
             try:
                 days = (today - date.fromisoformat(stamp or "")).days
             except ValueError:

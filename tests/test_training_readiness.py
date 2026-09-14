@@ -49,9 +49,7 @@ def _manifest(corpus: Path, output: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_manifest_flags_paraphrase_contamination_even_when_exact_holdout_is_unseen(
-    generated_corpus: Path, tmp_path: Path
-) -> None:
+def test_manifest_flags_paraphrase_contamination_even_when_exact_holdout_is_unseen(generated_corpus: Path, tmp_path: Path) -> None:
     output = tmp_path / "manifest.json"
     result = _manifest(generated_corpus, output)
     assert result.returncode == 1, result.stdout + result.stderr

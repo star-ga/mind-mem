@@ -974,7 +974,7 @@ def admit_read(
 
         kept_content = filter_revoked_credentials([dict(r) for r in rows], workspace)
         content_withheld = len(rows) - len(kept_content)
-        rows = kept_content
+        rows = list(kept_content)
         rows = list(with_live_statuses([dict(r) for r in rows], live_statuses(workspace), status_key=status_key))
     if all(is_admissible_status(row.get(status_key)) for row in rows):
         return ReadAdmission([dict(row) for row in rows], content_withheld)
