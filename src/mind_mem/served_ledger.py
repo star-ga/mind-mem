@@ -157,8 +157,10 @@ def context_digest(*, workspace: str, config_hash: str, generation: str, index_a
 GENESIS_ROW_HASH = "0" * 64
 
 #: The ledger file, relative to the workspace. Its own directory, not the
-#: block store's and not the audit chain's.
-LEDGER_RELPATH = os.path.join(".mind-mem-ledger", "served.jsonl")
+#: block store's and not the audit chain's. These identifiers also travel in
+#: receipt manifests, so their encoding uses POSIX separators on every host.
+#: The filesystem boundary joins them to the native workspace path.
+LEDGER_RELPATH = ".mind-mem-ledger/served.jsonl"
 
 #: Sidecar holding the current chain head. The last row has no successor to
 #: bind it, so without this its ``index_anchor`` / ``scoring_instant`` would be
@@ -166,7 +168,7 @@ LEDGER_RELPATH = os.path.join(".mind-mem-ledger", "served.jsonl")
 #: Once a row exists the sidecar is REQUIRED, not merely consulted when
 #: present: a seal whose absence is tolerated is the seal an editor removes
 #: first, and tolerating it turns "delete one file" into a clean pass.
-HEAD_RELPATH = os.path.join(".mind-mem-ledger", "served.head")
+HEAD_RELPATH = ".mind-mem-ledger/served.head"
 
 #: ``mind-mem.json`` section. Absent means ON; only a literal ``false`` opts
 #: out. See :func:`ledger_enabled` for why the default inverted in 5.0.2.

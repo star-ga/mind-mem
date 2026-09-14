@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1617 | **Est. tokens:** ~4763385
-**Generated:** 2026-09-14 14:07 UTC
+**Files:** 1617 | **Est. tokens:** ~4763680
+**Generated:** 2026-09-14 14:17 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1075447 |
+| `src/mind_mem/` | 237 | ~1075483 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 708 | ~2107054 |
+| `tests/` | 708 | ~2107313 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1009,7 +1009,7 @@
 - `scopes.py` (~283 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `scoring_instant.py` (~1643 tok, huge) — The recency seam — one UTC date, resolved once, threaded everywhere.
 - `self_update.py` (~5198 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `served_ledger.py` (~13279 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `served_ledger.py` (~13315 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `session_boost.py` (~1511 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
 - `session_summarizer.py` (~3852 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 ### `src/mind_mem/skill_opt/`
@@ -1459,7 +1459,7 @@
 - `test_identity_seam_is_transport_neutral.py` (~5628 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_importers.py` (~5662 tok, huge) — Tests for the roadmap Group G migration importers (file-based subset).
 - `test_importers_field_injection.py` (~1609 tok, huge) — Regression gate: dump content cannot forge a second block field.
-- `test_importers_notes.py` (~8646 tok, huge) — Tests for the note-tree and transcript importers.
+- `test_importers_notes.py` (~8744 tok, huge) — Tests for the note-tree and transcript importers.
 - `test_importers_quarantine.py` (~6695 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
 - `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1738,7 +1738,7 @@
 - `test_retention_class.py` (~2883 tok, huge) — RA.4 — the retention class, and the two things it must refuse to be.
 - `test_retrieval_diagnostics.py` (~2428 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
-- `test_retrieval_receipts.py` (~5047 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_retrieval_receipts.py` (~5208 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_retrieval_trace.py` (~978 tok, large) — Tests for v3.3.0 per-feature retrieval attribution."""
 - `test_retrieval_trace_wiring.py` (~3142 tok, huge) — ``retrieval_trace`` wired into the live recall pipeline.
 - `test_review_batch.py` (~2787 tok, huge) — # Copyright 2026 STARGA, Inc.

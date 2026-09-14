@@ -27,6 +27,8 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Receipt manifest paths now use canonical `/` separators on every host, so
+  Windows verifiers accept the same committed receipt vectors as POSIX hosts.
 - Remote Qdrant and Pinecone hits now carry and verify a canonical
   `source_digest`, then rebuild served content and status from the current
   admitted source. Existing remote indexes must be rebuilt to add this field;

@@ -290,9 +290,18 @@ class TestReceiptCLI:
         assert package_bytes.decode("utf-8") == golden["package_utf8"]
         assert receipts._sha256(package_bytes) == golden["package_sha256"]
         report = receipts.verify_receipt(package)
-        assert report["status"] == golden["expected"]["status"]
+        assert report["status"] == golden["expected"]["status"], report
         assert report["rows_checked"] == golden["expected"]["rows_checked"]
         assert package["manifest_sha256"] == golden["expected"]["manifest_sha256"]
+
+        # Manifest paths are wire identifiers, not the verifier's native path
+        # spelling. Keep the committed fixture intact on Windows as on POSIX,
+        # and refuse a noncanonical spelling even with a recomputed hash.
+        for field in ("ledger_relpath", "head_relpath"):
+            altered = json.loads(json.dumps(package))
+            altered["manifest"][field] = altered["manifest"][field].replace("/", "\\")
+            altered["manifest_sha256"] = receipts._sha256(receipts._package_bytes(receipts._manifest_payload(altered)))
+            assert receipts.verify_receipt(altered)["status"] == "malformed", field
 
         altered = json.loads(json.dumps(package))
         altered["ledger_b64"] = base64.b64encode(base64.b64decode(package["ledger_b64"]).replace(b'"seq":0', b'"seq":9', 1)).decode("ascii")

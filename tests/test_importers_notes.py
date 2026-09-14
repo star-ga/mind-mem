@@ -275,13 +275,22 @@ class TestNoteTreeLoading:
         assert not verify_document_anchor(blocks[0], str(tree))
 
     @pytest.mark.parametrize("filename", ["report\u202e.md", "report\n.md", "report\t.md", "report  name.md", " report.md"])
-    def test_chunk_anchor_rejects_ambiguous_source_identity(self, tmp_path, filename):
+    def test_chunk_anchor_rejects_ambiguous_source_identity(self, filename):
         from mind_mem.importers.engine import _chunk_import_records
+        from mind_mem.importers.fs_source import SourceNote
 
-        tree = tmp_path / "tree"
-        tree.mkdir()
-        (tree / filename).write_text("Valid source sentence. " * 100, encoding="utf-8")
-        records = parse_payload("markdown", load_note_tree(str(tree)))
+        # Exercise the public source-record/parser boundary: Windows cannot
+        # create newline/tab filenames, but records from another platform must
+        # still be refused before they can become ambiguous stored anchors.
+        body = "Valid source sentence. " * 100
+        note = SourceNote(
+            relative_path=filename,
+            front_matter={},
+            body=body,
+            raw_sha256=hashlib.sha256(body.encode("utf-8")).hexdigest(),
+            raw_body=body,
+        )
+        records = parse_payload("markdown", (note,))
         with pytest.raises(ImportParseError, match="unambiguous anchor"):
             _chunk_import_records(records)
 
