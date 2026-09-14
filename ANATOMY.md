@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1629 | **Est. tokens:** ~4805941
-**Generated:** 2026-09-14 16:56 UTC
+**Files:** 1629 | **Est. tokens:** ~4806226
+**Generated:** 2026-09-14 17:07 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 717 | ~2126607 |
+| `tests/` | 717 | ~2126892 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1148,7 +1148,7 @@
 - `_tls_certs.py` (~1957 tok, huge) — Throwaway CA, leaf certificates and a recording TLS peer for the TLS tests.
 - `_toml_compat.py` (~462 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `_write_path_scan.py` (~11624 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `conftest.py` (~4070 tok, huge) — Shared test fixtures.
+- `conftest.py` (~4237 tok, huge) — Shared test fixtures.
 ### `tests/fixtures/`
 
 - `ci_jobs_advisory_red.json` (~2657 tok, huge) — Keys: _provenance, workflow_runs, 90000000001
@@ -1436,7 +1436,7 @@
 - `test_governed_write_is_screened.py` (~1252 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_governed_write_paths.py` (~10704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_granularity_align.py` (~3310 tok, huge) — Tests for granularity_align — named merge operation (Group H, v4.0.x).
-- `test_granularity_align_wiring.py` (~6427 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_granularity_align_wiring.py` (~6518 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_graph_boost.py` (~6077 tok, huge) — Tests for graph boost, context packing, config validation, and block cap.
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
 - `test_graph_ingest.py` (~3700 tok, huge) — Corpus → typed knowledge-graph wiring (extraction → HITL signal → apply).
@@ -1655,7 +1655,7 @@
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
 - `test_ra4_proposal_rationale.py` (~932 tok, large) — Every accepted proposal type needs the caller's written rationale."""
 - `test_read_surface_admission.py` (~6331 tok, huge) — Every read surface, swept with a three-status canary.
-- `test_read_surface_classification.py` (~8993 tok, huge) — The registry-wide read-surface classification — the committed table.
+- `test_read_surface_classification.py` (~9020 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~4156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_resources.py` (~7355 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall.py` (~3898 tok, huge) — Tests for recall.py — zero external deps (stdlib unittest)."""

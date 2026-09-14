@@ -38,6 +38,28 @@ if _BENCHMARKS.is_dir() and str(_BENCHMARKS) not in sys.path:
     sys.path.insert(0, str(_BENCHMARKS))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_mcp_rate_limiter_state() -> Iterator[None]:
+    """Independent tests must not spend one another's process-wide budget.
+
+    Keep the real limiter and configured bounds within each test, including
+    saturation and HTTP 429 controls. Lazy lookup avoids importing an optional
+    MCP dependency into tests that never use the transport.
+    """
+
+    def reset() -> None:
+        module = sys.modules.get("mind_mem.mcp.infra.rate_limit")
+        if module is not None:
+            with module._rate_limiters_lock:
+                module._rate_limiters.clear()
+
+    reset()
+    try:
+        yield
+    finally:
+        reset()
+
+
 @pytest.fixture
 def admitted(tmp_path) -> Iterator[None]:
     """Open a real governance admission for the duration of one test.

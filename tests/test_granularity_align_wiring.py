@@ -530,6 +530,13 @@ class TestTheFlagProbeIsSilent:
 
         from mind_mem.mcp.tools.consolidation import plan_consolidation as tool
 
+        # Compare equivalent cold transport state. The reference call created
+        # its rate limiter, which reads the malformed config once; reusing it
+        # only for the candidate would omit that factory diagnostic.
+        from mind_mem.mcp.infra import rate_limit
+
+        with rate_limit._rate_limiters_lock:
+            rate_limit._rate_limiters.clear()
         monkeypatch.setattr(feature_flags, "_last_config_warning", None)
         with _mind_mem_stderr() as after, use_workspace(str(indexed_workspace)):
             got = tool()

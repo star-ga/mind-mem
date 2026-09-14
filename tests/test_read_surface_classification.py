@@ -339,8 +339,9 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "calibration_stats": ({},),
     "category_summary": ({"topic": "architecture", "limit": 10}, {"topic": "frost telemetry", "limit": 10}),
     "chat_with_memory": (
-        {"question": "architecture decision", "limit": 5},
+        {"question": "architecture decision", "limit": 5, "semantic_required": False},
         {"question": "frost telemetry", "limit": 5, "generator": "extractive", "on_invalid": "raise", "require_in_evidence": True},
+        {"question": "frost telemetry", "limit": 5, "semantic_required": True},
     ),
     "check_dead_ends": ({"tool": "bash", "command": "ls", "intent": "architecture decision"},),
     "check_guardrails": ({"tool": "bash", "command": "ls", "intent": "architecture decision"},),
