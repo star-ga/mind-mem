@@ -107,18 +107,18 @@ ALLOWLIST: dict[str, str] = {
     "memory_ops._store_block_is_active": "A predicate over a block the caller already holds; returns a bool and no content.",
     "memory_ops.index_stats": "Counts indexed vs. corpus blocks. Numbers, never block text or ids.",
     "memory_ops.memory_health": "Health tallies -- block counts, drift counts, signal counts, index freshness. Numbers, never block text.",
-    "memory_ops._resolve_block_for_read": (
-        "Resolution only: it says whether the bytes EXIST and where, and hands them to its caller, which "
-        "applies admit_read_one. Deliberately split that way so there is ONE egress decision in get_block "
-        "rather than one at each of the three resolution sites. Pinned as a RESOLVER below, so every "
-        "in-module caller is checked for that admission."
+    "memory_ops._resolve_block_in_namespace": (
+        "Namespace resolution only: raw configured-store rows select an ACL-visible source and refuse "
+        "duplicate identities. _resolve_block_for_read forwards that result to get_block, which applies "
+        "source-bound admit_read_one. Both resolver hops are checked below; an unadmitted egress caller "
+        "or a cycle in this declared resolver chain fails the tripwire."
     ),
 }
 
 #: Allowlisted helpers that return raw blocks to a caller. For these the reason
 #: is "my caller admits", which is only true if every caller actually does --
 #: so it is checked rather than asserted in prose.
-RESOLVERS: frozenset[str] = frozenset({"memory_ops._resolve_block_for_read"})
+RESOLVERS: frozenset[str] = frozenset({"memory_ops._resolve_block_for_read", "memory_ops._resolve_block_in_namespace"})
 
 
 # ---------------------------------------------------------------------------
@@ -253,13 +253,27 @@ def test_every_resolver_has_only_admitting_callers() -> None:
     """
     scan = scan_tool_layer()
     violations: dict[str, list[str]] = {}
-    for resolver in sorted(RESOLVERS):
+
+    def check_callers(resolver: str, path: tuple[str, ...]) -> list[str]:
+        if resolver in path:
+            return ["resolver cycle: " + " -> ".join((*path, resolver))]
         module, _, short = resolver.partition(".")
         callers = [qual for qual, record in scan.items() if qual.startswith(module + ".") and qual != resolver and short in record["calls"]]
         assert callers, f"{resolver} has no caller in {module}; the resolver rule would be vacuous"
-        ungoverned = [qual for qual in callers if not scan[qual]["admit"]]
+        failed: list[str] = []
+        for caller in callers:
+            if scan[caller]["admit"]:
+                continue
+            if caller in RESOLVERS:
+                failed.extend(check_callers(caller, (*path, resolver)))
+            else:
+                failed.append(caller)
+        return failed
+
+    for resolver in sorted(RESOLVERS):
+        ungoverned = check_callers(resolver, ())
         if ungoverned:
-            violations[resolver] = sorted(ungoverned)
+            violations[resolver] = sorted(set(ungoverned))
     assert not violations, f"resolvers whose callers do not apply an admission seam: {violations}"
 
 
@@ -320,4 +334,24 @@ def test_the_resolver_rule_fails_on_an_ungoverned_caller(monkeypatch: pytest.Mon
     poisoned["memory_ops.some_new_tool"] = {"raw": [], "admit": [], "calls": ["_resolve_block_for_read"]}
     monkeypatch.setattr(sys.modules[__name__], "scan_tool_layer", lambda: poisoned)
     with pytest.raises(AssertionError, match="some_new_tool"):
+        test_every_resolver_has_only_admitting_callers()
+
+
+def test_resolver_chain_rejects_unadmitted_inner_caller(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    scan = scan_tool_layer()
+    scan["memory_ops.inner_escape"] = {"raw": [], "admit": [], "calls": ["_resolve_block_in_namespace"]}
+    monkeypatch.setattr(sys.modules[__name__], "scan_tool_layer", lambda: scan)
+    with pytest.raises(AssertionError, match="inner_escape"):
+        test_every_resolver_has_only_admitting_callers()
+
+
+def test_resolver_cycle_cannot_stand_in_for_admission(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    scan = scan_tool_layer()
+    scan["memory_ops._resolve_block_in_namespace"]["calls"].append("_resolve_block_for_read")
+    monkeypatch.setattr(sys.modules[__name__], "scan_tool_layer", lambda: scan)
+    with pytest.raises(AssertionError, match="resolver cycle"):
         test_every_resolver_has_only_admitting_callers()
