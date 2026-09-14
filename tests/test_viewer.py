@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import http.client
 import json
+import socket
 import subprocess
 import sys
 import threading
@@ -92,6 +94,78 @@ def test_agent_graph_is_explicitly_unsupported_without_source_bound_edges(tmp_pa
     status, _headers, body = _request(server, "GET", "/api/graph?entity=anything")
     assert status == 501
     assert "source-bound" in json.loads(body)["error"]
+
+
+def test_graph_read_does_not_initialize_existing_empty_db(tmp_path: Path) -> None:
+    memory = tmp_path / "memory"
+    memory.mkdir()
+    db = memory / "knowledge_graph.db"
+    db.write_bytes(b"")
+    before = hashlib.sha256(db.read_bytes()).hexdigest()
+    server = make_server(str(_workspace(tmp_path)), port=0)
+    status, _headers, body = _request(server, "GET", "/api/graph?entity=unknown")
+    assert status == 503
+    assert json.loads(body)["available"] is False
+    assert hashlib.sha256(db.read_bytes()).hexdigest() == before
+    assert db.stat().st_size == 0
+
+
+def test_graph_read_reports_corrupt_db_without_dropping_connection(tmp_path: Path) -> None:
+    memory = tmp_path / "memory"
+    memory.mkdir()
+    (memory / "knowledge_graph.db").write_bytes(b"not sqlite")
+    server = make_server(str(_workspace(tmp_path)), port=0)
+    status, headers, body = _request(server, "GET", "/api/graph?entity=unknown")
+    assert status == 503
+    assert headers["Content-Security-Policy"].startswith("default-src 'none'")
+    assert json.loads(body)["reason"] == "knowledge graph is unavailable"
+
+
+def test_absolute_form_request_target_is_rejected(tmp_path: Path) -> None:
+    server = make_server(str(_workspace(tmp_path)), port=0)
+    status, _headers, body = _request(server, "GET", "http://evil.invalid/api/blocks")
+    assert status == 400
+    assert json.loads(body)["error"] == "request path is invalid"
+
+
+def test_authority_form_request_target_is_rejected(tmp_path: Path) -> None:
+    server = make_server(str(_workspace(tmp_path)), port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = socket.create_connection(("127.0.0.1", server.server_port), timeout=3)
+        connection.sendall(
+            f"GET //evil.invalid/api/blocks HTTP/1.1\r\nHost: 127.0.0.1:{server.server_port}\r\nConnection: close\r\n\r\n".encode()
+        )
+        response = b""
+        while chunk := connection.recv(4096):
+            response += chunk
+        connection.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=3)
+        server.server_close()
+    assert response.startswith(b"HTTP/1.0 400 Bad Request")
+    assert b'"error":"request path is invalid"' in response
+
+
+@pytest.mark.parametrize("method", ["HEAD", "PUT", "DELETE", "PATCH", "OPTIONS", "CONNECT", "TRACE"])
+def test_unsupported_methods_use_guarded_json_refusal(tmp_path: Path, method: str) -> None:
+    server = make_server(str(_workspace(tmp_path)), port=0)
+    status, headers, body = _request(server, method, "/api/blocks")
+    assert status == 405
+    assert headers["Content-Security-Policy"].startswith("default-src 'none'")
+    if method == "HEAD":
+        assert body == b""
+    else:
+        assert json.loads(body)["error"] == "viewer is read-only"
+
+
+def test_unsupported_method_still_rejects_bad_origin(tmp_path: Path) -> None:
+    server = make_server(str(_workspace(tmp_path)), port=0)
+    status, _headers, body = _request(server, "PUT", "/api/blocks", Origin="http://attacker.invalid")
+    assert status == 403
+    assert json.loads(body)["error"] == "host or origin is not allowed"
 
 
 def test_static_asset_uses_text_content_and_no_remote_dependency() -> None:

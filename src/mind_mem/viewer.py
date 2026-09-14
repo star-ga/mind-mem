@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
@@ -143,8 +144,26 @@ class ViewerHandler(BaseHTTPRequestHandler):
         if len(self.path) > MAX_PATH or any(ord(ch) < 0x20 for ch in self.path):
             self._reject(HTTPStatus.BAD_REQUEST, "request path is invalid")
             return
-        parsed = urlsplit(self.path)
-        if parsed.fragment or not parsed.path.startswith("/"):
+        # ``BaseHTTPRequestHandler`` normalizes a request-target beginning
+        # with ``//`` before exposing ``self.path``. Inspect the raw line so
+        # an authority-form target cannot be mistaken for a local path.
+        raw_requestline = getattr(self, "raw_requestline", b"")
+        raw_parts = raw_requestline.split(None, 2)
+        if len(raw_parts) >= 2:
+            try:
+                raw_target = raw_parts[1].decode("ascii")
+            except UnicodeDecodeError:
+                self._reject(HTTPStatus.BAD_REQUEST, "request path is invalid")
+                return
+            if raw_target.startswith("//"):
+                self._reject(HTTPStatus.BAD_REQUEST, "request path is invalid")
+                return
+        try:
+            parsed = urlsplit(self.path)
+        except ValueError:
+            self._reject(HTTPStatus.BAD_REQUEST, "request path is invalid")
+            return
+        if parsed.fragment or parsed.scheme or parsed.netloc or not parsed.path.startswith("/"):
             self._reject(HTTPStatus.BAD_REQUEST, "request path is invalid")
             return
         try:
@@ -198,11 +217,29 @@ class ViewerHandler(BaseHTTPRequestHandler):
             self._reject(HTTPStatus.BAD_REQUEST, "request parameters are invalid")
         except LookupError:
             self._reject(HTTPStatus.NOT_FOUND, "block not found")
-        except (OSError, UnicodeError):
+        except (OSError, UnicodeError, sqlite3.Error):
             self._reject(HTTPStatus.SERVICE_UNAVAILABLE, "configured corpus is unavailable")
 
     def do_POST(self) -> None:  # noqa: N802
+        self._reject_method()
+
+    def _reject_method(self) -> None:
+        """Reject every non-GET method through the same guarded JSON path."""
+        if not self._origin_allowed():
+            self._reject(HTTPStatus.FORBIDDEN, "host or origin is not allowed")
+            return
         self._reject(HTTPStatus.METHOD_NOT_ALLOWED, "viewer is read-only")
+
+    # BaseHTTPRequestHandler's default 501 response is HTML and omits the
+    # viewer security headers.  Keep the local surface consistently JSON and
+    # read-only for every method a client can send.
+    do_PUT = _reject_method
+    do_DELETE = _reject_method
+    do_PATCH = _reject_method
+    do_OPTIONS = _reject_method
+    do_HEAD = _reject_method
+    do_CONNECT = _reject_method
+    do_TRACE = _reject_method
 
     def _asset(self, path: str) -> None:
         resource_name = "index.html" if path in {"/", "/index.html"} else path[1:]
@@ -241,15 +278,23 @@ class ViewerHandler(BaseHTTPRequestHandler):
         if not os.path.isfile(path):
             self._send_json({"entity": entity, "neighbors": [], "available": False, "reason": "knowledge graph is not initialized"})
             return
-        kg = KnowledgeGraph(path)
+        kg = None
         try:
+            kg = KnowledgeGraph.open_read_only(path)
             canonical = kg.entities.lookup(entity)
             if canonical is None:
                 self._send_json({"entity": entity, "neighbors": [], "available": True, "reason": "entity is unknown"})
                 return
             neighbors = kg.neighbors(canonical, depth=depth, direction="both", max_results=MAX_LIMIT)
+        except sqlite3.Error:
+            self._send_json(
+                {"entity": entity, "neighbors": [], "available": False, "reason": "knowledge graph is unavailable"},
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+            return
         finally:
-            kg.close()
+            if kg is not None:
+                kg.close()
         self._send_json({"entity": entity, "neighbors": neighbors, "available": True, "depth": depth})
 
 
