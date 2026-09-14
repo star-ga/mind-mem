@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1623 | **Est. tokens:** ~4787464
-**Generated:** 2026-09-14 16:14 UTC
+**Files:** 1628 | **Est. tokens:** ~4792396
+**Generated:** 2026-09-14 17:22 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~72673 |
+| `./` | 37 | ~72678 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1078895 |
+| `src/mind_mem/` | 238 | ~1081949 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,8 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 714 | ~2122879 |
+| `src/mind_mem/viewer_static/` | 3 | ~865 |
+| `tests/` | 715 | ~2123887 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -146,7 +147,7 @@
 - `install.sh` (~5444 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
-- `pyproject.toml` (~3733 tok, huge) — [project]
+- `pyproject.toml` (~3738 tok, huge) — [project]
 - `requirements-optional.in` (~54 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
 - `requirements-optional.txt` (~22642 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
@@ -1125,6 +1126,14 @@
 - `validity_gate.py` (~4353 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
 - `vector_inertness.py` (~3125 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `verify_cli.py` (~10537 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `viewer.py` (~3054 tok, huge) — Read-only local memory and graph viewer.
+### `src/mind_mem/viewer_static/`
+
+- `app.js` (~563 tok, large)
+- `index.html` (~230 tok, medium) — <!doctype html>
+- `style.css` (~72 tok, small) — :root{font-family:system-ui,sans-serif;color:#1e293b;background:#f8fafc}body{mar
+### `src/mind_mem/`
+
 - `walkthrough.py` (~2449 tok, huge) — Dependency-ordered walkthrough — `compile_walkthrough` (v3.9.0 candidate).
 - `watcher.py` (~1453 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
 - `world_anchors.py` (~2986 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1894,6 +1903,7 @@
 - `test_vector_index_shape_contract.py` (~4682 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_vector_inertness.py` (~1607 tok, huge) — The vector-leg honesty gauge.
 - `test_verify_cli.py` (~4647 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_viewer.py` (~1008 tok, large) — Actual socket and CLI controls for the read-only local viewer."""
 - `test_vocabulary_wiring.py` (~2980 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_walkthrough.py` (~2441 tok, huge) — Tests for the v3.9 dependency-ordered walkthrough."""
 - `test_watcher.py` (~2037 tok, huge) — Tests for watcher.py — file change detection for auto-reindex."""

@@ -225,7 +225,7 @@ package-dir = {"" = "src"}
 # as the compat entry point. Without this glob the file never reached the wheel, so a
 # pip-installed mind-mem created workspaces with no validator and said nothing -- the
 # copy loop skips a missing source silently.
-mind_mem = ["py.typed", "*.mind", "*.pyx", "*.sh", "validate.sh.pre-forwarder", "templates/*"]
+mind_mem = ["py.typed", "*.mind", "*.pyx", "*.sh", "validate.sh.pre-forwarder", "templates/*", "viewer_static/*"]
 
 # Ship the top-level `mind/*.mind` scoring-kernel sources alongside the wheel
 # (task #298).  The kernels stay at the repo root by public convention
