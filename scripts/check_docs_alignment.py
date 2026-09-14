@@ -282,6 +282,8 @@ _CLIENT_PATTERNS = (
     # Only the spellings actually present are added; a general "\w+ clients"
     # would match "16 of the 19 clients".
     re.compile(rf"\b(?P<n>{_SMALL})(?P<plus>)\s+(?:AI\s+)?(?:coding\s+)?clients\b", re.IGNORECASE),
+    re.compile(rf"\b(?P<n>{_SMALL})(?P<plus>)\s+AI\s+development\s+tools\b", re.IGNORECASE),
+    re.compile(rf"\b(?P<n>{_SMALL})(?P<plus>)\s+different\s+CLIs\b", re.IGNORECASE),
 )
 
 # "Supports 8 MCP-aware clients" -- a capability claim with a mechanical
@@ -300,6 +302,9 @@ _TOOL_PATTERNS = (
     re.compile(rf"tools?[-_:]\s*(?P<n>{_SMALL})(?P<plus>)\b", re.IGNORECASE),
     re.compile(rf"MCP\s+Tools?\s*\((?P<n>{_SMALL})(?P<plus>)\)", re.IGNORECASE),
     re.compile(rf"\b(?P<n>{_SMALL})(?P<plus>)\s+distinct\s+tools?\b", re.IGNORECASE),
+    # A comparison row may qualify the count in the same cell instead of
+    # using a bare numeric cell, e.g. "100 distinct (102 registrations)".
+    re.compile(r"^\s*\|\s*MCP\s+tools?\s*\|\s*(?P<n>\d{2,3})(?P<plus>)\s+distinct\b", re.IGNORECASE),
     # "trained against a 96-tool surface" -- the hyphenated adjective form,
     # which no pattern in count_mcp_tools can see. It is exactly the spelling
     # the stale trained-on count was hiding behind, and it was also hiding two
@@ -1133,6 +1138,7 @@ _EVAL_TOTAL_ROW = re.compile(r"\*\*Total (?P<which>main|holdout)\*\*\s*\|\s*\*\*
 # stale 109/109 -- found by mutating the doc back and watching the gate stay
 # green, which is the only reason this is not still a per-line regex.
 _EVAL_GRAND = re.compile(r"(?:Grand total|Eval score)[^:]{0,120}?:?\s*\**(?P<n>\d+)\s*/\s*(?P<d>\d+)")
+_EVAL_README_TABLE = re.compile(r"\|\s*Eval\s*\([^|\n]*\)\s*\|\s*\**(?P<n>\d+)\s*/\s*(?P<d>\d+)")
 _EVAL_HARNESS_PROBES = re.compile(r"Harness:[^\n]*?\*\*(?P<n>\d+) probes\*\*")
 # "(`train/eval_holdout.py` -- 22 probes that do **not** appear verbatim...)".
 # Anchored on the harness filename so it cannot drift onto a per-category
@@ -1144,17 +1150,20 @@ def check_eval_claims(auth: Authorities, root: Path | None = None) -> list[Findi
     """The published eval totals must equal the probe lists the harness benches."""
     root = root or _project_root()
     out: list[Finding] = []
-    for rel in ("train/HF_MODEL_CARD_v4.md", "docs/mind-mem-4b-setup.md"):
+    for rel in ("train/HF_MODEL_CARD_v4.md", "docs/mind-mem-4b-setup.md", "README.md"):
         path = root / rel
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8")
-        for pattern, expected_for in (
+        patterns = [
             (_EVAL_TOTAL_ROW, lambda m: auth.eval_main_probes if m.group("which") == "main" else auth.eval_holdout_probes),
             (_EVAL_GRAND, lambda m: auth.eval_total_probes),
             (_EVAL_HARNESS_PROBES, lambda m: auth.eval_main_probes),
             (_EVAL_HOLDOUT_PROBES, lambda m: auth.eval_holdout_probes),
-        ):
+        ]
+        if rel == "README.md":
+            patterns = [(_EVAL_README_TABLE, lambda m: auth.eval_total_probes)]
+        for pattern, expected_for in patterns:
             for match in pattern.finditer(text):
                 expected = expected_for(match)
                 for group in [g for g in ("n", "d") if g in match.groupdict()]:
