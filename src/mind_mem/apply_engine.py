@@ -22,11 +22,11 @@ import re
 import subprocess  # nosec B404 — subprocess is used with a fixed argument list (shell=False) for internal tooling; no user input reaches the command
 import sys
 from datetime import datetime, timedelta, timezone
-from typing import Final, Optional
+from typing import Any, Final, Optional
 
 # Import block parser from same directory
 from .backup_restore import WAL
-from .block_parser import get_by_id, parse_file
+from .block_parser import get_by_id, parse_blocks, parse_file
 from .block_store import (
     SNAPSHOT_FILES,
     MarkdownBlockStore,
@@ -1300,6 +1300,21 @@ def _with_supersedes_field(block_text: str, target: str) -> str:
     return "\n".join(lines)
 
 
+def _slot_identity(block: dict[str, Any]) -> tuple[str, str] | None:
+    """Return a closed-slot identity carried by *block*, if any.
+
+    The apply engine stays agnostic about slot declarations, but it must not
+    let two concurrently prepared supersessions create two active occupants.
+    M4 metadata is additive, so ordinary decision supersessions keep the
+    historical path unchanged.
+    """
+    namespace = block.get("SlotNamespace")
+    slot = block.get("SlotName")
+    if isinstance(namespace, str) and isinstance(slot, str) and namespace and slot:
+        return namespace, slot
+    return None
+
+
 def _op_supersede_decision(filepath, op, store=None):
     """Atomic supersede: append new block + mark old as superseded.
 
@@ -1342,14 +1357,23 @@ def _op_supersede_decision(filepath, op, store=None):
 
     # v3.2.2 — BlockStore path.
     if store is not None:
-        from .block_parser import parse_blocks
-
         try:
             new_blocks = parse_blocks(new_block)
         except Exception as exc:
             return False, f"supersede_decision: parse failed: {exc}"
         if not new_blocks or not all(b.get("_id") for b in new_blocks):
             return False, "supersede_decision: new_block missing or has no '_id'"
+
+        new_slot = _slot_identity(new_blocks[0])
+        if new_slot is not None:
+            old_slot = _slot_identity(old)
+            if old_slot != new_slot:
+                return False, "supersede_decision: closed-slot identity does not match target"
+            if old.get("Status") != "active":
+                return False, "supersede_decision: closed-slot target is no longer active"
+            for active in store.get_all(active_only=True):
+                if active.get("_id") != target and _slot_identity(active) == new_slot:
+                    return False, f"supersede_decision: closed-slot {new_slot[0]}/{new_slot[1]} already has another active occupant"
 
         successor_id = str(new_blocks[0].get("_id"))
         old["Status"] = "superseded"
@@ -1359,6 +1383,23 @@ def _op_supersede_decision(filepath, op, store=None):
         for b in new_blocks:
             store.write_block(b)
         return True, f"supersede_decision: superseded {target} → {successor_id}"
+
+    # A prepared M4 proposal can outlive another approval.  Check the
+    # closed-slot target while holding this operation's transaction so a
+    # stale proposal cannot create a second active occupant.
+    try:
+        new_parsed = parse_blocks(new_block)
+    except Exception as exc:
+        return False, f"supersede_decision: parse failed: {exc}"
+    new_slot = _slot_identity(new_parsed[0]) if len(new_parsed) == 1 else None
+    if new_slot is not None:
+        old_slot = _slot_identity(old)
+        if old_slot != new_slot:
+            return False, "supersede_decision: closed-slot identity does not match target"
+        if old.get("Status") != "active":
+            return False, "supersede_decision: closed-slot target is no longer active"
+        if any(_slot_identity(block) == new_slot and block.get("_id") != target and block.get("Status") == "active" for block in blocks):
+            return False, f"supersede_decision: closed-slot {new_slot[0]}/{new_slot[1]} already has another active occupant"
 
     # Build the complete new file content in memory, then write atomically.
     # Reading the file once here avoids two separate read-modify-write cycles.

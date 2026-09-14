@@ -195,6 +195,7 @@ from mind_mem.mcp.tools.governance import (  # noqa: E402, F401
     list_contradictions,
     memory_evolution,
     propose_update,
+    propose_slot_update,
     rollback_proposal,
     scan,
 )
