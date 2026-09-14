@@ -160,6 +160,16 @@ class TestRecallWithPersona:
         out = json.loads(recall_with_persona("authentication"))
         assert out["persona"] == "detailed"
 
+    def test_persona_forwards_ranked_receipt_with_explicit_scope(self, workspace: str) -> None:
+        from mind_mem.mcp.tools.walkthrough_persona import recall_with_persona
+        from mind_mem.served_ledger import read_served_runs
+
+        out = json.loads(recall_with_persona("authentication", persona="brief", limit=10))
+        assert isinstance(out["attestation"], dict)
+        assert out["attestation_scope"] == "ranked_recall_evidence"
+        assert out["attestation"]["served_proof"] == "recorded"
+        assert len(read_served_runs(workspace)) == 1
+
     def test_technical_persona_promotes_governance(self, workspace: str) -> None:
         from mind_mem.mcp.tools.walkthrough_persona import recall_with_persona
 

@@ -196,6 +196,12 @@ def recall_with_persona(
             "query": query,
             "count": len(projected),
             "results": projected,
+            # The projection changes fields and may remove ids (``brief``),
+            # but it does not rerun retrieval. Forward the ranked receipt
+            # unchanged so callers can join it to the underlying evidence;
+            # the receipt does not attest persona annotations or prose.
+            "attestation": envelope.get("attestation"),
+            "attestation_scope": ("ranked_recall_evidence" if isinstance(envelope.get("attestation"), dict) else "unproven"),
         },
         indent=2,
         default=str,

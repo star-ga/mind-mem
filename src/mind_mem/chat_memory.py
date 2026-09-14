@@ -127,6 +127,12 @@ class ChatAnswer:
     rejected: bool = False
     warnings: tuple[str, ...] = ()
     semantic_required: bool = False
+    # The ranked recall evidence receipt, when the default serving entry
+    # produced one.  This is deliberately separate from the answer: the
+    # generator's prose and the canonicalized evidence projection are not
+    # sealed by a ranked-recall attestation.
+    attestation: dict[str, Any] | None = None
+    attestation_scope: str | None = None
 
     @property
     def semantic_verification(self) -> str:
@@ -149,6 +155,8 @@ class ChatAnswer:
             # generator or caller-supplied payload.
             "semantic_verification": SEMANTIC_VERIFICATION_NOT_ESTABLISHED,
             "semantic_required": self.semantic_required,
+            "attestation": self.attestation,
+            "attestation_scope": self.attestation_scope,
         }
 
 
@@ -191,11 +199,62 @@ def _default_recall(
     question: str,
     limit: int,
     agent_id: str | None = None,
-) -> list[dict[str, Any]]:
+) -> Sequence[dict[str, Any]]:
     """Recall through the workspace's configured backend."""
     from .recall import recall as recall_engine
 
-    return list(recall_engine(workspace, question, limit=limit, agent_id=agent_id))
+    # Keep the ServedResults carrier intact.  Converting it to ``list`` here
+    # used to discard the ranked recall attestation before chat could expose
+    # it.  The caller still treats this as a read-only Sequence.
+    return recall_engine(workspace, question, limit=limit, agent_id=agent_id)
+
+
+def _unproven_attestation(reason: str) -> dict[str, Any]:
+    """Return the dependency-free marker used when ranked proof is absent."""
+    return {
+        "served_seq": None,
+        "served_row_hash": None,
+        "served_proof": "unproven",
+        "ledger_error": reason,
+    }
+
+
+def _ranked_attestation(
+    hits: Sequence[Any],
+) -> tuple[dict[str, Any], str]:
+    """Accept only a coherent default serving carrier; never trust extensions.
+
+    Chat canonicalizes evidence fields before generation, so the receipt's
+    scope is the ranked recall list.  The internal hash check prevents a
+    malformed or forged carrier from being presented as proof.
+    """
+    candidate = getattr(hits, "attestation", None)
+    if not isinstance(candidate, dict):
+        return _unproven_attestation("default recall returned no ranked attestation"), "unproven"
+
+    if candidate.get("served_proof") == "unproven":
+        return dict(candidate), "unproven"
+    if candidate.get("served_proof") != "recorded":
+        return _unproven_attestation("ranked attestation has an unknown proof status"), "unproven"
+
+    ids: list[str] = []
+    for hit in hits:
+        if not isinstance(hit, dict) or not isinstance(hit.get("_id"), str) or not hit["_id"]:
+            return _unproven_attestation("ranked attestation cannot bind malformed evidence ids"), "unproven"
+        ids.append(hit["_id"])
+
+    try:
+        from .recall_attestation import RecallAttestation
+        from .recall_digests import served_set_digest
+
+        parsed = RecallAttestation.from_dict(candidate)
+        if not parsed.is_internally_consistent():
+            raise ValueError("ranked attestation hash is inconsistent")
+        if parsed.result_count != len(ids) or parsed.results_digest != served_set_digest(ids):
+            raise ValueError("ranked attestation does not bind the returned evidence ids")
+    except (TypeError, ValueError, KeyError) as exc:
+        return _unproven_attestation(f"ranked attestation refused: {exc}"), "unproven"
+    return dict(candidate), "ranked_recall_evidence"
 
 
 def _to_evidence(hits: Sequence[Any]) -> tuple[EvidenceItem, ...]:
@@ -424,16 +483,24 @@ def chat_with_memory(
             rejected=True,
             warnings=("semantic verification unavailable; answer withheld",),
             semantic_required=True,
+            attestation_scope="none",
         )
 
     hits: Sequence[Any]
     if recall_fn is None:
         hits = _default_recall(workspace, asked, limit, agent_id=agent_id)
+        serving_attestation, attestation_scope = _ranked_attestation(hits)
     else:
         # Injected recall functions are a deliberate low-level test/extension
         # seam with the historical three-argument contract. Public MCP calls
         # use the default path above, where the verified principal is bound.
         hits = recall_fn(workspace, asked, limit)
+        # An extension function is not an attestation authority.  Even if it
+        # returns an object with an ``attestation`` attribute, accepting that
+        # caller-supplied value would turn chat's response field into a proof
+        # of data the serving entry never recorded.
+        serving_attestation = _unproven_attestation("custom recall function has no trusted serving receipt")
+        attestation_scope = "unproven"
 
     allowed_blocks = _admitted_blocks_for_agent(workspace, agent_id)
     if allowed_blocks is not None:
@@ -480,6 +547,8 @@ def chat_with_memory(
             grounded=True,
             no_record=True,
             semantic_required=semantic_required,
+            attestation=serving_attestation,
+            attestation_scope=attestation_scope,
         )
 
     resolved_category = category or classify_question_category(asked)
@@ -540,6 +609,8 @@ def chat_with_memory(
             rejected=True,
             warnings=tuple(warnings) + (report.summary(),),
             semantic_required=semantic_required,
+            attestation=serving_attestation,
+            attestation_scope=attestation_scope,
         )
 
     is_no_record = not report.citations
@@ -558,4 +629,6 @@ def chat_with_memory(
         no_record=is_no_record,
         warnings=tuple(warnings),
         semantic_required=semantic_required,
+        attestation=serving_attestation,
+        attestation_scope=attestation_scope,
     )

@@ -43,6 +43,8 @@ from mind_mem.chat_memory import (
     chat_with_memory,
     make_workspace_resolver,
 )
+from mind_mem.recall_digests import served_set_digest
+from mind_mem.served_ledger import read_served_runs
 
 DECISIONS_MD = """\
 [D-20260301-001]
@@ -157,6 +159,41 @@ class TestGroundedAnswers:
         for sentence in split_claim_sentences(result.answer):
             assert extract_citations(sentence)
         assert all(resolver(bid) for bid in result.citations)
+
+    def test_default_chat_exposes_ranked_receipt_without_sealing_answer(self, workspace):
+        result = chat_with_memory(workspace, "deploys friday", limit=3)
+
+        assert result.attestation is not None
+        assert result.attestation["served_proof"] == "recorded"
+        assert result.attestation_scope == "ranked_recall_evidence"
+        evidence_ids = [item.block_id for item in result.evidence]
+        assert result.attestation["results_digest"] == served_set_digest(evidence_ids)
+        rows = read_served_runs(workspace)
+        assert len(rows) == 1
+        assert list(rows[0].ids) == evidence_ids
+
+    def test_custom_recall_carrier_is_explicitly_unproven(self, workspace):
+        class ForgedCarrier(list):
+            attestation = {"served_proof": "recorded", "results_digest": "forged"}
+
+        def custom_recall(ws, question, limit):
+            return ForgedCarrier([{"_id": "D-20260301-001", "excerpt": "Friday", "score": 1.0}])
+
+        result = chat_with_memory(
+            workspace,
+            "deploys friday",
+            recall_fn=custom_recall,
+            generator=stub_cited,
+        )
+        assert result.attestation_scope == "unproven"
+        assert result.attestation["served_proof"] == "unproven"
+        assert result.attestation["served_seq"] is None
+
+    def test_semantic_abstention_has_no_ranked_receipt(self, workspace, monkeypatch):
+        monkeypatch.setattr("mind_mem.chat_memory.semantic_entailment_verification_available", lambda: False)
+        result = chat_with_memory(workspace, "deploys friday", semantic_required=True)
+        assert result.attestation is None
+        assert result.attestation_scope == "none"
 
     def test_answer_is_reproducible_byte_for_byte(self, workspace):
         first = chat_with_memory(workspace, "deploys friday", generator=stub_cited)
