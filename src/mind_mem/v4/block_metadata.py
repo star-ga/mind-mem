@@ -57,7 +57,7 @@ from typing import Any
 
 from ..observability import get_logger
 from . import vocabulary as _vocabulary
-from .feature_flags import is_enabled, require_enabled
+from .feature_flags import is_enabled_for_workspace, require_enabled, require_enabled_for_workspace
 
 __all__ = [
     "FLAG",
@@ -89,7 +89,7 @@ def _vocabulary_violations(
     Returns ``[]`` when the flag is off or nothing is declared — the
     vocabulary layer is strictly additive.
     """
-    if not is_enabled(_vocabulary.FLAG):
+    if not is_enabled_for_workspace(str(workspace), _vocabulary.FLAG):
         return []
     return _vocabulary.validate_workspace_fields(workspace, fields)
 
@@ -369,7 +369,13 @@ def validate_block(
     return ``ok=False``; flag-mode violations keep ``ok=True`` with a
     ``vocabulary_flagged: ...`` reason so callers can surface them.
     """
-    require_enabled(FLAG)
+    # With an explicit workspace, the metadata flag belongs to that
+    # workspace.  Direct callers must not be able to select A while this
+    # process happens to have B in its ambient environment.
+    if workspace is None:
+        require_enabled(FLAG)
+    else:
+        require_enabled_for_workspace(str(workspace), FLAG)
     with _validator_lock:
         fn = _validators.get(kind)
     if fn is None:

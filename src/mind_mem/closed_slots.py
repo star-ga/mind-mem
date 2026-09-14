@@ -181,13 +181,12 @@ def _v4_enabled_for_slots(workspace: str) -> bool:
     """Return whether the ordinary v4 metadata gate is active for this workspace."""
 
     from .v4.block_metadata import FLAG
-    from .v4.feature_flags import is_enabled_quiet
+    from .v4.feature_flags import is_enabled_for_workspace
 
-    # The feature-flag helper resolves the same workspace-bound flag used by
-    # the ordinary proposal path; the workspace parameter is retained here so
-    # the slot call site documents the policy boundary explicitly.
-    del workspace
-    return is_enabled_quiet(FLAG)
+    # An explicit workspace is the policy boundary for direct callers.  Do
+    # not fall back to the process ambient workspace here: a caller may be
+    # staging one workspace while another request owns the process context.
+    return is_enabled_for_workspace(workspace, FLAG)
 
 
 def _revalidate_slot_policy(

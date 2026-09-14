@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1577 | **Est. tokens:** ~4657551
-**Generated:** 2026-09-14 10:55 UTC
+**Files:** 1577 | **Est. tokens:** ~4658727
+**Generated:** 2026-09-14 11:10 UTC
 
 ## Token Budget Guide
 
@@ -73,7 +73,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 233 | ~1051000 |
+| `src/mind_mem/` | 233 | ~1051003 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -86,8 +86,8 @@
 | `src/mind_mem/storage/` | 2 | ~11515 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
-| `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 692 | ~2060380 |
+| `src/mind_mem/v4/` | 24 | ~93127 |
+| `tests/` | 692 | ~2061224 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -757,7 +757,7 @@
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
 - `chat_memory.py` (~3952 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
-- `closed_slots.py` (~6760 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
+- `closed_slots.py` (~6763 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `cognitive_forget.py` (~3179 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1058,12 +1058,12 @@
 - `__init__.py` (~1010 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
 - `backpressure.py` (~4318 tok, huge) — v4 backpressure controller (round 4 audit, DeepSeek 9.75→10 gap).
 - `block_kinds.py` (~6493 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
-- `block_metadata.py` (~3852 tok, huge) — v4 block metadata + schema-validation hooks.
+- `block_metadata.py` (~3946 tok, huge) — v4 block metadata + schema-validation hooks.
 - `block_versioning.py` (~1861 tok, huge) — Block versioning + time-travel — reconstruct what a block said, and when.
 - `circuit_breaker.py` (~4577 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 - `cognitive_kernel.py` (~2576 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `embedding_pipeline.py` (~2377 tok, huge) — v4 embedding auto-derivation pipeline (Group A — closes the
-- `feature_flags.py` (~6166 tok, huge) — v4.0 feature-flag registry.
+- `feature_flags.py` (~6336 tok, huge) — v4.0 feature-flag registry.
 - `federation.py` (~7339 tok, huge) — v4 federated cross-agent consistency (Group D).
 - `federation_client.py` (~5276 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `flag_registry.py` (~8516 tok, huge) — Three-state registry for every declared v4 feature flag.
@@ -1078,7 +1078,7 @@
 - `self_editing.py` (~3295 tok, huge) — v4 self-editing on recall (Group A — MemGPT pattern).
 - `surprise_retrieval.py` (~2619 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
 - `tls_floor.py` (~4385 tok, huge) — TLS 1.3 floor and certificate pinning for mind-mem's own network surfaces.
-- `vocabulary.py` (~2895 tok, huge) — v4 vocabulary-bound fields — per-workspace controlled vocabularies.
+- `vocabulary.py` (~2960 tok, huge) — v4 vocabulary-bound fields — per-workspace controlled vocabularies.
 ### `src/mind_mem/`
 
 - `validate.sh` (~1350 tok, large) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
@@ -1458,7 +1458,7 @@
 - `test_llm_noise_profile_wiring.py` (~7741 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_locomo_suite.py` (~2743 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
-- `test_m4_closed_set_slots.py` (~4921 tok, huge) — M4 closed-set slots: declaration, staging, and governed supersession."""
+- `test_m4_closed_set_slots.py` (~5765 tok, huge) — M4 closed-set slots: declaration, staging, and governed supersession."""
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.

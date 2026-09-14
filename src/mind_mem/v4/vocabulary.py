@@ -59,7 +59,7 @@ from pathlib import Path
 from typing import Any
 
 from ..observability import get_logger
-from .feature_flags import require_enabled
+from .feature_flags import require_enabled, require_enabled_for_workspace
 
 __all__ = [
     "FLAG",
@@ -231,7 +231,7 @@ def load_vocabularies(
     with a logged warning so a config typo can't take ingest down; with
     ``strict=True`` they raise :class:`VocabularyConfigError`.
     """
-    require_enabled(FLAG)
+    require_enabled_for_workspace(str(workspace), FLAG)
     ws = Path(workspace)
     merged: dict[str, FieldVocabulary] = {}
 
@@ -272,6 +272,8 @@ def _iter_values(value: Any) -> Iterable[str]:
 def check_fields(
     fields: Mapping[str, Any],
     vocabularies: Mapping[str, FieldVocabulary],
+    *,
+    workspace: str | Path | None = None,
 ) -> list[VocabularyViolation]:
     """Check ``fields`` against ``vocabularies``.
 
@@ -279,7 +281,10 @@ def check_fields(
     compatible). Returns one :class:`VocabularyViolation` per offending
     value; an empty list means everything is in-vocabulary.
     """
-    require_enabled(FLAG)
+    if workspace is None:
+        require_enabled(FLAG)
+    else:
+        require_enabled_for_workspace(str(workspace), FLAG)
     violations: list[VocabularyViolation] = []
     for field, value in fields.items():
         vocab = vocabularies.get(field)
@@ -303,11 +308,11 @@ def validate_workspace_fields(
     fields: Mapping[str, Any],
 ) -> list[VocabularyViolation]:
     """Convenience: :func:`load_vocabularies` + :func:`check_fields`."""
-    require_enabled(FLAG)
+    require_enabled_for_workspace(str(workspace), FLAG)
     vocabularies = load_vocabularies(workspace)
     if not vocabularies:
         return []
-    return check_fields(fields, vocabularies)
+    return check_fields(fields, vocabularies, workspace=workspace)
 
 
 def rejections(violations: Iterable[VocabularyViolation]) -> list[VocabularyViolation]:

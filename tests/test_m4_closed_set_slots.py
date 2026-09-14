@@ -320,6 +320,71 @@ def test_slot_stage_uses_enabled_v4_field_vocabulary_gate(tmp_path: Path, monkey
     assert "SlotName: status" not in (tmp_path / "intelligence/proposed/EDITS_PROPOSED.md").read_text(encoding="utf-8")
 
 
+def test_explicit_workspace_binds_v4_flags_during_staging(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A direct slot call cannot borrow v4 policy from the ambient workspace."""
+    from mind_mem.closed_slots import ClosedSlotError
+
+    explicit = _workspace(tmp_path / "explicit", declarations=_decl())
+    ambient = _workspace(tmp_path / "ambient", declarations=_decl())
+    (explicit / "mind-mem.json").write_text(
+        json.dumps(
+            {
+                "governance_mode": "propose",
+                "closed_slots": _decl(),
+                "v4": {"block_metadata": {"enabled": True}, "vocabulary": {"enabled": True}},
+                "vocabularies": {"actor_role": {"values": ["admin"], "mode": "reject"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ambient))
+
+    with pytest.raises(ClosedSlotError, match="schema_validation_rejection"):
+        stage_slot_update(str(explicit), "profile", "status", "active", rationale="the profile is active", actor_role="planner")
+    assert (explicit / "intelligence/proposed/EDITS_PROPOSED.md").read_text(encoding="utf-8") == ""
+
+
+def test_explicit_workspace_binds_v4_flags_during_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Approval rechecks the explicit workspace even when ambient config differs."""
+    from mind_mem.apply_engine import apply_proposal
+    from mind_mem.closed_slots import stage_slot_update
+    from mind_mem.init_workspace import init
+    from mind_mem.spec_binding import SpecBindingManager
+    from mind_mem.v4 import block_metadata
+
+    explicit = tmp_path / "explicit"
+    ambient = tmp_path / "ambient"
+    init(str(explicit))
+    init(str(ambient))
+    (explicit / "mind-mem.json").write_text(
+        json.dumps({"governance_mode": "propose", "closed_slots": _decl(), "v4": {"block_metadata": {"enabled": True}}}),
+        encoding="utf-8",
+    )
+    (ambient / "mind-mem.json").write_text(json.dumps({"governance_mode": "propose", "closed_slots": _decl()}), encoding="utf-8")
+    SpecBindingManager(str(explicit / "mind-mem.json")).rebind(str(explicit / "mind-mem.json"))
+
+    original = dict(block_metadata._validators)
+    try:
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(explicit))
+        block_metadata.register_schema_validator("decision", lambda payload: block_metadata.SchemaValidationResult(ok=True))
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ambient))
+        staged = stage_slot_update(str(explicit), "profile", "status", "active", rationale="the profile is active")
+        assert staged["status"] == "staged"
+
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(explicit))
+        block_metadata.register_schema_validator(
+            "decision", lambda payload: block_metadata.SchemaValidationResult(ok=False, reason="approval policy changed")
+        )
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ambient))
+        success, message = apply_proposal(str(explicit), staged["proposal_id"], dry_run=False)
+        assert not success
+        assert "schema_validation_rejection" in message or "current policy" in message
+        assert "SlotName: status" not in (explicit / "decisions/DECISIONS.md").read_text(encoding="utf-8")
+    finally:
+        block_metadata._validators.clear()
+        block_metadata._validators.update(original)
+
+
 def test_slot_approval_rechecks_new_strict_quality_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A proposal staged under advisory quality cannot bypass a later strict gate."""
     from mind_mem.init_workspace import init
