@@ -68,7 +68,7 @@ from .enums import TaskStatus
 from .error_codes import DailyTokenCapExceeded
 from .guardrail_surface import apply_guardrail_surfacing
 from .guardrails import GuardrailContext, GuardrailPolicy
-from .namespace_retrieval import filter_search_hits, namespace_search_allowed
+from .namespace_retrieval import declared_custom_namespaces, filter_search_hits, namespace_search_allowed
 from .observability import get_logger, metrics
 from .recall_smart_chunk import chunk_statement, resolve_smart_chunking_config
 from .retrieval_graph import (
@@ -1483,6 +1483,49 @@ def recall(
             for b in blocks:
                 b["_source_file"] = ns_path
                 b["_source_label"] = f"{label}@{agent_id}"
+                all_blocks.append(b)
+
+    # Explicit custom namespace roots are opt-in.  Do not recurse through the
+    # workspace looking for arbitrary directories: a declaration is the
+    # identity and the ACL remains the authority for an authenticated agent.
+    # ``discover_corpus_files`` is reused below each declared root so custom
+    # namespaces have the same registered corpus-file boundary as the root.
+    try:
+        custom_namespaces = declared_custom_namespaces(_get_config(workspace))
+    except ValueError:
+        custom_namespaces = ()
+    for namespace in custom_namespaces:
+        namespace_path = os.path.join(workspace_real, namespace)
+        if os.path.islink(namespace_path):
+            continue
+        namespace_real = os.path.realpath(namespace_path)
+        if not namespace_real.startswith(workspace_prefix) or not os.path.isdir(namespace_real):
+            continue
+        for label, local_rel_path in discover_corpus_files(namespace_real):
+            path = os.path.join(namespace_real, *local_rel_path.split("/"))
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            candidate_real = os.path.realpath(path)
+            if not candidate_real.startswith(workspace_prefix):
+                continue
+            rel_path = os.path.relpath(candidate_real, workspace_real).replace(os.sep, "/")
+            if not rel_path == namespace and not rel_path.startswith(namespace + "/"):
+                continue
+            if ns_manager and not ns_manager.can_read(rel_path):
+                continue
+            if candidate_real in seen_corpus_realpaths:
+                continue
+            seen_corpus_realpaths.add(candidate_real)
+            try:
+                blocks = parse_file(candidate_real)
+            except (OSError, UnicodeDecodeError, ValueError) as e:
+                _log.debug("custom_namespace_parse_failed", namespace=namespace, file=rel_path, error=str(e))
+                continue
+            if active_only:
+                blocks = get_active(blocks)
+            for b in blocks:
+                b["_source_file"] = rel_path
+                b["_source_label"] = f"{label}@{namespace}"
                 all_blocks.append(b)
 
     # Admissibility, once, over the whole corpus — after BOTH load loops so

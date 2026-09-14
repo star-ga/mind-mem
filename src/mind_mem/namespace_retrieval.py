@@ -22,6 +22,7 @@ FLOOR_NONE = "none"
 FLOOR_INHERIT_GLOBAL = "inherit-global"
 DEFAULT_DECLARATION = {"reachability": REACHABILITY_SEARCHABLE, "floor": FLOOR_INHERIT_GLOBAL}
 _MAX_ALWAYS_ITEMS = 32
+_BUILTIN_NAMESPACE_DECLARATIONS = frozenset({"defaults", "workspace", "shared", "agents/*"})
 
 
 def _properties(config: Mapping[str, Any] | None) -> Mapping[str, Any]:
@@ -109,6 +110,36 @@ def declaration_for(config: Mapping[str, Any] | None, namespace: str) -> dict[st
     else:
         out["_configured"] = False
     return out
+
+
+def declared_custom_namespaces(config: Mapping[str, Any] | None) -> tuple[str, ...]:
+    """Return explicitly declared, top-level custom namespace roots.
+
+    The standard workspace/shared/agent roots have dedicated discovery
+    rules.  A custom root is discoverable only when its exact name appears in
+    ``recall.namespace_properties``; arbitrary directories and glob patterns
+    are never promoted into the corpus by this helper.
+    """
+    props = _properties(config)
+    roots: list[str] = []
+    for name, candidate in props.items():
+        if name in _BUILTIN_NAMESPACE_DECLARATIONS:
+            continue
+        if not isinstance(name, str) or not isinstance(candidate, Mapping):
+            continue
+        if (
+            not name
+            or name in {".", ".."}
+            or "/" in name
+            or "\\" in name
+            or any(ch in name for ch in "*?[")
+            or name.startswith(".")
+            or "\x00" in name
+        ):
+            continue
+        _validate_declaration(candidate, name)
+        roots.append(name)
+    return tuple(sorted(roots))
 
 
 def _merge_valid(target: dict[str, Any], candidate: Mapping[str, Any]) -> None:
@@ -365,6 +396,7 @@ __all__ = [
     "FLOOR_NONE",
     "FLOOR_INHERIT_GLOBAL",
     "declaration_for",
+    "declared_custom_namespaces",
     "namespace_for_path",
     "filter_search_hits",
     "namespace_search_allowed",

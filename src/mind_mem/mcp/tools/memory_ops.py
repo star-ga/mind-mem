@@ -180,7 +180,7 @@ def _find_block_file(ws: str, block_id: str) -> str | None:
     return None
 
 
-def _namespace_selector(selector: str) -> tuple[str | None, str | None]:
+def _namespace_selector(selector: str, config: dict[str, Any] | None = None) -> tuple[str | None, str | None]:
     """Validate a direct-read namespace selector without widening identity."""
     if not isinstance(selector, str) or not selector:
         return None, "namespace must be a non-empty relative namespace"
@@ -188,18 +188,28 @@ def _namespace_selector(selector: str) -> tuple[str | None, str | None]:
         return None, "invalid namespace selector"
     if selector == "workspace" or selector == "shared":
         return selector, None
-    if not selector.startswith("agents/"):
-        return None, "invalid namespace selector"
-    agent_id = selector.removeprefix("agents/")
-    if not agent_id or "/" in agent_id:
-        return None, "invalid namespace selector"
-    from mind_mem.namespaces import InvalidAgentIdError, _validate_agent_id
+    if selector.startswith("agents/"):
+        agent_id = selector.removeprefix("agents/")
+        if not agent_id or "/" in agent_id:
+            return None, "invalid namespace selector"
+        from mind_mem.namespaces import InvalidAgentIdError, _validate_agent_id
+
+        try:
+            _validate_agent_id(agent_id)
+        except InvalidAgentIdError:
+            return None, "invalid namespace selector"
+        return selector, None
+    # Custom roots are opt-in identities.  A directory merely existing under
+    # the workspace, or matching a wildcard declaration, does not make it a
+    # selectable namespace; only an exact declaration does.
+    from mind_mem.namespace_retrieval import declared_custom_namespaces
 
     try:
-        _validate_agent_id(agent_id)
-    except InvalidAgentIdError:
+        if selector in declared_custom_namespaces(config):
+            return selector, None
+    except ValueError:
         return None, "invalid namespace selector"
-    return selector, None
+    return None, "invalid namespace selector"
 
 
 def _is_markdown_backend(ws: str) -> bool:
@@ -1051,7 +1061,11 @@ def get_block(block_id: str, namespace: str = "") -> str:
 
     selected_namespace: str | None = None
     if namespace:
-        selected_namespace, selector_error = _namespace_selector(namespace)
+        from mind_mem.request_context import context_config_for
+
+        bound_config = context_config_for(ws)
+        selector_config = dict(bound_config) if bound_config is not None else _load_config(ws)
+        selected_namespace, selector_error = _namespace_selector(namespace, selector_config)
         if selector_error or selected_namespace is None:
             return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": selector_error or "invalid namespace selector"})
         from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
@@ -1069,6 +1083,11 @@ def get_block(block_id: str, namespace: str = "") -> str:
             "workspace": "decisions/DECISIONS.md",
             "shared": "shared/decisions/DECISIONS.md",
         }.get(selected_namespace, f"{selected_namespace}/decisions/DECISIONS.md")
+        namespace_path = os.path.join(ws, *selected_namespace.split("/"))
+        namespace_real = os.path.realpath(namespace_path)
+        workspace_real = os.path.realpath(ws)
+        if os.path.islink(namespace_path) or (namespace_real != workspace_real and not namespace_real.startswith(workspace_real + os.sep)):
+            return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
         if not manager.can_read(acl_probe):
             return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
 
@@ -1268,7 +1287,10 @@ def _resolve_block_in_namespace(ws: str, block_id: str, namespace: str) -> tuple
         manager = NamespaceManager(ws, agent_id=None if bound_agent in {None, "", UNATTRIBUTED} else bound_agent)
     except InvalidAgentIdError:
         return None, "corpus"
-    root = os.path.realpath(ws if namespace == "workspace" else os.path.join(ws, namespace))
+    namespace_path = ws if namespace == "workspace" else os.path.join(ws, *namespace.split("/"))
+    if os.path.islink(namespace_path):
+        return None, "corpus"
+    root = os.path.realpath(namespace_path)
     workspace_root = os.path.realpath(ws)
     if not root.startswith(workspace_root + os.sep) and root != workspace_root:
         return None, "corpus"
