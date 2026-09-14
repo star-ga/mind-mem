@@ -22,6 +22,8 @@ import binascii
 import hashlib
 import json
 import os
+import stat
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -90,8 +92,33 @@ def _canonical(value: Mapping[str, Any]) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
 
 
+def _json_loads_unique(raw: bytes) -> Any:
+    """Decode JSON while refusing duplicate object keys."""
+
+    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, item in items:
+            if key in result:
+                raise ReceiptError(f"duplicate JSON key: {key}")
+            result[key] = item
+        return result
+
+    try:
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs)
+    except ReceiptError:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ReceiptError(f"receipt package is not valid UTF-8 JSON: {exc}") from exc
+
+
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+def _validate_limit(value: Any, *, name: str, maximum: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0 or value > maximum:
+        raise ValueError(f"{name} must be a positive integer no greater than {maximum}")
+    return value
 
 
 def _stat_identity(stat: os.stat_result) -> dict[str, int]:
@@ -105,9 +132,14 @@ def _stat_identity(stat: os.stat_result) -> dict[str, int]:
 
 def _read_stable(path: Path, *, limit: int, optional: bool = False) -> tuple[bytes | None, dict[str, int] | None]:
     """Read one file and prove its identity did not move during the read."""
+    if path.is_symlink():
+        raise ReceiptUnavailable(f"evidence file must not be a symlink: {path}")
     try:
-        with path.open("rb") as handle:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        with os.fdopen(os.open(path, flags), "rb") as handle:
             before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise ReceiptUnavailable(f"evidence file must be a regular file: {path}")
             if before.st_size > limit:
                 raise ReceiptUnavailable(f"{path.name} exceeds the {limit}-byte snapshot limit")
             raw = handle.read(limit + 1)
@@ -123,6 +155,31 @@ def _read_stable(path: Path, *, limit: int, optional: bool = False) -> tuple[byt
     if _stat_identity(before) != _stat_identity(after):
         raise ReceiptUnavailable(f"evidence file changed while captured: {path}")
     return raw, _stat_identity(after)
+
+
+def _read_package_path(path: Path, *, limit: int) -> bytes:
+    """Read a regular, non-symlink package without following a replacement."""
+    if path.is_symlink():
+        raise ReceiptUnavailable("receipt input must not be a symlink")
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        with os.fdopen(os.open(path, flags), "rb") as handle:
+            before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise ReceiptUnavailable("receipt input must be a regular file")
+            if before.st_size > limit:
+                raise ReceiptUnavailable("receipt package exceeds size limit")
+            raw = handle.read(limit + 1)
+            after = os.fstat(handle.fileno())
+    except ReceiptError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise ReceiptUnavailable(f"cannot read receipt package: {exc}") from exc
+    if len(raw) > limit:
+        raise ReceiptUnavailable("receipt package exceeds size limit")
+    if _stat_identity(before) != _stat_identity(after):
+        raise ReceiptUnavailable("receipt package changed while read")
+    return raw
 
 
 def _decode_rows(raw: bytes, *, max_rows: int) -> tuple[dict[str, Any], ...]:
@@ -209,10 +266,8 @@ def export_receipt(
     ordinary append.  A missing, empty, unreadable, malformed, or over-limit
     source raises an explicit error; no empty package is treated as proof.
     """
-    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
-        raise ValueError("max_bytes must be a positive integer")
-    if not isinstance(max_rows, int) or isinstance(max_rows, bool) or max_rows <= 0:
-        raise ValueError("max_rows must be a positive integer")
+    max_bytes = _validate_limit(max_bytes, name="max_bytes", maximum=DEFAULT_MAX_LEDGER_BYTES)
+    max_rows = _validate_limit(max_rows, name="max_rows", maximum=DEFAULT_MAX_ROWS)
 
     ledger = Path(ledger_path(workspace))
     head_path = Path(workspace) / HEAD_RELPATH
@@ -263,32 +318,38 @@ def export_receipt(
     return output
 
 
-def _load_package(package: bytes | bytearray | str | Path | Mapping[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+def _load_package(
+    package: bytes | bytearray | str | Path | Mapping[str, Any],
+    *,
+    max_package_bytes: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     if isinstance(package, Mapping):
         value: Any = dict(package)
         raw_size = len(_package_bytes(value))
     elif isinstance(package, Path):
         try:
-            if package.stat().st_size > DEFAULT_MAX_PACKAGE_BYTES:
-                return None, {"status": "unavailable", "reason": "receipt package exceeds size limit"}
-            raw = package.read_bytes()
-        except OSError as exc:
-            return None, {"status": "unavailable", "reason": f"cannot read receipt package: {exc}"}
+            raw = _read_package_path(package, limit=max_package_bytes)
+        except ReceiptError as exc:
+            return None, {"status": "unavailable", "reason": str(exc)}
         raw_size = len(raw)
         try:
-            value = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            return None, {"status": "malformed", "reason": f"receipt package is not valid UTF-8 JSON: {exc}"}
+            value = _json_loads_unique(raw)
+        except ReceiptError as exc:
+            status = "malformed"
+            return None, {"status": status, "reason": str(exc)}
     else:
-        raw = package.encode("utf-8") if isinstance(package, str) else bytes(package)
+        try:
+            raw = package.encode("utf-8") if isinstance(package, str) else bytes(package)
+        except (TypeError, ValueError) as exc:
+            return None, {"status": "malformed", "reason": f"receipt package is not bytes or text: {exc}"}
         raw_size = len(raw)
-        if raw_size > DEFAULT_MAX_PACKAGE_BYTES:
+        if raw_size > max_package_bytes:
             return None, {"status": "unavailable", "reason": "receipt package exceeds size limit"}
         try:
-            value = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            return None, {"status": "malformed", "reason": f"receipt package is not valid UTF-8 JSON: {exc}"}
-    if raw_size > DEFAULT_MAX_PACKAGE_BYTES:
+            value = _json_loads_unique(raw)
+        except ReceiptError as exc:
+            return None, {"status": "malformed", "reason": str(exc)}
+    if raw_size > max_package_bytes:
         return None, {"status": "unavailable", "reason": "receipt package exceeds size limit"}
     if not isinstance(value, dict):
         return None, {"status": "malformed", "reason": "receipt package must be a JSON object"}
@@ -308,6 +369,7 @@ def verify_receipt(
     package: bytes | bytearray | str | Path | Mapping[str, Any],
     *,
     expected_manifest_sha256: str | None = None,
+    max_package_bytes: int = DEFAULT_MAX_PACKAGE_BYTES,
 ) -> dict[str, Any]:
     """Verify a receipt offline and return individual check results.
 
@@ -316,7 +378,15 @@ def verify_receipt(
     retention; without it the report deliberately says ``issuer_trust`` is
     unknown and never upgrades local consistency to an external claim.
     """
-    value, loaded = _load_package(package)
+    try:
+        max_package_bytes = _validate_limit(
+            max_package_bytes,
+            name="max_package_bytes",
+            maximum=DEFAULT_MAX_PACKAGE_BYTES,
+        )
+    except ValueError as exc:
+        return {"status": "malformed", "scope": "local", "checks": {}, "reason": str(exc)}
+    value, loaded = _load_package(package, max_package_bytes=max_package_bytes)
     if value is None:
         return {**loaded, "scope": "local", "checks": {}}
     checks: dict[str, Any] = {}
@@ -418,5 +488,43 @@ def write_receipt(
 ) -> int:
     """Write an already captured package to an operator-selected path."""
     payload = export_receipt(workspace, max_bytes=max_bytes, max_rows=max_rows)
-    Path(destination).write_bytes(payload)
+    output = Path(destination)
+    ledger = Path(ledger_path(workspace))
+    head = Path(workspace) / HEAD_RELPATH
+    output_absolute = os.path.abspath(os.fspath(output))
+    if output_absolute in {os.path.abspath(os.fspath(ledger)), os.path.abspath(os.fspath(head))}:
+        raise ReceiptError("receipt output must not overwrite the live ledger or head")
+    if output.is_symlink() or output.exists():
+        raise ReceiptError("receipt output already exists; refusing to replace it")
+    parent = output.parent
+    if not parent.exists() or not parent.is_dir():
+        raise ReceiptError("receipt output parent must be an existing directory")
+    fd, temporary = tempfile.mkstemp(prefix=f".{output.name}.", suffix=".tmp", dir=os.fspath(parent))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        # A hard-link publication is atomic and cannot clobber a destination
+        # created by a racing writer.  The temporary inode is our bound output.
+        try:
+            os.link(temporary, output)
+        except OSError as exc:
+            raise ReceiptError(f"cannot publish receipt without replacing an existing path: {exc}") from exc
+        os.unlink(temporary)
+        try:
+            directory_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except OSError as exc:
+            raise ReceiptError(f"receipt published but output directory was not durable: {exc}") from exc
+    except Exception:
+        try:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+        except OSError:
+            pass
+        raise
     return len(payload)

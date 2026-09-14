@@ -1,0 +1,15 @@
+{
+  "profile": "local-served-ledger-v1",
+  "canonicalization": {
+    "input": {"b": "x", "a": 1},
+    "output_utf8": "{\"a\":1,\"b\":\"x\"}\n",
+    "sha256": "2ab52f950a71d1e5f94d20b173018ba634a1eea2e9ea6803af994a20158fc247"
+  },
+  "rules": [
+    "UTF-8 JSON with one trailing newline",
+    "Object keys sorted by Unicode code point",
+    "No insignificant whitespace",
+    "Duplicate object keys are rejected",
+    "The local profile is not an issuer signature or portable identity"
+  ]
+}
