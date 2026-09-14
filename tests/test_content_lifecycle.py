@@ -27,11 +27,11 @@ def _workspace(tmp_path: Path, *, enabled: bool = True) -> str:
     workspace = tmp_path / "workspace"
     init(str(workspace))
     config_path = workspace / "mind-mem.json"
-    config = json.loads(config_path.read_text())
+    config = json.loads(config_path.read_text(encoding="utf-8"))
     if enabled:
         config["recall"].update(copy.deepcopy(CFG))
     config["recall"]["knee_cutoff"] = False
-    config_path.write_text(json.dumps(config))
+    config_path.write_text(json.dumps(config), encoding="utf-8")
     body = ""
     for seq, category, stamp in (
         (1, "status", "2026-09-12"),
@@ -43,7 +43,7 @@ def _workspace(tmp_path: Path, *, enabled: bool = True) -> str:
             f"[D-20260901-{seq:03d}]\nStatus: active\nStatement: orchid infrastructure policy fact {seq}\n"
             f"ContentCategory: {category}\nContentValidFrom: {stamp}\n\n"
         )
-    (workspace / "decisions/DECISIONS.md").write_text(body)
+    (workspace / "decisions/DECISIONS.md").write_text(body, encoding="utf-8")
     return str(workspace)
 
 
@@ -51,9 +51,9 @@ def _workspace(tmp_path: Path, *, enabled: bool = True) -> str:
 def test_actual_recall_uses_semantic_lifetime_and_pinned_clock(tmp_path: Path, monkeypatch, backend: str) -> None:
     workspace = _workspace(tmp_path)
     config_path = Path(workspace) / "mind-mem.json"
-    config = json.loads(config_path.read_text())
+    config = json.loads(config_path.read_text(encoding="utf-8"))
     config["recall"]["backend"] = backend
-    config_path.write_text(json.dumps(config))
+    config_path.write_text(json.dumps(config), encoding="utf-8")
     if backend == "sqlite":
         from mind_mem.sqlite_index import build_index
 
@@ -61,7 +61,7 @@ def test_actual_recall_uses_semantic_lifetime_and_pinned_clock(tmp_path: Path, m
         # FTS5 otherwise clamps its IDF to tiny values rounded to zero.
         # Do not inject artificial scores into the production query path.
         corpus = Path(workspace) / "decisions/DECISIONS.md"
-        with corpus.open("a") as handle:
+        with corpus.open("a", encoding="utf-8") as handle:
             for seq in range(10, 20):
                 handle.write(f"\n[D-20260901-{seq:03d}]\nStatus: active\nStatement: unrelated violet control {seq}\n")
         build_index(workspace)
@@ -131,7 +131,10 @@ def test_idle_tier_sweep_preserves_categories_but_manual_demotion_still_works(tm
 def test_credential_revocation_is_not_overridden_by_durability(tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
     corpus = Path(workspace) / "decisions/DECISIONS.md"
-    corpus.write_text(corpus.read_text().replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"))
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"),
+        encoding="utf-8",
+    )
     hits = recall(workspace, "orchid", limit=10, rerank=False, scoring_instant=NOW)
     assert hits
     assert "D-20260901-004" not in {hit["_id"] for hit in hits}
@@ -158,7 +161,10 @@ def test_lifetime_metadata_is_bound_to_namespace_source_when_ids_repeat(tmp_path
 def test_revoked_credentials_are_withheld_by_generic_corpus_admission(tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
     corpus = Path(workspace) / "decisions/DECISIONS.md"
-    corpus.write_text(corpus.read_text().replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"))
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"),
+        encoding="utf-8",
+    )
     from mind_mem.admissibility import admit_corpus
 
     rows = [{"_id": "D-20260901-004", "_source_file": "decisions/DECISIONS.md", "Status": "active", "ContentCategory": "credential"}]
@@ -168,7 +174,10 @@ def test_revoked_credentials_are_withheld_by_generic_corpus_admission(tmp_path: 
 def test_compliance_export_door_applies_revocation_before_serialization(tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
     corpus = Path(workspace) / "decisions/DECISIONS.md"
-    corpus.write_text(corpus.read_text().replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"))
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"),
+        encoding="utf-8",
+    )
     from mind_mem.compliance.export import load_admitted_blocks
 
     admitted, withheld = load_admitted_blocks(workspace)
@@ -184,7 +193,10 @@ def test_public_direct_fetch_withholds_revoked_credential_but_serves_decision(tm
     active = json.loads(memory_ops.get_block("D-20260901-004"))
     assert active["found"] and active["block"]["ContentCategory"] == "credential"
     corpus = Path(workspace) / "decisions/DECISIONS.md"
-    corpus.write_text(corpus.read_text().replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"))
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"),
+        encoding="utf-8",
+    )
     refused = json.loads(memory_ops.get_block("D-20260901-004"))
     assert refused["found"] is False and refused["withheld"] is True
     assert "block" not in refused
@@ -196,7 +208,10 @@ def test_current_corpus_renewal_changes_the_result_without_reindex(tmp_path: Pat
     hit = {"_id": "D-20260901-001", "Status": "active", "score": 10.0}
     assert apply_validity_gate([copy.deepcopy(hit)], workspace, CFG, scoring_instant=NOW) == 1
     corpus = Path(workspace) / "decisions/DECISIONS.md"
-    corpus.write_text(corpus.read_text().replace("ContentValidFrom: 2026-09-12", "ContentValidFrom: 2026-09-14"))
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("ContentValidFrom: 2026-09-12", "ContentValidFrom: 2026-09-14"),
+        encoding="utf-8",
+    )
     renewed = copy.deepcopy(hit)
     assert apply_validity_gate([renewed], workspace, CFG, scoring_instant=NOW) == 0
     assert renewed["validity"]["content_lifecycle"]["state"] == "current"

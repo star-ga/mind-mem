@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1581 | **Est. tokens:** ~4697748
-**Generated:** 2026-09-14 10:35 UTC
+**Files:** 1581 | **Est. tokens:** ~4697845
+**Generated:** 2026-09-14 10:39 UTC
 
 ## Token Budget Guide
 
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92803 |
-| `tests/` | 693 | ~2062653 |
+| `tests/` | 693 | ~2062750 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1291,7 +1291,7 @@
 - `test_consolidation_index_path.py` (~2113 tok, huge) — Regression: consolidation tools must read the index the product writes.
 - `test_consolidation_maturity_gate.py` (~3750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_constants.py` (~371 tok, medium) — Tests for recall constants module."""
-- `test_content_lifecycle.py` (~2908 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_content_lifecycle.py` (~3005 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_content_source_provenance.py` (~5229 tok, huge) — Tests for content-provenance tagging (roadmap T-001).
 - `test_context_core.py` (~3175 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_context_pack.py` (~2584 tok, huge) — Tests for context_pack rules: adjacency, diversity, pronoun rescue."""
