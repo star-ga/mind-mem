@@ -69,16 +69,24 @@ Kernel sources live in `mind/` (repo root), not `kernels/`.
 |---|---|---|
 | Adversarial-memory + Jepsen stress tests | _(planned — no dedicated suite yet)_ | v3.0.0+; gated on long-haul CI runner. |
 
-## Future roadmap (alignment-driven)
+## Roadmap status — 2026-09-14 candidate
 
-For product roadmap, see `ROADMAP.md` and `CHANGELOG.md`. Cross-repo alignment items:
+This section describes the unreleased 5.0.3 repository candidate. The release
+checks must identify the exact commit they tested. It does not change the published
+PyPI `v5.0.2` release or claim that the `v5.0.3` candidate has been published.
+Statuses below are implementation and evidence states, not a checkbox-derived
+completion percentage. The full roadmap and release history remain in
+`ROADMAP.md` and `CHANGELOG.md`.
 
-| ID | Item | Target |
+| Area | Current status | Evidence and boundary |
 |---|---|---|
-| `EVD-MIND-1` | Native-MIND scoring kernels emit evidence calls from MIND modules | v3.2.0 |
-| `MIC-1` | MIC-B serialization for cross-repo evidence payloads | v3.2.0 |
-| `CI-AM-1` | Nightly arch-mind regression with audit-trail event emission | v3.2.0 |
-| `STATUS-AUTO-1` | Auto-generate this file from the MCP tool catalogue | v3.2.0 |
+| Current release work | Implemented in the candidate; release publication pending | The candidate contains the current governed recall, export, importer and receipt work. The 103-tool source count is current for this candidate; the published 5.0.2 package remains a separate release identity. |
+| Pure-MIND core port | Planned; not started | `ROADMAP.md` describes the compiler and Rust-independence gate, missing `std.tensor`, and unresolved reductions before migration. Existing Python/native prototypes are not a completed Pure-MIND port. |
+| 4B retraining | Deferred until after the Pure-MIND port | Published weights remain trained on 83 tools and report 133/133 evaluation; the candidate exposes 103. A newer base, including Qwen3.8, is not asserted as available. Any post-port run requires a fresh corpus, rented GPU approval/funding, and new receipts. |
+| Ground-truth evaluation | Open and blocked | `docs/design/eval-set-ground-truth.md` requires 60+ labelled cases against a hash-pinned snapshot. The current 36-query pool is an unlabelled development pool, not an independent evaluation or a basis for tuning and release claims. |
+| JavaScript/TypeScript SDK | Source exists; registry publication pending | `sdk/js/` is tested in-tree. `sdk/release/README.md` requires a built staged artifact and npm authentication for `@star-ga/mind-mem-client`; no registry publication is claimed. |
+| Independent CVS / MIND Witness | Open design and implementation | `ROADMAP.md` RE.3 and `docs/specs/retrieval-receipt-contract.md` define the split and acceptance boundary. Local receipts remain local evidence until an independent producer/verifier interoperates. |
+| AsyncAPI | Deferred | `sdk/spec/README.md` records that no cross-process event transport is shipped; publishing AsyncAPI waits for a webhook, SSE, WebSocket or other transport with a matching drift gate. |
 
 ## What this file is not
 
