@@ -588,10 +588,79 @@ def _withhold_inadmissible(
         from .content_lifecycle import filter_revoked_credentials
 
         items = filter_revoked_credentials(items, workspace)
+        # Qdrant/Pinecone rows are caches of a different process and cannot
+        # authorize themselves with their copied ``status`` field. Require a
+        # source path and source-content digest, then run the same live read
+        # admission used by other serving surfaces. An absent local index is
+        # therefore fine for a valid remote row, while an unknown or stale
+        # remote row is withheld before it can consume a result slot.
+        remote = [item for item in items if item.get("_remote_vector") is True]
+        if remote:
+            from .admission import admit_read
+            from .content_lifecycle import content_identity, live_content_blocks
+            from .recall_vector import source_content_digest
+
+            admitted_remote: list[dict] = []
+            by_source: dict[str, list[dict]] = {}
+            for item in remote:
+                source = item.get("_source_file") or item.get("file")
+                block_id = item.get("_id")
+                digest = item.get("_source_digest")
+                if not isinstance(source, str) or not source or source == "?":
+                    continue
+                if not isinstance(block_id, str) or not block_id:
+                    continue
+                if not isinstance(digest, str) or len(digest) != 64:
+                    continue
+                by_source.setdefault(source, []).append(item)
+            for source, candidates in by_source.items():
+                try:
+                    live = live_content_blocks(workspace, blocks=candidates)
+                    valid: list[dict] = []
+                    for candidate in candidates:
+                        identity = content_identity(candidate)
+                        current = live.get(identity) if identity is not None else None
+                        if current is None or source_content_digest(current) != candidate.get("_source_digest"):
+                            continue
+                        valid.append(candidate)
+                    if valid:
+                        admitted_remote.extend(
+                            admit_read(
+                                valid,
+                                workspace=workspace,
+                                status_key=status_key,
+                                surface=leg or "vector_remote",
+                                source_file=source,
+                            ).admitted
+                        )
+                except Exception as exc:  # fail closed for unverified cache rows
+                    _log.warning("remote_vector_admission_failed", source=source, error=str(exc))
+            # ``admit_read`` copies rows, so join its result back by the full
+            # source/id/digest identity; duplicate rows in one source remain
+            # equivalent cache records.
+            admitted_keys = {
+                (item.get("_source_file") or item.get("file"), item.get("_id"), item.get("_source_digest"))
+                for item in admitted_remote
+            }
+            remote_ids = {id(item) for item in remote}
+            items = [
+                item
+                for item in items
+                if id(item) not in remote_ids
+                or (item.get("_source_file") or item.get("file"), item.get("_id"), item.get("_source_digest")) in admitted_keys
+            ]
+        # A workspace-wide id -> status map is unsafe for a source-bound
+        # remote row: another namespace may reuse the same id.  Refresh only
+        # ordinary indexed hits here; the remote rows already went through
+        # source-bound ``admit_read`` above.
+        remote_item_ids = {id(item) for item in items if item.get("_remote_vector") is True}
+        ordinary = [item for item in items if id(item) not in remote_item_ids]
         try:
-            items = with_live_statuses(items, live_statuses(workspace), status_key=status_key)
+            ordinary = with_live_statuses(ordinary, live_statuses(workspace), status_key=status_key)
         except Exception as exc:  # pragma: no cover — defensive
             _log.warning("live_status_refresh_failed", error=str(exc))
+        ordinary_iter = iter(ordinary)
+        items = [item if id(item) in remote_item_ids else next(ordinary_iter) for item in items]
     if all(is_admissible_status(item.get(status_key)) for item in items):
         return items
     releases: frozenset[str] = frozenset()
