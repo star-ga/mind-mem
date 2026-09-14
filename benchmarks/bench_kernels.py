@@ -118,6 +118,8 @@ def py_top_k_mask(scores: list[float], k: int) -> list[bool]:
     mask = [False] * n
     if k <= 0 or n == 0:
         return mask
+    if k >= n:
+        return [score > -math.inf for score in scores]
     eligible = [index for index, score in enumerate(scores) if score > -math.inf]
     for index in sorted(eligible, key=scores.__getitem__, reverse=True)[:k]:
         mask[index] = True

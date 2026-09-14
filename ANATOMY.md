@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1653 | **Est. tokens:** ~4860381
-**Generated:** 2026-09-14 23:51 UTC
+**Files:** 1653 | **Est. tokens:** ~4860399
+**Generated:** 2026-09-14 23:53 UTC
 
 ## Token Budget Guide
 
@@ -32,7 +32,7 @@
 | `.github/workflows/` | 11 | ~20873 |
 | `.roo/` | 1 | ~22 |
 | `audits/` | 5 | ~24039 |
-| `benchmarks/` | 66 | ~182125 |
+| `benchmarks/` | 66 | ~182143 |
 | `benchmarks/repro/` | 1 | ~689 |
 | `benchmarks/repro/niah/` | 4 | ~2557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4684 |
@@ -224,7 +224,7 @@
 - `_ch_minilm.py` (~2045 tok, huge) — LongMemEval-S — per-turn chunking + hybrid (BM25F+mxbai RRF) + 4b expansion.
 - `_ch_minilm_spawn.py` (~6904 tok, huge) — LongMemEval-S — mind-mem FULL POTENTIAL harness (same-equipment, best-vs-best).
 - `ablation_mask.py` (~3414 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `bench_kernels.py` (~4206 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
+- `bench_kernels.py` (~4224 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
 - `cache_effectiveness.py` (~2717 tok, huge) — Cache-effectiveness benchmark — Redis L2 vs LRU-only vs no-cache.
 - `cache_effectiveness_v3.2.1.json` (~227 tok, medium) — Keys: n_blocks, n_queries, pool_size, repeat_pct, runs
 - `compare_runs.py` (~3022 tok, huge) — Compare two benchmark runs -- unpaired for LoCoMo, paired for ranking.
