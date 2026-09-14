@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from mind_mem.chat_generators import ChatRequest
-from mind_mem.chat_memory import ChatAnswer, chat_with_memory
+from mind_mem.chat_memory import chat_with_memory
 from mind_mem.edge_grounded_answer import answer as graph_answer
 from mind_mem.knowledge_graph import KnowledgeGraph
 from mind_mem.semantic_capability import (
@@ -74,21 +74,28 @@ def test_semantic_required_chat_abstains_before_generator(tmp_path: Path) -> Non
 
 
 def test_mcp_chat_forwards_semantic_required(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from fastmcp.server.auth import AccessToken
+
     import mind_mem.chat_memory as chat_memory_module
+    from mind_mem.init_workspace import init
+    from mind_mem.mcp.infra.workspace import use_workspace
     from mind_mem.mcp.tools import chat as chat_tool
 
-    captured: dict[str, object] = {}
+    init(str(tmp_path))
+    token = AccessToken(token="fixture", client_id="fixture", scopes=["user"], claims={"sub": "alice"})
+    monkeypatch.setattr("mind_mem.mcp.infra.acl.get_access_token", lambda: token)
 
-    def fake_chat(*args, **kwargs):
-        captured.update(kwargs)
-        return ChatAnswer(question="q", answer="no record found", no_record=True)
+    def must_not_recall(*args, **kwargs):
+        pytest.fail("semantic-required request reached recall without a verifier")
 
-    monkeypatch.setattr(chat_memory_module, "chat_with_memory", fake_chat)
-    monkeypatch.setattr(chat_tool, "_workspace", lambda: _chat_workspace(tmp_path))
-    monkeypatch.setattr(chat_tool, "_check_workspace", lambda _workspace: None)
-    payload = json.loads(chat_tool.chat_with_memory.__wrapped__("q", semantic_required=True))
-    assert payload["semantic_required"] is False  # fake response cannot set capability
-    assert captured["semantic_required"] is True
+    monkeypatch.setattr(chat_memory_module, "_default_recall", must_not_recall)
+    with use_workspace(str(tmp_path)):
+        payload = json.loads(chat_tool.chat_with_memory("q", semantic_required=True))
+    assert payload["semantic_required"] is True
+    assert payload["semantic_verification"] == "not_established"
+    assert payload["grounded"] is False
+    assert payload["rejected"] is True
+    assert "unavailable" in payload["warnings"][0]
 
 
 def test_graph_answer_semantic_required_abstains_before_generator(tmp_path: Path, admitted) -> None:
@@ -116,6 +123,20 @@ def test_graph_default_remains_structurally_grounded(tmp_path: Path, admitted) -
         result = graph_answer(graph, "alice")
     assert result.grounded is True
     assert result.semantic_verification == SEMANTIC_VERIFICATION_NOT_ESTABLISHED
+
+
+def test_graph_cited_contradiction_does_not_claim_semantic_verification(tmp_path: Path, admitted) -> None:
+    with KnowledgeGraph(str(tmp_path / "graph.db")) as graph:
+        graph.add_edge("alice", "depends_on", "blue", source_block_id="D-1")
+        structural = graph_answer(graph, "alice")
+        assert structural.citations
+        result = graph_answer(
+            graph,
+            "alice",
+            generate_fn=lambda _context: f"Alice does not depend on blue [[{structural.citations[0]}]].",
+        )
+    assert result.grounded is True
+    assert result.semantic_verification == "not_established"
 
 
 def test_graph_cli_forwards_semantic_required_and_abstains(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, admitted) -> None:

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1625 | **Est. tokens:** ~4790047
-**Generated:** 2026-09-14 16:48 UTC
+**Files:** 1625 | **Est. tokens:** ~4790268
+**Generated:** 2026-09-14 16:52 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 715 | ~2124209 |
+| `tests/` | 715 | ~2124430 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1510,7 +1510,7 @@
 - `test_m2_m3_namespace_contract.py` (~3147 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
 - `test_m4_closed_set_slots.py` (~5837 tok, huge) — M4 closed-set slots: declaration, staging, and governed supersession."""
 - `test_m5_enforcement_boundaries.py` (~2959 tok, huge) — M5 output enforcement controls for summaries and evidence scope."""
-- `test_m5_semantic_capability.py` (~1330 tok, large) — M5 semantic-verification capability boundary controls."""
+- `test_m5_semantic_capability.py` (~1551 tok, huge) — M5 semantic-verification capability boundary controls."""
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.
