@@ -49,20 +49,25 @@ revision pointer, prior revisions pinned at `v4.1.0`, `v4.0.0-base`,
 
 ## What v4 knows
 
-> **Surface drift as of mind-mem 5.0.1 — read before trusting the model on
-> module names.** These weights were trained against an **83-tool** surface.
-> The live server now exposes **102**, so the model does not know the newest
-> tools at all.
+> **Surface drift as of the published mind-mem 5.0.2 package — read before
+> trusting the model on module names.** These weights were trained against an
+> **83-tool** surface.
+>
+> The published 5.0.2 package exposed one hundred two tools; the current
+> repository's 5.0.3 candidate exposes **103**. The candidate has not been
+> published here, so this card does not claim a new package release.
 >
 > **Correction (2026-09-01): this card said 96 and the hub copy said 84.**
 > Both were wrong, and neither had an authority behind it. 83 is measured, not
-> asserted: it is `scripts/count_mcp_tools.py`'s AST rule — the same rule that
-> produces the live 102 — applied to `git show v4.1.1:src/mind_mem/mcp/`. The
+> asserted: it is `scripts/count_mcp_tools.py`'s AST rule — applied to
+> `git show v4.1.1:src/mind_mem/mcp/` for the trained revision and to the
+> current repository candidate for its 103-tool runtime count. The
 > **84** was that revision's *registration* total, which double-counts `recall`
 > (registered in both `public.py` and `recall.py`, and exposed once); the same
 > off-by-one produced v3.9's "81" and the "81 + 3 = 84" arithmetic
 > that this card then rounded up to 96. No revision of mind-mem has ever
-> exposed 96 distinct tools: the surface went 80 → 83 → 89 → 94 → 98 → 102.
+> exposed 96 distinct tools: the historical surface went 80 → 83 → 89 → 94
+> → 98 → 102; the current repository candidate is 103.
 > `scripts/check_docs_alignment.py` now recomputes this number from the
 > trained revision on every CI run, so the two copies of this card cannot
 > disagree again.
@@ -77,8 +82,8 @@ revision pointer, prior revisions pinned at `v4.1.0`, `v4.0.0-base`,
 > flags, and that 6 modules are deliberately unwired with a recorded trigger.
 >
 > The **83 below is deliberate and correct**: it is a fact about these
-> WEIGHTS, not about the server. Editing it to the live count of 102 would
-> state something untrue about the model you are running. The corpus is
+> WEIGHTS, not about the server. Editing it to the candidate's live count of
+> 103 would state something untrue about the model you are running. The corpus is
 > regenerated and the model retrained as separate, sequenced work — and it
 > must be regenerated against **5.0.1**, not a 5.0.0 checkout, which is
 > missing capability the product ships again. Until then, treat model answers
