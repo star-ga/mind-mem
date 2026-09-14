@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1625 | **Est. tokens:** ~4790645
-**Generated:** 2026-09-14 16:47 UTC
+**Files:** 1627 | **Est. tokens:** ~4802924
+**Generated:** 2026-09-14 16:53 UTC
 
 ## Token Budget Guide
 
@@ -45,7 +45,7 @@
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
-| `docs/benchmarks/` | 25 | ~43169 |
+| `docs/benchmarks/` | 27 | ~55448 |
 | `docs/benchmarks/ablation/` | 2 | ~12181 |
 | `docs/benchmarks/head-20260907/` | 8 | ~7240 |
 | `docs/benchmarks/memory-ab-420s-runs/` | 26 | ~84421 |
@@ -386,6 +386,10 @@
 - `lme-mind_mem-head.md` (~1016 tok, large) — LongMemEval-S scorecard — `mind_mem` (2026-09-07)
 - `lme-no_expansion.md` (~1015 tok, large) — LongMemEval-S scorecard — `mind_mem` (2026-09-07)
 - `report.json` (~1420 tok, large) — Keys: control_path, control_path_status, floor_by_type, floor_headline, floor_path
+### `docs/benchmarks/`
+
+- `local-receipt-pilot-20260914.json` (~10921 tok, huge) — Keys: protocol_sha256, runner_sha256, before, started_utc, python
+- `local-receipt-pilot-20260914.md` (~1358 tok, large) — Local retrieval-receipt pilot — 2026-09-14
 ### `docs/benchmarks/memory-ab-420s-runs/`
 
 - `MANIFEST.json` (~2906 tok, huge) — Keys: count, executable_binding, originals, receipts, what
