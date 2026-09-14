@@ -5,13 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mind_mem._recall_core import recall
+from mind_mem._recall_core import knee_cutoff, recall
 from mind_mem.block_store import MarkdownBlockStore
 from mind_mem.init_workspace import init
 from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.mcp.tools.recall import pack_recall_budget
 from mind_mem.namespace_retrieval import declaration_for, filter_search_hits
-from mind_mem._recall_core import knee_cutoff
 
 
 def _block(path: Path, block_id: str, block_type: str, statement: str) -> None:

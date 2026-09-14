@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1581 | **Est. tokens:** ~4697845
-**Generated:** 2026-09-14 10:39 UTC
+**Files:** 1581 | **Est. tokens:** ~4697837
+**Generated:** 2026-09-14 10:43 UTC
 
 ## Token Budget Guide
 
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92803 |
-| `tests/` | 693 | ~2062750 |
+| `tests/` | 693 | ~2062742 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1467,7 +1467,7 @@
 - `test_llm_noise_profile_wiring.py` (~7741 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_locomo_suite.py` (~2743 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
-- `test_m2_m3_namespace_contract.py` (~1729 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
+- `test_m2_m3_namespace_contract.py` (~1721 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.
