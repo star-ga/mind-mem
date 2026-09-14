@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1645 | **Est. tokens:** ~4842945
-**Generated:** 2026-09-14 19:12 UTC
+**Files:** 1648 | **Est. tokens:** ~4848680
+**Generated:** 2026-09-14 19:15 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~72678 |
+| `./` | 37 | ~72692 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5887 |
 | `.gemini/` | 1 | ~28 |
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~213524 |
+| `docs/` | 95 | ~213552 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -69,14 +69,14 @@
 | `sdk/js/src/` | 5 | ~3113 |
 | `sdk/js/test/` | 2 | ~3654 |
 | `sdk/release/` | 3 | ~4640 |
-| `sdk/spec/` | 2 | ~5717 |
+| `sdk/spec/` | 3 | ~6684 |
 | `sdk/spec/fixtures/` | 7 | ~926 |
 | `security/` | 5 | ~24696 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1090422 |
+| `src/mind_mem/` | 239 | ~1090441 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
@@ -85,13 +85,13 @@
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
 | `src/mind_mem/mcp/tools/` | 29 | ~124769 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
-| `src/mind_mem/spec/` | 2 | ~2005 |
+| `src/mind_mem/spec/` | 3 | ~5381 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 727 | ~2147247 |
+| `tests/` | 728 | ~2148578 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -147,7 +147,7 @@
 - `install.sh` (~5444 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
-- `pyproject.toml` (~3738 tok, huge) — [project]
+- `pyproject.toml` (~3752 tok, huge) — [project]
 - `requirements-optional.in` (~54 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
 - `requirements-optional.txt` (~22642 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
@@ -527,7 +527,7 @@
 - `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 
-- `status.md` (~1873 tok, huge) — MIND-Mem — implementation status (alignment companion)
+- `status.md` (~1901 tok, huge) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
@@ -679,7 +679,8 @@
 - `version.py` (~1702 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `sdk/spec/`
 
-- `README.md` (~672 tok, large) — API specifications
+- `README.md` (~804 tok, large) — API specifications
+- `asyncapi.json` (~835 tok, large) — Keys: asyncapi, channels, components, defaultContentType, info
 ### `sdk/spec/fixtures/`
 
 - `README.md` (~251 tok, medium) — REST response contract fixtures
@@ -840,7 +841,7 @@
 - `entity_prefetch.py` (~3078 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
 - `enums.py` (~3698 tok, huge) — Centralised enum definitions for mind-mem.
 - `error_codes.py` (~1918 tok, huge) — mind-mem Error Codes — structured error classification.
-- `event_fanout.py` (~4850 tok, huge) — Governance event fan-out (v4.0 prep).
+- `event_fanout.py` (~4869 tok, huge) — Governance event fan-out (v4.0 prep).
 - `evidence_bundle.py` (~2205 tok, huge) — Structured evidence bundle for answerer co-design (v3.3.0 Tier 3 #7).
 - `evidence_objects.py` (~15297 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3313 tok, huge) — Deterministic evidence packer for Mind-Mem.
@@ -1040,6 +1041,7 @@
 ### `src/mind_mem/spec/`
 
 - `__init__.py` (~215 tok, medium) — # Copyright 2026 STARGA, Inc.
+- `export_asyncapi.py` (~3376 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `export_openapi.py` (~1790 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
 
@@ -1793,6 +1795,7 @@
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_sdk_asyncapi_drift.py` (~1331 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_js_packaging.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.

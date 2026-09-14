@@ -2,9 +2,9 @@
 
 Exposes mind-mem's governance events (``contradiction_detected``,
 ``block_promoted``, ``snapshot_created``, ``proposal_applied``,
-``rollback_executed``, ``audit_chain_verified``) as a publish-subscribe
-stream. External systems (Kafka, NATS, Redis Streams, webhook
-aggregators) subscribe once instead of polling governance endpoints.
+``rollback_executed``, ``audit_chain_verified``) as an outbound notification
+stream. A configured downstream reader can consume the Redis stream instead
+of polling governance endpoints; this module does not implement that reader.
 
 The module ships a minimal pluggable publisher interface plus two
 built-in publishers:
@@ -12,8 +12,9 @@ built-in publishers:
 * :class:`LoggingPublisher` — zero-dep; emits events to the
   structured logger. Always available.
 * :class:`RedisStreamPublisher` — writes to a Redis stream when
-  ``redis`` is importable. Cross-worker fan-out with at-least-once
-  semantics via consumer groups.
+  ``redis`` is importable. It performs a best-effort ``XADD`` append; this
+  module does not create consumer groups or provide retry/acknowledgement
+  semantics.
 
 Additional publishers (Kafka, NATS, SNS, custom webhook) plug in by
 implementing :class:`Publisher` and registering via
@@ -336,8 +337,8 @@ class EventFanout:
     """Routes a single :class:`Event` to every configured publisher.
 
     Publisher failures never block the event — each publisher's error
-    is logged and the next publisher runs. Callers get at-least-once
-    delivery to whichever publishers are online.
+    is logged and the next publisher runs. Delivery is best-effort to
+    whichever publishers are online.
     """
 
     def __init__(self, publishers: list[Publisher]) -> None:

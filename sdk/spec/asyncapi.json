@@ -1,0 +1,112 @@
+{
+  "asyncapi": "3.0.0",
+  "channels": {
+    "mindMemEvents": {
+      "address": "mind-mem:events",
+      "bindings": {
+        "x-redis-stream": {
+          "description": "Redis Streams XADD record. The data field is a JSON string containing the event. This extension documents Redis Streams because standard Pub/Sub bindings do not.",
+          "field": "data",
+          "stream": "mind-mem:events",
+          "type": "redis-stream"
+        }
+      },
+      "messages": {
+        "event": {
+          "$ref": "#/components/messages/MindMemEvent"
+        }
+      }
+    }
+  },
+  "components": {
+    "messages": {
+      "MindMemEvent": {
+        "contentType": "application/json",
+        "name": "MindMemEvent",
+        "payload": {
+          "$ref": "#/components/schemas/MindMemEvent"
+        },
+        "title": "mind-mem event wire body"
+      }
+    },
+    "schemas": {
+      "MindMemEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "Extensible event kind; canonical and observed sets are listed in x-mind-mem.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "description": "Scrubbed scalar/id/hash metadata; block prose is dropped before publishing.",
+            "type": "object"
+          },
+          "ts_wall": {
+            "type": "number"
+          },
+          "workspace": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "payload",
+          "workspace",
+          "ts_wall"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "defaultContentType": "application/json",
+  "info": {
+    "description": "Opt-in outbound Redis Streams notification contract. The publisher appends a JSON event to one stream; failures are swallowed.",
+    "title": "mind-mem outbound events",
+    "version": "1"
+  },
+  "operations": {
+    "publishMindMemEvent": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/mindMemEvents"
+      },
+      "description": "Best-effort outbound append from the configured publisher. No consumer group, retry, acknowledgement, ordering, or at-least-once guarantee is part of this contract.",
+      "messages": [
+        {
+          "$ref": "#/channels/mindMemEvents/messages/event"
+        }
+      ]
+    }
+  },
+  "x-mind-mem": {
+    "canonical_event_kinds": [
+      "audit_chain_verified",
+      "block_promoted",
+      "contradiction_detected",
+      "proposal_applied",
+      "rollback_executed",
+      "snapshot_created",
+      "tier_demoted",
+      "tier_promoted"
+    ],
+    "consumer_surface": "none shipped by this module",
+    "delivery": "best-effort outbound append; publish failures are swallowed and not retried",
+    "event_kind_policy": "extensible string; canonical names are advisory taxonomy",
+    "observed_source_event_kinds": [
+      "contradiction_detected",
+      "proposal_applied",
+      "rollback_executed",
+      "tier_demoted",
+      "tier_promoted"
+    ],
+    "payload_policy": "scrub_payload permits bounded ids, hashes, enums, numbers and booleans; prose is dropped",
+    "record_field": "data",
+    "stream": "mind-mem:events",
+    "transport": "redis-stream-xadd"
+  }
+}

@@ -42,16 +42,30 @@ must be followed by `--write`**. The structural comparison deliberately ignores
 route drift — but `TestArtifactVersion` asserts it separately and names the
 command in its failure message.
 
-## AsyncAPI — deferred, with the reason
+## `asyncapi.json`
 
-`AsyncAPI` is not published, and not because it was skipped. There is no
-network event surface to describe. `src/mind_mem/change_stream.py` is an
-**in-process** pub/sub bus; its own header records that "the HTTP webhook
-endpoint + cross-process bus remain deferred". Writing an AsyncAPI document
-today would mean publishing a transport contract no server honours — the same
-failure mode the drift gate above exists to prevent, with no gate available to
-catch it.
+The outbound event publisher has an opt-in cross-process transport: when
+`events.enabled` and the Redis publisher are configured,
+`mind_mem.event_fanout.RedisStreamPublisher` appends one JSON string in the
+Redis Streams `data` field. The contract is deliberately limited to that
+publisher boundary. It does not describe SSE, webhooks, a consumer service,
+acknowledgements, retries, ordering, consumer groups, or at-least-once
+delivery; publish failures are swallowed by the existing fail-open event seam.
 
-**Trigger:** the first time a change-stream event crosses a process boundary
-(webhook, SSE, WebSocket, or the cross-process bus), that transport gets an
-AsyncAPI document and a drift check built the same way as this one.
+The artifact records the eight canonical event names and the five literal
+event kinds currently observed at product emit sites. Event kinds remain
+extensible, and the payload is the existing `scrub_payload` output: bounded
+IDs, hashes, enums, numbers and booleans may cross the boundary while prose is
+dropped.
+
+Regenerate or check it with the stdlib exporter:
+
+```bash
+mind-mem-asyncapi --write
+mind-mem-asyncapi --check
+```
+
+(`python3 -m mind_mem.spec.export_asyncapi` is the equivalent module command.)
+`tests/test_sdk_asyncapi_drift.py` compares the complete committed document
+with the live source emitter inventory and validates a captured `XADD` record,
+including duplicate-key, malformed-body and unsanitised-payload refusals.

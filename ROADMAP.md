@@ -2541,7 +2541,7 @@ default story is two laptops talking to each other.
 
 - [ ] **JavaScript / TypeScript SDK** — client code ships in-tree at `sdk/js/`; the npm publish as `@star-ga/mind-mem-client` is the open step. Tracked.
 - [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
-- [ ] **OpenAPI + AsyncAPI specs** — **HALF SHIPPED 2026-09-06:** OpenAPI 3.1.0 ships at `sdk/spec/openapi.json` (13 paths, version-gated by `tests/test_sdk_openapi_drift.py`); AsyncAPI is still unpublished, and no public asynchronous event transport is in the current product, which is why this stays open. Original text: declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
+- [ ] **OpenAPI + AsyncAPI specs** — **PARTIALLY SHIPPED 2026-09-14:** OpenAPI 3.1.0 ships at `sdk/spec/openapi.json` (13 paths, version-gated by `tests/test_sdk_openapi_drift.py`); `sdk/spec/asyncapi.json` now documents the opt-in outbound Redis Streams `XADD` publisher, with a source-emitter and captured-wire drift gate in `tests/test_sdk_asyncapi_drift.py`. The AsyncAPI scope excludes consumers, retries, ordering and at-least-once delivery because the publisher does not provide them. Go/JS publication and the remaining SDK work stay open. Original text: declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
 - [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Endpoint-backed (pinecone / weaviate / qdrant) still deferred — they need a live endpoint + API credential.
 
 ### F. Anti-patterns explicitly forbidden

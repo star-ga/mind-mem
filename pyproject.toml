@@ -210,6 +210,7 @@ mind-mem-connect = "mind_mem.federation_connect:main"
 # reason mind-mem-baseline targets `_cli`: the module names its own entry point
 # and pyproject follows it rather than renaming it.
 mind-mem-openapi = "mind_mem.spec.export_openapi:_main"
+mind-mem-asyncapi = "mind_mem.spec.export_asyncapi:_main"
 mm = "mind_mem.mm_cli:main"
 
 [tool.setuptools.packages.find]

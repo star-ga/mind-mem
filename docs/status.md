@@ -86,7 +86,7 @@ completion percentage. The full roadmap and release history remain in
 | Ground-truth evaluation | Open and blocked | `docs/design/eval-set-ground-truth.md` requires 60+ labelled cases against a hash-pinned snapshot. The current 36-query pool is an unlabelled development pool, not an independent evaluation or a basis for tuning and release claims. |
 | JavaScript/TypeScript SDK | Source exists; registry publication pending | `sdk/js/` is tested in-tree. `sdk/release/README.md` requires a built staged artifact and npm authentication for `@star-ga/mind-mem-client`; no registry publication is claimed. |
 | Independent CVS / MIND Witness | Open design and implementation | `ROADMAP.md` RE.3 and `docs/specs/retrieval-receipt-contract.md` define the split and acceptance boundary. Local receipts remain local evidence until an independent producer/verifier interoperates. |
-| AsyncAPI | Deferred | `sdk/spec/README.md` records that no cross-process event transport is shipped; publishing AsyncAPI waits for a webhook, SSE, WebSocket or other transport with a matching drift gate. |
+| AsyncAPI | Published for the opt-in outbound Redis Streams publisher | `sdk/spec/asyncapi.json` and `tests/test_sdk_asyncapi_drift.py` bind the `XADD` `data` field and observed source emitters. This is a best-effort outbound notification contract; no consumer, retry, ordering or at-least-once guarantee is claimed. |
 
 ## What this file is not
 
