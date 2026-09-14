@@ -1084,6 +1084,54 @@ def list_contradictions() -> str:
 
 
 @mcp_tool_observe
+@_traced("propose_slot_update")
+def propose_slot_update(
+    namespace: str,
+    slot: str,
+    value: str,
+    rationale: str,
+    actor_id: str = "",
+    actor_role: str = "",
+    session_id: str = "",
+    tool_id: str = "",
+    purpose: str = "",
+) -> str:
+    """Stage a closed-slot update for review by ``approve_apply``.
+
+    Closed slots are opt-in, authored in ``mind-mem.json``, and reject
+    unknown namespace/member names.  This tool only writes a staged proposal;
+    the existing human approval gate remains the sole source-of-truth writer.
+    Unslotted facts continue through :func:`propose_update`.
+    """
+    ws = _workspace()
+    from mind_mem.closed_slots import ClosedSlotError, stage_slot_update
+    from mind_mem.compliance.provenance_policy import ProvenanceRequired
+    from mind_mem.compliance.redaction import RedactionRefused
+
+    try:
+        result = stage_slot_update(
+            ws,
+            namespace,
+            slot,
+            value,
+            rationale=rationale,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            session_id=session_id,
+            tool_id=tool_id,
+            purpose=purpose,
+        )
+    except ProvenanceRequired as exc:
+        return json.dumps({"error": "provenance_required", "reason": str(exc), "namespace": namespace, "slot": slot}, indent=2)
+    except RedactionRefused as exc:
+        return json.dumps({"error": "redaction_refused", "reason": str(exc), "namespace": namespace, "slot": slot}, indent=2)
+    except ClosedSlotError as exc:
+        return json.dumps({"error": str(exc), "namespace": namespace, "slot": slot}, indent=2)
+    metrics.inc("mcp_slot_proposals")
+    return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, **result}, indent=2)
+
+
+@mcp_tool_observe
 def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     """Apply a staged proposal from intelligence/proposed/."""
     ws = _workspace()
@@ -1427,6 +1475,7 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
 def register(mcp) -> None:
     """Wire the governance tools onto *mcp*."""
     mcp.tool(propose_update)
+    mcp.tool(propose_slot_update)
     mcp.tool(scan)
     mcp.tool(list_contradictions)
     mcp.tool(approve_apply)

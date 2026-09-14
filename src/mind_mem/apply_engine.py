@@ -22,11 +22,11 @@ import re
 import subprocess  # nosec B404 — subprocess is used with a fixed argument list (shell=False) for internal tooling; no user input reaches the command
 import sys
 from datetime import datetime, timedelta, timezone
-from typing import Final, Optional
+from typing import Any, Final, Optional
 
 # Import block parser from same directory
 from .backup_restore import WAL
-from .block_parser import get_by_id, parse_file
+from .block_parser import get_by_id, parse_blocks, parse_file
 from .block_store import (
     SNAPSHOT_FILES,
     MarkdownBlockStore,
@@ -887,7 +887,7 @@ def execute_op(ws, op, *, store=None):
 
     try:
         if op_type == "append_block":
-            return _op_append_block(filepath, op, store=store)
+            return _op_append_block(filepath, op, store=store, ws=ws)
         elif op_type == "insert_after_block":
             return _op_insert_after_block(filepath, op)
         elif op_type == "update_field":
@@ -899,14 +899,14 @@ def execute_op(ws, op, *, store=None):
         elif op_type == "replace_range":
             return _op_replace_range(filepath, op)
         elif op_type == "supersede_decision":
-            return _op_supersede_decision(filepath, op, store=store)
+            return _op_supersede_decision(filepath, op, store=store, ws=ws)
         else:
             return False, f"Unknown op: {op_type}"
     except (OSError, IOError, ValueError, KeyError, IndexError) as e:
         return False, f"Op {op_type} failed: {e}"
 
 
-def _op_append_block(filepath, op, store=None):
+def _op_append_block(filepath, op, store=None, ws=None):
     """Append a new block at end of file.
 
     v3.2.2: when ``store`` is provided, parses ``patch`` as block
@@ -930,8 +930,29 @@ def _op_append_block(filepath, op, store=None):
         for block in blocks:
             if not block.get("_id"):
                 return False, "append_block: parsed block is missing '_id'"
+        if ws is not None:
+            from .closed_slots import ClosedSlotError, _validate_slot_payload
+
+            try:
+                active = store.get_all(active_only=True) if store is not None else parse_file(filepath)
+                _validate_slot_payload(ws, blocks, active_blocks=active)
+            except ClosedSlotError as exc:
+                return False, f"append_block: {exc}"
+        for block in blocks:
             store.write_block(block)
         return True, f"append_block: wrote {len(blocks)} block(s) via BlockStore"
+
+    if ws is not None:
+        from .closed_slots import ClosedSlotError, _validate_slot_payload
+
+        try:
+            blocks = parse_blocks(patch)
+            active = parse_file(filepath)
+            _validate_slot_payload(ws, blocks, active_blocks=active)
+        except ClosedSlotError as exc:
+            return False, f"append_block: {exc}"
+        except Exception as exc:
+            return False, f"append_block: parse failed: {exc}"
 
     with open(filepath, "a", encoding="utf-8") as f:
         f.write(f"\n{patch}\n")
@@ -1300,7 +1321,22 @@ def _with_supersedes_field(block_text: str, target: str) -> str:
     return "\n".join(lines)
 
 
-def _op_supersede_decision(filepath, op, store=None):
+def _slot_identity(block: dict[str, Any]) -> tuple[str, str] | None:
+    """Return a closed-slot identity carried by *block*, if any.
+
+    The apply engine stays agnostic about slot declarations, but it must not
+    let two concurrently prepared supersessions create two active occupants.
+    M4 metadata is additive, so ordinary decision supersessions keep the
+    historical path unchanged.
+    """
+    namespace = block.get("SlotNamespace")
+    slot = block.get("SlotName")
+    if isinstance(namespace, str) and isinstance(slot, str) and namespace and slot:
+        return namespace, slot
+    return None
+
+
+def _op_supersede_decision(filepath, op, store=None, ws=None):
     """Atomic supersede: append new block + mark old as superseded.
 
     v3.2.2: when ``store`` is provided, both phases route through
@@ -1342,14 +1378,20 @@ def _op_supersede_decision(filepath, op, store=None):
 
     # v3.2.2 — BlockStore path.
     if store is not None:
-        from .block_parser import parse_blocks
-
         try:
             new_blocks = parse_blocks(new_block)
         except Exception as exc:
             return False, f"supersede_decision: parse failed: {exc}"
         if not new_blocks or not all(b.get("_id") for b in new_blocks):
             return False, "supersede_decision: new_block missing or has no '_id'"
+
+        if ws is not None:
+            from .closed_slots import ClosedSlotError, _validate_slot_payload
+
+            try:
+                _validate_slot_payload(ws, new_blocks, active_blocks=store.get_all(active_only=True), target=old)
+            except ClosedSlotError as exc:
+                return False, f"supersede_decision: {exc}"
 
         successor_id = str(new_blocks[0].get("_id"))
         old["Status"] = "superseded"
@@ -1359,6 +1401,21 @@ def _op_supersede_decision(filepath, op, store=None):
         for b in new_blocks:
             store.write_block(b)
         return True, f"supersede_decision: superseded {target} → {successor_id}"
+
+    # A prepared M4 proposal can outlive another approval.  Check the
+    # closed-slot target while holding this operation's transaction so a
+    # stale proposal cannot create a second active occupant.
+    try:
+        new_parsed = parse_blocks(new_block)
+    except Exception as exc:
+        return False, f"supersede_decision: parse failed: {exc}"
+    if ws is not None:
+        from .closed_slots import ClosedSlotError, _validate_slot_payload
+
+        try:
+            _validate_slot_payload(ws, new_parsed, active_blocks=blocks, target=old)
+        except ClosedSlotError as exc:
+            return False, f"supersede_decision: {exc}"
 
     # Build the complete new file content in memory, then write atomically.
     # Reading the file once here avoids two separate read-modify-write cycles.

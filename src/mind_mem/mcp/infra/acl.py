@@ -55,6 +55,7 @@ ADMIN_TOOLS = frozenset(
         "rollback_proposal",
         "delete_memory_item",
         "propose_update",
+        "propose_slot_update",
         "reindex",
         "export_memory",
         "verify_chain",

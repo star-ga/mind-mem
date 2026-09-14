@@ -535,6 +535,20 @@ def is_enabled_for_workspace(workspace: str, flag: str) -> bool:
     return is_enabled_quiet(flag)
 
 
+def require_enabled_for_workspace(workspace: str, flag: str) -> None:
+    """Require *flag* in the explicit workspace's current configuration.
+
+    This is the raising counterpart to :func:`is_enabled_for_workspace` for
+    APIs whose workspace argument is the policy boundary.  It deliberately
+    keeps the existing ambient fallback when the workspace has no override,
+    while an explicit ``enabled: false`` remains authoritative.
+    """
+    require_implemented(flag)
+    if is_enabled_for_workspace(workspace, flag):
+        return
+    raise FeatureDisabledError(f"mind-mem v4 surface '{flag}' is disabled for workspace {workspace}")
+
+
 def flag_config_for_workspace(workspace: str, flag: str) -> dict:
     """The sub-config dict for *flag*, workspace-first. Quiet, like the probe.
 
@@ -586,4 +600,5 @@ __all__ = [
     "flag_config",
     "flag_config_for_workspace",
     "is_enabled_for_workspace",
+    "require_enabled_for_workspace",
 ]

@@ -15,7 +15,7 @@ This source tree reports package version **v5.0.3**. The published `mind-mem-4b`
 checkpoint remains **v4.1.1**, with a reported **133/133** result (111 main and
 22 held-out probes, two using inference-time anchors). This is not a new
 independent evaluation. The weights were trained on 83 MCP tools.
-The current server exposes 102 MCP tools. See
+The current server exposes 103 MCP tools. See
 [`mind-mem-4b-setup.md`](mind-mem-4b-setup.md) and the
 [published model card](https://huggingface.co/star-ga/mind-mem-4b).
 
