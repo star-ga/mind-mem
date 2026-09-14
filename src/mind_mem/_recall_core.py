@@ -68,7 +68,7 @@ from .enums import TaskStatus
 from .error_codes import DailyTokenCapExceeded
 from .guardrail_surface import apply_guardrail_surfacing
 from .guardrails import GuardrailContext, GuardrailPolicy
-from .namespace_retrieval import filter_search_hits, namespace_search_allowed
+from .namespace_retrieval import declared_custom_namespaces, filter_search_hits, namespace_search_allowed
 from .observability import get_logger, metrics
 from .recall_smart_chunk import chunk_statement, resolve_smart_chunking_config
 from .retrieval_graph import (
@@ -1120,6 +1120,30 @@ def recall(
                 from .hybrid_recall import _merge_leg_markers
 
                 _degraded_marker = _merge_leg_markers(_degraded_marker, dict(_backend_marker))
+            # A PostgreSQL workspace has a database as its source of record.
+            # An empty result is a valid database answer, and a database
+            # outage is an error; neither may fall through to the local
+            # Markdown/custom-namespace walk below.  The generic fallback is
+            # retained for the historical optional recall backends.
+            if isinstance(_cfg_backend, PostgresRecallBackend) and not backend_hits:
+                return _project_recall_carrier(
+                    _apply_post_filters(
+                        backend_hits,
+                        since=since,
+                        until=until,
+                        lifecycle=lifecycle,
+                        event_id=event_id,
+                        min_maturity=min_maturity,
+                        limit=limit,
+                        workspace=workspace,
+                        as_of=as_of,
+                        guardrail_context=_guardrail_ctx,
+                        guardrail_policy=_guardrail_policy,
+                        admission_allow=_admission_allow,
+                    ),
+                    backend_hits,
+                    degraded=_degraded_marker,
+                )
             if backend_hits:
                 backend_hits = filter_search_hits(backend_hits, _get_config(workspace))
                 backend_hits = _apply_validity_and_resort(backend_hits, workspace, _indexed_recall_cfg, _scoring_instant)
@@ -1139,6 +1163,11 @@ def recall(
                 )
                 return _project_recall_carrier(filtered, filtered, degraded=_degraded_marker)
         except Exception as exc:
+            if isinstance(_cfg_backend, PostgresRecallBackend):
+                # A configured source-of-record failure must remain visible;
+                # scanning local files would disclose a shadow corpus and
+                # falsely report a successful database-backed recall.
+                raise
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
 
     # Load .mind kernel overrides if available
@@ -1484,6 +1513,70 @@ def recall(
                 b["_source_file"] = ns_path
                 b["_source_label"] = f"{label}@{agent_id}"
                 all_blocks.append(b)
+
+    # Explicit custom namespace roots are opt-in.  Do not recurse through the
+    # workspace looking for arbitrary directories: a declaration is the
+    # identity and the ACL remains the authority for an authenticated agent.
+    # ``discover_corpus_files`` is reused below each declared root so custom
+    # namespaces have the same registered corpus-file boundary as the root.
+    try:
+        custom_namespaces = declared_custom_namespaces(_get_config(workspace))
+    except ValueError:
+        custom_namespaces = ()
+    custom_files: list[tuple[str, str, str, str]] = []
+    for namespace in custom_namespaces:
+        namespace_path = os.path.join(workspace_real, namespace)
+        if os.path.islink(namespace_path):
+            continue
+        namespace_real = os.path.realpath(namespace_path)
+        if not namespace_real.startswith(workspace_prefix) or not os.path.isdir(namespace_real):
+            continue
+        for label, local_rel_path in discover_corpus_files(namespace_real):
+            path = os.path.join(namespace_real, *local_rel_path.split("/"))
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            candidate_real = os.path.realpath(path)
+            if not candidate_real.startswith(workspace_prefix):
+                continue
+            rel_path = os.path.relpath(candidate_real, workspace_real).replace(os.sep, "/")
+            if not rel_path == namespace and not rel_path.startswith(namespace + "/"):
+                continue
+            if ns_manager and not ns_manager.can_read(rel_path):
+                continue
+            if candidate_real in seen_corpus_realpaths:
+                continue
+            seen_corpus_realpaths.add(candidate_real)
+            custom_files.append((namespace, label, rel_path, candidate_real))
+
+    # Use the same configured corpus reader as the storage layer.  In
+    # particular, an encrypted custom file must be decrypted here; a direct
+    # ``parse_file`` call treats ciphertext as an empty Markdown document.
+    # Pass the complete custom source set so encrypted-reader selection sees
+    # ciphertext even when the root corpus is still plaintext.
+    if custom_files:
+        from .storage import _backend_name, _corpus_parse_fn
+
+        custom_config = _get_config(workspace)
+        custom_backend = _backend_name(workspace, custom_config)
+        custom_parse = _corpus_parse_fn(
+            workspace,
+            custom_backend,
+            sources=[rel_path for _namespace, _label, rel_path, _path in custom_files],
+        )
+    else:
+        custom_parse = None
+    for namespace, label, rel_path, candidate_real in custom_files:
+        try:
+            blocks = custom_parse(candidate_real) if custom_parse is not None else []
+        except (OSError, UnicodeDecodeError, ValueError) as e:
+            _log.debug("custom_namespace_parse_failed", namespace=namespace, file=rel_path, error=str(e))
+            continue
+        if active_only:
+            blocks = get_active(blocks)
+        for b in blocks:
+            b["_source_file"] = rel_path
+            b["_source_label"] = f"{label}@{namespace}"
+            all_blocks.append(b)
 
     # Admissibility, once, over the whole corpus — after BOTH load loops so
     # the release decisions are visible whichever file order they arrived in,

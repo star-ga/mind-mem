@@ -235,8 +235,11 @@ class TestPostgresRecallLive:
             assert {"_id", "type", "score", "excerpt", "file", "status"} <= set(h)
 
     def test_recall_empty_store_returns_empty(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
-        ws, _store = pg_workspace
-        assert recall(ws, "nothing was ever written here", limit=5) == []
+        ws, store = pg_workspace
+        query = "nothing was ever written here"
+        (Path(ws) / "decisions" / "DECISIONS.md").write_text(_md_block("D-LOCAL-SHADOW", query), encoding="utf-8")
+        assert store.get_all() == []
+        assert recall(ws, query, limit=5) == []
 
     def test_recall_respects_limit(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
         ws, store = pg_workspace

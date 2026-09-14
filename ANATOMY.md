@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1615 | **Est. tokens:** ~4754750
-**Generated:** 2026-09-14 13:22 UTC
+**Files:** 1616 | **Est. tokens:** ~4757527
+**Generated:** 2026-09-14 13:31 UTC
 
 ## Token Budget Guide
 
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1074631 |
+| `src/mind_mem/` | 237 | ~1074935 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
-| `src/mind_mem/mcp/tools/` | 29 | ~120676 |
+| `src/mind_mem/mcp/tools/` | 29 | ~121011 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 706 | ~2100966 |
+| `tests/` | 707 | ~2103104 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -926,7 +926,7 @@
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `lineage.py` (~725 tok, large) — MCP wrapping for the v3.11.0 typed block-lineage graph (Pattern 3).
 - `lint.py` (~1511 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `memory_ops.py` (~18805 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `memory_ops.py` (~19140 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `mic_map.py` (~2436 tok, huge) — MIC/MAP serialization MCP tools — wraps ``mind_mem.mic_map``.
 - `model.py` (~3185 tok, huge) — Model audit / signing MCP tools — wraps ``mind_mem.model_audit``,
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
@@ -955,7 +955,7 @@
 - `model_signing.py` (~2998 tok, huge) — Ed25519 manifest signing for ``mm audit-model`` checkpoints.
 - `mrs.py` (~5273 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~3184 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `namespace_retrieval.py` (~4184 tok, huge) — Configuration and enforcement for namespace retrieval properties.
+- `namespace_retrieval.py` (~4488 tok, huge) — Configuration and enforcement for namespace retrieval properties.
 - `namespaces.py` (~5138 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
 - `novel_term_gate.py` (~1729 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `observability.py` (~3828 tok, huge) — mind-mem Observability Module. Zero external deps.
@@ -1501,6 +1501,7 @@
 - `test_llm_noise_profile_wiring.py` (~7741 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_locomo_suite.py` (~2743 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
+- `test_m2_custom_namespace_direct_get.py` (~2095 tok, huge) — M2: direct reads and recall for explicitly declared custom roots."""
 - `test_m2_m3_namespace_contract.py` (~3147 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
 - `test_m4_closed_set_slots.py` (~5837 tok, huge) — M4 closed-set slots: declaration, staging, and governed supersession."""
 - `test_m5_enforcement_boundaries.py` (~2959 tok, huge) — M5 output enforcement controls for summaries and evidence scope."""
@@ -1680,7 +1681,7 @@
 - `test_recall_metadata.py` (~1345 tok, large) — Tests for A-MEM block metadata integration in recall pipeline."""
 - `test_recall_pgvector_engagement.py` (~2392 tok, huge) — Regression tests for the Postgres pgvector recall-engagement audit.
 - `test_recall_post_filters.py` (~310 tok, medium) — recall() applies lifecycle/event_id/min_maturity on EVERY dispatch path.
-- `test_recall_postgres_backend.py` (~2914 tok, huge) — Backend-aware recall dispatch — Postgres parity (audit bug 1).
+- `test_recall_postgres_backend.py` (~2957 tok, huge) — Backend-aware recall dispatch — Postgres parity (audit bug 1).
 - `test_recall_priority.py` (~414 tok, medium) — Tests for priority boost in recall."""
 - `test_recall_quality_locomo.py` (~2613 tok, huge) — LoCoMo recall-quality regression gate.
 - `test_recall_query_id_join.py` (~7740 tok, huge) — RA.1's residual, closed: the recall envelope publishes the run identity.
