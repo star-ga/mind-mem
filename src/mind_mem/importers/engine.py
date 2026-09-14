@@ -220,7 +220,7 @@ def load_dump(path: str) -> Any:
         raise ImportParseError(f"cannot read dump file {path}: {exc}") from exc
 
 
-def load_source(system: str, path: str) -> Any:
+def load_source(system: str, path: str, *, reject_symlinks: bool = False) -> Any:
     """Load the import source for *system* — a JSON dump or a note tree.
 
     One dispatch point so :func:`run_import` stays source-shape agnostic:
@@ -242,7 +242,7 @@ def load_source(system: str, path: str) -> Any:
     if system in DIRECTORY_SYSTEMS:
         from .fs_source import load_note_tree
 
-        return load_note_tree(path)
+        return load_note_tree(path, reject_symlinks=reject_symlinks)
     return load_dump(path)
 
 
@@ -710,7 +710,7 @@ def run_import(
 
     if chunk_documents and resolved not in DIRECTORY_SYSTEMS:
         raise ImportParseError("--chunk-documents is supported only for markdown and agentmem note trees")
-    records = tuple(parse_payload(resolved, load_source(resolved, path)))
+    records = tuple(parse_payload(resolved, load_source(resolved, path, reject_symlinks=chunk_documents)))
     if chunk_documents:
         # Chunk the source representation first. Sanitizing before this step
         # leaves document_text untouched for anchor verification while the

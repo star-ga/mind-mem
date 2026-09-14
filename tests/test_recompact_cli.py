@@ -276,7 +276,8 @@ def test_real_lifecycle_admission_controls_recompaction(tmp_path, revoke):
     (ws / "mind-mem.json").write_text(
         json.dumps(
             {"recall": {"validity_gate": {"enabled": True, "content_categories": {"enabled": True, "ttl_days": {"infra": 2, "status": 1}}}}}
-        )
+        ),
+        encoding="utf-8",
     )
     corpus = ws / "decisions/DECISIONS.md"
     body = (
@@ -284,13 +285,13 @@ def test_real_lifecycle_admission_controls_recompaction(tmp_path, revoke):
         "[CRED-002]\nStatus: active\nContentCategory: credential\nStatement: credential test fixture\n\n"
     )
     revoked = body.replace("[CRED-002]\nStatus: active", "[CRED-002]\nStatus: revoked")
-    corpus.write_text(revoked if revoke == "before" else body)
+    corpus.write_text(revoked if revoke == "before" else body, encoding="utf-8")
     calls = []
 
     def compress(text, rows):
         calls.append(rows)
         if revoke == "during":
-            corpus.write_text(revoked)
+            corpus.write_text(revoked, encoding="utf-8")
         return text
 
     def run():

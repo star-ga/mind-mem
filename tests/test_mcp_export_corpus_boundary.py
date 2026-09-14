@@ -18,7 +18,7 @@ def workspace(tmp_path, monkeypatch, backend="markdown"):
     ws.mkdir()
     (ws / "decisions").mkdir()
     (ws / "memory").mkdir()
-    (ws / "mind-mem.json").write_text(json.dumps({"block_store": {"backend": backend}}))
+    (ws / "mind-mem.json").write_text(json.dumps({"block_store": {"backend": backend}}), encoding="utf-8")
     return ws
 
 
@@ -26,12 +26,13 @@ def test_mcp_export_includes_released_imports_and_counts_withheld(tmp_path, monk
     from mind_mem.admissibility import RELEASE_FIELD
 
     ws = workspace(tmp_path, monkeypatch)
-    (ws / "decisions/DECISIONS.md").write_text(f"[D-EXPORT-1]\nStatus: active\n{RELEASE_FIELD}: IMP-EXPORT-1\n\n")
+    (ws / "decisions/DECISIONS.md").write_text(f"[D-EXPORT-1]\nStatus: active\n{RELEASE_FIELD}: IMP-EXPORT-1\n\n", encoding="utf-8")
     (ws / "memory/IMPORTED.md").write_text(
         "[IMP-EXPORT-1]\nStatus: quarantined\nStatement: released-canary\n\n"
-        "[IMP-EXPORT-2]\nStatus: quarantined\nStatement: withheld-canary\n\n"
+        "[IMP-EXPORT-2]\nStatus: quarantined\nStatement: withheld-canary\n\n",
+        encoding="utf-8",
     )
-    (ws / "memory/unregistered.md").write_text("[D-EXPORT-3]\nStatus: active\nStatement: unregistered-canary\n")
+    (ws / "memory/unregistered.md").write_text("[D-EXPORT-3]\nStatus: active\nStatement: unregistered-canary\n", encoding="utf-8")
     with use_workspace(str(ws)):
         payload = json.loads(export_memory())
     assert payload["withheld_count"] == 1
@@ -46,13 +47,13 @@ def test_mcp_export_confines_source_before_open(tmp_path, monkeypatch):
 
     ws = workspace(tmp_path, monkeypatch)
     outside = tmp_path / "outside.md"
-    outside.write_text("[D-EXPORT-1]\nStatus: active\nStatement: outside-canary\n")
+    outside.write_text("[D-EXPORT-1]\nStatus: active\nStatement: outside-canary\n", encoding="utf-8")
     link = ws / "decisions/DECISIONS.md"
     try:
         link.symlink_to(outside)
     except OSError:
         pytest.skip("symlinks unavailable")
-    (ws / "decisions/LOCAL.md").write_text("[D-EXPORT-2]\nStatus: active\nStatement: local-canary\n")
+    (ws / "decisions/LOCAL.md").write_text("[D-EXPORT-2]\nStatus: active\nStatement: local-canary\n", encoding="utf-8")
     parsed = []
     original = block_parser.parse_file
 
@@ -76,7 +77,7 @@ def test_mcp_export_decrypts_registered_source(tmp_path, monkeypatch):
     ws = workspace(tmp_path, monkeypatch, "encrypted")
     monkeypatch.setenv("MIND_MEM_ENCRYPTION_PASSPHRASE", "export-test-passphrase")
     source = ws / "decisions/DECISIONS.md"
-    source.write_text("[D-EXPORT-1]\nStatus: active\nStatement: encrypted-canary\n")
+    source.write_text("[D-EXPORT-1]\nStatus: active\nStatement: encrypted-canary\n", encoding="utf-8")
     encrypt_workspace(str(ws))
     assert has_magic(source.read_bytes())
     with use_workspace(str(ws)):

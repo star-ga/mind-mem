@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1615 | **Est. tokens:** ~4753644
-**Generated:** 2026-09-14 13:04 UTC
+**Files:** 1615 | **Est. tokens:** ~4754166
+**Generated:** 2026-09-14 13:12 UTC
 
 ## Token Budget Guide
 
@@ -80,7 +80,7 @@
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
-| `src/mind_mem/importers/` | 9 | ~30364 |
+| `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
 | `src/mind_mem/mcp/tools/` | 29 | ~120676 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 706 | ~2100550 |
+| `tests/` | 706 | ~2100966 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -861,8 +861,8 @@
 
 - `__init__.py` (~1807 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_shared.py` (~947 tok, large) — # Copyright 2026 STARGA, Inc.
-- `engine.py` (~9150 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `fs_source.py` (~2914 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `engine.py` (~9175 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `fs_source.py` (~2995 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `note_parsers.py` (~3770 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `okf_source.py` (~1885 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `parsers.py` (~3243 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1459,7 +1459,7 @@
 - `test_identity_seam_is_transport_neutral.py` (~5628 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_importers.py` (~5662 tok, huge) — Tests for the roadmap Group G migration importers (file-based subset).
 - `test_importers_field_injection.py` (~1609 tok, huge) — Regression gate: dump content cannot forge a second block field.
-- `test_importers_notes.py` (~8280 tok, huge) — Tests for the note-tree and transcript importers.
+- `test_importers_notes.py` (~8646 tok, huge) — Tests for the note-tree and transcript importers.
 - `test_importers_quarantine.py` (~6695 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
 - `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1516,7 +1516,7 @@
 - `test_mcp_compiled_truth_contradictions.py` (~4713 tok, huge) — ``compiled_truth_contradictions`` — the detective half of the truth pages.
 - `test_mcp_compiled_truth_load.py` (~4697 tok, huge) — The compiled-truth read tool -- registered since v3.2.0, never tested.
 - `test_mcp_db_error_backstop.py` (~1717 tok, huge) — The MCP tool decorator must not let a backend DB error crash the server.
-- `test_mcp_export_corpus_boundary.py` (~889 tok, large) — MCP export must use the same configured, admitted corpus as other exports.
+- `test_mcp_export_corpus_boundary.py` (~923 tok, large) — MCP export must use the same configured, admitted corpus as other exports.
 - `test_mcp_graph_hitl.py` (~1868 tok, huge) — MCP-surface tests for the HITL typed-edge flow + provenance (v4.4.0 Finding 1)
 - `test_mcp_http_gate_matches_enforcement.py` (~2695 tok, huge) — The MCP HTTP startup gate must agree with what actually enforces auth.
 - `test_mcp_integration.py` (~5530 tok, huge) — MCP transport and auth integration tests (#474).
@@ -1702,7 +1702,7 @@
 - `test_recall_vector.py` (~5496 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_recall_wire_owner.py` (~3251 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_workspace_zero_index_probe.py` (~917 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_recompact_cli.py` (~4727 tok, huge) — Production-path controls for the proposal-only H1 recompaction command."""
+- `test_recompact_cli.py` (~4743 tok, huge) — Production-path controls for the proposal-only H1 recompaction command."""
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.

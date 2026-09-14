@@ -212,14 +212,16 @@ def load_note_tree(
     path: str,
     *,
     excludes: frozenset[str] = DEFAULT_EXCLUDED_DIRS,
+    reject_symlinks: bool = False,
 ) -> tuple[SourceNote, ...]:
     """Walk the note tree at *path* and return its notes, sorted by path.
 
     Raises:
         ImportParseError: the path is missing, is not a directory, holds
             more than :data:`MAX_TREE_FILES` notes, exceeds
-            :data:`MAX_TREE_BYTES` in total, or contains a note that is
-            not valid UTF-8.
+            :data:`MAX_TREE_BYTES` in total, contains a note that is not
+            valid UTF-8, or contains a symlink when ``reject_symlinks`` is
+            true.
     """
     root = _validate_root(path)
     collected: list[SourceNote] = []
@@ -231,6 +233,9 @@ def load_note_tree(
             if not filename.endswith(NOTE_EXTENSIONS):
                 continue
             full = os.path.join(dirpath, filename)
+            if reject_symlinks and os.path.islink(full):
+                relative = os.path.relpath(full, root)
+                raise ImportParseError(f"symlinked note is not supported for anchored chunk import: {relative}")
             if not os.path.isfile(full):
                 continue
             size = os.path.getsize(full)
