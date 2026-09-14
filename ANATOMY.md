@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1574 | **Est. tokens:** ~4692067
-**Generated:** 2026-09-14 06:46 UTC
+**Files:** 1574 | **Est. tokens:** ~4692230
+**Generated:** 2026-09-14 08:51 UTC
 
 ## Token Budget Guide
 
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 690 | ~2078465 |
+| `tests/` | 690 | ~2078628 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1527,7 +1527,7 @@
 - `test_mrs_wiring.py` (~6750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""
 - `test_multi_modal_wiring.py` (~8022 tok, huge) — ``multi_modal`` is actually reachable — and the door it opens quarantines.
-- `test_namespace_reachability.py` (~2391 tok, huge) — M2: namespace direct-get versus production recall reachability.
+- `test_namespace_reachability.py` (~2554 tok, huge) — M2: namespace direct-get versus production recall reachability.
 - `test_namespaces.py` (~5844 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
 - `test_native_c_abi.py` (~1813 tok, huge) — Required, opt-in ABI gate for the checked-in C kernel reference.
 - `test_network_audit_headers.py` (~5743 tok, huge) — Audit headers propagate end-to-end — roadmap v4.0.0 Group D (RM-2291).

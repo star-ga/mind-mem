@@ -18,7 +18,7 @@ import pytest
 from mind_mem._recall_core import recall
 from mind_mem.block_store import MarkdownBlockStore
 from mind_mem.init_workspace import init
-from mind_mem.namespaces import NamespaceManager
+from mind_mem.namespaces import InvalidAgentIdError, NamespaceManager
 
 
 def _block(path: Path, block_id: str, statement: str) -> None:
@@ -147,6 +147,25 @@ def test_unknown_agent_uses_documented_shared_default(namespaced_workspace: Path
     hits = _ids_and_scores(namespaced_workspace, "unlisted-agent", "aurora")
     assert hits and hits[0][0] == "SHARED-1"
     assert hits[0][1] > 0.0
+
+
+@pytest.mark.parametrize("invalid_agent", ("../alice", "/alice", "alice\x00suffix", 0))
+def test_invalid_agent_id_refuses_workspace_fallback(namespaced_workspace: Path, invalid_agent: object) -> None:
+    """A malformed identity must not be downgraded to workspace access."""
+    _block(
+        namespaced_workspace / "decisions/DECISIONS.md",
+        "ROOT-1",
+        "root-only sentinel",
+    )
+
+    with pytest.raises(InvalidAgentIdError):
+        recall(
+            str(namespaced_workspace),
+            "root-only sentinel",
+            limit=10,
+            agent_id=invalid_agent,
+            rerank=False,
+        )
 
 
 def test_shared_symlink_escape_is_not_recalled(namespaced_workspace: Path, tmp_path: Path) -> None:

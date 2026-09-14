@@ -1324,10 +1324,15 @@ def recall(
     # (../, leading /, NUL bytes) would let a caller probe paths outside the
     # workspace; whitespace and shell metacharacters tighten the perimeter.
     ns_manager = None
-    if agent_id:
-        if not _AGENT_ID_RE.fullmatch(agent_id):
-            _log.warning("invalid_agent_id_rejected", agent_id_len=len(agent_id))
-            agent_id = None
+    # Keep the historical empty-string compatibility behavior, but validate
+    # every other supplied value so a false-y non-string cannot widen scope.
+    if agent_id is not None and agent_id != "":
+        if not isinstance(agent_id, str) or not _AGENT_ID_RE.fullmatch(agent_id):
+            agent_id_len = len(agent_id) if isinstance(agent_id, str) else None
+            _log.warning("invalid_agent_id_rejected", agent_id_len=agent_id_len)
+            from .namespaces import InvalidAgentIdError
+
+            raise InvalidAgentIdError("invalid agent_id; refusing namespace fallback")
         else:
             try:
                 from .namespaces import NamespaceManager
