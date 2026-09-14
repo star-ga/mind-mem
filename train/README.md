@@ -9,7 +9,10 @@ established by this repository.
 
 Artifacts use `MM_TRAIN_ROOT` (default
 `/data/checkpoints/mm-workspace/train-output`). The corpus output can be
-overridden independently with `MM_CORPUS_OUT`.
+overridden independently with `MM_CORPUS_OUT`, or with
+`python3 train/build_corpus.py --output /path/to/corpus.jsonl` (which takes
+precedence). `--help` and invalid arguments exit without creating or replacing
+the corpus. A generation run replaces its selected output file.
 
 ## Pipeline
 

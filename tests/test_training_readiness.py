@@ -57,7 +57,7 @@ def test_manifest_flags_paraphrase_contamination_even_when_exact_holdout_is_unse
 
     surface = manifest["live_mcp_surface"]
     binding = manifest["evaluation_probe_binding"]
-    assert surface["registered_tool_count"] == 102
+    assert surface["registered_tool_count"] == 103
     assert surface["tools_missing_from_corpus"] == []
     assert binding["holdout_exact_overlap_count"] == 0
     assert binding["holdout_exact_string_status"] == "PASS"

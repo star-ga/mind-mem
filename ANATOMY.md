@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1606 | **Est. tokens:** ~4713586
-**Generated:** 2026-09-14 11:26 UTC
+**Files:** 1607 | **Est. tokens:** ~4714192
+**Generated:** 2026-09-14 11:36 UTC
 
 ## Token Budget Guide
 
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~93132 |
-| `tests/` | 698 | ~2078686 |
+| `tests/` | 699 | ~2079235 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -103,7 +103,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 35 | ~79405 |
+| `train/` | 35 | ~79462 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -1812,6 +1812,7 @@
 - `test_tool_output_postgres_backend.py` (~1615 tok, huge) — ``ToolOutputStore`` on the Postgres backend the module advertises.
 - `test_tracking_online_trainer_wiring.py` (~1519 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_tracking_wiring.py` (~8018 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_train_corpus_cli.py` (~549 tok, large) — Corpus CLI inspection and bad arguments must never regenerate training data.
 - `test_train_eval_receipt.py` (~12987 tok, huge) — Publication-gate controls for the 4B evaluation attestation.
 - `test_train_mind_mem_4b.py` (~962 tok, large) — Smoke tests for benchmarks/train_mind_mem_4b.py.
 - `test_train_release_entrypoints.py` (~1486 tok, large) — Default-path integration for the staged training release entrypoints.
@@ -1899,7 +1900,7 @@
 - `Modelfile.v4.0.0` (~576 tok, large) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `Modelfile.v4.1.0` (~395 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.0/mind-mem-4b-v4.1.0-Q4_K_M.gguf
 - `Modelfile.v4.1.1` (~440 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.1/mind-mem-4b-v4.1.1-Q4_K_M.gguf
-- `README.md` (~1319 tok, large) — mind-mem training pipeline
+- `README.md` (~1376 tok, large) — mind-mem training pipeline
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
 - `V4_RETRAIN_TODO.md` (~2361 tok, huge) — v4 Retrain — Probe Honesty TODO
 - `_causal_lm_import.py` (~493 tok, medium) — Import the shared causal loader from a checkout or a deployed RunPod file."""

@@ -1,6 +1,6 @@
 """Harvest a training corpus for the mind-mem-4b model.
 
-Produces ~/mm-train-output/corpus.jsonl — one example per line, in
+Produces the file selected by --output or MM_CORPUS_OUT — one example per line, in
 the chat format expected by the SFTTrainer.  Each example follows::
 
     {"messages": [
@@ -23,6 +23,7 @@ same output bytes.
 
 from __future__ import annotations
 
+import argparse
 import ast
 import hashlib
 import json
@@ -2804,10 +2805,11 @@ def _dedup(entries: Iterable[dict]) -> Iterator[dict]:
         yield e
 
 
-def main() -> None:
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+def main(output: Path | None = None) -> None:
+    output = OUT if output is None else output
+    output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
-    with OUT.open("w", encoding="utf-8") as fh:
+    with output.open("w", encoding="utf-8") as fh:
         for src in (
             _harvest_mcp_tools(),
             _harvest_block_schemas(),
@@ -2904,10 +2906,10 @@ def main() -> None:
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 count += 1
-    print(f"wrote {count} examples (pre-cap) to {OUT}")
+    print(f"wrote {count} examples (pre-cap) to {output}")
     # v3.9.10: tighter cap=1 for the eval-prompt buckets specifically (so
     # canonical terse answer wins), but keep cap=4 for everything else.
-    _cap_multimodal_answers(OUT, max_answers_per_prompt=4)
+    _cap_multimodal_answers(output, max_answers_per_prompt=4)
 
 
 def _cap_multimodal_answers(path, max_answers_per_prompt: int = 2) -> None:
@@ -7099,4 +7101,11 @@ def _harvest_v4_retry2g_holdout_paraphrase() -> Iterator[dict]:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Build the deterministic development training corpus (no model training).")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=OUT,
+        help="Destination JSONL file; overrides MM_CORPUS_OUT (default: %(default)s).",
+    )
+    main(parser.parse_args().output)
