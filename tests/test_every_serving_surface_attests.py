@@ -885,7 +885,7 @@ def test_the_serving_entry_still_reads_the_clock_exactly_once(seed_template: str
         # Positive control: the shape where the record defaults its own instant.
         reads.clear()
         hits = _recall_core.recall(ws, "architecture decision", limit=5)
-        attest_and_record(ws, "architecture decision", hits)
+        attest_and_record(ws, "architecture decision", hits, generation="__not_bound__")
         assert len(reads) == 2, "the control did not double-read — this test cannot see the defect it guards"
     finally:
         shutil.rmtree(ws, ignore_errors=True)

@@ -129,6 +129,25 @@ def compute_pipeline_hash(inputs: PipelineHashInputs) -> str:
 
 
 def _load_workspace_config(workspace: str) -> dict[str, Any]:
+    """The request's bound config if one governs *workspace*, else mind-mem.json from disk.
+
+    WHY THE BINDING REACHES IN HERE. The pipeline hash is the coordinate a served row commits to, so
+    it must describe the SAME configuration the ranking consumed. Reading the file again meant the
+    captured mapping and the captured hash could come from two different moments: an independent
+    source-bound reproduction served one real result with the backend observed twice under config A
+    while the recorded row's pipeline_hash was hash_B — engine A, receipt B. The mapping was captured
+    and the hash was re-read.
+
+    With the binding honoured here, a hash computed inside the request's context is BY CONSTRUCTION
+    the hash of the config that context carries, so the two coordinates cannot disagree. Callers with
+    no context bound read the file exactly as before.
+    """
+    from .request_context import context_config_for
+
+    bound = context_config_for(workspace)
+    if bound is not None:
+        return dict(bound)
+
     config_path = os.path.join(os.path.abspath(workspace), "mind-mem.json")
     if not os.path.isfile(config_path):
         return {}

@@ -131,7 +131,25 @@ _config_mtime: dict[str, float] = {}
 
 
 def _get_config(workspace: str) -> dict[str, Any]:
-    """Return parsed mind-mem.json contents, cached per workspace by file mtime."""
+    """Return the request's config if one is bound, else parsed mind-mem.json (mtime-cached).
+
+    THE BOUND BRANCH IS THE POINT. This function is the one place the ranking reads policy: eight
+    call sites below plus ``sqlite_index.query_index`` all come through here. Before this branch
+    existed, each of them read whatever was on disk at the moment it ran, so a row could report a
+    config hash captured by the caller while the ranking had been produced under a different
+    configuration. An independent review's phrasing: passing the context only to the recorder
+    "cannot prove which policy produced the ranking".
+
+    An unbound read still answers from disk for callers that never established a context.
+    Serving callers bind the captured mapping here and pass its coordinates to the recorder.
+    The request-context read counter is diagnostic; it does not govern ledger row admission.
+    """
+    from .request_context import context_config_for
+
+    bound = context_config_for(workspace)
+    if bound is not None:
+        return bound  # type: ignore[return-value]
+
     global _config_cache, _config_mtime
     cfg_path = os.path.join(workspace, "mind-mem.json")
     try:
@@ -2385,7 +2403,7 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
     """
     cfg = _get_config(workspace)
     recall_backend: str | None = None
-    if cfg:
+    if isinstance(cfg, dict):
         recall_cfg = cfg.get("recall", {})
         # Defensive: an old or hand-edited mind-mem.json can have
         # `recall` as a string / list / null.  Treat anything non-dict
@@ -2420,12 +2438,14 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
     try:
         from .storage import _backend_name
 
-        block_backend = _backend_name(workspace, cfg or None)
+        # Preserve a captured empty dict. ``cfg or None`` would discard a valid snapshot and make
+        # this selector reread the mutable workspace file, allowing a backend/corpus switch mid-run.
+        block_backend = _backend_name(workspace, cfg)
     except Exception as exc:  # pragma: no cover — config read is best-effort
         _log.debug("block_store_backend_probe_failed", error=str(exc))
         block_backend = "markdown"
     if block_backend == "postgres":
-        return PostgresRecallBackend(workspace, config=cfg or None)
+        return PostgresRecallBackend(workspace, config=cfg)
 
     return None  # use built-in BM25 scan
 
@@ -2475,6 +2495,8 @@ def prefetch_context(
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    from .request_context import bind_current
+
     # Strip and filter empty signals upfront
     signals = [s.strip() for s in recent_signals if s.strip()]
     if not signals:
@@ -2496,7 +2518,13 @@ def prefetch_context(
     # Preserve signal order: collect results by index, then flatten in order
     ordered_hits: list[list[dict]] = [[] for _ in signals]
     with ThreadPoolExecutor(max_workers=min(len(signals), 4)) as executor:
-        futures = {executor.submit(_recall_signal, sig): idx for idx, sig in enumerate(signals)}
+        # ``bind_current`` and not ``_recall_signal`` directly: a ThreadPoolExecutor worker starts
+        # with a FRESH context, so a worker submitted bare would read live config while the request
+        # that spawned it is bound — N+1 signal recalls each ranking under whatever is on disk when
+        # its thread happens to run, under a row claiming the captured snapshot. Re-binding inside
+        # the worker also means the parent's receipt counts the worker's reads, so a fan-out that
+        # ignored the context cannot be reported as proven.
+        futures = {executor.submit(bind_current(_recall_signal), sig): idx for idx, sig in enumerate(signals)}
         for future in as_completed(futures):
             idx = futures[future]
             try:
@@ -2616,9 +2644,18 @@ def main():
     # serving entry re-exports this module, and the write-side ledger it
     # reaches must stay out of the scoring path's import closure
     # (``tests/test_recall_attestation_v2.py`` fails the build on that edge).
-    from .recall import attest_and_record, serving_scope
+    from .recall import attest_and_record, capture_policy_snapshot, serving_scope
+    from .request_context import RequestContext, bind_request_context
 
-    with serving_scope():
+    _snap_config, _snap_hash, _snap_anchor = capture_policy_snapshot(workspace)
+    _request_context = RequestContext(
+        workspace=workspace,
+        config=_snap_config if isinstance(_snap_config, dict) else {},
+        config_hash=_snap_hash,
+        index_anchor=_snap_anchor,
+    )
+
+    with bind_request_context(_request_context), serving_scope():
         # Resolve backend: CLI flag > config > default scan
         backend = args.backend
         if backend == "auto":
@@ -2662,9 +2699,11 @@ def main():
                 rerank_debug=args.rerank_debug,
             )
 
-    # Reads no clock of its own: ``scoring_instant`` is left to the value the
-    # run resolved, and the ranking above is already fixed and printed below,
-    # so nothing recorded here can reach it.
+    # Reuse the pre-retrieval coordinates; no post-ranking workspace reread can create a mixed row.
+    from .mcp.infra.constants import MCP_SCHEMA_VERSION
+    from .prefetch import anticipation_generation_identity
+
+    _snap_generation = anticipation_generation_identity(_snap_config, str(MCP_SCHEMA_VERSION)) if _snap_config is not None else None
     attest_and_record(
         workspace,
         args.query,
@@ -2674,6 +2713,16 @@ def main():
         # degraded that this run never requested. A configured custom backend
         # (the vector one) is the case where those flags ARE the run's own.
         backend="bm25" if backend in ("scan", "sqlite") else "auto",
+        config=_snap_config,
+        config_hash=_snap_hash,
+        index_anchor=_snap_anchor,
+        # Derived from the captured config, like every other door that holds a snapshot. This site
+        # used to pass the NOT_BOUND literal while ALSO passing config_hash above, which is the
+        # incoherence an independent control caught on the axis door: a recorded row carrying a
+        # bound hash beside an unbound generation. NOT_BOUND stays correct only for a door that
+        # captures nothing. ``None`` means "not derivable for this config" and the recorder turns it
+        # into an explicit unproven reference rather than a silent v1 downgrade.
+        generation=_snap_generation,
     )
 
     if args.json:

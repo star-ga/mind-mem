@@ -254,6 +254,61 @@ jobs:
       - name: Reachability gate (no caller, no tick)
         run: python scripts/check_reachable_modules.py --check
 
+  native-c-abi:
+    # The optional C backend has one required Ubuntu execution gate. The
+    # fixture builds the checked-in source and loads that exact artifact;
+    # JUnit records its identity and a separate check refuses skipped tests.
+    name: native C ABI (required Ubuntu control)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install the test runner
+        run: python -m pip install "pytest>=7.4,<10.0"
+      - name: Require the C compiler
+        run: command -v cc
+      - name: Build, load and exercise the actual C ABI
+        env:
+          MIND_MEM_RUN_NATIVE_C_ABI: "1"
+          PYTHONPATH: src
+        run: python -m pytest tests/test_native_c_abi.py -q --junitxml="$RUNNER_TEMP/native-c-abi.xml"
+      - name: Require executed controls and artifact identity
+        run: |
+          python - "$RUNNER_TEMP/native-c-abi.xml" <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(sys.argv[1]).getroot()
+          cases = root.findall(".//testcase")
+          assert cases, "native gate executed no test cases"
+          assert not any(case.find(tag) is not None for case in cases for tag in ("skipped", "failure", "error")), "native controls skipped or failed"
+          properties = {p.get("name"): p.get("value") for p in root.findall(".//property")}
+          for name in ("native_c_source_sha256", "native_c_artifact_sha256", "native_c_artifact_path", "native_c_compiler"):
+              assert properties.get(name), f"missing artifact evidence: {name}"
+          source = Path("lib/kernels.c")
+          artifact = Path(properties["native_c_artifact_path"])
+          compiler = Path(properties["native_c_compiler"])
+          assert artifact.is_absolute() and artifact.is_file(), "recorded native artifact is unavailable"
+          assert compiler.is_absolute() and compiler.is_file() and os.access(compiler, os.X_OK), "recorded compiler is unavailable"
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == properties["native_c_source_sha256"], "C source identity mismatch"
+          assert hashlib.sha256(artifact.read_bytes()).hexdigest() == properties["native_c_artifact_sha256"], "loaded artifact identity mismatch"
+          print(f"Executed {len(cases)} native C ABI controls without skips")
+          PY
+      - name: Retain native C ABI execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: native-c-abi-evidence
+          path: ${{ runner.temp }}/native-c-abi.xml
+          retention-days: 30
+          if-no-files-found: error
+
   repro-verify:
     # Every published number must follow from the raw rows committed beside it.
     # This recomputes them -- it does not re-run a benchmark -- so it costs
@@ -451,40 +506,70 @@ jobs:
         run: python -c "import mind_mem; print(mind_mem.__name__)"
 
   pinned-requirements:
-    # v3.7.0 M5 follow-up: requirements-optional.txt only pins three
-    # top-level packages (onnxruntime / tokenizers / sentence-
-    # transformers); transitive deps are intentionally resolved by pip.
-    # ``--require-hashes`` is implicitly enabled for the whole resolve
-    # whenever ANY line has ``--hash=``, so a plain ``pip install`` of
-    # this file fails on transitive deps that aren't pinned (the file
-    # is a "minimum supported set" not a full lockfile). Generating a
-    # full hashed lockfile (200+ entries) would silently expand the
-    # file's scope; the audit's M5 intent ("prove the pinned versions
-    # still resolve on a fresh runner so a yanked wheel breaks the
-    # release, not prod") is satisfied by:
-    #   1. ``pip download --no-deps --require-hashes`` — proves all
-    #      three pins still exist on PyPI with the recorded hashes
-    #   2. ``pip install`` of the same three top-level packages
-    #      *without* the requirements file — proves the version line
-    #      still resolves a working transitive closure
+    # The optional lock is generated from requirements-optional.in with
+    # uv's universal marker-aware resolver. It includes every transitive
+    # package and hash while retaining the three direct pins. This job is
+    # intentionally metadata-only: resolving the ML stack must not download
+    # or install Torch/CUDA wheels on every CI run.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
-      - name: Verify hashes for pinned wheels (gate against yanked wheels)
+      - name: Install lock and audit tooling
         run: |
           python -m pip install --upgrade pip
-          python -m pip download --no-deps --require-hashes \
-            --dest /tmp/hash-verify \
-            -r requirements-optional.txt
-      - name: Resolve transitive closure (gate against unsatisfiable deps)
+          # Pin the supply-chain tooling itself. An unpinned pip-audit/uv would
+          # let a PyPI-side compromise or dependency-confusion between runs be
+          # trusted silently — the one un-hashed install sitting next to the very
+          # job whose purpose is lock hygiene.
+          python -m pip install "pip-audit==2.10.1" "uv==0.9.22"
+      - name: Lock is current with requirements-optional.in (no drift)
         run: |
-          python -m pip install \
-            onnxruntime==1.24.2 \
-            tokenizers==0.22.2 \
-            sentence-transformers==5.2.3
+          # A stale lock with valid OLD hashes passes every other check. Only a
+          # recompile-and-compare proves requirements-optional.txt still derives
+          # from its .in inputs. Compare the SUBSTANCE (pins + hashes + markers)
+          # and not the header/`# via` comment lines, which uv varies by
+          # invocation and output path — a raw diff would false-positive on
+          # cosmetics while a stripped compare fails closed only on real drift.
+          uv pip compile requirements-optional.in \
+            --universal --generate-hashes --python-version 3.10 \
+            --quiet -o /tmp/requirements-optional.regen.txt
+          strip() { grep -vE '^[[:space:]]*#' "$1" | grep -vE '^[[:space:]]*$'; }
+          if ! diff -u <(strip requirements-optional.txt) <(strip /tmp/requirements-optional.regen.txt); then
+            echo "::error::requirements-optional.txt drifted from requirements-optional.in — regenerate with 'uv pip compile requirements-optional.in --universal --generate-hashes --python-version 3.10 -o requirements-optional.txt'"
+            exit 1
+          fi
+      - name: Resolve complete hashed closure (dry-run — resolves+parses, does NOT byte-verify)
+        run: |
+          # HONESTY: --dry-run resolves the closure and confirms the lock parses
+          # under --require-hashes, but it does NOT download and hash wheel bytes
+          # — a deliberately-wrong hash passes this step (verified with uv
+          # 0.9.22). Wheel-byte hash verification happens at real install on the
+          # release machine, where `uv pip install --require-hashes` fails closed
+          # on a mismatch. Do not read a green here as "wheel hashes verified".
+          uv pip install --dry-run --require-hashes --no-cache \
+            --system \
+            --python-version 3.12 \
+            --python-platform x86_64-manylinux_2_28 \
+            -r requirements-optional.txt
+      - name: Audit complete lock
+        run: |
+          pip-audit --disable-pip --no-deps \
+            --desc --format json \
+            --output optional-pip-audit.json \
+            -r requirements-optional.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("optional-pip-audit.json").read_text())
+          dependencies = data.get("dependencies", [])
+          if not dependencies:
+              raise SystemExit("pip-audit covered no dependencies")
+          print(f"pip-audit covered {len(dependencies)} locked packages")
+          PY
 
   docker-build:
     runs-on: ubuntu-latest

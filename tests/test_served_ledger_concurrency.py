@@ -59,6 +59,7 @@ from mind_mem.served_ledger import (
     GENESIS_ROW_HASH,
     HEAD_RELPATH,
     LEDGER_ERROR_KEY,
+    NOT_BOUND,
     PROOF_RECORDED,
     PROOF_UNPROVEN,
     SERVED_PROOF_KEY,
@@ -501,12 +502,12 @@ def test_a_run_whose_row_was_refused_is_published_as_unproven(tmp_path: pathlib.
     ws = _served_ledger(tmp_path, "unproven")
     ids = ["blk-0"]
 
-    proven = attach_served_run(_record(ws, ids), ws, ids=ids)
+    proven = attach_served_run(_record(ws, ids), ws, ids=ids, serve_kind="attested", generation=NOT_BOUND)
     assert proven[SERVED_PROOF_KEY] == PROOF_RECORDED, "positive control: a healthy ledger must prove a run"
     assert isinstance(proven[SERVED_SEQ_KEY], int) and proven[LEDGER_ERROR_KEY] is None
 
     os.remove(ledger_path(ws))  # the row for the next run cannot be written
-    unproven = attach_served_run(_record(ws, ids), ws, ids=ids)
+    unproven = attach_served_run(_record(ws, ids), ws, ids=ids, serve_kind="attested", generation=NOT_BOUND)
 
     assert unproven[SERVED_PROOF_KEY] == PROOF_UNPROVEN
     assert unproven[SERVED_SEQ_KEY] is None and unproven[SERVED_ROW_HASH_KEY] is None
@@ -525,21 +526,21 @@ def test_the_proof_status_never_disagrees_with_the_row(tmp_path: pathlib.Path) -
     """
     ws = _served_ledger(tmp_path, "derived", rows=1)
     ids = ["blk-0"]
-    records = [attach_served_run(_record(ws, ids), ws, ids=ids)]
+    records = [attach_served_run(_record(ws, ids), ws, ids=ids, serve_kind="attested", generation=NOT_BOUND)]
 
     os.remove(ledger_path(ws))
-    records.append(attach_served_run(_record(ws, ids), ws, ids=ids))
+    records.append(attach_served_run(_record(ws, ids), ws, ids=ids, serve_kind="attested", generation=NOT_BOUND))
 
     off = _workspace(tmp_path, "derived_off")
     (pathlib.Path(off) / "mind-mem.json").write_text(json.dumps({"served_ledger": {"enabled": False}}), encoding="utf-8")
-    records.append(attach_served_run(_record(off, ids), off, ids=ids))
+    records.append(attach_served_run(_record(off, ids), off, ids=ids, serve_kind="attested", generation=NOT_BOUND))
 
     # And the fourth path: a ledger that cannot be written at all. A plain file
     # where the directory must be fails for every user on every platform, which
     # a permission bit does not (CI containers run as root).
     unwritable = _workspace(tmp_path, "derived_unwritable")
     pathlib.Path(unwritable, ".mind-mem-ledger").write_text("not a directory\n", encoding="utf-8")
-    records.append(attach_served_run(_record(unwritable, ids), unwritable, ids=ids))
+    records.append(attach_served_run(_record(unwritable, ids), unwritable, ids=ids, serve_kind="attested", generation=NOT_BOUND))
     assert records[-1][LEDGER_ERROR_KEY], "an unwritable ledger published no reason"
 
     seen = {record[SERVED_PROOF_KEY] for record in records}

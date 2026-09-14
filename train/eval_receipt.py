@@ -75,7 +75,9 @@ def _entries(root: Path) -> Iterable[tuple[str, Path]]:
     if not root.is_dir():
         return
     for path in sorted(root.rglob("*")):
-        rel = str(path.relative_to(root))
+        # Manifest names are repository/release wire paths.  Keep nested
+        # checkpoint files stable when the receipt is produced on Windows.
+        rel = path.relative_to(root).as_posix()
         if rel in _NON_MODEL_ARTIFACTS:
             continue  # root-level eval output only; nested files stay
         if path.is_file():  # follows symlinks by design (HF cache layout)
@@ -179,7 +181,10 @@ def _source_manifest(repo_root: Path, source_paths: Iterable[Path]) -> dict[str,
     source: dict[str, dict[str, Any]] = {}
     for path in sorted({Path(p).resolve() for p in source_paths}):
         try:
-            rel = str(path.relative_to(repo_root))
+            # Receipt keys are repository-relative wire paths.  They must be
+            # stable across hosts, so never serialize the host Path spelling
+            # (which uses backslashes on Windows).
+            rel = path.relative_to(repo_root).as_posix()
         except ValueError as exc:  # source outside the attested repo
             raise ReceiptError(f"source path escapes repo_root: {path}") from exc
         if path.is_file():

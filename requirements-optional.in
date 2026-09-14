@@ -1,0 +1,5 @@
+# Direct roots for the reproducible optional embedding/reranking lock.
+# Keep these versions aligned with the package's supported optional stack.
+onnxruntime==1.24.3
+tokenizers==0.23.2
+sentence-transformers==6.0.1

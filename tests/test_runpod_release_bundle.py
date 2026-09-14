@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,82 @@ from train import runpod_deploy as deploy
 
 REPO = Path(__file__).resolve().parents[1]
 SECRET = "hf_fixture_secret_must_not_escape"
+
+
+def _bash_executable() -> str:
+    """Resolve bash before a test changes any child environment.
+
+    On Windows the fixture drives path conversion through ``cygpath``, which
+    ships with Git Bash / MSYS2 but NOT with WSL's bash. Trusting PATH order can
+    resolve ``bash`` to WSL, where ``cygpath`` does not exist and the fixture
+    would later abort with an opaque cygpath error that reads like a portability
+    bug. So on Windows we require a bash whose ``cygpath`` is reachable and
+    otherwise ``skip`` WITH A REASON (never a silent skip, never a misleading
+    hard failure). On the GitHub ``windows-latest`` runner ``bash`` is Git Bash,
+    so this passes. On POSIX any ``bash`` is fine and no cygpath is needed.
+    """
+    bash = shutil.which("bash")
+    if not bash:
+        if os.name == "nt":
+            pytest.skip("Windows release fixture requires Git Bash (no bash on PATH)")
+        raise AssertionError("the release fixture requires bash")
+    resolved = str(Path(bash).resolve())
+    if os.name == "nt":
+        probe = subprocess.run(
+            [resolved, "-lc", "command -v cygpath"],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=10,
+        )
+        if probe.returncode != 0 or not probe.stdout.strip():
+            pytest.skip(f"Windows release fixture requires Git Bash with cygpath; resolved bash ({resolved}) has none (likely WSL bash)")
+    return resolved
+
+
+def _bash_path(path: Path) -> str:
+    """Convert a fixture path to the POSIX spelling understood by Git Bash."""
+    if os.name != "nt":
+        return path.as_posix()
+    bash = _bash_executable()
+    command = f"cygpath -u -- {shlex.quote(path.as_posix())}"
+    completed = subprocess.run(
+        [bash, "-lc", command],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=10,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(f"cygpath failed for fixture path: {completed.stderr.strip()}")
+    result = completed.stdout.strip()
+    if not result:
+        raise AssertionError("cygpath returned an empty fixture path")
+    return result
+
+
+def _native_path(remote: str) -> Path:
+    """Map a POSIX remote fixture path back to the host filesystem for SCP."""
+    if os.name != "nt":
+        return Path(remote)
+    bash = _bash_executable()
+    command = f"cygpath -w -- {shlex.quote(remote)}"
+    completed = subprocess.run(
+        [bash, "-lc", command],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=10,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(f"cygpath failed for remote fixture path: {completed.stderr.strip()}")
+    result = completed.stdout.strip()
+    if not result:
+        raise AssertionError("cygpath returned an empty native fixture path")
+    return Path(result)
 
 
 def test_release_bundle_preserves_train_src_and_eval_dependencies(monkeypatch):
@@ -136,18 +213,28 @@ def test_training_shell_exports_token_without_env_argv_secret(monkeypatch, tmp_p
         encoding="utf-8",
     )
     fake_python.chmod(0o755)
-    monkeypatch.setattr(deploy, "REMOTE_SOURCE_ROOT", str(tmp_path / "source"))
-    monkeypatch.setattr(deploy, "REMOTE_TOKEN_FILE", str(token_file))
-    monkeypatch.setattr(deploy, "REMOTE_TRAIN_ROOT", str(tmp_path / "output"))
-    monkeypatch.setattr(deploy, "REMOTE_FULLFT_DIR", str(tmp_path / "output" / "full-ft"))
-    monkeypatch.setattr(deploy, "REMOTE_HOLDOUT_REPORT", str(tmp_path / "output" / "holdout.json"))
-    monkeypatch.setattr(deploy, "REMOTE_CORPUS", str(tmp_path / "output" / "corpus.jsonl"))
-    monkeypatch.setenv("MM_CAPTURE", str(capture))
+    # The generated command is for a POSIX shell on the Linux pod even when
+    # this test itself runs on Windows.  Use slash-form paths at that boundary.
+    monkeypatch.setattr(deploy, "REMOTE_SOURCE_ROOT", _bash_path(tmp_path / "source"))
+    monkeypatch.setattr(deploy, "REMOTE_TOKEN_FILE", _bash_path(token_file))
+    monkeypatch.setattr(deploy, "REMOTE_TRAIN_ROOT", _bash_path(tmp_path / "output"))
+    monkeypatch.setattr(deploy, "REMOTE_FULLFT_DIR", _bash_path(tmp_path / "output" / "full-ft"))
+    monkeypatch.setattr(deploy, "REMOTE_HOLDOUT_REPORT", _bash_path(tmp_path / "output" / "holdout.json"))
+    monkeypatch.setattr(deploy, "REMOTE_CORPUS", _bash_path(tmp_path / "output" / "corpus.jsonl"))
+    monkeypatch.setenv("MM_CAPTURE", _bash_path(capture))
+    bash = _bash_executable()
     run_env = os.environ.copy()
-    run_env["PATH"] = f"{fake_bin}:/usr/bin:/bin"
+    fake_bin_posix = _bash_path(fake_bin)
+    wrapped_command = f"PATH={shlex.quote(fake_bin_posix)}:$PATH; export PATH; " + deploy._training_command_body()
 
     completed = subprocess.run(
-        ["bash", "-c", deploy._training_command_body()], check=True, capture_output=True, text=True, env=run_env, encoding="utf-8"
+        [bash, "-c", wrapped_command],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=run_env,
+        encoding="utf-8",
+        timeout=30,
     )
 
     assert completed.stdout == ""
@@ -163,20 +250,24 @@ def test_staging_smoke_bare_import_and_receipt_sources(monkeypatch, tmp_path):
     """Copy the bundle like SCP, then import the staged evaluators in a subprocess."""
     remote_source = tmp_path / "workspace" / "mind-mem-release"
     remote_output = tmp_path / "workspace" / "train-output"
-    monkeypatch.setattr(deploy, "REMOTE_ROOT", str(tmp_path / "workspace"))
-    monkeypatch.setattr(deploy, "REMOTE_SOURCE_ROOT", str(remote_source))
-    monkeypatch.setattr(deploy, "REMOTE_TRAIN_ROOT", str(remote_output))
-    monkeypatch.setattr(deploy, "REMOTE_FULLFT_DIR", str(remote_output / "full-ft"))
-    monkeypatch.setattr(deploy, "REMOTE_CORPUS", str(remote_output / "corpus.jsonl"))
-    monkeypatch.setattr(deploy, "REMOTE_EVAL_REPORT", str(remote_output / "eval_report.json"))
-    monkeypatch.setattr(deploy, "REMOTE_HOLDOUT_REPORT", str(remote_output / "holdout.json"))
+    # Remote commands always target the POSIX pod filesystem.  The local
+    # Windows runner still maps these slash-form paths to its fixture tree.
+    monkeypatch.setattr(deploy, "REMOTE_ROOT", _bash_path(tmp_path / "workspace"))
+    monkeypatch.setattr(deploy, "REMOTE_SOURCE_ROOT", _bash_path(remote_source))
+    monkeypatch.setattr(deploy, "REMOTE_TRAIN_ROOT", _bash_path(remote_output))
+    monkeypatch.setattr(deploy, "REMOTE_FULLFT_DIR", _bash_path(remote_output / "full-ft"))
+    monkeypatch.setattr(deploy, "REMOTE_CORPUS", _bash_path(remote_output / "corpus.jsonl"))
+    monkeypatch.setattr(deploy, "REMOTE_EVAL_REPORT", _bash_path(remote_output / "eval_report.json"))
+    monkeypatch.setattr(deploy, "REMOTE_HOLDOUT_REPORT", _bash_path(remote_output / "holdout.json"))
+
+    bash = _bash_executable()
 
     def fake_ssh(ip, port, command):
-        subprocess.run(command, shell=True, check=True, executable="/bin/bash")
+        subprocess.run([bash, "-c", command], check=True, timeout=30)
         return ""
 
     def fake_scp(ip, port, local, remote):
-        destination = Path(remote)
+        destination = _native_path(remote)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(local, destination)
 
@@ -200,7 +291,14 @@ def test_staging_smoke_bare_import_and_receipt_sources(monkeypatch, tmp_path):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(remote_source)
     completed = subprocess.run(
-        [sys.executable, "-c", probe], cwd=remote_source, env=env, check=True, capture_output=True, text=True, encoding="utf-8"
+        [sys.executable, "-c", probe],
+        cwd=remote_source,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
     )
 
     assert "staged_eval_imports=ok" in completed.stdout

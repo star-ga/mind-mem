@@ -332,6 +332,9 @@ class TestToolCountScoping:
     def test_a_stale_live_claim_is_caught(self):
         findings = scan("MIND-Mem exposes 89 MCP tools over stdio.")
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "89", "102")]
+        emphasized = scan("The live server currently exposes **95** MCP tools.", rel="train/HF_MODEL_CARD_v4.md")
+        assert [(f.claimed, f.actual) for f in emphasized] == [("95", "102")]
+        assert scan("The live server currently exposes **102** MCP tools.", rel="train/HF_MODEL_CARD_v4.md") == []
 
     def test_the_hyphenated_form_is_caught(self):
         """ "89-tool surface" -- the spelling count_mcp_tools cannot see, and the
@@ -342,12 +345,21 @@ class TestToolCountScoping:
     def test_a_trained_on_claim_is_measured_against_the_trained_revision(self):
         findings = scan("These weights were trained against a 96-tool surface.", rel="train/HF_MODEL_CARD_v4.md")
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "96", "83")]
+        assert scan("The weights know **83** MCP tools.", rel="train/HF_MODEL_CARD_v4.md") == []
+        emphasized = scan("The weights know **95** MCP tools.", rel="train/HF_MODEL_CARD_v4.md")
+        assert [(f.claimed, f.actual) for f in emphasized] == [("95", "83")]
 
     def test_a_live_claim_inside_the_model_card_is_still_live(self):
         card = "train/HF_MODEL_CARD_v4.md"
         assert scan("The live server now exposes 102 tools.", rel=card) == []
         findings = scan("The live server now exposes 83 tools.", rel=card)
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "83", "102")]
+        code = scan("Run `the live server exposes 95 MCP tools`.", rel=card)
+        link = scan("[the live server exposes **95** MCP tools](https://example.test).", rel=card)
+        numeric_link = scan("The live server exposes [95](https://example.test) MCP tools.", rel=card)
+        assert [(f.claimed, f.actual) for f in code] == [("95", "102")]
+        assert [(f.claimed, f.actual) for f in link] == [("95", "102")]
+        assert [(f.claimed, f.actual) for f in numeric_link] == [("95", "102")]
 
     def test_a_swapped_pair_is_caught_both_ways(self):
         """The failure that produced 84-vs-96: the two numbers traded places.
@@ -359,6 +371,7 @@ class TestToolCountScoping:
         assert scan("v4 knows all 83 MCP tools from v3.x", rel=card) == []
         swapped = scan("v4 knows all 102 MCP tools from v3.x", rel=card)
         assert [(f.claimed, f.actual) for f in swapped] == [("102", "83")]
+        assert scan("v4.0.0 shipped **83** MCP tools.", rel=card) == []
 
     def test_the_model_card_defaults_to_trained_with_no_marker_at_all(self):
         """No "live"/"trained" word on the line -- the file's default decides."""
@@ -519,6 +532,14 @@ class TestFixMode:
         assert (fixed, skipped) == (2, [])
         expected = '<img src="https://img.shields.io/badge/test_functions-9%2C707-x" alt="Test functions: 9,707">\n'
         assert doc.read_text(encoding="utf-8") == expected
+
+        linked = tmp_path / "docs" / "linked.md"
+        linked.write_text("The live server exposes [95](https://example.test) MCP tools.\n", encoding="utf-8")
+        linked_findings = cda.scan_text("docs/linked.md", linked.read_text(encoding="utf-8").splitlines(), make_authorities())
+        assert [(f.claimed, f.actual, f.start, f.end) for f in linked_findings] == [("95", "102", 25, 27)]
+        fixed, skipped = cda.apply_fixes(linked_findings, tmp_path)
+        assert (fixed, skipped) == (1, [])
+        assert linked.read_text(encoding="utf-8") == "The live server exposes [102](https://example.test) MCP tools.\n"
 
     def test_fix_refuses_a_finding_whose_line_moved(self, tmp_path):
         doc = tmp_path / "docs" / "x.md"
@@ -913,6 +934,11 @@ class TestPublishedModelCard:
         findings = cda.check_live_hf_card(make_authorities())
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "84", "83")]
         assert findings[0].surface.startswith("huggingface.co/"), "the finding must name the published surface"
+
+        wrapped = "> The live server currently exposes **95** MCP\n> tools.\n"
+        self._stub_fetch(monkeypatch, wrapped)
+        findings = cda.check_live_hf_card(make_authorities())
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "95", "102")]
 
     def test_a_corrected_hub_card_passes(self, monkeypatch):
         self._stub_fetch(monkeypatch, self.CARD.replace("84 MCP tools", "83 MCP tools"))

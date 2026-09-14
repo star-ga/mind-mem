@@ -145,6 +145,7 @@ import hashlib
 import hmac
 import os
 import sqlite3
+import stat
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -182,6 +183,29 @@ LEG_HYBRID = "hybrid"  # the two-leg fusion mode — present iff bm25 AND vector
 # — so an absent ledger is a stable, recomputable value rather than an empty
 # string that could be confused with "unresolved".
 GENESIS_ANCHOR = "0" * 64
+
+# Unlike an empty governed ledger, a ledger that exists but cannot be read has
+# no trustworthy corpus coordinate. Keep this out of the hexadecimal anchor
+# namespace so callers cannot accidentally attest or cache it as a real head.
+INDEX_ANCHOR_UNRESOLVED = "\x00index-anchor-unresolved"
+
+
+@dataclass(frozen=True)
+class IndexAnchorResolution:
+    """The governed-head result, including whether its value is trustworthy."""
+
+    anchor: str
+    resolved: bool
+    reason: str | None = None
+
+    @classmethod
+    def genesis(cls) -> "IndexAnchorResolution":
+        return cls(GENESIS_ANCHOR, True)
+
+    @classmethod
+    def unresolved(cls, reason: str) -> "IndexAnchorResolution":
+        return cls(INDEX_ANCHOR_UNRESOLVED, False, reason)
+
 
 # Domain tag for the index anchor's preimage class. The anchor is a tagged
 # SHA-256 of the governed ledger's head ``entry_hash``, so it needs its own
@@ -328,15 +352,101 @@ def _served_ids(results: Any) -> tuple[str, ...]:
 def index_anchor_ledger_path(workspace: str) -> str:
     """Absolute path of the ledger :func:`_resolve_index_anchor` reads.
 
-    Public because the anticipation cache memoizes the anchor on an
-    ``os.stat`` of the file it was read from. A freshness check aimed at a
-    *different* file than the read is a stale-cache generator, so the path
-    is published here rather than restated there — one definition, and a
-    future move of the ledger cannot leave a watcher behind on the old one.
+    Serving callers and independent verifiers share this one path definition.
+    The head is read fresh from SQLite; filesystem metadata is not a memoized
+    head because an append can remain in the database's WAL sidecar.
 
-    The file may not exist; an absent ledger is :data:`GENESIS_ANCHOR`.
+    A genuinely absent ledger is :data:`GENESIS_ANCHOR`. A present unreadable
+    entry or broken link is unresolved, as classified by
+    :func:`resolve_index_anchor`.
     """
     return os.path.join(os.path.abspath(workspace), "memory", "hash_chain_v2.db")
+
+
+def _missing_ledger_parent_error(db_path: str) -> str | None:
+    """Return an error when a missing final path crosses a broken parent link.
+
+    ``lstat(db_path)`` reports ``ENOENT`` both for an absent final entry and
+    for a dangling symlink in an ancestor. Walk to the nearest existing
+    ancestor: an ordinary directory admits a missing ledger (genesis), while
+    an existing symlink must resolve to a directory before that conclusion is
+    safe. This walk does not resolve or rewrite any path.
+    """
+    current = os.path.dirname(db_path)
+    while True:
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            parent = os.path.dirname(current)
+            if parent == current:
+                return None
+            current = parent
+            continue
+        except OSError as exc:
+            return f"{type(exc).__name__}: governed head parent unavailable"
+
+        if stat.S_ISLNK(info.st_mode):
+            try:
+                target = os.stat(current)
+            except FileNotFoundError:
+                return "governed head parent is a dangling symlink"
+            except OSError as exc:
+                return f"{type(exc).__name__}: governed head parent unavailable"
+            if not stat.S_ISDIR(target.st_mode):
+                return "governed head parent symlink target is not a directory"
+        elif not stat.S_ISDIR(info.st_mode):
+            return "governed head parent is not a directory"
+        return None
+
+
+def resolve_index_anchor(workspace: str) -> IndexAnchorResolution:
+    """Resolve the governed head without conflating failure with genesis.
+
+    An absent or empty ledger is a valid genesis state. A present ledger that
+    cannot be opened/read is instead unresolved: its corpus coordinate is not
+    safe for cache keys or a recorded served proof.
+    """
+    db_path = index_anchor_ledger_path(workspace)
+    # ``stat`` follows links.  A dangling final symlink therefore raises
+    # ``FileNotFoundError`` even though a ledger directory entry is present;
+    # only a genuinely absent final entry is the valid genesis state.
+    try:
+        link_info = os.lstat(db_path)
+    except FileNotFoundError:
+        parent_error = _missing_ledger_parent_error(db_path)
+        if parent_error is not None:
+            return IndexAnchorResolution.unresolved(parent_error)
+        return IndexAnchorResolution.genesis()
+    except OSError as exc:
+        return IndexAnchorResolution.unresolved(f"{type(exc).__name__}: governed head path unavailable")
+
+    try:
+        # Re-stat even for ordinary files: lstat establishes that the final
+        # entry exists, while this follows a supported symlink and catches a
+        # permission/read race before a present path can become genesis.
+        target_info = os.stat(db_path)
+    except FileNotFoundError:
+        if stat.S_ISLNK(link_info.st_mode):
+            return IndexAnchorResolution.unresolved("governed head path is a dangling symlink")
+        return IndexAnchorResolution.unresolved("governed head path disappeared during resolution")
+    except OSError as exc:
+        return IndexAnchorResolution.unresolved(f"{type(exc).__name__}: governed head target unavailable")
+    if not stat.S_ISREG(target_info.st_mode):
+        if stat.S_ISLNK(link_info.st_mode):
+            return IndexAnchorResolution.unresolved("governed head symlink target is not a regular file")
+        return IndexAnchorResolution.unresolved("governed head path is not a regular file")
+    try:
+        latest = HashChainV2.open_readonly(db_path).get_latest(n=1)
+    except (sqlite3.DatabaseError, OSError, IndexError, KeyError, TypeError, ValueError, AttributeError) as exc:
+        return IndexAnchorResolution.unresolved(f"{type(exc).__name__}: governed head unreadable")
+    if not latest:
+        return IndexAnchorResolution.genesis()
+    head = str(latest[-1].entry_hash or "")
+    if not head:
+        return IndexAnchorResolution.unresolved("governed head row has no entry hash")
+    if len(head) != 128 or any(char not in "0123456789abcdef" for char in head):
+        return IndexAnchorResolution.unresolved("governed head row has a malformed entry hash")
+    return IndexAnchorResolution(hashlib.sha256(preimage(INDEX_ANCHOR_TAG, head)).hexdigest(), True)
 
 
 def _resolve_index_anchor(workspace: str) -> str:
@@ -382,22 +492,11 @@ def _resolve_index_anchor(workspace: str) -> str:
 
     Zero side effects, as rail 2 requires: ``open_readonly`` neither creates
     the directory nor runs the schema touch, and the URI opens the database
-    without creating it and without taking a write lock. An absent, empty or
-    unreadable ledger is :data:`GENESIS_ANCHOR`.
+    without creating it and without taking a write lock. An absent or empty
+    ledger is :data:`GENESIS_ANCHOR`; an unreadable present ledger is the
+    distinct :data:`INDEX_ANCHOR_UNRESOLVED` sentinel.
     """
-    db_path = index_anchor_ledger_path(workspace)
-    if not os.path.isfile(db_path):
-        return GENESIS_ANCHOR
-    try:
-        latest = HashChainV2.open_readonly(db_path).get_latest(n=1)
-    except (sqlite3.DatabaseError, OSError):
-        return GENESIS_ANCHOR
-    if not latest:
-        return GENESIS_ANCHOR
-    head = str(latest[-1].entry_hash or "")
-    if not head:
-        return GENESIS_ANCHOR
-    return hashlib.sha256(preimage(INDEX_ANCHOR_TAG, head)).hexdigest()
+    return resolve_index_anchor(workspace).anchor
 
 
 # ---------------------------------------------------------------------------
@@ -877,6 +976,8 @@ def derive_recall_attestation_for_workspace(
     vector_available: bool,
     query: str,
     scoring_instant: date | str | None = None,
+    config_hash: str | None = None,
+    index_anchor: str | None = None,
 ) -> RecallAttestation:
     """Convenience wrapper: resolve ``config_hash`` + ``index_anchor`` from *workspace*.
 
@@ -887,16 +988,23 @@ def derive_recall_attestation_for_workspace(
     rather than raising — an attestation with an unresolved config hash is
     honest, a crashed recall is not.
     """
-    try:
-        from .pipeline_hash import current_pipeline_hash
+    if index_anchor == INDEX_ANCHOR_UNRESOLVED:
+        raise RuntimeError("governed head could not be resolved for this attestation")
+    if config_hash is None:
+        try:
+            from .pipeline_hash import current_pipeline_hash
 
-        config_hash = current_pipeline_hash(workspace)
-        if not isinstance(config_hash, str):  # pragma: no cover — overload guard
+            config_hash = current_pipeline_hash(workspace)
+            if not isinstance(config_hash, str):  # pragma: no cover — overload guard
+                config_hash = ""
+        except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
+            _log.warning("recall_attestation_config_hash_failed", error=str(exc))
             config_hash = ""
-    except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
-        _log.warning("recall_attestation_config_hash_failed", error=str(exc))
-        config_hash = ""
-    index_anchor = _resolve_index_anchor(workspace)
+    if index_anchor is None:
+        resolution = resolve_index_anchor(workspace)
+        if not resolution.resolved:
+            raise RuntimeError(resolution.reason or "governed head unresolved")
+        index_anchor = resolution.anchor
     return derive_recall_attestation(
         results,
         vector_requested=vector_requested,
@@ -939,6 +1047,8 @@ __all__ = [
     "DERIVATION_ASSERTED",
     "DERIVATION_DERIVED",
     "GENESIS_ANCHOR",
+    "INDEX_ANCHOR_UNRESOLVED",
+    "IndexAnchorResolution",
     "INDEX_ANCHOR_TAG",
     "LEG_BM25",
     "LEG_GRAPH",
@@ -954,4 +1064,5 @@ __all__ = [
     # they are owned by :mod:`mind_mem.recall_digests`, and two import paths to
     # one canonical encoding is the first step toward two encodings.
     "verify_recall_attestation",
+    "resolve_index_anchor",
 ]

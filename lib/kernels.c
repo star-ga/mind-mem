@@ -126,8 +126,17 @@ void top_k_mask(const float *scores, int n, int k, float *out) {
     /* Initialize all to 0 */
     for (int i = 0; i < n; i++) out[i] = 0.0f;
 
+    /* Selection contract (UNIFORM across both the k>=n fast path and the
+     * partial-selection loop below): a score is selected iff it is
+     * `> -INFINITY`, i.e. finite or +inf. NaN (`nan > -INFINITY` is false) and
+     * -inf are NEVER selected — top-k operates over finite scores, +inf ranks
+     * highest. When the requested k covers the input the fast path still honors
+     * this (it does NOT blindly mask non-finite slots), so a k>=n request over
+     * non-finite inputs leaves those slots unset rather than selecting a
+     * pathological value. Pinned by the k<n / k=n / k>n non-finite cases in
+     * tests/test_native_c_abi.py. */
     if (k >= n) {
-        for (int i = 0; i < n; i++) out[i] = 1.0f;
+        for (int i = 0; i < n; i++) out[i] = (scores[i] > -INFINITY) ? 1.0f : 0.0f;
         return;
     }
 
@@ -135,7 +144,12 @@ void top_k_mask(const float *scores, int n, int k, float *out) {
     /* For benchmark sizes, a simple approach suffices */
     for (int found = 0; found < k; found++) {
         int best_idx = -1;
-        float best_val = -1e30f;
+        /* Sentinel is -INFINITY (not a finite -1e30f) so EVERY finite float32
+         * score, down to -FLT_MAX, is selectable; see the uniform contract
+         * above. A round that finds only non-selectable scores leaves
+         * `best_idx == -1` and masks nothing (the mask is left UNDER-filled
+         * rather than picking a NaN/-inf). */
+        float best_val = -INFINITY;
         for (int i = 0; i < n; i++) {
             if (out[i] < 0.5f && scores[i] > best_val) {
                 best_val = scores[i];

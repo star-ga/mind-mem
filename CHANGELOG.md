@@ -4,6 +4,8 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## [5.0.2] - 2026-09-13
+
 ### Security
 
 - Document the recall-path prompt-injection surface identified in
@@ -16,6 +18,15 @@ All notable changes to MIND-Mem are documented in this file.
   does not eliminate, the surface) and its limit (no content filtering or
   instruction-detection is performed on approved blocks). Docs-only; no
   behavior change.
+
+### Fixed
+
+- Native `top_k_mask` (`lib/kernels.c`) selected against a finite `-1e30f`
+  sentinel, so any score at or below `-1e30` (down to `-FLT_MAX`) could never
+  be chosen — a wrong top-k on legitimately very-negative float32 scores. The
+  sentinel is now `-INFINITY`: finite scores and `+inf` are eligible, while
+  `-inf` and `NaN` are never selected; the `k>=n` and partial paths share that
+  contract and native-ABI tests pin the boundary.
 
 ### Roadmap
 
@@ -144,7 +155,34 @@ before acting on every run, and refuses outright on a chain that verifies
 clean. `mm chain survey` is read-only and exits 1 on damage so it can gate CI.
 `--store` exists so a recovery is rehearsed on a copy first.
 
-## [5.0.2] - 2026-09-05
+### Changed — request-bound policy and served-run receipts
+
+- Keep a genuinely absent or readable empty governed ledger distinct from an unresolved
+  head. Unreadable databases, malformed rows, and broken ledger or parent links bypass
+  ordinary and anticipation caches and return fresh retrieval with explicit unproven
+  status, without appending a served row. The direct cache APIs also refuse unresolved
+  generations; healthy and genesis anchors retain their existing behavior.
+- Capture the request policy snapshot once and use that same mapping for ranking and its
+  attestation. A malformed `mind-mem.json` follows the bound MCP loader's built-in
+  `DEFAULT_CONFIG` fallback; this is intentionally different from the historical unbound
+  engine fallback of `{}` on the malformed-config path, and the recorded hash covers the
+  mapping actually consumed. The request-context read counter is diagnostic only;
+  `served_proof="recorded"` indicates that a ledger row was appended with the captured
+  policy coordinates, not that the counter proved context consumption. Cache hits can
+  legitimately record a row without re-running the engine.
+- Context-bound served runs now write the additive `ServedRunV2` row with `serve_kind`
+  and `context_digest`; the reader accepts both the historical V1 rows and V2 rows without
+  rewriting or re-anchoring the ledger. Upgrade every reader process to the V2-capable
+  reader before enabling V2 writes: the old V1-only reader cannot parse a V2 row. A safe
+  rollback must retain a V2-capable reader for existing history even if the writer is
+  reverted. Never delete, rewrite, or re-anchor existing ledger rows to accommodate an
+  older reader.
+
+### Fixed — release documentation
+
+- Align the `ServedRunV2` schema docstring with its current writer: context-bound doors
+  emit V2 once a generation is resolved. The reader continues to accept historical V1
+  rows, and callers without V2 context retain the V1 writer path.
 
 ### Added — a snapshot has an identity, not just a directory
 
@@ -260,7 +298,6 @@ runs green at a peak of 10 live threads against a session baseline of 1 —
 inside the fixed path's whole budget of 12 (a 4-worker fan-out plus one
 2-worker leg pool per variant).
 
-
 ### Fixed — the score column now orders the results it is attached to
 
 `rrf_fuse` wrote `rrf_score` and never wrote `score`. The fused item is a copy
@@ -356,7 +393,6 @@ off path is one fewer query classification per search (4 to 3, measured), not
 one more. Sixteen mutations of the new guards were each shown to turn a named
 test red.
 
-
 ### Known limitations — named here, scheduled for 5.1
 
 Three residuals this release does not close. They are disclosed in the release
@@ -390,7 +426,6 @@ vector workspace the receipt used to read `legs_ran=['bm25']` and now reads
 `['bm25', 'hybrid', 'vector']`. Two doors that disagreed now agree, which is
 the intended trade — but the residual `bm25` is named in more receipts than it
 used to be, and saying so is what keeps the trade honest.
-
 
 ### Added — a paired scorecard, so a ranking change is measured rather than argued
 
@@ -607,7 +642,6 @@ this entry is only the mechanism.
   corpus test compared text to bytes across the platform's newline
   translation. All three fixed; the unexplained `DELETE /memories/<missing>`
   500 on Windows now logs its traceback so the next run names its cause.
-
 
 ### Fixed
 

@@ -82,7 +82,7 @@ from ._recall_scoring import bm25_idf, bm25f_score_terms, compute_weighted_tf
 from ._recall_tokenization import tokenize
 from .novel_term_gate import DEFAULT_CONFIG as GATE_DEFAULT_CONFIG
 from .novel_term_gate import NovelTermGateConfig, NovelTermVerdict, evaluate_stems
-from .recall_attestation import GENESIS_ANCHOR, _resolve_index_anchor
+from .recall_attestation import INDEX_ANCHOR_UNRESOLVED, IndexAnchorResolution, resolve_index_anchor
 from .recall_cache import PROJECTION_VERSION, UNCACHEABLE_CONFIG_FINGERPRINT, retrieval_config_fingerprint
 
 __all__ = [
@@ -96,6 +96,7 @@ __all__ = [
     "anticipation_enabled",
     "anticipation_generation_identity",
     "chain_head",
+    "chain_head_resolution",
     "get_cache",
     "reset_cache",
 ]
@@ -126,13 +127,12 @@ RETRIEVAL_SOURCE: Final = "anticipation_cache"
 def chain_head(workspace: str) -> str:
     """The governed-ledger head for *workspace* — this cache's generation key.
 
-    Delegates to :func:`mind_mem.recall_attestation._resolve_index_anchor`, the
+    Delegates to :func:`mind_mem.recall_attestation.resolve_index_anchor`, the
     very function that produces the ``index_anchor`` an attestation binds. Using
     it rather than a second reader is the point: the cache generation and the
     attested corpus state can never become two different opinions of "which
-    corpus is this", and when the ledger moves — as it did in 5.0.2, from the
-    field-audit sidecar to ``memory/hash_chain_v2.db`` — this follows without a
-    second edit.
+    corpus is this". A read failure returns the unresolved sentinel; serving
+    callers use :func:`chain_head_resolution` to bypass cache and proof.
 
     **Resolved fresh on every call, deliberately.** The obvious optimisation is
     to memoize the head and re-read the ledger only when an ``os.stat`` of its
@@ -165,12 +165,22 @@ def chain_head(workspace: str) -> str:
     of resolving it twice is a one-line change in the attestation module and is
     left to the lane that owns it.
     """
+    return chain_head_resolution(workspace).anchor
+
+
+def chain_head_resolution(workspace: str) -> IndexAnchorResolution:
+    """Return the head plus whether it was actually resolved.
+
+    Empty/absent workspaces remain legitimate genesis. A present but unreadable
+    ledger is returned as unresolved so serving callers can bypass both caches
+    and recorded proof rather than laundering the failure into genesis.
+    """
     if not workspace:
-        return GENESIS_ANCHOR
+        return IndexAnchorResolution.genesis()
     try:
-        return _resolve_index_anchor(workspace)
-    except Exception:  # pragma: no cover — the resolver already degrades internally
-        return GENESIS_ANCHOR
+        return resolve_index_anchor(workspace)
+    except Exception as exc:  # pragma: no cover - defensive boundary
+        return IndexAnchorResolution.unresolved(f"{type(exc).__name__}: governed head unresolved")
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +419,8 @@ class AnticipationCache:
         if not workspace or not hits:
             return None
         resolved_head = chain_head(workspace) if head is None else head
+        if resolved_head == INDEX_ANCHOR_UNRESOLVED:
+            return None
         documents: list[_Document] = []
         for hit in hits:
             if not isinstance(hit, Mapping):
@@ -466,6 +478,19 @@ class AnticipationCache:
         replays another query's ranked answer under a new query's name.
         """
         resolved_head = chain_head(workspace) if head is None else head
+        if resolved_head == INDEX_ANCHOR_UNRESOLVED:
+            # An unresolved generation is not a cache generation. In
+            # particular, do not create an empty generation or increment miss
+            # counters: this call bypasses both cache read and cache write.
+            return AnticipationDecision(
+                served=(),
+                serve_from_cache=False,
+                reason=REASON_COLD,
+                head=resolved_head,
+                bundle_count=0,
+                document_count=0,
+                generation_identity=generation_identity,
+            )
         with self._lock:
             generation = self._generation_for(workspace, resolved_head, generation_identity)
             bundles = tuple(generation.values())

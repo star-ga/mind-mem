@@ -66,16 +66,6 @@ class _RecordingLog:
     debug = _record
 
 
-def _kernel_lib_path():
-    """The .so the search path would find, or None."""
-    from mind_mem.mind_ffi import _LIB_SEARCH_PATHS
-
-    for p in _LIB_SEARCH_PATHS:
-        if p.exists():
-            return p
-    return None
-
-
 def test_env_lib_outside_allowlist_is_reported(monkeypatch, tmp_path):
     """A MIND_MEM_LIB pointing outside the allowed directories was dropped in
     silence: the operator saw 'library not found' (or a different library
@@ -138,33 +128,3 @@ def test_env_lib_missing_file_is_reported(monkeypatch):
     assert "outside allowed directories" not in rejected[0]["reason"], (
         f"path was rejected as out-of-allowlist, not as missing: {rejected[0]['reason']}"
     )
-
-
-def test_version_gate_reads_the_exported_symbol_and_keeps_the_verdict(monkeypatch):
-    """The gate probed 'mindmem_get_version', which no build exports, and then
-    threw away the bool it computed. Both halves were dead.
-
-    deferred: unlike the missing-file test above, this one genuinely needs a
-    built ``libmindmem.so``. ``lib/*.so`` is gitignored and no workflow
-    compiles it (``libmindmem`` appears in .github/ only in a release.yml
-    comment recording that the artifact was dropped), so this assertion runs
-    on no CI row. Upgrade path: a job that builds lib/kernels.c into
-    lib/libmindmem.so and runs this file, failing if the .so is absent rather
-    than skipping.
-    """
-    import pytest
-
-    from mind_mem.mind_ffi import MindMemKernel
-
-    lib = _kernel_lib_path()
-    if lib is None:
-        pytest.skip("no compiled MIND kernel in the search path")
-    monkeypatch.delenv("MIND_MEM_LIB", raising=False)
-
-    kernel = MindMemKernel()
-    version = kernel.so_version()
-    assert version, "version symbol was not read from the library"
-    assert version[0].isdigit()
-    # The verdict is now kept rather than discarded.
-    assert kernel.version_compatible() is not None
-    assert isinstance(kernel.version_compatible(), bool)

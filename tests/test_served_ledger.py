@@ -39,6 +39,7 @@ from mind_mem.served_ledger import (
     LEDGER_DISABLED,
     LEDGER_ERROR_KEY,
     LEDGER_RELPATH,
+    NOT_BOUND,
     RUN_TAG,
     SERVED_ROW_HASH_KEY,
     SERVED_SEQ_KEY,
@@ -996,7 +997,7 @@ def test_the_attestation_names_the_row_that_was_written(tmp_path: Path) -> None:
     ws = _ws(tmp_path, enabled=True)
     ids = ["D-1", "D-2"]
 
-    stamped = attach_served_run(_record(ws, ids), ws, ids=ids)
+    stamped = attach_served_run(_record(ws, ids), ws, ids=ids, serve_kind="attested", generation=NOT_BOUND)
 
     rows = read_served_runs(ws)
     assert len(rows) == 1
@@ -1012,11 +1013,13 @@ def test_every_ledger_key_is_present_whatever_happened(tmp_path: Path) -> None:
     A key that appears only on the happy path is a key consumers stop reading.
     """
     ids = ["D-1"]
-    written = attach_served_run(_record(str(tmp_path), ids), _ws(tmp_path, enabled=True), ids=ids)
-    off = attach_served_run(_record(str(tmp_path), ids), _ws(tmp_path, enabled=False), ids=ids)
+    written = attach_served_run(
+        _record(str(tmp_path), ids), _ws(tmp_path, enabled=True), ids=ids, serve_kind="attested", generation=NOT_BOUND
+    )
+    off = attach_served_run(_record(str(tmp_path), ids), _ws(tmp_path, enabled=False), ids=ids, serve_kind="attested", generation=NOT_BOUND)
     broken_ws = _ws(tmp_path / "broken", enabled=True)
     _break_the_ledger(broken_ws)
-    failed = attach_served_run(_record(broken_ws, ids), broken_ws, ids=ids)
+    failed = attach_served_run(_record(broken_ws, ids), broken_ws, ids=ids, serve_kind="attested", generation=NOT_BOUND)
 
     for label, record in (("written", written), ("disabled", off), ("failed", failed)):
         assert set(LEDGER_ATTESTATION_KEYS) <= set(record), f"{label} record is missing a ledger key: {sorted(record)}"
@@ -1028,7 +1031,7 @@ def test_a_failed_append_yields_a_null_seq_and_names_the_reason(tmp_path: Path) 
     _break_the_ledger(ws)
     ids = ["D-1"]
 
-    stamped = attach_served_run(_record(ws, ids), ws, ids=ids)
+    stamped = attach_served_run(_record(ws, ids), ws, ids=ids, serve_kind="attested", generation=NOT_BOUND)
 
     assert stamped[SERVED_SEQ_KEY] is None
     assert stamped[SERVED_ROW_HASH_KEY] is None
@@ -1046,7 +1049,7 @@ def test_a_disabled_ledger_is_distinguishable_from_a_broken_one(tmp_path: Path) 
     ws = _ws(tmp_path, enabled=False)
     ids = ["D-1"]
 
-    stamped = attach_served_run(_record(ws, ids), ws, ids=ids)
+    stamped = attach_served_run(_record(ws, ids), ws, ids=ids, serve_kind="attested", generation=NOT_BOUND)
 
     assert stamped[SERVED_SEQ_KEY] is None
     assert stamped[LEDGER_ERROR_KEY] == LEDGER_DISABLED
@@ -1060,7 +1063,7 @@ def test_attach_returns_a_new_record_and_mutates_nothing(tmp_path: Path) -> None
     original = _record(ws, ids)
     before = dict(original)
 
-    stamped = attach_served_run(original, ws, ids=ids)
+    stamped = attach_served_run(original, ws, ids=ids, serve_kind="attested", generation=NOT_BOUND)
 
     assert original == before, "attach_served_run mutated the record it was given"
     assert stamped is not original
@@ -1075,7 +1078,9 @@ def test_the_published_row_hash_is_the_one_the_chain_seals(tmp_path: Path) -> No
     parses back.
     """
     ws = _ws(tmp_path, enabled=True)
-    stamped = [attach_served_run(_record(ws, [f"D-{n}"]), ws, ids=[f"D-{n}"]) for n in range(3)]
+    stamped = [
+        attach_served_run(_record(ws, [f"D-{n}"]), ws, ids=[f"D-{n}"], serve_kind="attested", generation=NOT_BOUND) for n in range(3)
+    ]
 
     rows = read_served_runs(ws)
     assert [record[SERVED_SEQ_KEY] for record in stamped] == [0, 1, 2]

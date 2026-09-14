@@ -124,6 +124,31 @@ from .recall_digests import RUN_TAG, hex64, run_id, served_set_digest
 
 #: Domain tag for the row-chain link.
 ROW_TAG = "MM_LEDGER_ROW_v1"
+#: Version-specific row tags. v1 keeps its historical value; v2 adds the
+#: serving kind and context digest without changing the bytes of old rows.
+ROW_TAG_V1 = ROW_TAG
+ROW_TAG_V2 = "MM_LEDGER_ROW_v2"
+
+#: The only v2 serve kinds a reader is allowed to interpret. A v1 row has no
+#: kind and must remain distinguishable from an attested v2 row.
+SERVE_KINDS = frozenset({"attested", "anticipation"})
+
+CTX_TAG_V2 = "MM_CTX_v2"
+
+
+def _length_prefixed(*parts: object) -> bytes:
+    """Encode variable-width context fields without delimiter collisions."""
+    out = bytearray()
+    for part in parts:
+        raw = str(part).encode("utf-8")
+        out += str(len(raw)).encode("ascii") + b":" + raw
+    return bytes(out)
+
+
+def context_digest(*, workspace: str, config_hash: str, generation: str, index_anchor: str) -> str:
+    """Derive the v2 identity of the workspace/config/generation/corpus context."""
+    return hashlib.sha256(_length_prefixed(CTX_TAG_V2, workspace, config_hash, generation, index_anchor)).hexdigest()
+
 
 #: ``prev_row_hash`` of the first row. SHA-256 width — deliberately NOT the
 #: 128-char ``hash_chain_v2.GENESIS_HASH`` (SHA3-512) nor
@@ -173,6 +198,8 @@ LEDGER_ERROR_KEY = "ledger_error"
 #: record as a proven one and nothing in the record objects. So the status is
 #: stated, in a word, on every record.
 SERVED_PROOF_KEY = "served_proof"
+SERVED_KIND_KEY = "served_serve_kind"
+SERVED_CONTEXT_KEY = "served_context_digest"
 
 #: The CLOSED vocabulary of :data:`SERVED_PROOF_KEY`. Exactly two members, and
 #: it stays two: every *reason* a row is missing goes in ``ledger_error``,
@@ -322,6 +349,74 @@ class ServedRun:
         return cls(**{name: _COERCE.get(name, str)(row[name]) for name in expected})
 
 
+@dataclass(frozen=True)
+class ServedRunV2:
+    """A v2 row: the nine v1 fields plus kind and context digest.
+
+    Context-bound serving doors write v2 once a generation is resolved. The
+    reader also accepts historical v1 rows, and callers without v2 context
+    retain the v1 writer path.
+    """
+
+    seq: int
+    prev_row_hash: str
+    run_id: str
+    query_hash: str
+    served_digest: str
+    ids: tuple[str, ...]
+    pipeline_hash: str
+    index_anchor: str
+    scoring_instant: str
+    serve_kind: str
+    context_digest: str
+
+    def __post_init__(self) -> None:
+        if self.serve_kind not in SERVE_KINDS:
+            raise ValueError(f"serve_kind {self.serve_kind!r} is not a recorded kind")
+        try:
+            _hex64("context_digest", self.context_digest)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("a v2 row must carry a lowercase 64-character hexadecimal context_digest") from exc
+
+    def to_row(self) -> dict[str, Any]:
+        return {f.name: _JSONABLE.get(f.name, _identity)(getattr(self, f.name)) for f in fields(self)}
+
+    @classmethod
+    def from_row(cls, row: dict[str, Any]) -> "ServedRunV2":
+        expected = {f.name for f in fields(cls)}
+        if set(row) != expected:
+            raise ValueError(f"row keys {sorted(row)} do not match the v2 schema {sorted(expected)}")
+        if not isinstance(row["context_digest"], str):
+            raise ValueError("context_digest must be a string, without coercion")
+        return cls(**{name: _COERCE.get(name, str)(row[name]) for name in expected})
+
+
+def row_serve_kind(row: ServedRun | ServedRunV2) -> str:
+    """Return the recorded kind, or the explicit sentinel for a v1 row."""
+    return row.serve_kind if isinstance(row, ServedRunV2) else "unrecorded"
+
+
+# Exact set equality prevents partial, mixed, and unknown schemas from being
+# silently downgraded to v1.
+V1_KEYS = frozenset(f.name for f in fields(ServedRun))
+V2_KEYS = frozenset(f.name for f in fields(ServedRunV2))
+
+
+def decode_row(row: dict[str, Any]) -> ServedRun | ServedRunV2:
+    """Decode one persisted row by exact v1/v2 key set."""
+    if not isinstance(row, dict):
+        raise ValueError(f"row must be a JSON object, got {type(row).__name__}")
+    keys = frozenset(row)
+    if keys == V1_KEYS:
+        return ServedRun.from_row(dict(row))
+    if keys == V2_KEYS:
+        return ServedRunV2.from_row(dict(row))
+    raise ValueError(
+        f"row keys {sorted(keys)} match neither the v1 schema {sorted(V1_KEYS)} "
+        f"nor the v2 schema {sorted(V2_KEYS)}; mixed and unknown shapes are refused"
+    )
+
+
 #: The ONE field :func:`row_hash` does not name directly. ``ids`` enters
 #: through ``served_digest``, whose agreement with the ids is re-derived on
 #: every verification, so editing the ids alone fails there and editing them
@@ -332,12 +427,12 @@ class ServedRun:
 _HASH_EXCLUDED = frozenset({"ids"})
 
 
-def _hashed_values(row: ServedRun) -> tuple[Any, ...]:
+def _hashed_values(row: ServedRun | ServedRunV2) -> tuple[Any, ...]:
     """Every field the row chain seals, in declaration order."""
     return tuple(getattr(row, f.name) for f in fields(row) if f.name not in _HASH_EXCLUDED)
 
 
-def row_hash(row: ServedRun) -> str:
+def row_hash(row: ServedRun | ServedRunV2) -> str:
     """The chain link, **derived** rather than stored — over the whole schema.
 
     A stored row hash can be rewritten alongside the row it covers; a derived
@@ -345,7 +440,8 @@ def row_hash(row: ServedRun) -> str:
     up: a hash whose coverage is a literal is only as current as the last
     author who remembered to extend it.
     """
-    return hashlib.sha256(preimage(ROW_TAG, *_hashed_values(row))).hexdigest()
+    tag = ROW_TAG_V2 if isinstance(row, ServedRunV2) else ROW_TAG_V1
+    return hashlib.sha256(preimage(tag, *_hashed_values(row))).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -416,14 +512,14 @@ def ledger_enabled(workspace: str | Path) -> bool:
     return not (isinstance(section, dict) and section.get("enabled") is False)
 
 
-def read_served_runs(workspace: str | Path) -> tuple[ServedRun, ...]:
+def read_served_runs(workspace: str | Path) -> tuple[ServedRun | ServedRunV2, ...]:
     """Every row on disk, in file order. Empty when the ledger is absent."""
     try:
         with open(ledger_path(workspace), encoding="utf-8") as handle:
             lines = [line for line in handle.read().splitlines() if line.strip()]
     except OSError:
         return ()
-    return tuple(ServedRun.from_row(json.loads(line)) for line in lines)
+    return tuple(decode_row(json.loads(line)) for line in lines)
 
 
 class ServedLedgerCorruptedError(OSError):
@@ -448,7 +544,7 @@ class ServedLedgerCorruptedError(OSError):
     """
 
 
-def _last_row(workspace: str | Path) -> Optional[ServedRun]:
+def _last_row(workspace: str | Path) -> Optional[ServedRun | ServedRunV2]:
     """The final row on disk, or ``None`` when the ledger genuinely holds none.
 
     ``None`` means exactly one thing: no file, or a file with no non-blank
@@ -481,7 +577,7 @@ def _last_row(workspace: str | Path) -> Optional[ServedRun]:
     if not lines:
         return None
     try:
-        return ServedRun.from_row(json.loads(lines[-1]))
+        return decode_row(json.loads(lines[-1]))
     except (json.JSONDecodeError, ValueError, TypeError) as exc:
         raise ServedLedgerCorruptedError(
             f"the last line of the served ledger {path} is not a readable row ({exc}); refusing to "
@@ -581,7 +677,9 @@ def append_served_run(
     pipeline_hash: str,
     index_anchor: str,
     scoring_instant: str,
-) -> Optional[ServedRun]:
+    serve_kind: str = "",
+    context_digest: str = "",
+) -> Optional[ServedRun | ServedRunV2]:
     """Append one row. Returns ``None`` — writing nothing — when disabled.
 
     Reads no clock: ``scoring_instant`` is the value the run *already scored
@@ -611,6 +709,9 @@ def append_served_run(
     served = tuple(str(i) for i in ids)
     if served_set_digest(served) != served_digest:
         raise ValueError("served_digest does not match ids — refusing to record an inconsistent row")
+    want_v2 = bool(serve_kind) or bool(context_digest)
+    if want_v2 and not (serve_kind and context_digest):
+        raise ValueError("a v2 row needs both serve_kind and context_digest")
     # The lock file lives beside the ledger, so the directory has to exist
     # before the lock can be taken rather than at the first write. Reaching
     # here means the ledger is enabled, so this creates nothing a disabled
@@ -618,17 +719,38 @@ def append_served_run(
     Path(ledger_path(workspace)).parent.mkdir(parents=True, exist_ok=True)
     with _append_lock(workspace):
         seq, prev = _next_link(workspace)
-        row = ServedRun(
-            seq=seq,
-            prev_row_hash=prev,
-            run_id=run_id(query_hash=query_hash, served_digest=served_digest, pipeline_hash=pipeline_hash),
-            query_hash=_hex64("query_hash", query_hash),
-            served_digest=served_digest,
-            ids=served,
-            pipeline_hash=_hex64("pipeline_hash", pipeline_hash),
-            index_anchor=_hex64("index_anchor", index_anchor),
-            scoring_instant=str(scoring_instant),
-        )
+        _rid = run_id(query_hash=query_hash, served_digest=served_digest, pipeline_hash=pipeline_hash)
+        _qh = _hex64("query_hash", query_hash)
+        _ph = _hex64("pipeline_hash", pipeline_hash)
+        _ia = _hex64("index_anchor", index_anchor)
+        _si = str(scoring_instant)
+        row: ServedRun | ServedRunV2
+        if want_v2:
+            row = ServedRunV2(
+                seq=seq,
+                prev_row_hash=prev,
+                run_id=_rid,
+                query_hash=_qh,
+                served_digest=served_digest,
+                ids=served,
+                pipeline_hash=_ph,
+                index_anchor=_ia,
+                scoring_instant=_si,
+                serve_kind=serve_kind,
+                context_digest=context_digest,
+            )
+        else:
+            row = ServedRun(
+                seq=seq,
+                prev_row_hash=prev,
+                run_id=_rid,
+                query_hash=_qh,
+                served_digest=served_digest,
+                ids=served,
+                pipeline_hash=_ph,
+                index_anchor=_ia,
+                scoring_instant=_si,
+            )
         _write_row(workspace, row)
     return row
 
@@ -646,14 +768,18 @@ def _ledger_log() -> Any:
     return get_logger("served_ledger")
 
 
-def _ledger_fields(row: Optional[ServedRun], error: Optional[str]) -> dict[str, Any]:
+def _ledger_fields(row: Optional[ServedRun | ServedRunV2], error: Optional[str]) -> dict[str, Any]:
     """The four attestation keys for *row*, or for its absence.
 
     The ONE place the status is decided, so ``served_proof`` cannot disagree
     with ``served_seq``: both are read off the same ``row``, in one expression,
     and no caller is offered a way to set one without the other.
     """
+    extra: dict[str, Any] = {}
+    if row is not None and isinstance(row, ServedRunV2):
+        extra = {SERVED_KIND_KEY: row.serve_kind, SERVED_CONTEXT_KEY: row.context_digest}
     return {
+        **extra,
         SERVED_SEQ_KEY: None if row is None else row.seq,
         SERVED_ROW_HASH_KEY: None if row is None else row_hash(row),
         LEDGER_ERROR_KEY: error,
@@ -661,7 +787,21 @@ def _ledger_fields(row: Optional[ServedRun], error: Optional[str]) -> dict[str, 
     }
 
 
-def attach_served_run(record: Mapping[str, Any], workspace: str | Path, *, ids: Sequence[str]) -> dict[str, Any]:
+NOT_BOUND = "__not_bound__"
+GENERATION_UNAVAILABLE = (
+    "generation identity unavailable: the retrieval policy/schema could not be represented, "
+    "so no context could be bound and no v2 row was written"
+)
+
+
+def attach_served_run(
+    record: Mapping[str, Any],
+    workspace: str | Path,
+    *,
+    ids: Sequence[str],
+    serve_kind: str,
+    generation: str | None,
+) -> dict[str, Any]:
     """Append this run's row and return *record* plus the keys naming it.
 
     **The only function a serving surface should call.** Two defects made it
@@ -722,9 +862,23 @@ def attach_served_run(record: Mapping[str, Any], workspace: str | Path, *, ids: 
     what is true: every row present is intact, and every record says whether
     it has one.
     """
-    row: Optional[ServedRun] = None
+    row: Optional[ServedRun | ServedRunV2] = None
     error: Optional[str] = None
+    if generation == NOT_BOUND:
+        generation = ""
+    elif not generation:
+        return {**record, **_ledger_fields(None, GENERATION_UNAVAILABLE)}
     try:
+        bound_context = (
+            context_digest(
+                workspace=str(workspace),
+                config_hash=record["config_hash"],
+                generation=generation,
+                index_anchor=record["index_anchor"],
+            )
+            if generation
+            else ""
+        )
         row = append_served_run(
             workspace,
             query_hash=record["query_hash"],
@@ -733,6 +887,8 @@ def attach_served_run(record: Mapping[str, Any], workspace: str | Path, *, ids: 
             pipeline_hash=record["config_hash"],
             index_anchor=record["index_anchor"],
             scoring_instant=record["scoring_instant"],
+            serve_kind=serve_kind if bound_context else "",
+            context_digest=bound_context,
         )
         if row is None:
             error = LEDGER_DISABLED
@@ -742,7 +898,7 @@ def attach_served_run(record: Mapping[str, Any], workspace: str | Path, *, ids: 
     return {**record, **_ledger_fields(row, error)}
 
 
-def _write_row(workspace: str | Path, row: ServedRun) -> None:
+def _write_row(workspace: str | Path, row: ServedRun | ServedRunV2) -> None:
     """Append the row, then re-anchor the head sidecar. Caller holds the lock."""
     path = Path(ledger_path(workspace))
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -800,7 +956,7 @@ def _read_head(workspace: str | Path) -> Optional[str]:
         return None
 
 
-def _check_row(row: ServedRun, index: int) -> str:
+def _check_row(row: ServedRun | ServedRunV2, index: int) -> str:
     """Failure reason for one row's INTERNAL invariants, or ``""``.
 
     These three are self-checking: a row carries enough to convict itself, so
@@ -817,10 +973,17 @@ def _check_row(row: ServedRun, index: int) -> str:
     )
     if row.run_id != expected:
         return f"row {index}: run_id is not derived from query_hash + served_digest + pipeline_hash"
+    if isinstance(row, ServedRunV2):
+        if row.serve_kind not in SERVE_KINDS:
+            return f"row {index}: serve_kind {row.serve_kind!r} is not a recorded kind"
+        try:
+            _hex64("context_digest", row.context_digest)
+        except (TypeError, ValueError):
+            return f"row {index}: context_digest is not a lowercase 64-character hexadecimal digest"
     return ""
 
 
-def _link_breaks(rows: Sequence[ServedRun]) -> list[int]:
+def _link_breaks(rows: Sequence[ServedRun | ServedRunV2]) -> list[int]:
     """Positions whose ``prev_row_hash`` disagrees with their predecessor.
 
     Checked independently per position — never propagated forward — so the
@@ -835,7 +998,7 @@ def _link_breaks(rows: Sequence[ServedRun]) -> list[int]:
     return out
 
 
-def _locate_break(rows: Sequence[ServedRun], breaks: list[int], stored_head: Optional[str]) -> int:
+def _locate_break(rows: Sequence[ServedRun | ServedRunV2], breaks: list[int], stored_head: Optional[str]) -> int:
     """Name the edited row from the break pattern.
 
     A chain link seals the row BEFORE it, so a naive report always accuses the
@@ -941,18 +1104,30 @@ __all__ = [
     "LEDGER_DISABLED",
     "LEDGER_ERROR_KEY",
     "LEDGER_RELPATH",
+    "CTX_TAG_V2",
+    "GENERATION_UNAVAILABLE",
+    "NOT_BOUND",
     "PROOF_RECORDED",
     "PROOF_UNPROVEN",
     "ROW_TAG",
+    "ROW_TAG_V1",
+    "ROW_TAG_V2",
     "RUN_TAG",
+    "SERVE_KINDS",
     "SERVED_PROOF_KEY",
+    "SERVED_KIND_KEY",
+    "SERVED_CONTEXT_KEY",
     "SERVED_ROW_HASH_KEY",
     "SERVED_SEQ_KEY",
     "ChainVerdict",
     "ServedLedgerCorruptedError",
     "ServedRun",
+    "ServedRunV2",
     "append_served_run",
     "attach_served_run",
+    "context_digest",
+    "row_serve_kind",
+    "decode_row",
     "ledger_enabled",
     "ledger_path",
     "read_served_runs",

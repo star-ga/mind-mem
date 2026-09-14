@@ -479,14 +479,25 @@ def _stage_verified_uploads(uploads: list[tuple[Path, str]], reports: dict):
     """Upload private verified copies, so later source edits cannot change them."""
     with tempfile.TemporaryDirectory(prefix="mind-mem-release-") as temporary:
         staged = []
-        for source, remote in uploads:
-            destination = Path(temporary) / remote
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, destination)
-            destination.chmod(0o400)
-            staged.append((destination, remote))
-        _verify_upload_plan(staged, reports)
-        yield staged
+        try:
+            for source, remote in uploads:
+                destination = Path(temporary) / remote
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, destination)
+                destination.chmod(0o400)
+                staged.append((destination, remote))
+            _verify_upload_plan(staged, reports)
+            yield staged
+        finally:
+            # Windows treats 0400 as a filesystem read-only bit and refuses
+            # TemporaryDirectory's unlink unless the bit is cleared first.
+            # Restore write permission before its context manager removes the
+            # private copies; this does not expose or alter their bytes.
+            for destination, _ in staged:
+                try:
+                    destination.chmod(0o600)
+                except OSError:
+                    pass
 
 
 def _remote_release_plan(api, uploads: list[tuple[Path, str]]) -> tuple[str, list[str]]:

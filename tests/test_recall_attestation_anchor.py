@@ -57,6 +57,7 @@ from mind_mem.preimage import preimage
 from mind_mem.recall_attestation import (
     GENESIS_ANCHOR,
     INDEX_ANCHOR_TAG,
+    INDEX_ANCHOR_UNRESOLVED,
     _resolve_index_anchor,
     derive_recall_attestation_for_workspace,
     index_anchor_ledger_path,
@@ -159,14 +160,14 @@ def test_an_empty_ledger_is_the_genesis_anchor(tmp_path: Path) -> None:
     assert _resolve_index_anchor(ws) == GENESIS_ANCHOR
 
 
-def test_an_unreadable_ledger_is_the_genesis_anchor(tmp_path: Path) -> None:
-    """A corrupt ledger degrades to the sentinel rather than raising into recall."""
+def test_an_unreadable_ledger_is_unresolved_not_genesis(tmp_path: Path) -> None:
+    """A corrupt present ledger must not masquerade as an empty workspace."""
     ws = str(tmp_path)
     db_path = index_anchor_ledger_path(ws)
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     Path(db_path).write_text("this is not a sqlite database", encoding="utf-8")
 
-    assert _resolve_index_anchor(ws) == GENESIS_ANCHOR
+    assert _resolve_index_anchor(ws) == INDEX_ANCHOR_UNRESOLVED
 
 
 # ---------------------------------------------------------------------------
