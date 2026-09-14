@@ -1915,7 +1915,7 @@ def _cmd_graph_answer(args: argparse.Namespace) -> int:
     """Answer about an entity using ONLY the governed edges, with citations."""
     import os as _os
 
-    from mind_mem.edge_grounded_answer import answer, build_context, corpus_block_ids
+    from mind_mem.edge_grounded_answer import answer, corpus_block_ids
     from mind_mem.knowledge_graph import KnowledgeGraph, default_db_path
 
     ws = _workspace()
@@ -1927,7 +1927,7 @@ def _cmd_graph_answer(args: argparse.Namespace) -> int:
         return 1
     kg = KnowledgeGraph(db_path)
     try:
-        context = build_context(
+        result = answer(
             kg,
             args.entity,
             hops=args.hops,
@@ -1938,7 +1938,7 @@ def _cmd_graph_answer(args: argparse.Namespace) -> int:
             as_of=args.as_of or None,
             known_block_ids=corpus_block_ids(ws),
         )
-        result = answer(kg, args.entity, context=context)
+        context = result.context
     finally:
         kg.close()
 

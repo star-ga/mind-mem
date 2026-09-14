@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1610 | **Est. tokens:** ~4730795
-**Generated:** 2026-09-14 12:18 UTC
+**Files:** 1610 | **Est. tokens:** ~4731745
+**Generated:** 2026-09-14 12:39 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 236 | ~1067960 |
+| `src/mind_mem/` | 236 | ~1068205 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
@@ -90,7 +90,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 702 | ~2088777 |
+| `tests/` | 702 | ~2089482 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -827,7 +827,7 @@
 - `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
 - `dream_cycle.py` (~13912 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~5752 tok, huge) — mind-mem Semantic Belief Drift Detection.
-- `edge_grounded_answer.py` (~5493 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `edge_grounded_answer.py` (~5738 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
 - `entity_ingest.py` (~3309 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
 - `entity_prefetch.py` (~3064 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
@@ -1356,7 +1356,7 @@
 - `test_dsn_redaction.py` (~542 tok, large) — Tests for DSN password redaction in mm_cli.
 - `test_edge_cases.py` (~4078 tok, huge) — Edge-case and stress tests for mind-mem — block_parser, recall, and MCP server."""
 - `test_edge_corroboration.py` (~3178 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_edge_grounded_answer.py` (~4262 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_edge_grounded_answer.py` (~4967 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_embed_fallback_error_provenance.py` (~880 tok, large) — Fallback diagnostics must preserve genuine loader and encoder failures."""
 - `test_embed_last_resort_is_cache_only.py` (~1235 tok, large) — The last-resort embedding fallback must not perform an unbounded download.
 - `test_embedding_augmentation_probe.py` (~1685 tok, huge) — M1 — the embed-vs-store exposure, measured rather than assumed.
