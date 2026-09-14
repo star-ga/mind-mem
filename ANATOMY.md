@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1617 | **Est. tokens:** ~4763385
-**Generated:** 2026-09-14 14:07 UTC
+**Files:** 1619 | **Est. tokens:** ~4768862
+**Generated:** 2026-09-14 14:32 UTC
 
 ## Token Budget Guide
 
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1075447 |
+| `src/mind_mem/` | 237 | ~1075972 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
-| `src/mind_mem/mcp/infra/` | 8 | ~13502 |
-| `src/mind_mem/mcp/tools/` | 29 | ~121011 |
+| `src/mind_mem/mcp/infra/` | 8 | ~13973 |
+| `src/mind_mem/mcp/tools/` | 29 | ~121450 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 708 | ~2107054 |
+| `tests/` | 710 | ~2111096 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -744,7 +744,7 @@
 - `audit_context.py` (~4198 tok, huge) — Request-scoped audit attribution for mind-mem's network transports.
 - `audit_pinned.py` (~3194 tok, huge) — Pinned-model audit pipeline — release-CI gate for ``mind-mem.json``.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
-- `axis_recall.py` (~5169 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `axis_recall.py` (~5249 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `backup_restore.py` (~7122 tok, huge) — mind-mem Backup & Restore CLI. Zero external deps.
 - `baseline_snapshot.py` (~4176 tok, huge) — Baseline snapshot for intent drift detection.
 ### `src/mind_mem/bench/`
@@ -856,7 +856,7 @@
 - `guardrails.py` (~5942 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10904 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hybrid_recall.py` (~24611 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~25017 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 ### `src/mind_mem/importers/`
 
 - `__init__.py` (~1807 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -895,7 +895,7 @@
 ### `src/mind_mem/mcp/infra/`
 
 - `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
-- `acl.py` (~3962 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
+- `acl.py` (~4433 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~1315 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
 - `http_auth.py` (~2032 tok, huge) — HTTP bearer-token authentication helpers for the MCP surface.
@@ -933,7 +933,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~22093 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~22532 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1571 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -983,7 +983,7 @@
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
 - `recall.py` (~7692 tok, huge) — mind-mem Recall Engine (BM25 + TF-IDF + Graph + Stemming). Zero external deps.
 - `recall_attestation.py` (~13053 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
-- `recall_cache.py` (~4957 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
+- `recall_cache.py` (~4996 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
 - `recall_digests.py` (~2101 tok, huge) — Canonical digests the recall attestation commits to.
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `recall_vector.py` (~24403 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
@@ -1464,6 +1464,7 @@
 - `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""
+- `test_indexed_namespace_acl.py` (~1807 tok, huge) — Namespace ACLs must guard indexed recall before any result processing."""
 - `test_indexed_validity_topk.py` (~2073 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ingest_tiers.py` (~4614 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ingestion_pipeline_wiring.py` (~6467 tok, huge) — The webhook ingest door — wiring proof for `mm ingest-serve` (5.0.1).
@@ -1621,6 +1622,7 @@
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_proposal_field_screening.py` (~1229 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_protection.py` (~2068 tok, huge) — Tests for mind_mem.protection (v3.3.0+)."""
+- `test_public_mcp_acl.py` (~2235 tok, huge) — Public MCP recall binds verified transport principals before retrieval."""
 - `test_q1616_preimage.py` (~1496 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_quality_gate.py` (~1971 tok, huge) — Tests for the v3.11.0 deterministic block quality gate.
 - `test_quality_gate_recent_window.py` (~2480 tok, huge) — quality_gate rule 6 (``near_duplicate``) must actually execute in the product.

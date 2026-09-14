@@ -787,6 +787,28 @@ class HybridBackend:
         if not query or not query.strip():
             return []
 
+        # A verified transport principal is an authorization input, not a
+        # ranking hint. Remove it before forwarding kwargs to backend methods,
+        # and filter each candidate leg before admission/reranking/fusion.
+        agent_id = kwargs.pop("agent_id", None)
+        namespace_manager = None
+        if agent_id:
+            from .namespaces import NamespaceManager
+
+            namespace_manager = NamespaceManager(workspace, agent_id=agent_id)
+
+        def _filter_agent(results: list[dict]) -> list[dict]:
+            if not agent_id:
+                return results
+            from ._recall_core import _filter_indexed_hits_for_agent
+
+            return _filter_indexed_hits_for_agent(
+                workspace,
+                results,
+                agent_id=agent_id,
+                namespace_manager=namespace_manager,
+            )
+
         # Audit R-6: detect_query_type is called from the expansion
         # path, the decomposition path, and the cross-encoder path on
         # every search() invocation. The detector itself is regex-only
@@ -867,6 +889,7 @@ class HybridBackend:
                         graph_boost=graph_boost,
                         retrieve_wide_k=retrieve_wide_k,
                         rerank=rerank,
+                        agent_id=agent_id,
                         **kwargs,
                     )
             except DailyTokenCapExceeded as exc:
@@ -930,6 +953,7 @@ class HybridBackend:
                         graph_boost=graph_boost,
                         retrieve_wide_k=retrieve_wide_k,
                         rerank=rerank,
+                        agent_id=agent_id,
                         **kwargs,
                     )
             except Exception as exc:
@@ -970,14 +994,16 @@ class HybridBackend:
                     active_only=active_only,
                     graph_boost=graph_boost,
                     retrieve_wide_k=_leg_k,
-                    rerank=rerank,
+                    rerank=False if agent_id else rerank,
                     scoring_instant=scoring_instant,
+                    agent_id=agent_id,
                     **kwargs,
                 )
                 # Capture the bm25 leg's structural-degradation marker BEFORE
                 # rerank (which returns a plain list and drops ``.degraded``).
                 bm25_degraded: LegMarker | None = getattr(results, "degraded", None)
                 metrics.inc("hybrid_searches_bm25_only")
+                results = _filter_agent(results)
                 results = self._admit(results, workspace, leg=Leg.BM25, overrides=live_statuses(workspace))
                 # v3.3.0 Tier 2: cross-encoder rerank also applies to
                 # BM25-only deployments (previously only post-fusion).
@@ -1037,6 +1063,7 @@ class HybridBackend:
                     retrieve_wide_k=_leg_k,
                     rerank=False,  # defer reranking to post-fusion
                     scoring_instant=scoring_instant,
+                    agent_id=agent_id,
                     **kwargs,
                 )
                 vec_future: Future = pool.submit(
@@ -1093,6 +1120,8 @@ class HybridBackend:
             # ranks. Filtering each leg's candidates closes that channel.
             # Resolved once and shared by both legs: the staleness check
             # opens the index, so paying it per leg would double it.
+            bm25_results = _filter_agent(bm25_results)
+            vec_results = _filter_agent(vec_results)
             _live = live_statuses(workspace)
             bm25_results = self._admit(bm25_results, workspace, leg=Leg.BM25, overrides=_live)
             vec_results = self._admit(vec_results, workspace, leg=Leg.VECTOR, overrides=_live)
@@ -1162,8 +1191,14 @@ class HybridBackend:
             # python-reviewer 2026-04-20).
             corpus = self._load_corpus_if_needed(query, workspace)
             result = self._maybe_graph_expand(query, workspace, result, corpus=corpus)
+            result = _filter_agent(result)
             result = self._maybe_kg_expand(query, workspace, result, corpus=corpus)
+            result = _filter_agent(result)
             result = self._maybe_entity_prefetch(query, workspace, result, corpus=corpus)
+            # Graph/entity expansion reads the workspace after the indexed
+            # legs. Re-apply the same principal filter before any expanded hit
+            # can reach the response (or later presentation stages).
+            result = _filter_agent(result)
 
             # v3.3.0 Tier 2 #5 — session-boundary preservation.
             result = self._maybe_session_boost(result)
@@ -1986,6 +2021,7 @@ class HybridBackend:
         what lets a reader — and the call-site guard in
         ``tests/test_recall_clock_guard.py`` — see the seam at every hop.
         """
+        agent_id = kwargs.pop("agent_id", None)
         try:
             from .sqlite_index import _db_path, ensure_index, query_index
 
@@ -2006,7 +2042,7 @@ class HybridBackend:
         try:
             from .recall import recall
 
-            return recall(workspace, query, limit=limit, scoring_instant=scoring_instant, **kwargs)
+            return recall(workspace, query, limit=limit, scoring_instant=scoring_instant, agent_id=agent_id, **kwargs)
         except Exception as exc:
             _log.error("bm25_search_failed", error=str(exc))
             return []

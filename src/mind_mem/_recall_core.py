@@ -138,6 +138,63 @@ def _validate_recall_agent_id(agent_id: object | None) -> None:
         raise
 
 
+def _indexed_hit_is_readable(
+    workspace: str,
+    hit: Mapping[str, Any],
+    namespace_manager: Any,
+) -> bool:
+    """Check the ACL against both indexed source claims and their real target.
+
+    Indexed backends return already-shaped hits before the filesystem corpus
+    walk runs. For an agent-bound request, a missing or conflicting source
+    claim is therefore unresolved and must be withheld. Checking the resolved
+    path as well as the lexical claim closes a shared-file symlink into another
+    agent's private namespace.
+    """
+    source_values: list[str] = []
+    for field in ("_source_file", "file"):
+        if field not in hit:
+            continue
+        value = hit[field]
+        if not isinstance(value, str) or not value.strip():
+            return False
+        source_values.append(value)
+    if not source_values or len(set(source_values)) != 1:
+        return False
+    source = source_values[0].replace("\\", "/")
+    if "\x00" in source or source.startswith("/") or (len(source) >= 2 and source[1] == ":"):
+        return False
+    if not namespace_manager.can_read(source):
+        return False
+
+    workspace_real = os.path.realpath(workspace)
+    try:
+        resolved = os.path.realpath(os.path.join(workspace_real, source))
+        if not resolved.startswith(workspace_real + os.sep):
+            return False
+        resolved_rel = os.path.relpath(resolved, workspace_real)
+    except (OSError, ValueError):
+        return False
+    return namespace_manager.can_read(resolved_rel)
+
+
+def _filter_indexed_hits_for_agent(
+    workspace: str,
+    hits: list[dict],
+    *,
+    agent_id: str | None,
+    namespace_manager: Any,
+) -> list[dict]:
+    """Apply namespace ACL before indexed hits reach validity or ranking work."""
+    if agent_id is None or agent_id == "":
+        return hits
+    if namespace_manager is None:
+        # An authenticated namespace request must fail closed if its ACL
+        # authority cannot be imported; it must never become workspace-wide.
+        return []
+    return [hit for hit in hits if _indexed_hit_is_readable(workspace, hit, namespace_manager)]
+
+
 # ---------------------------------------------------------------------------
 # Config cache — mtime-based invalidation avoids re-reading mind-mem.json
 # on every recall() call (#473).
@@ -1126,6 +1183,22 @@ def recall(
     # re-withholds what the caller asked for.
     _admission_allow = frozenset({"pending"}) if include_pending else frozenset()
 
+    # Resolve the authenticated ACL before any indexed backend can return an
+    # answer. Indexed hits have no later filesystem discovery pass to enforce
+    # this identity, so the filter below must run before validity, scoring or
+    # model-processing stages. The unbound path remains byte-for-byte legacy.
+    ns_manager = None
+    if agent_id is not None and agent_id != "":
+        try:
+            from .namespaces import NamespaceManager
+
+            ns_manager = NamespaceManager(workspace, agent_id=agent_id)
+        except ImportError:
+            _log.warning("namespaces_unavailable_for_indexed_recall", agent_id=agent_id)
+            # An agent-bound request must never downgrade to the unscoped scan
+            # if its ACL authority is unavailable.
+            return []
+
     # Fix for #525: dispatch to the configured backend (sqlite / vector)
     # before falling through to the markdown-scan BM25 path.  This is the
     # same dispatch the `python3 -m mind_mem.recall` CLI does at line 1400
@@ -1180,6 +1253,12 @@ def recall(
             until=until,
             return_k=_wide_pool_k,
         )
+        hits = _filter_indexed_hits_for_agent(
+            workspace,
+            hits,
+            agent_id=agent_id,
+            namespace_manager=ns_manager,
+        )
         hits = filter_search_hits(hits, _get_config(workspace))
         hits = _apply_validity_and_resort(hits, workspace, _indexed_recall_cfg, _scoring_instant)
         return _apply_post_filters(
@@ -1207,6 +1286,12 @@ def recall(
             # turn the carrier into a plain list or replace the provider's
             # result with the lexical scan below.
             _backend_marker = getattr(backend_hits, "degraded", None)
+            backend_hits = _filter_indexed_hits_for_agent(
+                workspace,
+                backend_hits,
+                agent_id=agent_id,
+                namespace_manager=ns_manager,
+            )
             if _backend_marker is not None:
                 from .hybrid_recall import _merge_leg_markers
 
@@ -1464,20 +1549,6 @@ def recall(
 
     # Adjust effective limit for retrieval (retrieve more candidates, trim later)
     limit = int(limit * qparams.get("extra_limit_factor", 1.0))
-
-    # Namespace ACL: resolve accessible paths if agent_id is provided.
-    # v3.9.x security: agent_id flows into a filesystem path (agents/{agent_id}/...)
-    # so reject anything that isn't a flat identifier. Path-traversal sequences
-    # (../, leading /, NUL bytes) would let a caller probe paths outside the
-    # workspace; whitespace and shell metacharacters tighten the perimeter.
-    ns_manager = None
-    if agent_id is not None and agent_id != "":
-        try:
-            from .namespaces import NamespaceManager
-
-            ns_manager = NamespaceManager(workspace, agent_id=agent_id)
-        except ImportError:
-            _log.debug("namespaces_unavailable", agent_id=agent_id)
 
     # Load all blocks with source file tracking.
     #
@@ -2679,6 +2750,7 @@ def prefetch_context(
     limit: int = 5,
     *,
     scoring_instant: date | str | None = None,
+    agent_id: str | None = None,
 ) -> list[dict]:
     """Given recent conversation signals (entity mentions, topic keywords),
     pre-fetch memory blocks likely to be needed next.
@@ -2726,7 +2798,14 @@ def prefetch_context(
     # 1. Parallel recall for each signal (#477 — avoid N+1 serial calls)
     def _recall_signal(sig: str) -> list[dict]:
         try:
-            return recall(workspace, sig, limit=limit, rerank=True, scoring_instant=instant)
+            return recall(
+                workspace,
+                sig,
+                limit=limit,
+                rerank=True,
+                scoring_instant=instant,
+                agent_id=agent_id,
+            )
         except RecursionError:
             raise  # structural cycle — never swallow silently
         except Exception as e:
@@ -2793,7 +2872,14 @@ def prefetch_context(
         if relevant_cats and category_reserve > 0:
             cat_query = " ".join(relevant_cats[:3])
             try:
-                cat_hits = recall(workspace, cat_query, limit=category_reserve, rerank=True, scoring_instant=instant)
+                cat_hits = recall(
+                    workspace,
+                    cat_query,
+                    limit=category_reserve,
+                    rerank=True,
+                    scoring_instant=instant,
+                    agent_id=agent_id,
+                )
                 added = 0
                 for block in cat_hits:
                     if added >= category_reserve:
