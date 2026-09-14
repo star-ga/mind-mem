@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1609 | **Est. tokens:** ~4722721
-**Generated:** 2026-09-14 12:07 UTC
+**Files:** 1610 | **Est. tokens:** ~4730795
+**Generated:** 2026-09-14 12:18 UTC
 
 ## Token Budget Guide
 
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 236 | ~1066936 |
+| `src/mind_mem/` | 236 | ~1067960 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
-| `src/mind_mem/mcp/tools/` | 29 | ~118257 |
+| `src/mind_mem/mcp/tools/` | 29 | ~120703 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
-| `src/mind_mem/storage/` | 2 | ~11646 |
+| `src/mind_mem/storage/` | 2 | ~11690 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 701 | ~2084217 |
+| `tests/` | 702 | ~2088777 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -723,7 +723,7 @@
 - `accountability_dashboard.py` (~6668 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `accountability_views.py` (~10307 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `admissibility.py` (~5894 tok, huge) — What recall is allowed to serve — the servability allow-list.
-- `admission.py` (~12016 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `admission.py` (~12812 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `agent_bridge.py` (~5340 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `agent_messaging.py` (~2877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alert_urls.py` (~1873 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -813,7 +813,7 @@
 - `connection_manager.py` (~3185 tok, huge) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~2067 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
 - `consolidation_maturity_gate.py` (~2589 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `content_lifecycle.py` (~2930 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `content_lifecycle.py` (~3158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4893 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `core_export.py` (~8336 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -926,7 +926,7 @@
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `lineage.py` (~725 tok, large) — MCP wrapping for the v3.11.0 typed block-lineage graph (Pattern 3).
 - `lint.py` (~1511 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `memory_ops.py` (~16514 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `memory_ops.py` (~18960 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `mic_map.py` (~2436 tok, huge) — MIC/MAP serialization MCP tools — wraps ``mind_mem.mic_map``.
 - `model.py` (~3185 tok, huge) — Model audit / signing MCP tools — wraps ``mind_mem.model_audit``,
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
@@ -1039,7 +1039,7 @@
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
-- `__init__.py` (~5533 tok, huge) — Storage factory for mind-mem block stores (v3.2.0).
+- `__init__.py` (~5577 tok, huge) — Storage factory for mind-mem block stores (v3.2.0).
 - `sharded_pg.py` (~6113 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
 ### `src/mind_mem/`
 
@@ -1518,6 +1518,7 @@
 - `test_mcp_integration.py` (~5530 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_list_cores.py` (~3407 tok, huge) — ``list_cores`` — the read side of the ``.mmcore`` lifecycle, previously unpinned.
 - `test_mcp_list_evidence.py` (~4569 tok, huge) — ``list_evidence`` — the audit family's only *reader* of the evidence chain.
+- `test_mcp_namespace_direct_get.py` (~4560 tok, huge) — Namespace-selected MCP direct reads remain ACL- and admission-bound."""
 - `test_mcp_ontology_load.py` (~4897 tok, huge) — ``ontology_load`` -- the MCP door onto the OWL-lite schema layer.
 - `test_mcp_ontology_validate.py` (~4754 tok, huge) — ``ontology_validate`` — the MCP tool, as distinct from the ontology library.
 - `test_mcp_pipeline.py` (~1495 tok, large) — Tests for the v3.9.0 pipeline-hash MCP tools."""

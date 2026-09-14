@@ -916,6 +916,7 @@ def admit_read(
     status_key: str = "Status",
     allow: frozenset[str] = frozenset(),
     surface: Optional[str] = None,
+    source_file: Optional[str] = None,
 ) -> ReadAdmission:
     """The subset of *items* a read surface may serve, and how many it may not.
 
@@ -952,6 +953,9 @@ def admit_read(
             is the precedent), never a default.
         surface: Name recorded on the withheld metric, for the same
             reason ``admit_leg`` takes ``leg``.
+        source_file: Optional canonical source for a namespace-selected
+            row. When present, status is refreshed from that source identity
+            and releases are resolved from that namespace's decisions file.
 
     Returns:
         A :class:`ReadAdmission`. ``withheld`` is the number of items
@@ -975,14 +979,63 @@ def admit_read(
         kept_content = filter_revoked_credentials([dict(r) for r in rows], workspace)
         content_withheld = len(rows) - len(kept_content)
         rows = list(kept_content)
-        rows = list(with_live_statuses([dict(r) for r in rows], live_statuses(workspace), status_key=status_key))
+        if source_file is None:
+            rows = list(with_live_statuses([dict(r) for r in rows], live_statuses(workspace), status_key=status_key))
+        else:
+            # A namespace-selected row has an explicit source identity.  The
+            # workspace-wide ``id -> status`` map is unsafe here: two
+            # namespaces may legitimately reuse an id, and an active row in
+            # one source must never refresh a quarantined row in another.
+            # Re-read the claimed source through the same source-bound
+            # lifecycle helper used for credential revocation.  An unresolved
+            # source is withheld rather than falling back to the cached status.
+            from .content_lifecycle import content_identity, live_content_blocks
+
+            live = live_content_blocks(workspace, blocks=rows)
+            source_rows: list[dict[str, Any]] = []
+            for row in rows:
+                identity = content_identity(row)
+                current = live.get(identity) if identity is not None else None
+                # ``content_identity`` canonicalises all supported source
+                # fields (_source_file, _source, and file). Comparing the
+                # field spelling here would reject a valid active row when
+                # the backend serialises the same source under another key.
+                if current is None or identity is None:
+                    content_withheld += 1
+                    continue
+                refreshed = dict(row)
+                refreshed[status_key] = current.get("Status")
+                source_rows.append(refreshed)
+            rows = source_rows
     if all(is_admissible_status(row.get(status_key)) for row in rows):
         return ReadAdmission([dict(row) for row in rows], content_withheld)
     releases: frozenset[str] = frozenset()
     if workspace is not None:
-        releases = workspace_release_ids(workspace)
+        releases = _source_release_ids(workspace, source_file) if source_file is not None else workspace_release_ids(workspace)
     kept = admit_leg(rows, status_key=status_key, releases=releases, allow=allow, leg=surface or "read")
     return ReadAdmission(kept, content_withheld + len(rows) - len(kept))
+
+
+def _source_release_ids(workspace: str, source_file: str) -> frozenset[str]:
+    """Resolve release decisions within the row's own namespace.
+
+    A source-bound row cannot use an arbitrary workspace-wide ID release,
+    because another namespace may reuse that ID. Workspace rows retain the
+    historical decisions file; namespaced Markdown rows use their own
+    registered source, and store backends use their canonical rows.
+    """
+    from .admissibility import release_ids
+    from .content_lifecycle import content_identity, live_content_blocks
+
+    identity = content_identity({"_id": "source", "_source_file": source_file})
+    if identity is None:
+        return frozenset()
+    namespace = identity[0]
+    decision_file = "decisions/DECISIONS.md" if namespace == "workspace" else f"{namespace}/decisions/DECISIONS.md"
+    # Resolve the decisions source, not the imported block's own file. A
+    # release-shaped field in another corpus is not an authorizing decision.
+    live = live_content_blocks(workspace, blocks=[{"_id": "source", "_source_file": decision_file}])
+    return release_ids(row for key, row in live.items() if key[0] == namespace and key[1] == decision_file)
 
 
 def admit_read_one(
@@ -992,6 +1045,7 @@ def admit_read_one(
     status_key: str = "Status",
     allow: frozenset[str] = frozenset(),
     surface: Optional[str] = None,
+    source_file: Optional[str] = None,
 ) -> ReadAdmission:
     """:func:`admit_read` for a surface that resolved exactly one block.
 
@@ -1003,4 +1057,11 @@ def admit_read_one(
     """
     if block is None:
         return ReadAdmission([], 0)
-    return admit_read([block], workspace=workspace, status_key=status_key, allow=allow, surface=surface)
+    return admit_read(
+        [block],
+        workspace=workspace,
+        status_key=status_key,
+        allow=allow,
+        surface=surface,
+        source_file=source_file,
+    )

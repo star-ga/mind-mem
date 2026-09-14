@@ -30,7 +30,7 @@ from typing import Any
 
 from mind_mem.admission import AdmissionReceipt, admit_read, admit_read_one
 from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file
-from mind_mem.corpus_registry import CORPUS_DIRS
+from mind_mem.corpus_registry import CORPUS_DIRS, discover_corpus_files
 from mind_mem.mind_ffi import get_mind_dir
 from mind_mem.mind_ffi import is_available as mind_kernel_available
 from mind_mem.mind_ffi import is_protected as mind_kernel_protected
@@ -178,6 +178,28 @@ def _find_block_file(ws: str, block_id: str) -> str | None:
         if block_id.startswith(prefix + "-"):
             return os.path.join(ws, subdir, filename)
     return None
+
+
+def _namespace_selector(selector: str) -> tuple[str | None, str | None]:
+    """Validate a direct-read namespace selector without widening identity."""
+    if not isinstance(selector, str) or not selector:
+        return None, "namespace must be a non-empty relative namespace"
+    if selector != selector.replace("\\", "/") or "\x00" in selector:
+        return None, "invalid namespace selector"
+    if selector == "workspace" or selector == "shared":
+        return selector, None
+    if not selector.startswith("agents/"):
+        return None, "invalid namespace selector"
+    agent_id = selector.removeprefix("agents/")
+    if not agent_id or "/" in agent_id:
+        return None, "invalid namespace selector"
+    from mind_mem.namespaces import InvalidAgentIdError, _validate_agent_id
+
+    try:
+        _validate_agent_id(agent_id)
+    except InvalidAgentIdError:
+        return None, "invalid namespace selector"
+    return selector, None
 
 
 def _is_markdown_backend(ws: str) -> bool:
@@ -995,7 +1017,7 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
 
 
 @mcp_tool_observe
-def get_block(block_id: str) -> str:
+def get_block(block_id: str, namespace: str = "") -> str:
     """Retrieve a single ADMITTED block by its ID, with full content.
 
     A block that exists but has not passed admission answers
@@ -1007,6 +1029,12 @@ def get_block(block_id: str) -> str:
     Scope does not widen this. Quarantine is a property of the content,
     not of the caller's role, so an admin sees the same refusal here and
     reviews withheld content through the governance tools instead.
+
+    ``namespace`` is an optional source selector for namespace-resident blocks
+    whose IDs are not unique across the workspace. An omitted selector keeps
+    the historical ID-only resolver and response shape. A selected namespace
+    is checked against the authenticated agent ACL before its source is read;
+    the selector never grants access by itself.
     """
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
         return json.dumps(
@@ -1021,7 +1049,72 @@ def get_block(block_id: str) -> str:
     if ws_err:
         return ws_err
 
-    block, where = _resolve_block_for_read(ws, block_id)
+    selected_namespace: str | None = None
+    if namespace:
+        selected_namespace, selector_error = _namespace_selector(namespace)
+        if selector_error or selected_namespace is None:
+            return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": selector_error or "invalid namespace selector"})
+        from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+        from mind_mem.namespaces import InvalidAgentIdError, NamespaceManager
+
+        agent_id = current_agent_id.get()
+        if selected_namespace.startswith("agents/"):
+            if not agent_id or agent_id == UNATTRIBUTED or selected_namespace != f"agents/{agent_id}":
+                return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+        try:
+            manager = NamespaceManager(ws, agent_id=None if agent_id in {None, "", UNATTRIBUTED} else agent_id)
+        except InvalidAgentIdError:
+            return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+        acl_probe = {
+            "workspace": "decisions/DECISIONS.md",
+            "shared": "shared/decisions/DECISIONS.md",
+        }.get(selected_namespace, f"{selected_namespace}/decisions/DECISIONS.md")
+        if not manager.can_read(acl_probe):
+            return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+
+    block, where = _resolve_block_for_read(ws, block_id, namespace=selected_namespace)
+
+    if where == "ambiguous":
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "block_id": block_id,
+                "found": False,
+                "ambiguous": True,
+                "error": "Block ID is ambiguous in the selected namespace; choose a narrower source.",
+            },
+            indent=2,
+        )
+
+    if selected_namespace is None and block is not None:
+        # The historical ID-only form remains available for workspace rows,
+        # but a non-Markdown backend may return a namespaced source directly.
+        # Do not let that backend-only shape bypass the ACL that selected
+        # namespace reads enforce.  A source path is metadata, so an invalid
+        # or outside-workspace path is treated as unresolved and refused.
+        from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+        from mind_mem.namespace_retrieval import namespace_for_path
+        from mind_mem.namespaces import InvalidAgentIdError, NamespaceManager
+
+        source = block.get("_source_file") or block.get("_source") or block.get("file")
+        rel_source = source.replace("\\", "/") if isinstance(source, str) else ""
+        if rel_source and os.path.isabs(rel_source):
+            source_real = os.path.realpath(rel_source)
+            workspace_real = os.path.realpath(ws)
+            if source_real != workspace_real and not source_real.startswith(workspace_real + os.sep):
+                return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+            rel_source = os.path.relpath(source_real, workspace_real).replace(os.sep, "/")
+        if "\x00" in rel_source or ".." in rel_source.split("/"):
+            return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+        source_namespace = namespace_for_path(rel_source)
+        if source_namespace is not None and source_namespace != "workspace":
+            bound_agent = current_agent_id.get()
+            try:
+                manager = NamespaceManager(ws, agent_id=None if bound_agent in {None, "", UNATTRIBUTED} else bound_agent)
+            except InvalidAgentIdError:
+                return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+            if not manager.can_read(rel_source):
+                return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
 
     # EGRESS GATE. Resolution above says whether the bytes EXIST; this says
     # whether this caller may see them. ``get_block`` is a USER-scope tool and
@@ -1030,7 +1123,23 @@ def get_block(block_id: str) -> str:
     # ``recall`` withheld the same block. One resolved block, one decision,
     # taken here rather than at each of the three resolution sites, because
     # three decisions is how the third one gets forgotten.
-    decision = admit_read_one(block, workspace=ws, surface="get_block")
+    # Namespace resolution carries a source identity.  Admission must refresh
+    # status from that exact source, because the workspace-wide id map can
+    # otherwise borrow the status of a duplicate id in another namespace.
+    admission_source = (block or {}).get("_source_file") or (block or {}).get("_source") or (block or {}).get("file")
+    if not isinstance(admission_source, str):
+        admission_source = None
+    decision = admit_read_one(
+        block,
+        workspace=ws,
+        surface="get_block",
+        # Any canonical source identity must be part of status refresh, even
+        # for the historical omitted-selector form. Otherwise a backend row
+        # with a duplicate id can inherit the workspace-wide status of a
+        # different namespace. Rows without a source retain the old ID-only
+        # behavior; a claimed source is always bound to that source.
+        source_file=admission_source,
+    )
     admitted = decision.sole
     if admitted is not None:
         metrics.inc("mcp_get_block")
@@ -1078,7 +1187,7 @@ def get_block(block_id: str) -> str:
     )
 
 
-def _resolve_block_for_read(ws: str, block_id: str) -> tuple[dict | None, str]:
+def _resolve_block_for_read(ws: str, block_id: str, *, namespace: str | None = None) -> tuple[dict | None, str]:
     """Find *block_id*'s block dict, and name where we looked for it.
 
     Resolution only -- no admission decision, no metrics, no envelope. The
@@ -1090,6 +1199,9 @@ def _resolve_block_for_read(ws: str, block_id: str) -> tuple[dict | None, str]:
         not-found message differs between the two backends and a caller
         that could not tell them apart would report the wrong one.
     """
+    if namespace is not None:
+        return _resolve_block_in_namespace(ws, block_id, namespace)
+
     # Audit bug #5: a non-Markdown backend (e.g. Postgres) keeps the block
     # of record in the store, not in local Markdown files, so the
     # corpus-file resolution below would never find it. Query the store
@@ -1100,7 +1212,7 @@ def _resolve_block_for_read(ws: str, block_id: str) -> tuple[dict | None, str]:
     filepath = _find_block_file(ws, block_id)
     if filepath and os.path.isfile(filepath):
         try:
-            for block in parse_file(filepath):
+            for block in _read_direct_source(ws, filepath):
                 if block.get("_id") == block_id:
                     rel_path = os.path.relpath(filepath, ws)
                     block["_source_file"] = rel_path.replace(os.sep, "/")
@@ -1119,7 +1231,7 @@ def _resolve_block_for_read(ws: str, block_id: str) -> tuple[dict | None, str]:
             if fpath == filepath:
                 continue
             try:
-                for block in parse_file(fpath):
+                for block in _read_direct_source(ws, fpath):
                     if block.get("_id") == block_id:
                         block["_source_file"] = f"{subdir}/{fn}"
                         return block, "corpus"
@@ -1127,6 +1239,83 @@ def _resolve_block_for_read(ws: str, block_id: str) -> tuple[dict | None, str]:
                 continue
 
     return None, "corpus"
+
+
+def _read_direct_source(ws: str, path: str) -> list[dict[str, Any]]:
+    """Read a confined source through the configured plaintext/cipher reader."""
+    from mind_mem.content_lifecycle import _safe_source_path
+    from mind_mem.request_context import context_config_for
+    from mind_mem.storage import _corpus_parse_fn
+
+    relative = os.path.relpath(path, ws).replace(os.sep, "/")
+    safe = _safe_source_path(ws, relative)
+    if safe is None:
+        return []
+    bound = context_config_for(ws)
+    config = dict(bound) if bound is not None else None
+    read = _corpus_parse_fn(ws, _backend_name(ws, config), sources=[relative])
+    return read(safe)
+
+
+def _resolve_block_in_namespace(ws: str, block_id: str, namespace: str) -> tuple[dict | None, str]:
+    """Resolve one ID inside a validated namespace, refusing duplicates."""
+    from mind_mem.audit_context import UNATTRIBUTED, current_agent_id
+    from mind_mem.namespace_retrieval import namespace_for_path
+    from mind_mem.namespaces import InvalidAgentIdError, NamespaceManager
+
+    bound_agent = current_agent_id.get()
+    try:
+        manager = NamespaceManager(ws, agent_id=None if bound_agent in {None, "", UNATTRIBUTED} else bound_agent)
+    except InvalidAgentIdError:
+        return None, "corpus"
+    root = os.path.realpath(ws if namespace == "workspace" else os.path.join(ws, namespace))
+    workspace_root = os.path.realpath(ws)
+    if not root.startswith(workspace_root + os.sep) and root != workspace_root:
+        return None, "corpus"
+    matches: list[dict] = []
+
+    markdown_backend = _is_markdown_backend(ws)
+    if not markdown_backend:
+        for block in get_block_store(ws).get_all(active_only=False):
+            if block.get("_id") != block_id:
+                continue
+            source = block.get("_source_file") or block.get("_source") or block.get("file")
+            if not isinstance(source, str) or namespace_for_path(source) is None:
+                continue
+            if namespace_for_path(source) != namespace:
+                continue
+            if not manager.can_read(source):
+                continue
+            matches.append(dict(block))
+    elif os.path.isdir(root):
+        # Resolve only files registered by corpus_registry.  An unrestricted
+        # recursive ``.md`` walk would make arbitrary namespace files part of
+        # the public corpus and would bypass the store's source boundary.
+        for _label, local_rel in discover_corpus_files(root):
+            path = os.path.join(root, *local_rel.split("/"))
+            if not os.path.isfile(path) or os.path.islink(path):
+                continue
+            real = os.path.realpath(path)
+            if not real.startswith(workspace_root + os.sep):
+                continue
+            rel = os.path.relpath(path, ws).replace(os.sep, "/")
+            if namespace_for_path(rel) != namespace:
+                continue
+            if not manager.can_read(rel):
+                continue
+            try:
+                blocks = _read_direct_source(ws, path)
+            except (OSError, UnicodeDecodeError, ValueError, BlockCorruptedError):
+                continue
+            for block in blocks:
+                if block.get("_id") == block_id:
+                    block["_source_file"] = rel
+                    matches.append(block)
+
+    if len(matches) > 1:
+        return None, "ambiguous"
+    where = "corpus" if markdown_backend else "store"
+    return (matches[0], where) if matches else (None, where)
 
 
 @mcp_tool_observe

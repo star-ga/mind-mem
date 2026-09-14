@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any, cast
 
 from ..block_store import BlockStore, MarkdownBlockStore
@@ -241,7 +241,7 @@ def _backend_name(workspace: str, config: dict[str, Any] | None = None) -> str:
     return backend if isinstance(backend, str) else "markdown"
 
 
-def _corpus_has_ciphertext(workspace: str) -> bool:
+def _corpus_has_ciphertext(workspace: str, *, sources: Iterable[str] | None = None) -> bool:
     """True when any corpus file the walk reads starts with the encryption marker.
 
     Probes exactly the paths :func:`_iter_markdown_active_blocks`
@@ -258,7 +258,8 @@ def _corpus_has_ciphertext(workspace: str) -> bool:
     from ..corpus_registry import discover_corpus_files
     from ..encryption import _MAGIC, has_magic
 
-    for _label, rel_path in discover_corpus_files(workspace):
+    paths = (rel for _label, rel in discover_corpus_files(workspace)) if sources is None else sources
+    for rel_path in paths:
         path = _safe_source_path(workspace, rel_path)
         if path is None:
             continue
@@ -271,7 +272,7 @@ def _corpus_has_ciphertext(workspace: str) -> bool:
     return False
 
 
-def _corpus_parse_fn(workspace: str, backend: str) -> Callable[[str], list[dict[str, Any]]]:
+def _corpus_parse_fn(workspace: str, backend: str, *, sources: Iterable[str] | None = None) -> Callable[[str], list[dict[str, Any]]]:
     """Return the reader the corpus walk must use for *backend*.
 
     ``markdown`` reads its corpus files straight off disk. ``encrypted``
@@ -306,7 +307,7 @@ def _corpus_parse_fn(workspace: str, backend: str) -> Callable[[str], list[dict[
 
     if backend != "encrypted":
         return parse_file
-    if not _corpus_has_ciphertext(workspace):
+    if not _corpus_has_ciphertext(workspace, sources=sources):
         # Configured for encryption but not migrated yet: the corpus is
         # still plaintext, so the plain reader is the correct one.
         return parse_file
