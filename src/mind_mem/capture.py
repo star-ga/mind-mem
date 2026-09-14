@@ -25,6 +25,7 @@ import hashlib
 import os
 import re
 import sys
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -350,7 +351,13 @@ def _signal_block(sig: dict, sig_id: str, date_str: str) -> dict[str, Any]:
     return block
 
 
-def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
+def append_signals(
+    workspace: str,
+    signals: list[dict],
+    date_str: str,
+    *,
+    provenance: Mapping[str, object] | None = None,
+) -> int:
     """Land captured signals as governed ``SIG-`` blocks. Returns the count.
 
     Every signal goes through ``BlockStore.write_block`` inside one
@@ -442,6 +449,18 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
         ]
         if not blocks:
             return 0
+        # Bind the gate's side mapping to the payload that will actually be
+        # persisted. Otherwise required provenance can pass the gate while
+        # _signal_block emits no corresponding fields.
+        if provenance:
+            for block in blocks:
+                for prov_param, prov_field in PROVENANCE_FIELDS.items():
+                    prov_val = provenance.get(prov_param, provenance.get(prov_field))
+                    if prov_val is None:
+                        continue
+                    prov_clean = clean_provenance_value(prov_param, prov_val)
+                    if prov_clean:
+                        block[prov_field] = prov_clean
 
         from .governance_gate import get_gate
         from .storage import get_block_store
@@ -458,6 +477,7 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
             tier=IngestTier.AUTO_CAPTURE,
             actor="capture",
             target_file=signals_path,
+            provenance=provenance,
         ):
             for block in blocks:
                 store.write_block(block)

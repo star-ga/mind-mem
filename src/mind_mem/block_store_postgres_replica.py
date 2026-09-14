@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from .admission import require_admission, require_delete_admission, require_restore_admission
+from .block_provenance import extract_provenance
 from .block_store import BlockStore
 from .block_store_postgres import PostgresBlockStore
 from .observability import get_logger, metrics
@@ -184,7 +185,7 @@ class ReplicatedPostgresBlockStore:
         # Enforced here as well as on the primary: this adapter is a
         # BlockStore in its own right, so a caller holding only the replica
         # must not get a laxer write surface than one holding the primary.
-        require_admission(str(block.get("_id") or ""), status=block.get("Status"))
+        require_admission(str(block.get("_id") or ""), status=block.get("Status"), provenance=extract_provenance(block))
         # Must forward `embedding`: the primary's signature accepts it, and
         # dropping it both raised TypeError for embedding-aware callers and
         # silently prevented embeddings from ever being stored (vector

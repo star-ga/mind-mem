@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1612 | **Est. tokens:** ~4746519
-**Generated:** 2026-09-14 12:55 UTC
+**Files:** 1614 | **Est. tokens:** ~4751290
+**Generated:** 2026-09-14 12:58 UTC
 
 ## Token Budget Guide
 
@@ -76,21 +76,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 237 | ~1073151 |
+| `src/mind_mem/` | 237 | ~1074392 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30173 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13502 |
-| `src/mind_mem/mcp/tools/` | 29 | ~120703 |
+| `src/mind_mem/mcp/tools/` | 29 | ~120831 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
-| `src/mind_mem/storage/` | 2 | ~11690 |
+| `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 703 | ~2095097 |
+| `tests/` | 705 | ~2098477 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -723,7 +723,7 @@
 - `accountability_dashboard.py` (~6668 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `accountability_views.py` (~10307 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `admissibility.py` (~5894 tok, huge) — What recall is allowed to serve — the servability allow-list.
-- `admission.py` (~12812 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `admission.py` (~13245 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `agent_bridge.py` (~5340 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `agent_messaging.py` (~2877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alert_urls.py` (~1873 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -773,14 +773,14 @@
 - `block_metadata.py` (~5685 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~8138 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_provenance.py` (~2728 tok, huge) — Provenance-rich blocks — optional actor/session/tool/source metadata.
-- `block_store.py` (~18340 tok, huge) — BlockStore abstraction — decouples block access from storage format.
-- `block_store_encrypted.py` (~5788 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~22445 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
-- `block_store_postgres_replica.py` (~3116 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
+- `block_store.py` (~18362 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store_encrypted.py` (~5809 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `block_store_postgres.py` (~22467 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres_replica.py` (~3138 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `calibration.py` (~7500 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
-- `capture.py` (~5281 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
+- `capture.py` (~5483 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6359 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~4689 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
 - `causal_lm_loader.py` (~552 tok, large) — Load causal language models with the narrow Qwen3.5 config workaround.
@@ -791,7 +791,7 @@
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
 - `chat_memory.py` (~4088 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
-- `closed_slots.py` (~6763 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
+- `closed_slots.py` (~6812 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `cognitive_forget.py` (~3179 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -845,7 +845,7 @@
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `frame_fields.py` (~2143 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
-- `governance_gate.py` (~21316 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `governance_gate.py` (~21786 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `governance_raft.py` (~2474 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
 - `granularity_align.py` (~3714 tok, huge) — Granularity / abstraction alignment — named merge operation (Group H, v4.0.x).
 - `graph_ingest.py` (~7386 tok, huge) — Corpus → typed knowledge-graph ingestion (HITL-gated).
@@ -920,7 +920,7 @@
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~15524 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~15652 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~7091 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1811 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
@@ -1041,7 +1041,7 @@
 ### `src/mind_mem/storage/`
 
 - `__init__.py` (~5577 tok, huge) — Storage factory for mind-mem block stores (v3.2.0).
-- `sharded_pg.py` (~6113 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
+- `sharded_pg.py` (~6135 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
 ### `src/mind_mem/`
 
 - `streaming.py` (~6278 tok, huge) — Rate-limited front gate for the ingest webhook (v3.3.0, wired 5.0.1).
@@ -1279,7 +1279,7 @@
 - `test_calibration.py` (~3269 tok, huge) — Tests for calibration feedback loop.
 - `test_calibration_window_determinism.py` (~1159 tok, large) — The calibration window boundary is UTC-anchored and pinnable.
 - `test_capture.py` (~2193 tok, huge) — Tests for capture.py — zero external deps (stdlib unittest)."""
-- `test_capture_governed_signals.py` (~2903 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_capture_governed_signals.py` (~3277 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_category_distiller.py` (~2660 tok, huge) — Tests for category_distiller.py — CategoryDistiller class."""
 - `test_causal_graph.py` (~1566 tok, huge) — Tests for mind-mem temporal causal graph (causal_graph.py)."""
 - `test_causal_lm_import.py` (~596 tok, large)
@@ -1355,6 +1355,7 @@
 - `test_drift_detector.py` (~3914 tok, huge) — Tests for mind-mem semantic belief drift detection (drift_detector.py)."""
 - `test_drift_detector_encrypted_backend.py` (~1531 tok, huge) — Drift detection over an ``encrypted`` block-store backend.
 - `test_dsn_redaction.py` (~542 tok, large) — Tests for DSN password redaction in mm_cli.
+- `test_e3_apply_provenance_refusal.py` (~1692 tok, huge) — Public apply keeps provenance refusals structured and transactional."""
 - `test_edge_cases.py` (~4078 tok, huge) — Edge-case and stress tests for mind-mem — block_parser, recall, and MCP server."""
 - `test_edge_corroboration.py` (~3178 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_edge_grounded_answer.py` (~4262 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1408,6 +1409,7 @@
 - `test_fts_fallback.py` (~4472 tok, huge) — Tests for FTS fallback behavior, recall envelope structure, block size cap,
 - `test_governance_bench.py` (~815 tok, large) — Tests for mind-mem governance benchmark suite."""
 - `test_governance_concurrency.py` (~1368 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_governance_provenance_gate.py` (~1314 tok, large) — Governance receipt scopes enforce the workspace provenance policy."""
 - `test_governance_raft.py` (~1398 tok, large) — v4.0 prep — Raft-style consensus wrapper for governance writes."""
 - `test_governance_receipt_ts_anchor.py` (~484 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `test_governance_scan_backends.py` (~2722 tok, huge) — Backend-aware governance ``scan`` — audit bugs #3 / #10.

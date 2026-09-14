@@ -19,6 +19,7 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 from .admission import require_admission, require_delete_admission, require_restore_admission
 from .block_parser import get_active, get_by_id, parse_file
+from .block_provenance import extract_provenance
 from .corpus_registry import (
     BLOCK_PREFIX_MAP,
     CORPUS_RELPATHS,
@@ -1154,7 +1155,7 @@ class MarkdownBlockStore:
         # Governance choke-point. Refuses the write outright when no
         # admission scope is open — checked before the id is even parsed,
         # so an ungated caller cannot learn anything by probing id shapes.
-        require_admission(str(block_id), status=block.get("Status"))
+        require_admission(str(block_id), status=block.get("Status"), provenance=extract_provenance(block))
         if not _BLOCK_ID_RE.match(str(block_id)):
             raise ValueError(f"invalid block id: {block_id!r}")
         target = _resolve_block_file(self._workspace, block_id)

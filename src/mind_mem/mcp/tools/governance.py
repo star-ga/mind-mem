@@ -538,7 +538,7 @@ def propose_update(
     if provenance:
         signal["provenance"] = provenance
 
-    written = append_signals(ws, [signal], today)
+    written = append_signals(ws, [signal], today, provenance=provenance)
 
     metrics.inc("mcp_proposals")
     _log.info("mcp_propose", block_type=block_type, confidence=confidence, written=written)
@@ -1145,6 +1145,7 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     import io
 
     from mind_mem.apply_engine import apply_proposal, find_proposal
+    from mind_mem.compliance.provenance_policy import ProvenanceRequired
     from mind_mem.contradiction_detector import check_proposal_contradictions
 
     contra_report = None
@@ -1172,8 +1173,16 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
         )
 
     capture = io.StringIO()
-    with contextlib.redirect_stdout(capture):
-        success, message = apply_proposal(ws, proposal_id, dry_run=dry_run)
+    try:
+        with contextlib.redirect_stdout(capture):
+            success, message = apply_proposal(ws, proposal_id, dry_run=dry_run)
+    except ProvenanceRequired as exc:
+        # A staged proposal is checked against the current policy at the
+        # actual apply boundary. Return the tool's established failure shape
+        # instead of leaking an exception through the MCP wrapper; no store
+        # call occurs before the gate raises.
+        success = False
+        message = f"current policy requires provenance: {exc}"
 
     log_output = capture.getvalue()
 

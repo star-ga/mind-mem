@@ -431,6 +431,11 @@ class AdmissionReceipt:
     actor: str = ""
     operation: str = OP_WRITE
     evidence_id: str = ""
+    # Canonical block-field provenance supplied when the write scope opened.
+    # Stored on the receipt so the store seam can compare the actual payload
+    # with the mapping the policy admitted; a side argument alone proves
+    # nothing about what was persisted.
+    provenance: tuple[tuple[str, str], ...] = ()
     removals: RemovalLedger = field(default_factory=RemovalLedger, compare=False, repr=False)
     landings: LandingLedger = field(default_factory=LandingLedger, compare=False, repr=False)
 
@@ -704,7 +709,30 @@ def require_restore_admission(snap_dir: str) -> AdmissionReceipt:
     return receipt
 
 
-def require_admission(block_id: str, *, status: object = None, operation: str = OP_WRITE) -> AdmissionReceipt:
+def _canonical_provenance(values: Mapping[str, object] | None) -> tuple[tuple[str, str], ...]:
+    """Normalize caller or block provenance to canonical field names."""
+    if not values:
+        return ()
+    # Delayed import keeps the low-level admission module independent at
+    # import time while ensuring the six-field mapping has one owner.
+    from .block_provenance import PROVENANCE_FIELDS
+
+    aliases = {**PROVENANCE_FIELDS, **{field: field for field in PROVENANCE_FIELDS.values()}}
+    out: dict[str, str] = {}
+    for key, value in values.items():
+        field = aliases.get(str(key))
+        if field is not None and isinstance(value, str) and value.strip():
+            out[field] = value
+    return tuple((field, out[field]) for field in PROVENANCE_FIELDS.values() if field in out)
+
+
+def require_admission(
+    block_id: str,
+    *,
+    status: object = None,
+    operation: str = OP_WRITE,
+    provenance: Mapping[str, object] | None = None,
+) -> AdmissionReceipt:
     """Return the open receipt authorising *operation* on *block_id*.
 
     Called at the top of every ``BlockStore.write_block`` implementation,
@@ -769,6 +797,15 @@ def require_admission(block_id: str, *, status: object = None, operation: str = 
         raise _ungated(operation, f"admission {receipt.entry_id} does not cover block {block_id!r} (covers: {covered})")
     if operation == OP_WRITE:
         _require_write_within_tier(receipt, block_id, status)
+        expected = dict(receipt.provenance)
+        if expected:
+            actual = dict(_canonical_provenance(provenance))
+            missing_or_mismatched = [field for field, value in expected.items() if actual.get(field) != value]
+            if missing_or_mismatched:
+                raise UngatedWriteError(
+                    f"admission {receipt.entry_id} provenance does not match block {block_id!r}; "
+                    f"refusing write with missing or mismatched field(s): {', '.join(missing_or_mismatched)}"
+                )
         # Last, after every refusal: the ledger holds ids this scope let
         # through, never one it turned away. The gate reads it when the
         # scope closes and names the consumed ids in the close record, so
