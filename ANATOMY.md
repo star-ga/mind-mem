@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1648 | **Est. tokens:** ~4848680
-**Generated:** 2026-09-14 19:15 UTC
+**Files:** 1648 | **Est. tokens:** ~4848809
+**Generated:** 2026-09-14 19:17 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~213552 |
+| `docs/` | 95 | ~213558 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 728 | ~2148578 |
+| `tests/` | 728 | ~2148701 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -527,7 +527,7 @@
 - `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 
-- `status.md` (~1901 tok, huge) — MIND-Mem — implementation status (alignment companion)
+- `status.md` (~1907 tok, huge) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
@@ -1795,7 +1795,7 @@
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_sdk_asyncapi_drift.py` (~1331 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_sdk_asyncapi_drift.py` (~1454 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_js_packaging.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_openapi_drift.py` (~3346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sdk_release_versioning.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.

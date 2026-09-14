@@ -2527,7 +2527,7 @@ default story is two laptops talking to each other.
 - [x] **Pluggable redaction layer** — **CORRECTED 2026-09-06; accepted 2026-09-14:** the in-tree chain, governed pre-write screening, explicit external detector loading, and CLI refusal boundary are implemented and covered by source-bound positive and failure controls. The original 2026-09-01 false shipped tick (“zero consumers”) is preserved in this line's history rather than erased. Eight built-ins remain the default; external modules are loaded only when explicitly configured and are not sandboxed or independently proven deterministic. RE3 signing and independent observation are outside this item.
 - [x] **Compliance export pipeline** — **CORRECTED 2026-09-06; accepted 2026-09-14:** the opt-in CLI/API export surface is implemented over admitted records, with `full`, `redacted`, and `metadata-only`, both JSONL/Markdown formats, date filtering, withheld/undated counts, output integrity digest, and stable detector-failure refusal. The original 2026-09-01 false shipped tick (“no export verb/policy”) is preserved in this line's history rather than erased. `content_sha256` is not a signature or independent observation; RE3 remains open.
 
-### G. Observability, reliability, ecosystem (partial — 7 open)
+### G. Observability, reliability, ecosystem (implementation and release status)
 
 **Shipped:**
 
@@ -2537,11 +2537,12 @@ default story is two laptops talking to each other.
 - [x] **Performance regression alerting** — `.github/workflows/benchmark.yml` runs latency benchmarks per PR.
 - [x] **Model-call token metering** — per-day token counter plus optional daily cap behind `mm usage`. **SHIPPED — verified at HEAD 2026-09-07.** `src/mind_mem/usage_meter.py`: `record_call` (per-UTC-day ledger, atomic tmp+`os.replace`, 90-day retention), `report`, `check_cap` raising `DailyTokenCapExceeded`, `load_daily_cap` reading `mind-mem.json {"usage": {"daily_token_cap": N}}`. Wired at four real call sites, 40 passing tests.
 
+- [x] **OpenAPI + AsyncAPI specs** — implemented in the 5.0.3 candidate: `sdk/spec/openapi.json` describes the REST API and `sdk/spec/asyncapi.json` describes the existing opt-in outbound Redis Streams publisher. Regeneration commands and source-emitter/captured-wire controls prevent artifact drift. The event contract is best effort and includes no consumer service or delivery guarantee. SDK registry publication is tracked separately.
+
 **Open:**
 
 - [ ] **JavaScript / TypeScript SDK** — client code ships in-tree at `sdk/js/`; the npm publish as `@star-ga/mind-mem-client` is the open step. Tracked.
 - [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
-- [ ] **OpenAPI + AsyncAPI specs** — **PARTIALLY SHIPPED 2026-09-14:** OpenAPI 3.1.0 ships at `sdk/spec/openapi.json` (13 paths, version-gated by `tests/test_sdk_openapi_drift.py`); `sdk/spec/asyncapi.json` now documents the opt-in outbound Redis Streams `XADD` publisher, with a source-emitter and captured-wire drift gate in `tests/test_sdk_asyncapi_drift.py`. The AsyncAPI scope excludes consumers, retries, ordering and at-least-once delivery because the publisher does not provide them. Go/JS publication and the remaining SDK work stay open. Original text: declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
 - [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Endpoint-backed (pinecone / weaviate / qdrant) still deferred — they need a live endpoint + API credential.
 
 ### F. Anti-patterns explicitly forbidden

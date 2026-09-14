@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-import copy
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -33,12 +33,16 @@ class _CaptureRedis:
         return "1-0"
 
 
-def _captured_event() -> dict[str, Any]:
+def _captured_event(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     capture = _CaptureRedis()
-    publisher = object.__new__(RedisStreamPublisher)
-    publisher._client = capture
-    publisher._stream = export_asyncapi.DEFAULT_STREAM
-    publisher._maxlen = 10_000
+
+    def connect(url: str, **kwargs: Any) -> _CaptureRedis:
+        assert url == "redis://localhost:6379/0"
+        assert kwargs == {"decode_responses": True, "socket_timeout": 1.0}
+        return capture
+
+    monkeypatch.setitem(sys.modules, "redis", SimpleNamespace(from_url=connect))
+    publisher = RedisStreamPublisher()
     publisher.publish(
         Event(
             kind=event_fanout.EVENT_PROPOSAL_APPLIED,
@@ -71,10 +75,11 @@ class TestAsyncApiArtifact:
         assert spec["x-mind-mem"]["canonical_event_kinds"] == sorted(spec["x-mind-mem"]["canonical_event_kinds"])
         assert spec["x-mind-mem"]["observed_source_event_kinds"] == list(export_asyncapi.observed_event_kinds())
 
-    def test_new_literal_emitter_forces_artifact_drift(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_new_literal_emitter_forces_artifact_drift(self, tmp_path: Path) -> None:
         committed = export_asyncapi.load_committed_spec(ARTIFACT)
-        live = copy.deepcopy(committed)
-        live["x-mind-mem"]["observed_source_event_kinds"].append("synthetic_emitter")
+        (tmp_path / "emitter.py").write_text('def emit(workspace):\n    emit_event(workspace, "synthetic_emitter")\n', encoding="utf-8")
+        live = export_asyncapi.build_live_spec(source_root=tmp_path)
+        assert live["x-mind-mem"]["observed_source_event_kinds"] == ["synthetic_emitter"]
         assert export_asyncapi.structural_diff(committed, live)
 
     def test_artifact_corruption_fails_cli(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -99,8 +104,8 @@ class TestAsyncApiArtifact:
 
 
 class TestRedisWire:
-    def test_real_publisher_call_is_validated(self) -> None:
-        record = _captured_event()
+    def test_real_publisher_call_is_validated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        record = _captured_event(monkeypatch)
         body = export_asyncapi.validate_wire_record(record)
         assert body["kind"] == "proposal_applied"
         assert body["payload"] == {"proposal_id": "P-20260914-001", "_dropped": ["statement"]}
@@ -114,14 +119,14 @@ class TestRedisWire:
             lambda fields: fields.update(data='{"kind":"x","payload":{},"workspace":null,"ts_wall":1,"extra":0}'),
         ],
     )
-    def test_wire_mutation_is_refused(self, mutator: Any) -> None:
-        record = _captured_event()
+    def test_wire_mutation_is_refused(self, mutator: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        record = _captured_event(monkeypatch)
         mutator(record["fields"])
         with pytest.raises(ValueError):
             export_asyncapi.validate_wire_record(record)
 
-    def test_wrong_stream_is_refused(self) -> None:
-        record = _captured_event()
+    def test_wrong_stream_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        record = _captured_event(monkeypatch)
         record["stream"] = "other-stream"
         with pytest.raises(ValueError, match="unexpected stream"):
             export_asyncapi.validate_wire_record(record)
