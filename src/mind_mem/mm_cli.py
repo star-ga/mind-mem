@@ -29,7 +29,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Final, Mapping, Optional, Sequence
+from typing import Any, Final, Mapping, Optional, Sequence, cast
 
 # ---------------------------------------------------------------------------
 # Workspace resolution (mirrors mcp_server._workspace)
@@ -66,6 +66,7 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
     import mind_mem.v4.kernels  # noqa: F401 — importing IS the registration
     from mind_mem.admissibility import admissible
     from mind_mem.recall import (
+        ServedResults,
         _derive_generation,
         attest_and_record,
         capture_policy_snapshot,
@@ -107,16 +108,25 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
     # attachment.  Give it the exact final output IDs in output order; kernel
     # metadata and score values remain explicitly outside that ID commitment.
     attested_hits = [{"_id": hit["block_id"], "score": hit["score"]} for hit in hits]
+    # Re-wrap the final IDs in the established runtime carrier so a degraded
+    # core run cannot be turned into a clean receipt by the KernelHit adapter.
+    attested_results = ServedResults(attested_hits)
+    attested_results.degraded = cast(dict[str, str] | None, result.degraded)
     # Only the pass-through default kernel has a complete lexical execution
     # contract today.  Graph/reranking strategies transform or add hits after
     # the core leg, so carrying the base marker would overstate what ran.
     execution_backend = result.execution_backend or "unknown"
+    if result.degraded is not None:
+        # This kernel adapter cannot express a degraded backend in the
+        # existing attestation leg contract.  Refuse proof rather than
+        # certifying the fallback as a clean backend run.
+        execution_backend = "degraded_kernel_result"
     if result.kernel is not KernelKind.DEFAULT:
         execution_backend = "unsupported_kernel"
     attestation = attest_and_record(
         ws,
         args.query,
-        attested_hits,
+        attested_results,
         backend="bm25",
         scoring_instant=scoring_instant,
         config=snap_config,
@@ -135,7 +145,10 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
         "withheld": len(result.hits) - len(kept),
         "count": len(hits),
         "hits": hits,
-        "metadata": dict(result.metadata),
+        "metadata": {
+            **dict(result.metadata),
+            **({"degraded": result.degraded} if result.degraded is not None else {}),
+        },
         "attestation": attestation,
     }
     print(json.dumps(payload, indent=2, default=str))

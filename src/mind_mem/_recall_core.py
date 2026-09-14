@@ -1410,6 +1410,14 @@ def recall(
                 # scanning local files would disclose a shadow corpus and
                 # falsely report a successful database-backed recall.
                 raise
+            # A configured indexed backend that fails is not equivalent to a
+            # clean scan: the answer below is a BM25 fallback.  Keep that
+            # fact on the existing RecallResults carrier so serving doors can
+            # record the degradation instead of certifying a full request.
+            _degraded_marker = {
+                "leg": "vector" if getattr(_cfg_backend, "execution_backend", None) == "vector" else "backend",
+                "reason": "backend_error_fallback_to_scan",
+            }
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
 
     # Load .mind kernel overrides if available

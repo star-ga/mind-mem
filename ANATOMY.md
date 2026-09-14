@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1622 | **Est. tokens:** ~4785254
-**Generated:** 2026-09-14 16:36 UTC
+**Files:** 1622 | **Est. tokens:** ~4785726
+**Generated:** 2026-09-14 16:57 UTC
 
 ## Token Budget Guide
 
@@ -89,8 +89,8 @@
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
-| `src/mind_mem/v4/` | 24 | ~96187 |
-| `tests/` | 713 | ~2121621 |
+| `src/mind_mem/v4/` | 24 | ~96290 |
+| `tests/` | 713 | ~2121990 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1099,7 +1099,7 @@
 - `block_metadata.py` (~3946 tok, huge) — v4 block metadata + schema-validation hooks.
 - `block_versioning.py` (~1861 tok, huge) — Block versioning + time-travel — reconstruct what a block said, and when.
 - `circuit_breaker.py` (~4577 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
-- `cognitive_kernel.py` (~2748 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
+- `cognitive_kernel.py` (~2851 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `embedding_pipeline.py` (~2377 tok, huge) — v4 embedding auto-derivation pipeline (Group A — closes the
 - `feature_flags.py` (~6336 tok, huge) — v4.0 feature-flag registry.
 - `federation.py` (~7339 tok, huge) — v4 federated cross-agent consistency (Group D).
@@ -1641,7 +1641,7 @@
 - `test_ra1_direct_python_snapshot.py` (~1713 tok, huge) — The public Python recall wrapper must snapshot policy before ranking."""
 - `test_ra1_empty_config_backend_binding.py` (~1677 tok, huge) — The captured empty policy must not fall back to a later backend choice."""
 - `test_ra1_engine_ranks_under_captured_context.py` (~1788 tok, huge) — The engine ranks under the CAPTURED config, not the file as it stands when a leg runs.
-- `test_ra1_kernel_cli_serving.py` (~2639 tok, huge) — Acceptance controls for the primary ``mm recall --kernel`` serving door.
+- `test_ra1_kernel_cli_serving.py` (~3008 tok, huge) — Acceptance controls for the primary ``mm recall --kernel`` serving door.
 - `test_ra1_public_boundary_binding.py` (~5515 tok, huge) — Public axis/prefetch RA.1 boundaries must retain one request snapshot.
 - `test_ra1_serving_receipt_binds_engine_config.py` (~3802 tok, huge) — The recorded receipt must bind the config the ENGINE consumed — and the binding must not
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.

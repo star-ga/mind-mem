@@ -244,6 +244,42 @@ def test_kernel_cli_clears_forged_custom_backend_marker(
     assert read_served_runs(str(workspace)) == ()
 
 
+def test_kernel_cli_refuses_clean_proof_after_backend_fallback(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failed vector dispatch cannot become a clean BM25 receipt."""
+    from mind_mem import _recall_core as core
+
+    class FailingVectorBackend(core.RecallBackend):
+        execution_backend = "vector"
+
+        def search(self, *args: object, **kwargs: object) -> list[dict[str, object]]:
+            del args, kwargs
+            raise RuntimeError("fixture vector dispatch failure")
+
+        def index(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+    config = json.loads((workspace / "mind-mem.json").read_text(encoding="utf-8"))
+    config["recall"] = {"backend": "vector"}
+    config["served_ledger"] = {"enabled": True}
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setattr(core, "_load_backend", lambda _workspace: FailingVectorBackend())
+
+    payload = _run(capsys)
+
+    assert payload["count"] == 1
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "degraded_kernel_result" in attestation["ledger_error"]
+    assert payload["metadata"]["degraded"]["leg"] == "vector"
+    assert payload["metadata"]["degraded"]["reason"] == "backend_error_fallback_to_scan"
+    assert read_served_runs(str(workspace)) == ()
+
+
 def test_kernel_cli_graph_answer_is_unproven_until_graph_trace_is_attestable(
     workspace: Path,
     capsys: pytest.CaptureFixture[str],
