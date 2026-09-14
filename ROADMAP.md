@@ -302,9 +302,13 @@ self-modifies. We adopt the connectivity model, not the autonomy.
         gated evaluator: lint/type → test suites → echo-control-must-be-1.0 →
         measure) drives it against the real ~1469-block corpus to optimize the
         loop + compressor prompt.
-      - [ ] a `mm recompact` / dream-cycle pass 6 that clusters via `find_similar`
-        and routes results through `propose_update` (engine + bench shipped; the
-        CLI verb and scheduler wiring are not yet built).
+      - [x] a bounded, opt-in `mm recompact` / dream-cycle pass 6 that clusters
+        via `find_similar` and routes results through `propose_update` (2026-09-14).
+        Source block/file identities are revalidated after compression and before
+        staging; malformed, duplicate, stale, forged, oversized, and unsafe text
+        is refused. The result remains a review-only proposal with
+        `semantic_verification: not_established`; no automatic scheduler or apply
+        path is enabled, and the before/after recall benchmark remains open.
       - [ ] a **before/after recall benchmark on our own corpus** (gate on the
         LoCoMo item below) — the retention bench measures fact preservation, not
         end-to-end recall; do not take the reported accuracy gain on faith,
