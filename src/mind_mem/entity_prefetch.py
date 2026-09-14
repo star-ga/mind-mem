@@ -276,6 +276,7 @@ def prefetch_entity_blocks(
             out = graph_expand(
                 out,
                 all_blocks,
+                workspace=workspace,
                 max_hops=max_hops,
                 decay=0.5,
                 max_neighbors_per_hop=3,

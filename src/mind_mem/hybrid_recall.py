@@ -1695,7 +1695,7 @@ class HybridBackend:
                         continue
             params = resolve_graph_config(self._config)
             with _step("graph_expand", max_hops=params["max_hops"]) as rec:
-                expanded = graph_expand(results, all_blocks, **params)
+                expanded = graph_expand(results, all_blocks, workspace=workspace, **params)
                 rec["added_count"] = len(expanded) - len(results)
                 rec["top_score_delta"] = _top_score(expanded) - _top_score(results)
             if len(expanded) > len(results):
@@ -1758,7 +1758,7 @@ class HybridBackend:
             params = resolve_kg_fusion_config(self._config)
             with _step("kg_expand", max_hops=params["max_hops"]) as rec:
                 with KnowledgeGraph(db_path) as kg:
-                    expanded = kg_expand(results, all_blocks, kg, query, **params)
+                    expanded = kg_expand(results, all_blocks, kg, query, workspace=workspace, **params)
                 rec["added_count"] = len(expanded) - len(results)
                 rec["top_score_delta"] = _top_score(expanded) - _top_score(results)
             if len(expanded) > len(results):

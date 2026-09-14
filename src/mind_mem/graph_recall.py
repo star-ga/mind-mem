@@ -92,6 +92,7 @@ def graph_expand(
     results: list[dict],
     all_blocks: list[dict],
     *,
+    workspace: str | None = None,
     max_hops: int = 2,
     decay: float = 0.5,
     max_neighbors_per_hop: int = 5,
@@ -109,6 +110,9 @@ def graph_expand(
         all_blocks: Full block corpus (needed to build the xref graph
             and resolve neighbour-ID → block-dict). Not walked by ID;
             the function reads ``build_xref_graph`` once.
+        workspace: Workspace whose current content-admission policy must be
+            applied before graph edges can resolve blocks. Omit only when the
+            caller supplies a corpus already admitted by the same authority.
         max_hops: Maximum graph distance from seed blocks.
         decay: Multiplicative score decay per hop (``score_at_hop_n =
             seed_score * decay ** n``).
@@ -147,7 +151,7 @@ def graph_expand(
     # blocks straight into the result list, so a withheld block reachable
     # here is a withheld block served — filtering the corpus is what makes
     # it unreachable rather than merely unwanted.
-    all_blocks = admit_corpus(all_blocks)
+    all_blocks = admit_corpus(all_blocks, workspace=workspace)
 
     id_to_block: dict[str, dict] = {str(b.get("_id")): b for b in all_blocks if b.get("_id")}
     if not id_to_block:
