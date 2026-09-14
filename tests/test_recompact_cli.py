@@ -108,6 +108,28 @@ def test_staging_refuses_writer_truncation(monkeypatch, tmp_path):
     assert not (tmp_path / "intelligence" / "SIGNALS.md").exists()
 
 
+def test_staging_exercises_real_proposal_service_in_temp_workspace(monkeypatch, tmp_path):
+    for directory in ("decisions", "entities", "intelligence", "tasks"):
+        (tmp_path / directory).mkdir()
+    (tmp_path / "decisions" / "DECISIONS.md").write_text("", encoding="utf-8")
+    (tmp_path / "intelligence" / "SIGNALS.md").write_text("", encoding="utf-8")
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+    payload = {
+        "status": "proposal",
+        "text": "A compact reviewed task with enough context",
+        "source_ids": ["DEC-001", "DEC-002"],
+        "mode": "recompact",
+        "input_digest": "b" * 64,
+    }
+    staged = recompact_cli.stage_recompact_proposal(str(tmp_path), payload)
+    assert staged["write"] == "staged"
+    signals = (tmp_path / "intelligence" / "SIGNALS.md").read_text(encoding="utf-8")
+    assert "Status: pending" in signals
+    assert "source_ids=DEC-001,DEC-002" in signals
+    assert "Semantic verification is not established" in signals
+    assert not (tmp_path / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
+
+
 def test_unbounded_compressor_output_is_rejected_before_proposal(monkeypatch, blocks):
     _install_blocks(monkeypatch, blocks)
 
