@@ -997,7 +997,11 @@ def admit_read(
             for row in rows:
                 identity = content_identity(row)
                 current = live.get(identity) if identity is not None else None
-                if current is None or (source_file and (current.get("_source_file") or "") != source_file):
+                # ``content_identity`` canonicalises all supported source
+                # fields (_source_file, _source, and file). Comparing the
+                # field spelling here would reject a valid active row when
+                # the backend serialises the same source under another key.
+                if current is None or identity is None:
                     content_withheld += 1
                     continue
                 refreshed = dict(row)
@@ -1007,10 +1011,41 @@ def admit_read(
     if all(is_admissible_status(row.get(status_key)) for row in rows):
         return ReadAdmission([dict(row) for row in rows], content_withheld)
     releases: frozenset[str] = frozenset()
-    if workspace is not None and source_file is None:
-        releases = workspace_release_ids(workspace)
+    if workspace is not None:
+        releases = _source_release_ids(workspace, source_file) if source_file is not None else workspace_release_ids(workspace)
     kept = admit_leg(rows, status_key=status_key, releases=releases, allow=allow, leg=surface or "read")
     return ReadAdmission(kept, content_withheld + len(rows) - len(kept))
+
+
+def _source_release_ids(workspace: str, source_file: str) -> frozenset[str]:
+    """Resolve release decisions within the row's own namespace.
+
+    A source-bound row cannot use an arbitrary workspace-wide ID release,
+    because another namespace may reuse that ID. Workspace rows retain the
+    historical decisions file; namespaced Markdown rows use their own
+    registered source, and store backends use their canonical rows.
+    """
+    from .admissibility import release_ids, workspace_release_ids
+    from .content_lifecycle import content_identity, live_content_blocks
+    from .storage import _MARKDOWN_BACKENDS, _backend_name, iter_blocks
+
+    identity = content_identity({"_id": "source", "_source_file": source_file})
+    if identity is None:
+        return frozenset()
+    namespace = identity[0]
+    config = None
+    from .request_context import context_config_for
+
+    bound = context_config_for(workspace)
+    if bound is not None:
+        config = dict(bound)
+    backend = _backend_name(workspace, config)
+    if backend not in _MARKDOWN_BACKENDS:
+        rows = iter_blocks(workspace, config=config, active_only=False)
+        return release_ids(row for row in rows if (row_identity := content_identity(row)) is not None and row_identity[0] == namespace)
+    if namespace == "workspace":
+        return workspace_release_ids(workspace)
+    return release_ids(live_content_blocks(workspace, blocks=[{"_id": "source", "_source_file": source_file}]).values())
 
 
 def admit_read_one(

@@ -73,9 +73,16 @@ def _workspace(tmp_path: Path) -> Path:
 def _get(ws: Path, block_id: str, namespace: str, agent: str) -> dict:
     import os
 
+    previous = os.environ.get("MIND_MEM_WORKSPACE")
     os.environ["MIND_MEM_WORKSPACE"] = str(ws)
-    with bind_current_agent(agent), use_workspace(str(ws)):
-        return json.loads(get_block(block_id, namespace=namespace))
+    try:
+        with bind_current_agent(agent), use_workspace(str(ws)):
+            return json.loads(get_block(block_id, namespace=namespace))
+    finally:
+        if previous is None:
+            os.environ.pop("MIND_MEM_WORKSPACE", None)
+        else:
+            os.environ["MIND_MEM_WORKSPACE"] = previous
 
 
 def test_authenticated_agent_reads_shared_and_own_direct_only_blocks_but_search_stays_absent(tmp_path: Path) -> None:
@@ -109,11 +116,7 @@ def test_selected_namespace_duplicate_ids_are_explicitly_ambiguous(tmp_path: Pat
 def test_legacy_id_only_root_resolution_remains_available(tmp_path: Path) -> None:
     ws = _workspace(tmp_path)
     _block(ws / "decisions/DECISIONS.md", "D-LEGACY-1", "legacy root direct read")
-    import os
-
-    os.environ["MIND_MEM_WORKSPACE"] = str(ws)
-    with use_workspace(str(ws)):
-        result = json.loads(get_block("D-LEGACY-1"))
+    result = _get(ws, "D-LEGACY-1", "", "")
     assert result["found"] is True
     assert result["block"]["_id"] == "D-LEGACY-1"
     assert MarkdownBlockStore(str(ws)).get_by_id("D-LEGACY-1") is not None
@@ -272,3 +275,94 @@ def test_non_markdown_omitted_selector_still_binds_private_source_status(monkeyp
     monkeypatch.setattr(storage, "iter_blocks", lambda *_args, **_kwargs: [dict(row) for row in rows])
     result = _get(ws, "D-DUP-2", "", "alice")
     assert result["found"] is False and result["withheld"] is True
+
+
+def test_non_markdown_source_field_variants_admit_active_and_withhold_quarantined(monkeypatch, tmp_path: Path) -> None:
+    """Backend source spellings share one identity and release decision."""
+    ws = _workspace(tmp_path)
+    from mind_mem import storage
+    from mind_mem.mcp.tools import memory_ops
+
+    monkeypatch.setattr(memory_ops, "_is_markdown_backend", lambda _ws: False)
+    monkeypatch.setattr(storage, "_backend_name", lambda *_args: "postgres")
+    for field in ("_source_file", "_source", "file"):
+        row = {
+            "_id": f"D-FIELD-{field.replace('_', '')}",
+            field: "shared/decisions/DECISIONS.md",
+            "Statement": "field variant",
+            "Status": "active",
+        }
+
+        class Store:
+            def get_all(self, *, active_only: bool = False) -> list[dict]:
+                return [dict(row)]
+
+            def get_by_id(self, _block_id: str) -> dict:
+                return dict(row)
+
+        monkeypatch.setattr(memory_ops, "get_block_store", lambda _ws: Store())
+        monkeypatch.setattr(storage, "iter_blocks", lambda *_args, **_kwargs: [dict(row)])
+        for selector in ("shared", ""):
+            active = _get(ws, row["_id"], selector, "alice")
+            assert active["found"] is True, (field, selector, active)
+        row["Status"] = "quarantined"
+        withheld = _get(ws, row["_id"], "shared", "alice")
+        assert withheld["found"] is False and withheld["withheld"] is True
+
+
+def test_non_markdown_omitted_selector_enforces_shared_acl(tmp_path: Path, monkeypatch) -> None:
+    """An omitted selector must not bypass shared-namespace ACL policy."""
+    ws = _workspace(tmp_path)
+    acl_path = ws / "mind-mem-acl.json"
+    acl = json.loads(acl_path.read_text(encoding="utf-8"))
+    acl["agents"]["alice"]["read"] = ["agents/alice"]
+    acl_path.write_text(json.dumps(acl), encoding="utf-8")
+    from mind_mem import storage
+    from mind_mem.mcp.tools import memory_ops
+
+    row = {"_id": "D-BACKEND-SHARED", "_source_file": "shared/decisions/DECISIONS.md", "Statement": "shared backend", "Status": "active"}
+
+    class Store:
+        def get_by_id(self, _block_id: str) -> dict:
+            return dict(row)
+
+    monkeypatch.setattr(memory_ops, "_is_markdown_backend", lambda _ws: False)
+    monkeypatch.setattr(memory_ops, "get_block_store", lambda _ws: Store())
+    monkeypatch.setattr(storage, "_backend_name", lambda *_args: "postgres")
+    monkeypatch.setattr(storage, "iter_blocks", lambda *_args, **_kwargs: [dict(row)])
+    denied = _get(ws, row["_id"], "", "alice")
+    allowed = _get(ws, row["_id"], "", "bob")
+    assert denied["error"] == "namespace access denied"
+    assert allowed["found"] is True
+
+
+def test_non_markdown_root_release_remains_available_with_source_binding(tmp_path: Path, monkeypatch) -> None:
+    """Source binding retains the approved release path for root imports."""
+    ws = _workspace(tmp_path)
+    from mind_mem import storage
+    from mind_mem.mcp.tools import memory_ops
+
+    target = {
+        "_id": "IMP-RELEASE-1",
+        "_source_file": "memory/IMPORTED.md",
+        "Statement": "released import",
+        "Status": "quarantined",
+    }
+    release = {
+        "_id": "D-RELEASE-1",
+        "_source_file": "decisions/DECISIONS.md",
+        "Statement": "release",
+        "Status": "active",
+        "Releases": "IMP-RELEASE-1",
+    }
+
+    class Store:
+        def get_by_id(self, _block_id: str) -> dict:
+            return dict(target)
+
+    monkeypatch.setattr(memory_ops, "_is_markdown_backend", lambda _ws: False)
+    monkeypatch.setattr(memory_ops, "get_block_store", lambda _ws: Store())
+    monkeypatch.setattr(storage, "_backend_name", lambda *_args: "postgres")
+    monkeypatch.setattr(storage, "iter_blocks", lambda *_args, **_kwargs: [dict(target), dict(release)])
+    result = _get(ws, target["_id"], "", "")
+    assert result["found"] is True and result["block"]["_id"] == target["_id"]

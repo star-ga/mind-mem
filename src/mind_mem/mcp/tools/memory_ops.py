@@ -1107,7 +1107,7 @@ def get_block(block_id: str, namespace: str = "") -> str:
         if "\x00" in rel_source or ".." in rel_source.split("/"):
             return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
         source_namespace = namespace_for_path(rel_source)
-        if source_namespace is not None and source_namespace.startswith("agents/"):
+        if source_namespace is not None and source_namespace != "workspace":
             bound_agent = current_agent_id.get()
             try:
                 manager = NamespaceManager(ws, agent_id=None if bound_agent in {None, "", UNATTRIBUTED} else bound_agent)
@@ -1263,7 +1263,7 @@ def _resolve_block_in_namespace(ws: str, block_id: str, namespace: str) -> tuple
         for block in get_block_store(ws).get_all(active_only=False):
             if block.get("_id") != block_id:
                 continue
-            source = block.get("_source_file") or block.get("file")
+            source = block.get("_source_file") or block.get("_source") or block.get("file")
             if not isinstance(source, str) or namespace_for_path(source) is None:
                 continue
             if namespace_for_path(source) != namespace:

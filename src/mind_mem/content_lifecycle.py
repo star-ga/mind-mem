@@ -150,7 +150,12 @@ def _safe_source_path(workspace: str, source: str) -> str | None:
 
 def _identity_blocks(blocks: list[dict[str, Any]], workspace: str) -> dict[ContentIdentity, dict[str, Any]]:
     """Re-read the exact source files named by already ACL-selected rows."""
-    from .block_parser import parse_file
+    from .request_context import context_config_for
+    from .storage import _backend_name, _corpus_parse_fn
+
+    bound = context_config_for(workspace)
+    config = dict(bound) if bound is not None else None
+    read = _corpus_parse_fn(workspace, _backend_name(workspace, config))
 
     sources: dict[str, str] = {}
     for block in blocks:
@@ -162,7 +167,7 @@ def _identity_blocks(blocks: list[dict[str, Any]], workspace: str) -> dict[Conte
     out: dict[ContentIdentity, dict[str, Any]] = {}
     for path, source in sources.items():
         try:
-            parsed = parse_file(path)
+            parsed = read(path)
         except (OSError, UnicodeDecodeError, ValueError):
             continue
         for row in parsed:
