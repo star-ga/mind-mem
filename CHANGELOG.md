@@ -53,6 +53,12 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Indexed MCP recall resources now use the shared ranked serving boundary.
+  Blocks quarantined after indexing are withheld immediately,
+  and the final ordered result IDs are recorded under the existing ledger
+  policy. The resource retains its JSON-list response; the recall tool supplies
+  the receipt envelope.
+
 - Entity-equivalence approval and reversal now admit only their exact edge.
   The core rechecks this scope against the locked proposal; unrelated corpus
   writes remain refused, and the proposal-wide admission allowlist is unchanged.

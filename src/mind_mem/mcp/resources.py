@@ -67,8 +67,6 @@ from mind_mem.admission import admit_read
 from mind_mem.block_parser import get_active, parse_file
 from mind_mem.observability import get_logger
 from mind_mem.recall import recall as recall_engine
-from mind_mem.sqlite_index import _db_path as fts_db_path
-from mind_mem.sqlite_index import query_index as fts_query
 
 from .infra.workspace import _validate_path, _workspace
 
@@ -249,12 +247,16 @@ def get_health() -> str:
 
 
 def get_recall(query: str) -> str:
-    """Search memory using ranked recall (FTS5 or BM25 scan)."""
+    """Search through the configured, live-admitted ranked serving boundary.
+
+    An index is a candidate cache, not authority for current block admission.
+    The shared entry point rechecks current sources and records the final
+    ranked IDs. Keep the historical JSON-list response; callers that need a
+    receipt envelope use the recall tool. The resource does not attest its
+    serialized text or expose a new direct-read receipt contract.
+    """
     ws = _workspace()
-    if os.path.isfile(fts_db_path(ws)):
-        results = fts_query(ws, query, limit=10)
-    else:
-        results = recall_engine(ws, query, limit=10)
+    results = recall_engine(ws, query, limit=10)
     return json.dumps(results, indent=2, default=str)
 
 

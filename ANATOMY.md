@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1640 | **Est. tokens:** ~4838698
-**Generated:** 2026-09-14 18:30 UTC
+**Files:** 1642 | **Est. tokens:** ~4841217
+**Generated:** 2026-09-14 18:40 UTC
 
 ## Token Budget Guide
 
@@ -81,7 +81,7 @@
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
-| `src/mind_mem/mcp/` | 3 | ~6614 |
+| `src/mind_mem/mcp/` | 3 | ~6657 |
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
 | `src/mind_mem/mcp/tools/` | 29 | ~124769 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 722 | ~2143043 |
+| `tests/` | 724 | ~2145519 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -911,7 +911,7 @@
 - `workspace.py` (~2237 tok, huge) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
 
-- `resources.py` (~3199 tok, huge) — MCP ``@mcp.resource`` declarations.
+- `resources.py` (~3242 tok, huge) — MCP ``@mcp.resource`` declarations.
 - `server.py` (~3200 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/mcp/tools/`
 
@@ -1310,6 +1310,7 @@
 - `test_check_workspace_backend.py` (~3248 tok, huge) — Backend-aware workspace validation — ``mcp.infra.workspace._check_workspace``.
 - `test_chunk_text.py` (~231 tok, medium) — Tests for text chunking."""
 - `test_ci_green_per_job_gate.py` (~4344 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
+- `test_cli_detector_refusal.py` (~1619 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_codepoint_sanitize.py` (~3333 tok, huge) — Tests for invisible-Unicode ingest sanitization (security).
 - `test_coding_schemas.py` (~1284 tok, large) — Tests for mind-mem coding-native memory schemas."""
 - `test_cognitive_forget.py` (~2315 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1672,7 +1673,7 @@
 - `test_read_surface_admission.py` (~6331 tok, huge) — Every read surface, swept with a three-status canary.
 - `test_read_surface_classification.py` (~9234 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~4156 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_read_surface_resources.py` (~7355 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_read_surface_resources.py` (~7373 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall.py` (~3898 tok, huge) — Tests for recall.py — zero external deps (stdlib unittest)."""
 - `test_recall_admissibility.py` (~8772 tok, huge) — Acceptance gate for recall admissibility — the servability allow-list.
 - `test_recall_as_of.py` (~1297 tok, large) — Tests for the ``recall(..., as_of=)`` time-travel plumb-through (roadmap Group B).
@@ -1752,6 +1753,7 @@
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.
 - `test_reranker_model_cache.py` (~1909 tok, huge) — Reranker weights load once per process, not once per query.
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
+- `test_resource_ranked_serving.py` (~839 tok, large) — Indexed MCP recall must use the live admitted serving boundary."""
 - `test_rest_admin_gate_api_key_only.py` (~2102 tok, huge) — The REST admin gate must fire in an API-key-only deployment.
 - `test_rest_admin_scope_handoff.py` (~1246 tok, large) — Real REST -> observed-MCP admin scope handoff controls (RA.4).
 - `test_rest_api.py` (~4353 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).

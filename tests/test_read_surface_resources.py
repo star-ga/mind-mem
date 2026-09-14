@@ -431,7 +431,8 @@ def test_every_content_resource_reaches_the_corpus_through_the_admission_seam(se
         assert "_admitted_corpus(" in source, f"{name} returns corpus content without going through the admission seam:\n{source}"
 
     recall_source = inspect.getsource(resources.get_recall)
-    assert "recall_engine(" in recall_source or "fts_query(" in recall_source
+    assert "recall_engine(" in recall_source
+    assert "fts_query(" not in recall_source, "raw FTS rows bypass current admission and serving receipts"
     assert ACTIVE_CANARIES["decisions"] not in served["get_health"], "get_health started serving block text; reclassify it"
 
 
