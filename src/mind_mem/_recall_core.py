@@ -959,12 +959,19 @@ def _prefilter_corpus(
     return kept
 
 
+# ``None`` is a meaningful value here: the dispatch seam uses it to clear a
+# carrier's untrusted/self-declared marker for custom backends.  A sentinel
+# distinguishes that explicit clear from callers that merely want inherited
+# metadata while projecting a result list.
+_EXECUTION_BACKEND_UNSET = object()
+
+
 def _project_recall_carrier(
     source: list[dict],
     projected: list[dict],
     *,
     degraded: dict[str, object] | None = None,
-    execution_backend: str | None = None,
+    execution_backend: str | None | object = _EXECUTION_BACKEND_UNSET,
 ) -> list[dict]:
     """Preserve run metadata when a post-filter creates a new result list.
 
@@ -981,10 +988,18 @@ def _project_recall_carrier(
     marker = degraded if degraded is not None else source_degraded
     trace = getattr(source, "trace", None)
     source_backend = getattr(source, "execution_backend", None)
-    backend = execution_backend if execution_backend is not None else source_backend
+    if execution_backend is _EXECUTION_BACKEND_UNSET:
+        backend = source_backend
+    elif execution_backend is None or isinstance(execution_backend, str):
+        backend = execution_backend
+    else:  # pragma: no cover - private seam defensive typing
+        backend = None
     if projected is source and marker == source_degraded and backend == source_backend:
         return source
-    if marker is None and trace is None and backend is None:
+    # An explicit clear must not return the original carrier: that would
+    # preserve a forged attribute on ``projected is source`` and reintroduce
+    # the very inheritance this dispatch seam is meant to prevent.
+    if marker is None and trace is None and backend is None and source_backend is None:
         return projected
 
     from .hybrid_recall import RecallResults

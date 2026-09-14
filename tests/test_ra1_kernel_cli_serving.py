@@ -19,8 +19,8 @@ from mind_mem.served_ledger import read_served_runs, row_hash
 from mind_mem.v4.cognitive_kernel import mind_recall
 
 
-def _args() -> Namespace:
-    return Namespace(query="PostgreSQL", kernel="default", limit=10)
+def _args(kernel: str = "default") -> Namespace:
+    return Namespace(query="PostgreSQL", kernel=kernel, limit=10)
 
 
 @pytest.fixture
@@ -193,6 +193,74 @@ def test_kernel_cli_vector_execution_is_not_attested_as_bm25(
     assert isinstance(attestation, dict)
     assert attestation["served_proof"] == "unproven"
     assert "execution backend 'vector'" in attestation["ledger_error"]
+    assert read_served_runs(str(workspace)) == ()
+
+
+def test_kernel_cli_clears_forged_custom_backend_marker(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A custom backend cannot self-declare a trusted BM25 carrier marker."""
+    import importlib
+
+    from mind_mem._recall_core import RecallBackend
+    from mind_mem.hybrid_recall import RecallResults
+
+    class ForgedBackend(RecallBackend):
+        def search(self, workspace_path: str, query: str, limit: int = 10, active_only: bool = False) -> RecallResults:
+            del workspace_path, query, limit, active_only
+            result = RecallResults(
+                [
+                    {
+                        "_id": "D-20260101-001",
+                        "score": 0.88,
+                        "file": "decisions/DECISIONS.md",
+                        "status": "active",
+                    }
+                ]
+            )
+            # This is deliberately forged carrier state.  The dispatcher must
+            # clear it because this backend is not a built-in attested leg.
+            result.execution_backend = "bm25"
+            return result
+
+        def index(self, workspace_path: str) -> None:
+            del workspace_path
+
+    config = json.loads((workspace / "mind-mem.json").read_text(encoding="utf-8"))
+    config["served_ledger"] = {"enabled": True}
+    (workspace / "mind-mem.json").write_text(json.dumps(config), encoding="utf-8")
+    core = importlib.import_module("mind_mem._recall_core")
+    monkeypatch.setattr(core, "_load_backend", lambda _workspace: ForgedBackend())
+
+    payload = _run(capsys)
+
+    assert payload["count"] == 1
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "execution backend 'unknown'" in attestation["ledger_error"]
+    assert read_served_runs(str(workspace)) == ()
+
+
+def test_kernel_cli_graph_answer_is_unproven_until_graph_trace_is_attestable(
+    workspace: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Graph-produced IDs retain the answer but cannot borrow BM25 proof."""
+    from test_v4_kernels_wiring import _seed_co_retrieval
+
+    _seed_co_retrieval(workspace)
+    assert mm_cli._cmd_kernel_recall(_args("graph_walk")) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["count"] == 1
+    assert payload["hits"][0]["block_id"] == "D-20260101-001"
+    attestation = payload["attestation"]
+    assert isinstance(attestation, dict)
+    assert attestation["served_proof"] == "unproven"
+    assert "unsupported_kernel" in attestation["ledger_error"]
     assert read_served_runs(str(workspace)) == ()
 
 

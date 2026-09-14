@@ -107,6 +107,12 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
     # attachment.  Give it the exact final output IDs in output order; kernel
     # metadata and score values remain explicitly outside that ID commitment.
     attested_hits = [{"_id": hit["block_id"], "score": hit["score"]} for hit in hits]
+    # Only the pass-through default kernel has a complete lexical execution
+    # contract today.  Graph/reranking strategies transform or add hits after
+    # the core leg, so carrying the base marker would overstate what ran.
+    execution_backend = result.execution_backend or "unknown"
+    if result.kernel is not KernelKind.DEFAULT:
+        execution_backend = "unsupported_kernel"
     attestation = attest_and_record(
         ws,
         args.query,
@@ -120,7 +126,7 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
         # The core result stamps this from the backend dispatch seam.  An
         # absent/unknown marker must become an explicit unproven result rather
         # than silently inheriting the old BM25 claim.
-        execution_backend=result.execution_backend or "unknown",
+        execution_backend=execution_backend,
     )
     payload = {
         "query": args.query,
