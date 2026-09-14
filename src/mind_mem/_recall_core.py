@@ -138,6 +138,79 @@ def _validate_recall_agent_id(agent_id: object | None) -> None:
         raise
 
 
+def _indexed_hit_is_readable(
+    workspace: str,
+    hit: Mapping[str, Any],
+    namespace_manager: Any,
+    *,
+    check_realpath: bool = True,
+) -> bool:
+    """Check the ACL against both indexed source claims and their real target.
+
+    Indexed backends return already-shaped hits before the filesystem corpus
+    walk runs. For an agent-bound request, a missing or conflicting source
+    claim is therefore unresolved and must be withheld. Checking the resolved
+    path as well as the lexical claim closes a shared-file symlink into another
+    agent's private namespace.
+    """
+    source_values: list[str] = []
+    for field in ("_source_file", "file"):
+        if field not in hit:
+            continue
+        value = hit[field]
+        if not isinstance(value, str) or not value.strip():
+            return False
+        # Backends use both slash spellings. Compare the canonical separator
+        # form, while refusing explicit empty/dot/traversal components rather
+        # than normalising a potentially ambiguous source claim.
+        source = value.replace("\\", "/")
+        if "\x00" in source or any(part in {"", ".", ".."} for part in source.split("/")):
+            return False
+        source_values.append(source)
+    if not source_values or len(set(source_values)) != 1:
+        return False
+    source = source_values[0]
+    if source.startswith("/") or (len(source) >= 2 and source[1] == ":"):
+        return False
+    if not namespace_manager.can_read(source):
+        return False
+
+    # PostgreSQL file_path values are logical store identities. A local
+    # Markdown tree may be absent or contain an unrelated symlink at the same
+    # name; consulting it would turn a valid DB row into a false denial (or
+    # make local bytes part of the DB ACL decision).
+    if not check_realpath:
+        return True
+
+    workspace_real = os.path.realpath(workspace)
+    try:
+        resolved = os.path.realpath(os.path.join(workspace_real, source))
+        if not resolved.startswith(workspace_real + os.sep):
+            return False
+        resolved_rel = os.path.relpath(resolved, workspace_real)
+    except (OSError, ValueError):
+        return False
+    return namespace_manager.can_read(resolved_rel)
+
+
+def _filter_indexed_hits_for_agent(
+    workspace: str,
+    hits: list[dict],
+    *,
+    agent_id: str | None,
+    namespace_manager: Any,
+    check_realpath: bool = True,
+) -> list[dict]:
+    """Apply namespace ACL before indexed hits reach validity or ranking work."""
+    if agent_id is None or agent_id == "":
+        return hits
+    if namespace_manager is None:
+        # An authenticated namespace request must fail closed if its ACL
+        # authority cannot be imported; it must never become workspace-wide.
+        return []
+    return [hit for hit in hits if _indexed_hit_is_readable(workspace, hit, namespace_manager, check_realpath=check_realpath)]
+
+
 # ---------------------------------------------------------------------------
 # Config cache — mtime-based invalidation avoids re-reading mind-mem.json
 # on every recall() call (#473).
@@ -1126,6 +1199,22 @@ def recall(
     # re-withholds what the caller asked for.
     _admission_allow = frozenset({"pending"}) if include_pending else frozenset()
 
+    # Resolve the authenticated ACL before any indexed backend can return an
+    # answer. Indexed hits have no later filesystem discovery pass to enforce
+    # this identity, so the filter below must run before validity, scoring or
+    # model-processing stages. The unbound path remains byte-for-byte legacy.
+    ns_manager = None
+    if agent_id is not None and agent_id != "":
+        try:
+            from .namespaces import NamespaceManager
+
+            ns_manager = NamespaceManager(workspace, agent_id=agent_id)
+        except ImportError:
+            _log.warning("namespaces_unavailable_for_indexed_recall", agent_id=agent_id)
+            # An agent-bound request must never downgrade to the unscoped scan
+            # if its ACL authority is unavailable.
+            return []
+
     # Fix for #525: dispatch to the configured backend (sqlite / vector)
     # before falling through to the markdown-scan BM25 path.  This is the
     # same dispatch the `python3 -m mind_mem.recall` CLI does at line 1400
@@ -1180,9 +1269,17 @@ def recall(
             until=until,
             return_k=_wide_pool_k,
         )
+        indexed_source = hits
+        indexed_marker = getattr(hits, "degraded", None)
+        hits = _filter_indexed_hits_for_agent(
+            workspace,
+            hits,
+            agent_id=agent_id,
+            namespace_manager=ns_manager,
+        )
         hits = filter_search_hits(hits, _get_config(workspace))
         hits = _apply_validity_and_resort(hits, workspace, _indexed_recall_cfg, _scoring_instant)
-        return _apply_post_filters(
+        filtered = _apply_post_filters(
             hits,
             since=since,
             until=until,
@@ -1196,6 +1293,7 @@ def recall(
             guardrail_policy=_guardrail_policy,
             admission_allow=_admission_allow,
         )
+        return _project_recall_carrier(indexed_source, filtered, degraded=indexed_marker)
     if isinstance(_cfg_backend, RecallBackend):
         try:
             # No pushable surface on an arbitrary backend, so the only lever
@@ -1206,7 +1304,15 @@ def recall(
             # Capture before filtering or empty-result fallback. Either can
             # turn the carrier into a plain list or replace the provider's
             # result with the lexical scan below.
+            backend_source = backend_hits
             _backend_marker = getattr(backend_hits, "degraded", None)
+            backend_hits = _filter_indexed_hits_for_agent(
+                workspace,
+                backend_hits,
+                agent_id=agent_id,
+                namespace_manager=ns_manager,
+                check_realpath=not isinstance(_cfg_backend, PostgresRecallBackend),
+            )
             if _backend_marker is not None:
                 from .hybrid_recall import _merge_leg_markers
 
@@ -1218,6 +1324,7 @@ def recall(
             # retained for the historical optional recall backends.
             if isinstance(_cfg_backend, PostgresRecallBackend) and not backend_hits:
                 return _project_recall_carrier(
+                    backend_source,
                     _apply_post_filters(
                         backend_hits,
                         since=since,
@@ -1232,7 +1339,6 @@ def recall(
                         guardrail_policy=_guardrail_policy,
                         admission_allow=_admission_allow,
                     ),
-                    backend_hits,
                     degraded=_degraded_marker,
                 )
             if backend_hits:
@@ -1252,7 +1358,7 @@ def recall(
                     guardrail_policy=_guardrail_policy,
                     admission_allow=_admission_allow,
                 )
-                return _project_recall_carrier(filtered, filtered, degraded=_degraded_marker)
+                return _project_recall_carrier(backend_source, filtered, degraded=_degraded_marker)
         except Exception as exc:
             if isinstance(_cfg_backend, PostgresRecallBackend):
                 # A configured source-of-record failure must remain visible;
@@ -1464,20 +1570,6 @@ def recall(
 
     # Adjust effective limit for retrieval (retrieve more candidates, trim later)
     limit = int(limit * qparams.get("extra_limit_factor", 1.0))
-
-    # Namespace ACL: resolve accessible paths if agent_id is provided.
-    # v3.9.x security: agent_id flows into a filesystem path (agents/{agent_id}/...)
-    # so reject anything that isn't a flat identifier. Path-traversal sequences
-    # (../, leading /, NUL bytes) would let a caller probe paths outside the
-    # workspace; whitespace and shell metacharacters tighten the perimeter.
-    ns_manager = None
-    if agent_id is not None and agent_id != "":
-        try:
-            from .namespaces import NamespaceManager
-
-            ns_manager = NamespaceManager(workspace, agent_id=agent_id)
-        except ImportError:
-            _log.debug("namespaces_unavailable", agent_id=agent_id)
 
     # Load all blocks with source file tracking.
     #
