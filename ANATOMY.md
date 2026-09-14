@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1574 | **Est. tokens:** ~4687808
-**Generated:** 2026-09-13 12:03 UTC
+**Files:** 1574 | **Est. tokens:** ~4688116
+**Generated:** 2026-09-13 12:39 UTC
 
 ## Token Budget Guide
 
@@ -45,7 +45,7 @@
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
-| `docs/benchmarks/` | 25 | ~42861 |
+| `docs/benchmarks/` | 25 | ~43169 |
 | `docs/benchmarks/ablation/` | 2 | ~12181 |
 | `docs/benchmarks/head-20260907/` | 8 | ~7240 |
 | `docs/benchmarks/memory-ab-420s-runs/` | 26 | ~84421 |
@@ -362,13 +362,13 @@
 - `2026-09-06-dialogue-diversity-cap1.ndjson` (~3666 tok, huge) — {"all": true, "any": true, "distinct": 5, "n_gold": 2, "qid": "6a1eabeb", "qtype
 - `2026-09-06-dialogue-diversity-cap2.ndjson` (~3774 tok, huge) — {"all": true, "any": true, "distinct": 3, "n_gold": 2, "qid": "6a1eabeb", "qtype
 - `2026-09-06-stemming-union-cap1.ndjson` (~3682 tok, huge) — {"all": true, "any": true, "distinct": 5, "n_gold": 2, "qid": "6a1eabeb", "qtype
-- `2026-09-07-external-chroma.md` (~1035 tok, large) — An external system under the same contract — and what it actually shows
-- `2026-09-07-hybrid-vector-on.md` (~1001 tok, large) — Vector-on hybrid on the full set — `all@5` beats the floor, and 36 runs did not get a dense leg
+- `2026-09-07-external-chroma.md` (~1090 tok, large) — An external system under the same contract — and what it actually shows
+- `2026-09-07-hybrid-vector-on.md` (~1051 tok, large) — Vector-on hybrid on the full set — `all@5` beats the floor, and 36 runs did not get a dense leg
 - `2026-09-07-longmemeval-s-HEAD.md` (~1088 tok, large) — LongMemEval-S on HEAD — the 09-03 deficit is gone
 - `2026-09-07-no-expansion-gate.md` (~940 tok, large) — `no_expansion` on the full set — the ordering gap closes, at no recall cost
 - `2026-09-08-class-a-public-integrity.md` (~701 tok, large) — Class A integrity — public synthetic-workspace evidence
-- `SOTA-GATE.md` (~1680 tok, huge) — The SOTA gate — what is required, and what is measured
-- `SOTA-NORTH-STAR.md` (~1940 tok, huge) — 100% across every dimension — what that means per dimension, measured
+- `SOTA-GATE.md` (~1862 tok, huge) — The SOTA gate — what is required, and what is measured
+- `SOTA-NORTH-STAR.md` (~1961 tok, huge) — 100% across every dimension — what that means per dimension, measured
 ### `docs/benchmarks/ablation/`
 
 - `paired-scorecards-posthoc.json` (~1492 tok, large) — Keys: no_facts, no_facts_plain

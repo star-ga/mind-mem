@@ -28,7 +28,9 @@ index (commit `b7c3e26`).
 
 **This is the first significant win against the floor on the official strict
 metric.** `recall_all@5` — every gold document inside the top five — goes 0.8298
-to 0.8660, p=0.0270. `any@5` and MRR remain indistinguishable from the floor.
+to 0.8660, p=0.0270. `any@5` and MRR showed no statistically detectable
+difference from the floor (p=0.4545 and p=0.6785); these are difference tests,
+not equivalence or non-inferiority tests, and no such margin was predeclared.
 
 ## The caveat, which is not small: 36 runs had no dense leg
 
@@ -69,12 +71,12 @@ It closes the standing requirement that a vector-on run exist, and it produces
 the first metric on which this product is significantly ahead of the
 zero-dependency floor.
 
-It does **not** make a SOTA claim available. The remaining requirement is an
-external system under the same adapter contract, and `chroma_baseline` (commit
-`4d1ac54`) has landed but not yet been run over the full set. Beyond that, every
-competing figure in this field is *answer accuracy* under an LLM judge, while
-these are *retrieval* metrics; the two are not the same quantity and must not be
-placed on one axis.
+It does **not** make a SOTA claim available. Requirement 3 has a committed
+external-system comparison: Chroma was attempted on 470 questions and completed
+436, so its reported metrics are conditional on that subset. It is not an
+independent-party reproduction. The competing figures cited in the benchmark
+materials are *answer accuracy* under an LLM judge, while these are *retrieval*
+metrics; the two are not the same quantity and must not be placed on one axis.
 
 Before the next hybrid number is published, the 36 inert runs should be zero.
 A 7.7% silent-degradation rate is small enough to miss and large enough to move
