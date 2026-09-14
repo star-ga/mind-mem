@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1615 | **Est. tokens:** ~4754750
-**Generated:** 2026-09-14 13:22 UTC
+**Files:** 1615 | **Est. tokens:** ~4755265
+**Generated:** 2026-09-14 13:40 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 94 | ~210763 |
+| `docs/` | 94 | ~210788 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -62,7 +62,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9456 |
-| `scripts/` | 21 | ~66207 |
+| `scripts/` | 21 | ~66697 |
 | `sdk/go/` | 11 | ~9890 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4864 |
@@ -421,7 +421,7 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `cli-reference.md` (~7514 tok, huge) — CLI Reference
+- `cli-reference.md` (~7539 tok, huge) — CLI Reference
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
@@ -609,12 +609,12 @@
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
-- `check_docs_alignment.py` (~16568 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
+- `check_docs_alignment.py` (~16621 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_tool_surface.py` (~2214 tok, huge) — Reachability, applied to the MCP tool surface.
-- `count_mcp_tools.py` (~5216 tok, huge) — Count registered MCP tools and assert the count matches CLAUDE.md.
+- `count_mcp_tools.py` (~5653 tok, huge) — Count registered MCP tools and assert the count matches CLAUDE.md.
 - `docs-alignment-hook.sh` (~454 tok, medium) — docs-alignment-hook.sh — Git pre-commit step to refresh derived doc counts.
 - `pre-commit-hook.sh` (~489 tok, medium) — STARGA author guard (chained first: a wrong-identity commit must never be created).
 - `pre-push-hook.sh` (~460 tok, medium) — pre-push-hook.sh — the last LOCAL gate before an identity becomes public.

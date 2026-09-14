@@ -161,9 +161,39 @@ _DISTINCT_RE = re.compile(r"\b(\d{2,3})\s+distinct\s+tools?\b", re.IGNORECASE)
 # "Tools (N)" against the full-surface count would fail CI on a correct line.
 _HEADING_RE = re.compile(r"MCP\s+Tools?\s*\((\d{2,3})\)", re.IGNORECASE)
 
-# A line describing a TRANSITION is a record of a past fix, not a claim:
-# "CLAUDE.md drift cleared (`MCP Tools (81) -> (84)`)".
+# A numeric tool-count transition is a record of a past fix, not a claim:
+# "CLAUDE.md drift cleared (`MCP Tools (81) -> (84)`)".  The arrow by itself
+# is not meaningful: live prose commonly uses the same arrow for a workflow
+# ("propose → review → approve_apply"), and must not hide a count later on the
+# line.
 _LINE_TRANSITION = re.compile(r"(->|\u2192|\u2013>|=>)")
+_NUMERIC_TRANSITION = re.compile(
+    r"(?P<old>\d{2,3})(?:\s*\))?\s*(?:->|\u2192|\u2013>|=>)\s*"
+    r"(?:\(\s*)?(?P<new>\d{2,3})"
+)
+_TRANSITION_RECORD_MARKER = re.compile(
+    r"\b(?:histor(?:y|ical)|drift|release|record|changelog|migration|previous|prior)\b",
+    re.IGNORECASE,
+)
+
+
+def is_numeric_transition_claim(line: str, start: int, end: int) -> bool:
+    """Whether a numeric claim participates in a numeric count transition.
+
+    Historical transition records are exempted per claim.  An unrelated
+    workflow arrow elsewhere on the line therefore cannot suppress a live
+    count claim.
+    """
+    for transition in _NUMERIC_TRANSITION.finditer(line):
+        if transition.start("old") < end and start < transition.end("new"):
+            return True
+    return False
+
+
+def is_historical_numeric_transition_line(line: str) -> bool:
+    """Whether a line explicitly records a historical numeric transition."""
+    return _NUMERIC_TRANSITION.search(line) is not None and _TRANSITION_RECORD_MARKER.search(line) is not None
+
 
 # ---------------------------------------------------------------------------
 # Two shapes every pattern above is structurally blind to
@@ -214,7 +244,10 @@ _NOT_A_CONTINUATION = re.compile(r"^\s*(\||#{1,6}\s|[-*+>]\s|\d+[.)]\s|```)")
 # wrong in a new way. ``check_docs_alignment`` resolves both authorities and
 # gates that claim against the right one -- so skipping it here is not an
 # exemption, it is a referral, and the referral is verified by a test.
-TRAINED_MARK = re.compile(r"\b(trained|training|weights|checkpoint|knows|corpus)\b", re.IGNORECASE)
+# ``corpus`` describes the admitted retrieval input and is not evidence that a
+# nearby tool count belongs to the trained weights.  Training-specific markers
+# remain scoped to the trained-surface authority.
+TRAINED_MARK = re.compile(r"\b(trained|training|weights|checkpoint|knows)\b", re.IGNORECASE)
 LIVE_MARK = re.compile(r"\b(live|exposes|currently|current)\b", re.IGNORECASE)
 
 
@@ -277,12 +310,16 @@ def table_tool_claims(lines: list[str]) -> list[tuple[int, int, int, int]]:
                     break
             previous = None
             continue
-        if in_table and cells and _TABLE_ROW_LABEL.match(line) and not _LINE_TRANSITION.search(line):
+        if in_table and cells and _TABLE_ROW_LABEL.match(line):
             for column, (start, _end, text) in enumerate(cells):
                 if column == 0 or (ours is not None and column != ours):
                     continue
                 cell = _TABLE_CELL_COUNT.match(text)
-                if cell is not None:
+                if (
+                    cell is not None
+                    and not is_historical_numeric_transition_line(line)
+                    and not is_numeric_transition_claim(line, start + cell.start(1), start + cell.end(1))
+                ):
                     claims.append((idx + 1, start + cell.start(1), start + cell.end(1), int(cell.group(1))))
         # A row can carry a scope marker of its own ("| MCP tools (trained) |"),
         # so table claims are filtered by the caller, which knows both counts.
@@ -361,12 +398,16 @@ def _doc_files() -> list[Path]:
 def _scan_line_claims(line: str, lineno: int) -> list[tuple[int, int, int, int, str]]:
     """``(lineno, start, end, value, excerpt)`` for every tool claim on one line."""
     found: list[tuple[int, int, int, int, str]] = []
-    if _LINE_TRANSITION.search(line):
+    if is_historical_numeric_transition_line(line):
         return found
     for regex in (_CLAIM_RE, _BADGE_RE, _HEADING_RE, _DISTINCT_RE):
         for match in regex.finditer(line):
             # Checked PER CLAIM, not per line -- see _version_qualifies.
-            if _version_qualifies(line, match) or is_trained_claim(line, match.start(), match.end()):
+            if (
+                _version_qualifies(line, match)
+                or is_trained_claim(line, match.start(), match.end())
+                or is_numeric_transition_claim(line, match.start(1), match.end(1))
+            ):
                 continue
             found.append((lineno, match.start(1), match.end(1), int(match.group(1)), match.group(0)))
     return found

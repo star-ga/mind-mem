@@ -332,6 +332,9 @@ class TestToolCountScoping:
     def test_a_stale_live_claim_is_caught(self):
         findings = scan("MIND-Mem exposes 89 MCP tools over stdio.")
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "89", "102")]
+        workflow = "Built on a proposal → review → approve_apply workflow. 89 MCP tools as the surface — recall uses the admitted corpus."
+        assert [(lineno, value) for lineno, _s, _e, value, _x in cmt.scan_doc_claims([workflow])] == [(1, 89)]
+        assert [(f.kind, f.claimed, f.actual) for f in scan(workflow)] == [("tools", "89", "102")]
         emphasized = scan("The live server currently exposes **95** MCP tools.", rel="train/HF_MODEL_CARD_v4.md")
         assert [(f.claimed, f.actual) for f in emphasized] == [("95", "102")]
         assert scan("The live server currently exposes **102** MCP tools.", rel="train/HF_MODEL_CARD_v4.md") == []
@@ -348,6 +351,9 @@ class TestToolCountScoping:
         assert scan("The weights know **83** MCP tools.", rel="train/HF_MODEL_CARD_v4.md") == []
         emphasized = scan("The weights know **95** MCP tools.", rel="train/HF_MODEL_CARD_v4.md")
         assert [(f.claimed, f.actual) for f in emphasized] == [("95", "83")]
+        live_corpus = "The current corpus includes 95 MCP tools."
+        assert cmt.scan_doc_claims([live_corpus])
+        assert [(f.kind, f.claimed, f.actual) for f in scan(live_corpus)] == [("tools", "95", "102")]
 
     def test_a_live_claim_inside_the_model_card_is_still_live(self):
         card = "train/HF_MODEL_CARD_v4.md"
@@ -463,6 +469,10 @@ class TestRecordScopes:
 
     def test_a_transition_line_is_a_record_of_a_fix(self):
         assert scan("CLAUDE.md drift cleared (`MCP Tools (81) -> (102)`).") == []
+        assert cmt.scan_doc_claims(["CLAUDE.md drift cleared (`MCP Tools (81) -> (102)`)."]) == []
+        historical = "No revision exposed 96 distinct tools: historical surface went 80 → 83 → 89."
+        assert cmt.scan_doc_claims([historical]) == []
+        assert scan(historical, rel="train/HF_MODEL_CARD_v4.md") == []
 
 
 class TestOtherClaims:

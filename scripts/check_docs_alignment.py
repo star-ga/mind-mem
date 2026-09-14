@@ -628,8 +628,8 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
                 findings.append(
                     Finding(rel, lineno, "version", match.group("n"), auth.version, match.group(0), match.start("n"), match.end("n"))
                 )
-    if historical or cmt._LINE_TRANSITION.search(line):
-        # "MCP Tools (81) -> (84)" records a past fix; it is not a claim.
+    if historical or cmt.is_historical_numeric_transition_line(line):
+        # Version-scoped records retain their historical numbers.
         return findings
     if _RECORD_ATTRIBUTION.match(line) and _SCOPE_VERSION.search(line):
         return findings
@@ -660,7 +660,11 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
             _KERNEL_PATTERNS,
             lambda m: None if cmt._version_qualifies(line, m) else auth.mind_kernels,
         ),
-        ("tools", _TOOL_PATTERNS, lambda m: _tool_expected(rel, tool_line, m, auth)),
+        (
+            "tools",
+            _TOOL_PATTERNS,
+            lambda m: None if cmt.is_numeric_transition_claim(line, m.start("n"), m.end("n")) else _tool_expected(rel, tool_line, m, auth),
+        ),
         ("flags", _FLAG_PATTERNS, lambda m: _flag_expected(rel, line, m, auth)),
         (
             "ci_jobs",
@@ -823,6 +827,8 @@ def scan_table_tools(rel: str, lines: list[str], auth: Authorities, scopes: list
     for lineno, start, end, value in cmt.table_tool_claims(lines):
         line = lines[lineno - 1]
         if scopes[lineno - 1] or cmt.version_qualifies_span(line, start, end):
+            continue
+        if cmt.is_numeric_transition_claim(line, start, end):
             continue
         scope = _tool_scope_span(rel, line, start, end)
         expected = auth.trained_tools if scope == "trained" else auth.live_tools
