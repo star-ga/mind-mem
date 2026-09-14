@@ -70,6 +70,7 @@ The sections below this index cover the frequently-used verbs in depth.
 | `mm trace` | Display recent MCP tool calls parsed from structured JSON logs. |
 | `mm export` | Deterministic compliance bundle over the admitted corpus. Two runs over an unchanged corpus produce byte-identical output. |
 | `mm receipt` | Capture and verify bounded local served-ledger evidence. |
+| `mm recompact` | Build a bounded similarity-cluster recompaction proposal (dry-run by default). |
 | `mm compliance` | Redaction detectors, the pre-write screening door, and the provenance policy. |
 | `mm self-update` | Check PyPI for a newer mind-mem and upgrade this install. |
 <!-- END GENERATED: cli-verb-index -->

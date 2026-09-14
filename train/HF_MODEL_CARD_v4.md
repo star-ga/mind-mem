@@ -65,8 +65,9 @@ revision pointer, prior revisions pinned at `v4.1.0`, `v4.0.0-base`,
 > **84** was that revision's *registration* total, which double-counts `recall`
 > (registered in both `public.py` and `recall.py`, and exposed once); the same
 > off-by-one produced v3.9's "81" and the "81 + 3 = 84" arithmetic
-> that this card then rounded up to 96. No revision of mind-mem has ever
-> exposed 96 distinct tools: the historical surface went 80 → 83 → 89 → 94
+> that this card then rounded up to 96.
+> No revision of mind-mem has ever exposed 96 distinct tools:
+> the historical surface went 80 → 83 → 89 → 94
 > → 98 → 102; the current repository candidate is 103.
 > `scripts/check_docs_alignment.py` now recomputes this number from the
 > trained revision on every CI run, so the two copies of this card cannot

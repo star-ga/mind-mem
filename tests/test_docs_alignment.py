@@ -332,6 +332,9 @@ class TestToolCountScoping:
     def test_a_stale_live_claim_is_caught(self):
         findings = scan("MIND-Mem exposes 89 MCP tools over stdio.")
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "89", "102")]
+        workflow = "Built on a proposal → review → approve_apply workflow. 89 MCP tools as the surface — recall uses the admitted corpus."
+        assert [(lineno, value) for lineno, _s, _e, value, _x in cmt.scan_doc_claims([workflow])] == [(1, 89)]
+        assert [(f.kind, f.claimed, f.actual) for f in scan(workflow)] == [("tools", "89", "102")]
         emphasized = scan("The live server currently exposes **95** MCP tools.", rel="train/HF_MODEL_CARD_v4.md")
         assert [(f.claimed, f.actual) for f in emphasized] == [("95", "102")]
         assert scan("The live server currently exposes **102** MCP tools.", rel="train/HF_MODEL_CARD_v4.md") == []
@@ -348,6 +351,9 @@ class TestToolCountScoping:
         assert scan("The weights know **83** MCP tools.", rel="train/HF_MODEL_CARD_v4.md") == []
         emphasized = scan("The weights know **95** MCP tools.", rel="train/HF_MODEL_CARD_v4.md")
         assert [(f.claimed, f.actual) for f in emphasized] == [("95", "83")]
+        live_corpus = "The current corpus includes 95 MCP tools."
+        assert cmt.scan_doc_claims([live_corpus])
+        assert [(f.kind, f.claimed, f.actual) for f in scan(live_corpus)] == [("tools", "95", "102")]
 
     def test_a_live_claim_inside_the_model_card_is_still_live(self):
         card = "train/HF_MODEL_CARD_v4.md"
@@ -463,6 +469,28 @@ class TestRecordScopes:
 
     def test_a_transition_line_is_a_record_of_a_fix(self):
         assert scan("CLAUDE.md drift cleared (`MCP Tools (81) -> (102)`).") == []
+        assert cmt.scan_doc_claims(["CLAUDE.md drift cleared (`MCP Tools (81) -> (102)`)."]) == []
+        historical = "No revision exposed 96 distinct tools: historical surface went 80 → 83 → 89."
+        assert cmt.scan_doc_claims([historical]) == []
+        assert scan(historical, rel="train/HF_MODEL_CARD_v4.md") == []
+        line = "Historical tool migration 81 -> 84; currently 102 MCP tools."
+        assert _cmt_claims(line) == [(1, 102)]
+        findings = scan(line, auth=make_authorities(live_tools=103))
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "102", "103")]
+        unqualified = "Historical migration 81 -> 84. MIND-Mem has 102 MCP tools."
+        assert _cmt_claims(unqualified) == [(1, 102)]
+        findings = scan(unqualified, auth=make_authorities(live_tools=103))
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "102", "103")]
+        correct = "Historical tool migration 81 -> 84; currently 103 MCP tools."
+        assert scan(correct, auth=make_authorities(live_tools=103)) == []
+        line = "Historical migration 81 -> 84; weights know 83 MCP tools; live server exposes 102 MCP tools."
+        assert _cmt_claims(line) == [(1, 102)]
+        findings = scan(line, auth=make_authorities(live_tools=103))
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "102", "103")]
+        line = "Release v5.0.3 migration 81 -> 84; current server exposes 102 MCP tools."
+        assert _cmt_claims(line) == [(1, 102)]
+        findings = scan(line, auth=make_authorities(live_tools=103, version="5.0.3"))
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "102", "103")]
 
 
 class TestOtherClaims:
@@ -751,6 +779,10 @@ class TestTableCellToolClaims:
     def test_a_transition_row_is_a_record_not_a_claim(self):
         body = "| Item | MIND-Mem |\n|------|----------|\n| MCP tools | 89 -> 102 |\n"
         assert _cmt_claims(body) == []
+        mixed = "| Feature | History | MIND-Mem |\n|---------|---------|----------|\n| MCP tools | 81 -> 84 | 102 |\n"
+        assert _cmt_claims(mixed) == [(3, 102)]
+        findings = cda.scan_text("docs/comparison.md", mixed.splitlines(), make_authorities(live_tools=103))
+        assert [(f.lineno, f.kind, f.claimed, f.actual) for f in findings] == [(3, "tools", "102", "103")]
 
     def test_the_alignment_gate_sees_the_same_cell(self):
         findings = cda.scan_text("docs/comparison.md", self.COMPARISON.splitlines(), make_authorities())

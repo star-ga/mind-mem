@@ -106,7 +106,7 @@ class stress tests); marked Python 3.14 matrix rows as
 `continue-on-error` (still pre-release). No source/test changes.
 Builds on **v4.0.5** (released 2026-05-14) — Docs/badges aligned + release
 workflow idempotent. README badges + comparison table now match
-ground truth (`tests-5155+`, `clients-18`, `audit-cross-model`, `84` MCP
+ground truth (`tests-5155+`, `clients-18`, `audit-cross-model`, v4.0.5's `84` MCP
 tools); CLAUDE.md drift cleared (`MCP Tools (81) → (84)`,
 `16 → 15` clients). `.github/workflows/release.yml` `pypa/gh-action-pypi-publish`
 step passes `skip-existing: true` so tag re-pushes and local-twine
