@@ -83,6 +83,12 @@ class TestReceiptRoundTrip:
         with pytest.raises(receipts.ReceiptUnavailable):
             receipts.export_receipt(ws)
 
+        no_parent = tmp_path / "no-ledger-parent"
+        (no_parent / "mind-mem.json").parent.mkdir()
+        (no_parent / "mind-mem.json").write_text(json.dumps({"served_ledger": {"enabled": True}}), encoding="utf-8")
+        with pytest.raises(receipts.ReceiptUnavailable, match="directory is absent"):
+            receipts.export_receipt(no_parent)
+
 
 class TestReceiptIntegrity:
     def test_changed_row_is_rejected_even_when_package_digest_is_updated(self, tmp_path: Path) -> None:

@@ -216,9 +216,16 @@ def export_receipt(
 
     ledger = Path(ledger_path(workspace))
     head_path = Path(workspace) / HEAD_RELPATH
-    with _append_lock(workspace):
-        ledger_raw, ledger_identity = _read_stable(ledger, limit=max_bytes)
-        head_raw, head_identity = _read_stable(head_path, limit=4096, optional=True)
+    if not ledger.parent.exists():
+        raise ReceiptUnavailable(f"required evidence directory is absent: {ledger.parent}")
+    try:
+        with _append_lock(workspace):
+            ledger_raw, ledger_identity = _read_stable(ledger, limit=max_bytes)
+            head_raw, head_identity = _read_stable(head_path, limit=4096, optional=True)
+    except ReceiptError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise ReceiptUnavailable(f"cannot acquire the evidence snapshot lock: {exc}") from exc
     assert ledger_raw is not None
     rows = _decode_rows(ledger_raw, max_rows=max_rows)
     if head_raw is None:

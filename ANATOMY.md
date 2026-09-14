@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1578 | **Est. tokens:** ~4685649
-**Generated:** 2026-09-14 10:10 UTC
+**Files:** 1578 | **Est. tokens:** ~4685819
+**Generated:** 2026-09-14 10:12 UTC
 
 ## Token Budget Guide
 
@@ -74,7 +74,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 234 | ~1073858 |
+| `src/mind_mem/` | 234 | ~1073939 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~13934 |
@@ -88,7 +88,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 692 | ~2057807 |
+| `tests/` | 692 | ~2057896 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -963,7 +963,7 @@
 - `resume_brief.py` (~2720 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retention_class.py` (~1840 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retrieval_graph.py` (~8339 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
-- `retrieval_receipts.py` (~4215 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `retrieval_receipts.py` (~4296 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
 - `review_batch.py` (~3102 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `review_cli.py` (~2207 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1693,7 +1693,7 @@
 - `test_retention_class.py` (~2883 tok, huge) — RA.4 — the retention class, and the two things it must refuse to be.
 - `test_retrieval_diagnostics.py` (~2428 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
-- `test_retrieval_receipts.py` (~1941 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_retrieval_receipts.py` (~2030 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_retrieval_trace.py` (~978 tok, large) — Tests for v3.3.0 per-feature retrieval attribution."""
 - `test_retrieval_trace_wiring.py` (~3142 tok, huge) — ``retrieval_trace`` wired into the live recall pipeline.
 - `test_review_batch.py` (~2787 tok, huge) — # Copyright 2026 STARGA, Inc.
