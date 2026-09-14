@@ -705,7 +705,11 @@ class RecallRequest(BaseModel):
 class ProposeUpdateRequest(BaseModel):
     block_type: str = Field(..., description="Block type: decision | task")
     statement: str = Field(..., min_length=1, max_length=500, description="The proposal statement")
-    rationale: str = Field("", max_length=2000, description="Rationale for the proposal")
+    rationale: str = Field(
+        "",
+        max_length=2000,
+        description="Written reason required for decisions and tasks: at least 8 non-whitespace characters",
+    )
     tags: str = Field("", max_length=500, description="Comma-separated tags")
     confidence: str = Field("medium", description="Confidence level: low | medium | high")
 

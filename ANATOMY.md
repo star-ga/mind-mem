@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1624 | **Est. tokens:** ~4789271
-**Generated:** 2026-09-14 16:32 UTC
+**Files:** 1625 | **Est. tokens:** ~4790645
+**Generated:** 2026-09-14 16:47 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 94 | ~211309 |
+| `docs/` | 94 | ~211734 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -69,7 +69,7 @@
 | `sdk/js/src/` | 5 | ~3113 |
 | `sdk/js/test/` | 2 | ~3654 |
 | `sdk/release/` | 3 | ~4640 |
-| `sdk/spec/` | 2 | ~5702 |
+| `sdk/spec/` | 2 | ~5717 |
 | `sdk/spec/fixtures/` | 7 | ~926 |
 | `security/` | 5 | ~24696 |
 | `skills/apply-proposal/` | 1 | ~345 |
@@ -77,20 +77,20 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 237 | ~1078895 |
-| `src/mind_mem/api/` | 5 | ~27237 |
+| `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15387 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~16138 |
-| `src/mind_mem/mcp/tools/` | 29 | ~122708 |
+| `src/mind_mem/mcp/tools/` | 29 | ~122688 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~95777 |
-| `tests/` | 715 | ~2124124 |
+| `tests/` | 716 | ~2125056 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -335,7 +335,7 @@
 
 - `agent-comm.md` (~1251 tok, large) — Agent-to-agent messaging (`mm send` / `mm inbox`)
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
-- `api-reference.md` (~2836 tok, huge) — API Reference
+- `api-reference.md` (~2858 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1626 tok, huge) — Append-Only Audit Logs — Operator Runbook
 - `architecture.md` (~3506 tok, huge) — Architecture
 ### `docs/audit/`
@@ -467,7 +467,7 @@
 - `federation-setup.md` (~2406 tok, huge) — mind-mem federation & multi-machine setup
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `governance.md` (~1740 tok, huge) — MIND-Mem — governance design (5 layers)
+- `governance.md` (~2143 tok, huge) — MIND-Mem — governance implementation and boundaries
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `install-guide.md` (~2914 tok, huge) — Installation guide — every step + every option
@@ -684,7 +684,7 @@
 - `scan.json` (~64 tok, small) — Keys: _schema_version, backend, checks
 ### `sdk/spec/`
 
-- `openapi.json` (~5030 tok, huge) — Keys: components, info, openapi, paths
+- `openapi.json` (~5045 tok, huge) — Keys: components, info, openapi, paths
 ### `security/`
 
 - `api-security-2026-04-28.md` (~5929 tok, huge) — MIND-Mem v3.1.8 — API / MCP Surface Security Audit
@@ -736,7 +736,7 @@
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~4581 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `grpc_server.py` (~3956 tok, huge) — gRPC wire protocol for mind-mem (v4.0 prep).
-- `rest.py` (~15963 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
+- `rest.py` (~15985 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
 
 - `append_only.py` (~3657 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -920,7 +920,7 @@
 - `core.py` (~2862 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~15652 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~15632 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~7091 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1835 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
@@ -1647,6 +1647,7 @@
 - `test_ra1_serving_receipt_binds_engine_config.py` (~3802 tok, huge) — The recorded receipt must bind the config the ENGINE consumed — and the binding must not
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
+- `test_ra4_proposal_rationale.py` (~932 tok, large) — Every accepted proposal type needs the caller's written rationale."""
 - `test_read_surface_admission.py` (~6331 tok, huge) — Every read surface, swept with a three-status canary.
 - `test_read_surface_classification.py` (~8993 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~4156 tok, huge) — # Copyright 2026 STARGA, Inc.

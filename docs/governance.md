@@ -1,54 +1,92 @@
-# MIND-Mem — governance design (5 layers)
+# MIND-Mem — governance implementation and boundaries
 
-MIND-Mem is the L4 retrieval-time layer of the MIND ecosystem: persistent, auditable, contradiction-safe memory for AI agents. This document is the local five-layer mapping; the canonical description lives in [`512-mind/docs/governance.md`](https://github.com/star-ga/512-mind/blob/main/docs/governance.md).
+MIND-Mem provides governed memory and retrieval for the MIND ecosystem. This
+document maps the five governance layers to current local implementations.
+The [roadmap](../ROADMAP.md) owns completion status; the
+[retrieval receipt contract](specs/retrieval-receipt-contract.md) defines the
+remaining CVS, MIND Witness and canonical 512 lineage work.
 
 ## Layer summary
 
 | Layer | What it enforces | Primary source | Verified by |
 |---|---|---|---|
-| **L1 architectural** | Acyclicity, governance-kernel coverage, depth/equality/redundancy/purity floors of MIND-Mem | `.arch-mind/rules.mind` (this repo) | `arch-mind check-rules` (CI per-repo) |
-| **L2 training-time** | Local-model fine-tune integrity (`mind-mem-4b` checkpoint provenance) | `docs/mind-mem-4b-setup.md` + planned `model_provenance.py` | Checkpoint manifest + reproducibility runbook |
-| **L3 inference-time** | Per-recall request shape; rate limiting; auth-token validation | `src/mind_mem/mcp_server.py` + `src/mind_mem/auth.py` | MCP server tests; auth-failure tests |
-| **L4 retrieval-time** | **The load-bearing layer.** Contradiction detection, drift, proposal queue, audit chain (TAG_v1), tier decay, at-rest encryption | `src/mind_mem/governance/*.py` + `src/mind_mem/core/store.py` | `tests/test_governance.py`, `tests/test_audit.py`, `tests/jepsen/` |
-| **L5 continuous** | CI on every PR; planned nightly arch-mind regression; PyPI release on tag | `.github/workflows/ci.yml`, `.github/workflows/release.yml` | OIDC trusted-publishing via PyPI; LoCoMo benchmark snapshot per release |
+| **L1 architectural** | Declared architecture rules and fixture/source checks | `.arch-mind/rules.mind`, `.arch-mind/rescan.py` | `tests/test_arch_mind_rules_gate.py`, `tests/test_arch_mind_fixture_provenance.py` |
+| **L2 training-time** | Checkpoint audit, publisher allowlist, training/evaluation provenance | `src/mind_mem/model_audit.py`, `src/mind_mem/model_provenance.py` | `tests/test_model_provenance.py`; training-readiness reports remain separate from model evaluation |
+| **L3 request-time** | Authentication, tool scope, namespace admission and rate limits | `src/mind_mem/mcp/infra/`, `src/mind_mem/api/auth.py`, `src/mind_mem/namespaces.py` | Authentication, request-snapshot and namespace controls |
+| **L4 memory operations** | Admitted reads, governed writes, contradiction/drift analysis and evidence | `src/mind_mem/admissibility.py`, `src/mind_mem/governance_gate.py`, `src/mind_mem/served_ledger.py` | Admission, proposal/apply, lifecycle and served-receipt controls |
+| **L5 continuous** | Required CI and release preflight | `.github/workflows/ci.yml`, `.github/workflows/release.yml` | OS/Python matrix, documentation/identity gates and exact-commit release checks |
 
 ## L1 — Architectural
 
-`.arch-mind/rules.mind` declares nine `[arch_rule]` constraints. Floors recalibrated 2026-05-01 (see `audit_response.md` F1) for the Python+MIND hybrid reality. Per-rule current values are in `audit_response.md`.
-
-The cross-repo contract: a regression on any of the nine rules halts MIND-Mem's nightly regression and surfaces in the ecosystem health dashboard.
+`.arch-mind/rules.mind` declares nine `[arch_rule]` constraints. The pytest
+gate checks committed fixtures, pinned thresholds and source import edges.
+Fixture regeneration uses a Git archive of the selected commit so nested
+worktrees do not become part of the measured product. Historical scans are
+retained separately; a prior passing fixture is not proof of a changed tree.
 
 ## L2 — Training-time
 
 MIND-Mem ships a local fine-tuned model (`star-ga/mind-mem-4b`, Qwen3.5-4B base). L2 governance covers:
 
-- **Checkpoint provenance.** Every release of `mind-mem-4b` is reproducible from the data + base + recipe documented in `docs/mind-mem-4b-setup.md`.
-- **Bundle integrity.** The Q4_K_M GGUF format ships with the standard llama.cpp checksum.
-- **Planned: model provenance v1.0.** `src/mind_mem/model_provenance.py` (currently in-flight on local main) will record the source-tree SHA, training-data hash, and base-model hash into a manifest that travels with every fine-tuned weights bundle.
+- **Checkpoint audit.** `model_provenance.py` implements a declared-upstream
+  publisher allowlist used by the model audit. An allowed publisher name does
+  not independently prove the weights' origin or training quality.
+- **Training evidence.** The setup and training recipe document the current
+  model and planned refresh. The published checkpoint was trained against an
+  earlier tool surface. Runtime additions and development-data coverage do not
+  establish competence on those additions or an uncontaminated evaluation.
+- **Release separation.** A package release, model-weight release and training
+  run are separate events. No training replay or bit-identical weight
+  reproduction is inferred from a package CI result.
 
 ## L3 — Inference-time
 
-MIND-Mem's request-time surface is the MCP server. Every MCP tool call flows through:
+MIND-Mem exposes MCP and optional REST/gRPC transports. The MCP serving boundary
+provides:
 
-1. **Auth check.** `X-MindMem-Token` header validated against the configured token list.
-2. **Rate limit.** Sliding-window per-token + global; the limiter primitive is shared with 512-mind.
-3. **Tool dispatch.** 103 MCP tools, each with a typed input schema. Schema mismatch rejects with a structured error.
-4. **Audit chain entry.** The request is recorded with the calling `auth_hash` (when supplied) so a downstream auditor can replay.
+1. **Authentication and scope.** HTTP bearer authentication supplies a verified
+   subject and tool scope. One request snapshot binds namespace identity;
+   missing or inconsistent authentication context cannot become a broad read.
+   Local stdio scope is a separate deployment setting.
+2. **Rate limits.** Client identifiers can key rate limits but do not grant
+   namespace identity. Namespace access follows the workspace's explicit ACL.
+3. **Tool dispatch.** 103 MCP tools have typed schemas and capability checks.
+4. **Evidence scope.** Observability logs describe calls. Governed-write and
+   serving receipts have their own explicit contracts; a logged invocation is
+   not proof of successful execution or semantic correctness.
 
 ## L4 — Retrieval-time
 
-The load-bearing layer. Every `recall` (read) or `propose_update` (write) flows through:
-
-1. **Contradiction detection.** Conflicting memories surface as a structured contradiction event on the witness chain.
-2. **Drift detection.** Long-window memory-shape monitoring; an alert fires if the corpus shape diverges from the recent baseline.
-3. **Proposal queue.** Writes go to the proposal queue; approval requires either explicit operator sign-off or automated approval under a declared policy (rate-limited, contradiction-free).
-4. **Audit chain.** TAG_v1 NUL-separated hash preimages over Q16.16-scored entries. The chain is replayable: feed the same inputs to the same source-tree SHA and get the same hash.
-5. **At-rest encryption.** Optional authenticated encryption of on-disk block files (HMAC-SHA256 keystream + encrypt-then-MAC with a PBKDF2-derived key — *not* AES/SQLCipher; the FTS5/sqlite-vec recall index is not encrypted). Decryption is per-process; the running server is the only entity that can read the plaintext.
+1. **Read admission.** Serving paths apply source lifecycle, release and
+   namespace rules before returning content. Index metadata is not a substitute
+   for canonical source admission. Complete surface review remains tracked in M5.
+2. **Analysis.** Contradiction and drift detectors are explicit mechanisms;
+   their existence does not mean every request executes a scan or that every
+   semantic contradiction is detectable.
+3. **Governed changes.** `propose_update` stages a signal. Proposal approval and
+   application are separate governed operations. Required-provenance profiles
+   validate attribution without inventing missing legacy fields.
+4. **Serving evidence.** Recall attestations and the append-only served ledger
+   bind the declared local retrieval result and request coordinates. A recorder
+   failure is reported as unproven. Local consistency does not establish an
+   independent witness, portable occurrence identity or semantic entailment.
+5. **Encryption.** The default block-file format uses a PBKDF2-derived
+   HMAC-SHA256 keystream with encrypt-then-MAC. Opt-in `v4.tenant_kms` uses
+   AES-256-GCM when its key and optional crypto dependency are configured.
+   Existing files require explicit re-encryption to migrate. The local
+   FTS5/sqlite-vec recall index remains plaintext; block-file encryption does
+   not encrypt every copy of retrieved content.
 
 ### Proposal field screening
 
-`propose_update` preserves the supplied reason as `Rationale` in its staged
-signal. When redaction is enabled, screening covers the statement, rationale,
+`propose_update` requires the caller's rationale for both `decision` and `task`
+proposals. At least eight non-whitespace characters are required; omitted,
+blank and whitespace-padded short reasons are refused before content screening
+or proposal writes. The server does not invent a rationale. Clients that
+previously omitted the reason on task proposals must now supply it.
+
+The supplied reason is preserved as `Rationale` in the staged signal. When
+redaction is enabled, screening covers the statement, rationale,
 tags, confidence and supplied provenance fields before any redaction audit
 metadata is recorded. A `reject` policy refuses matching content before the
 proposal is written. A `redact` policy may rewrite content fields, including
@@ -60,33 +98,29 @@ its rationale does not approve it.
 
 ## L5 — Continuous
 
-The drift-detection layer:
-
-- **CI** on every push and PR — full pytest matrix (12,305 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
-- **PyPI release** on tag push via OIDC trusted publishing (no long-lived tokens).
-- **LoCoMo benchmark snapshot** per release; regression on any axis (mean / adversarial / temporal) is documented in CHANGELOG.
-
-Planned:
-
-- **Nightly arch-mind regression** — `.github/workflows/arch-mind.yml`.
-- **Adversarial-memory long-haul** — Jepsen-style stress tests on a long-running runner.
+- **CI** on main pushes and pull requests — full pytest matrix (12,308 test functions across the suite; counted from source, so the number is the tree's and not one machine's).
+- **Release preflight** requires matching versions, mainline ancestry, passing
+  CI for the exact commit, an unused package version, tests, current public
+  documentation and readable code-scanning results before publishing.
+- **PyPI publication** uses OIDC trusted publishing. Existing released tags and
+  withdrawn versions remain immutable.
+- **Benchmarks** need their own frozen workloads and source/hardware evidence.
+  The release workflow does not establish a new model-quality result or a
+  LoCoMo benchmark for every release. Planned long-running and cross-deployment
+  studies remain separate roadmap items.
 
 ## Cross-repo discipline
 
-MIND-Mem is one consumer of the 512 kernel; the same kernel runs in:
+The adopted boundary is: agents agree terms, 512-MIND evaluates admissibility,
+MIND-Mem serves within the admitted scope, and independent CVS records evidence
+through an explicit adapter. Settlement is separate. MIND Witness is the
+MIND-specific CVS adapter, not proof that MIND independently witnessed itself.
 
-- `512-mind` (kernel itself)
-- `mind-inference` (transformer inference)
-- `rfn-mind` (RFN classifier inference)
-- `MindLLM` (request-time HTTP surface; uses MIND-Mem for L4)
-- `mind-mem` (this repo — L4 retrieval-time)
-- `arch-mind` (L1 ecosystem-wide)
-
-A change to the kernel surface in 512-mind propagates here through the MIND-Mem MCP server's auth-hash binding; the consumer's audit-chain replay catches any mismatch.
-
----
-
-*Memory governance design v3.1.x, 2026-05-02. Canonical kernel description: [`512-mind/docs/governance.md`](https://github.com/star-ga/512-mind/blob/main/docs/governance.md).*
+The canonical 512 commitment, 512-MIND implementation commitment and MIND
+language-spec identity identify different objects. Current local spec binding
+must not be described as cryptographic canonical lineage until the producer
+commitment and runtime consumer tests required by RE.5 exist. The receipt
+contract and roadmap track those dependencies explicitly.
 
 
 ### Ledger preservation during backup and restore

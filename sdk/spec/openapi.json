@@ -85,7 +85,7 @@
           },
           "rationale": {
             "default": "",
-            "description": "Rationale for the proposal",
+            "description": "Written reason required for decisions and tasks: at least 8 non-whitespace characters",
             "maxLength": 2000,
             "title": "Rationale",
             "type": "string"
