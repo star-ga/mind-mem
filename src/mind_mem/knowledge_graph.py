@@ -1411,6 +1411,30 @@ class KnowledgeGraph:
                 ).fetchall()
         return [proposal for row in rows if (proposal := self.get_entity_merge_proposal(row["proposal_id"])) is not None]
 
+    def _validate_applied_entity_merge_state(self, proposal: EntityMergeProposal) -> None:
+        """Verify the persisted lineage and edge behind an applied proposal.
+
+        An idempotent approval must not turn a missing or edited edge into an
+        ``applied`` success.  Keep this check under the caller's transaction
+        lock so the proposal, lineage, and exact SAME_AS edge are one state.
+        """
+        lineage = self._conn.execute(
+            "SELECT winner_id, loser_id, status, same_as_source_block_id FROM entity_merge_lineage WHERE proposal_id = ?",
+            (proposal.proposal_id,),
+        ).fetchone()
+        if lineage is None or lineage["status"] != PROPOSAL_APPLIED:
+            raise EntityMergeError("entity merge lineage is missing or already reversed")
+        if (lineage["winner_id"], lineage["loser_id"]) != (proposal.winner_id, proposal.loser_id):
+            raise EntityMergeError("entity merge proposal and lineage endpoints do not match")
+        if lineage["same_as_source_block_id"] != proposal.proposal_id:
+            raise EntityMergeError("entity merge lineage source does not match proposal")
+        exists = self._conn.execute(
+            "SELECT 1 FROM edges WHERE subject = ? AND predicate = ? AND object = ? AND source_block_id = ?",
+            (proposal.winner_id, Predicate.SAME_AS.value, proposal.loser_id, proposal.proposal_id),
+        ).fetchone()
+        if exists is None:
+            raise EntityMergeError("entity merge SAME_AS edge is missing or changed")
+
     def approve_entity_merge(self, proposal_id: str) -> EntityMergeProposal:
         """Apply a staged proposal by adding one governed ``SAME_AS`` edge.
 
@@ -1422,9 +1446,6 @@ class KnowledgeGraph:
         if proposal is None:
             raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
         _validate_entity_merge_identity(proposal_id, proposal)
-        if proposal.status == PROPOSAL_APPLIED:
-            require_admission(proposal_id)
-            return proposal
         if proposal.status in {PROPOSAL_REJECTED, MERGE_REVERSED}:
             raise EntityMergeError(f"cannot approve entity merge in status {proposal.status!r}")
         require_admission(proposal_id)
@@ -1437,6 +1458,7 @@ class KnowledgeGraph:
                     raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
                 _validate_entity_merge_identity(proposal_id, current)
                 if current.status == PROPOSAL_APPLIED:
+                    self._validate_applied_entity_merge_state(current)
                     self._conn.commit()
                     return current
                 if current.status != PROPOSAL_STAGED:
@@ -1499,23 +1521,10 @@ class KnowledgeGraph:
         with self._lock:
             self._conn.execute("BEGIN IMMEDIATE")
             try:
-                lineage = self._conn.execute(
-                    "SELECT winner_id, loser_id, status, same_as_source_block_id FROM entity_merge_lineage WHERE proposal_id = ?",
-                    (proposal_id,),
-                ).fetchone()
-                if lineage is None or lineage["status"] != PROPOSAL_APPLIED:
-                    raise EntityMergeError("entity merge lineage is missing or already reversed")
-                if (lineage["winner_id"], lineage["loser_id"]) != (proposal.winner_id, proposal.loser_id):
-                    raise EntityMergeError("entity merge proposal and lineage endpoints do not match")
-                exists = self._conn.execute(
-                    "SELECT 1 FROM edges WHERE subject = ? AND predicate = ? AND object = ? AND source_block_id = ?",
-                    (lineage["winner_id"], Predicate.SAME_AS.value, lineage["loser_id"], lineage["same_as_source_block_id"]),
-                ).fetchone()
-                if exists is None:
-                    raise EntityMergeError("entity merge SAME_AS edge is missing or changed")
+                self._validate_applied_entity_merge_state(proposal)
                 self._conn.execute(
                     "DELETE FROM edges WHERE subject = ? AND predicate = ? AND object = ? AND source_block_id = ?",
-                    (lineage["winner_id"], Predicate.SAME_AS.value, lineage["loser_id"], lineage["same_as_source_block_id"]),
+                    (proposal.winner_id, Predicate.SAME_AS.value, proposal.loser_id, proposal.proposal_id),
                 )
                 self._conn.execute("UPDATE entity_merge_lineage SET status = ? WHERE proposal_id = ?", (MERGE_REVERSED, proposal_id))
                 self._conn.execute("UPDATE entity_merge_proposals SET status = ? WHERE proposal_id = ?", (MERGE_REVERSED, proposal_id))

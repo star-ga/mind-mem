@@ -203,6 +203,64 @@ def test_connected_component_and_forged_proposal_refuse_with_access_tokens(ws, m
         assert kg._conn.execute("SELECT COUNT(*) FROM edges WHERE predicate = 'same_as'").fetchone()[0] == 2
 
 
+def _install_entity_merge_token(monkeypatch):
+    current = {"scope": "user"}
+
+    def token():
+        return AccessToken(
+            token="fixture-entity-merge-integrity",
+            client_id="fixture-client",
+            scopes=[current["scope"]],
+            claims={"sub": "fixture-admin"},
+        )
+
+    monkeypatch.setattr(acl, "get_access_token", token)
+    return current
+
+
+def test_applied_merge_missing_edge_refuses_idempotent_approval(ws, monkeypatch):
+    """An applied proposal cannot hide a deleted SAME_AS edge."""
+    current = _install_entity_merge_token(monkeypatch)
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        kg.entities.resolve("winner")
+        kg.entities.resolve("loser")
+    staged = json.loads(propose_entity_merge("winner", "loser", "reviewed relation identity"))
+    current["scope"] = "admin"
+    assert json.loads(approve_entity_merge(staged["proposal_id"]))["status"] == "applied"
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        kg._conn.execute(
+            "DELETE FROM edges WHERE predicate = 'same_as' AND source_block_id = ?",
+            (staged["proposal_id"],),
+        )
+        kg._conn.commit()
+    refused = json.loads(approve_entity_merge(staged["proposal_id"]))
+    assert "missing or changed" in refused["error"]
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        assert kg._conn.execute("SELECT COUNT(*) FROM edges WHERE predicate = 'same_as'").fetchone()[0] == 0
+        assert kg.get_entity_merge_proposal(staged["proposal_id"]).status == "applied"
+
+
+def test_applied_merge_mutated_lineage_refuses_idempotent_approval(ws, monkeypatch):
+    """An applied proposal cannot approve a lineage with changed endpoints."""
+    current = _install_entity_merge_token(monkeypatch)
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        kg.entities.resolve("winner")
+        kg.entities.resolve("loser")
+    staged = json.loads(propose_entity_merge("winner", "loser", "reviewed relation identity"))
+    current["scope"] = "admin"
+    assert json.loads(approve_entity_merge(staged["proposal_id"]))["status"] == "applied"
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        kg._conn.execute(
+            "UPDATE entity_merge_lineage SET loser_id = 'forged' WHERE proposal_id = ?",
+            (staged["proposal_id"],),
+        )
+        kg._conn.commit()
+    refused = json.loads(approve_entity_merge(staged["proposal_id"]))
+    assert "endpoints do not match" in refused["error"]
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        assert kg._conn.execute("SELECT COUNT(*) FROM edges WHERE predicate = 'same_as'").fetchone()[0] == 1
+
+
 def test_graph_query_expands_equivalence_at_each_bounded_hop(ws, monkeypatch):
     """A SAME_AS component supplies edges at the current BFS level."""
     with KnowledgeGraph(default_db_path(ws)) as kg:
