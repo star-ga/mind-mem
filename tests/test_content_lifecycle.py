@@ -193,6 +193,19 @@ def test_compliance_export_door_applies_revocation_before_serialization(tmp_path
     assert "D-20260901-004" not in {row["_id"] for row in admitted}
 
 
+def test_accountability_waste_does_not_name_revoked_credentials(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    corpus = Path(workspace) / "decisions/DECISIONS.md"
+    corpus.write_text(
+        corpus.read_text(encoding="utf-8").replace("[D-20260901-004]\nStatus: active", "[D-20260901-004]\nStatus: revoked"),
+        encoding="utf-8",
+    )
+    from mind_mem.accountability_views import waste_view
+
+    report = waste_view(workspace)
+    assert "D-20260901-004" not in report.unserved_ids
+
+
 def test_public_direct_fetch_withholds_revoked_credential_but_serves_decision(tmp_path: Path, monkeypatch) -> None:
     from mind_mem.mcp.tools import memory_ops
 

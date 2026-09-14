@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1581 | **Est. tokens:** ~4698806
-**Generated:** 2026-09-14 10:50 UTC
+**Files:** 1581 | **Est. tokens:** ~4699375
+**Generated:** 2026-09-14 10:56 UTC
 
 ## Token Budget Guide
 
@@ -74,21 +74,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 235 | ~1077755 |
+| `src/mind_mem/` | 235 | ~1077773 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15393 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
-| `src/mind_mem/mcp/tools/` | 29 | ~117495 |
+| `src/mind_mem/mcp/tools/` | 29 | ~117656 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 2 | ~2005 |
 | `src/mind_mem/storage/` | 2 | ~11515 |
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92803 |
-| `tests/` | 693 | ~2063093 |
+| `tests/` | 693 | ~2063483 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -905,7 +905,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~21854 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~22015 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1571 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -927,7 +927,7 @@
 - `model_signing.py` (~2998 tok, huge) — Ed25519 manifest signing for ``mm audit-model`` checkpoints.
 - `mrs.py` (~5273 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~3184 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `namespace_retrieval.py` (~3932 tok, huge) — Configuration and enforcement for namespace retrieval properties.
+- `namespace_retrieval.py` (~3950 tok, huge) — Configuration and enforcement for namespace retrieval properties.
 - `namespaces.py` (~5138 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
 - `novel_term_gate.py` (~1729 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `observability.py` (~3828 tok, huge) — mind-mem Observability Module. Zero external deps.
@@ -1291,7 +1291,7 @@
 - `test_consolidation_index_path.py` (~2113 tok, huge) — Regression: consolidation tools must read the index the product writes.
 - `test_consolidation_maturity_gate.py` (~3750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_constants.py` (~371 tok, medium) — Tests for recall constants module."""
-- `test_content_lifecycle.py` (~3099 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_content_lifecycle.py` (~3227 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_content_source_provenance.py` (~5229 tok, huge) — Tests for content-provenance tagging (roadmap T-001).
 - `test_context_core.py` (~3175 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_context_pack.py` (~2584 tok, huge) — Tests for context_pack rules: adjacency, diversity, pronoun rescue."""
@@ -1467,7 +1467,7 @@
 - `test_llm_noise_profile_wiring.py` (~7741 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_locomo_suite.py` (~2743 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_longmemeval_full_run.py` (~1696 tok, huge) — The full-run driver must score the same pool the canonical harness does.
-- `test_m2_m3_namespace_contract.py` (~1978 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
+- `test_m2_m3_namespace_contract.py` (~2240 tok, huge) — Source-bound M2/M3 namespace reachability and floor controls."""
 - `test_maintenance_migrate.py` (~741 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_maintenance_migrate_wiring.py` (~3993 tok, huge) — ``maintenance_migrate`` is actually reachable — from apply and from ``mm``.
 - `test_maintenance_scripts_ship.py` (~1434 tok, large) — Every maintenance script listed must actually reach an install.

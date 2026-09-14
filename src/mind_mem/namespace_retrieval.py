@@ -201,7 +201,12 @@ def filter_search_hits(hits: list[dict[str, Any]], config: Mapping[str, Any] | N
     return out
 
 
-def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def always_injected_hits(
+    workspace: str,
+    config: Mapping[str, Any] | None,
+    *,
+    agent_id: str | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Read bounded, admitted behaviour blocks from configured always namespaces."""
     from .admissibility import admit_corpus
     from .block_parser import parse_file
@@ -211,7 +216,7 @@ def always_injected_hits(workspace: str, config: Mapping[str, Any] | None) -> tu
     selected: list[dict[str, Any]] = []
     selected_identities: set[tuple[str, str, str]] = set()
     remaining_global = _MAX_ALWAYS_ITEMS
-    acl = NamespaceManager(workspace)
+    acl = NamespaceManager(workspace, agent_id=agent_id)
     declarations = _properties(config)
     import glob
 

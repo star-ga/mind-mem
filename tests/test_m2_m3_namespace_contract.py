@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from mind_mem._recall_core import knee_cutoff, recall
+from mind_mem.audit_context import bind_current_agent
 from mind_mem.block_store import MarkdownBlockStore
 from mind_mem.init_workspace import init
 from mind_mem.mcp.infra.workspace import use_workspace
@@ -113,6 +114,7 @@ def test_pack_injects_only_admitted_behavior_blocks_under_hard_cap(tmp_path: Pat
     print(json.dumps({"always_injected": payload.get("always_injected"), "included": payload.get("included")}, sort_keys=True))
     included_ids = [item["_id"] for item in payload["included"]]
     assert payload["always_injected"] == {"count": 1, "cap": 1, "content_type": "behavior"}
+    assert payload["supplemental_evidence"]["status"] == "unproven"
     assert "BEHAVIOR-1" in included_ids
     assert "FACT-1" not in included_ids
 
@@ -187,3 +189,22 @@ def test_wildcard_always_namespace_expands_only_real_directories(tmp_path: Path)
     assert [item["_id"] for item in selected] == ["BEHAVIOR-1"]
     assert selected[0]["file"] == "agents/a1/decisions/BEHAVIOR.md"
     assert meta["cap"] == 1
+
+
+def test_pack_applies_bound_agent_acl_to_always_namespace(tmp_path: Path, monkeypatch) -> None:
+    ws = tmp_path / "acl-always"
+    init(str(ws))
+    _block(ws / "agents/a1/decisions/BEHAVIOR.md", "BEHAVIOR-1", "Behavior", "private agent behavior")
+    (ws / "mind-mem-acl.json").write_text(
+        json.dumps({"agents": {"alice": {"namespaces": ["shared"], "read": ["shared"], "write": []}}}),
+        encoding="utf-8",
+    )
+    _config(
+        ws,
+        {"agents/*": {"reachability": "always-injected", "floor": "none", "max_items": 1, "content_type": "behavior"}},
+    )
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
+    with bind_current_agent("alice"), use_workspace(str(ws)):
+        payload = json.loads(pack_recall_budget("ordinary", max_tokens=1000, limit=10))
+    assert "BEHAVIOR-1" not in [item.get("_id") for item in payload.get("included", [])]
+    assert payload["always_injected"]["count"] == 0
