@@ -195,6 +195,7 @@ def test_selected_namespace_ignores_unregistered_markdown_sources(tmp_path: Path
 def test_legacy_id_only_non_markdown_namespaced_rows_still_obey_agent_acl(tmp_path: Path, monkeypatch) -> None:
     """A backend source identity cannot bypass private namespace ACLs."""
     ws = _workspace(tmp_path)
+    from mind_mem import storage
     from mind_mem.mcp.tools import memory_ops
 
     class Store:
@@ -208,7 +209,66 @@ def test_legacy_id_only_non_markdown_namespaced_rows_still_obey_agent_acl(tmp_pa
 
     monkeypatch.setattr(memory_ops, "_is_markdown_backend", lambda _ws: False)
     monkeypatch.setattr(memory_ops, "get_block_store", lambda _ws: Store())
+    monkeypatch.setattr(storage, "_backend_name", lambda *_args: "postgres")
+    monkeypatch.setattr(
+        storage,
+        "iter_blocks",
+        lambda *_args, **_kwargs: [
+            {
+                "_id": "D-BACKEND-PRIVATE",
+                "_source_file": "agents/bob/decisions/DECISIONS.md",
+                "Statement": "private backend canary",
+                "Status": "active",
+            }
+        ],
+    )
     denied = _get(ws, "D-BACKEND-PRIVATE", "", "alice")
     assert denied["error"] == "namespace access denied"
     allowed = _get(ws, "D-BACKEND-PRIVATE", "", "bob")
     assert allowed["found"] is True
+
+
+def test_non_markdown_selected_status_is_bound_to_backend_source(monkeypatch, tmp_path: Path) -> None:
+    """A DB row must not refresh from a shadow Markdown file or duplicate id."""
+    ws = _workspace(tmp_path)
+    from mind_mem import storage
+    from mind_mem.mcp.tools import memory_ops
+
+    rows = [
+        {"_id": "D-DUP-1", "_source_file": "shared/decisions/DECISIONS.md", "Statement": "shared", "Status": "quarantined"},
+        {"_id": "D-DUP-1", "_source_file": "decisions/DECISIONS.md", "Statement": "root", "Status": "active"},
+    ]
+
+    class Store:
+        def get_all(self, *, active_only: bool = False) -> list[dict]:
+            return [dict(row) for row in rows]
+
+    monkeypatch.setattr(memory_ops, "_is_markdown_backend", lambda _ws: False)
+    monkeypatch.setattr(memory_ops, "get_block_store", lambda _ws: Store())
+    monkeypatch.setattr(storage, "_backend_name", lambda *_args: "postgres")
+    monkeypatch.setattr(storage, "iter_blocks", lambda *_args, **_kwargs: [dict(row) for row in rows])
+    result = _get(ws, "D-DUP-1", "shared", "alice")
+    assert result["found"] is False and result["withheld"] is True
+
+
+def test_non_markdown_omitted_selector_still_binds_private_source_status(monkeypatch, tmp_path: Path) -> None:
+    """The legacy selector shape cannot borrow an active root duplicate."""
+    ws = _workspace(tmp_path)
+    from mind_mem import storage
+    from mind_mem.mcp.tools import memory_ops
+
+    rows = [
+        {"_id": "D-DUP-2", "_source_file": "agents/alice/decisions/DECISIONS.md", "Statement": "private", "Status": "quarantined"},
+        {"_id": "D-DUP-2", "_source_file": "decisions/DECISIONS.md", "Statement": "root", "Status": "active"},
+    ]
+
+    class Store:
+        def get_by_id(self, _block_id: str) -> dict:
+            return dict(rows[0])
+
+    monkeypatch.setattr(memory_ops, "_is_markdown_backend", lambda _ws: False)
+    monkeypatch.setattr(memory_ops, "get_block_store", lambda _ws: Store())
+    monkeypatch.setattr(storage, "_backend_name", lambda *_args: "postgres")
+    monkeypatch.setattr(storage, "iter_blocks", lambda *_args, **_kwargs: [dict(row) for row in rows])
+    result = _get(ws, "D-DUP-2", "", "alice")
+    assert result["found"] is False and result["withheld"] is True

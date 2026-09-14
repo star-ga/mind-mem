@@ -1130,7 +1130,12 @@ def get_block(block_id: str, namespace: str = "") -> str:
         block,
         workspace=ws,
         surface="get_block",
-        source_file=(block or {}).get("_source_file") if selected_namespace is not None else None,
+        # Any canonical source identity must be part of status refresh, even
+        # for the historical omitted-selector form. Otherwise a backend row
+        # with a duplicate id can inherit the workspace-wide status of a
+        # different namespace. Rows without a source retain the old ID-only
+        # behavior; a claimed source is always bound to that source.
+        source_file=(block or {}).get("_source_file") if block is not None else None,
     )
     admitted = decision.sole
     if admitted is not None:

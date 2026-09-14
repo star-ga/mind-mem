@@ -188,6 +188,23 @@ def live_content_blocks(
     namespace sources inherit the wrong date or revocation state.
     """
     if blocks is not None:
+        # A selected row may have come from a configured store backend. The
+        # filesystem helper is correct for Markdown, but consulting it for a
+        # Postgres row can either miss the live row or borrow a stale/shadow
+        # Markdown copy. Re-read the same backend and bind by full identity.
+        from .request_context import context_config_for
+        from .storage import _MARKDOWN_BACKENDS, _backend_name, iter_blocks
+
+        bound = context_config_for(workspace)
+        config = dict(bound) if bound is not None else None
+        if _backend_name(workspace, config) not in _MARKDOWN_BACKENDS:
+            rows = iter_blocks(workspace, config=config, active_only=False)
+            out: dict[ContentIdentity, dict[str, Any]] = {}
+            for row in rows:
+                identity = content_identity(row)
+                if identity is not None and identity not in out:
+                    out[identity] = row
+            return out
         return _identity_blocks(blocks, workspace)
     from .request_context import context_config_for
     from .storage import iter_blocks
@@ -255,9 +272,7 @@ def filter_revoked_credentials(items: list[dict], workspace: str) -> list[dict]:
             # to serve; never resolve the ambiguity in the permissive way.
             candidates = [row for key, row in blocks.items() if key[2] == str(item.get("_id") or "")]
             if any(
-                row.get("ContentCategory") == "credential"
-                and str(row.get("Status", "")).strip().lower() == "revoked"
-                for row in candidates
+                row.get("ContentCategory") == "credential" and str(row.get("Status", "")).strip().lower() == "revoked" for row in candidates
             ):
                 continue
         kept.append(item)
