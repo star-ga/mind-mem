@@ -402,6 +402,7 @@ def approve_entity_merge(proposal_id: str) -> str:
         EntityMergeError,
         KnowledgeGraph,
         _validate_entity_merge_identity,
+        edge_id,
     )
 
     ws = _workspace()
@@ -420,13 +421,14 @@ def approve_entity_merge(proposal_id: str) -> str:
             return json.dumps({"error": f"cannot approve a rejected proposal: {pid!r}"})
         _validate_entity_merge_identity(pid, proposal)
         content = f"{proposal.winner_id}\tSAME_AS\t{proposal.loser_id}\t{proposal.rationale}"
-        with get_gate(ws).admit_proposal(
-            proposal_id=pid,
+        with get_gate(ws).admit_edge(
+            edge_id=edge_id(proposal.winner_id, "same_as", proposal.loser_id, pid),
             content=content,
             actor="",
             metadata={
                 "door": "mcp.approve_entity_merge",
                 "operation": "entity_merge",
+                "proposal_id": pid,
                 "winner_id": proposal.winner_id,
                 "loser_id": proposal.loser_id,
             },
@@ -448,6 +450,7 @@ def reverse_entity_merge(proposal_id: str) -> str:
         EntityMergeError,
         KnowledgeGraph,
         _validate_entity_merge_identity,
+        edge_id,
     )
 
     ws = _workspace()
@@ -465,13 +468,14 @@ def reverse_entity_merge(proposal_id: str) -> str:
         if proposal.status != PROPOSAL_APPLIED:
             return json.dumps({"error": "only an applied entity merge can be reversed"})
         _validate_entity_merge_identity(pid, proposal)
-        with get_gate(ws).admit_proposal(
-            proposal_id=pid,
+        with get_gate(ws).admit_edge(
+            edge_id=edge_id(proposal.winner_id, "same_as", proposal.loser_id, pid),
             content=f"REVERSE\t{proposal.winner_id}\tSAME_AS\t{proposal.loser_id}",
             actor="",
             metadata={
                 "door": "mcp.reverse_entity_merge",
                 "operation": "entity_merge_reverse",
+                "proposal_id": pid,
                 "winner_id": proposal.winner_id,
                 "loser_id": proposal.loser_id,
             },

@@ -39,3 +39,12 @@ Readers that consume persisted graphs must understand the `SAME_AS` predicate.
 
 The candidate is integrated and has focused independent acceptance evidence.
 Full release verification and publication are still pending.
+
+
+Approval and reversal use `admit_edge` over the exact deterministic identity
+`edge_id(winner_id, same_as, loser_id, proposal_id)`. Admission metadata retains
+the proposal ID and distinguishes approval from reversal. The core checks this
+identity before entering and again against the proposal read under the write
+transaction. These graph operations cannot use their edge receipt to write an
+unrelated corpus block; the proposal-wide admission allowlist stays unchanged.
+Reversal is a governed graph-state transition, not a corpus-block deletion.

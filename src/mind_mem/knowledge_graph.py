@@ -1441,6 +1441,8 @@ class KnowledgeGraph:
         Entity rows, aliases, observations, and source edges remain intact.
         The edge is the reversible lineage record and the read-side
         :meth:`same_as_component` method supplies the union-find view.
+        Admission names the exact edge, rechecked against the locked proposal.
+        Proposal identity alone is not authority to write unrelated corpus blocks.
         """
         proposal = self.get_entity_merge_proposal(proposal_id)
         if proposal is None:
@@ -1448,7 +1450,7 @@ class KnowledgeGraph:
         _validate_entity_merge_identity(proposal_id, proposal)
         if proposal.status in {PROPOSAL_REJECTED, MERGE_REVERSED}:
             raise EntityMergeError(f"cannot approve entity merge in status {proposal.status!r}")
-        require_admission(proposal_id)
+        require_admission(edge_id(proposal.winner_id, Predicate.SAME_AS, proposal.loser_id, proposal_id))
         source_id = proposal_id.strip()
         with self._lock:
             self._conn.execute("BEGIN IMMEDIATE")
@@ -1457,6 +1459,7 @@ class KnowledgeGraph:
                 if current is None:
                     raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
                 _validate_entity_merge_identity(proposal_id, current)
+                require_admission(edge_id(current.winner_id, Predicate.SAME_AS, current.loser_id, proposal_id))
                 if current.status == PROPOSAL_APPLIED:
                     self._validate_applied_entity_merge_state(current)
                     self._conn.commit()
@@ -1507,14 +1510,19 @@ class KnowledgeGraph:
         return updated
 
     def reverse_entity_merge(self, proposal_id: str) -> EntityMergeProposal:
-        """Retract the governed ``SAME_AS`` edge, restoring the raw view."""
+        """Retract the governed ``SAME_AS`` edge, restoring the raw view.
+
+        This is an approved graph-state transition under the same exact edge
+        scope as approval, with reversal recorded in admission metadata. It
+        does not grant permission to delete any corpus block.
+        """
         proposal = self.get_entity_merge_proposal(proposal_id)
         if proposal is None:
             raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
         _validate_entity_merge_identity(proposal_id, proposal)
         if proposal.status not in {PROPOSAL_APPLIED, MERGE_REVERSED}:
             raise EntityMergeError("only an applied entity merge can be reversed")
-        require_admission(proposal_id)
+        require_admission(edge_id(proposal.winner_id, Predicate.SAME_AS, proposal.loser_id, proposal_id))
         with self._lock:
             self._conn.execute("BEGIN IMMEDIATE")
             try:
@@ -1527,6 +1535,7 @@ class KnowledgeGraph:
                 if current is None:
                     raise KeyError(f"unknown entity merge proposal: {proposal_id!r}")
                 _validate_entity_merge_identity(proposal_id, current)
+                require_admission(edge_id(current.winner_id, Predicate.SAME_AS, current.loser_id, proposal_id))
                 if current.status == MERGE_REVERSED:
                     self._conn.commit()
                     return current

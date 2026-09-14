@@ -275,14 +275,20 @@ def test_reverse_rechecks_status_after_acquiring_transaction_lock(ws, monkeypatc
 
     original_require_admission = knowledge_graph.require_admission
 
-    def interpose_status(proposal_id):
-        with sqlite3.connect(default_db_path(ws)) as conn:
-            conn.execute(
-                "UPDATE entity_merge_proposals SET status = 'staged' WHERE proposal_id = ?",
-                (proposal_id,),
-            )
-            conn.commit()
-        return original_require_admission(proposal_id)
+    interposed = []
+
+    def interpose_status(admitted_edge_id):
+        # Interpose once before BEGIN, never attempt a concurrent write while
+        # the corrected core rechecks its exact receipt under the write lock.
+        if not interposed:
+            with sqlite3.connect(default_db_path(ws)) as conn:
+                conn.execute(
+                    "UPDATE entity_merge_proposals SET status = 'staged' WHERE proposal_id = ?",
+                    (staged["proposal_id"],),
+                )
+                conn.commit()
+            interposed.append(admitted_edge_id)
+        return original_require_admission(admitted_edge_id)
 
     monkeypatch.setattr(knowledge_graph, "require_admission", interpose_status)
     refused = json.loads(reverse_entity_merge(staged["proposal_id"]))
@@ -331,3 +337,70 @@ def test_graph_query_expands_equivalence_at_each_bounded_hop(ws, monkeypatch):
     ]
     plain = json.loads(graph_query("a", depth=2, resolve_same_as=False))
     assert [item["entity"] for item in plain["neighbors"]] == ["b", "c"]
+
+
+@pytest.mark.parametrize("operation", ["approve_entity_merge", "reverse_entity_merge"])
+def test_entity_merge_tool_scope_covers_only_its_exact_edge(ws, monkeypatch, operation):
+    """A real approval/reversal may not spend its scope on unrelated content."""
+    import mind_mem.mcp.tools.graph as graph_tools
+    from mind_mem.admission import UngatedWriteError, current_admission
+    from mind_mem.enums import IngestTier
+    from mind_mem.governance_gate import EDGE
+    from mind_mem.knowledge_graph import Predicate, edge_id
+    from mind_mem.storage import get_block_store
+
+    _seed(ws, monkeypatch)
+    staged = json.loads(propose_entity_merge("winner", "loser", "reviewed exact edge identity"))
+    pid = staged["proposal_id"]
+    _admin(monkeypatch)
+    if operation == "reverse_entity_merge":
+        assert json.loads(approve_entity_merge(pid))["status"] == "applied"
+    expected = edge_id("winner", Predicate.SAME_AS, "loser", pid)
+    original = getattr(KnowledgeGraph, operation)
+    calls = []
+
+    def checked(self, proposal_id):
+        receipt = current_admission()
+        assert receipt is not None
+        assert receipt.kind == EDGE
+        assert receipt.tier is IngestTier.EDGE_APPROVAL
+        assert receipt.covers == frozenset({expected})
+        assert not receipt.authorizes(pid)
+        store = get_block_store(ws)
+        with pytest.raises(UngatedWriteError):
+            store.write_block({"_id": "D-20260914-999", "Statement": "unrelated corpus write", "Status": "active"})
+        assert store.get_by_id("D-20260914-999") is None
+        calls.append(receipt.entry_id)
+        return original(self, proposal_id)
+
+    monkeypatch.setattr(KnowledgeGraph, operation, checked)
+    result = json.loads(getattr(graph_tools, operation)(pid))
+    assert result["status"] == ("applied" if operation == "approve_entity_merge" else "reversed")
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("operation", ["approve_entity_merge", "reverse_entity_merge"])
+def test_entity_merge_core_requires_the_matching_edge_receipt(ws, monkeypatch, operation):
+    """An unrelated edge receipt cannot change this proposal or its graph rows."""
+    from mind_mem.admission import UngatedWriteError
+    from mind_mem.governance_gate import get_gate
+    from mind_mem.knowledge_graph import Predicate, edge_id
+
+    _seed(ws, monkeypatch)
+    staged = json.loads(propose_entity_merge("winner", "loser", "reviewed exact edge identity"))
+    pid = staged["proposal_id"]
+    _admin(monkeypatch)
+    if operation == "reverse_entity_merge":
+        assert json.loads(approve_entity_merge(pid))["status"] == "applied"
+    before = _rows(ws)
+    with KnowledgeGraph(default_db_path(ws)) as kg:
+        wrong = edge_id("winner", Predicate.SAME_AS, "target", pid)
+        with get_gate(ws).admit_edge(wrong, "wrong edge"):
+            with pytest.raises(UngatedWriteError):
+                getattr(kg, operation)(pid)
+        assert _rows(ws) == before
+        assert kg.get_entity_merge_proposal(pid).status == (staged["status"] if operation == "approve_entity_merge" else "applied")
+        correct = edge_id("winner", Predicate.SAME_AS, "loser", pid)
+        with get_gate(ws).admit_edge(correct, "reviewed exact edge"):
+            result = getattr(kg, operation)(pid)
+        assert result.status == ("applied" if operation == "approve_entity_merge" else "reversed")

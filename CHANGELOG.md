@@ -37,6 +37,10 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Entity-equivalence approval and reversal now admit only their exact edge.
+  The core rechecks this scope against the locked proposal; unrelated corpus
+  writes remain refused, and the proposal-wide admission allowlist is unchanged.
+
 - Use explicit runtime invariant errors in slot, receipt and PostgreSQL vector
   validation; retain fixed SQL for both supported summary-index schemas and
   report unavailable authentication metrics while preserving denial.
