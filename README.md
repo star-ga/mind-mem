@@ -3,7 +3,7 @@
   MIND-Mem
 </h1>
 <p align="center">
-  <strong>Replayable memory for AI agents. Deterministic recall with a byte-identical audit chain across runs, machines, and substrates.</strong>
+  <strong>Replayable memory for AI agents. Governed recall with canonical, hash-anchored audit evidence.</strong>
 </p>
 <p align="center">
   Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 102 MCP tools<br>
@@ -71,11 +71,11 @@ Output:
 
 | Property                | What it means                                                                     |
 | ----------------------- | --------------------------------------------------------------------------------- |
-| **Byte-identical replay** | Recall ranking is a deterministic function of (corpus, config, `scoring_instant`) — same three → same ranked results, on any host and on any day (A-MEM importance/recency evolves deterministically on access, so ordering shifts as that state updates; no *probabilistic* mutations). The byte-identical guarantee is the audit/replay chain (Q16.16), identical across runs, machines, and substrates. |
+| **Byte-identical replay** | Replay fixes the query, admitted corpus, configuration, `scoring_instant`, execution providers and dependencies. Canonical Q16.16 audit encoding produces identical bytes and hashes for identical preimages. Ranking uses floating-point scores; provider behavior, access-state updates and receipt metadata can change the inputs and results. |
 | **Governed-write**      | Nothing reaches the source of truth without `propose → review → approve_apply`. No silent mutations. Ever. |
 | **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability from signal to decision. |
 | **Deterministic**       | No ML in the retrieval core. Q16.16 fixed-point encoding in the audit-hash preimage. The same preimage produces the same hash. |
-| **Local-first**         | All data stays on disk. No cloud calls, no telemetry, no phoning home.            |
+| **Local-first**         | The default retrieval path stores data locally. External storage and model providers are optional and must be configured. |
 | **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
 | **Zero infrastructure** | Core requires only Python 3.10+ stdlib. Postgres, Redis, Docker, and GPU are opt-in extras. |
 | **100% NIAH**           | 250/250 Needle In A Haystack retrieval, every needle/depth/size — full-matrix repro package committed, first-party verified; no independent reproduction yet ([EVIDENCE.md](EVIDENCE.md) row 1). |
@@ -343,8 +343,9 @@ MIND-Mem's recall pipeline is provider-agnostic. Tested against
 Anthropic Claude (3.5 Sonnet, 4.x), OpenAI GPT (4o, 5.4), Google
 Gemini (2.0 Flash, 3.1 Pro), Mistral Large, and local endpoints
 (Ollama, vLLM, llama.cpp). Compatibility is at the API contract
-level — the same MIND-Mem server returns the same answers
-regardless of which LLM is asking.
+level: clients use the same server interface. Replay also requires the same
+query, admitted corpus, configuration, scoring instant, execution providers
+and dependencies; different client models can generate different queries.
 
 ### Production usage at STARGA
 

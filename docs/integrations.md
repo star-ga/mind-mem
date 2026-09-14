@@ -75,10 +75,11 @@ MIND-Mem's recall pipeline is provider-agnostic. Tested against:
 - Mistral Large
 - Local: Ollama, vLLM, llama.cpp endpoints
 
-The "compatibility" claim is at the API contract level — the same
-MIND-Mem server returns the same answers regardless of which LLM is
-asking. We do not use any provider's commercial relationship as a
-positioning artefact.
+Compatibility is at the API contract level: clients use the same server
+interface. Replay also requires the same query, admitted corpus,
+configuration, scoring instant, execution providers and dependencies.
+Different client models can generate different queries. Provider compatibility
+does not imply a commercial relationship.
 
 ## Reproducible benchmarks
 
