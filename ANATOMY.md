@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1575 | **Est. tokens:** ~4670032
-**Generated:** 2026-09-14 07:20 UTC
+**Files:** 1577 | **Est. tokens:** ~4678001
+**Generated:** 2026-09-14 12:15 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 93 | ~206800 |
+| `docs/` | 93 | ~207191 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -73,10 +73,10 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 233 | ~1069624 |
+| `src/mind_mem/` | 234 | ~1072912 |
 | `src/mind_mem/api/` | 5 | ~27043 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
-| `src/mind_mem/compliance/` | 7 | ~13934 |
+| `src/mind_mem/compliance/` | 7 | ~15308 |
 | `src/mind_mem/importers/` | 9 | ~26775 |
 | `src/mind_mem/mcp/` | 3 | ~6614 |
 | `src/mind_mem/mcp/infra/` | 8 | ~13494 |
@@ -87,7 +87,7 @@
 | `src/mind_mem/templates/` | 19 | ~1041 |
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~92798 |
-| `tests/` | 691 | ~2055418 |
+| `tests/` | 692 | ~2058334 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -423,7 +423,7 @@
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~16577 tok, huge) — Configuration Reference
+- `configuration.md` (~16862 tok, huge) — Configuration Reference
 ### `docs/decisions/`
 
 - `author-identity.md` (~3174 tok, huge) — Commit author identity — policy, measured state, and the open decision
@@ -517,7 +517,7 @@
 - `tool-output-architecture.md` (~2067 tok, huge) — Tool-output offload — architecture
 - `trajectory-memory.md` (~1346 tok, large) — Trajectory memory
 - `troubleshooting.md` (~809 tok, large) — Troubleshooting
-- `usage.md` (~2653 tok, huge) — Usage
+- `usage.md` (~2759 tok, huge) — Usage
 - `v3.1.9-self-audit.md` (~1396 tok, large) — Self-audit after v3.1.9
 - `v3.11.0-implementation-plan.md` (~1609 tok, huge) — v3.11.0 Implementation Plan — synthesis from cross-model review
 - `v3.11.0-mind-mem-4b-retrain-plan.md` (~1529 tok, huge) — mind-mem-4b v3.11.0 Retrain Plan
@@ -764,13 +764,13 @@
 - `compiled_truth.py` (~8420 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
 ### `src/mind_mem/compliance/`
 
-- `__init__.py` (~1041 tok, large) — # Copyright 2026 STARGA, Inc.
+- `__init__.py` (~1055 tok, large) — # Copyright 2026 STARGA, Inc.
 - `audit.py` (~995 tok, large) — # Copyright 2026 STARGA, Inc.
-- `detectors.py` (~3136 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `detectors.py` (~4220 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `export.py` (~3268 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prewrite.py` (~1552 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `provenance_policy.py` (~1878 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `redaction.py` (~2064 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `redaction.py` (~2340 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
 
 - `compressors.py` (~2253 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
@@ -789,7 +789,7 @@
 - `data_marking.py` (~1133 tok, large) — # Copyright 2026 STARGA, Inc.
 - `dead_ends.py` (~3855 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
-- `dream_cycle.py` (~13464 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
+- `dream_cycle.py` (~14584 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~5752 tok, huge) — mind-mem Semantic Belief Drift Detection.
 - `edge_grounded_answer.py` (~5493 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `encryption.py` (~8391 tok, huge) — mind-mem Encryption at Rest — optional authenticated encryption for blocks.
@@ -950,6 +950,7 @@
 - `recall_digests.py` (~2101 tok, huge) — Canonical digests the recall attestation commits to.
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `recall_vector.py` (~24008 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recompact_cli.py` (~2168 tok, huge) — Safe CLI orchestration for proposal-only memory recompaction.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `replay_check.py` (~4323 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `request_context.py` (~2388 tok, huge) — One immutable policy context per request, consumed by the engine itself.
@@ -1263,7 +1264,7 @@
 - `test_compiled_truth.py` (~4665 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
 - `test_compliance_export.py` (~3734 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compliance_provenance.py` (~3329 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_compliance_redaction.py` (~5255 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_compliance_redaction.py` (~6842 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compressors.py` (~2757 tok, huge) — Tests for compressors.py — real Compressor implementations.
 - `test_concurrency_stress.py` (~4169 tok, huge) — Concurrency and performance stress tests for recall engine.
 - `test_concurrent_integration.py` (~10941 tok, huge) — Integration tests for concurrent access and partial failure in mind-mem.
@@ -1653,6 +1654,7 @@
 - `test_recall_vector.py` (~5496 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_recall_wire_owner.py` (~3251 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_workspace_zero_index_probe.py` (~917 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_recompact_cli.py` (~1329 tok, large) — Production-path controls for the proposal-only H1 recompaction command."""
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.

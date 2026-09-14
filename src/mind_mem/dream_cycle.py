@@ -27,6 +27,7 @@ from typing import Any
 
 from .enums import INITIAL_STATUS, IngestTier
 from .observability import get_logger, metrics, timed
+from .recompaction import RecompactionConfig
 
 _log = get_logger("dream_cycle")
 
@@ -170,6 +171,10 @@ class DreamCycleReport:
     broken_citations: tuple[BrokenCitation, ...] = ()
     stale_blocks: tuple[StaleBlock, ...] = ()
     consolidation_candidates: tuple[ConsolidationCandidate, ...] = ()
+    # Proposal-only H1 sleep pass.  The payloads carry source digests and are
+    # deliberately excluded from ``total_findings``: a proposed rewrite is a
+    # review action, not a detected defect.
+    recompaction_proposals: tuple[dict[str, Any], ...] = ()
     repair_actions: tuple = ()  # tuple[RepairAction, ...]
     errors: tuple[str, ...] = ()
 
@@ -806,6 +811,45 @@ def pass_consolidation(
     return candidates
 
 
+def pass_recompaction(
+    workspace: str,
+    block_ids: list[str],
+    *,
+    compressor: Callable[[str, list[dict[str, Any]]], str] | None = None,
+    max_iterations: int = 6,
+    min_retention_ratio: float = 0.25,
+    limit: int = 5,
+    stage: bool = False,
+) -> list[dict[str, Any]]:
+    """Build optional H1 sleep proposals for explicitly selected blocks.
+
+    Selection is explicit because a nightly scheduler must not send a model
+    over the whole corpus by accident.  Similarity, active-body reload,
+    fixed-point bounds and proposal staging are delegated to the same helpers
+    used by ``mm recompact``.  ``stage`` stages proposals for operator review;
+    it never calls ``approve_apply``.
+    """
+    from .recompact_cli import compressor_for, make_recompact_proposal, stage_recompact_proposal
+
+    selected_compressor = compressor or compressor_for("echo")
+    proposals: list[dict[str, Any]] = []
+    for block_id in block_ids:
+        try:
+            payload = make_recompact_proposal(
+                workspace,
+                block_id,
+                compressor=selected_compressor,
+                config=RecompactionConfig(max_iterations=max_iterations, min_retention_ratio=min_retention_ratio),
+                limit=limit,
+                dream=True,
+            )
+            proposals.append(stage_recompact_proposal(workspace, payload) if stage else payload)
+        except (OSError, ValueError) as exc:
+            proposals.append({"status": "refused", "block_id": block_id, "error": str(exc), "write": "not_written"})
+    metrics.inc("dream_recompaction_proposals", len(proposals))
+    return proposals
+
+
 # --- Pass 5: Integrity Summary ---
 
 
@@ -858,6 +902,17 @@ def _format_report_markdown(report: DreamCycleReport) -> str:
     else:
         lines.append("No consolidation candidates found.")
     lines.append("")
+
+    # Optional H1 sleep proposals. They are intentionally described as
+    # proposals rather than findings or verified summaries.
+    if report.recompaction_proposals:
+        lines += ["## H1: Recompaction Proposals", ""]
+        for proposal in report.recompaction_proposals:
+            lines.append(
+                f"- `{proposal.get('status', 'unknown')}` for {len(proposal.get('source_ids', ()))} source blocks; "
+                f"input `{proposal.get('input_digest', '')}`; semantic verification not established"
+            )
+        lines.append("")
 
     # Pass 6: Auto-Repair Actions
     if report.repair_actions:
@@ -1243,6 +1298,9 @@ def run_dream_cycle(
     consolidation_lookback: int = 30,
     min_occurrences: int = 3,
     instant: datetime | None = None,
+    recompact_ids: list[str] | None = None,
+    recompact_compressor: Callable[[str, list[dict[str, Any]]], str] | None = None,
+    recompact_stage: bool = False,
 ) -> DreamCycleReport:
     """Run all 5 enrichment passes. Errors in one pass do not block others.
 
@@ -1339,6 +1397,28 @@ def run_dream_cycle(
         errors=tuple(errors),
     )
 
+    # Optional H1 pass: callers name seed blocks explicitly. This keeps the
+    # ordinary scheduler unchanged and prevents an accidental corpus-wide
+    # model run merely because dream maintenance is enabled.
+    if recompact_ids:
+        with timed("dream_pass_recompaction", _log):
+            proposals = pass_recompaction(
+                ws,
+                recompact_ids,
+                compressor=recompact_compressor,
+                stage=recompact_stage and not dry_run,
+            )
+        report = DreamCycleReport(
+            timestamp=report.timestamp,
+            workspace=report.workspace,
+            entity_proposals=report.entity_proposals,
+            broken_citations=report.broken_citations,
+            stale_blocks=report.stale_blocks,
+            consolidation_candidates=report.consolidation_candidates,
+            recompaction_proposals=tuple(proposals),
+            errors=report.errors,
+        )
+
     # Pass 5: Integrity Summary
     with timed("dream_pass_integrity_summary", _log):
         try:
@@ -1354,6 +1434,7 @@ def run_dream_cycle(
                 broken_citations=report.broken_citations,
                 stale_blocks=report.stale_blocks,
                 consolidation_candidates=report.consolidation_candidates,
+                recompaction_proposals=report.recompaction_proposals,
                 errors=tuple(errors),
             )
 
@@ -1370,6 +1451,7 @@ def run_dream_cycle(
                     broken_citations=report.broken_citations,
                     stale_blocks=report.stale_blocks,
                     consolidation_candidates=report.consolidation_candidates,
+                    recompaction_proposals=report.recompaction_proposals,
                     repair_actions=tuple(repair_actions),
                     errors=report.errors,
                 )
@@ -1384,6 +1466,7 @@ def run_dream_cycle(
                     broken_citations=report.broken_citations,
                     stale_blocks=report.stale_blocks,
                     consolidation_candidates=report.consolidation_candidates,
+                    recompaction_proposals=report.recompaction_proposals,
                     repair_actions=tuple(repair_actions),
                     errors=tuple(errors),
                 )
@@ -1424,6 +1507,18 @@ def main() -> None:
     parser.add_argument("--stale-days", type=int, default=30)
     parser.add_argument("--consolidation-lookback", type=int, default=30)
     parser.add_argument("--min-occurrences", type=int, default=3)
+    parser.add_argument(
+        "--recompact",
+        action="append",
+        default=[],
+        metavar="BLOCK_ID",
+        help="Opt-in H1 proposal pass for an active block (repeatable; never auto-applies).",
+    )
+    parser.add_argument(
+        "--recompact-stage",
+        action="store_true",
+        help="Stage H1 proposals through propose_update; requires a non-dry run and still never applies.",
+    )
     args = parser.parse_args()
 
     ws = os.path.abspath(args.workspace)
@@ -1457,6 +1552,8 @@ def main() -> None:
         stale_days=args.stale_days,
         consolidation_lookback=args.consolidation_lookback,
         min_occurrences=args.min_occurrences,
+        recompact_ids=args.recompact,
+        recompact_stage=args.recompact_stage,
     )
     labels = [
         ("Entity Discovery", len(report.entity_proposals)),
@@ -1470,6 +1567,8 @@ def main() -> None:
         print(f"  Auto-Repairs: {len(report.repair_actions)}")
         for action in report.repair_actions:
             print(f"    [{action.action_type}] {action.target}: {action.detail}")
+    if report.recompaction_proposals:
+        print(f"  Recompaction proposals: {len(report.recompaction_proposals)} (review required; never auto-applied)")
     print(f"  Summary: {'written' if not args.dry_run else 'dry-run'}")
     print(f"\nTotal findings: {report.total_findings}")
     if report.errors:

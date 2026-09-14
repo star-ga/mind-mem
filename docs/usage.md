@@ -116,6 +116,13 @@ mm inbox --to S1                                # read your mail + broadcasts
 # Status of current workspace
 mm status
 
+# Build a fixed-point sleep proposal for one active block (dry-run by default)
+mm recompact DEC-20260101-001
+mm recompact DEC-20260101-001 --compressor ollama --model llama3.2 --stage
+# The opt-in dream-cycle spelling accepts explicit seeds and still stages only
+# through propose_update; it never approves or applies a proposal.
+python3 -m mind_mem.dream_cycle "$MIND_MEM_WORKSPACE" --dry-run --recompact DEC-20260101-001
+
 # Webhook ingest door (requires "v4": { "ingest_serve": { "enabled": true } })
 mm ingest-serve --port 8788           # POST /ingest -> QUARANTINED blocks
 mm ingest-serve --replay-only         # apply a WAL backlog left by a killed run
