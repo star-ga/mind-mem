@@ -384,6 +384,24 @@ class TestToolCountScoping:
     def test_a_one_digit_count_near_the_word_tool_is_too_noisy_to_gate(self):
         assert scan("the existing builder sees 1 tool, not 81.") == []
 
+    def test_qualified_mcp_comparison_counts_are_gated(self):
+        findings = scan("| MCP tools | 100 distinct (102 registrations) | - |")
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "100", "102")]
+        assert scan("| MCP tools | 102 distinct (102 registrations) | - |") == []
+
+    def test_client_count_aliases_are_gated(self):
+        assert [(f.kind, f.claimed, f.actual) for f in scan("integrating with 17 different CLIs")] == [("clients", "17", "19")]
+        findings = scan("Native MCP integration with 17 AI development tools")
+        assert [(f.kind, f.claimed, f.actual) for f in findings] == [("clients", "17", "19")]
+        assert scan("integrating with 19 different CLIs") == []
+
+    def test_unit_and_comparison_counts_require_measured_nouns(self):
+        for text in ("Backed by 3024 pytest unit tests across the repository.", "| Tests | 6,000+ | - |"):
+            findings = scan(text)
+            assert len(findings) == 1
+            assert findings[0].kind == "tests_spelling"
+        assert scan("Backed by 9707 test functions across the repository.") == []
+
 
 class TestRecordScopes:
     """A release record must keep its own numbers, and only a release record."""
@@ -1297,6 +1315,13 @@ class TestEvalClaims:
         )
         root = self.write_card(tmp_path, body)
         assert cda.check_eval_claims(make_authorities(), root) == []
+
+    def test_readme_current_model_eval_is_gated(self, tmp_path):
+        (tmp_path / "README.md").write_text("| Eval (current published v4.1.1 weights) | **95/95 = 100%** |\n", encoding="utf-8")
+        findings = cda.check_eval_claims(make_authorities(), tmp_path)
+        assert [(f.claimed, f.actual) for f in findings] == [("95", "133"), ("95", "133")]
+        (tmp_path / "README.md").write_text("| Eval (current published v4.1.1 weights) | **133/133 = 100%** |\n", encoding="utf-8")
+        assert cda.check_eval_claims(make_authorities(), tmp_path) == []
 
     def test_the_shipped_card_agrees_with_the_shipped_harness(self):
         main, holdout = aa.eval_probe_counts(ROOT)

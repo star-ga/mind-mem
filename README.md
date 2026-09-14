@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/test_functions-12%2C028-brightgreen?style=flat-square" alt="Test functions: 12,028">
+  <img src="https://img.shields.io/badge/test_functions-12%2C035-brightgreen?style=flat-square" alt="Test functions: 12,035">
   <img src="https://img.shields.io/badge/MCP_tools-102-blue?style=flat-square" alt="MCP Tools: 102">
   <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
@@ -249,8 +249,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (102 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 102 distinct tools and 8 read-only resources (6 static + 2 templated). The server makes 102 `mcp.tool(...)` registrations, but the consolidated `recall` dispatcher intentionally shadows the base `recall`, so the live surface is 102 distinct tool names. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
-### 74+ Structural Checks + 3024 Unit Tests
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
+### 74+ Structural Checks + 12,035 Test Functions
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 12,035 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -305,14 +305,14 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 
 ## Integrations are the substrate working
 
-Because the substrate is deterministic, integrating with 17 different CLIs produces the same answers on each. That is not a coincidence — it is the point. MIND-Mem can be the canonical memory layer across heterogeneous agent stacks precisely because recall is deterministic given (corpus, config, `scoring_instant`) and its audit/replay chain is byte-identical regardless of which client is asking. The 17-CLI surface is a consequence of the substrate, not a feature in itself.
+MIND-Mem provides integrations for 19 supported clients, including 11 MCP-aware clients. They can share a governed memory workspace. Reproducing a recall result requires the same request, corpus, configuration, scoring instant and execution dependencies; the client count alone does not establish cross-client output identity.
 
 > Honest positioning: the integrations below are *software-level* —
-> the named tool talks to MIND-Mem via the Model Context Protocol.
+> clients use their configured MCP connection or local integration.
 > They are **not** commercial-customer relationships with any vendor.
 > Full positioning policy: [`docs/integrations.md`](docs/integrations.md).
 
-### Native MCP integration with 17 AI development tools
+### Native integration with 19 clients (11 MCP-aware clients)
 
 ```bash
 pip install mind-mem
@@ -860,9 +860,9 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Vector only | Hybrid | Graph + vector |
 | Governance (propose/review/apply) | Yes | No | No | No |
 | Contradiction detection | Yes | No | No | No |
-| Tests | 6,000+ | - | - | - |
+| Test functions | 12,035 test functions | - | - | - |
 | LoCoMo benchmark (full 10-conv, Acc>=50)¹ | 73.8% | 66.9%² | 74.0% | - |
-| MCP tools | 100 distinct (102 `mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
+| MCP tools | 102 distinct (`mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
 
 ¹ Canonical MIND-Mem LoCoMo number — see
@@ -1588,8 +1588,13 @@ tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 |----------|------|
 | Model (GGUF + bf16 safetensors) | [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b) |
 | Base model | Qwen/Qwen3.5-4B |
-| Training | Full fine-tune on Runpod H200 SXM (141 GB HBM3e), v3.12.0 corpus (4,392 examples), bf16, paged-AdamW-8bit, batch 2 × accum 16, max_length 2048, LR 1.5e-5 cosine + 3% warmup |
-| Eval (v3.12.0-fullft, shipped in v3.12.1) | **95/95 = 100%** across ten categories — tool_call (20/20), block_schema (10/10), workflow (5/5), v39_new_tools (13/13), v39_transform_hash (3/3), v39_transport_guard (4/4), v311_new_tools (10/10), v311_explain_field (10/10), v312_quality_gate_strict_mode (10/10), v312_lineage_staleness (10/10). Two probes intentionally softened — see HF model card "Known model errors" section. |
+| Training | Full fine-tune on Runpod H200 SXM (141 GB HBM3e), v4.0.0 corpus plus r3/r4 addendums (r4 includes 8 KernelKind anchor examples), bf16, paged-AdamW-8bit, batch 2 × accum 16, max_length 2048, LR 1.5e-5 cosine + 3% warmup |
+| Eval (current published v4.1.1 weights) | **133/133 = 100%** — 111 main probes plus 22 held-out paraphrases, as reported in the [HF model card](https://huggingface.co/star-ga/mind-mem-4b). |
+
+Two held-out probes use documented inference-time anchors. This is the
+published checkpoint's reported result, not a new independent evaluation or
+coverage of the full runtime surface. The weights were trained on 83 MCP tools.
+The current server exposes 102 MCP tools.
 
 ### Platform Support
 

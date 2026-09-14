@@ -4,12 +4,12 @@
 > tree, the public PyPI artifact, or a published benchmark file in
 > `benchmarks/`. Nothing here is a customer-relationship claim about
 > any AI vendor — the integrations described are *software-level*
-> (the named tool talks to MIND-Mem via the Model Context Protocol),
+> (clients use their configured MCP connection or local integration),
 > not commercial.
 
 ## What MIND-Mem actually ships
 
-### Native MCP integration with 17 AI development tools
+### Native integration with 19 clients (11 MCP-aware clients)
 
 MIND-Mem speaks the [Model Context Protocol](https://modelcontextprotocol.io/).
 Any MCP-compatible client connects with one command:

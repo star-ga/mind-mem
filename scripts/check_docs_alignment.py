@@ -266,6 +266,8 @@ _TESTS_PATTERNS = (
 # tests") are outside suite scale and untouched; the ``module_facts`` leg owns
 # those.
 _RETIRED_TESTS_PATTERNS = (
+    re.compile(rf"\b(?P<n>{_GROUPED})(?P<plus>\+?)\s+pytest\s+unit\s+tests\b", re.IGNORECASE),
+    re.compile(rf"^\s*\|\s*Tests\s*\|\s*(?P<n>{_GROUPED})(?P<plus>\+?)", re.IGNORECASE),
     re.compile(rf"tests-(?P<n>{_GROUPED})(?P<plus>)-", re.IGNORECASE),
     re.compile(rf"\bTests:\s*(?P<n>{_GROUPED})(?P<plus>)", re.IGNORECASE),
     re.compile(rf"\b(?P<n>{_GROUPED})(?P<plus>\+?)\s+tests\b(?!\s+functions)", re.IGNORECASE),
