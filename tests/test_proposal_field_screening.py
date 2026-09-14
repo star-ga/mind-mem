@@ -21,11 +21,11 @@ def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str | None
     ws = tmp_path / "ws"
     init(str(ws))
     cfg = ws / "mind-mem.json"
-    data = json.loads(cfg.read_text())
+    data = json.loads(cfg.read_text(encoding="utf-8"))
     data.setdefault("v4", {})["redaction"] = (
         {"enabled": True, "mode": mode, "detectors": ["aws_access_key_id"]} if mode else {"enabled": False}
     )
-    cfg.write_text(json.dumps(data))
+    cfg.write_text(json.dumps(data), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
     monkeypatch.setenv("MIND_MEM_CONFIG", str(cfg))
     monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
@@ -104,9 +104,9 @@ def test_non_rewriting_modes_preserve_metadata_and_reason(tmp_path, monkeypatch,
 def test_bad_redaction_configuration_returns_a_structured_refusal(tmp_path, monkeypatch, bad_config):
     ws = _workspace(tmp_path, monkeypatch, "reject")
     cfg = ws / "mind-mem.json"
-    data = json.loads(cfg.read_text())
+    data = json.loads(cfg.read_text(encoding="utf-8"))
     data["v4"]["redaction"].update(bad_config)
-    cfg.write_text(json.dumps(data))
+    cfg.write_text(json.dumps(data), encoding="utf-8")
     before = (ws / "intelligence" / "SIGNALS.md").read_bytes()
     assert _propose()["error"] == "compliance_config_invalid"
     assert (ws / "intelligence" / "SIGNALS.md").read_bytes() == before
