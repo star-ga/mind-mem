@@ -41,12 +41,20 @@ No clock, no IO, no randomness: scanning is a pure function of the text
 and the registry, which is what lets the export bundle be byte-identical
 across runs.
 
+An explicitly configured external detector is loaded through
+:func:`load_external_detector`. Its class creation is kept out of the
+process-wide in-tree registry; absent a plugin reference, no external module
+is imported and the shipped chain is unchanged.
+
 Copyright STARGA, Inc.
 """
 
 from __future__ import annotations
 
 import abc
+import contextvars
+import importlib
+import inspect
 import re
 from dataclasses import dataclass
 from typing import ClassVar, Iterable, Sequence
@@ -63,6 +71,7 @@ __all__ = [
     "get_detector",
     "registered_detectors",
     "resolve_detectors",
+    "load_external_detector",
     "scan_text",
 ]
 
@@ -92,6 +101,7 @@ class Finding:
     function of its input rather than of dict iteration order.
     """
 
+
     start: int
     end: int
     detector: str
@@ -116,6 +126,12 @@ class Finding:
         }
 
 
+# Importing a configured plugin must not make it an implicit member of the
+# process-wide in-tree registry. A ContextVar keeps that rule true even when
+# a caller resolves policies concurrently in different contexts.
+_LOADING_EXTERNAL = contextvars.ContextVar("mind_mem_loading_external_detector", default=False)
+
+
 #: name -> concrete detector class. Populated by :class:`_DetectorMeta`
 #: at class-creation time; read only through the accessors below, which
 #: sort by name so every caller sees one order.
@@ -123,6 +139,18 @@ _REGISTRY: dict[str, type["Detector"]] = {}
 
 
 def _register(cls: type["Detector"]) -> None:
+    _validate_detector_class(cls)
+    name = cls.name
+    existing = _REGISTRY.get(name)
+    if existing is not None:
+        same_class = existing.__module__ == cls.__module__ and existing.__qualname__ == cls.__qualname__
+        if not same_class:
+            raise DuplicateDetectorError(f"detector name {name!r} is claimed by both {existing.__qualname__} and {cls.__qualname__}")
+    _REGISTRY[name] = cls
+
+
+def _validate_detector_class(cls: type["Detector"]) -> None:
+    """Validate the narrow class contract shared by built-ins and plugins."""
     name = getattr(cls, "name", "")
     if not isinstance(name, str) or not name:
         raise DetectorSpecError(
@@ -131,12 +159,6 @@ def _register(cls: type["Detector"]) -> None:
     category = getattr(cls, "category", "")
     if category not in _CATEGORIES:
         raise DetectorSpecError(f"{cls.__qualname__} declares category {category!r}; expected one of {sorted(_CATEGORIES)}")
-    existing = _REGISTRY.get(name)
-    if existing is not None:
-        same_class = existing.__module__ == cls.__module__ and existing.__qualname__ == cls.__qualname__
-        if not same_class:
-            raise DuplicateDetectorError(f"detector name {name!r} is claimed by both {existing.__qualname__} and {cls.__qualname__}")
-    _REGISTRY[name] = cls
 
 
 class _DetectorMeta(abc.ABCMeta):
@@ -150,7 +172,7 @@ class _DetectorMeta(abc.ABCMeta):
 
     def __new__(mcls, name: str, bases: tuple[type, ...], namespace: dict[str, object], **kwargs: object) -> "_DetectorMeta":
         cls = super().__new__(mcls, name, bases, namespace, **kwargs)
-        if bases and not cls.__abstractmethods__:
+        if bases and not cls.__abstractmethods__ and not _LOADING_EXTERNAL.get():
             _register(cls)  # type: ignore[arg-type]
         return cls
 
@@ -322,6 +344,51 @@ def resolve_detectors(names: Sequence[str] | None = None) -> tuple["Detector", .
     return tuple(get_detector(name) for name in sorted(set(names)))
 
 
+def load_external_detector(spec: str) -> Detector:
+    """Load one explicitly configured ``module:DetectorClass`` reference.
+
+    This is deliberately a module path contract rather than ambient package
+    discovery.  A workspace that does not name a plugin performs no imports;
+    a malformed, unavailable, abstract, non-detector, or non-instantiable
+    plugin is a configuration error before any caller can persist text.
+    """
+    if not isinstance(spec, str) or spec.count(":") != 1:
+        raise DetectorSpecError("external detector must be a 'module:Class' string")
+    module_name, object_name = (part.strip() for part in spec.split(":", 1))
+    if not module_name or module_name.startswith(".") or not object_name:
+        raise DetectorSpecError(f"invalid external detector reference {spec!r}")
+    if any(not part.isidentifier() for part in module_name.split(".")):
+        raise DetectorSpecError(f"invalid external detector module {module_name!r}")
+    if any(not part.isidentifier() for part in object_name.split(".")):
+        raise DetectorSpecError(f"invalid external detector object {object_name!r}")
+
+    token = _LOADING_EXTERNAL.set(True)
+    try:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as exc:
+            raise DetectorSpecError(f"could not load external detector {spec!r}: {exc}") from exc
+        candidate: object = module
+        try:
+            for part in object_name.split("."):
+                candidate = getattr(candidate, part)
+        except AttributeError as exc:
+            raise DetectorSpecError(f"external detector object not found: {spec!r}") from exc
+    finally:
+        _LOADING_EXTERNAL.reset(token)
+
+    if not inspect.isclass(candidate) or not issubclass(candidate, Detector):
+        raise DetectorSpecError(f"external detector {spec!r} must be a Detector subclass")
+    if candidate.__abstractmethods__:
+        raise DetectorSpecError(f"external detector {spec!r} is abstract")
+    _validate_detector_class(candidate)
+    try:
+        instance = candidate()
+    except Exception as exc:
+        raise DetectorSpecError(f"external detector {spec!r} must have a zero-argument constructor") from exc
+    return instance
+
+
 def _dedupe(findings: Iterable[Finding]) -> list[Finding]:
     """Drop findings that overlap an earlier-kept one.
 
@@ -344,5 +411,25 @@ def scan_text(text: str, detectors: Sequence[Detector] | None = None) -> list[Fi
     chain = registered_detectors() if detectors is None else tuple(detectors)
     found: list[Finding] = []
     for detector in chain:
-        found.extend(detector.scan(text))
+        try:
+            findings = detector.scan(text)
+        except Exception as exc:
+            raise DetectorSpecError(f"detector {detector.name!r} failed while scanning") from exc
+        if not isinstance(findings, list):
+            raise DetectorSpecError(f"detector {detector.name!r} must return a list of Finding objects")
+        for finding in findings:
+            if not isinstance(finding, Finding):
+                raise DetectorSpecError(f"detector {detector.name!r} returned a non-Finding result")
+            if finding.detector != detector.name or finding.category != detector.category:
+                raise DetectorSpecError(f"detector {detector.name!r} returned a mismatched finding identity")
+            if (
+                isinstance(finding.start, bool)
+                or isinstance(finding.end, bool)
+                or not isinstance(finding.start, int)
+                or not isinstance(finding.end, int)
+            ):
+                raise DetectorSpecError(f"detector {detector.name!r} returned non-integer finding bounds")
+            if not 0 <= finding.start < finding.end <= len(text):
+                raise DetectorSpecError(f"detector {detector.name!r} returned out-of-range finding bounds")
+        found.extend(findings)
     return _dedupe(found)

@@ -896,6 +896,35 @@ mutating the workspace.
 
 ---
 
+## Redaction Detectors (`v4.redaction`)
+
+Redaction is off unless the flag is explicitly enabled. The shipped detector
+pack is selected by `detectors` (all eight when omitted). A workspace may name
+an external zero-argument `Detector` subclass explicitly with `plugins`:
+
+```json
+{
+  "v4": {
+    "redaction": {
+      "enabled": true,
+      "mode": "reject",
+      "detectors": ["email", "secret_key_prefix"],
+      "plugins": ["acme_memory_policy.detectors:CustomerTokenDetector"]
+    }
+  }
+}
+```
+
+Plugin modules are imported only for references present in this list; there is
+no installed-package scan or ambient entry-point discovery. Each reference
+must be `module:Class`, resolve to a concrete `Detector` with a unique stable
+`name` and `pii` or `secret` category, and return a list of valid `Finding`
+objects. Malformed, unavailable, duplicate, colliding, or failing plugins
+refuse the governed write before persistence. The combined chain is ordered by
+detector name, and the detector name is retained in redaction results and
+audit provenance. Plugin code is an optional deployment concern; the core
+package remains dependency-free.
+
 ## Producer Backpressure (`v4.backpressure`)
 
 A producer loop that outruns the store grows its queue until the process is
