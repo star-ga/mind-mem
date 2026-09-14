@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1649 | **Est. tokens:** ~4851589
-**Generated:** 2026-09-14 19:56 UTC
+**Files:** 1649 | **Est. tokens:** ~4851611
+**Generated:** 2026-09-14 19:57 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 729 | ~2150811 |
+| `tests/` | 729 | ~2150833 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1487,7 +1487,7 @@
 - `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_filter_metadata.py` (~1879 tok, huge) — Real SQLite/public-path coverage for compound recall filters."""
-- `test_indexed_namespace_acl.py` (~3205 tok, huge) — Namespace ACLs must guard indexed recall before any result processing."""
+- `test_indexed_namespace_acl.py` (~3227 tok, huge) — Namespace ACLs must guard indexed recall before any result processing."""
 - `test_indexed_source_admission.py` (~1124 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_source_hash_admission.py` (~598 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_indexed_source_status_overlay.py` (~471 tok, medium) — # Copyright 2026 STARGA, Inc.

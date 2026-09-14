@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -157,6 +158,8 @@ def test_indexed_acl_rejects_shared_symlink_into_private_namespace(
     private_decisions = workspace / "agents/bob/decisions"
     private_decisions.mkdir(parents=True, exist_ok=True)
     shared_decisions.parent.mkdir(parents=True, exist_ok=True)
+    if shared_decisions.exists():
+        shutil.rmtree(shared_decisions)
     try:
         os.symlink(private_decisions, shared_decisions, target_is_directory=True)
     except (OSError, NotImplementedError) as exc:
