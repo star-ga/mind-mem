@@ -2906,7 +2906,7 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
             _log.warning(
                 "unknown_recall_backend",
                 backend=recall_backend,
-                known=sorted(_KNOWN_RECALL_BACKENDS),
+                known=sorted(_KNOWN_RECALL_BACKENDS | _POSTGRES_DELEGATED_RECALL_BACKENDS),
                 selected_backend="postgres",
                 fallback="postgres",
             )

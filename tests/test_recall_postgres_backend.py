@@ -155,6 +155,7 @@ class TestPostgresRecallBackendUnit:
         matching = [kw for event, kw in seen if event == "unknown_recall_backend"]
         assert len(matching) == 1
         assert matching[0]["backend"] == "future_backend"
+        assert "hybrid" in matching[0]["known"]
         assert matching[0]["selected_backend"] == "postgres"
         assert matching[0]["fallback"] == "postgres"
 
