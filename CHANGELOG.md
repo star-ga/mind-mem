@@ -37,6 +37,8 @@ All notable changes to MIND-Mem are documented in this file.
 - Release SBOM generation derives package contents and dependencies from the
   built wheel, with artifact identity checks. The published 5.0.3 archives and
   their original release records are unchanged.
+- PyPI publication waits for successful SBOM generation and validation, so a
+  failed SBOM job blocks the package upload as well as the GitHub release.
 - Model-card alignment checks use the canonical Hugging Face card and preserve
   the distinction between runtime tooling and the existing trained checkpoint.
 - Roadmap publication status distinguishes the published 5.0.3 release from

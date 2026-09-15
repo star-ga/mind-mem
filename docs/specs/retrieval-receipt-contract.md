@@ -1,14 +1,14 @@
 # Retrieval receipt contract
 
-Status: **Partially implemented in the 5.0.3 candidate, 2026-09-14.**
+Status: **Local profile published in 5.0.3; broader profiles remain proposed.**
 Owner: STARGA Inc. Canonical milestones: [Group RE](../../ROADMAP.md#group-re--portable-retrieval-evidence).
 
 This specification defines an export and verification boundary over MIND-Mem's
 existing serving evidence. The bounded local profile is implemented as
 `mm receipt export` and `mm receipt verify`; its schema and canonical vectors
 are linked in section 4. The portable occurrence, independent witness and
-constitutional-lineage profiles remain proposed. Candidate implementation is
-not evidence of release publication or deployment. Ordinary memory use has no
+constitutional-lineage profiles remain proposed. Package publication is
+not evidence of deployment or independent witnessing. Ordinary memory use has no
 payment requirement.
 
 ## 1. Purpose and priority

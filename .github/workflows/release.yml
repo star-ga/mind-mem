@@ -378,7 +378,10 @@ jobs:
 
   # ── PyPI publish (OIDC trusted publishing) ────────────────────────────────────
   publish-pypi:
-    needs: [build, sign]
+    # Validate the wheel's SBOM before uploading an immutable package version.
+    # Waiting only in github-release allowed a failed SBOM to leave a package
+    # published on PyPI while its release artifacts remained incomplete.
+    needs: [build, sign, sbom]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

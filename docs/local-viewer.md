@@ -1,6 +1,6 @@
 # Local memory viewer
 
-The next release candidate adds a packaged local browser interface:
+MIND-Mem 5.0.3 includes a packaged local browser interface:
 
 ```sh
 MIND_MEM_WORKSPACE=/path/to/workspace mm view
@@ -41,5 +41,5 @@ ranked recall attestation or an independent evidence claim.
 Corpus strings render as text, with a restrictive Content Security Policy.
 Absolute URL request targets and path traversal are refused. Common non-GET
 methods return guarded refusal responses; HEAD sends headers without a body.
-This candidate is implemented and reviewed separately from the pending 5.0.3
-release source. Publication is still pending.
+This bounded viewer was published in 5.0.3. Its presence does not close the
+namespace-bound graph or ranked-receipt limitations described above.

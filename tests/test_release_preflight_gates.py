@@ -418,6 +418,10 @@ class TestReleaseWorkflowWiring:
         """The 5.1.0 divergence: index yanked, GitHub Release still serving it."""
         assert "publish-pypi" in graph["github-release"]
 
+    def test_pypi_upload_waits_for_validated_sbom(self, graph: dict[str, list[str]]) -> None:
+        """A failed SBOM must block the irreversible upload, not just release notes."""
+        assert {"build", "sign", "sbom"} <= set(graph["publish-pypi"])
+
     def test_post_publish_proof_runs_after_publishing(self, graph: dict[str, list[str]]) -> None:
         assert "publish-pypi" in graph["verify-published"]
         assert "release-preflight" in graph["verify-published"]

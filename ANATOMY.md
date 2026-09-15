@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4882826
-**Generated:** 2026-09-15 11:12 UTC
+**Files:** 1665 | **Est. tokens:** ~4882959
+**Generated:** 2026-09-15 11:16 UTC
 
 ## Token Budget Guide
 
@@ -29,7 +29,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~21630 |
+| `.github/workflows/` | 11 | ~21689 |
 | `.roo/` | 1 | ~22 |
 | `audits/` | 5 | ~24039 |
 | `benchmarks/` | 66 | ~182143 |
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~215103 |
+| `docs/` | 95 | ~215107 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -50,11 +50,11 @@
 | `docs/benchmarks/head-20260907/` | 8 | ~7240 |
 | `docs/benchmarks/memory-ab-420s-runs/` | 26 | ~84421 |
 | `docs/decisions/` | 1 | ~3174 |
-| `docs/design/` | 11 | ~18781 |
+| `docs/design/` | 11 | ~18786 |
 | `docs/evidence/5.0.2-f1/` | 12 | ~188585 |
 | `docs/plans/` | 1 | ~6134 |
 | `docs/security-baselines/` | 1 | ~18974 |
-| `docs/specs/` | 3 | ~10732 |
+| `docs/specs/` | 3 | ~10734 |
 | `examples/` | 3 | ~1203 |
 | `hooks/` | 3 | ~1026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1211 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 740 | ~2178382 |
+| `tests/` | 740 | ~2178445 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -198,7 +198,7 @@
 - `docs.yml` (~262 tok, medium) — name: Docs
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
-- `release.yml` (~6861 tok, huge) — name: Release
+- `release.yml` (~6920 tok, huge) — name: Release
 - `security.yml` (~3153 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `.roo/`
@@ -445,7 +445,7 @@
 - `m4-closed-set-slots.md` (~2250 tok, huge) — Design: M4 — closed-set slots, structural contradiction prevention
 - `m5-enforcement-in-code-audit.md` (~2245 tok, huge) — Design: M5 — enforcement in code, not in the prompt
 - `m6-negative-results.md` (~2171 tok, huge) — Design: M6 — negative results as a first-class recorded outcome
-- `ra4-entity-equivalence.md` (~732 tok, large) — RA.4 entity equivalence (5.0.3 candidate)
+- `ra4-entity-equivalence.md` (~737 tok, large) — RA.4 entity equivalence (published in 5.0.3)
 - `recall-harness.md` (~1639 tok, huge) — Design: the recall harness — deterministic working memory for search agents
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
 - `v3-multi-tenancy.md` (~1336 tok, large) — v3.0 Design: Multi-Tenancy Foundation
@@ -478,7 +478,7 @@
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `install-guide.md` (~2914 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1567 tok, huge) — Integrations
-- `local-viewer.md` (~625 tok, large) — Local memory viewer
+- `local-viewer.md` (~629 tok, large) — Local memory viewer
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1625 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1770 tok, huge) — MCP Integration Guide
@@ -523,7 +523,7 @@
 ### `docs/specs/`
 
 - `retrieval-receipt-canonical-vectors.json` (~1558 tok, huge) — Keys: profile, canonicalization, receipt_golden, rules
-- `retrieval-receipt-contract.md` (~8604 tok, huge) — Retrieval receipt contract
+- `retrieval-receipt-contract.md` (~8606 tok, huge) — Retrieval receipt contract
 - `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 
@@ -1752,7 +1752,7 @@
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
-- `test_release_preflight_gates.py` (~5444 tok, huge) — Tests for the release-preflight gates.
+- `test_release_preflight_gates.py` (~5507 tok, huge) — Tests for the release-preflight gates.
 - `test_release_sbom.py` (~2445 tok, huge) — Fail-closed controls for the wheel-bound release SBOM helper."""
 - `test_remote_vector_admission.py` (~2441 tok, huge) — Remote vector hits must be checked against the current corpus authority."""
 - `test_replay_check.py` (~4122 tok, huge) — Replay — does the ledger corroborate what one recall attestation claims?

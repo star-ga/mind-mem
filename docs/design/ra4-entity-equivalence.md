@@ -1,4 +1,4 @@
-# RA.4 entity equivalence (5.0.3 candidate)
+# RA.4 entity equivalence (published in 5.0.3)
 
 Governed entity merging uses a reversible `SAME_AS` edge. It never deletes an
 entity, rewrites a source edge, moves an alias, or combines observations. A
@@ -37,8 +37,8 @@ The MCP surface consists of `propose_entity_merge`,
 no entity-merge REST surface or automatic entity resolution in this slice.
 Readers that consume persisted graphs must understand the `SAME_AS` predicate.
 
-The candidate is integrated and has focused independent acceptance evidence.
-Full release verification and publication are still pending.
+This implementation was published in 5.0.3 with focused acceptance controls.
+Publication does not add automatic resolution or change the boundaries above.
 
 
 Approval and reversal use `admit_edge` over the exact deterministic identity
