@@ -994,6 +994,11 @@ def _recall_impl_uncached(
     results: list = []
     hybrid_degraded: dict | None = None
     hybrid_trace: dict | None = None
+    # Keep the workspace's resolved config for the indexed validity gate and
+    # candidate-width decision.  Reading it once also ensures both decisions
+    # use the same request-bound policy snapshot.
+    recall_cfg: dict[str, Any] = {}
+    validity_on = False
 
     if backend in ("hybrid", "auto"):
         try:
@@ -1050,10 +1055,21 @@ def _recall_impl_uncached(
     if used_backend != "hybrid":
         try:
             if os.path.isfile(fts_db_path(ws)):
+                config = _load_config(ws)
+                loaded_recall_cfg = config.get("recall", {})
+                recall_cfg = loaded_recall_cfg if isinstance(loaded_recall_cfg, dict) else {}
+                validity_cfg = recall_cfg.get("validity_gate")
+                validity_on = isinstance(validity_cfg, dict) and bool(validity_cfg.get("enabled", False))
                 # An agent-bound filter must see a wide enough candidate pool;
                 # asking FTS for only top-k can let forbidden rows crowd out
                 # permitted lower-ranked rows before the ACL is applied.
-                fts_limit = min(max(_leg_limit, limit * _FILTER_WIDEN), limits["max_recall_results"]) if agent_id else _leg_limit
+                # The same bounded over-fetch is needed for a validity-enabled
+                # indexed request: a stale top hit is demoted only after FTS
+                # returns, so a fresh lower hit must be in that returned pool.
+                # Keep the historical exact limit when both controls are off.
+                fts_limit = (
+                    min(max(_leg_limit, limit * _FILTER_WIDEN), limits["max_recall_results"]) if agent_id or validity_on else _leg_limit
+                )
                 results = fts_query(
                     ws,
                     query,
@@ -1102,9 +1118,6 @@ def _recall_impl_uncached(
     if results and used_backend == "sqlite":
         from mind_mem.validity_gate import apply_validity_gate
 
-        recall_cfg = _load_config(ws).get("recall", {})
-        if not isinstance(recall_cfg, dict):
-            recall_cfg = {}
         if apply_validity_gate(results, ws, recall_cfg, scoring_instant=scoring_instant):
             results.sort(key=lambda item: item.get("score", 0.0), reverse=True)
 

@@ -308,13 +308,74 @@ def test_hybrid_rrf_gates_before_limit_cut(tmp_path: Path, monkeypatch) -> None:
     assert envelope["results"][0]["validity"]["content_lifecycle"]["state"] == "durable"
 
 
+def test_mcp_indexed_bm25_validity_widens_before_limit_cut(tmp_path: Path, monkeypatch) -> None:
+    """Direct indexed BM25 must admit a bounded pool before its validity cut.
+
+    The explicit ``bm25`` route is allowed to return only the requested row
+    when validity is off.  With the gate on, the stale high-scoring row must
+    not hide a durable lower-scoring row that FTS can return in the bounded
+    over-fetch window.
+    """
+    workspace = _workspace(tmp_path)
+    decisions = Path(workspace) / "decisions/DECISIONS.md"
+    decisions.write_text(
+        "".join(
+            (f"[D-20260901-{seq:03d}]\nStatus: active\nStatement: {statement}\nContentCategory: {category}\nContentValidFrom: {stamp}\n\n")
+            for seq, statement, category, stamp in (
+                (1, "orchid lifecycle orchid lifecycle stale record", "status", "2026-09-12"),
+                (2, "orchid lifecycle durable record", "decision", "2026-09-12"),
+            )
+        )
+        + "".join(f"[D-20260901-{seq:03d}]\nStatus: active\nStatement: fillerword {seq}\n\n" for seq in range(3, 103)),
+        encoding="utf-8",
+    )
+    build_index(workspace)
+    monkeypatch.setattr(recall_tool, "_workspace", lambda: workspace)
+    real_fts_query = recall_tool.fts_query
+    fts_limits: list[int] = []
+
+    def captured_fts_query(*args, **kwargs):
+        fts_limits.append(kwargs["limit"])
+        return real_fts_query(*args, **kwargs)
+
+    monkeypatch.setattr(recall_tool, "fts_query", captured_fts_query)
+
+    enabled = json.loads(
+        recall_tool._recall_impl_ranked(
+            "orchid lifecycle",
+            limit=1,
+            backend="bm25",
+            scoring_instant=NOW,
+        )
+    )
+    assert fts_limits == [4]
+    assert [row["_id"] for row in enabled["results"]] == ["D-20260901-002"]
+    assert enabled["results"][0]["validity"]["content_lifecycle"]["state"] == "durable"
+
+    config_path = Path(workspace) / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["recall"]["validity_gate"] = {"enabled": False}
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    fts_limits.clear()
+    disabled = json.loads(
+        recall_tool._recall_impl_ranked(
+            "orchid lifecycle",
+            limit=1,
+            backend="bm25",
+            scoring_instant=NOW,
+        )
+    )
+    assert fts_limits == [1]
+    assert [row["_id"] for row in disabled["results"]] == ["D-20260901-001"]
+    assert "validity" not in disabled["results"][0]
+
+
 def test_mcp_stale_index_cannot_borrow_namespace_lifecycle_or_revoked_status(tmp_path: Path, monkeypatch) -> None:
     workspace = _workspace(tmp_path)
     shared = Path(workspace) / "shared" / "decisions"
     shared.mkdir(parents=True)
     shared.joinpath("DECISIONS.md").write_text(
-        "[D-20260901-001]\nStatus: active\nStatement: orchid shared duplicate\n"
-        "ContentCategory: status\nContentValidFrom: 2026-09-01\n\n",
+        "[D-20260901-001]\nStatus: active\nStatement: orchid shared duplicate\nContentCategory: status\nContentValidFrom: 2026-09-01\n\n",
         encoding="utf-8",
     )
     build_index(workspace)
