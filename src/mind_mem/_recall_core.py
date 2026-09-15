@@ -2822,14 +2822,14 @@ def recall(
     return _project_recall_carrier(top, top, degraded=_degraded_marker, execution_backend="bm25")
 
 
-#: Every ``recall.backend`` value this loader has a case for. Anything else
-#: falls through to the built-in BM25 Markdown scan, which is the right
-#: fallback and was the wrong silence: unknown config *keys* were logged and
-#: unknown config *values* were not, so a workspace configured
-#: ``"backend": "hybrid"`` was served the scan with nothing said, and the
-#: benchmark harness above it reported "hybrid" read off the config string.
-#: Naming the value costs one warning on a path no valid config takes.
+#: Every direct ``recall.backend`` value this loader has a case for. Values
+#: delegated to a selected block-store backend are listed separately below so
+#: the warning names the actual route rather than a guessed fallback.
 _KNOWN_RECALL_BACKENDS = frozenset({"scan", "tfidf", "sqlite", "vector"})
+# PostgreSQL's source-of-record backend owns a hybrid BM25/pgvector path.  It
+# is selected after the explicit sqlite/vector cases below, so it is not a
+# direct loader return value but is still a valid requested backend there.
+_POSTGRES_DELEGATED_RECALL_BACKENDS = frozenset({"hybrid"})
 
 
 def _load_backend(workspace: str) -> str | RecallBackend | None:
@@ -2868,8 +2868,10 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
             if unknown:
                 _log.warning("unknown_recall_config_keys", keys=sorted(unknown))
             recall_backend = recall_cfg.get("backend", "scan")
-            if isinstance(recall_backend, str) and recall_backend not in _KNOWN_RECALL_BACKENDS:
-                _log.warning("unknown_recall_backend", backend=recall_backend, known=sorted(_KNOWN_RECALL_BACKENDS), fallback="bm25_scan")
+            # Defer this diagnostic until the block-store route is known.
+            # ``hybrid`` is delegated to PostgreSQL below; warning here would
+            # falsely claim a BM25 scan even though the loader returns a
+            # PostgresRecallBackend.
             if recall_backend == "sqlite":
                 return "sqlite"
             if recall_backend == "vector":
@@ -2896,7 +2898,22 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
         _log.debug("block_store_backend_probe_failed", error=str(exc))
         block_backend = "markdown"
     if block_backend == "postgres":
+        if (
+            isinstance(recall_backend, str)
+            and recall_backend not in _KNOWN_RECALL_BACKENDS
+            and recall_backend not in _POSTGRES_DELEGATED_RECALL_BACKENDS
+        ):
+            _log.warning(
+                "unknown_recall_backend",
+                backend=recall_backend,
+                known=sorted(_KNOWN_RECALL_BACKENDS | _POSTGRES_DELEGATED_RECALL_BACKENDS),
+                selected_backend="postgres",
+                fallback="postgres",
+            )
         return PostgresRecallBackend(workspace, config=cfg)
+
+    if isinstance(recall_backend, str) and recall_backend not in _KNOWN_RECALL_BACKENDS:
+        _log.warning("unknown_recall_backend", backend=recall_backend, known=sorted(_KNOWN_RECALL_BACKENDS), fallback="bm25_scan")
 
     return None  # use built-in BM25 scan
 
