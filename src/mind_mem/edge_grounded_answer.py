@@ -295,6 +295,7 @@ def build_context(
     include_expired: bool = False,
     as_of: Optional[str] = None,
     known_block_ids: Optional[Iterable[str]] = None,
+    admitted_source_ids: Optional[Iterable[str]] = None,
 ) -> EdgeGroundedContext:
     """Serialise the k-hop subgraph around *seed* as citable triples.
 
@@ -318,6 +319,11 @@ def build_context(
         known_block_ids: When given, any cited ``source_block_id`` outside
             this set is reported as :data:`GAP_PROVENANCE_MISSING` — a
             citation whose document is gone is not a citation.
+        admitted_source_ids: Optional source-admission projection. When
+            supplied, only edges asserted by these canonical source ids are
+            traversed or counted. An empty collection therefore serves no
+            source edges; ``None`` preserves the historical unprojected
+            graph helper contract.
 
     Returns:
         An :class:`EdgeGroundedContext`. Deterministic for a fixed graph,
@@ -340,7 +346,8 @@ def build_context(
     # property of the CLAIM (subject, predicate, object) across every
     # block that asserts it, so it cannot be read off the single row the
     # traversal happens to reach.
-    corroboration = kg.corroboration_index()
+    admitted = None if admitted_source_ids is None else frozenset(str(item) for item in admitted_source_ids)
+    corroboration = kg.corroboration_index() if admitted is None else kg.corroboration_index(source_block_ids=admitted)
     triples: list[GroundedTriple] = []
     served: set[str] = set()
     seen_nodes: set[str] = {seed_id}
@@ -360,6 +367,12 @@ def build_context(
             # count of what was withheld is knowable.
             candidates = kg.edges_of(node, direction=direction, include_expired=True)
             for edge in candidates:
+                # Apply the source projection before validity accounting,
+                # corroboration and endpoint expansion. An inadmissible
+                # private edge must not influence a visible confidence,
+                # expired-edge gap, hop frontier, or triple cap.
+                if admitted is not None and edge.source_block_id not in admitted:
+                    continue
                 if wanted_predicates and edge.predicate.value not in wanted_predicates:
                     continue
                 if not include_expired and not _is_live(edge, as_of=moment):

@@ -220,6 +220,21 @@ def _is_binding_error(text: str) -> bool:
     return text.startswith("TypeError:") and any(phrase in text for phrase in _BINDING_PHRASES)
 
 
+def _seed_chat_graph(workspace: str) -> None:
+    """Exercise graph chat with real edges backed by all three source statuses."""
+    from mind_mem.governance_gate import get_gate
+    from mind_mem.knowledge_graph import KnowledgeGraph, default_db_path
+
+    gate = get_gate(workspace)
+    with gate.admit_proposal(proposal_id="READ-SURFACE-GRAPH", content="graph canary fixture", actor="pytest"):
+        graph = KnowledgeGraph(default_db_path(workspace))
+        try:
+            for block_id, status in SEEDED:
+                graph.add_edge("frost", "depends_on", CANARIES[status], source_block_id=block_id)
+        finally:
+            graph.close()
+
+
 def _call(tool: str, kwargs: dict, workspace: str, scope: str) -> str:
     """Invoke one tool and return everything the caller would see, as text.
 
@@ -249,6 +264,8 @@ def _call(tool: str, kwargs: dict, workspace: str, scope: str) -> str:
     os.environ["MIND_MEM_CONFIG"] = os.path.join(workspace, "mind-mem.json")
     try:
         with use_workspace(workspace):
+            if tool == "chat_with_memory" and resolved.get("graph_seed"):
+                _seed_chat_graph(workspace)
             result = fn(**resolved)
     except Exception as exc:  # noqa: BLE001 - a raising tool still gets swept
         return f"{type(exc).__name__}: {exc}"
@@ -258,6 +275,25 @@ def _call(tool: str, kwargs: dict, workspace: str, scope: str) -> str:
         else:
             os.environ["MIND_MEM_SCOPE"] = previous
     return result if isinstance(result, str) else json.dumps(result, default=str)
+
+
+def test_graph_chat_sweep_reaches_admitted_source_in_both_scopes(seed_template: str) -> None:
+    """Missing-graph refusal cannot masquerade as a successful graph canary sweep."""
+    invocations = [kwargs for kwargs in TOOL_INVOCATIONS["chat_with_memory"] if kwargs.get("graph_seed")]
+    assert invocations
+    for scope in SCOPES:
+        for kwargs in invocations:
+            workspace = _fresh(seed_template)
+            try:
+                payload = json.loads(_call("chat_with_memory", kwargs, workspace, scope))
+                rendered = json.dumps(payload)
+                assert payload["graph_evidence"]["status"] == "served", payload
+                assert payload["grounded"] is True, payload
+                assert ACTIVE_ID in rendered and CANARIES["active"] in rendered, payload
+                for canary in WITHHELD_CANARIES:
+                    assert canary not in rendered, payload
+            finally:
+                shutil.rmtree(workspace, ignore_errors=True)
 
 
 @pytest.fixture(scope="module")

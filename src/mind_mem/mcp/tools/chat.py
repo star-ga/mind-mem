@@ -43,6 +43,7 @@ def chat_with_memory(
     on_invalid: str = "reject",
     require_in_evidence: bool = True,
     semantic_required: bool = False,
+    graph_seed: str = "",
 ) -> str:
     """Answer *question* from workspace memory with verified citations.
 
@@ -60,6 +61,9 @@ def chat_with_memory(
         semantic_required: Require semantic entailment verification. The
             current runtime has no verifier, so the tool returns an explicit
             abstention without invoking a generator.
+        graph_seed: Optional graph entity seed. When present, the answer is
+            constrained to source documents behind the served graph edges;
+            missing graph/provenance is returned as an explicit abstention.
 
     Returns:
         JSON string of the :class:`~mind_mem.chat_memory.ChatAnswer`
@@ -98,6 +102,7 @@ def chat_with_memory(
             require_in_evidence=bool(require_in_evidence),
             semantic_required=semantic_required,
             agent_id=authenticated_agent_id(),
+            graph_seed=graph_seed.strip() or None,
         )
     except CitationError as exc:
         _log.warning("chat_with_memory_ungrounded", reason=str(exc))

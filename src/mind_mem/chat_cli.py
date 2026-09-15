@@ -77,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.set_defaults(require_in_evidence=True)
     parser.add_argument("--json", action="store_true", help="emit the full result as JSON")
+    parser.add_argument(
+        "--graph-seed",
+        default="",
+        help="opt-in graph entity seed; cite only its admitted edge provenance documents",
+    )
     return parser
 
 
@@ -108,6 +113,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             limit=args.limit,
             on_invalid=args.on_invalid,
             require_in_evidence=args.require_in_evidence,
+            graph_seed=args.graph_seed.strip() or None,
         )
     except (ValueError, TypeError) as exc:
         print(f"mind-mem-chat: {exc}", file=sys.stderr)

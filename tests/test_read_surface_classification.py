@@ -353,6 +353,7 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
         {"question": "architecture decision", "limit": 5, "semantic_required": False},
         {"question": "frost telemetry", "limit": 5, "generator": "extractive", "on_invalid": "raise", "require_in_evidence": True},
         {"question": "frost telemetry", "limit": 5, "semantic_required": True},
+        {"question": "frost telemetry", "limit": 5, "graph_seed": "frost"},
     ),
     "check_dead_ends": ({"tool": "bash", "command": "ls", "intent": "architecture decision"},),
     "check_guardrails": ({"tool": "bash", "command": "ls", "intent": "architecture decision"},),
