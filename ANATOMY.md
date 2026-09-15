@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1660 | **Est. tokens:** ~4891067
-**Generated:** 2026-09-15 01:11 UTC
+**Files:** 1660 | **Est. tokens:** ~4891109
+**Generated:** 2026-09-15 09:51 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~214477 |
+| `docs/` | 95 | ~214519 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -510,7 +510,7 @@
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `review.md` (~1647 tok, huge) — `mm review` — batch approval for the HITL queue
 - `roadmap-v4.md` (~11275 tok, huge) — mind-mem v4.0 — Design Rationale
-- `roadmap.md` (~14401 tok, huge) — Roadmap
+- `roadmap.md` (~14443 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-audit-sow.md` (~3353 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
 ### `docs/security-baselines/`
