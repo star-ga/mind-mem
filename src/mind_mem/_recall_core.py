@@ -1104,6 +1104,8 @@ def _apply_validity_and_resort(
     workspace: str,
     recall_cfg: dict,
     scoring_instant: date | None,
+    *,
+    skip_validity: bool = False,
 ) -> list[dict]:
     """Apply validity scoring before an indexed leg returns its final top-k.
 
@@ -1111,7 +1113,7 @@ def _apply_validity_and_resort(
     this call demoted a hit; the disabled gate preserves backend ordering,
     even when incoming hits carry stale demotion markers.
     """
-    if apply_validity_gate(hits, workspace, recall_cfg, scoring_instant=scoring_instant):
+    if not skip_validity and apply_validity_gate(hits, workspace, recall_cfg, scoring_instant=scoring_instant):
         hits.sort(key=lambda h: h.get("score", 0.0), reverse=True)
     return hits
 
@@ -1400,7 +1402,13 @@ def recall(
             namespace_manager=ns_manager,
         )
         hits = filter_search_hits(hits, _get_config(workspace))
-        hits = _apply_validity_and_resort(hits, workspace, _indexed_recall_cfg, _scoring_instant)
+        hits = _apply_validity_and_resort(
+            hits,
+            workspace,
+            _indexed_recall_cfg,
+            _scoring_instant,
+            skip_validity=_skip_validity,
+        )
         filtered = _apply_post_filters(
             hits,
             since=since,
@@ -1472,7 +1480,13 @@ def recall(
                 )
             if backend_hits:
                 backend_hits = filter_search_hits(backend_hits, _get_config(workspace))
-                backend_hits = _apply_validity_and_resort(backend_hits, workspace, _indexed_recall_cfg, _scoring_instant)
+                backend_hits = _apply_validity_and_resort(
+                    backend_hits,
+                    workspace,
+                    _indexed_recall_cfg,
+                    _scoring_instant,
+                    skip_validity=_skip_validity,
+                )
                 filtered = _apply_post_filters(
                     backend_hits,
                     since=since,

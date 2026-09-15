@@ -1095,11 +1095,11 @@ def _recall_impl_uncached(
                 return _sqlite_busy_error()
             raise
 
-    # Indexed and hybrid legs do not pass through recall_engine's final
-    # validity stage. Apply the same source-bound lifecycle gate here before
-    # the public post-filter funnel, otherwise an indexed MCP request can
-    # serve a stale semantic-TTL row that the scan path would demote.
-    if results and used_backend in ("sqlite", "hybrid"):
+    # Indexed legs do not pass through recall_engine's final validity stage.
+    # HybridBackend owns its own final gate because direct Python/CLI callers
+    # share that boundary; applying it here as well would demote hybrid
+    # fallback and fused scores twice.
+    if results and used_backend == "sqlite":
         from mind_mem.validity_gate import apply_validity_gate
 
         recall_cfg = _load_config(ws).get("recall", {})
