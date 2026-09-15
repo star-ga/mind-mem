@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1661 | **Est. tokens:** ~4892738
-**Generated:** 2026-09-15 10:01 UTC
+**Files:** 1662 | **Est. tokens:** ~4894698
+**Generated:** 2026-09-15 10:15 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 737 | ~2169205 |
+| `tests/` | 738 | ~2171165 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1458,6 +1458,7 @@
 - `test_granularity_align.py` (~3310 tok, huge) — Tests for granularity_align — named merge operation (Group H, v4.0.x).
 - `test_granularity_align_wiring.py` (~6715 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_graph_backfill_backends.py` (~1526 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_graph_backfill_postgres.py` (~1960 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_graph_boost.py` (~6077 tok, huge) — Tests for graph boost, context packing, config validation, and block cap.
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
 - `test_graph_ingest.py` (~3700 tok, huge) — Corpus → typed knowledge-graph wiring (extraction → HITL signal → apply).
