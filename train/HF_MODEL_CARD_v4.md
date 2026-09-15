@@ -49,47 +49,24 @@ revision pointer, prior revisions pinned at `v4.1.0`, `v4.0.0-base`,
 
 ## What v4 knows
 
-> **Surface drift as of the published mind-mem 5.0.2 package — read before
-> trusting the model on module names.** These weights were trained against an
-> **83-tool** surface.
+> **Runtime and checkpoint scope (2026-09-15).**
+> Published package **mind-mem 5.0.3** exposes **107 registered MCP tools**.
+> These weights were trained against **83 tools** at revision `v4.1.1`.
+> Runtime registration does not extend the model's training coverage.
 >
-> The published 5.0.2 package exposed one hundred two tools; the current
-> repository's 5.0.3 candidate exposes **103**. The candidate has not been
-> published here, so this card does not claim a new package release.
+> The runtime count is measured by `scripts/count_mcp_tools.py`; the trained
+> count uses the same AST rule against the frozen training revision. The older
+> count of 84 double-counted the `recall` registration. Changing this card does
+> not retrain the weights or establish performance on the newer tool surface.
 >
-> **Correction (2026-09-01): this card said 96 and the hub copy said 84.**
-> Both were wrong, and neither had an authority behind it. 83 is measured, not
-> asserted: it is `scripts/count_mcp_tools.py`'s AST rule — applied to
-> `git show v4.1.1:src/mind_mem/mcp/` for the trained revision and to the
-> current repository candidate for its 107-tool runtime count. The
-> **84** was that revision's *registration* total, which double-counts `recall`
-> (registered in both `public.py` and `recall.py`, and exposed once); the same
-> off-by-one produced v3.9's "81" and the "81 + 3 = 84" arithmetic
-> that this card then rounded up to 96.
-> No revision of mind-mem has ever exposed 96 distinct tools:
-> the historical surface went 80 → 83 → 89 → 94
-> → 98 → 102; the current repository candidate is 103.
-> `scripts/check_docs_alignment.py` now recomputes this number from the
-> trained revision on every CI run, so the two copies of this card cannot
-> disagree again.
+> The historical **133/133** result below is the reported checkpoint evaluation,
+> not a new independent evaluation of all current runtime tools. New training
+> requires a frozen implementation and corpus, a held-out evaluation and a
+> separately documented training run. Check model advice against current
+> runtime documentation and the live tool list.
 >
-> The module landscape has moved TWICE, and the current state is not the
-> obvious one. 5.0.0 deleted 47 modules as "unreachable"; for that release the
-> model was describing surfaces that no longer existed (`v4.health`, `v4.pq`,
-> `KernelKind`, `FallbackPolicy`). **5.0.1 restored all 47 and wired 41 of
-> them**, so those names are real again and the model's descriptions of them
-> are broadly right once more. What it cannot know is the *wiring*: which
-> surface each module now hangs off, that most sit behind default-OFF `v4.*`
-> flags, and that 6 modules are deliberately unwired with a recorded trigger.
->
-> The **83 below is deliberate and correct**: it is a fact about these
-> WEIGHTS, not about the server. Editing it to the candidate's live count of
-> 103 would state something untrue about the model you are running. The corpus is
-> regenerated and the model retrained as separate, sequenced work — and it
-> must be regenerated against the frozen implementation selected for the next
-> training run; changing this card does not retrain the published weights. Until then, treat model answers
-> about module names as advisory and check them against `mm doctor` or the
-> live tool list.
+> Package: https://pypi.org/project/mind-mem/5.0.3/
+> Source: `3226e4c7dcdfe2b9d0aaacc701b159bcc8c0fc78`.
 
 v4 knows all 83 MCP tools from v3.x, plus the following v4 surfaces:
 

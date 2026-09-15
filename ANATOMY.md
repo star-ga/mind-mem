@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1653 | **Est. tokens:** ~4860684
-**Generated:** 2026-09-14 23:04 UTC
+**Files:** 1654 | **Est. tokens:** ~4860473
+**Generated:** 2026-09-15 00:59 UTC
 
 ## Token Budget Guide
 
@@ -81,7 +81,7 @@
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
 | `src/mind_mem/importers/` | 9 | ~30470 |
-| `src/mind_mem/mcp/` | 3 | ~6657 |
+| `src/mind_mem/mcp/` | 3 | ~6672 |
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
 | `src/mind_mem/mcp/tools/` | 29 | ~124769 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 731 | ~2153586 |
+| `tests/` | 732 | ~2153741 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -104,7 +104,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 35 | ~80081 |
+| `train/` | 35 | ~79700 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -914,7 +914,7 @@
 ### `src/mind_mem/mcp/`
 
 - `resources.py` (~3242 tok, huge) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~3200 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
+- `server.py` (~3215 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/mcp/tools/`
 
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
@@ -1561,6 +1561,7 @@
 - `test_mcp_ontology_load.py` (~4897 tok, huge) — ``ontology_load`` -- the MCP door onto the OWL-lite schema layer.
 - `test_mcp_ontology_validate.py` (~4754 tok, huge) — ``ontology_validate`` — the MCP tool, as distinct from the ontology library.
 - `test_mcp_pipeline.py` (~1495 tok, large) — Tests for the v3.9.0 pipeline-hash MCP tools."""
+- `test_mcp_product_version.py` (~155 tok, small) — The MCP handshake identifies the product, not its framework dependency."""
 - `test_mcp_quality_preview_matches_enforcement.py` (~1206 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_server.py` (~5336 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_thread_leak.py` (~3511 tok, huge) — Regression tests for the MCP-server thread leak (2026-07-04).
@@ -1948,7 +1949,7 @@
 
 - `CORPUS_HASH_v3.11.0` (~21 tok, tiny) — 02b3ba6a1433e25bdbefe3cebf992ca961734850d1e3550e9496905abbadb3b7  build_corpus.p
 - `CORPUS_HASH_v3.12.0-fullft` (~21 tok, tiny) — 568d1559631a590e44eeec6716081b4534a40ab5f3047feb622cc225ead9ad01  build_corpus.p
-- `HF_MODEL_CARD_v4.md` (~3543 tok, huge) — mind-mem-4b v4.1.1
+- `HF_MODEL_CARD_v4.md` (~3162 tok, huge) — mind-mem-4b v4.1.1
 - `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `Modelfile.v4.0.0` (~576 tok, large) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `Modelfile.v4.1.0` (~395 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.0/mind-mem-4b-v4.1.0-Q4_K_M.gguf

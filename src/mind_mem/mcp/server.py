@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from mind_mem import __version__
 from mind_mem.mcp import resources as _resources
 from mind_mem.mcp.infra.http_auth import (
     ALLOW_UNAUTH_ENV,
@@ -116,6 +117,7 @@ _log = get_logger("mcp_server")
 
 mcp = FastMCP(
     name="mind-mem",
+    version=__version__,
     instructions=(
         "Mind-Mem: persistent, auditable, contradiction-safe memory for coding agents. "
         "Use recall to search memory. Use propose_update to suggest changes (never writes "
