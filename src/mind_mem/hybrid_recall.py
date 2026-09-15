@@ -678,6 +678,44 @@ class HybridBackend:
             return default
         return max(1.0, min(val, 120.0))
 
+    def _apply_validity(
+        self,
+        results: list[dict],
+        workspace: str,
+        scoring_instant: date | None,
+    ) -> list[dict]:
+        """Apply the source-bound lifecycle gate once to a hybrid answer.
+
+        Hybrid owns this boundary because it is shared by direct Python/CLI
+        callers and the MCP surface. Its BM25 fallback may call the core
+        engine, but that leg is explicitly ungated until the final hybrid
+        result exists. This keeps RRF and degraded BM25 answers on one score
+        path while preserving the core engine's own ownership for direct
+        non-hybrid recall.
+        """
+        if not results:
+            return results
+        from ._recall_core import _get_config
+        from .validity_gate import apply_validity_gate
+
+        recall_cfg = _get_config(workspace).get("recall", {})
+        if not isinstance(recall_cfg, dict):
+            recall_cfg = {}
+        if apply_validity_gate(results, workspace, recall_cfg, scoring_instant=scoring_instant):
+            results.sort(key=lambda item: item.get("score", 0.0), reverse=True)
+        return results
+
+    @staticmethod
+    def _validity_enabled(workspace: str) -> bool:
+        """Return whether the bound workspace config requests validity gating."""
+        from ._recall_core import _get_config
+
+        recall_cfg = _get_config(workspace).get("recall", {})
+        if not isinstance(recall_cfg, dict):
+            return False
+        validity_cfg = recall_cfg.get("validity_gate")
+        return isinstance(validity_cfg, dict) and bool(validity_cfg.get("enabled", False))
+
     # -- search entry point -------------------------------------------------
 
     def search(
@@ -692,6 +730,7 @@ class HybridBackend:
         rerank_depth: int | None = None,
         _skip_auto_features: bool = False,
         scoring_instant: date | None = None,
+        _skip_validity: bool = False,
         **kwargs: Any,
     ) -> list[dict]:
         """Public recall entry point; see :meth:`_search` for the pipeline.
@@ -729,6 +768,7 @@ class HybridBackend:
                 rerank_depth=rerank_depth,
                 _skip_auto_features=_skip_auto_features,
                 scoring_instant=scoring_instant,
+                _skip_validity=_skip_validity,
                 **kwargs,
             )
         with _open_trace(query) as tracer:
@@ -743,6 +783,7 @@ class HybridBackend:
                 rerank_depth=rerank_depth,
                 _skip_auto_features=_skip_auto_features,
                 scoring_instant=scoring_instant,
+                _skip_validity=_skip_validity,
                 **kwargs,
             )
             if not isinstance(out, RecallResults):
@@ -763,6 +804,7 @@ class HybridBackend:
         rerank_depth: int | None = None,
         _skip_auto_features: bool = False,
         scoring_instant: date | None = None,
+        _skip_validity: bool = False,
         **kwargs: Any,
     ) -> list[dict]:
         """Run BM25 and (optionally) vector search, fuse via RRF.
@@ -902,6 +944,8 @@ class HybridBackend:
                         graph_boost=graph_boost,
                         retrieve_wide_k=retrieve_wide_k,
                         rerank=rerank,
+                        scoring_instant=scoring_instant,
+                        _skip_validity=_skip_validity,
                         agent_id=agent_id,
                         **kwargs,
                     )
@@ -966,6 +1010,8 @@ class HybridBackend:
                         graph_boost=graph_boost,
                         retrieve_wide_k=retrieve_wide_k,
                         rerank=rerank,
+                        scoring_instant=scoring_instant,
+                        _skip_validity=_skip_validity,
                         agent_id=agent_id,
                         **kwargs,
                     )
@@ -993,17 +1039,20 @@ class HybridBackend:
         _depth = rerank_depth if rerank_depth is not None else resolve_rerank_depth(self._config, limit)
         _ce_active = self._cross_encoder_active(_qt())
         _leg_k = max(retrieve_wide_k, _depth) if _ce_active else retrieve_wide_k
+        validity_on = self._validity_enabled(workspace)
 
         with timed("hybrid_search"):
             if not self._vector_available or pg_server_side:
                 _log.info("hybrid_bm25_only", query=query, pg_server_side=pg_server_side)
-                # ``max(limit, _depth)`` only when a reranker will run — see
-                # the comment above ``_leg_k``. With no reranker this is
-                # ``limit``, the value it has always been.
+                # A validity-enabled answer needs a wide lexical pool before
+                # its final gate, otherwise a stale top hit can crowd out a
+                # fresh lower-ranked hit at the requested limit. The
+                # disabled path retains its historical request size.
+                _result_limit = max(limit, retrieve_wide_k) if validity_on else limit
                 results = self._bm25_search(
                     query,
                     workspace,
-                    limit=max(limit, _depth) if _ce_active else limit,
+                    limit=max(_result_limit, _depth) if _ce_active else _result_limit,
                     active_only=active_only,
                     graph_boost=graph_boost,
                     retrieve_wide_k=_leg_k,
@@ -1023,7 +1072,7 @@ class HybridBackend:
                 results = self._maybe_cross_encoder_rerank(
                     query,
                     results,
-                    limit,
+                    _result_limit,
                     rerank_depth=_depth,
                     ce_active=_ce_active,
                 )
@@ -1034,6 +1083,9 @@ class HybridBackend:
                 vector_degraded: LegMarker | None = None
                 if self.vector_enabled and not self._vector_available and not pg_server_side:
                     vector_degraded = {"leg": "vector", "reason": "unavailable"}
+                if not _skip_validity:
+                    results = self._apply_validity(results, workspace, scoring_instant)
+                results = results[:limit]
                 return _as_results(results, _merge_leg_markers(bm25_degraded, vector_degraded))
 
             # Run BM25 + vector in parallel
@@ -1193,7 +1245,7 @@ class HybridBackend:
             result = self._maybe_cross_encoder_rerank(
                 query,
                 fused,
-                limit,
+                max(limit, retrieve_wide_k) if validity_on else limit,
                 rerank_depth=_depth,
                 ce_active=_ce_active,
             )
@@ -1244,7 +1296,12 @@ class HybridBackend:
                 except Exception as e:
                     _log.warning("hybrid_dedup_failed", error=str(e))
 
+            if not _skip_validity:
+                result = self._apply_validity(result, workspace, scoring_instant)
+
             # Final slice so callers never receive more than they asked for.
+            # Validity must sort the full fused pool first; otherwise a stale
+            # hit at the requested boundary can crowd out a fresh candidate.
             result = result[:limit]
 
             _log.info(
@@ -1267,6 +1324,8 @@ class HybridBackend:
         graph_boost: bool = False,
         retrieve_wide_k: int = 200,
         rerank: bool = True,
+        scoring_instant: date | None = None,
+        _skip_validity: bool = False,
         **kwargs: Any,
     ) -> list[dict]:
         """Search with multiple query variants and fuse results via RRF.
@@ -1319,6 +1378,8 @@ class HybridBackend:
                         retrieve_wide_k=retrieve_wide_k,
                         rerank=rerank,
                         _skip_auto_features=True,
+                        scoring_instant=scoring_instant,
+                        _skip_validity=True,
                         **kwargs,
                     )
                 )
@@ -1343,6 +1404,8 @@ class HybridBackend:
                     retrieve_wide_k=retrieve_wide_k,
                     rerank=rerank,
                     _skip_auto_features=True,
+                    scoring_instant=scoring_instant,
+                    _skip_validity=True,
                     **kwargs,
                 )
 
@@ -1397,6 +1460,9 @@ class HybridBackend:
             degraded=bool(combined_degraded),
         )
 
+        fused = _as_results(fused, combined_degraded)
+        if not _skip_validity:
+            fused = _as_results(self._apply_validity(fused, workspace, scoring_instant), combined_degraded)
         return _as_results(fused[:limit], combined_degraded)
 
     def _maybe_session_boost(self, results: list[dict]) -> list[dict]:
@@ -2055,7 +2121,19 @@ class HybridBackend:
         try:
             from .recall import recall
 
-            return recall(workspace, query, limit=limit, scoring_instant=scoring_instant, agent_id=agent_id, **kwargs)
+            # The outer MCP hybrid surface owns the one final validity pass.
+            # This fallback is a hybrid leg, not an independent public recall;
+            # letting the core apply its gate here would demote these hits once
+            # before RRF/finalisation and again at the serving boundary.
+            return recall(
+                workspace,
+                query,
+                limit=limit,
+                scoring_instant=scoring_instant,
+                agent_id=agent_id,
+                _skip_validity=True,
+                **kwargs,
+            )
         except Exception as exc:
             _log.error("bm25_search_failed", error=str(exc))
             return []

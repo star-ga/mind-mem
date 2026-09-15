@@ -19,6 +19,10 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Hybrid retrieval applies lifecycle validity once across direct, CLI and MCP
+  calls, before the final result limit. Indexed BM25 uses bounded additional
+  candidates when validity is enabled so expired top hits can yield to fresh
+  results; disabled behavior is preserved.
 - Graph backfill reads the configured storage backend and admits its source
   corpus before extraction. Quarantined sources, revoked credentials and
   ambiguous source IDs cannot feed proposed graph edges; unavailable backends

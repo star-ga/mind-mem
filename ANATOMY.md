@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4903419
-**Generated:** 2026-09-15 11:03 UTC
+**Files:** 1665 | **Est. tokens:** ~4882622
+**Generated:** 2026-09-15 11:05 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~214803 |
+| `docs/` | 95 | ~214973 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -76,14 +76,14 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1095302 |
+| `src/mind_mem/` | 238 | ~1070057 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
 | `src/mind_mem/importers/` | 10 | ~34469 |
 | `src/mind_mem/mcp/` | 3 | ~6672 |
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
-| `src/mind_mem/mcp/tools/` | 29 | ~124845 |
+| `src/mind_mem/mcp/tools/` | 29 | ~125231 |
 | `src/mind_mem/skill_opt/` | 11 | ~20899 |
 | `src/mind_mem/spec/` | 4 | ~6845 |
 | `src/mind_mem/storage/` | 2 | ~11712 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 739 | ~2174493 |
+| `tests/` | 740 | ~2178385 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -432,7 +432,7 @@
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~18323 tok, huge) — Configuration Reference
-- `content-lifecycle.md` (~865 tok, large) — Content-category lifetimes
+- `content-lifecycle.md` (~1035 tok, large) — Content-category lifetimes
 ### `docs/decisions/`
 
 - `author-identity.md` (~3174 tok, huge) — Commit author identity — policy, measured state, and the open decision
@@ -866,7 +866,6 @@
 - `guardrails.py` (~5942 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10904 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hybrid_recall.py` (~25245 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 ### `src/mind_mem/importers/`
 
 - `__init__.py` (~1998 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -944,7 +943,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~5590 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~1009 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~22956 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~23342 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `trajectory.py` (~1474 tok, large) — Trajectory-memory MCP tool — case-based recall over past task outcomes.
 - `walkthrough_persona.py` (~1843 tok, huge) — MCP wrapping for v3.9 walkthrough + persona projection.
@@ -1555,6 +1554,7 @@
 - `test_mcp_compiled_truth_add_evidence.py` (~3677 tok, huge) — The one compiled-truth tool that WRITES, and the only one nothing tested.
 - `test_mcp_compiled_truth_contradictions.py` (~4713 tok, huge) — ``compiled_truth_contradictions`` — the detective half of the truth pages.
 - `test_mcp_compiled_truth_load.py` (~4697 tok, huge) — The compiled-truth read tool -- registered since v3.2.0, never tested.
+- `test_mcp_content_lifecycle.py` (~3892 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_db_error_backstop.py` (~1717 tok, huge) — The MCP tool decorator must not let a backend DB error crash the server.
 - `test_mcp_entity_merge.py` (~4607 tok, huge) — Governed RA.4 entity equivalence controls.
 - `test_mcp_export_corpus_boundary.py` (~923 tok, large) — MCP export must use the same configured, admitted corpus as other exports.

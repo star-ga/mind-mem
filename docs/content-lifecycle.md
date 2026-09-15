@@ -69,5 +69,15 @@ Acceptance controls are in `tests/test_content_lifecycle.py`: real scan and
 SQLite recall, pinned-clock replay, stale cached metadata, file-touch
 resistance, idle-tier preservation, explicit demotion, credential withdrawal
 through recall and the public direct-fetch handler, and invalid configuration.
-Namespace-specific source identity and a full transport sweep remain part of
-the roadmap integration review; these controls do not establish them.
+`tests/test_mcp_content_lifecycle.py` adds public MCP, direct HybridBackend and
+CLI controls, including indexed and degraded retrieval, namespace collisions,
+one validity application per result path, and a fixed scoring date. Hybrid
+retrieval applies validity before its final result limit. Explicit indexed
+BM25 requests widen the candidate pool within existing recall limits when
+validity is enabled, so a demoted top hit can yield to a fresh candidate.
+Ranking still operates over that bounded pool, not every record in storage.
+Disabled validity preserves the prior candidate width and result behavior.
+
+These controls cover the named source and backend paths. Complete namespace
+identity and transport acceptance remain part of the roadmap integration
+review; this test set does not establish every deployment combination.
