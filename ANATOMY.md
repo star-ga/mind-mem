@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1653 | **Est. tokens:** ~4860399
-**Generated:** 2026-09-14 23:53 UTC
+**Files:** 1653 | **Est. tokens:** ~4860798
+**Generated:** 2026-09-15 00:19 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1091036 |
+| `src/mind_mem/` | 239 | ~1091183 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 731 | ~2153773 |
+| `tests/` | 731 | ~2154025 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -955,7 +955,7 @@
 - `memory_tiers.py` (~6653 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `merkle_tree.py` (~3673 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mic_map.py` (~8384 tok, huge) — MIC/MAP — STARGA-native serialization for MIND IR graphs.
-- `mind_ffi.py` (~7638 tok, huge) — mind-mem FFI bridge — loads an optional native scoring library.
+- `mind_ffi.py` (~7785 tok, huge) — mind-mem FFI bridge — loads an optional native scoring library.
 - `mind_filelock.py` (~10088 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~3107 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4920 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
@@ -1613,7 +1613,7 @@
 - `test_multi_modal_wiring.py` (~8022 tok, huge) — ``multi_modal`` is actually reachable — and the door it opens quarantines.
 - `test_namespace_reachability.py` (~2646 tok, huge) — M2: namespace direct-get versus production recall reachability.
 - `test_namespaces.py` (~5893 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
-- `test_native_c_abi.py` (~2000 tok, huge) — Required, opt-in ABI gate for the checked-in C kernel reference.
+- `test_native_c_abi.py` (~2252 tok, huge) — Required, opt-in ABI gate for the checked-in C kernel reference.
 - `test_network_audit_headers.py` (~5743 tok, huge) — Audit headers propagate end-to-end — roadmap v4.0.0 Group D (RM-2291).
 - `test_network_cert_pinning.py` (~5212 tok, huge) — Certificate pinning is opt-in, and when it is on it refuses — RM-2290 / RM-2382.
 - `test_network_tls_floor.py` (~3100 tok, huge) — The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).

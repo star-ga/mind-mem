@@ -152,6 +152,29 @@ def test_top_k_mask_boundaries_and_input_order_ties(production_kernel: MindMemKe
     assert production_kernel.top_k_mask_py(normalized_scores, k) == expected
 
 
+@pytest.mark.parametrize("k", [2**31, 2**32, -(2**31) - 1, -(2**32), 10**100, -(10**100)])
+def test_top_k_mask_rejects_k_outside_native_c_int_range(production_kernel: MindMemKernel, k: int):
+    with pytest.raises(OverflowError, match="native C int"):
+        production_kernel.top_k_mask_py([1.0, 0.0], k)
+
+
+@pytest.mark.parametrize(
+    ("k", "expected"),
+    [
+        (-(1 << (ctypes.sizeof(ctypes.c_int) * 8 - 1)), [False, False]),
+        ((1 << (ctypes.sizeof(ctypes.c_int) * 8 - 1)) - 1, [True, True]),
+    ],
+)
+def test_top_k_mask_accepts_native_c_int_endpoints(production_kernel: MindMemKernel, k: int, expected: list[bool]):
+    assert production_kernel.top_k_mask_py([1.0, 0.0], k) == expected
+
+
+@pytest.mark.parametrize("k", [1.5, "2", None])
+def test_top_k_mask_preserves_non_index_type_refusal(production_kernel: MindMemKernel, k: object):
+    with pytest.raises(TypeError, match="interpreted as an integer"):
+        production_kernel.top_k_mask_py([1.0, 0.0], k)  # type: ignore[arg-type]
+
+
 def _compile_version_provider(tmp_path: Path, version: str) -> Path:
     """Build a symbol-only test provider; this is not the production C ABI."""
     source = tmp_path / "version_provider.c"
