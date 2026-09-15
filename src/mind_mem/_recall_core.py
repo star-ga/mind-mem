@@ -1209,6 +1209,7 @@ def recall(
     scoring_instant: date | None = None,
     guardrail_context: Mapping[str, Any] | GuardrailContext | None = None,
     _allow_decompose: bool = True,
+    _skip_validity: bool = False,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
 
@@ -1654,6 +1655,7 @@ def recall(
                         event_id=event_id,
                         min_maturity=min_maturity,
                         _allow_decompose=False,
+                        _skip_validity=_skip_validity,
                     )
                 except RecursionError:
                     # Never swallow RecursionError silently — it indicates a
@@ -2646,7 +2648,8 @@ def recall(
     # blended score, and before the 2.8/2.9 re-sort + knee cutoff so
     # demotion actually moves blocks below the knee. A complete no-op
     # (no annotation, no DB reads) when disabled.
-    apply_validity_gate(deduped, workspace, recall_cfg, scoring_instant=_scoring_instant)
+    if not _skip_validity:
+        apply_validity_gate(deduped, workspace, recall_cfg, scoring_instant=_scoring_instant)
     _stage_counts["validity_demoted"] = sum(1 for r in deduped if r.get("_validity_demoted"))
 
     # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only

@@ -2055,7 +2055,19 @@ class HybridBackend:
         try:
             from .recall import recall
 
-            return recall(workspace, query, limit=limit, scoring_instant=scoring_instant, agent_id=agent_id, **kwargs)
+            # The outer MCP hybrid surface owns the one final validity pass.
+            # This fallback is a hybrid leg, not an independent public recall;
+            # letting the core apply its gate here would demote these hits once
+            # before RRF/finalisation and again at the serving boundary.
+            return recall(
+                workspace,
+                query,
+                limit=limit,
+                scoring_instant=scoring_instant,
+                agent_id=agent_id,
+                _skip_validity=True,
+                **kwargs,
+            )
         except Exception as exc:
             _log.error("bm25_search_failed", error=str(exc))
             return []

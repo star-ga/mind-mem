@@ -75,6 +75,125 @@ def test_mcp_indexed_path_applies_semantic_ttl_and_keeps_admitted_durable(tmp_pa
     assert "_validity_demoted" not in by_id["D-20260901-002"]
 
 
+def test_hybrid_scan_fallback_applies_semantic_ttl_once(tmp_path: Path, monkeypatch) -> None:
+    """Hybrid's no-index BM25 fallback must match the direct BM25 score.
+
+    ``HybridBackend`` reaches the core ``recall`` implementation when its
+    SQLite leg is unavailable. The serving boundary applies the final gate;
+    the private fallback call must therefore leave that gate for the boundary
+    rather than demoting the same score twice.
+    """
+    workspace = _workspace(tmp_path)
+    monkeypatch.setattr(recall_tool, "_workspace", lambda: workspace)
+    config_path = Path(workspace) / "mind-mem.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    # Keep the direct comparison on the core scan path. The MCP request still
+    # asks for hybrid below; its BM25 leg is forced through the same core scan
+    # fallback after the indexed probe is made unavailable.
+    config["recall"]["backend"] = "scan"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    bm25 = json.loads(
+        recall_tool._recall_impl_ranked(
+            "orchid",
+            limit=10,
+            backend="bm25",
+            scoring_instant=NOW,
+        )
+    )
+
+    # Force the real HybridBackend -> core-recall fallback seam. The current
+    # SQLite helper has a re-entrancy guard that can return an empty result on
+    # a missing index; that is a separate degradation control, so make the
+    # backend-unavailable transition explicit here.
+    import mind_mem.sqlite_index as sqlite_index
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("synthetic index unavailable")
+
+    monkeypatch.setattr(sqlite_index, "query_index", unavailable)
+
+    import mind_mem.validity_gate as validity_gate
+
+    calls = []
+    real_gate = validity_gate.apply_validity_gate
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return real_gate(*args, **kwargs)
+
+    monkeypatch.setattr(validity_gate, "apply_validity_gate", counted)
+
+    hybrid = json.loads(
+        recall_tool._recall_impl_ranked(
+            "orchid",
+            limit=10,
+            backend="auto",
+            scoring_instant=NOW,
+        )
+    )
+
+    bm25_rows = {row["_id"]: row for row in bm25["results"]}
+    hybrid_rows = {row["_id"]: row for row in hybrid["results"]}
+    assert list(bm25_rows) == list(hybrid_rows)
+    assert {key: row["score"] for key, row in bm25_rows.items()} == {key: row["score"] for key, row in hybrid_rows.items()}
+    assert calls == [1]
+    assert hybrid_rows["D-20260901-001"]["validity"]["content_lifecycle"]["state"] == "stale"
+    assert hybrid_rows["D-20260901-001"]["_validity_demoted"] is True
+
+
+def test_hybrid_rrf_applies_semantic_ttl_once_after_fusion(tmp_path: Path, monkeypatch) -> None:
+    """A genuine two-arm RRF result receives one final lifecycle gate."""
+    workspace = _workspace(tmp_path)
+    build_index(workspace)
+    monkeypatch.setattr(recall_tool, "_workspace", lambda: workspace)
+
+    from mind_mem.hybrid_recall import HybridBackend
+
+    real_factory = HybridBackend.from_config
+
+    def configured(config):
+        backend = real_factory(config)
+        backend._vector_available = True
+        monkeypatch.setattr(
+            backend,
+            "_vector_search",
+            lambda query, workspace, limit=200, active_only=False, **kwargs: [
+                {"_id": "D-20260901-001", "score": 0.99},
+                {"_id": "D-20260901-002", "score": 0.98},
+            ],
+        )
+        return backend
+
+    monkeypatch.setattr(HybridBackend, "from_config", staticmethod(configured))
+
+    import mind_mem.validity_gate as validity_gate
+
+    calls = []
+    real_gate = validity_gate.apply_validity_gate
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return real_gate(*args, **kwargs)
+
+    monkeypatch.setattr(validity_gate, "apply_validity_gate", counted)
+
+    envelope = json.loads(
+        recall_tool._recall_impl_ranked(
+            "orchid",
+            limit=10,
+            backend="auto",
+            scoring_instant=NOW,
+        )
+    )
+
+    assert calls == [1]
+    by_id = {row["_id"]: row for row in envelope["results"]}
+    assert {"bm25", "vector"} <= set(by_id["D-20260901-001"]["fusion_sources"])
+    assert by_id["D-20260901-001"]["validity"]["content_lifecycle"]["state"] == "stale"
+    assert by_id["D-20260901-001"]["_validity_demoted"] is True
+
+
 def test_mcp_stale_index_cannot_borrow_namespace_lifecycle_or_revoked_status(tmp_path: Path, monkeypatch) -> None:
     workspace = _workspace(tmp_path)
     shared = Path(workspace) / "shared" / "decisions"
