@@ -711,6 +711,12 @@ measure. Wiring comes first, with the yield measurement built into the wiring:
       set; user-scope graph mutation now routes through signal staging +
       approval only, making the Group K "every graph mutation routes through
       HITL" guardrail true in code, not just in docs.
+**Unreleased backfill correction:** the default loader now uses the configured
+backend and shared source-admission rules, including credential revocation and
+ambiguous source-ID refusal. Backend errors propagate rather than producing an
+empty-success report. This fixes the backfill input path; it does not count as
+a completed live-corpus run or approval of extracted edges.
+
 - [ ] **Run the backfill over the live corpus** — with the wiring landed,
       run `mm graph-backfill` over the 1469-block corpus, read the yield
       numbers, review/approve the staged edges, then enable

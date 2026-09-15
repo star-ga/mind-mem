@@ -14,6 +14,10 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Graph backfill reads the configured storage backend and admits its source
+  corpus before extraction. Quarantined sources, revoked credentials and
+  ambiguous source IDs cannot feed proposed graph edges; unavailable backends
+  no longer appear as a successful empty backfill.
 - Native top-k validates integer and C-ABI bounds and matches the reference
   behavior on boundary inputs.
 - Runpod launch requires an approval bound to the exact selected training

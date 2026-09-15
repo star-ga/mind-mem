@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1660 | **Est. tokens:** ~4891109
-**Generated:** 2026-09-15 09:51 UTC
+**Files:** 1661 | **Est. tokens:** ~4892744
+**Generated:** 2026-09-15 10:00 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 239 | ~1095199 |
+| `src/mind_mem/` | 239 | ~1095302 |
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 736 | ~2167679 |
+| `tests/` | 737 | ~2169211 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -858,7 +858,7 @@
 - `governance_gate.py` (~21786 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `governance_raft.py` (~2474 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
 - `granularity_align.py` (~3714 tok, huge) — Granularity / abstraction alignment — named merge operation (Group H, v4.0.x).
-- `graph_ingest.py` (~7386 tok, huge) — Corpus → typed knowledge-graph ingestion (HITL-gated).
+- `graph_ingest.py` (~7489 tok, huge) — Corpus → typed knowledge-graph ingestion (HITL-gated).
 - `graph_recall.py` (~4634 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `graph_schema.py` (~2082 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `guardrail_patterns.py` (~1463 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1457,6 +1457,7 @@
 - `test_governed_write_paths.py` (~10704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_granularity_align.py` (~3310 tok, huge) — Tests for granularity_align — named merge operation (Group H, v4.0.x).
 - `test_granularity_align_wiring.py` (~6715 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_graph_backfill_backends.py` (~1532 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_graph_boost.py` (~6077 tok, huge) — Tests for graph boost, context packing, config validation, and block cap.
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
 - `test_graph_ingest.py` (~3700 tok, huge) — Corpus → typed knowledge-graph wiring (extraction → HITL signal → apply).
