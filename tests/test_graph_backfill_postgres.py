@@ -46,10 +46,9 @@ def _insert_rows(dsn: str, schema: str, rows: list[dict[str, Any]]) -> None:
     assert pgsql is not None
     with psycopg.connect(dsn, autocommit=True) as conn:
         table = pgsql.Identifier(schema, "blocks")
-        statement = pgsql.SQL(
-            "INSERT INTO {table} (id, file_path, content, metadata, active) "
-            "VALUES (%s, %s, %s, %s::jsonb, %s)"
-        ).format(table=table)
+        statement = pgsql.SQL("INSERT INTO {table} (id, file_path, content, metadata, active) VALUES (%s, %s, %s, %s::jsonb, %s)").format(
+            table=table
+        )
         for row in rows:
             metadata = dict(row["metadata"])
             conn.execute(
