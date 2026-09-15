@@ -11,6 +11,7 @@ import subprocess
 import venv
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -40,13 +41,15 @@ def _wheel(tmp_path: Path, version: str = "5.0.3") -> Path:
     return path
 
 
-def _wheel_with_member(tmp_path: Path, member: str) -> Path:
+def _wheel_with_member(tmp_path: Path, member: str, *, alias: str | None = None) -> Path:
     path = tmp_path / "mind_mem-5.0.3-py3-none-any.whl"
     dist_info = "mind_mem-5.0.3.dist-info"
     members = {
         member: b"unsafe member\n",
         f"{dist_info}/METADATA": b"Metadata-Version: 2.1\nName: mind-mem\nVersion: 5.0.3\n",
     }
+    if alias is not None:
+        members[alias] = b"alias\n"
     record = []
     for name, content in members.items():
         digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest()).rstrip(b"=").decode()
@@ -54,7 +57,11 @@ def _wheel_with_member(tmp_path: Path, member: str) -> Path:
     record.append(f"{dist_info}/RECORD,,")
     with zipfile.ZipFile(path, "w") as archive:
         for name, content in members.items():
-            archive.writestr(name, content)
+            # ZipInfo normalizes Windows separators and truncates NULs even
+            # when writing. Preserve the hostile name in the actual archive.
+            info = zipfile.ZipInfo(name)
+            info.filename = info.orig_filename = name
+            archive.writestr(info, content)
         archive.writestr(f"{dist_info}/RECORD", "\n".join(record) + "\n")
     return path
 
@@ -66,6 +73,7 @@ def _wheel_with_member(tmp_path: Path, member: str) -> Path:
         "/absolute.txt",
         "\\\\server\\outside.txt",
         "mind_mem\\outside.py",
+        "mind_mem/outside.py\x00suffix",
         "mind_mem/../outside.py",
         "mind_mem/./outside.py",
         "mind_mem//outside.py",
@@ -75,7 +83,47 @@ def _wheel_with_member(tmp_path: Path, member: str) -> Path:
 )
 def test_wheel_rejects_unsafe_member_paths(tmp_path: Path, member: str) -> None:
     wheel = _wheel_with_member(tmp_path, member)
+    with zipfile.ZipFile(wheel) as archive:
+        assert archive.infolist()[0].orig_filename == member
     with pytest.raises(_MODULE.SbomValidationError, match="unsafe archive member path"):
+        _MODULE._wheel_manifest(wheel, "5.0.3")
+
+
+@pytest.fixture
+def windows_zip_separators(monkeypatch) -> None:
+    # Exercise the stdlib's Windows normalization without changing global os
+    # or pathlib behavior on the host. monkeypatch restores zipfile.os.
+    monkeypatch.setattr(zipfile, "os", SimpleNamespace(**{**vars(os), "sep": "\\", "altsep": "/"}))
+
+
+@pytest.mark.parametrize("include_alias", [False, True])
+def test_wheel_rejects_windows_normalized_member_names(tmp_path: Path, windows_zip_separators, include_alias: bool) -> None:
+    member = "mind_mem\\outside.py"
+    normalized = "mind_mem/outside.py"
+    wheel = _wheel_with_member(tmp_path, member, alias=normalized if include_alias else None)
+    with zipfile.ZipFile(wheel) as archive:
+        entry = archive.infolist()[0]
+        assert entry.orig_filename == member
+        assert entry.filename == normalized
+        assert archive.namelist().count(normalized) == (2 if include_alias else 1)
+    with pytest.raises(_MODULE.SbomValidationError, match="unsafe archive member path"):
+        _MODULE._wheel_manifest(wheel, "5.0.3")
+
+
+def test_valid_wheel_survives_windows_zip_normalization(tmp_path: Path, windows_zip_separators) -> None:
+    wheel = _wheel(tmp_path)
+    name, version, payload = _MODULE._wheel_manifest(wheel, "5.0.3")
+    assert (name, version) == ("mind-mem", "5.0.3")
+    assert payload["mind_mem/__init__.py"] == b'__version__ = "5.0.3"\n'
+    assert len(payload) == 2
+
+
+def test_wheel_rejects_duplicate_raw_member_names(tmp_path: Path) -> None:
+    wheel = _wheel(tmp_path)
+    with zipfile.ZipFile(wheel, "a") as archive:
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            archive.writestr("mind_mem/__init__.py", b"duplicate\n")
+    with pytest.raises(_MODULE.SbomValidationError, match="duplicate archive members"):
         _MODULE._wheel_manifest(wheel, "5.0.3")
 
 

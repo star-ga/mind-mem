@@ -64,6 +64,7 @@ def _validate_wheel_member_path(path: str) -> None:
         not path
         or path.startswith(("/", "\\"))
         or "\\" in path
+        or "\x00" in path
         or any(part in {"", ".", ".."} for part in parts)
         or ntpath.splitdrive(path)[0]
     ):
@@ -78,11 +79,19 @@ def _wheel_manifest(wheel: Path, expected_version: str) -> tuple[str, str, dict[
         raise SbomValidationError(f"wheel filename must be mind_mem-{expected_version}-<tags>.whl: {wheel.name}")
     try:
         with zipfile.ZipFile(wheel) as archive:
-            names = archive.namelist()
+            names = []
+            for entry in archive.infolist():
+                # ZipInfo normalizes Windows separators and truncates NULs.
+                # Check the raw name before any normalized-key lookup can
+                # hide it or alias another member in NameToInfo.
+                _validate_wheel_member_path(entry.orig_filename)
+                if entry.filename != entry.orig_filename:
+                    raise SbomValidationError(
+                        f"wheel contains unsafe archive member path normalization: {entry.orig_filename!r} -> {entry.filename!r}"
+                    )
+                names.append(entry.filename)
             if len(names) != len(set(names)):
                 raise SbomValidationError("wheel contains duplicate archive members")
-            for path in names:
-                _validate_wheel_member_path(path)
             metadata_names = [name for name in names if name.endswith(".dist-info/METADATA")]
             if len(metadata_names) != 1:
                 raise SbomValidationError("wheel must contain exactly one dist-info/METADATA")
