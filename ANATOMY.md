@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1660 | **Est. tokens:** ~4891067
-**Generated:** 2026-09-15 01:11 UTC
+**Files:** 1660 | **Est. tokens:** ~4891230
+**Generated:** 2026-09-15 09:55 UTC
 
 ## Token Budget Guide
 
@@ -62,7 +62,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9632 |
-| `scripts/` | 23 | ~75938 |
+| `scripts/` | 23 | ~75953 |
 | `sdk/go/` | 11 | ~9890 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4864 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 736 | ~2167679 |
+| `tests/` | 736 | ~2167825 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -104,7 +104,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 35 | ~81842 |
+| `train/` | 35 | ~81844 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -612,7 +612,7 @@
 - `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `build_integrity_manifest.py` (~681 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
-- `build_release_sbom.py` (~4837 tok, huge) — Generate and validate the release SBOM for the built wheel.
+- `build_release_sbom.py` (~4852 tok, huge) — Generate and validate the release SBOM for the built wheel.
 - `check_author_identity.sh` (~1880 tok, huge) — check_author_identity.sh — enforce the single-author identity rule.
 - `check_built_integrity.py` (~3938 tok, huge) — Fail-closed verification of the integrity manifest in release archives.
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
@@ -1565,7 +1565,7 @@
 - `test_mcp_ontology_load.py` (~4897 tok, huge) — ``ontology_load`` -- the MCP door onto the OWL-lite schema layer.
 - `test_mcp_ontology_validate.py` (~4754 tok, huge) — ``ontology_validate`` — the MCP tool, as distinct from the ontology library.
 - `test_mcp_pipeline.py` (~1495 tok, large) — Tests for the v3.9.0 pipeline-hash MCP tools."""
-- `test_mcp_product_version.py` (~155 tok, small) — The MCP handshake identifies the product, not its framework dependency."""
+- `test_mcp_product_version.py` (~285 tok, medium) — The MCP handshake identifies the product, not its framework dependency."""
 - `test_mcp_quality_preview_matches_enforcement.py` (~1206 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_server.py` (~5336 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_thread_leak.py` (~3511 tok, huge) — Regression tests for the MCP-server thread leak (2026-07-04).
@@ -1751,7 +1751,7 @@
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
 - `test_release_preflight_gates.py` (~5444 tok, huge) — Tests for the release-preflight gates.
-- `test_release_sbom.py` (~2080 tok, huge) — Fail-closed controls for the wheel-bound release SBOM helper."""
+- `test_release_sbom.py` (~2096 tok, huge) — Fail-closed controls for the wheel-bound release SBOM helper."""
 - `test_remote_vector_admission.py` (~2441 tok, huge) — Remote vector hits must be checked against the current corpus authority."""
 - `test_replay_check.py` (~4122 tok, huge) — Replay — does the ledger corroborate what one recall attestation claims?
 - `test_repo_task_generation.py` (~3390 tok, huge) — Tests for the real-repo A/B task generator.
@@ -1986,7 +1986,7 @@
 - `ship_gguf_ollama_v4.1.1.py` (~1804 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
 - `spend_guard.py` (~3348 tok, huge) — spend_guard — launch approval checks and operator run records.
 - `train_qlora.py` (~1433 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
-- `training_readiness_manifest.py` (~3422 tok, huge) — Create a deterministic, source-bound training-readiness manifest.
+- `training_readiness_manifest.py` (~3424 tok, huge) — Create a deterministic, source-bound training-readiness manifest.
 - `upload_to_hf.py` (~6912 tok, huge) — Push the retrained checkpoint + model card to star-ga/mind-mem-4b.
 ### `web/`
 

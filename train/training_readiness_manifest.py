@@ -176,7 +176,7 @@ def _read_model_facts() -> dict[str, Any]:
     default_values = re.findall(r"current default base is `([^`\n]+)`", readme)
     default_base = _single_source_fact("default base-model", default_values)
     trained_values = re.findall(
-        r"trained\s+against\s+an\s+(?:>\s*)?\*\*(\d+)-tool\*\*\s+surface",
+        r"trained\s+against\s+(?:an\s+)?(?:>\s*)?\*\*(\d+)(?:-tool|\s+tools?)\*\*",
         model_card,
     )
     trained_tools = _single_source_fact("trained-tool count", trained_values)

@@ -53,6 +53,7 @@ def _target(tmp_path: Path, wheel: Path, *, install: bool = True, extra: bool = 
                 "import json,sysconfig; print(json.dumps({'purelib': sysconfig.get_path('purelib'), 'data': sysconfig.get_path('data')}))",
             ],
             text=True,
+            encoding="utf-8",
         )
     )
     if install:
@@ -150,6 +151,7 @@ def test_empty_target_and_payload_drift_are_refused(tmp_path: Path) -> None:
             subprocess.check_output(
                 [str(target), "-I", "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
                 text=True,
+                encoding="utf-8",
             ).strip()
         )
         / "mind_mem"

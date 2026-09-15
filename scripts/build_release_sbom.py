@@ -132,6 +132,7 @@ def _target_installation(target_python: Path) -> dict[str, Any]:
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             env=_clean_environment(),
         )
         result = json.loads(completed.stdout)
@@ -307,6 +308,7 @@ def _measure_generator_version(cyclonedx: Path) -> str:
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             env=_clean_environment(),
         )
     except (OSError, subprocess.CalledProcessError) as exc:
