@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1662 | **Est. tokens:** ~4895560
-**Generated:** 2026-09-15 10:55 UTC
+**Files:** 1665 | **Est. tokens:** ~4903135
+**Generated:** 2026-09-15 11:00 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 738 | ~2171876 |
+| `tests/` | 739 | ~2174493 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -104,7 +104,7 @@
 | `tests/integration/` | 2 | ~1982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 35 | ~81844 |
+| `train/` | 37 | ~86802 |
 | `web/` | 5 | ~1500 |
 | `web/app/` | 2 | ~1204 |
 | `web/app/console/` | 1 | ~1169 |
@@ -1842,6 +1842,7 @@
 - `test_smart_chunker_wiring.py` (~4909 tok, huge) — ``smart_chunker`` wired into the BM25 chunk-scoring boost.
 - `test_snapshot_path_confinement.py` (~1455 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_snapshot_snap_id.py` (~5713 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_source_training_corpus.py` (~2617 tok, huge) — Controls for the source-only MCP contract preparation artifact."""
 - `test_spec_binding.py` (~3156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_spend_approval_consumer.py` (~2487 tok, huge) — Controls for the approval parser and the RunPod launch boundary."""
@@ -1972,6 +1973,7 @@
 - `audit_semantic_correctness.py` (~1971 tok, huge) — Cross-check every 'file X ships Y' claim in the corpus against src/.
 - `backport_sweep.py` (~1722 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
 - `build_model_card.py` (~5526 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
+- `build_source_corpus.py` (~4473 tok, huge) — Build a source-only MCP contract corpus.
 - `eval_harness.py` (~8821 tok, huge) — Eval harness for mind-mem-4b.
 - `eval_holdout.py` (~2556 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
 - `eval_receipt.py` (~6551 tok, huge) — Content-addressed receipts binding a 4B evaluation report to its inputs.
@@ -1986,6 +1988,7 @@
 - `runpod_full_ft.py` (~2669 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `ship_gguf_ollama_v4.1.0.py` (~1754 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.0.
 - `ship_gguf_ollama_v4.1.1.py` (~1804 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
+- `source-corpus.md` (~485 tok, medium) — Source MCP contract corpus (preparation only)
 - `spend_guard.py` (~3348 tok, huge) — spend_guard — launch approval checks and operator run records.
 - `train_qlora.py` (~1433 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `training_readiness_manifest.py` (~3424 tok, huge) — Create a deterministic, source-bound training-readiness manifest.
