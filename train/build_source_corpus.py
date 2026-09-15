@@ -58,7 +58,10 @@ def _safe_source_path(root: Path, relative: Path) -> tuple[Path, bytes]:
     resolved = path.resolve()
     if resolved != path.absolute() or resolved.parent != path.absolute().parent:
         raise SourceCorpusError(f"source path resolves outside checkout: {relative}")
-    data = path.read_bytes()
+    if path.stat().st_size > MAX_SOURCE_BYTES:
+        raise SourceCorpusError(f"source exceeds {MAX_SOURCE_BYTES} bytes: {relative}")
+    with path.open("rb") as handle:
+        data = handle.read(MAX_SOURCE_BYTES + 1)
     if len(data) > MAX_SOURCE_BYTES:
         raise SourceCorpusError(f"source exceeds {MAX_SOURCE_BYTES} bytes: {relative}")
     return path, data
@@ -147,16 +150,24 @@ def _registration_modules(server_source: bytes) -> list[tuple[str, str, int]]:
     for node in tree.body:
         if isinstance(node, ast.ImportFrom) and node.module == "mind_mem.mcp.tools":
             for item in node.names:
-                aliases[item.asname or item.name] = item.name
+                alias = item.asname or item.name
+                previous = aliases.get(alias)
+                if previous is not None:
+                    raise SourceCorpusError(f"ambiguous registration import alias {alias!r}")
+                aliases[alias] = item.name
     registrations: list[tuple[str, str, int]] = []
+    direct_calls: set[int] = set()
     for node in tree.body:
         if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
             continue
         call = node.value
         if not isinstance(call.func, ast.Attribute) or call.func.attr != "register":
             continue
-        if len(call.args) != 1 or not isinstance(call.func.value, ast.Name):
+        if len(call.args) != 1 or call.keywords or not isinstance(call.func.value, ast.Name):
             raise SourceCorpusError(f"unsupported register call at mcp/server.py:{node.lineno}")
+        if not isinstance(call.args[0], ast.Name) or call.args[0].id != "mcp":
+            raise SourceCorpusError(f"registration receiver is not mcp at mcp/server.py:{node.lineno}")
+        direct_calls.add(id(call))
         alias = call.func.value.id
         module = aliases.get(alias)
         if module is None:
@@ -167,6 +178,14 @@ def _registration_modules(server_source: bytes) -> list[tuple[str, str, int]]:
                 continue
             raise SourceCorpusError(f"unresolved registration module {alias!r} at mcp/server.py:{node.lineno}")
         registrations.append((alias, module, node.lineno))
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "register"
+            and id(node) not in direct_calls
+        ):
+            raise SourceCorpusError(f"nested or conditional register call at mcp/server.py:{node.lineno}")
     if not registrations:
         raise SourceCorpusError("no MCP registration calls found in mcp/server.py")
     return registrations
@@ -191,6 +210,7 @@ def _registered_tools(root: Path, loaded: dict[Path, bytes]) -> list[Registratio
             raise SourceCorpusError(f"registration function is missing or ambiguous: {path}")
         definitions = _module_definitions(path, source)
         register_body = register_defs[0].body
+        direct_tool_attributes: set[int] = set()
         for nested in register_body:
             if any(
                 isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "tool"
@@ -205,6 +225,8 @@ def _registered_tools(root: Path, loaded: dict[Path, bytes]) -> list[Registratio
                 continue
             if not isinstance(call.func.value, ast.Name) or call.func.value.id != "mcp" or len(call.args) != 1:
                 raise SourceCorpusError(f"unsupported mcp.tool registration at {path}:{node.lineno}")
+            if call.keywords:
+                raise SourceCorpusError(f"mcp.tool keyword options are unsupported at {path}:{node.lineno}")
             target = call.args[0]
             if not isinstance(target, ast.Name):
                 raise SourceCorpusError(f"non-symbol mcp.tool registration at {path}:{node.lineno}")
@@ -219,6 +241,16 @@ def _registered_tools(root: Path, loaded: dict[Path, bytes]) -> list[Registratio
             item = Registration(target.id, module, path, function.lineno, node.lineno, function)
             seen[target.id] = item
             result.append(item)
+            direct_tool_attributes.add(id(call.func))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == "tool"
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "mcp"
+                and id(node) not in direct_tool_attributes
+            ):
+                raise SourceCorpusError(f"unsupported nested or decorator mcp.tool use at {path}:{node.lineno}")
     if len(result) > MAX_RECORDS:
         raise SourceCorpusError(f"registered tool count exceeds {MAX_RECORDS}")
     return result

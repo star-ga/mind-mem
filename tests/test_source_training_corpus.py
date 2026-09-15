@@ -136,6 +136,63 @@ def test_undocumented_registered_symbol_refuses_without_partial_output(tmp_path:
     assert list(output.iterdir()) == []
 
 
+@pytest.mark.parametrize(
+    ("label", "target", "rewrite", "needle"),
+    [
+        (
+            "tool-keyword",
+            "public",
+            lambda server, public: public.replace("mcp.tool(recall)\n", "mcp.tool(recall, name='renamed')\n", 1),
+            "keyword options",
+        ),
+        (
+            "wrong-receiver",
+            "server",
+            lambda server, public: server.replace("_tools_recall.register(mcp)", "_tools_recall.register(other_server)", 1),
+            "receiver is not mcp",
+        ),
+        (
+            "conditional-register",
+            "server",
+            lambda server, public: server.replace("_tools_recall.register(mcp)", "if True:\n    _tools_recall.register(mcp)", 1),
+            "nested or conditional register",
+        ),
+        (
+            "decorator-tool",
+            "public",
+            lambda server, public: public.replace("@mcp_tool_observe\ndef recall(\n", "@mcp.tool\n@mcp_tool_observe\ndef recall(\n", 1),
+            "decorator mcp.tool",
+        ),
+    ],
+)
+def test_unsupported_registration_shapes_refuse(tmp_path: Path, label: str, target: str, rewrite: object, needle: str) -> None:
+    checkout = _copy_source_checkout(tmp_path / label)
+    server_path = checkout / "src/mind_mem/mcp/server.py"
+    public_path = checkout / "src/mind_mem/mcp/tools/public.py"
+    server, public = server_path.read_text(encoding="utf-8"), public_path.read_text(encoding="utf-8")
+    rewritten = rewrite(server, public)  # type: ignore[operator]
+    if target == "server":
+        server_path.write_text(rewritten, encoding="utf-8")
+    else:
+        public_path.write_text(rewritten, encoding="utf-8")
+    output = tmp_path / label / "refused"
+    result = _run(checkout, output)
+    assert result.returncode == 2
+    assert needle in result.stderr
+    assert list(output.iterdir()) == []
+
+
+def test_oversized_source_refuses_before_unbounded_read(tmp_path: Path) -> None:
+    checkout = _copy_source_checkout(tmp_path)
+    source = checkout / "src/mind_mem/mcp_server.py"
+    source.write_bytes(b"x" * (2 * 1024 * 1024 + 1))
+    output = tmp_path / "refused"
+    result = _run(checkout, output)
+    assert result.returncode == 2
+    assert "exceeds" in result.stderr
+    assert list(output.iterdir()) == []
+
+
 def test_nonempty_output_is_never_clobbered(tmp_path: Path) -> None:
     output = tmp_path / "existing"
     output.mkdir()
