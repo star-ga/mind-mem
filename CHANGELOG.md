@@ -4,6 +4,35 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- An explicit, bounded Qdrant collection importer that stages records in
+  governed quarantine and retains source provenance and idempotent imports.
+- Opt-in graph context for chat, restricted to admitted evidence and checked
+  against current sources before the response is returned. Structural citations
+  do not establish semantic entailment.
+
+### Fixed
+
+- Graph backfill reads the configured storage backend and admits its source
+  corpus before extraction. Quarantined sources, revoked credentials and
+  ambiguous source IDs cannot feed proposed graph edges; unavailable backends
+  no longer appear as a successful empty backfill.
+- Native top-k validates integer and C-ABI bounds and matches the reference
+  behavior on boundary inputs.
+- Runpod launch requires an approval bound to the exact selected training
+  configuration; changing the configuration invalidates that approval.
+- PostgreSQL recall warnings describe the selected backend accurately.
+- MCP initialization reports the MIND-Mem package version independently of
+  the FastMCP dependency version.
+- Release SBOM generation derives package contents and dependencies from the
+  built wheel, with artifact identity checks. The published 5.0.3 archives and
+  their original release records are unchanged.
+- Model-card alignment checks use the canonical Hugging Face card and preserve
+  the distinction between runtime tooling and the existing trained checkpoint.
+- Roadmap publication status distinguishes the published 5.0.3 release from
+  subsequent integration work.
+
 ## [5.0.3] - 2026-09-14
 
 ### Added

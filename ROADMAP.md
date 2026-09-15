@@ -10,9 +10,15 @@
 
 ## Currently shipping
 
-**Latest release: v5.0.2** (PyPI). See `CHANGELOG.md` for the per-version
-detail and the canonical record; this roadmap covers forward-looking work,
-not history.
+**Latest published release: [v5.0.3](https://pypi.org/project/mind-mem/5.0.3/)**
+(2026-09-14). The published tag and archives remain immutable.
+See `CHANGELOG.md` for the per-version record. Changes under **Unreleased**
+are source-tree work and require the next release before they reach PyPI.
+
+The current integration includes Qdrant collection import, admitted graph
+context for chat, native top-k boundary checks, configuration-bound training
+spend approval, MCP product-version reporting and release-metadata controls.
+These additions are not part of the published 5.0.3 archives.
 
 > **5.0.0 / 5.0.1 — read this before planning anything.** 5.0.0 deleted 47
 > modules (14,711 LOC) plus 43 test files on the argument "nothing imports it".
@@ -112,8 +118,8 @@ by its full description below.
 
 ### Group E — Compliance (5 items — 4 implemented, 1 partial)
 
-The redaction and export acceptance below applies to the 5.0.3 candidate;
-publication remains part of the release gates.
+The redaction and export acceptance below shipped in 5.0.3. Independent
+witnessing and the broader transport/backend acceptance remain separate work.
 
 - [x] **Pluggable redaction layer** — the configured in-tree detector chain and explicit `module:DetectorClass` extension run on the governed write door and the `compliance scan`, `redact`, `screen`, and export CLI doors. Raising or malformed detectors fail closed as the generic `compliance_detector_failed` refusal before persistence or output replacement; valid plugins redact and record detector provenance. The eight built-in detectors remain default and deterministic; external Python is operator-selected and is not sandboxed or independently proven deterministic. The original 2026-09-01 false shipped tick (“zero consumers”) is retained in this corrected entry; this acceptance is source-bound to `tests/test_compliance_redaction.py`, `tests/test_cli_detector_refusal.py`, and the 2026-09-14 focused receipt. RE3 signing and independent observation are separate requirements.
 - [x] **Compliance export pipeline** — `mm export --policy {full|redacted|metadata-only} --since --format --out` and the direct `compliance.export.build_bundle(...)` API require the opt-in `v4.compliance_export` flag, operate on admitted records, report withheld/undated exclusions, and emit deterministic `content_sha256`. The CLI matrix covers all three policies, both formats, and with/without `--since`; `redacted` removes detector findings and `metadata-only` retains provenance fields plus a digest of omitted content. This digest is content integrity evidence, not a signature or independent observation authority. The original 2026-09-01 false shipped tick (“no export verb/policy”) is retained in this corrected entry; RE3 signing/independent observation remains open.
@@ -160,7 +166,7 @@ files are in play. The original R.1 would have been a no-op.
 - [x] **RA.0 — one tier axis** *(shipped; re-scoped from "wire the ladder onto one DB")* — the item asked for the four tier stores to be consolidated so a boost could be wired end-to-end. Wiring a boost is the wrong first move: a tier that moves a recall score is an unreviewed state transition, which RA.1's ruling forbids. What shipped instead is the collapse the dashboard item (RA.5) actually needs — `memory_tiers.MemoryTier` survives as the ONE lifecycle ladder (the only one reachable from `mcp.server` / `mm_cli`, via `compaction.run_promotion_cycle`), and `tiered_memory.py`, `tier_recall.py` and `v4/tier_memory.py` are **deleted**, not abstracted over, together with the consumers whose only data source was the deleted `block_recall_tier` (`v4/eviction.py`, `v4/consolidation_worker.py`, `kernels.recent_first_kernel`). `retrieval.tier_boost` / `tier_boost_weights` went with them — the boost never reached a ranking. Ratcheted by `tests/test_tier_axis_collapse.py` over frozen sets, so a fourth ladder fails the build. Note `IngestTier` is NOT a fourth: it is provenance (which door a write came through), and nothing is promoted along it. **Still open:** the DB consolidation itself — `block_meta` is read from two directories, and `intelligence/tiers.db` is separate from `.sqlite_index/index.db`.
 - [~] **RA.1 — served-set ledger** *(replaces old R.1; the ledger has shipped, the counters have not)* — `src/mind_mem/served_ledger.py`. Content-derived `run_id = sha256("MM_RUN_v1\0" ‖ query_hash ‖ served_digest ‖ pipeline_hash)`, no clock and no randomness, reusing `recall_digests.served_set_digest` rather than minting a second encoding. Versioned append-only rows retain `seq`, `prev_row_hash`, `run_id`, `query_hash`, `served_digest`, `ids`, `pipeline_hash`, `index_anchor` and `scoring_instant`; V2 adds `serve_kind` and `context_digest`, and the reader still accepts the exact V1 shape. The row hash is derived, never stored, and a head sidecar seals the last row. Corpus recall is recorded after retrieval returns; local anticipation uses its separate attachment path, and **default ON since 5.0.2** (`served_ledger.enabled`; it shipped OFF, and an opt-in proof is a property of a configuration rather than of the product — exactly one value, a literal `false`, opts out). **Two amendments to the wording above this line:** `run_id` is keyed on the ORDERED digest (an unordered set puts two answers under one key, which append-only cannot be consistent with), and it excludes BOTH the scoring instant and the index anchor — it names THE ANSWER, stably across days, so a repeated `run_id` is legitimate and `seq` is the unique key. **Ruling, and it overrides this bullet:** `served`/`credited` do NOT buy tiers. `credited` writes `confirmations` only through a proposal, or the promotion is a `plan_consolidation` output that `approve_apply` executes — never a direct write, never automatic. Absence of credit must never demote. Enforced structurally: nothing on the scoring path may import the ledger — in any of the six spellings, at either laziness level, and not through `importlib` either — and the ledger may not name the ladder (`tests/test_recall_attestation_v2.py` T12, `tests/test_served_ledger.py`). The rail's walker is itself under test: a meta-test feeds it source that DOES reach the ledger, in each form, and requires it to say so. The row chain seals every field derived from the schema rather than a hand-written list, so a field added without sealing it fails in the same commit that adds it. **Explicit outcome join implemented:** `report_outcome(run_id=…)` validates the current workspace's served chain under its append lock, checks block membership, and records a versioned run-bound outcome identity; repeat reports are idempotent while different run IDs remain distinct. The existing `query_id` column stays readable for historical records. Public dispatch, invalid/foreign/tampered binding and two-run controls cover the join; mutations removing chain, membership or identity binding turn those controls red. **Partial:** anticipation-cache serves do not produce a fresh `RECALL_ATTEST`; they read a local bundle rather than the corpus. They now use a separate V2 local-serving receipt, bound to the captured request context and recorded through the served-ledger attachment seam when evidence is available. The receipt identifies local serving and does not claim a corpus read or outcome credit. Full RA.1 coverage of every serving surface remains open until the anticipation receipt has its complete independent acceptance evidence; do not fabricate a recall attestation. *(`block_serve_counts` surviving the 30-day prune is CLOSED — `accountability_views.ServeCountView` derives from the append-only served ledger rather than the pruned `retrieval_log`. Verified 2026-09-06.)*
   **Kernel CLI follow-up (2026-09-14):** `mm recall --kernel default` now captures policy and scoring time before execution and attaches the existing served-ledger contract to the final ordered IDs. Only a clean built-in lexical run is recordable through this adapter. Vector/custom/unknown and non-default kernels return explicit unproven evidence; backend failure preserves the answer and its degradation reason without recording a clean receipt. Kernel metadata and scores are outside the ordered-ID commitment. Other serving surfaces still require inventory and acceptance; this is not full RA.1 closure.
-  **Response projections implemented in the 5.0.3 candidate:** Chat and persona
+  **Response projections shipped in 5.0.3:** Chat and persona
   carry the ranked recall receipt without claiming that generated prose or
   annotations are sealed. The opt-in CLI `--receipt-envelope` for recall,
   context packing and injection preserves that receipt and separately describes
@@ -705,6 +711,12 @@ measure. Wiring comes first, with the yield measurement built into the wiring:
       set; user-scope graph mutation now routes through signal staging +
       approval only, making the Group K "every graph mutation routes through
       HITL" guardrail true in code, not just in docs.
+**Unreleased backfill correction:** the default loader now uses the configured
+backend and shared source-admission rules, including credential revocation and
+ambiguous source-ID refusal. Backend errors propagate rather than producing an
+empty-success report. This fixes the backfill input path; it does not count as
+a completed live-corpus run or approval of extracted edges.
+
 - [ ] **Run the backfill over the live corpus** — with the wiring landed,
       run `mm graph-backfill` over the 1469-block corpus, read the yield
       numbers, review/approve the staged edges, then enable
@@ -2459,7 +2471,7 @@ multi-tenancy thread is also tracked as issue [#505].
 - [x] **AI lint with auto-fix** — SHIPPED. `lint_autofix` at `mcp/tools/lint.py:111`, exported in `__all__`, ACL-classified ADMIN at `mcp/infra/acl.py:88`. Ticked 2026-09-06; this box and the `[x]` entry above it made contradictory claims about the same tool, and both were wrong.
 - [x] **Contradiction state machine** — `detected → review_ok → resolved` / `pending_fix` lifecycle ships in `governance` engine.
 - [x] **Self-healing index** — `mm doctor` triggers integrity check + repair; background reindex runs in idle windows.
-- [x] **Local visual viewer** — implemented and integrated in the 5.0.3 candidate: `mm view` serves packaged local search and graph inspection with stdlib HTTP and JavaScript. It applies corpus/namespace admission, binds only loopback, and opens graph data read-only. Focused independent review, real socket controls and combined interface tests cover the implementation; publication remains pending. See [the viewer contract](docs/local-viewer.md).
+- [x] **Local visual viewer** — shipped in 5.0.3: `mm view` serves packaged local search and graph inspection with stdlib HTTP and JavaScript. It applies corpus/namespace admission, binds only loopback, and opens graph data read-only. Focused independent review, real socket controls and combined interface tests cover the implementation. See [the viewer contract](docs/local-viewer.md).
 - [x] **Auto-generated hierarchical index** — `index.md` (hierarchical: category → kind) + `log.md` (chronological) are regenerated from the block corpus by `src/mind_mem/memory_index.py` (`generate_index`), exposed as the `mm index` verb (`mm_cli._cmd_index`); `tests/test_memory_index.py` covers it with 14 tests. The earlier text on this line denied its own tick — corrected 2026-09-01 against the code.
 - [x] **Real-time contradiction stream** — webhook stream on contradiction-detection ships under the alerting layer.
 - [ ] **Adversarial / poisoning defense** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
@@ -2497,7 +2509,7 @@ default story is two laptops talking to each other.
 
 ### E. Compliance-sensitive opt-in extensions (8 implemented; residual RE3/transport scope tracked separately)
 
-**Implemented (including the 5.0.3 candidate):**
+**Implemented (including the published 5.0.3 release):**
 
 - [x] **Confidence / Evidence as first-class** — structured `Evidence` blocks with `confidence_score` ship; recall surfaces evidence chains.
 - [x] **Per-tenant audit chains** — `audit_chain.py` forks per tenant with isolated genesis + spec-hash binding.
@@ -2518,7 +2530,7 @@ default story is two laptops talking to each other.
 - [x] **Performance regression alerting** — `.github/workflows/benchmark.yml` runs latency benchmarks per PR.
 - [x] **Model-call token metering** — per-day token counter plus optional daily cap behind `mm usage`. **SHIPPED — verified at HEAD 2026-09-07.** `src/mind_mem/usage_meter.py`: `record_call` (per-UTC-day ledger, atomic tmp+`os.replace`, 90-day retention), `report`, `check_cap` raising `DailyTokenCapExceeded`, `load_daily_cap` reading `mind-mem.json {"usage": {"daily_token_cap": N}}`. Wired at four real call sites, 40 passing tests.
 
-- [x] **OpenAPI + AsyncAPI specs** — implemented in the 5.0.3 candidate: `sdk/spec/openapi.json` describes the REST API and `sdk/spec/asyncapi.json` describes the existing opt-in outbound Redis Streams publisher. Regeneration commands and source-emitter/captured-wire controls prevent artifact drift. The event contract is best effort and includes no consumer service or delivery guarantee. SDK registry publication is tracked separately.
+- [x] **OpenAPI + AsyncAPI specs** — shipped in 5.0.3: `sdk/spec/openapi.json` describes the REST API and `sdk/spec/asyncapi.json` describes the existing opt-in outbound Redis Streams publisher. Regeneration commands and source-emitter/captured-wire controls prevent artifact drift. The event contract is best effort and includes no consumer service or delivery guarantee. SDK registry publication is tracked separately.
 
 **Open:**
 
@@ -4626,8 +4638,8 @@ evidence.
   cut it. This is the institutional fix for the over-building lesson, not another
   one-time sweep.
 
-- [x] **5. Chunk provenance** — duplicate of Group N / N2, implemented in the
-  5.0.3 candidate. Opt-in Markdown/agentmem imports validate raw UTF-8 document
+- [x] **5. Chunk provenance** — duplicate of Group N / N2, shipped in
+  5.0.3. Opt-in Markdown/agentmem imports validate raw UTF-8 document
   hashes, spans and chunk/configuration identity before staging, then bind
   the anchor set through existing proposal/apply metadata and a batch Merkle
   root. Source symlinks are refused. This is provenance, not approval or ranking

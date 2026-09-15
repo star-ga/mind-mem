@@ -11,7 +11,9 @@
 
 ## Current source status — v5.0.3
 
-This source tree reports package version **v5.0.3**. The published `mind-mem-4b`
+The latest published package is **[v5.0.3](https://pypi.org/project/mind-mem/5.0.3/)**.
+The [Unreleased changelog](../CHANGELOG.md#unreleased) records later source-tree
+work; it is not included in those release archives. The published `mind-mem-4b`
 checkpoint remains **v4.1.1**, with a reported **133/133** result (111 main and
 22 held-out probes, two using inference-time anchors). This is not a new
 independent evaluation. The weights were trained on 83 MCP tools.

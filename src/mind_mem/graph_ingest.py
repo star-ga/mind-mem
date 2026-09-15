@@ -560,18 +560,22 @@ def _default_extract_fn(workspace: str) -> Callable[[str], list[dict]]:
 
 
 def _load_corpus(workspace: str) -> list[dict]:
-    """Load the workspace block corpus (markdown store)."""
-    from .block_parser import parse_file
-    from .block_store import MarkdownBlockStore
+    """Load admitted sources from the configured store, never a local shadow.
 
-    store = MarkdownBlockStore(workspace)
-    blocks: list[dict] = []
-    for path in store.list_blocks():
-        try:
-            blocks.extend(parse_file(path))
-        except (OSError, UnicodeDecodeError, ValueError) as exc:
-            _log.debug("backfill_block_parse_skipped", error=str(exc))
-    return blocks
+    Keep backend failures visible: an unavailable corpus is not an empty
+    successful backfill. Apply workspace-aware admission before any source
+    reaches extraction, including explicit credential revocation.
+    """
+    from .admissibility import admit_expansion_corpus
+    from .request_context import context_config_for
+    from .storage import iter_blocks
+
+    bound = context_config_for(workspace)
+    config = dict(bound) if bound is not None else None
+    # Keep release decisions beside the records they admit until the shared
+    # corpus gate has run. Graph edges carry a source block ID, so ambiguous
+    # duplicate IDs must also be withheld rather than picking an origin.
+    return admit_expansion_corpus(iter_blocks(workspace, config=config, active_only=False), workspace=workspace)
 
 
 def backfill(
