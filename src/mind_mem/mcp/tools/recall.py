@@ -1095,6 +1095,19 @@ def _recall_impl_uncached(
                 return _sqlite_busy_error()
             raise
 
+    # Indexed and hybrid legs do not pass through recall_engine's final
+    # validity stage. Apply the same source-bound lifecycle gate here before
+    # the public post-filter funnel, otherwise an indexed MCP request can
+    # serve a stale semantic-TTL row that the scan path would demote.
+    if results and used_backend in ("sqlite", "hybrid"):
+        from mind_mem.validity_gate import apply_validity_gate
+
+        recall_cfg = _load_config(ws).get("recall", {})
+        if not isinstance(recall_cfg, dict):
+            recall_cfg = {}
+        if apply_validity_gate(results, ws, recall_cfg, scoring_instant=scoring_instant):
+            results.sort(key=lambda item: item.get("score", 0.0), reverse=True)
+
     # Admissibility AND the post-retrieval filter contract: this tool reaches
     # the hybrid / FTS legs directly, so it does not pass through
     # ``recall._apply_post_filters`` on its own. One funnel per public surface,
