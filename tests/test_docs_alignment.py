@@ -961,8 +961,12 @@ class TestPublishedModelCard:
         ]
     )
 
-    def _stub_fetch(self, monkeypatch, body: str):
+    def _stub_fetch(self, monkeypatch, body: str, tmp_path, *, canonical_text: str | None = None):
         import urllib.request
+
+        canonical = tmp_path / "HF_MODEL_CARD_v4.md"
+        canonical.write_text(body if canonical_text is None else canonical_text, encoding="utf-8")
+        monkeypatch.setattr(cda, "HF_CANONICAL_CARD", canonical)
 
         class _Response:
             def __init__(self, payload: bytes):
@@ -979,24 +983,49 @@ class TestPublishedModelCard:
 
         monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Response(body.encode("utf-8")))
 
-    def test_the_hub_cards_stale_count_is_caught(self, monkeypatch):
-        self._stub_fetch(monkeypatch, self.CARD)
+    def test_the_hub_cards_stale_count_is_caught(self, monkeypatch, tmp_path):
+        self._stub_fetch(monkeypatch, self.CARD, tmp_path)
         findings = cda.check_live_hf_card(make_authorities())
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "84", "83")]
         assert findings[0].surface.startswith("huggingface.co/"), "the finding must name the published surface"
 
         wrapped = "> The live server currently exposes **95** MCP\n> tools.\n"
-        self._stub_fetch(monkeypatch, wrapped)
+        self._stub_fetch(monkeypatch, wrapped, tmp_path)
         findings = cda.check_live_hf_card(make_authorities())
         assert [(f.kind, f.claimed, f.actual) for f in findings] == [("tools", "95", "102")]
 
-    def test_a_corrected_hub_card_passes(self, monkeypatch):
-        self._stub_fetch(monkeypatch, self.CARD.replace("84 MCP tools", "83 MCP tools"))
+    def test_a_corrected_hub_card_passes(self, monkeypatch, tmp_path):
+        self._stub_fetch(monkeypatch, self.CARD.replace("84 MCP tools", "83 MCP tools"), tmp_path)
         assert cda.check_live_hf_card(make_authorities()) == []
 
-    def test_an_empty_body_is_an_error_not_a_clean_card(self, monkeypatch):
+    def test_matching_counts_but_card_prose_drift_is_rejected(self, monkeypatch, tmp_path):
+        canonical = self.CARD.replace("84 MCP tools", "83 MCP tools")
+        live = canonical.replace("following v4 surfaces", "available v4 surfaces")
+        self._stub_fetch(monkeypatch, live, tmp_path, canonical_text=canonical)
+        with pytest.raises(cda.AuthorityError, match="differs from the canonical"):
+            cda.check_live_hf_card(make_authorities())
+
+    def test_matching_counts_but_api_name_drift_is_rejected(self, monkeypatch, tmp_path):
+        canonical = Path(cda.HF_CANONICAL_CARD).read_text(encoding="utf-8")
+        live = canonical.replace("hnsw_kind_index", "hnsw_index", 1)
+        self._stub_fetch(monkeypatch, live, tmp_path, canonical_text=canonical)
+        with pytest.raises(cda.AuthorityError, match="differs from the canonical"):
+            cda.check_live_hf_card(make_authorities())
+
+    def test_a_single_final_newline_is_harmless(self, monkeypatch, tmp_path):
+        canonical = self.CARD.replace("84 MCP tools", "83 MCP tools")
+        self._stub_fetch(monkeypatch, canonical[:-1], tmp_path, canonical_text=canonical)
+        assert cda.check_live_hf_card(make_authorities()) == []
+
+    def test_missing_canonical_card_is_an_error(self, monkeypatch, tmp_path):
+        self._stub_fetch(monkeypatch, self.CARD, tmp_path)
+        monkeypatch.setattr(cda, "HF_CANONICAL_CARD", tmp_path / "missing.md")
+        with pytest.raises(cda.AuthorityError, match="could not read the canonical"):
+            cda.check_live_hf_card(make_authorities())
+
+    def test_an_empty_body_is_an_error_not_a_clean_card(self, monkeypatch, tmp_path):
         """An empty fetch must never read as "no stale claims"."""
-        self._stub_fetch(monkeypatch, "   \n")
+        self._stub_fetch(monkeypatch, "   \n", tmp_path)
         with pytest.raises(cda.AuthorityError):
             cda.check_live_hf_card(make_authorities())
 

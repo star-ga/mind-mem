@@ -1267,10 +1267,25 @@ def check_core_deps_badge(auth: Authorities, root: Path | None = None) -> list[F
 
 
 # --------------------------------------------------------------------------
-# The published model card (not a file in this repo)
+# The published model card and its in-tree upload source
 # --------------------------------------------------------------------------
 
 HF_CARD_URL = "https://huggingface.co/star-ga/mind-mem-4b/raw/main/README.md"
+HF_CANONICAL_CARD = _ROOT / "train" / "HF_MODEL_CARD_v4.md"
+
+
+def _canonical_hf_card_text() -> str:
+    """Read the in-tree card that is uploaded to the hub verbatim."""
+    try:
+        return HF_CANONICAL_CARD.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise AuthorityError(f"could not read the canonical model card ({HF_CANONICAL_CARD}): {exc}") from exc
+
+
+def _normalized_hf_card_text(text: str) -> str:
+    """Permit line-ending conversion and one final newline only."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return text[:-1] if text.endswith("\n") else text
 
 
 def check_live_hf_card(auth: Authorities, url: str = HF_CARD_URL, timeout: float = 30.0) -> list[Finding]:
@@ -1280,7 +1295,9 @@ def check_live_hf_card(auth: Authorities, url: str = HF_CARD_URL, timeout: float
     was reachable from the other, so neither could be gated by the other. It
     needs the network, so it is NOT part of the default run: the release
     preflight opts in with ``--check-live``, and a fetch failure raises
-    ``AuthorityError`` (exit 2) rather than returning an empty list.
+    ``AuthorityError`` (exit 2) rather than returning an empty list. The
+    fetched text must also match ``train/HF_MODEL_CARD_v4.md``; only line
+    ending conversion and one final newline are normalized before comparison.
     """
     import urllib.error  # noqa: PLC0415
     import urllib.request  # noqa: PLC0415
@@ -1294,6 +1311,9 @@ def check_live_hf_card(auth: Authorities, url: str = HF_CARD_URL, timeout: float
         raise AuthorityError(f"could not fetch the published model card ({url}): {exc}") from exc
     if not text.strip():
         raise AuthorityError(f"the published model card at {url} came back empty")
+    canonical = _canonical_hf_card_text()
+    if _normalized_hf_card_text(text) != _normalized_hf_card_text(canonical):
+        raise AuthorityError(f"the published model card differs from the canonical in-tree card ({HF_CANONICAL_CARD})")
     rel = "huggingface.co/star-ga/mind-mem-4b/README.md"
     # Same scanner as the in-tree surfaces: the published card is where the
     # wrapped and table shapes hide too, and a hub-only matcher would drift.
