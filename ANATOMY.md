@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1654 | **Est. tokens:** ~4864640
-**Generated:** 2026-09-14 23:56 UTC
+**Files:** 1654 | **Est. tokens:** ~4864644
+**Generated:** 2026-09-15 00:41 UTC
 
 ## Token Budget Guide
 
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 732 | ~2156069 |
+| `tests/` | 732 | ~2156073 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1836,7 +1836,7 @@
 - `test_snapshot_snap_id.py` (~5713 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_spec_binding.py` (~3156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_spend_approval_consumer.py` (~2483 tok, huge) — Controls for the approval parser and the RunPod launch boundary."""
+- `test_spend_approval_consumer.py` (~2487 tok, huge) — Controls for the approval parser and the RunPod launch boundary."""
 - `test_sqlite_handle_close_tool_output_hnsw.py` (~2197 tok, huge) — Every SQLite connection ``tool_output/store.py`` opens must be CLOSED before
 - `test_sqlite_index.py` (~5547 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_sqlite_index_backends.py` (~2781 tok, huge) — Backend-parity regression tests for ``sqlite_index`` (audit bugs 4, 9, 13, 14).

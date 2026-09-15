@@ -147,7 +147,7 @@ def test_preflight_cli_preserves_exact_decimal_in_ledger(tmp_path: Path, monkeyp
         ],
     )
     spend_guard.main()
-    assert json.loads(ledger.read_text())["budget_usd"] == budget
+    assert json.loads(ledger.read_text(encoding="utf-8"))["budget_usd"] == budget
 
 
 def test_preflight_cli_refuses_missing_expected_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
