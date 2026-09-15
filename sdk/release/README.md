@@ -2,7 +2,11 @@
 
 Both SDKs share the MIND-Mem version from `pyproject.toml`. The npm package is
 `@star-ga/mind-mem-client`; the Go module is
-`github.com/star-ga/mind-mem/sdk/go/v5`. Registry publication remains pending.
+`github.com/star-ga/mind-mem/sdk/go/v5`. The npm package and tagged Go SDK
+release remain pending. On 2026-09-15, the public npm endpoint returned 404
+for this package and the Go version list contained no tagged versions. Go
+`@latest` did resolve the source as a pseudo-version; this is source
+availability, not a tagged SDK release.
 
 ## Version and contract checks
 
@@ -48,8 +52,9 @@ scope. The repository does not contain registry credentials.
 ## Publish the Go module
 
 After the verified release commit is on the public repository, take the exact
-subdirectory tag from `python3 sdk/release/version.py`. For the 5.0.3 candidate
-it is `sdk/go/v5.0.3`. Create that new tag at the release commit, push it, and
+subdirectory tag from `python3 sdk/release/version.py`. For package version
+5.0.3 it is `sdk/go/v5.0.3`; use the actual selected release version. Create
+that new tag at the verified release commit, push it, and
 verify it through the module proxy:
 
 ```bash

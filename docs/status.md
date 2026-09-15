@@ -1,6 +1,6 @@
 # MIND-Mem — implementation status (alignment companion)
 
-Three-column ledger of what is operational on the current `main`, what is in-tree as experimental, and what is on the roadmap. Companion to `docs/audit_response.md`, `docs/governance.md`, and `ROADMAP.md` / `CHANGELOG.md` (which remain product-authoritative).
+Three-column ledger of the current source checkout, experimental work and roadmap items. Source changes listed under `CHANGELOG.md`'s Unreleased section are not part of the published package. Companion to `docs/audit_response.md`, `docs/governance.md`, and `ROADMAP.md` / `CHANGELOG.md` (which remain product-authoritative).
 
 ## Implemented now (operational, tested)
 
@@ -69,24 +69,27 @@ Kernel sources live in `mind/` (repo root), not `kernels/`.
 |---|---|---|
 | Adversarial-memory + Jepsen stress tests | _(planned — no dedicated suite yet)_ | v3.0.0+; gated on long-haul CI runner. |
 
-## Roadmap status — 2026-09-14 candidate
+## Release and roadmap status — 2026-09-15
 
-This section describes the unreleased 5.0.3 repository candidate. The release
-checks must identify the exact commit they tested. It does not change the published
-PyPI `v5.0.2` release or claim that the `v5.0.3` candidate has been published.
+The latest published package is
+[MIND-Mem 5.0.3](https://pypi.org/project/mind-mem/5.0.3/).
+Later changes are recorded under Unreleased and require their own release
+checks against the exact commit. The historical 5.1.0 release remains yanked;
+its published tag and archives are not rewritten.
 Statuses below are implementation and evidence states, not a checkbox-derived
 completion percentage. The full roadmap and release history remain in
 `ROADMAP.md` and `CHANGELOG.md`.
 
 | Area | Current status | Evidence and boundary |
 |---|---|---|
-| Current release work | Implemented in the candidate; release publication pending | The candidate contains the current governed recall, export, importer and receipt work. The 107-tool source count is current for this candidate; the published 5.0.2 package remains a separate release identity. |
+| Current release work | 5.0.3 published; later source fixes unreleased | Published archives and later source changes have separate identities. The current source exposes 107 MCP tools; see the Unreleased changelog for the later retrieval, graph, training-preparation and release checks. |
 | Pure-MIND core port | Planned; not started | `ROADMAP.md` describes the compiler and Rust-independence gate, missing `std.tensor`, and unresolved reductions before migration. Existing Python/native prototypes are not a completed Pure-MIND port. |
-| 4B retraining | Deferred until after the Pure-MIND port | Published weights remain trained on 83 tools and report 133/133 evaluation; the candidate exposes 103. A newer base, including Qwen3.8, is not asserted as available. Any post-port run requires a fresh corpus, rented GPU approval/funding, and new receipts. |
+| 4B retraining | Deferred until after the Pure-MIND port | Published weights remain trained on 83 tools and report 133/133 evaluation; the current server exposes 107. A source-only MCP contract inventory supports preparation but is not independent evaluation or training approval. A newer base, including Qwen3.8-4B, is not asserted as available. Any post-port run requires a reviewed corpus, independent evaluation, rented GPU approval/funding, and new receipts. |
 | Ground-truth evaluation | Open and blocked | `docs/design/eval-set-ground-truth.md` requires 60+ labelled cases against a hash-pinned snapshot. The current 36-query pool is an unlabelled development pool, not an independent evaluation or a basis for tuning and release claims. |
 | JavaScript/TypeScript SDK | Source exists; registry publication pending | `sdk/js/` is tested in-tree. `sdk/release/README.md` requires a built staged artifact and npm authentication for `@star-ga/mind-mem-client`; no registry publication is claimed. |
+| Go SDK | Source retrievable; tagged SDK release pending | `github.com/star-ga/mind-mem/sdk/go/v5` resolves through the Go proxy as a pseudo-version. The 2026-09-15 check found no `sdk/go/v5.x.y` release tag; source availability is distinct from a tagged SDK release. |
 | Independent CVS / MIND Witness | Open design and implementation | `ROADMAP.md` RE.3 and `docs/specs/retrieval-receipt-contract.md` define the split and acceptance boundary. Local receipts remain local evidence until an independent producer/verifier interoperates. |
-| AsyncAPI | Implemented in the 5.0.3 candidate for the opt-in outbound Redis Streams publisher | `sdk/spec/asyncapi.json` and `tests/test_sdk_asyncapi_drift.py` bind the `XADD` `data` field and observed source emitters. This is a best-effort outbound notification contract; no consumer, retry, ordering or at-least-once guarantee is claimed. |
+| AsyncAPI | Published in 5.0.3 for the opt-in outbound Redis Streams publisher | `sdk/spec/asyncapi.json` and `tests/test_sdk_asyncapi_drift.py` bind the `XADD` `data` field and observed source emitters. This is a best-effort outbound notification contract; no consumer, retry, ordering or at-least-once guarantee is claimed. |
 
 ## What this file is not
 

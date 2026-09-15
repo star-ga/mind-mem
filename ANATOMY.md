@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4882619
-**Generated:** 2026-09-15 11:10 UTC
+**Files:** 1665 | **Est. tokens:** ~4882826
+**Generated:** 2026-09-15 11:12 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~214973 |
+| `docs/` | 95 | ~215103 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -68,7 +68,7 @@
 | `sdk/js/` | 6 | ~4864 |
 | `sdk/js/src/` | 5 | ~3113 |
 | `sdk/js/test/` | 2 | ~3654 |
-| `sdk/release/` | 3 | ~4640 |
+| `sdk/release/` | 3 | ~4717 |
 | `sdk/spec/` | 3 | ~6848 |
 | `sdk/spec/fixtures/` | 7 | ~926 |
 | `security/` | 5 | ~24696 |
@@ -527,7 +527,7 @@
 - `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 
-- `status.md` (~1907 tok, huge) — MIND-Mem — implementation status (alignment companion)
+- `status.md` (~2037 tok, huge) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
@@ -676,7 +676,7 @@
 - `tsconfig.test.json` (~183 tok, small) — Keys: //, extends, compilerOptions, include, exclude
 ### `sdk/release/`
 
-- `README.md` (~682 tok, large) — SDK release path
+- `README.md` (~759 tok, large) — SDK release path
 - `pack_js.py` (~2256 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `version.py` (~1702 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `sdk/spec/`
