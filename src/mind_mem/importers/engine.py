@@ -663,6 +663,16 @@ def run_import(
     link_edges: bool = False,
     dry_run: bool = False,
     chunk_documents: bool = False,
+    endpoint: str | None = None,
+    collection: str | None = None,
+    api_key_env: str | None = None,
+    qdrant_text_field: str = "text",
+    qdrant_page_size: int = 100,
+    qdrant_max_pages: int = 1_000,
+    qdrant_max_records: int = 100_000,
+    qdrant_max_response_bytes: int = 8 * 1024 * 1024,
+    qdrant_max_total_response_bytes: int = 64 * 1024 * 1024,
+    qdrant_timeout: float = 30.0,
 ) -> ImportResult:
     """Import the source at *path* into *workspace*, quarantined.
 
@@ -677,7 +687,8 @@ def run_import(
         workspace: mind-mem workspace root.
         system: Source system slug; must be locally readable and supported.
         path: Path to the JSON dump, or the root of the note tree for the
-            directory formats (``markdown`` / ``agentmem``).
+            directory formats (``markdown`` / ``agentmem``); ignored for
+            explicit Qdrant endpoint mode.
         dedup_near: Opt-in (default OFF) near-duplicate collapse across
             the incoming batch, using ``dedup.layer_cosine_dedup``. With
             the default the import is a pure function of the dump.
@@ -691,6 +702,13 @@ def run_import(
         chunk_documents: Opt-in deterministic smart chunking for markdown
             and agentmem note trees. Chunks carry UTF-8 source anchors and
             remain quarantined until the normal release workflow.
+        endpoint: Qdrant REST endpoint; required for endpoint-backed Qdrant.
+        collection: Qdrant collection name; required with ``endpoint``.
+        api_key_env: Optional environment variable containing the Qdrant API
+            key. The key is never placed in the import receipt.
+        qdrant_max_total_response_bytes: Maximum bytes accepted across the
+            complete Qdrant scroll. This is a cumulative import bound, not a
+            whole-import deadline.
 
     Raises:
         UnsupportedSystemError: *system* has no file-based importer.
@@ -702,15 +720,52 @@ def run_import(
     """
     from . import resolve_system
 
-    resolved = resolve_system(system)
+    qdrant_requested = isinstance(system, str) and system.strip().lower() == "qdrant"
+    resolved = "qdrant" if qdrant_requested and endpoint is not None else resolve_system(system)
     if not isinstance(workspace, str) or not workspace.strip():
         raise ImporterError("workspace must be a non-empty path")
 
-    from .parsers import parse_payload
+    from .parsers import parse_payload, parse_qdrant
 
     if chunk_documents and resolved not in DIRECTORY_SYSTEMS:
         raise ImportParseError("--chunk-documents is supported only for markdown and agentmem note trees")
-    records = tuple(parse_payload(resolved, load_source(resolved, path, reject_symlinks=chunk_documents)))
+    if resolved == "qdrant":
+        if isinstance(path, str) and path.strip():
+            raise ImportParseError("qdrant endpoint imports do not accept a local path")
+        if not endpoint or not collection:
+            raise ImportParseError("qdrant imports require --endpoint and --collection")
+        from .qdrant_source import scroll_qdrant
+
+        points = scroll_qdrant(
+            endpoint,
+            collection,
+            api_key_env=api_key_env,
+            page_size=qdrant_page_size,
+            max_pages=qdrant_max_pages,
+            max_records=qdrant_max_records,
+            max_response_bytes=qdrant_max_response_bytes,
+            max_total_response_bytes=qdrant_max_total_response_bytes,
+            timeout=qdrant_timeout,
+        )
+        records = parse_qdrant(list(points), text_field=qdrant_text_field, collection=collection)
+        source_label = endpoint
+    else:
+        if not isinstance(path, str) or not path.strip():
+            raise ImportParseError("local imports require a non-empty path")
+        if endpoint is not None or collection is not None or api_key_env is not None:
+            raise ImportParseError("Qdrant endpoint options are only valid with --from qdrant")
+        if (
+            qdrant_text_field != "text"
+            or qdrant_page_size != 100
+            or qdrant_max_pages != 1_000
+            or qdrant_max_records != 100_000
+            or qdrant_max_response_bytes != 8 * 1024 * 1024
+            or qdrant_max_total_response_bytes != 64 * 1024 * 1024
+            or qdrant_timeout != 30.0
+        ):
+            raise ImportParseError("Qdrant endpoint options are only valid with --from qdrant")
+        source_label = os.path.abspath(path)
+        records = tuple(parse_payload(resolved, load_source(resolved, path, reject_symlinks=chunk_documents)))
     if chunk_documents:
         # Chunk the source representation first. Sanitizing before this step
         # leaves document_text untouched for anchor verification while the
@@ -784,7 +839,7 @@ def run_import(
         record_import_in_chain(
             workspace,
             system=resolved,
-            source_path=os.path.abspath(path),
+            source_path=source_label,
             batch=batch,
             block_ids=written,
             corpus_file=IMPORTED_CORPUS_FILE,
@@ -792,7 +847,7 @@ def run_import(
 
     result = ImportResult(
         system=resolved,
-        source_path=os.path.abspath(path),
+        source_path=source_label,
         parsed=parsed,
         imported=len(written),
         skipped_existing=skipped_existing,

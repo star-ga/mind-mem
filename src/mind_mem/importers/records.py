@@ -31,8 +31,9 @@ class ImportParseError(ImporterError):
 class UnsupportedSystemError(ImporterError):
     """The requested source system has no file-based importer.
 
-    Raised for the endpoint-backed systems (pinecone / weaviate / qdrant)
-    which are explicitly deferred, and for entirely unknown names.
+    Raised for endpoint-backed systems that remain deferred (pinecone and
+    weaviate), for Qdrant when explicit endpoint mode is absent, and for
+    entirely unknown names.
     """
 
 
@@ -41,7 +42,7 @@ class ImportRecord:
     """One memory unit lifted out of a foreign dump.
 
     Attributes:
-        system: Source system slug (``chroma`` / ``mem0`` / ``letta``).
+        system: Source system slug (``chroma`` / ``mem0`` / ``letta`` / ``qdrant``).
         external_id: Identifier the source system used. Stable across
             re-exports for every format we support, which is what makes
             the derived block id — and therefore the import — idempotent.

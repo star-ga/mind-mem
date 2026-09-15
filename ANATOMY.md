@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1654 | **Est. tokens:** ~4860473
-**Generated:** 2026-09-15 00:59 UTC
+**Files:** 1656 | **Est. tokens:** ~4868298
+**Generated:** 2026-09-15 01:02 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~214248 |
+| `docs/` | 95 | ~214477 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -80,7 +80,7 @@
 | `src/mind_mem/api/` | 5 | ~27259 |
 | `src/mind_mem/bench/` | 17 | ~48632 |
 | `src/mind_mem/compliance/` | 7 | ~15436 |
-| `src/mind_mem/importers/` | 9 | ~30470 |
+| `src/mind_mem/importers/` | 10 | ~34469 |
 | `src/mind_mem/mcp/` | 3 | ~6672 |
 | `src/mind_mem/mcp/infra/` | 8 | ~16195 |
 | `src/mind_mem/mcp/tools/` | 29 | ~124769 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 732 | ~2153741 |
+| `tests/` | 733 | ~2157338 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -426,7 +426,7 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `cli-reference.md` (~8025 tok, huge) — CLI Reference
+- `cli-reference.md` (~8254 tok, huge) — CLI Reference
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
@@ -868,15 +868,16 @@
 - `hybrid_recall.py` (~25245 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 ### `src/mind_mem/importers/`
 
-- `__init__.py` (~1807 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `__init__.py` (~1998 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_shared.py` (~947 tok, large) — # Copyright 2026 STARGA, Inc.
-- `engine.py` (~9175 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `engine.py` (~9872 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `fs_source.py` (~2995 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `note_parsers.py` (~3770 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `okf_source.py` (~1885 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `parsers.py` (~3243 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `parsers.py` (~4018 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `qdrant_source.py` (~2324 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `quarantine.py` (~5578 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `records.py` (~1070 tok, large) — # Copyright 2026 STARGA, Inc.
+- `records.py` (~1082 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
 
 - `inbox.py` (~9199 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
@@ -1486,6 +1487,7 @@
 - `test_importers.py` (~5662 tok, huge) — Tests for the roadmap Group G migration importers (file-based subset).
 - `test_importers_field_injection.py` (~1609 tok, huge) — Regression gate: dump content cannot forge a second block field.
 - `test_importers_notes.py` (~8744 tok, huge) — Tests for the note-tree and transcript importers.
+- `test_importers_qdrant.py` (~3597 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_importers_quarantine.py` (~6695 tok, huge) — Acceptance gate for import quarantine (``mind_mem.importers.quarantine``).
 - `test_inbox.py` (~2729 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.

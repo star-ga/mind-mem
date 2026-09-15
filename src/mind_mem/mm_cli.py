@@ -1410,22 +1410,57 @@ def _import_system_choices() -> tuple[str, ...]:
 def _cmd_import(args: argparse.Namespace) -> int:
     """``mm import --from <system> <path>``.
 
-    Endpoint-backed systems (pinecone / weaviate / qdrant) are accepted by
-    the parser only so they can be refused with an explicit deferred
-    message instead of an opaque argparse choice error.
+    Pinecone and Weaviate remain deferred. Qdrant is available only with the
+    explicit endpoint/collection options; it still lands through the normal
+    quarantined importer.
     """
     from mind_mem.importers import ImporterError, UnsupportedSystemError, run_import
+
+    local_systems = {"agentmem", "chatjson", "chroma", "letta", "markdown", "mem0"}
+    if args.source_system in local_systems:
+        qdrant_args = (
+            ("endpoint", args.endpoint),
+            ("collection", args.collection),
+            ("api-key-env", args.api_key_env),
+            ("text-field", args.text_field),
+            ("page-size", args.page_size),
+            ("max-pages", args.max_pages),
+            ("max-records", args.max_records),
+            ("max-response-bytes", args.max_response_bytes),
+            ("max-total-response-bytes", args.max_total_response_bytes),
+            ("timeout", args.timeout),
+        )
+        supplied = [f"--{name}" for name, value in qdrant_args if value is not None]
+        if supplied:
+            print(
+                "mm import: Qdrant endpoint options are only valid with --from qdrant: " + ", ".join(supplied),
+                file=sys.stderr,
+            )
+            return IMPORT_EXIT_BAD_DUMP
+
+    def qdrant_default(value: Any, default: Any) -> Any:
+        return default if value is None else value
 
     try:
         result = run_import(
             _workspace(),
             args.source_system,
-            args.path,
+            args.path or "",
             dedup_near=args.dedup_near,
             dedup_threshold=args.dedup_threshold,
             link_edges=args.link_edges,
             dry_run=args.dry_run,
             chunk_documents=args.chunk_documents,
+            endpoint=args.endpoint,
+            collection=args.collection,
+            api_key_env=args.api_key_env,
+            qdrant_text_field=qdrant_default(args.text_field, "text"),
+            qdrant_page_size=qdrant_default(args.page_size, 100),
+            qdrant_max_pages=qdrant_default(args.max_pages, 1000),
+            qdrant_max_records=qdrant_default(args.max_records, 100000),
+            qdrant_max_response_bytes=qdrant_default(args.max_response_bytes, 8 * 1024 * 1024),
+            qdrant_max_total_response_bytes=qdrant_default(args.max_total_response_bytes, 64 * 1024 * 1024),
+            qdrant_timeout=qdrant_default(args.timeout, 30.0),
         )
     except UnsupportedSystemError as exc:
         print(f"mm import: {exc}", file=sys.stderr)
@@ -4908,7 +4943,9 @@ def build_parser() -> argparse.ArgumentParser:
             "from recall until a governed release proposal is approved, so untrusted external "
             "content is never silently authoritative. Sources are a local JSON "
             "dump (chatjson/mem0/letta/chroma) or a local directory of markdown notes "
-            "(markdown/agentmem). Re-running the same import is idempotent (block ids are derived from "
+            "(markdown/agentmem). Qdrant is an explicit endpoint-only scroll import using "
+            "--endpoint/--collection/--api-key-env and a declared --text-field; Pinecone and "
+            "Weaviate remain deferred. Re-running the same import is idempotent (block ids are derived from "
             "the record content, so nothing is duplicated). "
             "Exit codes: 0 ok, 2 unsupported/deferred system, 3 unreadable or malformed source."
         ),
@@ -4921,14 +4958,27 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Source format. Note directories: markdown (vault / note tree), agentmem (auto-memory "
             "directory). JSON dumps: chatjson (session transcript), mem0, letta, chroma (low value — "
-            "a vector store keeps embeddings, not source text). pinecone/qdrant/weaviate are accepted "
-            "only to report that they are deferred."
+            "a vector store keeps embeddings, not source text). Qdrant requires explicit endpoint mode; "
+            "pinecone/weaviate remain deferred."
         ),
     )
     p_import.add_argument(
         "path",
-        help="Path to the JSON dump, or the root directory for the markdown/agentmem note-tree importers.",
+        nargs="?",
+        help="Path to a local dump/tree; omit for endpoint-backed Qdrant imports.",
     )
+    p_import.add_argument("--endpoint", help="Qdrant REST endpoint (required for --from qdrant).")
+    p_import.add_argument("--collection", help="Qdrant collection (required for --from qdrant).")
+    p_import.add_argument("--api-key-env", help="Environment variable containing the Qdrant API key.")
+    p_import.add_argument("--text-field", default=None, help="Declared Qdrant payload field containing text (default: text).")
+    p_import.add_argument("--page-size", type=int, default=None, help="Qdrant page size, bounded to 100 (default: 100).")
+    p_import.add_argument("--max-pages", type=int, default=None, help="Qdrant page bound (default: 1000).")
+    p_import.add_argument("--max-records", type=int, default=None, help="Qdrant record bound (default: 100000).")
+    p_import.add_argument("--max-response-bytes", type=int, default=None, help="Qdrant response-byte bound (default: 8 MiB).")
+    p_import.add_argument(
+        "--max-total-response-bytes", type=int, default=None, help="Qdrant cumulative response-byte bound (default: 64 MiB)."
+    )
+    p_import.add_argument("--timeout", type=float, default=None, help="Qdrant per-request timeout in seconds (default: 30).")
     p_import.add_argument(
         "--dedup-near",
         action="store_true",

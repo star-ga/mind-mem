@@ -85,6 +85,26 @@ mm --help
 All commands read the workspace from the `MIND_MEM_WORKSPACE` environment variable
 (falls back to the current working directory).
 
+### Qdrant migration import
+
+The Qdrant adapter is the only endpoint-backed migration path currently
+implemented. It is explicitly invoked with an endpoint and collection; the
+endpoint must be `http` or `https`, and an API key is read only from the named
+environment variable. Points are read with bounded, read-only scroll pages,
+the declared payload text field is mapped to quarantined `IMP-` blocks, and
+the normal release approval remains required:
+
+```bash
+mm import --from qdrant --endpoint https://qdrant.example \
+  --collection agent_memory --api-key-env QDRANT_API_KEY
+```
+
+Use `--text-field` when the collection stores text under a different payload
+key. `--page-size`, `--max-pages`, `--max-records`,
+`--max-response-bytes`, and `--max-total-response-bytes` bound the export;
+`--timeout` bounds each HTTP request. Pinecone and
+Weaviate endpoint importers remain open and are refused as deferred systems.
+
 ## Local retrieval receipts
 
 Capture the current nonempty served ledger and its head to a new file:
