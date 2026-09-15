@@ -70,6 +70,7 @@ def _wheel_with_member(tmp_path: Path, member: str) -> Path:
         "mind_mem/./outside.py",
         "mind_mem//outside.py",
         "C:/outside.py",
+        "C:outside.py",
     ],
 )
 def test_wheel_rejects_unsafe_member_paths(tmp_path: Path, member: str) -> None:

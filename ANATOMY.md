@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1660 | **Est. tokens:** ~4891714
-**Generated:** 2026-09-15 10:05 UTC
+**Files:** 1660 | **Est. tokens:** ~4891713
+**Generated:** 2026-09-15 10:09 UTC
 
 ## Token Budget Guide
 
@@ -62,7 +62,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9632 |
-| `scripts/` | 23 | ~76094 |
+| `scripts/` | 23 | ~76087 |
 | `sdk/go/` | 11 | ~9890 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4864 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96321 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 736 | ~2168168 |
+| `tests/` | 736 | ~2168174 |
 | `tests/fixtures/` | 7 | ~11912 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -612,7 +612,7 @@
 - `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `build_integrity_manifest.py` (~681 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
-- `build_release_sbom.py` (~4993 tok, huge) — Generate and validate the release SBOM for the built wheel.
+- `build_release_sbom.py` (~4986 tok, huge) — Generate and validate the release SBOM for the built wheel.
 - `check_author_identity.sh` (~1880 tok, huge) — check_author_identity.sh — enforce the single-author identity rule.
 - `check_built_integrity.py` (~3938 tok, huge) — Fail-closed verification of the integrity manifest in release archives.
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
@@ -1751,7 +1751,7 @@
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
 - `test_release_preflight_gates.py` (~5444 tok, huge) — Tests for the release-preflight gates.
-- `test_release_sbom.py` (~2439 tok, huge) — Fail-closed controls for the wheel-bound release SBOM helper."""
+- `test_release_sbom.py` (~2445 tok, huge) — Fail-closed controls for the wheel-bound release SBOM helper."""
 - `test_remote_vector_admission.py` (~2441 tok, huge) — Remote vector hits must be checked against the current corpus authority."""
 - `test_replay_check.py` (~4122 tok, huge) — Replay — does the ledger corroborate what one recall attestation claims?
 - `test_repo_task_generation.py` (~3390 tok, huge) — Tests for the real-repo A/B task generator.

@@ -14,6 +14,7 @@ import base64
 import csv
 import hashlib
 import json
+import ntpath
 import os
 import re
 import subprocess
@@ -64,7 +65,7 @@ def _validate_wheel_member_path(path: str) -> None:
         or path.startswith(("/", "\\"))
         or "\\" in path
         or any(part in {"", ".", ".."} for part in parts)
-        or (len(parts[0]) == 2 and parts[0][0].isalpha() and parts[0][1] == ":")
+        or ntpath.splitdrive(path)[0]
     ):
         raise SbomValidationError(f"wheel contains unsafe archive member path: {path!r}")
 
