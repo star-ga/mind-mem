@@ -104,6 +104,60 @@ class TestPostgresRecallBackendUnit:
         backend = _load_backend(str(ws))
         assert isinstance(backend, PostgresRecallBackend)
 
+    def test_hybrid_postgres_route_does_not_claim_bm25_fallback(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The delegated PostgreSQL hybrid path must not log a scan fallback."""
+        ws = tmp_path / "ws"
+        _write_workspace(
+            ws,
+            block_store={"backend": "postgres", "dsn": "postgresql://x/y"},
+            recall_cfg={"backend": "hybrid"},
+        )
+        seen: list[tuple[str, dict]] = []
+
+        class _Spy:
+            def __getattr__(self, name: str):
+                def record(event: str, **kw: object) -> None:
+                    if name == "warning":
+                        seen.append((event, kw))
+
+                return record
+
+        import mind_mem._recall_core as core
+
+        monkeypatch.setattr(core, "_log", _Spy())
+        backend = _load_backend(str(ws))
+        assert isinstance(backend, PostgresRecallBackend)
+        assert not any(event == "unknown_recall_backend" for event, _ in seen)
+
+    def test_unknown_postgres_route_names_selected_backend(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An unsupported value on a PG workspace must name PG, never BM25."""
+        ws = tmp_path / "ws"
+        _write_workspace(
+            ws,
+            block_store={"backend": "postgres", "dsn": "postgresql://x/y"},
+            recall_cfg={"backend": "future_backend"},
+        )
+        seen: list[tuple[str, dict]] = []
+
+        class _Spy:
+            def __getattr__(self, name: str):
+                def record(event: str, **kw: object) -> None:
+                    if name == "warning":
+                        seen.append((event, kw))
+
+                return record
+
+        import mind_mem._recall_core as core
+
+        monkeypatch.setattr(core, "_log", _Spy())
+        backend = _load_backend(str(ws))
+        assert isinstance(backend, PostgresRecallBackend)
+        matching = [kw for event, kw in seen if event == "unknown_recall_backend"]
+        assert len(matching) == 1
+        assert matching[0]["backend"] == "future_backend"
+        assert matching[0]["selected_backend"] == "postgres"
+        assert matching[0]["fallback"] == "postgres"
+
     def test_explicit_sqlite_overrides_postgres_store(self, tmp_path: Path) -> None:
         """An explicit recall.backend=sqlite wins over a PG block store."""
         ws = tmp_path / "ws"
