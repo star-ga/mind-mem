@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+"""End-to-end RunPod driver for full-FT on an explicitly configured base.
 
 Flow:
 
@@ -14,10 +14,17 @@ Flow:
     8. Tear down the pod.
 
 Requires:
+    - MM_BASE_MODEL naming the exact operator-selected base model
+    - Exact approval marker and budget (or MM_APPROVAL_FILE)
     - RunPod API key in ~/.runpod/config.toml (already present)
     - SSH key at ~/.ssh/runpod_key{,.pub}
     - HF write token at /tmp/hf_write_token
     - Corpus built at /data/checkpoints/mm-workspace/train-output/corpus.jsonl
+
+Approval scope: R2 binds the exact tag, decimal budget and requested provider
+configuration. It is not a billing cap or complete R1-R4 preflight. An existing
+pod's actual configuration and immutable corpus/model/source identities still
+need independent verification before a funded run.
 """
 
 from __future__ import annotations
@@ -33,6 +40,11 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path, PurePosixPath
+
+try:
+    from .spend_guard import ApprovalError, launch_config_sha256, validate_approval
+except ImportError:  # direct ``python train/runpod_deploy.py`` invocation
+    from spend_guard import ApprovalError, launch_config_sha256, validate_approval
 
 # ---------------------------------------------------------------------------
 # Config
@@ -104,6 +116,37 @@ def _api_key() -> str:
         if "api_key" in line or line.strip().startswith("apikey"):
             return line.split("=", 1)[1].strip().strip('"').strip("'")
     raise RuntimeError(f"no api_key found in {RUNPOD_CONFIG}")
+
+
+def _launch_config(
+    *, gpu_type: str, image: str, version_tag: str, skip_upload: bool
+) -> dict[str, object]:
+    """Return the non-secret values bound by the operator approval marker."""
+    return {
+        "base_model": os.environ["MM_BASE_MODEL"],
+        "cloud_type": os.environ.get("MM_RUNPOD_CLOUD", "SECURE"),
+        "container_disk_gb": DEFAULT_CONTAINER_DISK_GB,
+        "gpu_type": gpu_type,
+        "gpu_count": 1,
+        "image": image,
+        "skip_upload": skip_upload,
+        "version_tag": version_tag,
+        "volume_gb": DEFAULT_VOLUME_GB,
+        "volume_mount_path": "/workspace",
+    }
+
+
+def _launch_config_digest(
+    *, gpu_type: str, image: str, version_tag: str, skip_upload: bool
+) -> str:
+    return launch_config_sha256(
+        **_launch_config(
+            gpu_type=gpu_type,
+            image=image,
+            version_tag=version_tag,
+            skip_upload=skip_upload,
+        )
+    )
 
 
 def _api_call(method: str, path: str, body: dict | None = None) -> dict:
@@ -392,6 +435,21 @@ def main() -> None:
         "Drives the generic configured-base HF commit message.",
     )
     parser.add_argument(
+        "--approval-file",
+        default=os.environ.get("MM_APPROVAL_FILE"),
+        help="exact operator approval marker; required for provisioning",
+    )
+    parser.add_argument(
+        "--budget-usd",
+        default=None,
+        help="exact positive decimal USD budget; required for provisioning",
+    )
+    parser.add_argument(
+        "--print-approval-config",
+        action="store_true",
+        help="print the non-secret launch config digest and exit",
+    )
+    parser.add_argument(
         "--provision-only",
         action="store_true",
         help="Create pod + print SSH info; don't run training or tear down.",
@@ -437,6 +495,37 @@ def main() -> None:
     if args.destroy:
         destroy(args.destroy)
         return
+
+    if not os.environ.get("MM_BASE_MODEL"):
+        sys.exit(
+            "MM_BASE_MODEL is required before provisioning; "
+            "the compatibility default is not launch-authorized"
+        )
+    config = _launch_config(
+        gpu_type=args.gpu_type,
+        image=args.image,
+        version_tag=args.version_tag,
+        skip_upload=args.skip_upload,
+    )
+    config_digest = launch_config_sha256(**config)
+    if args.print_approval_config:
+        print(json.dumps({"config": config, "config_sha256": config_digest}, sort_keys=True))
+        return
+    if not args.approval_file:
+        sys.exit("SPEND-GUARD REFUSED (R2)\n  approval file is required")
+    if args.budget_usd is None:
+        sys.exit("SPEND-GUARD REFUSED (R2)\n  budget_usd is required")
+    try:
+        approval = validate_approval(
+            Path(args.approval_file),
+            expected_tag=args.version_tag,
+            expected_budget_usd=args.budget_usd,
+            expected_config_sha256=config_digest,
+            require_config=True,
+        )
+    except ApprovalError as exc:
+        sys.exit(f"SPEND-GUARD REFUSED (R2)\n  {exc}")
+    print(f"spend approval verified: tag={approval.tag} budget_usd={approval.budget_usd}")
 
     if not CORPUS.is_file():
         sys.exit(f"corpus missing: {CORPUS}. Run build_corpus.py first.")
