@@ -35,9 +35,7 @@ def _extractor(seen: list[str]):
 
 def test_configured_backend_is_used_instead_of_markdown_shadow(tmp_path, monkeypatch):
     workspace = _workspace(tmp_path, postgres=True)
-    (tmp_path / "decisions/DECISIONS.md").write_text(
-        "[D-20260915-001]\nStatus: active\nStatement: stale local shadow\n", encoding="utf-8"
-    )
+    (tmp_path / "decisions/DECISIONS.md").write_text("[D-20260915-001]\nStatus: active\nStatement: stale local shadow\n", encoding="utf-8")
     calls = []
 
     class Store:
@@ -80,8 +78,7 @@ def test_backend_failure_does_not_become_empty_success(tmp_path, monkeypatch):
 def test_markdown_withheld_source_does_not_reach_extractor(tmp_path, status):
     workspace = _workspace(tmp_path)
     (tmp_path / "decisions/DECISIONS.md").write_text(
-        "[D-20260915-001]\nStatus: active\nStatement: admitted source\n\n"
-        f"[D-20260915-002]\nStatus: {status}\nStatement: withheld source\n",
+        f"[D-20260915-001]\nStatus: active\nStatement: admitted source\n\n[D-20260915-002]\nStatus: {status}\nStatement: withheld source\n",
         encoding="utf-8",
     )
     seen = []
