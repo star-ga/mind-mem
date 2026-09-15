@@ -40,6 +40,44 @@ def _wheel(tmp_path: Path, version: str = "5.0.3") -> Path:
     return path
 
 
+def _wheel_with_member(tmp_path: Path, member: str) -> Path:
+    path = tmp_path / "mind_mem-5.0.3-py3-none-any.whl"
+    dist_info = "mind_mem-5.0.3.dist-info"
+    members = {
+        member: b"unsafe member\n",
+        f"{dist_info}/METADATA": b"Metadata-Version: 2.1\nName: mind-mem\nVersion: 5.0.3\n",
+    }
+    record = []
+    for name, content in members.items():
+        digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest()).rstrip(b"=").decode()
+        record.append(f"{name},sha256={digest},{len(content)}")
+    record.append(f"{dist_info}/RECORD,,")
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, content in members.items():
+            archive.writestr(name, content)
+        archive.writestr(f"{dist_info}/RECORD", "\n".join(record) + "\n")
+    return path
+
+
+@pytest.mark.parametrize(
+    "member",
+    [
+        "../outside.txt",
+        "/absolute.txt",
+        "\\\\server\\outside.txt",
+        "mind_mem\\outside.py",
+        "mind_mem/../outside.py",
+        "mind_mem/./outside.py",
+        "mind_mem//outside.py",
+        "C:/outside.py",
+    ],
+)
+def test_wheel_rejects_unsafe_member_paths(tmp_path: Path, member: str) -> None:
+    wheel = _wheel_with_member(tmp_path, member)
+    with pytest.raises(_MODULE.SbomValidationError, match="unsafe archive member path"):
+        _MODULE._wheel_manifest(wheel, "5.0.3")
+
+
 def _target(tmp_path: Path, wheel: Path, *, install: bool = True, extra: bool = False) -> Path:
     target = tmp_path / "target"
     venv.EnvBuilder(with_pip=False, clear=True).create(target)

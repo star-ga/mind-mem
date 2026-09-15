@@ -56,6 +56,19 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _validate_wheel_member_path(path: str) -> None:
+    """Reject archive names that can escape or alias their install path."""
+    parts = path.split("/")
+    if (
+        not path
+        or path.startswith(("/", "\\"))
+        or "\\" in path
+        or any(part in {"", ".", ".."} for part in parts)
+        or (len(parts[0]) == 2 and parts[0][0].isalpha() and parts[0][1] == ":")
+    ):
+        raise SbomValidationError(f"wheel contains unsafe archive member path: {path!r}")
+
+
 def _wheel_manifest(wheel: Path, expected_version: str) -> tuple[str, str, dict[str, bytes]]:
     if not wheel.is_file() or wheel.suffix != ".whl":
         raise SbomValidationError(f"wheel is not a regular .whl file: {wheel}")
@@ -67,6 +80,8 @@ def _wheel_manifest(wheel: Path, expected_version: str) -> tuple[str, str, dict[
             names = archive.namelist()
             if len(names) != len(set(names)):
                 raise SbomValidationError("wheel contains duplicate archive members")
+            for path in names:
+                _validate_wheel_member_path(path)
             metadata_names = [name for name in names if name.endswith(".dist-info/METADATA")]
             if len(metadata_names) != 1:
                 raise SbomValidationError("wheel must contain exactly one dist-info/METADATA")
