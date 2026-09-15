@@ -67,6 +67,13 @@ def _insert_rows(dsn: str, schema: str, rows: list[dict[str, Any]]) -> None:
             )
 
 
+def _drop_schema(dsn: str, schema: str) -> None:
+    """Drop the fixture schema and propagate failures to the test runner."""
+    assert pgsql is not None
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute(pgsql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(pgsql.Identifier(schema)))
+
+
 @pytest.fixture
 def pg_workspace(tmp_path: Path) -> Iterator[tuple[str, str, str]]:
     if psycopg is None or not _PG_DSN:
@@ -101,13 +108,7 @@ def pg_workspace(tmp_path: Path) -> Iterator[tuple[str, str, str]]:
         yield str(workspace), _PG_DSN, schema
     finally:
         store.close()
-        try:
-            with psycopg.connect(_PG_DSN, autocommit=True) as conn:
-                conn.execute(pgsql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(pgsql.Identifier(schema)))
-        except Exception:
-            # The test result remains useful; the disposable schema cleanup
-            # is best effort and is reported by the outer harness if needed.
-            pass
+        _drop_schema(_PG_DSN, schema)
 
 
 @requires_pg
@@ -163,21 +164,45 @@ def test_graph_backfill_reads_real_postgres_and_applies_admission(pg_workspace: 
     from mind_mem.storage import get_block_store
 
     configured = get_block_store(workspace)
-    assert {row["_id"] for row in configured.get_all(active_only=False)} == {
-        "D-PG-001",
-        "D-PG-002",
-        "D-PG-003",
-        "D-PG-004",
-        "IMP-PG-001",
-    }
+    try:
+        assert {row["_id"] for row in configured.get_all(active_only=False)} == {
+            "D-PG-001",
+            "D-PG-002",
+            "D-PG-003",
+            "D-PG-004",
+            "IMP-PG-001",
+        }
 
-    seen: list[str] = []
-    report = backfill(workspace, extract_fn=_extractor(seen))
+        seen: list[str] = []
+        report = backfill(workspace, extract_fn=_extractor(seen))
 
-    assert set(seen) == {"postgres source of record", "release decision", "released imported source"}
-    assert "markdown shadow must not win" not in seen
-    assert report["blocks_scanned"] == 3
-    assert report["edges_extracted"] == 3
+        assert set(seen) == {"postgres source of record", "release decision", "released imported source"}
+        assert "markdown shadow must not win" not in seen
+        assert report["blocks_scanned"] == 3
+        assert report["edges_extracted"] == 3
+    finally:
+        configured.close()
+
+
+@pytest.mark.skipif(psycopg is None, reason="psycopg is required for cleanup control")
+def test_schema_cleanup_failure_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingConnection:
+        def __enter__(self) -> "FailingConnection":
+            return self
+
+        def __exit__(self, *_: Any) -> bool:
+            return False
+
+        def execute(self, *_: Any) -> None:
+            raise RuntimeError("drop schema refused")
+
+    def fail_connect(*_args: Any, **_kwargs: Any) -> FailingConnection:
+        return FailingConnection()
+
+    assert psycopg is not None
+    monkeypatch.setattr(psycopg, "connect", fail_connect)
+    with pytest.raises(RuntimeError, match="drop schema refused"):
+        _drop_schema("postgresql://disposable.invalid/db", "mm_graph_failure")
 
 
 def test_graph_backfill_reads_encrypted_admitted_corpus(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
