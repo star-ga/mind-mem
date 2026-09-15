@@ -11,6 +11,11 @@ All notable changes to MIND-Mem are documented in this file.
 - Opt-in graph context for chat, restricted to admitted evidence and checked
   against current sources before the response is returned. Structural citations
   do not establish semantic entailment.
+- A deterministic source-only MCP contract inventory for training preparation.
+  It binds registration, source and generator hashes, refuses unsupported
+  registration forms, and does not import historical corpus or evaluation code.
+  Its output is preparation evidence, not an independent evaluation or training
+  approval.
 
 ### Fixed
 

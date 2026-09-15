@@ -51,6 +51,12 @@ by its full description below.
   GGUF, refresh the HF model card, restate the throughput numbers in `README.md`
   (they are measurements of the *current* weights), and re-verify `mm install-model`.
   Requires rented GPU — a 4B full fine-tune does not fit local hardware.
+  Source preparation now includes a deterministic
+  [MCP contract inventory](train/source-corpus.md) derived from registration
+  wiring, signatures and literal docstrings. It does not import the historical
+  corpus or evaluation modules. The inventory is preparation evidence only;
+  a reviewed training corpus, independent evaluation and the verified base
+  revision remain open.
 
 ### Governance — content-category decay policy (1 item, integration in progress)
 

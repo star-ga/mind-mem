@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4903135
-**Generated:** 2026-09-15 11:00 UTC
+**Files:** 1665 | **Est. tokens:** ~4903419
+**Generated:** 2026-09-15 11:03 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~214519 |
+| `docs/` | 95 | ~214803 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -489,7 +489,7 @@
 - `mind-kernels.md` (~398 tok, medium) — MIND Kernels
 - `mind-mem-4b-setup.md` (~3193 tok, huge) — Setting up the mind-mem-4b model
 - `mind-mem-4b-training-runbook.md` (~3586 tok, huge) — mind-mem-4b training runbook (post-v3.10.2 lessons)
-- `mind-mem-4b-v2-training-recipe.md` (~2352 tok, huge) — mind-mem 4B full fine-tune — Qwen3.8-4B preparation plan
+- `mind-mem-4b-v2-training-recipe.md` (~2636 tok, huge) — mind-mem 4B full fine-tune — Qwen3.8-4B preparation plan
 - `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in MIND-Mem
 - `performance-tuning.md` (~3162 tok, huge) — Performance Tuning
 ### `docs/plans/`

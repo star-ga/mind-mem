@@ -29,8 +29,11 @@ The sequence is deliberately ordered:
 
 1. Finish and independently accept the relevant Pure-MIND port. The current
    roadmap keeps this gate open; no model run closes it.
-2. Freeze the post-port source tree and generate a new corpus with the actual
-   `train/build_corpus.py`. The current corpus is development data: its
+2. Freeze the post-port source tree and generate a new corpus from independently
+   reviewed source inputs. `train/build_source_corpus.py` provides a source-only
+   MCP contract inventory for this preparation; it is not a complete training
+   corpus or a launch gate. The existing `train/build_corpus.py` corpus is
+   development data: its
    holdout-targeted harvest makes it contaminated even where exact prompt
    overlap is zero. It cannot be used as an independent evaluation set.
 3. Create a locked, family-disjoint evaluation set from a separate source
@@ -43,9 +46,10 @@ The sequence is deliberately ordered:
    selected by an evaluation; this preparation manifest does not download or
    independently approve a model snapshot.
 5. Obtain the normal spend approval marker for a fresh run tag. The existing
-   `spend_guard preflight` is a required launch step, but its current marker
-   parsing still needs independent launch-readiness review before it can be
-   treated as a sufficient authorization proof.
+   `spend_guard preflight` is a required launch step. The deployer checks that
+   approval matches the selected training configuration; changing that
+   configuration invalidates the approval. This does not establish the remote
+   source/base/path configuration or satisfy the other readiness gates.
 6. Treat the existing training-readiness manifest command as the local
    preflight. It must exit successfully and report `training_eval_separation_status:
    READY`; otherwise no RunPod command is authorized. Pure-MIND acceptance,
@@ -61,7 +65,25 @@ or a previous checkpoint as proof for this new run.
 
 ## Local preparation commands
 
-Run these from the exact frozen checkout and use a fresh output directory:
+First, inventory the current MCP source contracts without importing the runtime,
+historical corpus, evaluation modules or a model:
+
+```bash
+: "${MM_CONTRACT_ROOT:?export MM_CONTRACT_ROOT to a new absolute directory}"
+python3 train/build_source_corpus.py --repo-root "$PWD" \
+  --output-dir "$MM_CONTRACT_ROOT"
+```
+
+The command requires an empty output directory outside the checkout. Its
+manifest binds source, generator and output hashes and reports
+`PREPARATION_ONLY` / `independent_evaluation: NOT_ESTABLISHED`. The current
+source resolves 107 registered tools into 107 contract families. Unsupported
+registration forms refuse rather than silently omit or rename tools. See
+[the source-corpus contract](../train/source-corpus.md).
+
+The commands below reproduce the **historical development-corpus diagnostic**
+from an exact frozen checkout. They do not produce an approved training input.
+Use a fresh output directory:
 
 ```bash
 set -eu
