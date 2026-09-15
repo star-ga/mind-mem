@@ -13,6 +13,7 @@ Also provides utility functions for listing .mind source files (used by MCP tool
 from __future__ import annotations
 
 import ctypes
+import operator
 import os
 import re as _re
 from dataclasses import dataclass
@@ -23,6 +24,10 @@ from . import mind_kernels
 from .observability import get_logger
 
 _log = get_logger("ffi")
+
+_C_INT_BITS = ctypes.sizeof(ctypes.c_int) * 8
+_C_INT_MIN = -(1 << (_C_INT_BITS - 1))
+_C_INT_MAX = (1 << (_C_INT_BITS - 1)) - 1
 
 # --- Library loading ---
 
@@ -425,16 +430,24 @@ class MindMemKernel:
         )
 
     def top_k_mask_py(self, scores: list[float], k: int) -> list[bool]:
-        """Top-K mask via compiled MIND kernel."""
+        """Compute a top-k mask through the loaded native kernel.
+
+        ``k`` must implement the integer index protocol and fit the native
+        signed C ``int``. Out-of-range values raise ``OverflowError`` before
+        the kernel is called; non-index values raise ``TypeError``.
+        """
         if self._lib is None:
             raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
+        k_value = operator.index(k)
+        if not _C_INT_MIN <= k_value <= _C_INT_MAX:
+            raise OverflowError(f"top_k_mask k must fit native C int ({_C_INT_MIN}..{_C_INT_MAX})")
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
         self._lib.top_k_mask(
             arr_t(*scores),
             ctypes.c_int(n),
-            ctypes.c_int(k),
+            ctypes.c_int(k_value),
             out,
         )
         return [v > 0.5 for v in out]

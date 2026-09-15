@@ -15,6 +15,7 @@ symbol.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import os
 import shutil
@@ -23,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks.bench_kernels import py_top_k_mask
 from mind_mem import __version__
 from mind_mem.mind_ffi import MindMemKernel
 
@@ -111,6 +113,7 @@ def test_rrf_empty_vectors_are_a_valid_empty_result(production_kernel: MindMemKe
         ([0.9, 0.7, 0.8, 0.1], 2, [True, False, True, False]),
         ([0.5, 0.5, 0.4], 1, [True, False, False]),
         ([0.5, 0.5, 0.4], 2, [True, True, False]),
+        ([2.0, 2.0, 3.0], 2, [True, False, True]),
         ([0.9, 0.7], 0, [False, False]),
         ([0.9, 0.7], 2, [True, True]),
         ([], 0, []),
@@ -133,10 +136,43 @@ def test_rrf_empty_vectors_are_a_valid_empty_result(production_kernel: MindMemKe
         # -- k > n (fast path) --
         ([float("nan"), 2.0], 3, [False, True]),
         ([float("inf"), float("-inf"), float("nan")], 5, [True, False, False]),
+        # -- missing edge controls: negative k, signed-zero tie, empty input
+        # with positive k, and under-filled all-ineligible partial selection --
+        ([1.0, -2.0], -1, [False, False]),
+        ([-0.0, 0.0, -1.0], 1, [True, False, False]),
+        ([], 4, []),
+        ([float("nan"), float("-inf")], 1, [False, False]),
     ],
 )
 def test_top_k_mask_boundaries_and_input_order_ties(production_kernel: MindMemKernel, scores: list[float], k: int, expected: list[bool]):
-    assert production_kernel.top_k_mask_py(scores, k) == expected
+    # The C ABI receives float32 values.  Normalize once so the independent
+    # Python reference and actual consumer are checked on identical inputs.
+    normalized_scores = [ctypes.c_float(score).value for score in scores]
+    assert py_top_k_mask(normalized_scores, k) == expected
+    assert production_kernel.top_k_mask_py(normalized_scores, k) == expected
+
+
+@pytest.mark.parametrize("k", [2**31, 2**32, -(2**31) - 1, -(2**32), 10**100, -(10**100)])
+def test_top_k_mask_rejects_k_outside_native_c_int_range(production_kernel: MindMemKernel, k: int):
+    with pytest.raises(OverflowError, match="native C int"):
+        production_kernel.top_k_mask_py([1.0, 0.0], k)
+
+
+@pytest.mark.parametrize(
+    ("k", "expected"),
+    [
+        (-(1 << (ctypes.sizeof(ctypes.c_int) * 8 - 1)), [False, False]),
+        ((1 << (ctypes.sizeof(ctypes.c_int) * 8 - 1)) - 1, [True, True]),
+    ],
+)
+def test_top_k_mask_accepts_native_c_int_endpoints(production_kernel: MindMemKernel, k: int, expected: list[bool]):
+    assert production_kernel.top_k_mask_py([1.0, 0.0], k) == expected
+
+
+@pytest.mark.parametrize("k", [1.5, "2", None])
+def test_top_k_mask_preserves_non_index_type_refusal(production_kernel: MindMemKernel, k: object):
+    with pytest.raises(TypeError, match="interpreted as an integer"):
+        production_kernel.top_k_mask_py([1.0, 0.0], k)  # type: ignore[arg-type]
 
 
 def _compile_version_provider(tmp_path: Path, version: str) -> Path:

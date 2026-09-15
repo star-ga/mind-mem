@@ -105,18 +105,24 @@ def py_confidence_score(
 
 
 def py_top_k_mask(scores: list[float], k: int) -> list[bool]:
-    """Boolean mask for top-k scores."""
-    if k >= len(scores):
-        return [True] * len(scores)
-    threshold = sorted(scores, reverse=True)[k - 1]
-    count = 0
-    mask = []
-    for s in scores:
-        if s >= threshold and count < k:
-            mask.append(True)
-            count += 1
-        else:
-            mask.append(False)
+    """Match ``lib/kernels.c:top_k_mask`` for float32-domain scores.
+
+    The native contract admits scores strictly greater than ``-INFINITY``;
+    NaN and negative infinity are ineligible.  A stable descending sort of
+    eligible indices preserves the first input occurrence for ties and never
+    selects more than ``k`` entries.  The benchmark supplies float32-
+    normalized inputs before timing, so this function contains no conversion
+    work in its timed path.
+    """
+    n = len(scores)
+    mask = [False] * n
+    if k <= 0 or n == 0:
+        return mask
+    if k >= n:
+        return [score > -math.inf for score in scores]
+    eligible = [index for index, score in enumerate(scores) if score > -math.inf]
+    for index in sorted(eligible, key=scores.__getitem__, reverse=True)[:k]:
+        mask[index] = True
     return mask
 
 
@@ -311,6 +317,10 @@ def run_benchmarks(sizes: list[int], iterations: int):
         ranks_a = gen_ranks(n)
         ranks_b = gen_ranks(n)
         scores_a = gen_scores(n)
+        # ``ctypes.c_float`` performs the same one-time narrowing as the C
+        # ABI input array.  Keep conversion outside both timed callables so
+        # the benchmark compares kernel work rather than marshaling costs.
+        topk_scores = [ctypes.c_float(score).value for score in scores_a]
         bools_a = gen_bools(n)
         days = gen_scores(n, 0, 365)
         access_counts = gen_ints(n, 0, 500)
@@ -373,8 +383,8 @@ def run_benchmarks(sizes: list[int], iterations: int):
             (
                 "top_k_mask",
                 py_top_k_mask,
-                (scores_a, min(10, n)),
-                lambda: make_native_topk(lib, scores_a, min(10, n)) if lib else None,
+                (topk_scores, min(10, n)),
+                lambda: make_native_topk(lib, topk_scores, min(10, n)) if lib else None,
             ),
             (
                 "weighted_rank",
