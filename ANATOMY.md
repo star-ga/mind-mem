@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4882959
-**Generated:** 2026-09-15 11:16 UTC
+**Files:** 1665 | **Est. tokens:** ~4883048
+**Generated:** 2026-09-15 11:28 UTC
 
 ## Token Budget Guide
 
@@ -41,7 +41,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1149 |
 | `deploy/grafana/` | 1 | ~1145 |
-| `docs/` | 95 | ~215107 |
+| `docs/` | 95 | ~215166 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4973 |
@@ -63,7 +63,7 @@
 | `lib/` | 1 | ~2451 |
 | `mind/` | 27 | ~9632 |
 | `scripts/` | 23 | ~76087 |
-| `sdk/go/` | 11 | ~9890 |
+| `sdk/go/` | 11 | ~9920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4864 |
 | `sdk/js/src/` | 5 | ~3113 |
@@ -476,7 +476,7 @@
 - `governance.md` (~2186 tok, huge) — MIND-Mem — governance implementation and boundaries
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
-- `install-guide.md` (~2914 tok, huge) — Installation guide — every step + every option
+- `install-guide.md` (~2919 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1567 tok, huge) — Integrations
 - `local-viewer.md` (~629 tok, large) — Local memory viewer
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
@@ -510,7 +510,7 @@
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `review.md` (~1647 tok, huge) — `mm review` — batch approval for the HITL queue
 - `roadmap-v4.md` (~11275 tok, huge) — mind-mem v4.0 — Design Rationale
-- `roadmap.md` (~14443 tok, huge) — Roadmap
+- `roadmap.md` (~14477 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-audit-sow.md` (~3353 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
 ### `docs/security-baselines/`
@@ -527,7 +527,7 @@
 - `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 
-- `status.md` (~2037 tok, huge) — MIND-Mem — implementation status (alignment companion)
+- `status.md` (~2057 tok, huge) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
@@ -633,7 +633,7 @@
 ### `sdk/go/`
 
 - `.gitignore` (~5 tok, tiny) — *.test
-- `README.md` (~703 tok, large) — MIND-Mem Go SDK
+- `README.md` (~733 tok, large) — MIND-Mem Go SDK
 - `client.go` (~1255 tok, large) — Option is a functional option for NewClient.
 - `client_test.go` (~3805 tok, huge) — Helpers
 - `doc.go` (~334 tok, medium) — Package mindmem is the official Go SDK for the mind-mem REST API.

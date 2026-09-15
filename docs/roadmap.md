@@ -9,11 +9,12 @@
 > layer, compliance primitives) is in
 > [`./roadmap-v4.md`](./roadmap-v4.md).
 
-## Current source status — v5.0.3
+## Current source status — v5.0.4 release candidate
 
-The latest published package is **[v5.0.3](https://pypi.org/project/mind-mem/5.0.3/)**.
-The [Unreleased changelog](../CHANGELOG.md#unreleased) records later source-tree
-work; it is not included in those release archives. The published `mind-mem-4b`
+The 5.0.4 source is a release candidate; publication is pending. The verified
+publication baseline is **[v5.0.3](https://pypi.org/project/mind-mem/5.0.3/)**
+(checked 2026-09-15 before candidate preparation). The [5.0.4 changelog](../CHANGELOG.md#504---2026-09-15)
+records the candidate changes; they are not included in the 5.0.3 archives. The published `mind-mem-4b`
 checkpoint remains **v4.1.1**, with a reported **133/133** result (111 main and
 22 held-out probes, two using inference-time anchors). This is not a new
 independent evaluation. The weights were trained on 83 MCP tools.

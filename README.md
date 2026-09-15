@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v5.0.3</code> &mdash; preserves proposal reasons, screens all persisted proposal fields, and strengthens recall and local-serving evidence &mdash;
+  <strong>Current release:</strong> <code>v5.0.4</code> (candidate; publication pending) &mdash; corrects lifecycle ranking, graph admission and release gates, and adds source-only training preparation &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -65,7 +65,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v5.0.3** — preserves proposal reasons, screens all persisted proposal fields before audit recording, and marks recall proof explicitly unproven when derivation fails. Local anticipation answers receive a separate serving receipt when evidence is available. This release retains the 5.0.2 module restoration and governance fixes; see [CHANGELOG.md](CHANGELOG.md) for release history.</sub>
+<sub>Current release: **v5.0.4** (candidate; publication pending) — corrects lifecycle ranking and graph admission, strengthens release validation, and adds source-only training preparation. See [CHANGELOG.md](CHANGELOG.md) for candidate changes and published release history.</sub>
 
 ### Substrate Properties
 

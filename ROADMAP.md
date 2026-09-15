@@ -8,12 +8,13 @@
 > file now flips checkboxes to match the shipping state and surfaces
 > only the items that remain *genuinely* open.
 
-## Currently shipping
+## Current source and publication
 
-**Latest published release: [v5.0.3](https://pypi.org/project/mind-mem/5.0.3/)**
-(2026-09-14). The published tag and archives remain immutable.
-See `CHANGELOG.md` for the per-version record. Changes under **Unreleased**
-are source-tree work and require the next release before they reach PyPI.
+**Source: v5.0.4 release candidate; publication pending.**
+The verified publication baseline is [v5.0.3](https://pypi.org/project/mind-mem/5.0.3/)
+(2026-09-14), checked on 2026-09-15 before this candidate was prepared. Its
+published tag and archives remain immutable. See `CHANGELOG.md` for the
+per-version record; the 5.0.4 section describes the pending release.
 
 The current integration includes Qdrant collection import, admitted graph
 context for chat, native top-k boundary checks, configuration-bound training

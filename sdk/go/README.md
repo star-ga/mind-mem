@@ -14,10 +14,11 @@ import mindmem "github.com/star-ga/mind-mem/sdk/go/v5"
 ```
 
 The `/v5` suffix is required by Go, not decoration: this is a subdirectory
-module in a repository whose releases are v5.x, so it is published by the tag
-`sdk/go/v5.0.2`, and Go rejects a v2-or-higher version for a module path with
-no matching major-version suffix. The suffix is derived from the package
-version by `sdk/release/version.py`, so it cannot be left behind at the next
+module in a repository whose releases are v5.x. Versioned SDK publication is
+pending; the 5.0.4 candidate requires the tag `sdk/go/v5.0.4`. Until that tag
+is published, `@latest` may resolve to a source pseudo-version. Go rejects a
+v2-or-higher version for a module path with no matching major-version suffix.
+The suffix is derived from the package version by `sdk/release/version.py`, so it cannot be left behind at the next
 major.
 
 ## Quick start

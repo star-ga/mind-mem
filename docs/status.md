@@ -1,6 +1,6 @@
 # MIND-Mem — implementation status (alignment companion)
 
-Three-column ledger of the current source checkout, experimental work and roadmap items. Source changes listed under `CHANGELOG.md`'s Unreleased section are not part of the published package. Companion to `docs/audit_response.md`, `docs/governance.md`, and `ROADMAP.md` / `CHANGELOG.md` (which remain product-authoritative).
+Three-column ledger of the current source checkout, experimental work and roadmap items. The 5.0.4 source is a release candidate; its changelog entry does not establish publication. Companion to `docs/audit_response.md`, `docs/governance.md`, and `ROADMAP.md` / `CHANGELOG.md` (which remain product-authoritative).
 
 ## Implemented now (operational, tested)
 
@@ -71,10 +71,10 @@ Kernel sources live in `mind/` (repo root), not `kernels/`.
 
 ## Release and roadmap status — 2026-09-15
 
-The latest published package is
-[MIND-Mem 5.0.3](https://pypi.org/project/mind-mem/5.0.3/).
-Later changes are recorded under Unreleased and require their own release
-checks against the exact commit. The historical 5.1.0 release remains yanked;
+The 5.0.4 source is a release candidate with publication pending. The verified
+publication baseline is [MIND-Mem 5.0.3](https://pypi.org/project/mind-mem/5.0.3/)
+(checked 2026-09-15 before candidate preparation). The 5.0.4 changes require
+their own release checks against the exact commit. The historical 5.1.0 release remains yanked;
 its published tag and archives are not rewritten.
 Statuses below are implementation and evidence states, not a checkbox-derived
 completion percentage. The full roadmap and release history remain in
@@ -82,7 +82,7 @@ completion percentage. The full roadmap and release history remain in
 
 | Area | Current status | Evidence and boundary |
 |---|---|---|
-| Current release work | 5.0.3 published; later source fixes unreleased | Published archives and later source changes have separate identities. The current source exposes 107 MCP tools; see the Unreleased changelog for the later retrieval, graph, training-preparation and release checks. |
+| Current release work | 5.0.3 published; 5.0.4 candidate pending | Published archives and later source changes have separate identities. The current source exposes 107 MCP tools; see the 5.0.4 candidate changelog for the later retrieval, graph, training-preparation and release checks. |
 | Pure-MIND core port | Planned; not started | `ROADMAP.md` describes the compiler and Rust-independence gate, missing `std.tensor`, and unresolved reductions before migration. Existing Python/native prototypes are not a completed Pure-MIND port. |
 | 4B retraining | Deferred until after the Pure-MIND port | Published weights remain trained on 83 tools and report 133/133 evaluation; the current server exposes 107. A source-only MCP contract inventory supports preparation but is not independent evaluation or training approval. A newer base, including Qwen3.8-4B, is not asserted as available. Any post-port run requires a reviewed corpus, independent evaluation, rented GPU approval/funding, and new receipts. |
 | Ground-truth evaluation | Open and blocked | `docs/design/eval-set-ground-truth.md` requires 60+ labelled cases against a hash-pinned snapshot. The current 36-query pool is an unlabelled development pool, not an independent evaluation or a basis for tuning and release claims. |

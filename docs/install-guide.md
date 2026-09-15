@@ -358,7 +358,7 @@ Restart the CLI. Most clients only re-read MCP config at startup.
 
 ## Versions
 
-- mind-mem source version: 5.0.3. Published package versions are listed on [PyPI](https://pypi.org/project/mind-mem/#history).
+- mind-mem source version: 5.0.4 (release candidate). Published package versions are listed on [PyPI](https://pypi.org/project/mind-mem/#history).
 - mind-mem-4b model: v4.1.1 weights (full fine-tune of Qwen3.5-4B), **reported 133/133** — 111 main probes plus 22 held-out paraphrases, two using inference-time anchors. This is the published evaluation, not a new independent run; see the [model card on Hugging Face](https://huggingface.co/star-ga/mind-mem-4b) for the breakdown and known limitations.
 - Postgres: 16+ recommended, 14+ supported
 - Postgres pgvector: 0.6.0+

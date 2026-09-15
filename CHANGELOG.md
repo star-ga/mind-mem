@@ -4,6 +4,8 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## [5.0.4] - 2026-09-15
+
 ### Added
 
 - An explicit, bounded Qdrant collection importer that stages records in

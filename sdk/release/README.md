@@ -53,12 +53,12 @@ scope. The repository does not contain registry credentials.
 
 After the verified release commit is on the public repository, take the exact
 subdirectory tag from `python3 sdk/release/version.py`. For package version
-5.0.3 it is `sdk/go/v5.0.3`; use the actual selected release version. Create
+5.0.4 it is `sdk/go/v5.0.4`; use the actual selected release version. Create
 that new tag at the verified release commit, push it, and
 verify it through the module proxy:
 
 ```bash
-GOPROXY=proxy.golang.org go list -m github.com/star-ga/mind-mem/sdk/go/v5@v5.0.3
+GOPROXY=proxy.golang.org go list -m github.com/star-ga/mind-mem/sdk/go/v5@v5.0.4
 ```
 
 Never move an existing published tag. The `/v5` module path and the
