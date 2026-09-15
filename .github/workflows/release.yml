@@ -336,18 +336,39 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Generate CycloneDX SBOM
-        # CycloneDX/gh-python-generate-sbom@v2 crashes on Python 3.12.13
-        # with ``ModuleNotFoundError: pkg_resources`` because setuptools
-        # dropped that shim. Installing cyclonedx-bom directly + invoking
-        # the CLI keeps the output format identical while avoiding the
-        # broken action wrapper. Swap back when the action is repaired.
+      - name: Download wheel artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: dist
+          path: dist/
+
+      - name: Generate and validate CycloneDX SBOM for the wheel
+        # Keep the CycloneDX tool environment separate from the target
+        # environment. The target contains the built base wheel only; optional
+        # extras are intentionally outside this SBOM's scope.
         run: |
-          python -m pip install --upgrade pip setuptools
-          python -m pip install "cyclonedx-bom>=5"
-          cyclonedx-py environment \
-            --output-format json \
-            --output-file sbom.cdx.json
+          set -euo pipefail
+          version="${GITHUB_REF#refs/tags/v}"
+          mapfile -t wheels < <(find dist -maxdepth 1 -type f -name 'mind_mem-*.whl' -print)
+          test "${#wheels[@]}" -eq 1
+          wheel_sha256="$(sha256sum "${wheels[0]}" | cut -d' ' -f1)"
+          python -m venv --without-pip sbom-target
+          python -m venv sbom-tools
+          sbom-tools/bin/python -m pip install --disable-pip-version-check --no-input \
+            --upgrade "cyclonedx-bom==7.3.1"
+          # Install through the tool environment's pip into the target
+          # interpreter. The target was created without pip, so it contains
+          # no bootstrap or generator packages when CycloneDX inspects it.
+          sbom-tools/bin/python -m pip --python sbom-target/bin/python install \
+            --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
+          python scripts/build_release_sbom.py \
+            --wheel "${wheels[0]}" \
+            --sbom sbom.cdx.json \
+            --version "$version" \
+            --expected-wheel-sha256 "$wheel_sha256" \
+            --cyclonedx sbom-tools/bin/cyclonedx-py \
+            --target-python sbom-target/bin/python \
+            --pyproject pyproject.toml
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -417,9 +438,27 @@ jobs:
           name: sbom-release
           path: .
 
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify SBOM binds the signed wheel
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -type f -name 'mind_mem-*.whl' -print)
+          test "${#wheels[@]}" -eq 1
+          python3 - "${wheels[0]}" "${{ steps.version.outputs.version }}" <<'PY'
+          import pathlib, sys
+          sys.path.insert(0, "scripts")
+          from build_release_sbom import validate_sbom
+          wheel = pathlib.Path(sys.argv[1])
+          validate_sbom(pathlib.Path("sbom.cdx.json"), wheel, sys.argv[2])
+          print("SBOM is bound to the downloaded signed wheel")
+          PY
 
       - name: Create GitHub Release
         # v3.7.0 M9: dropped ``libmindmem.so`` from the file list. The
