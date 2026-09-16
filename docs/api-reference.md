@@ -199,7 +199,7 @@ describes the governance and persistence boundaries. Readers of a graph with
 this new predicate must support entity equivalence; older readers are not
 assumed compatible. Automatic resolution and REST merge routes are separate work.
 
-#### arch-mind Governance Wrappers
+#### Arch-MIND Governance Wrappers
 
 Thin wrappers over the external `arch-mind` binary, which scores a repository's
 structural metrics and chains each session into a tamper-evident log. **All
@@ -209,12 +209,12 @@ oracle outside the workspace.
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `arch_baseline` | Initialise the arch-mind store at a repo with a baseline event | `repo` |
-| `arch_session_start` | Open an arch-mind session evidence node | `repo` |
-| `arch_session_end` | Close the open arch-mind session at a repo | `repo` |
-| `arch_delta` | Per-metric delta between two arch-mind baselines | `repo`, baseline ids |
-| `arch_check_rules` | Apply a `rules.mind` to a fresh arch-mind scan | `repo`, rules path |
-| `arch_history` | List events in the arch-mind store at a repo | `repo` |
+| `arch_baseline` | Initialise the Arch-MIND store at a repo with a baseline event | `repo` |
+| `arch_session_start` | Open an Arch-MIND session evidence node | `repo` |
+| `arch_session_end` | Close the open Arch-MIND session at a repo | `repo` |
+| `arch_delta` | Per-metric delta between two Arch-MIND baselines | `repo`, baseline ids |
+| `arch_check_rules` | Apply a `rules.mind` to a fresh Arch-MIND scan | `repo`, rules path |
+| `arch_history` | List events in the Arch-MIND store at a repo | `repo` |
 | `arch_metric_explain` | Per-metric human-readable breakdown for a fixture | `metric` |
 
 ### Configuration

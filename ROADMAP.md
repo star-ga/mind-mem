@@ -4807,3 +4807,160 @@ this?* For everything below the answer was no.
   **Why not:** Grid-state embeddings in a governed store for CODING agents answer no question any consumer asks.
 - ~~**Evidence-chain submission format** — tamper-evident export of an agent's full decision history per episode, ready for third-party scorecard verification~~
   **Why not:** Per-episode export for the ARC harness, not for this product.
+
+## Group T — the control plane is unmeasured (2026-09-15)
+
+Every retrieval metric this project reports — `recall_any@5`, `recall_all@5`,
+MRR, the LongMemEval-S scorecards, `retrieval_diagnostics` — measures the **read
+plane**: given a query, did the right block come back. Not one of them measures
+the **control plane**: after a supersede, a retraction, or a staleness
+propagation, does the *superseded* block stop coming back.
+
+Those are different failure modes and only one of them is instrumented. A store
+can score 0.88 strict recall@5 and still hand an agent a rotated credential,
+because surfacing the old block is not a recall miss — the old block is, by the
+lexical metric, a correct hit.
+
+### T0 — the measurement, reproduced (EVIDENCE, 2026-09-15)
+
+Not a hypothetical. Two active blocks, one superseding the other:
+
+```
+[SUP-001] Statement: The API key rotation interval is 90 days   Status: Superseded
+[SUP-002] Statement: The API key rotation interval is 30 days   Status: Active   Supersedes: SUP-001
+```
+
+`recall(ws, "API key rotation interval", limit=10)` returns **both**, ranked,
+with `Superseded` present in the result set. The supersession pointer is
+recorded, the lifecycle machinery ran, and the consumer still receives the
+retracted fact next to the live one with nothing but a status string to
+distinguish them. The write path refuses (`admission.py` `require_admission`);
+the read path does not filter.
+
+The forgetting engine is NOT the gap — `cognitive_forget.py`
+(ACTIVE→MARKED→MERGED→ARCHIVED→FORGOTTEN), `conflict_resolver.py`,
+`auto_resolver.py`, `staleness.py`/`lineage_staleness.py`/`world_staleness.py`
+all ship and are imported from live MCP tool paths. The gap is that **nothing
+asserts the engine's effect is visible at the recall seam**, so the two halves
+were free to drift apart without a single test going red.
+
+### T1 — `test_recall_supersedes.py` is vacuous (CONFIRMED defect)
+
+The test that should have caught T0 exists, builds exactly the fixture above,
+and then asserts:
+
+```python
+assert isinstance(results, list)
+```
+
+It passes when recall returns the superseded block. It passes when recall
+returns nothing. It passes when recall returns the phone book. It is a
+type-check wearing a behavioural test's filename — the same
+`assert X not in results`-without-a-positive-control failure that
+`wiring-discipline.md` §6 already names, in its purest form.
+
+A sweep found the pattern in **36 test files**, concentrated on the recall path
+(`test_recall_status_boost.py`, `test_recall_priority.py`,
+`test_contradiction_detector.py`, `test_hybrid_search.py`, …). Not all 36 are
+vacuous — some assert type *in addition to* behaviour — but every one needs
+reading, because the filename is currently doing the work of the assertion.
+
+**Fix shape:** every recall-path test asserts on *identity and ordering* of the
+returned blocks, never on their container type. Prove the gate works by
+disabling it and watching the test go red (mutation), per §6.
+
+### T2 — five control-plane tests (BUILD FIRST)
+
+Cheap, falsifiable, no new dependency, no benchmark adapter. Each must fail
+today or it is not measuring anything:
+
+1. **Amnesia** — fact written in session 1 is recallable in session 2.
+   (Expected: passes. The read plane works; this is the control.)
+2. **Contradiction** — two live conflicting facts → recall surfaces the
+   conflict rather than confidently returning one. Today `list_contradictions`
+   *reports*; recall does not *abstain*.
+3. **Staleness** — a block past its validity horizon is not returned as current.
+4. **Supersession** — T0 above, as a red test: the superseded block MUST NOT
+   appear in a default recall.
+5. **Load** — control-plane cost at 10k blocks; supersession filtering must not
+   become the thing that makes recall slow.
+
+Sequencing matters and I got it backwards once already: **write these five
+before wrapping any external benchmark.** A benchmark whose result you cannot
+interpret is worse than five tests whose failure you can read directly.
+
+### T3 — supersession-as-admission, not deletion (DESIGN)
+
+The obvious fix — delete the superseded block — is unavailable and should stay
+unavailable. This is an append-only hash-chained store; a row cannot be removed
+without breaking the chain, and that property is load-bearing.
+
+So the correct form is **not deletion**. It is a supersession edge plus an
+admission filter at the *read* seam mirroring the one already at the *write*
+seam: the block stays in the chain (evidence intact, `verify_chain` still
+passes), and `admit_corpus` stops surfacing it by default. Withheld by
+construction, not filtered by whoever remembered — §1 of `wiring-discipline.md`,
+applied to the half that currently has no filter.
+
+Two constraints this must respect:
+- **Recoverable.** `cognitive_forget`'s reversible grace window is the right
+  precedent; a supersede that cannot be undone is a deletion with extra steps.
+- **Inert when off.** The filter sits on the recall hot path. Per §10, the OFF
+  path adds no syscall, no parse, no per-item work — probe once at the outermost
+  point, and *measure* the off path rather than arguing it.
+
+### T4 — external corroboration (REFERENCE, do not vendor)
+
+Two 2026 papers independently name this exact plane. Recorded for vocabulary
+and evaluation shape, not as a dependency:
+
+- **FORGETEVAL** (arXiv 2606.15903) — thesis: production memory failures are
+  forgetting failures, not recall failures, *"yet existing memory benchmarks
+  measure only recall."* Decomposes forgetting into 5 primitive families and 10
+  adversarial categories. At least four map onto live defects in our own note
+  corpus: recursive supersession (the fleet-panel chain), temporal qualifier
+  (every date-suffixed block), compound fact (the hub blocks), identifier
+  obfuscation (`~/autoresearch` vs `~/mind-lab/autoresearch`). Scoring is
+  deterministic substring match — **no LLM judge**, so it is reproducible across
+  model versions the way our gates require. MIT.
+  **Caveat:** its adapter protocol scores N/A for missing primitives, and we
+  have no `purge` and no partial-`supersede` — so the aggregate would understate
+  the gap. The per-category profile is the output worth having, not the headline.
+- **GPM** (arXiv 2608.12476) — describes this architecture in academic
+  vocabulary: bitemporal state transitions, source-bound admission, non-revival
+  after retraction, fail-closed structured release. Independent confirmation that
+  governed memory is a real category. **Nothing to steal — we built it.** Take
+  the vocabulary; the design is already ours.
+
+### Explicitly NOT taken from the trigger document
+
+The item that prompted this group was a typeset explainer ("Agent Memory
+Architecture — 5 Layers"), which carries an Anthropic wordmark on every page
+while disclaiming Anthropic affiliation, cites a vendor site for its headline
+numbers, and attributes an entire section to an unlocatable blog post. Its
+CoALA taxonomy is real and is not its own (arXiv 2309.02427). Recorded here so a
+later pass does not re-import it:
+
+- ~~**The five-layer architecture** (working / episodic / semantic / procedural / forgetting)~~
+  **Why not:** We have all five. Governed blocks, session transcripts, the skills
+  hub, the recall budget packer, and `cognitive_forget`. Adopting the framing
+  would be renaming, not building.
+- ~~**"90% token reduction, 91% lower latency"** and **"20% accuracy from one ontology layer"**~~
+  **Why not:** Vendor figures on vendor-chosen benchmarks, cited to a marketing
+  site rather than a paper. Unciteable. Any token-reduction number we publish is
+  measured on our corpus or it is not published.
+- ~~**"last-write-wins" / "single-writer-per-entity"** concurrency for conflicting facts~~
+  **Why not:** Actively wrong for this store. Both assume mutable rows. In an
+  append-only chain you cannot overwrite; T3 is the correct form and the document
+  never considers it because it assumes you can delete.
+- ~~**The 7-day build path and the "implementation code and templates"**~~
+  **Why not:** It is page 1 of a funnel.
+
+**Kept from it:** one thing — the five test *shapes* in T2. That is the whole
+harvest, and it is worth having.
+
+### Sequencing
+
+T2 (write the five tests) → T1 (fix what they expose in the 36 files) → T0
+re-run as a red test → T3 (design the read-seam filter) → only then decide
+whether T4's adapter is worth the work. Do not start at T4.
