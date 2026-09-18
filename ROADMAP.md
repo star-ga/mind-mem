@@ -4964,3 +4964,61 @@ harvest, and it is worth having.
 T2 (write the five tests) → T1 (fix what they expose in the 36 files) → T0
 re-run as a red test → T3 (design the read-seam filter) → only then decide
 whether T4's adapter is worth the work. Do not start at T4.
+
+---
+
+## Replay-as-corpus: the recorded discovery tree as a first-class memory object (2026-09-18, Proposed)
+
+> Prior-art shape observed in a recent public recursive-self-improvement paper
+> (idea only; the source repo ships a PDF and no license — nothing vendored,
+> never named in a public artifact). Full technical plan and the measured
+> numbers live in `mind-lab/autoresearch/ROADMAP.md` §12. This entry states only
+> the mind-mem leg.
+
+### The connection to `similar_trajectories`
+
+We already expose `similar_trajectories` and already record trajectory-shaped
+data. The transferable idea is that a completed discovery history is not just a
+*corpus to search* — it is a **replayable object**: a tree of decisions where
+every node's realized outcome is stored, so an alternative decision policy can
+be walked over it and scored by reading stored outcomes, at zero model cost.
+
+The asymmetry that makes this land here is the same one the one-class-learning
+entry above identifies: **we have abundant recorded good outcomes and almost no
+labelled bad ones.** Measured on our own campaign data (2026-09-18):
+12,165 `rejected` rows against 21 `keep` — a 579:1 negative-to-positive ratio.
+A replayable tree turns that lopsided pile into something you can ask
+counterfactual questions of, instead of only nearest-neighbour ones.
+
+### What this would actually mean for mind-mem
+
+Nothing, until a question exists that needs it. The candidate is narrow and
+should be stated narrowly: **should a completed discovery tree be a governed
+block kind**, so that "what did campaign X explore, and what else could it have
+explored" is answerable through recall rather than by hand-parsing
+`parent_lineage.md` in another repo?
+
+Arguments against, recorded honestly:
+
+- The tree's source of truth is an append-only TSV in another repo that already
+  has deterministic resume. Copying it into mind-mem creates a second copy of a
+  hash-chained artifact — a contradiction surface, which is the one thing this
+  product exists to avoid.
+- A pointer (campaign id → path + anchor hash) carries most of the value at a
+  fraction of the risk.
+
+**Provisional position: pointer, not copy.** Ingesting 19,091 lineage rows as
+blocks would be storing derived data we do not own the chain for.
+
+### Precondition before any work
+
+The autoresearch §12 bench must run first and show the replay signal is real. If
+alternative policies do not separate on recorded trees, there is no
+counterfactual worth remembering and this entry closes with a dated note.
+
+### Falsification
+
+Close this if the §12 bench produces no ranking signal, or if a pointer-only
+representation answers every question we actually ask of campaign history —
+in which case the correct outcome is a `reference` block convention, not a new
+block kind.
