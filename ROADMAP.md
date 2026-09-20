@@ -5095,3 +5095,89 @@ than one undifferentiated score.
 Close this if hand-classification shows no stable separation, or if the
 distribution is so lopsided (e.g. >90% content) that a layer dimension buys
 nothing the existing signal does not already carry.
+
+## Computed abstention: making "no record found" a measurement, not a convention (2026-09-20, Proposed)
+
+**Status: PROPOSED — source audited, our-side mapping NOT audited. Do not implement
+before the audit box at the bottom is discharged.**
+
+The standing operating rule for every agent that consumes this memory is: *recall first;
+if nothing comes back, say "no record found" — never guess.* That rule is enforced by
+prose. `recall` returns its ranked results and the caller decides, by convention, whether
+the answer was good enough. A caller that skips the judgement gets no warning, and the
+hallucination guardrail the rule exists to provide is exactly as strong as the discipline
+of whoever wrote the calling code.
+
+Recent research on decision models for agentic systems supplies the mechanical form.
+Their framing: the *shape* of the probability distribution over candidates is the
+uncertainty signal — concentrated on one outcome means a confident answer, spread out
+means an uncertain one — and a flat distribution specifically means *none of the
+candidates is a clear winner*. They collapse that shape into a single 0–1 statistic so
+callers can threshold without recomputing it, and they make the explicit architectural
+point that a system unable to express honest uncertainty cannot be trusted.
+
+We already produce the input this needs. Recall returns scored candidates; the
+distribution across those scores is right there and is currently discarded in favour of
+the ranked list.
+
+### The change
+
+- [ ] **Derive an abstention statistic from the score distribution across recalled
+      blocks,** returned alongside results. Not a new score on each block — a single
+      property of the *set*, describing how separated the top candidate is from the
+      rest.
+- [ ] **Return abstention as a first-class field,** so "five blocks came back and none
+      of them is a clear match" is distinguishable in the response from "five blocks
+      came back and the first one is clearly right." Today both are a list of five.
+- [ ] **Three bands, not one threshold.** The prior art's pattern — act / proceed with
+      caution / do not act — and the accompanying point that the boundary is not one
+      number: the threshold for acting without confirmation should scale with what the
+      caller intends to do with the answer. A recall feeding a governed write deserves
+      a stricter band than one feeding a summary.
+- [ ] **Wire it to the existing calibration loop** rather than standing up a parallel
+      one. `outcome_attribution` already projects success and failure back into
+      calibration; abstention is a prediction that loop can score, which makes it
+      falsifiable rather than decorative.
+
+### Relationship to work already on this roadmap
+
+This is the same seam the conformal-calibration note reaches for from a different
+direction, and it composes with the layer-attributed failure entry above: that entry
+asks *which layer was responsible when recall went wrong*, this one asks *did recall
+know at the time that it was on thin ice*. An abstention that fires and a failure that
+is then attributed to content are consistent; an abstention that never fires while
+content failures accumulate is a calibration bug this pairing would expose.
+
+It does **not** introduce a second memory subsystem. No new store, no semantic graph, no
+parallel index — a derived statistic over scores recall already computes.
+
+### What is NOT taken
+
+The hosted model. It is a closed-weight network call, and a remote probabilistic oracle
+inside the recall path is incompatible with offline operation and with reproducible
+recall. The statistic here must be computed locally and deterministically from scores we
+already have.
+
+### AUDIT STATUS
+
+**Source side: AUDITED 2026-09-20.** Confidence-derived-from-distribution-shape, the
+flat-distribution reading, the collapse-to-a-single-0-to-1-statistic design, the
+three-band act/caution/do-not-act pattern, and the "thresholds scale with risk" point
+were each read from the vendor's own published documentation, not from secondary
+coverage.
+
+**Correction to an earlier session claim:** an earlier read described
+confidence-from-distribution-shape as *our inference* about their design. It is not an
+inference — it is their documented mechanism, stated explicitly. The entry is on firmer
+ground than the session that proposed it believed.
+
+**Our side: NOT AUDITED.** No one has measured the score distributions recall actually
+produces, so we do not know whether they separate cleanly enough for a threshold to mean
+anything. That measurement is the first implementation step, not a formality — if top-1
+and top-2 scores are routinely within noise of each other, the statistic is not
+informative and this entry should be closed as declined.
+
+**Falsification condition.** Run recall over a labelled set where the right answer is
+known to be absent. If the derived statistic does not separate those queries from ones
+where the answer is present, there is no signal here and no amount of threshold tuning
+will create one.
