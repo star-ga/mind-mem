@@ -5022,3 +5022,76 @@ Close this if the §12 bench produces no ranking signal, or if a pointer-only
 representation answers every question we actually ask of campaign history —
 in which case the correct outcome is a `reference` block convention, not a new
 block kind.
+
+## Layer-attributed failure: giving outcome attribution a *where*, not just a *how badly* (2026-09-20, Proposed)
+
+> Prior-art shape observed in recent public research on gated self-evolving
+> agent systems (idea only — no code, no dependency). Never name the source in
+> a public artifact; provenance lives in mind-mem itself. Sibling entries:
+> `naestro/ROADMAP.md` R100 (the gate), `mind-lab/autoresearch/ROADMAP.md`.
+
+### AUDIT STATUS: the source's *code* backing for this idea is THIN — read this first
+
+Audited the source repo at commit `ace8ff69` (2026-09-15, 172 Python files).
+The four-phase loop described below is **stated in the paper but barely present
+in the shipped code**: its entire `evolution/` package is 634 lines across three
+files, and a grep for the mechanism's own vocabulary
+(`signature|attribut|localiz|single.?level|diagnos`) returns exactly **one**
+hit — a passing word in a docstring. There is no layer-attribution
+implementation to port.
+
+This does **not** make the idea worthless — the discipline is sound and argued
+for in the paper — but it means we would be building it, not adapting it, and
+the source provides no evidence it survives contact with a real system. Treat
+the numbers in that paper as evidence for their *gate*, not for this loop.
+
+### What our attribution does today, and what it cannot say
+
+`src/mind_mem/outcome_attribution.py` (466 lines) already answers the question
+every other quality signal misses: not *"was this block a good match?"* but
+*"did acting on it succeed?"*. Outcomes land in `recall_outcome` and project
+into `calibration_feedback` (success → accepted, failure → rejected) so the
+existing weight loop picks utility up for free. Its own docstring states the
+constraint that governs any extension here: **"No parallel subsystem."**
+
+What it cannot currently express is *where* a failure lives. Every failure
+arrives as one undifferentiated signal against a block id. But a recall failure
+has at least three distinguishable causes:
+
+- **content** — the block said something wrong or stale
+- **exposure** — the block was right but recall surfaced the wrong set, or
+  ranked it wrongly
+- **schema** — the block *could not* represent the thing that was needed
+
+These call for opposite remedies. Content failure means revise the block;
+exposure failure means the block is fine and the retrieval path is not; schema
+failure means no edit to any block fixes it. Collapsing all three into one
+score means the calibration loop down-weights good blocks for retrieval bugs,
+which is an actively wrong correction.
+
+### The discipline worth taking
+
+The transferable rule is not the taxonomy — ours would differ — it is the
+constraint attached to it: **attribute each recurring failure signature to
+exactly one layer, and allow the remedy to modify only that layer.** One
+variable at a time. The source's stated rationale is that the single-level
+restriction isolates the hypothesis under test and limits regressions on the
+validation set.
+
+That is what would make `memory_evolution` auditable rather than a black box:
+a proposal that claims to fix a content failure and also touches the retrieval
+path has not isolated anything, and its accept/reject signal is uninterpretable.
+
+### Precondition before any work
+
+Measure the distribution first. Sample existing `recall_outcome` failures and
+hand-classify them into the three layers. **If failures do not separate — if
+most are genuinely ambiguous between content and exposure — this entry closes
+with a dated note**, because a taxonomy nobody can apply consistently is worse
+than one undifferentiated score.
+
+### Falsification
+
+Close this if hand-classification shows no stable separation, or if the
+distribution is so lopsided (e.g. >90% content) that a layer dimension buys
+nothing the existing signal does not already carry.
