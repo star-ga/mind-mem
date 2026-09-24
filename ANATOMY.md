@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4,884,851
-**Generated:** 2026-09-23 22:58 UTC
+**Files:** 1665 | **Est. tokens:** ~4,884,850
+**Generated:** 2026-09-24 01:51 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~73,773 |
+| `./` | 37 | ~73,772 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -143,7 +143,7 @@
 - `pyproject.toml` (~3759 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `requirements-optional.in` (~54 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
-- `requirements-optional.txt` (~23716 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
+- `requirements-optional.txt` (~23715 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
 - `SECURITY.md` (~2996 tok, huge) — Security Policy
