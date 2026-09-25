@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4,884,850
-**Generated:** 2026-09-24 01:51 UTC
+**Files:** 1665 | **Est. tokens:** ~4,884,852
+**Generated:** 2026-09-25 05:39 UTC
 
 ## Token Budget Guide
 
@@ -54,7 +54,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~21,689 |
+| `.github/workflows/` | 11 | ~21,691 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -550,7 +550,7 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~9103 tok, huge) — name: CI
+- `ci.yml` (~9105 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
@@ -908,10 +908,12 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~3242 tok, huge) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~3215 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1877 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
+### `src/mind_mem/mcp/`
+
+- `server.py` (~3215 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/mcp/tools/`
 
 - `agent.py` (~3001 tok, huge) — Agent-bridge + vault MCP tools.
