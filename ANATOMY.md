@@ -6,7 +6,7 @@
 
 **Project:** `mind-mem`
 **Files:** 1665 | **Est. tokens:** ~4,883,777
-**Generated:** 2026-09-20 10:38 UTC
+**Generated:** 2026-09-25 05:37 UTC
 
 ## Token Budget Guide
 
@@ -908,10 +908,12 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~3242 tok, huge) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~3215 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1877 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
+### `src/mind_mem/mcp/`
+
+- `server.py` (~3215 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/mcp/tools/`
 
 - `agent.py` (~3001 tok, huge) — Agent-bridge + vault MCP tools.

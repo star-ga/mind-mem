@@ -5181,3 +5181,56 @@ informative and this entry should be closed as declined.
 known to be absent. If the derived statistic does not separate those queries from ones
 where the answer is present, there is no signal here and no amount of threshold tuning
 will create one.
+
+## Structure-first recall: route to the heading, then search inside it (2026-09-24, Proposed)
+
+**Status: PROPOSED. Not audited on our side. Do not implement before the falsification
+gate below has a measured baseline.**
+
+Recall today scores every chunk in the corpus against the query, flat. The document's own
+outline (its headings, and the path from the file root to each section) is thrown away
+at scoring time, even though `smart_chunker.py` already splits on headers when
+`retrieval.smart_chunking` is enabled. A chunk three levels under
+`## Group T > ### T3 — supersession-as-admission` competes on equal terms with a
+same-worded chunk from an unrelated file.
+
+Recent research on structure-aware retrieval measured that routing a query to the most
+specific section heading first, then answering from inside that section, beats flat
+chunk retrieval on long structured documents. The finding worth taking is that the
+gain comes from the outline itself. Their fine-tuned-model form is not needed to test it
+(see "What is NOT taken").
+
+### The change
+
+- [ ] **Heading tree per file.** At index time, record for every chunk the full heading
+  path it sits under (`file > ## A > ### B`). Derived data only, rebuilt with the index.
+- [ ] **Heading-first scoring leg.** Score the query against heading paths with plain
+  BM25 (no model), keep the top-k sections, then either restrict or boost chunk scoring
+  to those sections. Both variants measured, one kept.
+- [ ] **Flag, off by default.** `retrieval.structure_first.enabled = false`. With the
+  flag off, recall output must be byte-identical to today, and the off path must add no
+  parse or per-query work (wiring-discipline rules 2 and 10). Same resolution pattern as
+  `resolve_smart_chunking_config`.
+- [ ] **Scope chat citations to the retrieved set.** `chat_citations` already rejects a
+  citation that does not resolve to a real workspace block. Tighten the resolver
+  `chat_with_memory` passes so a citation must also be a block *this answer retrieved*.
+  An answer can then only cite what it was actually shown, by construction rather than
+  by a post-hoc corpus lookup.
+
+### What is NOT taken
+
+- **Corpus-in-weights retrieval** (training the corpus into a model that emits document
+  ids). It needs retraining whenever the corpus changes; a governed store that changes on
+  every approved proposal cannot use it.
+- **The whole outline in the prompt.** A multi-thousand-token table of contents per query
+  is the cost this entry exists to avoid.
+- **Fine-tuning anything.** If BM25 over headings does not capture the gain, the entry is
+  declined, not escalated to a trained router.
+
+### Falsification
+
+Run the current recall benchmark set with the flag off and on. The flag earns a place
+only if recall@1 improves measurably on structured files (roadmaps, specs, long
+decision logs) *and* does not regress on flat short blocks. If headings in our corpus are
+too generic to separate sections (many `### Status`, `### Falsification`), the heading leg
+carries no signal and this entry closes as declined.
