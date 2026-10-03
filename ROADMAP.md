@@ -5483,3 +5483,48 @@ below the untrimmed 2B on the harness.
 
 Proposed. §1 applies to the next cross-model comparison; §2 waits on the 2B
 training track.
+
+## Checking incoming material against our own claims, and learning from operator edits (2026-10-03, Proposed)
+
+> Prior-art shape observed in always-on agent products.
+> Ideas only — no code, no dependency. Provenance lives in governed memory, not here.
+
+### 1. Claim conflict check for incoming material
+
+Contradiction detection today runs inside memory (block against block). The
+same check is pointed outward: a new paper, post, benchmark or competitor
+release is compared against the claims we have published or committed to
+(roadmaps, READMEs, site copy, recorded benchmark numbers). A conflict, such as
+a result that undercuts a number we state, or a method that contradicts a
+stated assumption, becomes a proposal through `propose_update` with both
+sources attached, never a direct edit. Our public claims are indexed as their
+own block kind so the comparison has a fixed target.
+
+Builds on the 2026-09-28 entry: the "new or known?" step decides whether an
+item is new; this step decides whether it conflicts with what we say.
+
+### 2. Learning from operator edits
+
+When the operator edits a draft before sending it (a post, a reply, a
+message), the before-and-after pair is recorded as a style signal. Two uses:
+
+- **A measured edit distance per draft type**, tracked over time, so "drafts
+  need fewer edits" is a number rather than an impression. This feeds the
+  existing `calibration_feedback` / `calibration_stats` surface.
+- **Retrieved examples for the next draft**: the most similar recent edited
+  pairs are offered to the drafting agent as examples. Nothing is trained on
+  them without a separate decision.
+
+Edit pairs are private operator data: stored locally, excluded from any export
+by default, and never sent to an external model.
+
+### Falsification condition
+
+§1 is not worth keeping if, over a month of intake, it raises no conflict the
+operator acts on. §2 is not worth keeping if the edit distance does not fall
+after examples are offered, measured against drafts produced without them.
+
+### Status
+
+Proposed. Consumer is the naestro morning approval queue (naestro roadmap
+R117), where both kinds of output arrive as items to approve.
