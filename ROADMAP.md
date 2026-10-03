@@ -5445,3 +5445,41 @@ skipped, with the matching block id attached so the skip is auditable.
 
 Proposed. Order: §1, then §2 and §3. Consumers are the naestro research desk
 and the chat adapter's link intake (naestro roadmap R110).
+
+## Model training: tokenizer-independent metrics and attested vocabulary trimming (2026-10-03, Proposed)
+
+> Prior-art shape observed in recent research on tokenization.
+> Ideas only — no code, no dependency. Provenance lives in governed memory, not here.
+
+### 1. Bits per byte for any comparison across tokenizers
+
+Perplexity and loss are measured per token, so two models with different
+tokenizers cannot be ranked by them: the one that splits text into more tokens
+looks better or worse for reasons unrelated to quality. The shipped 4B and the
+planned 2B use different tokenizers. Any quality comparison between them, or
+against an external baseline, reports bits per byte on the same raw text,
+computed in fixed point so the number reproduces on every machine. The release
+gate stays the un-softened 95/95 eval harness (`train/V4_RETRAIN_TODO.md`);
+bits per byte is a reported side metric, never a substitute for it.
+
+### 2. Vocabulary trimming for the 2B model, as an attested step
+
+In a small model the embedding and output tables can hold a majority of the
+parameters. mind-mem's corpus is English and code heavy, so most of a large
+multilingual vocabulary is never used. Trimming unused entries frees that
+budget. The trim is a deterministic step that emits a signed old-ID → new-ID
+map alongside the weights, so every token of the trimmed model traces back to
+the original vocabulary, and a rebuild from the same inputs produces the same
+map byte for byte.
+
+### Falsification condition
+
+§1 is wrong if bits per byte and the 95/95 harness disagree on the ranking
+of two models and the harness ranking holds on blind review (then the side
+metric adds noise, not signal). §2 is not worth doing if the trimmed 2B scores
+below the untrimmed 2B on the harness.
+
+### Status
+
+Proposed. §1 applies to the next cross-model comparison; §2 waits on the 2B
+training track.

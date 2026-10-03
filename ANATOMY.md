@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4,884,852
-**Generated:** 2026-10-01 05:15 UTC
+**Files:** 1665 | **Est. tokens:** ~4,884,834
+**Generated:** 2026-10-03 08:32 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~215,166 |
+| `docs/` | 95 | ~215,158 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -89,7 +89,7 @@
 | `src/mind_mem/storage/` | 2 | ~11,712 |
 | `src/mind_mem/templates/` | 19 | ~1,041 |
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
-| `src/mind_mem/v4/` | 24 | ~96,321 |
+| `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
 | `tests/` | 740 | ~2,179,035 |
 | `tests/fixtures/` | 7 | ~11,912 |
@@ -289,7 +289,7 @@
 ### `docs/`
 
 - `agent-comm.md` (~1251 tok, large) — Agent-to-agent messaging (`mm send` / `mm inbox`)
-- `AGENTIC-MEMORY-SOTA.md` (~1674 tok, huge) — mind-mem → SOTA Agentic Memory (v4.5.0+ design brief)
+- `AGENTIC-MEMORY-SOTA.md` (~1675 tok, huge) — mind-mem → SOTA Agentic Memory (v4.5.0+ design brief)
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~3361 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1626 tok, huge) — Append-Only Audit Logs — Operator Runbook
@@ -410,7 +410,7 @@
 - `v3-multi-tenancy.md` (~1336 tok, large) — v3.0 Design: Multi-Tenancy Foundation
 ### `docs/`
 
-- `development.md` (~359 tok, medium) — Development Guide
+- `development.md` (~354 tok, medium) — Development Guide
 - `docker-deployment.md` (~571 tok, large) — Docker Deployment
 ### `docs/evidence/5.0.2-f1/`
 
@@ -444,7 +444,7 @@
 - `maintenance-namespaces.md` (~1625 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1770 tok, huge) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
-- `MHS_DEVICE_MEMORY.md` (~524 tok, large) — MHS / Device Memory Boundary
+- `MHS_DEVICE_MEMORY.md` (~522 tok, large) — MHS / Device Memory Boundary
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2761 tok, huge) — Migration Guide: mem-os to MIND-Mem
@@ -506,7 +506,7 @@
 - `usage.md` (~2924 tok, huge) — Usage
 - `v3.11.0-implementation-plan.md` (~1609 tok, huge) — v3.11.0 Implementation Plan — synthesis from cross-model review
 - `v3.11.0-mind-mem-4b-retrain-plan.md` (~1529 tok, huge) — mind-mem-4b v3.11.0 Retrain Plan
-- `v3.1.9-self-audit.md` (~1396 tok, large) — Self-audit after v3.1.9
+- `v3.1.9-self-audit.md` (~1394 tok, large) — Self-audit after v3.1.9
 - `v3.2.0-atomicity-scope-plan.md` (~1681 tok, huge) — v3.2.0 — Atomicity scope plan (§2.2)
 - `v3.2.0-blockstore-routing-plan.md` (~2116 tok, huge) — v3.2.0 — Apply engine → BlockStore routing plan
 - `v3.2.0-mcp-decomposition-plan.md` (~2575 tok, huge) — v3.2.0 — MCP server decomposition plan
@@ -1114,24 +1114,24 @@
 - `usage_meter.py` (~5249 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/v4/`
 
-- `backpressure.py` (~4318 tok, huge) — v4 backpressure controller (round 4 audit, 9.75→10 gap).
+- `backpressure.py` (~4315 tok, huge) — v4 backpressure controller (round 4 audit, 9.75→10 gap).
 - `block_kinds.py` (~6493 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
 - `block_metadata.py` (~3946 tok, huge) — v4 block metadata + schema-validation hooks.
 - `block_versioning.py` (~1861 tok, huge) — Block versioning + time-travel — reconstruct what a block said, and when.
 - `circuit_breaker.py` (~4577 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 - `cognitive_kernel.py` (~2851 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `embedding_pipeline.py` (~2377 tok, huge) — v4 embedding auto-derivation pipeline (Group A — closes the
-- `feature_flags.py` (~6336 tok, huge) — v4.0 feature-flag registry.
+- `feature_flags.py` (~6333 tok, huge) — v4.0 feature-flag registry.
 - `federation_client.py` (~5276 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `federation.py` (~7339 tok, huge) — v4 federated cross-agent consistency (Group D).
 - `flag_registry.py` (~8516 tok, huge) — Three-state registry for every declared v4 feature flag.
-- `health.py` (~2475 tok, huge) — v4 health-check surface (round 4 audit, 9.75→10 gap).
+- `health.py` (~2473 tok, huge) — v4 health-check surface (round 4 audit, 9.75→10 gap).
 - `hnsw_kind_index.py` (~3545 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~1010 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
 - `kernels.py` (~4057 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_backfill.py` (~3068 tok, huge) — The v4 kind-index build pass — ``mm kinds backfill``'s engine.
 - `kind_summaries.py` (~5345 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
-- `logging_context.py` (~1424 tok, large) — v4 structured logging context (round 4 audit, 9.75→10 gap).
+- `logging_context.py` (~1422 tok, large) — v4 structured logging context (round 4 audit, 9.75→10 gap).
 - `observability.py` (~2993 tok, huge) — v4 observability — counters, timers, histograms, exporters.
 - `pq.py` (~5255 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
 - `self_editing.py` (~3295 tok, huge) — v4 self-editing on recall (Group A — MemGPT pattern).
