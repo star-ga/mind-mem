@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1680 | **Est. tokens:** ~4,926,182
-**Generated:** 2026-10-05 21:35 UTC
+**Files:** 1680 | **Est. tokens:** ~4,926,195
+**Generated:** 2026-10-05 21:36 UTC
 
 ## Token Budget Guide
 
@@ -78,7 +78,7 @@
 | `skills/mind-mem/` | 1 | ~1,671 |
 | `skills/mind-mem/references/` | 6 | ~18,811 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 241 | ~1,074,871 |
+| `src/mind_mem/` | 241 | ~1,074,884 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -873,7 +873,7 @@
 - `guardrails.py` (~5942 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `guardrail_surface.py` (~1704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~11404 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~11417 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/importers/`
 
 - `engine.py` (~9872 tok, huge) — # Copyright 2026 STARGA, Inc.

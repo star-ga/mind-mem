@@ -429,7 +429,7 @@ def _merge_openclaw_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
 
 def _merge_gemini(existing: dict, workspace: str) -> tuple[dict, bool]:
     """Gemini settings.json system_instruction injection."""
-    instr = f"mind-mem workspace: {workspace}; run `mm inject --agent gemini` before answering."
+    instr = f'mind-mem workspace: {workspace}; run `mm inject --agent gemini "<question>"` before answering.'
     out = dict(existing)
     changed = out.get("system_instruction") != instr
     out["system_instruction"] = instr
@@ -439,7 +439,7 @@ def _merge_gemini(existing: dict, workspace: str) -> tuple[dict, bool]:
 def _merge_continue(existing: dict, workspace: str) -> tuple[dict, bool]:
     """Continue.dev config.json: inject a systemMessage."""
     out = json.loads(json.dumps(existing))
-    sys_msg = f"mind-mem workspace: {workspace}. Run `mm inject --agent continue` before composing responses."
+    sys_msg = f'mind-mem workspace: {workspace}. Run `mm inject --agent continue "<question>"` before composing responses.'
     if out.get("systemMessage") == sys_msg:
         return out, False
     out["systemMessage"] = sys_msg
@@ -450,7 +450,7 @@ def _merge_zed(existing: dict, workspace: str) -> tuple[dict, bool]:
     """Zed settings.json: inject assistant default_model_instructions."""
     out = json.loads(json.dumps(existing))
     assistant = out.setdefault("assistant", {})
-    sys_msg = f"mind-mem workspace: {workspace}. Use `mm inject --agent zed` for context."
+    sys_msg = f'mind-mem workspace: {workspace}. Use `mm inject --agent zed "<question>"` for context.'
     if assistant.get("default_system_message") == sys_msg:
         return out, False
     assistant["default_system_message"] = sys_msg
@@ -826,7 +826,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         content_tmpl=(
             f"{_MM_MARKER}: GitHub Copilot workspace instructions\n\n"
             "This repository uses mind-mem for persistent memory. "
-            "Before answering, consult memory with `mm inject --agent copilot`. "
+            'Before answering, consult memory with `mm inject --agent copilot "<question>"`. '
             "Respect ADR / DECISION blocks; route new decisions through "
             "`propose_update` rather than modifying them directly.\n"
         ),
