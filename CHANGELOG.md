@@ -13,6 +13,15 @@ All notable changes to MIND-Mem are documented in this file.
   major versions read, or the 2.x-native `mcp.servers` map when the file
   already uses it. Existing files are merged and backed up first; JSONC
   files with comments are never rewritten (#609).
+- A `mind-mem` agent skill that works as a user manual for the `mm` CLI:
+  a table-of-contents `skills/mind-mem/SKILL.md` with reference files for
+  install, every CLI command, configuration, troubleshooting, MCP vs CLI and
+  an FAQ. The CLI reference is generated from the parser, and
+  `tests/test_skill_manual.py` fails when any documented command, flag,
+  environment variable or config key stops existing.
+- `mm skill install [--target DIR] [--force] [--dry-run]` copies the bundled
+  skill into an agent skills directory (default `~/.claude/skills`). The skill
+  ships in the wheel under `share/mind-mem/skills/mind-mem`.
 
 ## [5.0.4] - 2026-09-15
 

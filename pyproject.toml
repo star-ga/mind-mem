@@ -237,6 +237,12 @@ mind_mem = ["py.typed", "_integrity_manifest.json", "*.mind", "*.pyx", "*.sh", "
 # `sysconfig.get_paths()["data"] / "share/mind-mem/kernels"`.
 [tool.setuptools.data-files]
 "share/mind-mem/kernels" = ["mind/*.mind"]
+# The agent skill (CLI user manual): a table-of-contents SKILL.md plus
+# progressive reference files. `mm skill install` (mind_mem.skill_bundle)
+# copies it from here -- or from skills/ in a source checkout -- into an
+# agent's skills directory. tests/test_skill_manual.py pins the contents.
+"share/mind-mem/skills/mind-mem" = ["skills/mind-mem/SKILL.md"]
+"share/mind-mem/skills/mind-mem/references" = ["skills/mind-mem/references/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

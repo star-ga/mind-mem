@@ -1949,6 +1949,15 @@ def _cmd_skill_score(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_skill_install(args: argparse.Namespace) -> int:
+    """Copy the bundled ``mind-mem`` skill (CLI user manual) into an agent's skills dir."""
+    from mind_mem.skill_bundle import install_skill
+
+    report = install_skill(args.target, force=args.force, dry_run=args.dry_run)
+    print(json.dumps(report, indent=2))
+    return 0 if report["status"] in ("installed", "up_to_date", "would_install") else 1
+
+
 # ---------------------------------------------------------------------------
 # serve subcommand
 # ---------------------------------------------------------------------------
@@ -5103,7 +5112,10 @@ def build_parser() -> argparse.ArgumentParser:
     l_flag.set_defaults(func=_cmd_lineage_flag)
 
     # skill namespace
-    p_skill = sub.add_parser("skill", help="Self-improving skill optimization subcommands.")
+    p_skill = sub.add_parser(
+        "skill",
+        help="Agent skills: install the bundled CLI user-manual skill, and self-improving skill optimization.",
+    )
     ssub = p_skill.add_subparsers(dest="skill_cmd", required=True)
 
     s_list = ssub.add_parser("list", help="List all discovered skills across systems.")
@@ -5129,6 +5141,19 @@ def build_parser() -> argparse.ArgumentParser:
     s_score = ssub.add_parser("score", help="Show current score for a skill.")
     s_score.add_argument("skill_id")
     s_score.set_defaults(func=_cmd_skill_score)
+
+    s_install = ssub.add_parser(
+        "install",
+        help="Install the bundled mind-mem skill (CLI user manual + reference files) into an agent skills directory.",
+    )
+    s_install.add_argument(
+        "--target",
+        default="~/.claude/skills",
+        help="Skills directory to install into; the skill lands in <target>/mind-mem (default: ~/.claude/skills).",
+    )
+    s_install.add_argument("--force", action="store_true", help="Replace an existing, different copy.")
+    s_install.add_argument("--dry-run", action="store_true", help="Report what would be copied without writing.")
+    s_install.set_defaults(func=_cmd_skill_install)
 
     # serve — launch the REST API
     p_serve = sub.add_parser(
