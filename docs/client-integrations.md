@@ -1,6 +1,6 @@
 # Client Integrations
 
-MIND-Mem works with **19 AI coding clients** out of the box. Every
+MIND-Mem works with **20 AI coding clients** out of the box. Every
 client reads and writes to the same shared workspace (default
 `~/.openclaw/workspace/`), so a fact captured in one tool is
 immediately visible to every other.
@@ -30,12 +30,13 @@ hand-rolled config you want replaced.
 
 ### Native MCP formats per client
 
-`mm install-all` writes format-specific MCP entries for 11 MCP-aware clients
-(the writers landed in v3.1.0; three clients have been added since):
+`mm install-all` writes format-specific MCP entries for 12 MCP-aware clients
+(the writers landed in v3.1.0; four clients have been added since):
 
 | Client | Config path | Format | Stanza |
 | --- | --- | --- | --- |
 | Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.mind-mem]` |
+| OpenCode (1.x / 2.x) | `~/.config/opencode/opencode.json` | JSON | `mcp.mind-mem` (or `mcp.servers.mind-mem` in a 2.x-native file) |
 | Gemini | `~/.gemini/settings.json` | JSON | `mcpServers.mind-mem` |
 | Cursor | `~/.cursor/mcp.json` | JSON | `mcpServers.mind-mem` |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | JSON | `mcpServers.mind-mem` |
@@ -88,6 +89,61 @@ relevant questions. See [the MCP integration guide](mcp-integration.md#claude-co
 
 Appends an `AGENTS.md` block telling the codex CLI to run
 `mm context "$QUERY"` before every response.
+
+## OpenCode (1.x and 2.x)
+
+| | |
+|---|---|
+| Instructions | `~/.config/opencode/AGENTS.md` (global, loaded in every session) |
+| MCP config | `~/.config/opencode/opencode.json` (or an existing `opencode.jsonc`) |
+| Stanza | `mcp.mind-mem` (works on 1.x and 2.x), or `mcp.servers.mind-mem` when the file already uses the 2.x-native `mcp.servers` map |
+| Install | `mm install-all --agent opencode` (`mm install opencode` writes the instructions only) |
+
+Detected by the `opencode` binary on `PATH`, `~/.config/opencode/`, or
+`~/.opencode/` (where the 2.x installer puts its binary).
+
+The MCP entry is a local stdio server:
+
+```json
+{
+  "mcp": {
+    "mind-mem": {
+      "type": "local",
+      "command": ["/path/to/python3", "/path/to/mind-mem/mcp_server.py"],
+      "environment": { "MIND_MEM_WORKSPACE": "/path/to/workspace" },
+      "enabled": true
+    }
+  }
+}
+```
+
+OpenCode 1.x reads this shape directly; OpenCode 2.x normalizes it in
+memory without rewriting your file, so one config serves both. If your
+file already uses the 2.x-native `mcp.servers` map, the entry is written
+there instead (and any `mcp.mind-mem` duplicate is removed), since that
+file is already 2.x-only.
+
+Safety: the writer merges into the existing file and keeps every other
+key and server. Before changing an existing file it saves a copy as
+`opencode.json.bak-mind-mem-<timestamp>`. Re-running is a no-op. A file
+that is not strict JSON (JSONC with comments or trailing commas) is
+**never rewritten**, because comments would be lost; the command reports
+`skipped` with the snippet to paste under `mcp` by hand.
+
+The instructions half is the same Memory Protocol block other CLIs get,
+appended once to the global `AGENTS.md` (OpenCode 2.x reads `AGENTS.md`
+only, not `CLAUDE.md`). Existing text in that file is preserved.
+
+If the OpenCode 2.x background server is already running, run
+`opencode reload` (or start a new session) so it picks up the new
+server, then check it with `opencode mcp list`. OpenCode names the tools
+`mind-mem_<tool>` (for example `mind-mem_recall`); under 2.x Code Mode
+they are grouped as `tools.mind_mem.<tool>`.
+
+Limits: no OpenCode plugin ships yet, so there is no automatic
+session-start recall or capture hook like Claude Code's; the agent calls
+the MCP tools as the `AGENTS.md` protocol instructs. Project-level
+`opencode.json` files are left alone; only the global config is written.
 
 ## Gemini CLI (Google)
 

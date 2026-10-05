@@ -9,7 +9,7 @@
 
 ## What MIND-Mem actually ships
 
-### Native integration with 19 clients (11 MCP-aware clients)
+### Native integration with 20 clients (12 MCP-aware clients)
 
 MIND-Mem speaks the [Model Context Protocol](https://modelcontextprotocol.io/).
 Any MCP-compatible client connects with one command:

@@ -680,6 +680,22 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         mcp_fmt="mcp-toml-vibe",
         mcp_path_tmpl="{home}/.vibe/config.toml",
     ),
+    # OpenCode (1.x and 2.x). Instructions go to the GLOBAL AGENTS.md,
+    # which OpenCode loads in every session (2.x reads AGENTS.md only, no
+    # CLAUDE.md fallback). MCP goes to the global opencode.json(c); the
+    # writer keeps V1-compatible shape unless the file is already V2-native.
+    # ~/.opencode is where the 2.x installer puts its binary.
+    "opencode": AgentSpec(
+        name="opencode",
+        description="OpenCode CLI (1.x and 2.x)",
+        config_fmt="text-block",
+        path_tmpl="{home}/.config/opencode/AGENTS.md",
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
+        detect_paths=("{home}/.config/opencode", "{home}/.opencode"),
+        detect_binaries=("opencode",),
+        mcp_fmt="mcp-json-opencode",
+        mcp_path_tmpl="{home}/.config/opencode/opencode.json",
+    ),
     "gemini": AgentSpec(
         name="gemini",
         description="Google Gemini CLI",
@@ -1022,6 +1038,13 @@ def install_mcp_config(
     path = spec.expand_mcp_path(workspace)
     merged = False
     skipped = False
+
+    if spec.mcp_fmt == "mcp-json-opencode":
+        # OpenCode has its own writer: V1/V2 dialects, JSONC refusal,
+        # backup-before-write. See mind_mem.opencode_config.
+        from mind_mem.opencode_config import install_opencode_mcp
+
+        return install_opencode_mcp(path, srv, agent=agent, dry_run=dry_run, force=force)
 
     if spec.mcp_fmt in _MCP_WRITERS_JSON:
         writer = _MCP_WRITERS_JSON[spec.mcp_fmt]

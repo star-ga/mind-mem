@@ -21,9 +21,9 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/test_functions-12%2C525-brightgreen?style=flat-square" alt="Test functions: 12,525">
+  <img src="https://img.shields.io/badge/test_functions-12%2C546-brightgreen?style=flat-square" alt="Test functions: 12,546">
   <img src="https://img.shields.io/badge/MCP_tools-107-blue?style=flat-square" alt="MCP Tools: 107">
-  <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
+  <img src="https://img.shields.io/badge/clients-20-blueviolet?style=flat-square" alt="AI Clients: 20">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
   <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>
@@ -112,7 +112,7 @@ Output:
 
 - [`docs/setup.md`](docs/setup.md) — install, configure, wire MCP, opt in to MIND native kernels
 - [`docs/usage.md`](docs/usage.md) — every surface (MCP tools by category, `mm` CLI, `mind-mem-verify`, Python library) with worked examples
-- [`docs/client-integrations.md`](docs/client-integrations.md) — **18 AI client integrations** (Claude Code, Codex, Grok Build, Vibe, Gemini, Cursor, Windsurf, aider, OpenClaw, NanoClaw, NemoClaw, Continue, Cline, Roo, Zed, Copilot, Cody, Qodo) with `mm install-all` auto-detection
+- [`docs/client-integrations.md`](docs/client-integrations.md) — **19 AI client integrations** (Claude Code, Codex, OpenCode, Grok Build, Vibe, Gemini, Cursor, Windsurf, aider, OpenClaw, NanoClaw, NemoClaw, Continue, Cline, Roo, Zed, Copilot, Cody, Qodo) with `mm install-all` auto-detection
 - [`docs/task-frames.md`](docs/task-frames.md) — **task frames + the dead-end registry**: `[TF-...]` multi-session continuity (`resume_brief`, `mm resume`) and `[DE-...]` negative action-space memory, matched by a deterministic declarative overlap that warns and never blocks
 - [`docs/review.md`](docs/review.md) — **`mm review`**: batch approval for the HITL queue — pending proposals with their pre-apply diff, provenance, chain status and staleness inline, approved or rejected many at once through the governed `approve_apply` path, with no auto-approve at any risk level
 - [`docs/mind-mem-4b-setup.md`](docs/mind-mem-4b-setup.md) — download + run the `star-ga/mind-mem-4b` full-FT model locally (transformers, exllamav2, vLLM, llama.cpp, Ollama, **MindLLM**)
@@ -250,8 +250,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (107 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 107 distinct tools and 8 read-only resources (6 static + 2 templated). Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
-### 74+ Structural Checks + 12,525 Test Functions
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 12,525 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
+### 74+ Structural Checks + 12,546 Test Functions
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 12,546 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -306,14 +306,14 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 
 ## Integrations are the substrate working
 
-MIND-Mem provides integrations for 19 supported clients, including 11 MCP-aware clients. They can share a governed memory workspace. Reproducing a recall result requires the same request, corpus, configuration, scoring instant and execution dependencies; the client count alone does not establish cross-client output identity.
+MIND-Mem provides integrations for 20 supported clients, including 12 MCP-aware clients. They can share a governed memory workspace. Reproducing a recall result requires the same request, corpus, configuration, scoring instant and execution dependencies; the client count alone does not establish cross-client output identity.
 
 > Honest positioning: the integrations below are *software-level* —
 > clients use their configured MCP connection or local integration.
 > They are **not** commercial-customer relationships with any vendor.
 > Full positioning policy: [`docs/integrations.md`](docs/integrations.md).
 
-### Native integration with 19 clients (11 MCP-aware clients)
+### Native integration with 20 clients (12 MCP-aware clients)
 
 ```bash
 pip install mind-mem
@@ -604,6 +604,7 @@ agents share one workspace. Supported clients:
 | **Claude Code CLI**     | `~/.claude/mcp.json`                          | JSON    |
 | **Claude Desktop**      | `~/.config/Claude/claude_desktop_config.json` | JSON    |
 | **Codex CLI** (OpenAI)  | `~/.codex/config.toml`                        | TOML    |
+| **OpenCode** (1.x/2.x)  | `~/.config/opencode/opencode.json`            | JSON    |
 | **Gemini CLI** (Google) | `~/.gemini/settings.json`                     | JSON    |
 | **Cursor**              | `~/.cursor/mcp.json`                          | JSON    |
 | **Windsurf**            | `~/.codeium/windsurf/mcp_config.json`         | JSON    |
@@ -862,7 +863,7 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Vector only | Hybrid | Graph + vector |
 | Governance (propose/review/apply) | Yes | No | No | No |
 | Contradiction detection | Yes | No | No | No |
-| Test functions | 12,525 test functions | - | - | - |
+| Test functions | 12,546 test functions | - | - | - |
 | LoCoMo benchmark (full 10-conv, Acc>=50)¹ | 73.8% | 66.9%² | 74.0% | - |
 | MCP tools | 107 distinct (`mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |

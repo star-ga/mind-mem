@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4,884,832
-**Generated:** 2026-10-05 14:14 UTC
+**Files:** 1667 | **Est. tokens:** ~4,890,769
+**Generated:** 2026-10-05 14:27 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~215,156 |
+| `docs/` | 95 | ~215,827 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 238 | ~1,070,057 |
+| `src/mind_mem/` | 239 | ~1,072,367 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -91,7 +91,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 740 | ~2,179,035 |
+| `tests/` | 741 | ~2,181,991 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -385,7 +385,7 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `client-integrations.md` (~3635 tok, huge) — Client Integrations
+- `client-integrations.md` (~4267 tok, huge) — Client Integrations
 - `cli-reference.md` (~8254 tok, huge) — CLI Reference
 - `companion-tools.md` (~1111 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
@@ -437,12 +437,12 @@
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
-- `install-guide.md` (~2919 tok, huge) — Installation guide — every step + every option
+- `install-guide.md` (~2953 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1567 tok, huge) — Integrations
 - `local-viewer.md` (~629 tok, large) — Local memory viewer
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1625 tok, huge) — `maintenance/` namespaces
-- `mcp-integration.md` (~1770 tok, huge) — MCP Integration Guide
+- `mcp-integration.md` (~1772 tok, huge) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `MHS_DEVICE_MEMORY.md` (~522 tok, large) — MHS / Device Memory Boundary
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
@@ -503,7 +503,7 @@
 - `tool-output-architecture.md` (~2067 tok, huge) — Tool-output offload — architecture
 - `trajectory-memory.md` (~1346 tok, large) — Trajectory memory
 - `troubleshooting.md` (~809 tok, large) — Troubleshooting
-- `usage.md` (~2924 tok, huge) — Usage
+- `usage.md` (~2927 tok, huge) — Usage
 - `v3.11.0-implementation-plan.md` (~1609 tok, huge) — v3.11.0 Implementation Plan — synthesis from cross-model review
 - `v3.11.0-mind-mem-4b-retrain-plan.md` (~1529 tok, huge) — mind-mem-4b v3.11.0 Retrain Plan
 - `v3.1.9-self-audit.md` (~1394 tok, large) — Self-audit after v3.1.9
@@ -858,7 +858,7 @@
 - `guardrails.py` (~5942 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `guardrail_surface.py` (~1704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~10904 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~11189 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/importers/`
 
 - `engine.py` (~9872 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -971,6 +971,7 @@
 - `ollama_host.py` (~1022 tok, large) — Single source of truth for the ollama base URL.
 - `online_trainer.py` (~6082 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ontology.py` (~3933 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `opencode_config.py` (~2025 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `outcome_attribution.py` (~4513 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
 - `outcome_store.py` (~4752 tok, huge) — Outcome-attribution persistence over the calibration store.
 - `payload_admission.py` (~3614 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1481,7 +1482,7 @@
 - `test_health_embedding_coverage.py` (~3068 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_mcp_force_preserves_siblings.py` (~1490 tok, large) — Regression test: install_mcp_config(force=True) must merge, not clobber.
-- `test_hook_installer_registry.py` (~4945 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_hook_installer_registry.py` (~4954 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1884 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_auth_optin_not_honoured_when_auth_configured.py` (~1049 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_http_read_admission.py` (~10548 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1650,6 +1651,7 @@
 - `test_online_trainer_wiring.py` (~8382 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ontology_predicate_constraints.py` (~2315 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_opencode_install.py` (~2947 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_optional_requirements_lock.py` (~504 tok, large) — Checks for the reproducible optional dependency lock."""
 - `test_outcome_attribution_bounds.py` (~3311 tok, huge) — Abuse bounds for outcome attribution — one reporter, one vote.
 - `test_outcome_attribution.py` (~4120 tok, huge) — Regression gate for outcome attribution — did the memory actually help?
