@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1680 | **Est. tokens:** ~4,926,125
-**Generated:** 2026-10-05 21:39 UTC
+**Files:** 1681 | **Est. tokens:** ~4,927,496
+**Generated:** 2026-10-05 21:40 UTC
 
 ## Token Budget Guide
 
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 744 | ~2,190,414 |
+| `tests/` | 745 | ~2,191,785 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1342,6 +1342,7 @@
 - `test_ci_green_per_job_gate.py` (~4344 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
 - `test_cli_detector_refusal.py` (~1619 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_help_is_harmless.py` (~1776 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_cli_hint_correctness.py` (~1371 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_codepoint_sanitize.py` (~3333 tok, huge) — Tests for invisible-Unicode ingest sanitization (security).
 - `test_coding_schemas.py` (~1284 tok, large) — Tests for mind-mem coding-native memory schemas."""
 - `test_cognitive_forget.py` (~2315 tok, huge) — # Copyright 2026 STARGA, Inc.
