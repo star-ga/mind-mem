@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1679 | **Est. tokens:** ~4,923,539
-**Generated:** 2026-10-05 21:32 UTC
+**Files:** 1680 | **Est. tokens:** ~4,926,182
+**Generated:** 2026-10-05 21:33 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~73,799 |
+| `./` | 37 | ~74,396 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -78,7 +78,7 @@
 | `skills/mind-mem/` | 1 | ~1,671 |
 | `skills/mind-mem/references/` | 6 | ~18,811 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 241 | ~1,074,601 |
+| `src/mind_mem/` | 241 | ~1,074,871 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 743 | ~2,188,638 |
+| `tests/` | 744 | ~2,190,414 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -153,7 +153,7 @@
 - `SPEC.md` (~6430 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `train_mind7b_runpod.py` (~1659 tok, huge)
 - `.trivyignore` (~128 tok, small) — # Trivy ignore file — intentionally empty.
-- `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
+- `uninstall.sh` (~1505 tok, huge) — mind-mem uninstaller — removes the mind-mem MCP server entry from client configs.
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 ### `.agents/skills/mind-mem-development/`
 
@@ -797,7 +797,7 @@
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `calibration.py` (~7500 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
-- `capture.py` (~5483 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
+- `capture.py` (~5607 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6359 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~4689 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
 - `causal_lm_loader.py` (~552 tok, large) — Load causal language models with the narrow Qwen3.5 config workaround.
@@ -1038,7 +1038,7 @@
 - `review_queue.py` (~2612 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `review_render.py` (~1836 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `review_session.py` (~1739 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `schema_version.py` (~2452 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
+- `schema_version.py` (~2523 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
 - `scopes.py` (~283 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `scoring_instant.py` (~1643 tok, huge) — The recency seam — one UTC date, resolved once, threaded everywhere.
 - `self_update.py` (~5198 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1157,7 +1157,7 @@
 - `vocabulary.py` (~2960 tok, huge) — v4 vocabulary-bound fields — per-workspace controlled vocabularies.
 ### `src/mind_mem/`
 
-- `validate_py.py` (~5676 tok, huge) — Mind Mem Integrity Validator — canonical engine.
+- `validate_py.py` (~5751 tok, huge) — Mind Mem Integrity Validator — canonical engine.
 - `validate.sh` (~1350 tok, large) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
 - `validity_gate.py` (~4353 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
@@ -1341,6 +1341,7 @@
 - `test_chunk_text.py` (~231 tok, medium) — Tests for text chunking."""
 - `test_ci_green_per_job_gate.py` (~4344 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
 - `test_cli_detector_refusal.py` (~1619 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_cli_help_is_harmless.py` (~1776 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_codepoint_sanitize.py` (~3333 tok, huge) — Tests for invisible-Unicode ingest sanitization (security).
 - `test_coding_schemas.py` (~1284 tok, large) — Tests for mind-mem coding-native memory schemas."""
 - `test_cognitive_forget.py` (~2315 tok, huge) — # Copyright 2026 STARGA, Inc.

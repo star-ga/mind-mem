@@ -20,11 +20,11 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import datetime as _dt
 import hashlib
 import os
 import re
-import sys
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
@@ -488,11 +488,21 @@ def append_signals(
     return len(blocks)
 
 
-def main():
-    workspace = sys.argv[1] if len(sys.argv) > 1 else "."
-    workspace = os.path.abspath(workspace)
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="mind-mem-capture",
+        description="Scan the daily log for uncaptured decisions and tasks and append them as signals.",
+    )
+    parser.add_argument("workspace", nargs="?", default=".", help="workspace directory (default: .)")
+    parser.add_argument("--scan-all", action="store_true", help="scan the last 7 days of logs, not only today's")
+    return parser.parse_args(argv)
 
-    scan_all = "--scan-all" in sys.argv
+
+def main(argv: list[str] | None = None):
+    args = _parse_args(argv)
+    workspace = os.path.abspath(args.workspace)
+
+    scan_all = args.scan_all
 
     if scan_all:
         logs = find_all_logs(workspace, days=7)

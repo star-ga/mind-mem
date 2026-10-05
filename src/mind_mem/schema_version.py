@@ -13,9 +13,9 @@ As library:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
-import sys
 from collections.abc import Callable
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -231,9 +231,13 @@ _MIGRATIONS.append(("2.0.0", "2.1.0", "Rename self_correcting_mode to governance
 # ---------------------------------------------------------------------------
 
 
-def main() -> int:
-    ws = sys.argv[1] if len(sys.argv) > 1 else "."
-    ws = os.path.abspath(ws)
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="mind-mem-migrate",
+        description="Report the workspace schema version and apply any pending migrations.",
+    )
+    parser.add_argument("workspace", nargs="?", default=".", help="workspace directory (default: .)")
+    ws = os.path.abspath(parser.parse_args(argv).workspace)
 
     version = get_workspace_version(ws)
     print(f"Workspace: {ws}")

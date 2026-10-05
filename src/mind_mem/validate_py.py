@@ -16,6 +16,7 @@ Exit codes:
     1 — at least one invariant failed
 """
 
+import argparse
 import logging
 import os
 import re
@@ -576,8 +577,13 @@ class Validator:
             self.warn("intelligence/proposed/ directory MISSING")
 
 
-def main():
-    workspace = sys.argv[1] if len(sys.argv) > 1 else "."
+def main(argv: list[str] | None = None):
+    parser = argparse.ArgumentParser(
+        prog="mind-mem-validate",
+        description="Validate a mind-mem workspace's structure and block files.",
+    )
+    parser.add_argument("workspace", nargs="?", default=".", help="workspace directory (default: .)")
+    workspace = parser.parse_args(argv).workspace
     validator = Validator(workspace)
     sys.exit(validator.run())
 
