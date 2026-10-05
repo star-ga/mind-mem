@@ -25,7 +25,7 @@ Two conclusions, and the second is the one that matters:
    the best distractor), and an inter-block cosine spread of 0.002 says the
    vectors are indistinguishable. Augmentation makes that spread WORSE, because
    it adds still more shared text to records that were already near-identical.
-   This is the shape ``512-mind/src/memory.mind`` actually writes.
+   This is the shape ``mind-law/src/memory.mind`` actually writes.
 
 These tests pin both, so a future embedding change cannot silently regress the
 ordinary case or quietly "fix" the boilerplate case without updating the claim.

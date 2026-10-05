@@ -99,7 +99,7 @@ The three probes above all assume blocks whose embedded text *varies*. The
 worst real case is the opposite, and it is already in production use by our
 own reference consumer.
 
-`512-mind/src/memory.mind` writes every governance record through `format!`
+`mind-law/src/memory.mind` writes every governance record through `format!`
 into a single flat string that is simultaneously the stored content and the
 embedded text:
 

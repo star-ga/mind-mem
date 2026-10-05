@@ -241,9 +241,9 @@ Prioritize existing release and retrieval-correctness work first.
 
 - [~] **RE.1 — freeze the receipt contract** — the local served-ledger profile now has a bounded wire schema and a complete mixed V1/V2 golden receipt, preserving existing digests. Portable occurrence identity, restart/move/clone/recovery continuity, issuer trust and the complete serving-path inventory remain open. Local consistency does not establish those properties. See `docs/specs/retrieval-receipt-local-v1.json` and `retrieval-receipt-canonical-vectors.json`.
 - [~] **RE.2 — local receipt export and verification** — `mm receipt export --out PATH` and `mm receipt verify --input PATH` now capture and verify the existing served ledger through its append lock. The adapter rejects malformed manifests, duplicate keys, broken chains, over-limit inputs, symlinks/nonregular files and output replacement; a separately retained manifest digest can be checked. Actual CLI and offline golden-vector controls pass, including an authentic operator-ledger export. The profile reports `scope=local`, unknown issuer/anchor trust and unavailable portable identity. Full RE-A1 through RE-A8 acceptance still requires the remaining occurrence-continuity and disclosure profiles; this local adapter adds no runtime dependency or ranking authority.
-- [ ] **RE.3 — independent CVS / MIND Witness contract** — implement the adopted architectural split: CVS owns a substrate-neutral evidence contract; MIND Witness maps canonical MIND events/artifact context into it; 512-MIND owns admissibility and may require evidence under explicit policy. Acceptance: a non-MIND producer and external verifier interoperate; mapping mutations, forged identity, producer-controlled witness keys/history and unauthorized disclosure cannot pass independent-evidence claims. Distinguish received self-reports from independently observed execution. Local audit remains useful at its own scope.
+- [ ] **RE.3 — independent CVS / MIND Witness contract** — implement the adopted architectural split: CVS owns a substrate-neutral evidence contract; MIND Witness maps canonical MIND events/artifact context into it; MIND-Law owns admissibility and may require evidence under explicit policy. Acceptance: a non-MIND producer and external verifier interoperate; mapping mutations, forged identity, producer-controlled witness keys/history and unauthorized disclosure cannot pass independent-evidence claims. Distinguish received self-reports from independently observed execution. Local audit remains useful at its own scope.
 - [~] **RE.4 — measured operator pilot** — a [scoped authentic-history pilot](docs/benchmarks/local-receipt-pilot-20260914.md) now documents the installed V1 reader versus mixed V1/V2 history diagnosis and publishes source-bound timing, CPU, memory, storage and concurrent-export measurements with predeclared budgets. All local pilot budgets passed. **Remaining:** the receipt contract’s full ordinary-recall/recording comparison, controlled per-mode and live-append matrix, cold storage, longer histories and physical write amplification. No external performance claim without matched baselines.
-- [ ] **RE.5 — canonical 512 lineage consumer** — required for canonical-lineage claims, independent of commercial demand. Consume the 512-MIND producer's versioned commitment that binds the immutable canonical root to decomposition, registry and implementation; preserve the distinct MIND language-spec identity. Bind and verify both root and implementation in actual verdict/event evidence. Acceptance: RE-A10 changed/missing-field and legacy-profile controls pass; no silent rehashing or metadata-only closure. Depends on the producer contract and implementation.
+- [ ] **RE.5 — canonical 512 lineage consumer** — required for canonical-lineage claims, independent of commercial demand. Consume the MIND-Law producer's versioned commitment that binds the immutable canonical root to decomposition, registry and implementation; preserve the distinct MIND language-spec identity. Bind and verify both root and implementation in actual verdict/event evidence. Acceptance: RE-A10 changed/missing-field and legacy-profile controls pass; no silent rehashing or metadata-only closure. Depends on the producer contract and implementation.
 
 For contracted retrieval, parties or delegated agents agree upstream. A bounded
 agreement arrives with the request; 512 enforces its constraints before retrieval
@@ -676,7 +676,7 @@ workspace, not read from docs):
   `part_of` (13), `authored_by` (11).
 - Multi-hop traversal **works**: `graph_query(entity="mind-mem", depth=3,
   direction="both")` returns real 2-hop paths
-  (`mind-mem → mind-kg → mindc`, `mind-mem → starga inc → 512-mind`).
+  (`mind-mem → mind-kg → mindc`, `mind-mem → starga inc → mind-law`).
 - `extraction.enabled: true`, backend `ollama`, model `mind-mem:4b`.
 
 The deeper finding (code audit, 2026-07-27): the graph was not merely
@@ -971,7 +971,7 @@ milestone in the MIND compiler roadmap.
 
 # v2.0 Roadmap — Verifiable, Accelerated Memory
 
-> Three STARGA projects converge: **512-mind** governance primitives + **mind-inference** acceleration + **MIND-Mem** retrieval.
+> Three STARGA projects converge: **MIND-Law** governance primitives + **mind-inference** acceleration + **MIND-Mem** retrieval.
 >
 > Theme: The first AI memory system with **cryptographically verifiable governance** and **hardware-accelerated hot paths**.
 >
@@ -982,7 +982,7 @@ milestone in the MIND compiler roadmap.
 
 ---
 
-## v2.0.0a2 — Cryptographic Governance Layer (from 512-mind) ✅ Released as v2.0.0a2 (2026-04-13)
+## v2.0.0a2 — Cryptographic Governance Layer (from MIND-Law) ✅ Released as v2.0.0a2 (2026-04-13)
 
 **Goal:** Every memory write is tamper-evident. Governance config is immutable post-init. Evidence objects prove governance actually ran.
 
@@ -1092,7 +1092,7 @@ milestone in the MIND compiler roadmap.
 
 ---
 
-## v2.0.0rc1 — External Verification (from 512-mind) ✅ Released 2026-04-13 — all boxes checked in v2.8.0
+## v2.0.0rc1 — External Verification (from MIND-Law) ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 **Goal:** Third parties can verify memory integrity without full DB access.
 
@@ -2635,7 +2635,7 @@ sitting on top.
 - [x] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
 - [x] **Distributed memory mesh** — multiple MIND-Mem instances with hash-chain synchronization _(see v2.6.0 P2P Mesh for foundation)_
 - [x] **Real-time governance dashboard** — web UI showing evidence stream, chain health, spec-hash status
-- [x] **512 Kernel full integration** — MIND-Mem as a governed resource within 512-mind production deployments
+- [x] **512 Kernel full integration** — MIND-Mem as a governed resource within MIND-Law production deployments
 - [x] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm
 - [x] **Multi-user retrieval adaptation** — per-user fine-tuning in multi-tenant deployments, isolated signal streams
 - [x] **Federated memory** — privacy-preserving retrieval across organizational boundaries (differential privacy + secure aggregation)
@@ -2712,7 +2712,7 @@ v3.9 hash-of-code invalidation + v3.10 governance drift detection are the operat
 - No new block types without contradiction-handling story — every type must specify how it conflicts with existing types and how that conflict is resolved
 - No silent retrieval mode changes that affect provenance — all changes traceable to a versioned policy
 - No "more substrates = better" decisions without measured improvement on adversarial-memory + Jepsen-style stress tests
-- No retirement of an invariant before separation strategies have been exhausted (matches 512-mind Phase B addendum discipline)
+- No retirement of an invariant before separation strategies have been exhausted (matches MIND-Law Phase B addendum discipline)
 
 Acceptance gate: every new feature cites IFR component strengthened, law of evolution followed or forbidden, separation strategy for likely contradictions, and anti-pattern avoided.
 
@@ -2943,7 +2943,7 @@ raw fusion rank.
     replaying a bad answer). It must not become an abstention trigger on its own —
     a 0.44-precision signal driving abstention would suppress correct recalls roughly
     half the times it fired, which is strictly worse than the shipped 5-signal
-    classifier. Same boundary the 512-mind calibrated-confidence sidecar draws: the
+    classifier. Same boundary the MIND-Law calibrated-confidence sidecar draws: the
     score informs, the gate decides, and they never merge.
   - **Sequencing.** Strictly behind the backtest above and behind the conformal sidecar.
     If the backtest closes this bullet, this closes with it. Cross-repo: the
@@ -3691,7 +3691,7 @@ mislabelled eval set still produces confident numbers.
   |---|---|---|---|---|
   | symptom query vs resolution text | raw | 80% | +0.0944 | 0.1083 |
   | | augmented | 80% | **+0.1156** | 0.1068 |
-  | near-duplicate boilerplate (512-mind shape) | raw | 12% | −0.0067 | 0.0021 |
+  | near-duplicate boilerplate (MIND-Law shape) | raw | 12% | −0.0067 | 0.0021 |
   | | augmented | 25% | −0.0056 | **0.0012** |
 
   **Finding 1 — the suspicion was wrong, and that is a result.** Augmentation
@@ -3706,7 +3706,7 @@ mislabelled eval set still produces confident numbers.
   The vector leg contributes nothing there and BM25 silently does all the work.
   Augmentation makes the spread WORSE (0.0021 → 0.0012) by adding still more
   shared text to records that were already near-identical. This is the shape
-  `512-mind/src/memory.mind` actually writes, so it is a live consumer, not a
+  `mind-law/src/memory.mind` actually writes, so it is a live consumer, not a
   hypothetical.
 
   Both are pinned as tests, including the boilerplate case as a KNOWN
@@ -3739,7 +3739,7 @@ mislabelled eval set still produces confident numbers.
   a number attached — which is still strictly better than the current state of
   having no number at all.
   **A live consumer instance, worse than the Python one (added 2026-08-17).**
-  `512-mind/src/memory.mind` is the reference consumer of this store, and every
+  `mind-law/src/memory.mind` is the reference consumer of this store, and every
   write it makes goes through `format!` into one flat string that is *both* the
   stored record and the embedded text — `store_witness` (`memory.mind:65`) emits
   `"WITNESS system={} time={} hash={} result=COMPLIANT invariants=9/9"`, and
@@ -3754,7 +3754,7 @@ mislabelled eval set still produces confident numbers.
   symptom-vs-resolution corpus — the near-duplicate case is what a real caller
   produces, and it is the one where a floor (M3) and a vector leg are both
   useless while BM25 silently does all the work. Note this is an exposure in the
-  *store's own API shape*, not a 512-mind bug: nothing in the surface offers an
+  *store's own API shape*, not a MIND-Law bug: nothing in the surface offers an
   embed-vs-store split for a caller to use.
 
 - [~] **M2 — Namespace-property round-trip test.** The current candidate asserts *empirically*, per
@@ -3805,7 +3805,7 @@ mislabelled eval set still produces confident numbers.
   should be stated; what should **not** be copied is content-hash keying at
   demo width (32 bits is collision-prone as a durable identity scheme).
   **The precedent is internal and one layer up (re-sourced 2026-08-17).**
-  `512-mind/src/drift.mind` applies closed-set discipline to *meaning* rather
+  `mind-law/src/drift.mind` applies closed-set discipline to *meaning* rather
   than to keys: `no_semantic_drift` enumerates the mutation classes that corrupt
   a contract — `"must not"`→`"should not"` (obligation weakened to suggestion),
   `"fail open"`→`"fail safe"` (default inverted), `"any human"`→`"authorized
@@ -3830,7 +3830,7 @@ mislabelled eval set still produces confident numbers.
   **The close condition is a mechanism, not a document.** The original scope
   ended at "a ranked list with a code-enforced replacement for each", which
   leaves every finding in the same unenforced state it was found in. The
-  ecosystem already has the right pattern: `512-mind` ships **fail-closed
+  ecosystem already has the right pattern: `mind-law` ships **fail-closed
   capability flags** — `drift.semantic_mutation_scan_supported() -> u8 { 0 }`
   (`drift.mind:30`) and `key_management.signature_verification_supported() -> u8
   { 0 }` (`key_management.mind:324`), each paired with an undefined `extern` so a
@@ -3905,9 +3905,9 @@ adopted, nothing named in any public artifact. Their stack (a graph runtime plus
 a vector-indexed SQLite store) is explicitly **not** being taken. After the
 2026-08-17 inspection pass, the external source contributes **no mechanism to
 any item in this group** — M4's closed-set discipline is sourced to
-`512-mind/src/drift.mind`, M5's fail-closed capability flags to `drift.mind` and
+`mind-law/src/drift.mind`, M5's fail-closed capability flags to `drift.mind` and
 `key_management.mind`, M6's negative-results registry to `autoresearch`'s
-`dead_ends.md`, and M1's worst instance is our own `512-mind/src/memory.mind`.
+`dead_ends.md`, and M1's worst instance is our own `mind-law/src/memory.mind`.
 What the tutorial supplied was framing: the observation that these are
 *silent-failure* classes worth gating. Every mechanism below it is internal
 precedent, which is the stronger position — the patterns are already running
@@ -4173,7 +4173,7 @@ evidence layer. Citation in `mind-internal`.
 Six layers of the ecosystem each anchor a different "what survives
 transformation": `trace_hash` (artifact, `mind`), routing lineage (decision,
 Naestro), **the provenance chain (belief over time, here)**, I1–I15 + `spec_hash`
-(constraint, 512-mind), the governed route table (intent→capability, mind-nerve),
+(constraint, MIND-Law), the governed route table (intent→capability, mind-nerve),
 and the session evidence log (structural health, arch-mind). Six roots, zero
 cross-links — nothing can prove the conjunction *"this binary, produced by this
 decision, under these constraints, **consistent with these beliefs**, routed by
@@ -4189,7 +4189,7 @@ other layer can supply it.
   `content_as_of`, `recall(..., as_of=date)`) already gives the point-in-time
   projection this needs; the open work is a canonical *serialization* of that
   projection, not new versioning machinery.
-  - No clock, no randomness, no dict-iteration order — the 512-mind
+  - No clock, no randomness, no dict-iteration order — the MIND-Law
     evidence-preimage discipline applies verbatim and is the standard the other
     five members should be held to.
   - Digest scope is the open design question: the whole workspace is stable but
@@ -4213,7 +4213,7 @@ canonical record, never over a caller's account of what it recalled. Same rule,
 same reason: a governing layer that decides on the governed party's summary is
 theatre.
 
-**Firewall (I13, inherited from 512-mind).** The anchor is an evidence artifact,
+**Firewall (I13, inherited from MIND-Law).** The anchor is an evidence artifact,
 never a score. Belief coverage confers no authority — a well-anchored artifact is
 not thereby more trustworthy, and anchor breadth must never be optimized against
 or used to relax a gate. This is also why the composite anchor must stay separate
@@ -4282,7 +4282,7 @@ is another assertion is not evidence; it is a second opinion.
   volunteering the entry stays empty.
 
 **Firewall — a scar is evidence, never a score.** Same rule Group O inherits
-from 512-mind (I13). A scar count must never be optimized against, never relax
+from MIND-Law (I13). A scar count must never be optimized against, never relax
 or tighten a gate automatically, and never be surfaced as an agent ranking. The
 moment "fewest scars" becomes a target, the incentive is to assert less
 specifically rather than to be right more often — and vague claims are the

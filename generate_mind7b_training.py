@@ -221,7 +221,7 @@ PROJECTS = [
     "Mobile App v3",
     "Search Rewrite",
     "mind-mem",
-    "512-mind",
+    "mind-law",
     "CogNet",
     "Project Atlas",
     "mindlang.dev",

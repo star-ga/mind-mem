@@ -113,12 +113,12 @@ its rationale does not approve it.
 
 ## Cross-repo discipline
 
-The adopted boundary is: agents agree terms, 512-MIND evaluates admissibility,
+The adopted boundary is: agents agree terms, MIND-Law evaluates admissibility,
 MIND-Mem serves within the admitted scope, and independent CVS records evidence
 through an explicit adapter. Settlement is separate. MIND Witness is the
 MIND-specific CVS adapter, not proof that MIND independently witnessed itself.
 
-The canonical 512 commitment, 512-MIND implementation commitment and MIND
+The canonical 512 commitment, MIND-Law implementation commitment and MIND
 language-spec identity identify different objects. Current local spec binding
 must not be described as cryptographic canonical lineage until the producer
 commitment and runtime consumer tests required by RE.5 exist. The receipt

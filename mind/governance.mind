@@ -11,7 +11,7 @@
 #   The rationale text lives inside the proposal's Markdown block as a
 #   timestamped audit record (or inside APPLY_RECEIPT.md for rollbacks).
 #   This kernel is the single source of truth for the rationale gate +
-#   audit-chain invariants. It mirrors the 512-mind v1.11.0 pattern
+#   audit-chain invariants. It mirrors the MIND-Law v1.11.0 pattern
 #   (I-GOV-1/2/3, I-DISP-1/2) for the mind-mem governance surface so
 #   the same audit discipline applies regardless of which MIND project
 #   a reviewer is reading.
@@ -53,7 +53,7 @@ store_inline   = true
 # Optional: also mirror the rationale into sealed_evidence / evidence_tier
 # under the same hash so a DIFC-style off-site audit works without
 # reading the workspace. Disabled by default (no wiring to those modules
-# in the FOSS build); 512-mind paths turn this on.
+# in the FOSS build); MIND-Law paths turn this on.
 mirror_to_evidence_store = false
 
 [markdown_safety]
@@ -89,7 +89,7 @@ name    = "vetoed_proposal_has_reasons"
 subject = "Proposal"
 rule    = "status == 'vetoed' ⇒ |veto_reasons| ≥ 1 ∧ ∀g∈vetoes: veto_reasons[g] ≠ 0"
 driver  = "governance.veto appends sha256(reason) to veto_reasons per vetoing guardian"
-# mind-mem surface inherits this from 512-mind; in mind-mem,
+# mind-mem surface inherits this from MIND-Law; in mind-mem,
 # proposals are single-owner so guardian set is the admin's own
 # veto-of-self (rare). Still enforced.
 

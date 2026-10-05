@@ -176,7 +176,7 @@ is the part that differs from the source.
 
 **Internal precedent, established 2026-08-17.** The closed-set discipline
 is already house style one layer up, applied to *meaning* rather than to
-keys. `512-mind/src/drift.mind` enumerates the mutation classes that
+keys. `mind-law/src/drift.mind` enumerates the mutation classes that
 corrupt a contract — `"must not"`→`"should not"` weakens an obligation to a
 suggestion, `"fail open"`→`"fail safe"` inverts a default, `"any human"`→
 `"authorized participants"` narrows scope — and `no_semantic_drift` asserts

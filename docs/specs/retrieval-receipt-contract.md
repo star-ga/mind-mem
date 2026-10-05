@@ -110,7 +110,7 @@ Keep three identities distinct:
 | Identity | Meaning |
 | --- | --- |
 | `canonical_512_ref` | Typed algorithm/digest, canonical byte format and resolution provenance identifying the original 512 constitution claimed. `canonical_512_hash` means only its digest subfield. |
-| `implementation_spec_hash_v2` | Versioned commitment binding that root to the 512-MIND decomposition, registry and implementation. |
+| `implementation_spec_hash_v2` | Versioned commitment binding that root to the MIND-Law decomposition, registry and implementation. |
 | `mind_language_spec_ref` | Separately typed MIND language-spec identity; not an alias for the implementation hash. |
 
 The required dependency is **constitution -> implementation -> event**. The
@@ -131,7 +131,7 @@ verifier must still resolve the exact canonical bytes and enforce the supported
 algorithm and byte-format profile. No reference metadata may silently override
 the committed artifact identity.
 
-The 512-MIND producer owns the versioned, domain-separated preimage and manifests.
+The MIND-Law producer owns the versioned, domain-separated preimage and manifests.
 The receipt adapter consumes and verifies that binding; it must not invent a
 second implementation-hash algorithm. Use unambiguous typed/length-delimited
 encoding, resolve the full original commitment and its exact preimage, and test
@@ -139,7 +139,7 @@ each changed/missing field. A hash authenticates declared lineage, not semantic
 conformance; invariant mapping and execution tests remain separate requirements.
 
 This is a new required contract, not a claim that the current MIND-Mem rows or
-every 512-MIND runtime proof already carry it. Existing `spec_hash` and historical
+every MIND-Law runtime proof already carry it. Existing `spec_hash` and historical
 evidence retain their original preimages. Legacy records remain readable with
 lineage status unknown; they cannot pass a new lineage-required profile through
 an invented field or a silent fallback. Keep lineage in the appropriate evidence
@@ -189,7 +189,7 @@ independently observed execution. A signature over a producer's self-report
 does not prove the reported computation occurred. An execution-observation claim
 needs its own observation mechanism and failure tests.
 
-512-MIND may consume or require validated CVS evidence as a declared admission
+MIND-Law may consume or require validated CVS evidence as a declared admission
 precondition. That is 512's policy decision; CVS does not own admissibility.
 Identify whether a precondition concerns prior evidence or a separately scoped
 observation of the current action, avoiding a circular requirement for a
@@ -476,7 +476,7 @@ RE.2 depends on RE.1. The local pilot in RE.4 can follow RE.2 without waiting
 for the independent witness profile in RE.3. Any commercial adapter also requires
 the proof profile its counterparties actually accept; local consistency must
 not silently stand in for independent history.
-RE.5 depends on the 512-MIND producer's canonical-lineage implementation; it
+RE.5 depends on the MIND-Law producer's canonical-lineage implementation; it
 cannot be closed by adding receipt metadata or by this documentation change.
 
 ## 10. Documentation and attribution

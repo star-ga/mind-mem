@@ -843,7 +843,7 @@ verify the property holds in their workflow.
 
 Status: v4.1 candidate, design-only. No new storage primitives —
 all three surfaces compose over the existing evidence chain and
-proposal queue. Coordinates with [[512-mind frame-local invariant
+proposal queue. Coordinates with [[MIND-Law frame-local invariant
 work]] for cross-jurisdiction drift attribution.
 
 ### 13. Deterministic weighted graph traversal for related-entity resolution

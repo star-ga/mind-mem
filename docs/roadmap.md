@@ -755,7 +755,7 @@ projects can adopt without parallel implementation:
 - **Orchestration layer** — primary consumer. Surfaces walkthroughs through
   its CLI, cockpit panel, chat channel, and governance evidence chain. Gated on
   this v3.9.0 work.
-- **512-mind** — module-level walkthroughs over the 38-module governance
+- **MIND-Law** — module-level walkthroughs over the 38-module governance
   kernel (DOS / CVS / ICL / Five Anchors / payment_rail) for new contributors
   and external auditors. Optional, opt-in.
 - **mind-inference** — pipeline walkthroughs over the LLM-inference DAG for
@@ -833,7 +833,7 @@ traces back to an exact byte range, not just a file. Add:
   block → extractor pipeline (with code hash) → source span → file
   sha256. One call answers "where did this claim come from?"
 
-Direct fit for `512-mind/sealed_evidence` and `arch-mind` evidence
+Direct fit for `mind-law/sealed_evidence` and `arch-mind` evidence
 chains: every governed assertion has byte-level provenance.
 
 ### What we explicitly do NOT borrow
@@ -887,7 +887,7 @@ range, not just a file:
   block → extractor pipeline (with code hash) → source span → file
   sha256.
 
-Direct fit for `512-mind/sealed_evidence` and `arch-mind` evidence
+Direct fit for `mind-law/sealed_evidence` and `arch-mind` evidence
 chains. Estimated effort: 2-3 days.
 
 ### 2. Auto-stamp + dirty-block re-extraction (hash-of-code theme 1

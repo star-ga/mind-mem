@@ -115,7 +115,7 @@ property is still unenforced, now with documentation saying so. Documented
 non-enforcement decays into assumed enforcement: the next reader sees a
 governance-shaped function name and infers the guarantee.
 
-The ecosystem already runs the pattern that fixes this. `512-mind` pairs
+The ecosystem already runs the pattern that fixes this. `mind-law` pairs
 each unimplemented guarantee with a **capability flag that reads false**,
 plus an undefined `extern` so a missing backend fails at link time rather
 than resolving to a permissive default:
@@ -182,6 +182,6 @@ padded into a list of non-issues to justify the effort.
 Prior-art shape observed in a public tutorial; the principle is one this
 project already held and published. No code adopted, nothing named in any
 public artifact. The closing mechanism — fail-closed capability flags with
-undefined-extern backends — is **internal precedent** from `512-mind`
+undefined-extern backends — is **internal precedent** from `mind-law`
 (`drift.mind`, `key_management.mind`), not external. Citation in
 `mind-internal`.

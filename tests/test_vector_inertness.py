@@ -53,7 +53,7 @@ def _write_index(ws, vectors: list[list[float]]) -> None:
 
 
 def _boilerplate(n: int = 12, dim: int = 64) -> list[list[float]]:
-    """Near-identical vectors: the 512-mind `format!`-one-flat-string shape."""
+    """Near-identical vectors: the MIND-Law `format!`-one-flat-string shape."""
     rng = random.Random(11)
     base = [rng.gauss(0, 1) for _ in range(dim)]
     return [[v + rng.gauss(0, 1e-4) for v in base] for _ in range(n)]

@@ -184,7 +184,7 @@ receipt service. Optional economic adapters consume agreed, eligible events
 downstream and have no authority over retrieval ranking or governed writes.
 
 The adopted target architecture gives CVS an environment-independent evidence
-contract, with MIND Witness as the MIND event/artifact adapter and 512-MIND as
+contract, with MIND Witness as the MIND event/artifact adapter and MIND-Law as
 the admissibility layer. Independent verification, observation and custody need
 explicit proof profiles; an internal signed self-report is not an independent
 execution witness. This separation and canonical-lineage integration are open

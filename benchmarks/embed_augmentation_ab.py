@@ -14,7 +14,7 @@ Two corpora, because they fail in opposite directions:
   queries arrive in the vocabulary of the PROBLEM. If the vectors never meet,
   nothing errors and recall returns wrong-but-plausible blocks forever.
 * BOILERPLATE. Near-constant records differing only in an id and a hash --
-  the shape `512-mind/src/memory.mind` actually writes. Inter-block cosine
+  the shape `mind-law/src/memory.mind` actually writes. Inter-block cosine
   variance collapses toward zero, so similarity ranking carries almost no
   signal and BM25 silently does all the work while the vector leg looks fine.
 
@@ -64,7 +64,7 @@ PROBLEM_QUERIES = [
     (4, "the service hammers a failing upstream and never backs off"),
 ]
 
-# --- corpus 2: near-duplicate boilerplate (the 512-mind shape) -------------
+# --- corpus 2: near-duplicate boilerplate (the MIND-Law shape) -------------
 BOILERPLATE = [
     (
         {"Category": "witness", "Speaker": "512", "Date": "2026-04-0%d" % (i + 1), "Tags": "witness,compliance"},
@@ -115,7 +115,7 @@ def _report(name, blocks, queries, backend) -> None:
 def main() -> int:
     backend = VectorBackend({"model": "all-MiniLM-L6-v2"})
     _report("corpus 1 - symptom query vs resolution text", RESOLUTION_BLOCKS, PROBLEM_QUERIES, backend)
-    _report("corpus 2 - near-duplicate boilerplate (512-mind shape)", BOILERPLATE, BOILERPLATE_QUERIES, backend)
+    _report("corpus 2 - near-duplicate boilerplate (MIND-Law shape)", BOILERPLATE, BOILERPLATE_QUERIES, backend)
     print("\nHigher top1 / mean_margin is better. A spread near 0 in corpus 2")
     print("means similarity ranking carries almost no signal there.")
     return 0
