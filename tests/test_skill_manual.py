@@ -199,7 +199,12 @@ class TestHandWrittenManual:
         text = (REF_DIR / "install.md").read_text(encoding="utf-8")
         para = text.split("Client keys accepted by", 1)[1].split("\n\n", 1)[0]
         keys = set(re.findall(r"`([a-z][a-z-]*)`", para)) - {"mm", "install", "--agent"}
-        assert keys == set(AGENT_REGISTRY), f"install.md client keys {sorted(keys)} != registry {sorted(AGENT_REGISTRY)}"
+        assert len(keys) >= 10, f"positive control: only {sorted(keys)} parsed"
+        # Subset, not equality: a client added to the registry by another
+        # change leaves the list incomplete (still correct), but a key the
+        # registry dropped would have an agent run a command that fails.
+        invented = sorted(keys - set(AGENT_REGISTRY))
+        assert not invented, f"install.md names client keys the installer does not know: {invented}"
 
     def test_config_keys_have_readers(self) -> None:
         source = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in (ROOT / "src" / "mind_mem").rglob("*.py"))
