@@ -79,6 +79,10 @@ from mind_mem.served_ledger import (
 #: to break it fails this file rather than silently weakening it.
 APPENDS = 120
 
+#: Independent runs the mutation twin may take to observe a fork. A fork is a
+#: scheduling outcome, so one clean run is possible; all of them clean is not.
+MUTANT_ATTEMPTS = 5
+
 #: Locking modes the worker understands. ``locked`` is the shipped code;
 #: ``threadlock`` reinstates the pre-fix guard and nothing else.
 LOCKED = "locked"
@@ -247,17 +251,32 @@ def test_the_pre_fix_thread_lock_forks_the_chain(tmp_path: pathlib.Path) -> None
     is a scheduling accident. What is not an accident is that at least one
     does; a run where none did would mean the gate above can pass without the
     lock, and this test says so by name.
+
+    Up to :data:`MUTANT_ATTEMPTS` independent runs, stopping at the first
+    fork. Two interpreters on a loaded CI runner are occasionally scheduled
+    so that 120 appends each never overlap inside the critical section; that
+    single clean run is the scheduler, not the lock (seen on ubuntu runners,
+    roughly one run in a few dozen). Every attempt clean is still the verdict
+    the twin exists to give: the per-process lock cannot be told apart from
+    the real one, so the gate above proves nothing.
     """
-    ws, codes = _run(tmp_path, "mutant", nproc=2, mode=THREADLOCK)
-    measured = _measure(ws)
-    forked = (
-        measured["rows"] != 2 * APPENDS
-        or measured["duplicate_seq"] != 0
-        or not measured["verify_ok"]
-        or bool(measured["unreadable"])
-        or codes != [0, 0]
+    observed = []
+    for attempt in range(MUTANT_ATTEMPTS):
+        ws, codes = _run(tmp_path, f"mutant{attempt}", nproc=2, mode=THREADLOCK)
+        measured = _measure(ws)
+        forked = (
+            measured["rows"] != 2 * APPENDS
+            or measured["duplicate_seq"] != 0
+            or not measured["verify_ok"]
+            or bool(measured["unreadable"])
+            or codes != [0, 0]
+        )
+        if forked:
+            return
+        observed.append((measured, list(codes)))
+    pytest.fail(
+        f"the per-process lock produced a clean chain in all {MUTANT_ATTEMPTS} runs — the gate above is not testing the lock: {observed}"
     )
-    assert forked, f"the per-process lock produced a clean chain — the gate above is not testing the lock: {measured} {codes}"
 
 
 def test_the_shipped_lock_is_the_cross_process_one() -> None:

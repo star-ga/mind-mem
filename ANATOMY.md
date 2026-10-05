@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1681 | **Est. tokens:** ~4,927,607
-**Generated:** 2026-10-05 21:46 UTC
+**Files:** 1681 | **Est. tokens:** ~4,927,836
+**Generated:** 2026-10-05 23:44 UTC
 
 ## Token Budget Guide
 
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 745 | ~2,191,929 |
+| `tests/` | 745 | ~2,192,158 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1848,7 +1848,7 @@
 - `test_security_scanning_alerts.py` (~1395 tok, large) — Regression tests for code-scanning alerts #189 and #192.
 - `test_self_editing_old_content.py` (~980 tok, large) — ``propose_edit`` must snapshot the block's real current content.
 - `test_self_update.py` (~2727 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_served_ledger_concurrency.py` (~6937 tok, huge) — The served ledger under a SECOND WRITER — the two shapes production has.
+- `test_served_ledger_concurrency.py` (~7166 tok, huge) — The served ledger under a SECOND WRITER — the two shapes production has.
 - `test_served_ledger.py` (~12124 tok, huge) — RA.1 — the served-set ledger: proof of what was served, joinable to outcome.
 - `test_served_ledger_v2_compat.py` (~1724 tok, huge) — Reader-only compatibility controls for mixed v1/v2 served ledgers.
 - `test_session_boost.py` (~1488 tok, large) — v3.3.0 Tier 2 #5 — session-boundary preservation via recall-side boost.
