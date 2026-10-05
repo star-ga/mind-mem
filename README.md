@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/test_functions-12%2C525-brightgreen?style=flat-square" alt="Test functions: 12,525">
+  <img src="https://img.shields.io/badge/test_functions-12%2C545-brightgreen?style=flat-square" alt="Test functions: 12,545">
   <img src="https://img.shields.io/badge/MCP_tools-107-blue?style=flat-square" alt="MCP Tools: 107">
   <img src="https://img.shields.io/badge/clients-19-blueviolet?style=flat-square" alt="AI Clients: 19">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
@@ -250,8 +250,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (107 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 107 distinct tools and 8 read-only resources (6 static + 2 templated). Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
-### 74+ Structural Checks + 12,525 Test Functions
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 12,525 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
+### 74+ Structural Checks + 12,545 Test Functions
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 12,545 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -749,6 +749,35 @@ TOTAL: 0 critical | 0 warnings | 16 info
 | `/apply`          | Review and apply proposals from scan results (dry-run first, then apply)                        |
 | `/recall <query>` | Search across all memory files with ranked results (add `--graph` for cross-reference boosting) |
 
+The three skills above live in [`skills/`](skills/).
+
+### Agent skill: CLI user manual
+
+Agents that prefer the shell over MCP can install a `mind-mem` skill that works
+as a user manual for the `mm` CLI. Its [`SKILL.md`](skills/mind-mem/SKILL.md)
+is a table of contents — what mind-mem is, which command to run for which job,
+and how governed writes work — and it points to reference files the agent opens
+only when it needs them:
+
+| Reference | Covers |
+| --- | --- |
+| [`install.md`](skills/mind-mem/references/install.md) | Install, workspaces, wiring clients, upgrading, removing |
+| [`cli.md`](skills/mind-mem/references/cli.md) | Every `mm` subcommand with its flags and an example (generated from the parser) |
+| [`configuration.md`](skills/mind-mem/references/configuration.md) | `mind-mem.json` keys, `mm config set`, environment variables |
+| [`troubleshooting.md`](skills/mind-mem/references/troubleshooting.md) | `mm doctor`, `mind-mem-verify`, common errors and their fixes |
+| [`mcp-vs-cli.md`](skills/mind-mem/references/mcp-vs-cli.md) | When to use which, and the MCP-tool-to-command map |
+| [`faq.md`](skills/mind-mem/references/faq.md) | Basic questions about the product |
+
+```bash
+mm skill install                             # -> ~/.claude/skills/mind-mem
+mm skill install --target ~/.codex/skills    # any agent that reads SKILL.md folders
+```
+
+The skill ships inside the package. `tests/test_skill_manual.py` fails the build
+if a documented command, flag, environment variable or config key stops
+existing, and `python3 scripts/gen_skill_cli_reference.py` regenerates the CLI
+reference after the parser changes.
+
 ---
 
 ## Architecture
@@ -862,7 +891,7 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Vector only | Hybrid | Graph + vector |
 | Governance (propose/review/apply) | Yes | No | No | No |
 | Contradiction detection | Yes | No | No | No |
-| Test functions | 12,525 test functions | - | - | - |
+| Test functions | 12,545 test functions | - | - | - |
 | LoCoMo benchmark (full 10-conv, Acc>=50)¹ | 73.8% | 66.9%² | 74.0% | - |
 | MCP tools | 107 distinct (`mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |

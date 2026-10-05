@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4,884,832
-**Generated:** 2026-10-05 14:14 UTC
+**Files:** 1675 | **Est. tokens:** ~4,913,343
+**Generated:** 2026-10-05 14:37 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~73,772 |
+| `./` | 37 | ~73,882 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~215,156 |
+| `docs/` | 95 | ~215,328 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -62,7 +62,7 @@
 | `lib/` | 1 | ~2,451 |
 | `mind/` | 27 | ~9,632 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 23 | ~76,226 |
+| `scripts/` | 24 | ~79,163 |
 | `sdk/go/` | 11 | ~9,920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4,864 |
@@ -75,8 +75,10 @@
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
+| `skills/mind-mem/` | 1 | ~1,671 |
+| `skills/mind-mem/references/` | 6 | ~18,806 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 238 | ~1,070,057 |
+| `src/mind_mem/` | 239 | ~1,071,140 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -91,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 740 | ~2,179,035 |
+| `tests/` | 741 | ~2,182,767 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -140,7 +142,7 @@
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~203 tok, medium) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
-- `pyproject.toml` (~3759 tok, huge) — [project]
+- `pyproject.toml` (~3869 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `requirements-optional.in` (~54 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
 - `requirements-optional.txt` (~23715 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
@@ -386,7 +388,7 @@
 - `ci-workflows.md` (~728 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
-- `cli-reference.md` (~8254 tok, huge) — CLI Reference
+- `cli-reference.md` (~8426 tok, huge) — CLI Reference
 - `companion-tools.md` (~1111 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
@@ -631,6 +633,7 @@
 - `check_tool_surface.py` (~2214 tok, huge) — Reachability, applied to the MCP tool surface.
 - `count_mcp_tools.py` (~5819 tok, huge) — Count registered MCP tools and assert the count matches CLAUDE.md.
 - `docs-alignment-hook.sh` (~454 tok, medium) — docs-alignment-hook.sh — Git pre-commit step to refresh derived doc counts.
+- `gen_skill_cli_reference.py` (~2937 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `pre-commit-hook.sh` (~489 tok, medium) — STARGA author guard (chained first: a wrong-identity commit must never be created).
 - `pre-push-hook.sh` (~460 tok, medium) — pre-push-hook.sh — the last LOCAL gate before an identity becomes public.
 - `reachability_baseline.txt` (~366 tok, medium) — api.grpc_server  # waiting: a named client integration that requires gRPC (strea
@@ -717,6 +720,17 @@
 ### `skills/memory-recall/`
 
 - `SKILL.md` (~549 tok, large) — /recall — Memory Search
+### `skills/mind-mem/references/`
+
+- `cli.md` (~13414 tok, huge) — `mm` command reference
+- `configuration.md` (~1375 tok, large) — Configuration
+- `faq.md` (~884 tok, large) — FAQ
+- `install.md` (~1125 tok, large) — Installing mind-mem
+- `mcp-vs-cli.md` (~730 tok, large) — MCP server or CLI?
+- `troubleshooting.md` (~1278 tok, large) — Troubleshooting
+### `skills/mind-mem/`
+
+- `SKILL.md` (~1671 tok, huge) — mind-mem — CLI user manual
 ### `src/`
 
 - `mcp_server.py` (~280 tok, medium) — Wheel-level compatibility module for `mind_mem.mcp_server`.
@@ -1030,6 +1044,7 @@
 - `served_ledger.py` (~13315 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `session_boost.py` (~1511 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
 - `session_summarizer.py` (~3852 tok, huge) — mind-mem Session Summarizer. Zero external deps.
+- `skill_bundle.py` (~1083 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/skill_opt/`
 
 - `adapters.py` (~2790 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1836,6 +1851,7 @@
 - `test_sharded_pg.py` (~4415 tok, huge) — v4.0 prep — sharded Postgres routing tests (mock underlying stores)."""
 - `test_silent_failure_regressions.py` (~3438 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_skeptical_query.py` (~194 tok, small) — Tests for skeptical query detection."""
+- `test_skill_manual.py` (~3732 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_skill_opt_adapters.py` (~943 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_skill_opt_analyzer.py` (~3122 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_skill_opt_config_orchestrator_path.py` (~798 tok, large) — The orchestrator location must be settable from OUTSIDE the installed package.

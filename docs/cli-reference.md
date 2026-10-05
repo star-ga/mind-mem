@@ -41,7 +41,7 @@ The sections below this index cover the frequently-used verbs in depth.
 | `mm kinds` | v4 block-kind taxonomy (requires v4.block_kinds in mind-mem.json). |
 | `mm vault` | Vault sync subcommands. |
 | `mm lineage` | Block-lineage subcommands (v3.11.0 typed edges + v3.12 staleness). |
-| `mm skill` | Self-improving skill optimization subcommands. |
+| `mm skill` | Agent skills: install the bundled CLI user-manual skill, and self-improving skill optimization. |
 | `mm serve` | Launch the mind-mem REST API server (requires mind-mem[api]). |
 | `mm http-serve` | Launch the v3.9 stdlib HTTP transport (zero dependencies; minimal endpoint surface). |
 | `mm view` | Launch a read-only local viewer for admitted memory and graph data. |
@@ -649,7 +649,21 @@ Write a block to a vault file.
 
 ---
 
-## Skill optimization subcommands
+## Skill subcommands
+
+### `mm skill install [--target DIR] [--force] [--dry-run]`
+
+Copy the bundled `mind-mem` agent skill — a table-of-contents `SKILL.md` plus
+`references/*.md` (install, CLI, configuration, troubleshooting, MCP vs CLI,
+FAQ) — into an agent skills directory. The skill lands in `<target>/mind-mem`
+(default target: `~/.claude/skills`). An existing copy that differs is left
+alone unless `--force` is given. The source files live at
+[`skills/mind-mem/`](../skills/mind-mem/SKILL.md).
+
+```bash
+mm skill install                           # ~/.claude/skills/mind-mem
+mm skill install --target ~/.codex/skills  # any agent that reads SKILL.md folders
+```
 
 ### `mm skill list`
 
