@@ -1126,7 +1126,7 @@ class TestCIMatrixAuthority:
         matrix = aa.ci_matrix(ROOT)
         assert matrix.job_count == len(matrix.python_versions) * len(matrix.operating_systems)
         assert "3.11" in matrix.python_versions, "3.11 has been a matrix row since it was added"
-        assert set(matrix.operating_systems) == {"ubuntu-latest", "macos-latest", "windows-latest"}
+        assert set(matrix.operating_systems) == {"ubuntu-24.04", "macos-latest", "windows-latest"}
 
     def test_only_the_named_jobs_matrix_is_read(self, tmp_path):
         """A version PINNED by another job must not be read as a matrix row.

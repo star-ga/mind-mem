@@ -112,7 +112,7 @@ automatically on every release tag push (`v*`).
 ### Job structure
 
 - Triggered: `push` on tags matching `v*` only (not every push or PR).
-- Runner: `ubuntu-latest`, Python 3.12, `continue-on-error: true`.
+- Runner: `ubuntu-24.04`, Python 3.12, `continue-on-error: true`.
 - Skips the audit step cleanly when `ANTHROPIC_API_KEY` is absent; the
   job still completes green so it does not block tag promotion.
 - Artifacts: transcripts in `tests/red_team/transcripts/` are uploaded

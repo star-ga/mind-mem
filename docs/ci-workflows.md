@@ -39,7 +39,7 @@ being filed as an advisory.
 | macOS | x | x | x | x | x |
 | Windows | x | x | x | x | x |
 
-Coverage (`--cov`) is instrumented on the `ubuntu-latest` / 3.12 row only; the
+Coverage (`--cov`) is instrumented on the `ubuntu-24.04` / 3.12 row only; the
 other rows run the same selector without instrumentation to stay inside the
 runner's memory budget.
 

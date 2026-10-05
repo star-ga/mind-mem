@@ -15,7 +15,7 @@ permissions:
 jobs:
   # ── CodeQL SAST ──────────────────────────────────────────────────────────────
   codeql:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       security-events: write
       contents: read
@@ -39,7 +39,7 @@ jobs:
 
   # ── pip-audit dependency audit ───────────────────────────────────────────────
   pip-audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -107,7 +107,7 @@ jobs:
 
   # ── Bandit SAST → SARIF → Code Scanning ─────────────────────────────────────
   bandit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       security-events: write
       contents: read
@@ -165,7 +165,7 @@ jobs:
 
   # ── Gitleaks secret scanning ─────────────────────────────────────────────────
   secrets-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -179,7 +179,7 @@ jobs:
 
   # ── CycloneDX SBOM generation ─────────────────────────────────────────────────
   sbom:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -243,7 +243,7 @@ jobs:
   # that don't touch Dockerfile. Heavy steps (build + scan) gate on the
   # diff check below.
   docker-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:

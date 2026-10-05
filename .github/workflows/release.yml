@@ -74,7 +74,7 @@ jobs:
   # dismiss it via the GitHub Security UI with a documented rationale and
   # then re-push the tag. There is no workflow input for that, on purpose.
   alerts-gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # Needed to check out the in-tree checker. Read-only.
       contents: read
@@ -119,7 +119,7 @@ jobs:
   # before this job were all of the "look for a problem, and if you cannot look,
   # carry on" shape, and that shape is what let a broken release through.
   release-preflight:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       # Needed by gate (c) to read the recorded conclusion of the CI workflow
@@ -263,7 +263,7 @@ jobs:
     # Nothing is built, signed, published or released until release-preflight
     # passes, so every downstream job inherits all five preflight gates.
     needs: [alerts-gate, release-preflight]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -299,7 +299,7 @@ jobs:
   # ── Sigstore provenance signing ───────────────────────────────────────────────
   sign:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       id-token: write
       contents: read
@@ -326,7 +326,7 @@ jobs:
   # ── CycloneDX SBOM ─────────────────────────────────────────────────────────
   sbom:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -382,7 +382,7 @@ jobs:
     # Waiting only in github-release allowed a failed SBOM to leave a package
     # published on PyPI while its release artifacts remained incomplete.
     needs: [build, sign, sbom]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: pypi
     permissions:
       id-token: write
@@ -423,7 +423,7 @@ jobs:
     # harmful direction of divergence is "GitHub serves what the index
     # refuses", so the release notes now wait for the upload to succeed.
     needs: [build, sign, sbom, publish-pypi]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -501,7 +501,7 @@ jobs:
   # release notes. A failure here turns the whole run red, which is the signal.
   verify-published:
     needs: [release-preflight, publish-pypi]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:

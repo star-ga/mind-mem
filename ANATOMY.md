@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1667 | **Est. tokens:** ~4,890,915
-**Generated:** 2026-10-05 17:50 UTC
+**Files:** 1667 | **Est. tokens:** ~4,890,904
+**Generated:** 2026-10-05 21:26 UTC
 
 ## Token Budget Guide
 
@@ -54,7 +54,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~21,888 |
+| `.github/workflows/` | 11 | ~21,877 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -550,14 +550,14 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~9299 tok, huge) — name: CI
+- `ci.yml` (~9294 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
-- `docs.yml` (~262 tok, medium) — name: Docs
-- `label-sync.yml` (~112 tok, small) — name: Label Sync
+- `docs.yml` (~261 tok, medium) — name: Docs
+- `label-sync.yml` (~111 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
-- `release.yml` (~6920 tok, huge) — name: Release
-- `security.yml` (~3156 tok, huge) — name: Supply-Chain Security
+- `release.yml` (~6918 tok, huge) — name: Release
+- `security.yml` (~3154 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `hooks/`
 
