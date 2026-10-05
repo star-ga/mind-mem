@@ -35,11 +35,15 @@ transitive lock with SHA-256 hashes:
 pip install --require-hashes -r requirements-optional.txt
 ```
 
-The direct pins are maintained in `requirements-optional.in`. To regenerate:
+The direct pins are maintained in `requirements-optional.in`, together with the
+resolution cutoff (`# exclude-newer: <RFC 3339 timestamp>`) that makes the lock
+reproducible. To regenerate, use that cutoff (bump it first to pick up newer
+transitive releases):
 
 ```bash
 uv pip compile requirements-optional.in --universal --generate-hashes \
-  --python-version 3.10 --output-file requirements-optional.txt
+  --python-version 3.10 --exclude-newer "<cutoff>" \
+  --output-file requirements-optional.txt
 ```
 
 The resolver emits Python and platform markers. Wheel availability still limits

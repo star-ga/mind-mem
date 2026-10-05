@@ -28,16 +28,17 @@ COPY src/ src/
 # with fixable CVEs). mind-mem ships ZERO core deps so end users are never
 # exposed via the wheel; this only keeps the build/scan image clean.
 #
-# NOTE: pip additionally VENDORS its own setuptools 70.3.0 + msgpack 1.1.2
-# (pip/_vendor), which the Trivy image scan reports under the generic "Python"
-# target. Those copies are pinned by pip for its installer internals — they are
-# un-upgradable independently of pip (even latest pip vendors them) and are
-# never imported on the serving path (entrypoint is `python3 mcp_server.py`;
-# pip is not invoked at runtime). The three advisory IDs are documented and
-# narrowly scoped in .trivyignore at the repo root — see that file for the
-# rationale; they are NOT the top-level packages, which are patched above.
+# pip VENDORS its own copies of setuptools, msgpack, urllib3 and others
+# (pip/_vendor, declared in pip's bundled SBOM), which the Trivy image scan
+# reports under the generic "Python" target. Those copies are pinned by pip
+# itself and cannot be upgraded independently — each new advisory against one
+# of them turned the scheduled scan red with no user-side fix. pip is never
+# invoked at runtime (entrypoint is `python3 mcp_server.py`), so it is removed
+# once the install is done: the runtime image then carries no installer and no
+# vendored copies, and the scan needs no suppressions at all.
 RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=83.0.0" \
- && pip install --no-cache-dir -e .
+ && pip install --no-cache-dir -e . \
+ && python3 -m pip uninstall -y pip
 
 EXPOSE 8000
 

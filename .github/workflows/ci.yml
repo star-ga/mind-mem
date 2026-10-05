@@ -570,12 +570,25 @@ jobs:
           # and not the header/`# via` comment lines, which uv varies by
           # invocation and output path — a raw diff would false-positive on
           # cosmetics while a stripped compare fails closed only on real drift.
+          #
+          # The re-resolution is pinned to the cutoff recorded in the .in file
+          # (`# exclude-newer: <timestamp>`). Without it the job compared the
+          # lock against "latest PyPI", so any upstream release of a transitive
+          # package turned main red although nothing in the repo changed. The
+          # regen still starts from scratch (no seeding from the committed
+          # lock), so a hand-edited pin or hash is still caught.
+          cutoff=$(sed -n 's/^# exclude-newer: *//p' requirements-optional.in)
+          if [ -z "$cutoff" ]; then
+            echo "::error::requirements-optional.in has no '# exclude-newer: <timestamp>' line"
+            exit 1
+          fi
           uv pip compile requirements-optional.in \
             --universal --generate-hashes --python-version 3.10 \
+            --exclude-newer "$cutoff" \
             --quiet -o /tmp/requirements-optional.regen.txt
           strip() { grep -vE '^[[:space:]]*#' "$1" | grep -vE '^[[:space:]]*$'; }
           if ! diff -u <(strip requirements-optional.txt) <(strip /tmp/requirements-optional.regen.txt); then
-            echo "::error::requirements-optional.txt drifted from requirements-optional.in — regenerate with 'uv pip compile requirements-optional.in --universal --generate-hashes --python-version 3.10 -o requirements-optional.txt'"
+            echo "::error::requirements-optional.txt drifted from requirements-optional.in — regenerate with 'uv pip compile requirements-optional.in --universal --generate-hashes --python-version 3.10 --exclude-newer <cutoff> -o requirements-optional.txt'"
             exit 1
           fi
       - name: Resolve complete hashed closure (dry-run — resolves+parses, does NOT byte-verify)

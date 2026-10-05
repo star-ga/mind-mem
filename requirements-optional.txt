@@ -7,6 +7,7 @@
 # Regenerate from requirements-optional.in with:
 #   uv pip compile requirements-optional.in --universal \
 #     --generate-hashes --python-version 3.10 \
+#     --exclude-newer <cutoff from requirements-optional.in> \
 #     --output-file requirements-optional.txt
 #
 # `--universal --python-version 3.10` asks uv to emit environment markers for
