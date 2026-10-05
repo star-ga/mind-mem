@@ -328,28 +328,14 @@ You're likely missing the HNSW index. Run section §3f above.
 
 ### Recall logs show `propagate_scores_failed: no such column: intent_type`
 
-You upgraded mind-mem across a schema migration. Run:
+You upgraded mind-mem across a schema migration. The SQLite retrieval-log
+auto-migrate covers fresh databases, but ones created before 2026-04 can miss
+it. Check, then add the missing columns (`intent_type`, `stage_counts`):
 
 ```bash
-mm migrate-store --check
+mm doctor                       # read-only: reports the drift
+mm doctor --migrate-recall-log  # adds the missing columns; no-op on fresh DBs
 ```
-
-If still failing, the SQLite retrieval-log auto-migrate is fine for
-fresh DBs but pre-2026-04 DBs can miss it. Force the migration:
-
-```python
-import sqlite3, os
-ws = os.path.expanduser("~/.openclaw/workspace")
-db = os.path.join(ws, ".mind-mem-index/recall.db")
-c = sqlite3.connect(db)
-try: c.execute("ALTER TABLE retrieval_log ADD COLUMN intent_type TEXT DEFAULT ''")
-except: pass
-try: c.execute("ALTER TABLE retrieval_log ADD COLUMN stage_counts TEXT DEFAULT '{}'")
-except: pass
-c.commit(); c.close()
-```
-
-(Will be packaged as `mm doctor --migrate-recall-log` in v3.10.4.)
 
 ### MCP server not visible in CLI after `mm install-all`
 

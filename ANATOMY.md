@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1680 | **Est. tokens:** ~4,926,197
-**Generated:** 2026-10-05 21:37 UTC
+**Files:** 1680 | **Est. tokens:** ~4,926,125
+**Generated:** 2026-10-05 21:39 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~622 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~216,052 |
+| `docs/` | 95 | ~215,980 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -439,7 +439,7 @@
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
-- `install-guide.md` (~2953 tok, huge) — Installation guide — every step + every option
+- `install-guide.md` (~2881 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1567 tok, huge) — Integrations
 - `local-viewer.md` (~629 tok, large) — Local memory viewer
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
