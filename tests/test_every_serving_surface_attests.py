@@ -153,6 +153,10 @@ ENGINE_SERVED: frozenset[str] = frozenset(
 #: set cannot grow silently; every name here is an open item, not an exemption.
 STORE_SERVED: frozenset[str] = frozenset({"category_summary", "export_memory", "get_block"})
 
+#: Swept tools that are deprecated but still registered. Each call must emit its
+#: DeprecationWarning; the sweep asserts it instead of leaking it into the run.
+DEPRECATED_TOOLS: frozenset[str] = frozenset({"hybrid_search"})
+
 
 # ---------------------------------------------------------------------------
 # The seed
@@ -312,7 +316,12 @@ def tool_sweep(seed_template: str) -> dict[str, list[dict[str, Any]]]:
             ws = _fresh(seed_template)
             try:
                 try:
-                    text = _invoke(tool, kwargs, ws)
+                    if tool in DEPRECATED_TOOLS:
+                        # Still registered, so still swept; its deprecation is asserted, not leaked as a warning.
+                        with pytest.warns(DeprecationWarning, match=f"{tool} is deprecated"):
+                            text = _invoke(tool, kwargs, ws)
+                    else:
+                        text = _invoke(tool, kwargs, ws)
                 except Exception as exc:  # noqa: BLE001 — a raising tool is still swept
                     text = f"{type(exc).__name__}: {exc}"
                 rows = read_served_runs(ws)

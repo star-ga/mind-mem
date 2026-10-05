@@ -569,11 +569,9 @@ def _graph_supporting_hits(
     candidates.update({key: value for key, value in allowed.items() if key in source_ids})
     hits: list[dict[str, Any]] = []
     for block_id in sorted(source_ids):
-        if block_id not in candidates or candidates[block_id] is None:
+        block = candidates.get(block_id)
+        if block is None:
             continue
-        block_value = candidates[block_id]
-        assert block_value is not None
-        block: dict[str, Any] = block_value
         hit = dict(block)
         hit["_id"] = block_id
         hit["excerpt"] = str(block.get("excerpt") or block.get("content") or block.get("Statement") or block.get("Title") or "")
