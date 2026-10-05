@@ -2842,7 +2842,9 @@ def recall(
 #: Every direct ``recall.backend`` value this loader has a case for. Values
 #: delegated to a selected block-store backend are listed separately below so
 #: the warning names the actual route rather than a guessed fallback.
-_KNOWN_RECALL_BACKENDS = frozenset({"scan", "tfidf", "sqlite", "vector"})
+# ``bm25`` is the name ``mind-mem-init`` writes for the built-in BM25 scan (the
+#: same route as ``scan``); it must not be reported as unknown on every recall.
+_KNOWN_RECALL_BACKENDS = frozenset({"scan", "bm25", "tfidf", "sqlite", "vector"})
 # PostgreSQL's source-of-record backend owns a hybrid BM25/pgvector path.  It
 # is selected after the explicit sqlite/vector cases below, so it is not a
 # direct loader return value but is still a valid requested backend there.
