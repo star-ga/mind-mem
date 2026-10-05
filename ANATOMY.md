@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4,884,976
-**Generated:** 2026-10-05 14:21 UTC
+**Files:** 1665 | **Est. tokens:** ~4,884,978
+**Generated:** 2026-10-05 15:56 UTC
 
 ## Token Budget Guide
 
@@ -60,7 +60,7 @@
 | `intelligence/` | 1 | ~113 |
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2,451 |
-| `mind/` | 27 | ~9,632 |
+| `mind/` | 27 | ~9,634 |
 | `.roo/` | 1 | ~22 |
 | `scripts/` | 23 | ~76,226 |
 | `sdk/go/` | 11 | ~9,920 |
@@ -586,7 +586,7 @@
 - `answer.mind` (~1294 tok, large)
 - `bm25.mind` (~480 tok, medium) — BM25F scoring kernel with field boosts and length normalization
 - `category.mind` (~395 tok, medium) — Category distillation scoring kernel
-- `cognitive.mind` (~434 tok, medium)
+- `cognitive.mind` (~436 tok, medium)
 - `cross_encoder.mind` (~174 tok, small)
 - `ensemble.mind` (~237 tok, medium)
 - `evidence.mind` (~232 tok, medium)
