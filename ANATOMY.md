@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4,884,834
-**Generated:** 2026-10-03 11:41 UTC
+**Files:** 1665 | **Est. tokens:** ~4,884,832
+**Generated:** 2026-10-05 14:14 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~215,158 |
+| `docs/` | 95 | ~215,156 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -387,7 +387,7 @@
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~3635 tok, huge) — Client Integrations
 - `cli-reference.md` (~8254 tok, huge) — CLI Reference
-- `companion-tools.md` (~1113 tok, large) — Companion Tools
+- `companion-tools.md` (~1111 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~18323 tok, huge) — Configuration Reference

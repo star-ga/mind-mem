@@ -116,7 +116,7 @@ Output:
 - [`docs/task-frames.md`](docs/task-frames.md) — **task frames + the dead-end registry**: `[TF-...]` multi-session continuity (`resume_brief`, `mm resume`) and `[DE-...]` negative action-space memory, matched by a deterministic declarative overlap that warns and never blocks
 - [`docs/review.md`](docs/review.md) — **`mm review`**: batch approval for the HITL queue — pending proposals with their pre-apply diff, provenance, chain status and staleness inline, approved or rejected many at once through the governed `approve_apply` path, with no auto-approve at any risk level
 - [`docs/mind-mem-4b-setup.md`](docs/mind-mem-4b-setup.md) — download + run the `star-ga/mind-mem-4b` full-FT model locally (transformers, exllamav2, vLLM, llama.cpp, Ollama, **MindLLM**)
-- [`docs/companion-tools.md`](docs/companion-tools.md) — **companion tools** that complement (not compete with) mind-mem: [MindLLM](https://github.com/star-ga/MindLLM) for deterministic + evidence-chained inference, [GitNexus](https://github.com/h4ckf0r0day/GitNexus) for code knowledge-graph
+- [`docs/companion-tools.md`](docs/companion-tools.md) — **companion tools** that complement (not compete with) mind-mem: MindLLM (STARGA, commercial) for deterministic + evidence-chained inference, [GitNexus](https://github.com/abhigyanpatwari/GitNexus) for code knowledge-graph
 - [`ROADMAP.md`](ROADMAP.md) — feature roadmap (genuinely-open items at the top; bulk of v3.2.0→v4.0.0 shipped)
 - [`docs/specs/retrieval-receipt-contract.md`](docs/specs/retrieval-receipt-contract.md) — **draft** portable retrieval-evidence contract and acceptance gates; optional billing and settlement remain demand-gated
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes for every published version
@@ -977,8 +977,8 @@ dependency.
 
 | Tool | Solves | Relationship to MIND-Mem |
 | ---- | ------ | ------------------------ |
-| [**MindLLM**](https://github.com/star-ga/MindLLM) (STARGA) | Deterministic, evidence-chained local inference behind OpenAI-compatible endpoints | Optional LLM backend — `"extraction": {"backend": "mindllm"}` in `mind-mem.json`, default endpoint `http://localhost:8080/v1` (override with `MIND_MEM_MINDLLM_URL`). `"backend": "auto"` probes it before vLLM. |
-| [**GitNexus**](https://github.com/h4ckf0r0day/GitNexus) (third-party) | Code knowledge-graph indexer — parses repo structure (call graphs, dependencies, clusters) and serves architectural-awareness tools to coding agents over MCP | Sibling MCP server, no integration code. Its license is **PolyForm Noncommercial**, incompatible with MIND-Mem's Apache-2.0 as a programmatic dependency — so co-installation, never a dependency. |
+| **MindLLM** (STARGA, commercial; available to customers, contact info@star.ga) | Deterministic, evidence-chained local inference behind OpenAI-compatible endpoints | Optional LLM backend — `"extraction": {"backend": "mindllm"}` in `mind-mem.json`, default endpoint `http://localhost:8080/v1` (override with `MIND_MEM_MINDLLM_URL`). `"backend": "auto"` probes it before vLLM. |
+| [**GitNexus**](https://github.com/abhigyanpatwari/GitNexus) (third-party) | Code knowledge-graph indexer — parses repo structure (call graphs, dependencies, clusters) and serves architectural-awareness tools to coding agents over MCP | Sibling MCP server, no integration code. Its license is **PolyForm Noncommercial**, incompatible with MIND-Mem's Apache-2.0 as a programmatic dependency — so co-installation, never a dependency. |
 
 ### GitNexus answers a different question
 
@@ -993,7 +993,7 @@ answering its own question domain, with no wiring between them:
 
 ```bash
 # GitNexus — follow its own README for install + MCP registration
-git clone https://github.com/h4ckf0r0day/GitNexus
+git clone https://github.com/abhigyanpatwari/GitNexus
 
 # MIND-Mem (Apache-2.0, this repo)
 pip install "mind-mem[all]"
