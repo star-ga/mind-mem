@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ src/
 COPY mcp_server.py ./
+# The CLI manual skill ships as package data (pyproject data-files); the
+# build fails without it.
+COPY skills/ skills/
 
 # Patch the build toolchain + constrain msgpack to the fixed floors, mirroring
 # the root Dockerfile: setuptools CVE-2025-47273 (fixed 78.1.1) / CVE-2026-59890

@@ -16,6 +16,8 @@ COPY mcp_server.py ./
 # {""="src"}); it must be present before the editable install or setuptools
 # fails with `error in 'egg_base' option: 'src' does not exist`.
 COPY src/ src/
+# The CLI manual skill ships as package data (pyproject data-files).
+COPY skills/ skills/
 
 # Upgrade the base-image pip/setuptools first: python:3.12-slim ships an
 # older pip (25.0.1) carrying fixable CVEs (e.g. CVE-2025-8869,

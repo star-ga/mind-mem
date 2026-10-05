@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1677 | **Est. tokens:** ~4,919,508
-**Generated:** 2026-10-05 21:27 UTC
+**Files:** 1677 | **Est. tokens:** ~4,919,561
+**Generated:** 2026-10-05 21:29 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~73,776 |
+| `./` | 37 | ~73,799 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -32,7 +32,7 @@
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
 | `bin/` | 1 | ~526 |
 | `deploy/` | 2 | ~772 |
-| `deploy/docker/` | 1 | ~592 |
+| `deploy/docker/` | 1 | ~622 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
 | `docs/` | 95 | ~216,052 |
@@ -127,7 +127,7 @@
 - `.cursorrules` (~23 tok, tiny) — # mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
 - `demo.tape` (~93 tok, small) — # mind-mem demo — terminal recording for README
-- `Dockerfile` (~526 tok, large) — FROM python:3.12-slim
+- `Dockerfile` (~549 tok, large) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `EVIDENCE.md` (~2303 tok, huge) — Evidence Matrix
@@ -270,7 +270,7 @@
 - `docker-compose.yml` (~690 tok, large) — name: mind-mem
 ### `deploy/docker/`
 
-- `Dockerfile` (~592 tok, large) — # Stage 1: build — install all deps and produce a pruned site-packages
+- `Dockerfile` (~622 tok, large) — # Stage 1: build — install all deps and produce a pruned site-packages
 ### `deploy/edge/`
 
 - `pyoxidizer.bzl` (~605 tok, large) — # mind-mem-edge — PyOxidizer build spec (v4.0 prep).
