@@ -130,7 +130,7 @@ class TestGeneratedCliReference:
         assert ok, f"example for 'mm {path}' does not parse: {example}\n{err}"
 
     def test_check_mode_reports_up_to_date(self) -> None:
-        proc = subprocess.run([sys.executable, str(GEN), "--check"], cwd=ROOT, capture_output=True, text=True, timeout=120)
+        proc = subprocess.run([sys.executable, str(GEN), "--check"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=120)
         assert proc.returncode == 0, proc.stderr
 
 
