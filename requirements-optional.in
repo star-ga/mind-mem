@@ -1,5 +1,11 @@
 # Direct roots for the reproducible optional embedding/reranking lock.
 # Keep these versions aligned with the package's supported optional stack.
+#
+# Resolution cutoff for the lock (passed to `uv pip compile --exclude-newer`).
+# CI re-resolves with this cutoff and requires an exact match, so the lock is
+# reproducible and an upstream release of a transitive package cannot turn the
+# drift check red. Bump it deliberately when relocking.
+# exclude-newer: 2026-09-24T01:51:04Z
 onnxruntime==1.24.3
 tokenizers==0.23.2
 sentence-transformers==6.0.1

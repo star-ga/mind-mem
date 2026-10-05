@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1665 | **Est. tokens:** ~4,884,832
-**Generated:** 2026-10-05 14:14 UTC
+**Files:** 1665 | **Est. tokens:** ~4,884,976
+**Generated:** 2026-10-05 14:21 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~73,772 |
+| `./` | 37 | ~73,666 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~215,156 |
+| `docs/` | 95 | ~215,209 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -54,7 +54,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~21,691 |
+| `.github/workflows/` | 11 | ~21,888 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -125,7 +125,7 @@
 - `.cursorrules` (~23 tok, tiny) — # mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
 - `demo.tape` (~93 tok, small) — # mind-mem demo — terminal recording for README
-- `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
+- `Dockerfile` (~526 tok, large) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `EVIDENCE.md` (~2303 tok, huge) — Evidence Matrix
@@ -142,15 +142,15 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~3759 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `requirements-optional.in` (~54 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
-- `requirements-optional.txt` (~23715 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
+- `requirements-optional.in` (~137 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
+- `requirements-optional.txt` (~23731 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
 - `SECURITY.md` (~2996 tok, huge) — Security Policy
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
 - `SPEC.md` (~6430 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `train_mind7b_runpod.py` (~1659 tok, huge)
-- `.trivyignore` (~338 tok, medium) — # Trivy ignore file — DOCUMENTED, un-actionable pip-vendored findings only.
+- `.trivyignore` (~128 tok, small) — # Trivy ignore file — intentionally empty.
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 ### `.agents/skills/mind-mem-development/`
@@ -485,7 +485,7 @@
 ### `docs/`
 
 - `security-model.md` (~823 tok, large) — Security Model
-- `setup.md` (~2221 tok, huge) — Setup
+- `setup.md` (~2274 tok, huge) — Setup
 - `SOTA_GAP_RULING_2026-09-03.md` (~8053 tok, huge) — mind-mem SOTA gap ruling — architecture seat, 2026-09-03
 ### `docs/specs/`
 
@@ -550,14 +550,14 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~9105 tok, huge) — name: CI
+- `ci.yml` (~9299 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
 - `release.yml` (~6920 tok, huge) — name: Release
-- `security.yml` (~3153 tok, huge) — name: Supply-Chain Security
+- `security.yml` (~3156 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `hooks/`
 
