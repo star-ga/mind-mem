@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1675 | **Est. tokens:** ~4,913,431
-**Generated:** 2026-10-05 15:03 UTC
+**Files:** 1675 | **Est. tokens:** ~4,913,436
+**Generated:** 2026-10-05 15:04 UTC
 
 ## Token Budget Guide
 
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 741 | ~2,182,855 |
+| `tests/` | 741 | ~2,182,860 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1851,7 +1851,7 @@
 - `test_sharded_pg.py` (~4415 tok, huge) — v4.0 prep — sharded Postgres routing tests (mock underlying stores)."""
 - `test_silent_failure_regressions.py` (~3438 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_skeptical_query.py` (~194 tok, small) — Tests for skeptical query detection."""
-- `test_skill_manual.py` (~3820 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_skill_manual.py` (~3825 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_skill_opt_adapters.py` (~943 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_skill_opt_analyzer.py` (~3122 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_skill_opt_config_orchestrator_path.py` (~798 tok, large) — The orchestrator location must be settable from OUTSIDE the installed package.
