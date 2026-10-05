@@ -4,6 +4,16 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- OpenCode support (1.x and 2.x): `mm detect` recognizes OpenCode and
+  `mm install-all --agent opencode` registers the mind-mem MCP server in
+  `~/.config/opencode/opencode.json` and adds the Memory Protocol to the
+  global `~/.config/opencode/AGENTS.md`. The entry uses the shape both
+  major versions read, or the 2.x-native `mcp.servers` map when the file
+  already uses it. Existing files are merged and backed up first; JSONC
+  files with comments are never rewritten (#609).
+
 ## [5.0.4] - 2026-09-15
 
 ### Added

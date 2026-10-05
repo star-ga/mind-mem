@@ -4823,9 +4823,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_install.add_argument(
         "agent",
         help=(
-            "Agent key: claude-code, codex, gemini, cursor, windsurf, "
-            "aider, openclaw, nanoclaw, nemoclaw, continue, cline, roo, "
-            "zed, copilot, cody, qodo."
+            "Agent key: claude-code, codex, opencode, gemini, cursor, "
+            "windsurf, aider, openclaw, nanoclaw, nemoclaw, continue, "
+            "cline, roo, zed, copilot, cody, qodo."
         ),
     )
     p_install.add_argument("--dry-run", action="store_true")
@@ -4854,8 +4854,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Skip native MCP server registration. Default: write both "
             "the text hook AND the MCP registration for every agent "
-            "that supports MCP (Codex, Gemini, Cursor, Windsurf, "
-            "Continue, Cline, Roo, Zed)."
+            "that supports MCP (Codex, OpenCode, Gemini, Cursor, "
+            "Windsurf, Continue, Cline, Roo, Zed)."
         ),
     )
     p_install_all.set_defaults(func=_cmd_install_all)

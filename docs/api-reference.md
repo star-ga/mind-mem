@@ -34,7 +34,7 @@ marker block. Returns `{agent, path, written, skipped, reason}`.
 
 #### `install_mcp_config(agent: str, workspace: str, *, force: bool = False, dry_run: bool = False) -> dict`
 **(New in v3.1.0)** Write the native MCP server entry for `agent` into
-its MCP config file. Supports 11 MCP-aware clients: `codex` /
+its MCP config file. Supports 12 MCP-aware clients: `codex` /
 `grok-build` / `vibe` (TOML), `gemini` / `cursor` / `continue` /
 `cline` / `roo` / `windsurf` / `copilot-cli` (JSON `mcpServers`),
 `zed` (JSON `context_servers`). Returns

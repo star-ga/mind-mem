@@ -25,6 +25,7 @@ class TestAgentRegistry:
         expected = {
             "claude-code",
             "codex",
+            "opencode",
             "gemini",
             "cursor",
             "windsurf",
@@ -282,7 +283,7 @@ class TestNativeMCPConfig:
 
     @pytest.mark.parametrize(
         "agent",
-        ["codex", "gemini", "cursor", "windsurf", "continue", "cline", "roo", "zed"],
+        ["codex", "opencode", "gemini", "cursor", "windsurf", "continue", "cline", "roo", "zed"],
     )
     def test_mcp_dry_run_for_every_supported_agent(self, agent: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         # Redirect the real per-client MCP path into tmp so we don't

@@ -285,6 +285,7 @@ visible to every other.
 |---|---|
 | Claude Code | hooks (`SessionStart` + `Stop` → `mm status`) |
 | Codex | TOML `[mcp_servers.mind-mem]` |
+| OpenCode (1.x / 2.x) | JSON `mcp.mind-mem` in `~/.config/opencode/opencode.json` + Memory Protocol in `~/.config/opencode/AGENTS.md` |
 | Gemini | JSON `mcpServers.mind-mem` in `~/.gemini/settings.json` |
 | Cursor | JSON `mcpServers.mind-mem` in `~/.cursor/mcp.json` |
 | Windsurf | JSON `mcpServers.mind-mem` in `~/.codeium/windsurf/mcp_config.json` |
