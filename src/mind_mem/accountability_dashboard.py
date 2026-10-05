@@ -222,7 +222,7 @@ def tier_census(workspace: str) -> TierCensus:
         return _unavailable_census(
             store,
             "no tier store: a promotion cycle has never run in this workspace "
-            "(`mm compact` runs one). Not a claim that no block is tiered.",
+            "(`mind-mem-compact` runs one). Not a claim that no block is tiered.",
         )
     try:
         table = _rows(conn, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'block_tiers'")

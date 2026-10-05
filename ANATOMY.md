@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1680 | **Est. tokens:** ~4,926,195
-**Generated:** 2026-10-05 21:36 UTC
+**Files:** 1680 | **Est. tokens:** ~4,926,197
+**Generated:** 2026-10-05 21:37 UTC
 
 ## Token Budget Guide
 
@@ -78,7 +78,7 @@
 | `skills/mind-mem/` | 1 | ~1,671 |
 | `skills/mind-mem/references/` | 6 | ~18,811 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 241 | ~1,074,884 |
+| `src/mind_mem/` | 241 | ~1,074,886 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -737,7 +737,7 @@
 ### `src/mind_mem/`
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
-- `accountability_dashboard.py` (~6668 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `accountability_dashboard.py` (~6670 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `accountability_views.py` (~10307 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `admissibility.py` (~6440 tok, huge) — What recall is allowed to serve — the servability allow-list.
 - `admission.py` (~13245 tok, huge) — # Copyright 2026 STARGA, Inc.
