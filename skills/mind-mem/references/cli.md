@@ -396,7 +396,7 @@ mm install <agent> [--dry-run] [--force]
 
 | Argument | Meaning |
 | --- | --- |
-| `<agent>` | Agent key: claude-code, codex, gemini, cursor, windsurf, aider, openclaw, nanoclaw, nemoclaw, continue, cline, roo, zed, copilot, cody, qodo. |
+| `<agent>` | Agent key: claude-code, codex, opencode, gemini, cursor, windsurf, aider, openclaw, nanoclaw, nemoclaw, continue, cline, roo, zed, copilot, cody, qodo. |
 | `--dry-run` | - |
 | `--force` | Overwrite existing config instead of non-destructive merge. |
 
@@ -419,7 +419,7 @@ mm install-all [--agent AGENT] [--dry-run] [--force] [--no-mcp]
 | `--agent` | Restrict installation to these named agents. Repeat flag for multiple. Default = auto-detect every installed client. |
 | `--dry-run` | - |
 | `--force` | - |
-| `--no-mcp` | Skip native MCP server registration. Default: write both the text hook AND the MCP registration for every agent that supports MCP (Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed). |
+| `--no-mcp` | Skip native MCP server registration. Default: write both the text hook AND the MCP registration for every agent that supports MCP (Codex, OpenCode, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed). |
 
 Example:
 

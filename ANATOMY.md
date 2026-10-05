@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1677 | **Est. tokens:** ~4,919,561
-**Generated:** 2026-10-05 21:29 UTC
+**Files:** 1677 | **Est. tokens:** ~4,919,566
+**Generated:** 2026-10-05 21:30 UTC
 
 ## Token Budget Guide
 
@@ -76,7 +76,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `skills/mind-mem/` | 1 | ~1,671 |
-| `skills/mind-mem/references/` | 6 | ~18,806 |
+| `skills/mind-mem/references/` | 6 | ~18,811 |
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 240 | ~1,073,450 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
@@ -722,7 +722,7 @@
 - `SKILL.md` (~549 tok, large) — /recall — Memory Search
 ### `skills/mind-mem/references/`
 
-- `cli.md` (~13414 tok, huge) — `mm` command reference
+- `cli.md` (~13419 tok, huge) — `mm` command reference
 - `configuration.md` (~1375 tok, large) — Configuration
 - `faq.md` (~884 tok, large) — FAQ
 - `install.md` (~1125 tok, large) — Installing mind-mem
