@@ -41,10 +41,9 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
-import tempfile
-import time
 from typing import Any
+
+from mind_mem.client_config_io import atomic_write_text, backup_file
 
 SERVER_NAME = "mind-mem"
 
@@ -128,30 +127,11 @@ def manual_snippet(srv: dict[str, Any]) -> str:
 
 
 def _backup(path: str) -> str:
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    dest = f"{path}.bak-mind-mem-{stamp}"
-    n = 1
-    while os.path.exists(dest):
-        dest = f"{path}.bak-mind-mem-{stamp}-{n}"
-        n += 1
-    shutil.copy2(path, dest)
-    return dest
+    return backup_file(path)
 
 
 def _atomic_write(path: str, text: str) -> None:
-    directory = os.path.dirname(path) or "."
-    os.makedirs(directory, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".opencode-", suffix=".tmp", dir=directory)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(text)
-        if os.path.isfile(path):
-            shutil.copymode(path, tmp)
-        os.replace(tmp, path)
-    except BaseException:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
+    atomic_write_text(path, text)
 
 
 def install_opencode_mcp(

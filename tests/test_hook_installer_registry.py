@@ -20,6 +20,34 @@ from mind_mem.hook_installer import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolated_home(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point ``~`` at an empty tmp dir for every test in this module.
+
+    Several registry paths live under the user's home
+    (``~/.claude/settings.json``, ``~/.cursor/mcp.json``, Zed's
+    ``settings.json`` …). Without this, a non-dry-run test such as the
+    claude-code migration test or ``install_all`` with MCP enabled rewrites
+    the developer's real client configs. ``expanduser`` reads ``HOME`` on
+    POSIX and ``USERPROFILE`` on Windows, so both are pinned. A sibling of
+    ``tmp_path`` (not a child) so tests that inspect ``tmp_path`` do not see
+    it.
+    """
+    home = tmp_path_factory.mktemp("isolated-home")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    assert os.path.expanduser("~") == str(home)
+    return home
+
+
+def test_home_isolation_is_active(_isolated_home: Path) -> None:
+    """Positive control: every home-relative registry path resolves under the tmp home."""
+    for spec in AGENT_REGISTRY.values():
+        for tmpl, expand in ((spec.path_tmpl, spec.expand_path), (spec.mcp_path_tmpl, spec.expand_mcp_path)):
+            if tmpl.startswith("{home}"):
+                assert expand("/ws").startswith(str(_isolated_home)), (spec.name, expand("/ws"))
+
+
 class TestAgentRegistry:
     def test_registry_has_all_known_clients(self) -> None:
         expected = {

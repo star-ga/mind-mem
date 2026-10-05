@@ -21,6 +21,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
+from mind_mem.client_config_io import UnsafeConfigError, read_json_object, read_text_file, write_config
+
 # ---------------------------------------------------------------------------
 # Hook event schema
 # ---------------------------------------------------------------------------
@@ -906,6 +908,41 @@ def detect_installed_agents(workspace: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _refused_result(agent: str, path: str, snippet: Any, reason: str) -> dict:
+    """Result for a config that exists but cannot be merged safely.
+
+    Nothing is written. ``content`` carries the mind-mem stanza so the
+    user can paste it by hand; ``reason`` says why the file was left alone.
+    """
+    text = json.dumps(snippet, indent=2) if isinstance(snippet, dict) else snippet
+    return {
+        "agent": agent,
+        "path": path,
+        "written": False,
+        "content": text,
+        "merged": False,
+        "skipped": True,
+        "reason": reason,
+    }
+
+
+def _write_result(agent: str, path: str, serialised: str, merged: bool) -> dict:
+    """Back up an existing file, write atomically, and describe the write."""
+    text = serialised if serialised.endswith("\n") else serialised + "\n"
+    backup = write_config(path, text)
+    result = {
+        "agent": agent,
+        "path": path,
+        "written": True,
+        "content": serialised,
+        "merged": merged,
+        "skipped": False,
+    }
+    if backup is not None:
+        result["backup"] = backup
+    return result
+
+
 def install_config(
     agent: str,
     workspace: str,
@@ -935,23 +972,24 @@ def install_config(
 
     if fmt in _JSON_MERGERS:
         merger = _JSON_MERGERS[fmt]
-        existing: dict = {}
-        # Always attempt to load the existing JSON even when --force is
-        # set. `force` semantically means "write even if no changes" —
-        # it must not mean "drop every other key in the file". Without
-        # this, `mm install-all --force` against a config that holds
-        # siblings of the mind-mem entry (openclaw.json has Telegram,
-        # Discord, channels, agents, gateway, wizard, etc. all at the
-        # same top level) produces a minimal JSON containing only the
-        # mind-mem entry, silently truncating the other sections.
-        if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    loaded = json.load(fh)
-                if isinstance(loaded, dict):
-                    existing = loaded
-            except (OSError, json.JSONDecodeError):
-                existing = {}
+        # Always load the existing JSON even when --force is set. `force`
+        # semantically means "write even if no changes" — it must not mean
+        # "drop every other key in the file". Without this, `mm install-all
+        # --force` against a config that holds siblings of the mind-mem
+        # entry (openclaw.json has Telegram, Discord, channels, agents,
+        # gateway, wizard, etc. all at the same top level) produces a
+        # minimal JSON containing only the mind-mem entry, silently
+        # truncating the other sections.
+        #
+        # A file that exists but is not a strict-JSON object (JSONC with
+        # comments, a typo, an unreadable file) is never rewritten: treating
+        # it as {} is exactly how the user's whole config used to be
+        # replaced by the mind-mem entry alone.
+        try:
+            loaded_obj = read_json_object(path)
+        except UnsafeConfigError as exc:
+            return _refused_result(agent, path, merger({}, workspace)[0], str(exc))
+        existing: dict = loaded_obj if loaded_obj is not None else {}
         content, changed = merger(existing, workspace)
         merged = os.path.isfile(path) and not force
         skipped = merged and not changed
@@ -959,10 +997,9 @@ def install_config(
         block = spec.content_tmpl.format(ws=workspace)
         if os.path.isfile(path) and not force:
             try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    existing_text = fh.read()
-            except OSError:
-                existing_text = ""
+                existing_text = read_text_file(path) or ""
+            except UnsafeConfigError as exc:
+                return _refused_result(agent, path, block, str(exc))
             if _MM_MARKER in existing_text:
                 content = existing_text
                 skipped = True
@@ -984,7 +1021,6 @@ def install_config(
             "merged": merged,
             "skipped": skipped,
         }
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     if skipped:
         return {
             "agent": agent,
@@ -994,16 +1030,7 @@ def install_config(
             "merged": False,
             "skipped": True,
         }
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(serialised if serialised.endswith("\n") else serialised + "\n")
-    return {
-        "agent": agent,
-        "path": path,
-        "written": True,
-        "content": serialised,
-        "merged": merged,
-        "skipped": False,
-    }
+    return _write_result(agent, path, serialised, merged)
 
 
 def install_mcp_config(
@@ -1048,21 +1075,20 @@ def install_mcp_config(
 
     if spec.mcp_fmt in _MCP_WRITERS_JSON:
         writer = _MCP_WRITERS_JSON[spec.mcp_fmt]
-        existing: dict = {}
         # Always load the existing config, `force` included — same rule
         # as install_config(). `force` means "write even if nothing
         # changed", never "discard every other key in the file". These
         # MCP files are the client's whole config (Zed's settings.json
         # holds themes/keymaps/languages; a shared mcp.json holds other
-        # servers), so loading {} here silently truncates all of it.
-        if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    loaded = json.load(fh)
-                if isinstance(loaded, dict):
-                    existing = loaded
-            except (OSError, json.JSONDecodeError):
-                existing = {}
+        # servers), so loading {} here silently truncates all of it —
+        # and the same holds for a file that is JSONC or invalid JSON,
+        # which is therefore left untouched with the snippet to paste.
+        try:
+            loaded_obj = read_json_object(path)
+        except UnsafeConfigError as exc:
+            snippet = json.dumps(writer({}, workspace, srv)[0], indent=2)
+            return _refused_result(agent, path, snippet, str(exc))
+        existing: dict = loaded_obj if loaded_obj is not None else {}
         content, changed = writer(existing, workspace, srv)
         merged = os.path.isfile(path) and not force
         skipped = merged and not changed
@@ -1074,12 +1100,10 @@ def install_mcp_config(
         # file. Both TOML writers already replace only the mind-mem
         # section/entry and preserve everything else, so handing them the
         # real text is both safe and the only non-destructive option.
-        if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    existing_text = fh.read()
-            except OSError:
-                existing_text = ""
+        try:
+            existing_text = read_text_file(path) or ""
+        except UnsafeConfigError as exc:
+            return _refused_result(agent, path, writer("", workspace, srv)[0], str(exc))
         content, changed = writer(existing_text, workspace, srv)
         merged = os.path.isfile(path) and not force
         skipped = merged and not changed
@@ -1096,7 +1120,6 @@ def install_mcp_config(
             "merged": merged,
             "skipped": skipped,
         }
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     if skipped:
         return {
             "agent": agent,
@@ -1106,16 +1129,7 @@ def install_mcp_config(
             "merged": False,
             "skipped": True,
         }
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(serialised if serialised.endswith("\n") else serialised + "\n")
-    return {
-        "agent": agent,
-        "path": path,
-        "written": True,
-        "content": serialised,
-        "merged": merged,
-        "skipped": False,
-    }
+    return _write_result(agent, path, serialised, merged)
 
 
 def install_all(

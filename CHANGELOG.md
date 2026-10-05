@@ -23,6 +23,17 @@ All notable changes to MIND-Mem are documented in this file.
   skill into an agent skills directory (default `~/.claude/skills`). The skill
   ships in the wheel under `share/mind-mem/skills/mind-mem`.
 
+### Fixed
+
+- `mm install` / `mm install-all` no longer overwrite a client config they
+  cannot parse. A Cursor, Windsurf, Zed, Gemini, Continue, Cline, Roo,
+  Copilot CLI, Claude Code or OpenClaw config that is JSONC, invalid JSON,
+  not a JSON object, or unreadable used to be replaced by a file holding
+  only the mind-mem entry. Such a file is now left byte-identical and the
+  result is `skipped` with a `reason` and the stanza to paste by hand.
+  Every change to an existing config takes a timestamped
+  `.bak-mind-mem-*` copy first and is written atomically.
+
 ## [5.0.4] - 2026-09-15
 
 ### Added

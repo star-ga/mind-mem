@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1677 | **Est. tokens:** ~4,919,566
-**Generated:** 2026-10-05 21:30 UTC
+**Files:** 1679 | **Est. tokens:** ~4,923,539
+**Generated:** 2026-10-05 21:32 UTC
 
 ## Token Budget Guide
 
@@ -78,7 +78,7 @@
 | `skills/mind-mem/` | 1 | ~1,671 |
 | `skills/mind-mem/references/` | 6 | ~18,811 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 240 | ~1,073,450 |
+| `src/mind_mem/` | 241 | ~1,074,601 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 742 | ~2,185,816 |
+| `tests/` | 743 | ~2,188,638 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -808,6 +808,7 @@
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
 - `chat_memory.py` (~10238 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
+- `client_config_io.py` (~1088 tok, large) — # Copyright 2026 STARGA, Inc.
 - `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
@@ -872,7 +873,7 @@
 - `guardrails.py` (~5942 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `guardrail_surface.py` (~1704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~11189 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~11404 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/importers/`
 
 - `engine.py` (~9872 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -985,7 +986,7 @@
 - `ollama_host.py` (~1022 tok, large) — Single source of truth for the ollama base URL.
 - `online_trainer.py` (~6082 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ontology.py` (~3933 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `opencode_config.py` (~2025 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `opencode_config.py` (~1873 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `outcome_attribution.py` (~4513 tok, huge) — Outcome attribution — did the recalled memory actually *help*?
 - `outcome_store.py` (~4752 tok, huge) — Outcome-attribution persistence over the calibration store.
 - `payload_admission.py` (~3614 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1497,7 +1498,7 @@
 - `test_health_embedding_coverage.py` (~3068 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_mcp_force_preserves_siblings.py` (~1490 tok, large) — Regression test: install_mcp_config(force=True) must merge, not clobber.
-- `test_hook_installer_registry.py` (~4954 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_hook_installer_registry.py` (~5297 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1884 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_auth_optin_not_honoured_when_auth_configured.py` (~1049 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_http_read_admission.py` (~10548 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1528,6 +1529,7 @@
 - `test_init_workspace.py` (~4105 tok, huge) — Tests for init_workspace — config validation and workspace scaffolding."""
 - `test_injection_framing_e2e.py` (~4777 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_install_script.py` (~750 tok, large) — # pip --user honours PYTHONUSERBASE on every platform; without it a
+- `test_install_unparseable_configs.py` (~2479 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_integration.py` (~1386 tok, large) — Integration test: full mind-mem lifecycle init → capture → scan → recall."""
 - `test_integrity_manifest_refusals.py` (~1688 tok, huge) — An absent, incomplete or substituted manifest cannot satisfy strict mode."""
 - `test_intel_scan.py` (~5959 tok, huge) — Tests for intel_scan.py — contradiction detection, drift analysis, impact graph."""
