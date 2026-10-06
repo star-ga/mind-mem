@@ -26,7 +26,7 @@ const TOKEN = process.env.MIND_MEM_TOKEN ?? "";
 // hold the token, and forwarding for them would hand out the token's authority.
 // `MIND_MEM_CONSOLE_TOKEN` is REQUIRED from the caller, always. There is no loopback
 // exemption — see `callerIsAllowed` for why the one this file used to have was unsound.
-const CONSOLE_TOKEN = process.env.MIND_MEM_CONSOLE_TOKEN ?? "";
+// (`CONSOLE_TOKEN` is declared once, below the WHO MAY CALL notes.)
 
 // WHO MAY CALL THIS ROUTE. Three iterations got here, and the two rejected ones are worth
 // keeping visible because each was plausible.
