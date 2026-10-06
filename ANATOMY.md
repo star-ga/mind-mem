@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1683 | **Est. tokens:** ~4,931,929
-**Generated:** 2026-10-06 04:54 UTC
+**Files:** 1684 | **Est. tokens:** ~4,933,320
+**Generated:** 2026-10-06 05:18 UTC
 
 ## Token Budget Guide
 
@@ -62,7 +62,7 @@
 | `lib/` | 1 | ~2,451 |
 | `mind/` | 27 | ~9,634 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 24 | ~80,448 |
+| `scripts/` | 24 | ~80,756 |
 | `sdk/go/` | 11 | ~9,920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4,864 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 745 | ~2,193,266 |
+| `tests/` | 746 | ~2,194,349 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -616,7 +616,7 @@
 - `system-prompt.md` (~22 tok, tiny) — mind-mem
 ### `scripts/`
 
-- `alignment_authorities.py` (~9129 tok, huge) — Where each counted doc claim gets its TRUE value from.
+- `alignment_authorities.py` (~9437 tok, huge) — Where each counted doc claim gets its TRUE value from.
 - `anatomy-hook.sh` (~237 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1266,6 +1266,7 @@
 - `test_agent_messaging.py` (~2778 tok, huge) — Tests for v4.0.19 agent-to-agent messaging (`mm send` / `mm inbox`).
 - `test_alerting.py` (~1964 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_alert_url_allowlist.py` (~1925 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_alignment_tar_extraction.py` (~1083 tok, large) — The docs-alignment authority unpacks a ``git archive`` tarball; prove it
 - `test_allow_decompose.py` (~311 tok, medium) — Tests for _allow_decompose recall parameter."""
 - `test_answer_quality_confidence.py` (~761 tok, large) — ``self_consistency`` confidence must be votes over samples REQUESTED.
 - `test_answer_quality.py` (~1288 tok, large) — Tests for the v3.3.0 answer-quality shims."""

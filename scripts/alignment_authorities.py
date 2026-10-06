@@ -16,12 +16,13 @@ from __future__ import annotations
 import ast
 import fnmatch
 import io
+import os
 import re
+import shutil
 import subprocess  # nosec B404 - fixed argv, no shell, repo-local commands only
 import sys
 import tarfile
 import tempfile
-from collections.abc import Iterator
 from pathlib import Path
 
 from scripts import count_mcp_tools as cmt
@@ -205,29 +206,71 @@ def live_tool_count() -> int:
     return cmt.count_tools()
 
 
-def _safe_members(tar: tarfile.TarFile, dest: Path) -> Iterator[tarfile.TarInfo]:
-    """Yield only members that land inside *dest*, as regular files or dirs.
+def _checked_members(tar: tarfile.TarFile, dest: str) -> list[tarfile.TarInfo]:
+    """Every member of *tar*, after proving each lands inside *dest* as a
+    regular file or directory.
 
-    Refuses an absolute path, a path that escapes *dest* through ``..`` or a
-    symlink, and any member that is not a file or a directory. Raising rather
-    than skipping is deliberate: this reads a revision to COUNT something, so
-    a surprising archive means the count would be wrong, and a wrong count
-    quietly published on a model card is the failure this module exists to
-    prevent.
+    Refuses an absolute path, a path that escapes *dest* through ``..``, a
+    symlink or hard link, and any device, FIFO or other special member.
+    Raising rather than skipping is deliberate: this reads a revision to COUNT
+    something, so a surprising archive means the count would be wrong, and a
+    wrong count quietly published on a model card is the failure this module
+    exists to prevent. Containment is checked on the RESOLVED target with
+    ``os.path.realpath`` + ``os.path.commonpath``, so a symlinked parent
+    cannot smuggle a path out either.
     """
-    root = dest.resolve()
-    for member in tar:
+    root = os.path.realpath(dest)
+    members = tar.getmembers()
+    for member in members:
         if member.issym() or member.islnk():
             raise AuthorityError(f"archive member {member.name!r} is a link; refusing to unpack")
         if not (member.isfile() or member.isdir()):
             raise AuthorityError(f"archive member {member.name!r} is not a file or directory")
-        target = Path(member.name)
-        if target.is_absolute() or target.drive or target.root:
+        if os.path.isabs(member.name) or Path(member.name).drive or member.name.startswith(("/", "\\")):
             raise AuthorityError(f"archive member {member.name!r} is an absolute path")
-        resolved = (root / target).resolve()
-        if resolved != root and root not in resolved.parents:
+        target = os.path.realpath(os.path.join(root, member.name))
+        if os.path.commonpath([root, target]) != root:
             raise AuthorityError(f"archive member {member.name!r} escapes the extraction directory")
-        yield member
+    return members
+
+
+def _extract_archive(data: bytes, dest: str, *, use_data_filter: bool | None = None) -> None:
+    """Unpack a ``git archive`` tarball into *dest*, refusing anything unsafe.
+
+    Every member is validated by ``_checked_members`` first, on every Python.
+    Then:
+
+    * where ``tarfile`` has extraction filters (3.12+, and the 3.10/3.11
+      security releases that backported them) the stdlib extracts with
+      ``filter="data"`` -- a second, independent guard, and the form the
+      analyzer recognises as safe. Passing it explicitly also silences the
+      3.12/3.13 deprecation warning about the default changing in 3.14;
+    * elsewhere, regular files are written one at a time from
+      ``tar.extractfile`` to a target that was re-resolved and re-checked
+      for containment immediately before the write. ``extract``/``extractall``
+      is never called without a filter.
+    """
+    if use_data_filter is None:
+        use_data_filter = hasattr(tarfile, "data_filter")
+    root = os.path.realpath(dest)
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as tar:
+        members = _checked_members(tar, root)
+        if use_data_filter:
+            tar.extractall(root, filter="data")  # nosec B202 - members validated above, data filter applied
+            return
+        for member in members:
+            target = os.path.realpath(os.path.join(root, member.name))
+            if os.path.commonpath([root, target]) != root:
+                raise AuthorityError(f"archive member {member.name!r} escapes the extraction directory")
+            if member.isdir():
+                os.makedirs(target, exist_ok=True)
+                continue
+            source = tar.extractfile(member)
+            if source is None:
+                raise AuthorityError(f"archive member {member.name!r} has no readable content")
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with source, open(target, "wb") as out:
+                shutil.copyfileobj(source, out)
 
 
 def trained_tool_count(revision: str = TRAINED_REVISION, root: Path | None = None) -> int:
@@ -259,26 +302,13 @@ def trained_tool_count(revision: str = TRAINED_REVISION, root: Path | None = Non
         # ``tarfile`` rather than a ``tar`` subprocess: this runs on the
         # Windows matrix rows too, and the stdlib already does the job.
         #
-        # Every member is checked before extraction, on EVERY version. The
-        # previous form passed ``filter="data"`` on 3.12+ and nothing at all
-        # on 3.10/3.11, resting on an argument about the caller: the archive
-        # comes from ``git archive`` over this repository's own history, so
-        # there is no external input. That argument is true today and is the
-        # wrong shape -- it makes the safety a property of who calls this
-        # rather than of what it does, and the two supported versions with no
-        # protection are the two the argument was quietly covering for.
-        # Code scanning called it (py/tarslip) and it was right to.
-        #
-        # The "data" extraction filter is applied ON TOP of that check wherever
-        # the interpreter has it (3.12+, and the 3.10/3.11 security releases
-        # that backported it). Calling extractall() without a filter is what
-        # 3.12-3.13 deprecate: 3.14 changed the default, and the warning was
-        # in every CI log. Passing it explicitly keeps the behaviour identical
-        # on every version instead of depending on which default applies.
-        extract_kwargs = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
+        # Safety is a property of what this does, not of who calls it: the
+        # archive comes from ``git archive`` over this repository's own
+        # history today, but every member is still validated and the
+        # extraction is filtered (see ``_extract_archive``). Code scanning
+        # (py/tarslip) flagged the earlier unfiltered form, and was right to.
         try:
-            with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r|") as tar:
-                tar.extractall(tmp, members=_safe_members(tar, Path(tmp)), **extract_kwargs)  # nosec B202
+            _extract_archive(archive.stdout, tmp)
         except (OSError, tarfile.TarError, ValueError) as exc:
             raise AuthorityError(f"could not unpack revision {revision}: {exc}") from exc
         base = Path(tmp)
