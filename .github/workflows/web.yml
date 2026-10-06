@@ -21,7 +21,9 @@ permissions:
 
 concurrency:
   group: web-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded PR pushes are cancelled; a run on main is never cancelled, so
+  # every main commit keeps a real verdict.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:

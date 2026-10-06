@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1683 | **Est. tokens:** ~4,931,675
-**Generated:** 2026-10-06 04:40 UTC
+**Files:** 1683 | **Est. tokens:** ~4,931,929
+**Generated:** 2026-10-06 04:53 UTC
 
 ## Token Budget Guide
 
@@ -54,7 +54,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 12 | ~22,912 |
+| `.github/workflows/` | 12 | ~22,952 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -62,7 +62,7 @@
 | `lib/` | 1 | ~2,451 |
 | `mind/` | 27 | ~9,634 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 24 | ~80,368 |
+| `scripts/` | 24 | ~80,448 |
 | `sdk/go/` | 11 | ~9,920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4,864 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 745 | ~2,193,132 |
+| `tests/` | 745 | ~2,193,266 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -561,7 +561,7 @@
 - `release.yml` (~6918 tok, huge) — name: Release
 - `security.yml` (~3350 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
-- `web.yml` (~445 tok, medium) — name: Web Console
+- `web.yml` (~485 tok, medium) — name: Web Console
 ### `hooks/`
 
 - `hooks.json` (~79 tok, small) — Keys: hooks
@@ -616,7 +616,7 @@
 - `system-prompt.md` (~22 tok, tiny) — mind-mem
 ### `scripts/`
 
-- `alignment_authorities.py` (~9049 tok, huge) — Where each counted doc claim gets its TRUE value from.
+- `alignment_authorities.py` (~9129 tok, huge) — Where each counted doc claim gets its TRUE value from.
 - `anatomy-hook.sh` (~237 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1619,7 +1619,7 @@
 - `test_merkle_tree.py` (~3837 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mic_map_accel.py` (~1848 tok, huge) — Regression tests for the optional Cython accelerator at
 - `test_mic_map_adversarial.py` (~3397 tok, huge) — Adversarial corpus for ``mind_mem.mic_map`` parsers.
-- `test_mic_map_bench.py` (~5199 tok, huge) — pytest-benchmark suite for ``mind_mem.mic_map``.
+- `test_mic_map_bench.py` (~5333 tok, huge) — pytest-benchmark suite for ``mind_mem.mic_map``.
 - `test_mic_map_cli.py` (~1659 tok, huge) — Integration tests for the ``mm mic`` CLI subcommand.
 - `test_mic_map_fuzz.py` (~2471 tok, huge) — Property-based fuzz tests for ``mind_mem.mic_map``.
 - `test_mic_map_mcp.py` (~1812 tok, huge) — Integration tests for the MIC/MAP MCP tools (``mic_convert_tool``,
