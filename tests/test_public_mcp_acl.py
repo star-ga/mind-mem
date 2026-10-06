@@ -151,7 +151,10 @@ def test_consolidated_public_recall_and_hybrid_never_cross_principal(tmp_path: P
         acl.get_access_token = lambda: SimpleNamespace(claims={"sub": "alice"})  # type: ignore[assignment]
         with use_workspace(str(ws)):
             public_result = json.loads(public_tools.recall.__wrapped__("aurora", mode="bm25", limit=10))
-            hybrid_result = json.loads(recall_tools.hybrid_search.__wrapped__("aurora", limit=10))
+            # hybrid_search is deprecated but still registered, so its ACL is
+            # still tested; the deprecation is asserted, not leaked.
+            with pytest.warns(DeprecationWarning, match="hybrid_search is deprecated"):
+                hybrid_result = json.loads(recall_tools.hybrid_search.__wrapped__("aurora", limit=10))
     finally:
         acl.get_access_token = old
     for envelope in (public_result, hybrid_result):

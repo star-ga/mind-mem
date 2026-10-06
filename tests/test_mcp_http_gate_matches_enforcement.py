@@ -28,6 +28,8 @@ import unittest
 import warnings
 from unittest import mock
 
+import pytest
+
 _ENV_KEYS = (
     "MIND_MEM_TOKEN",
     "MIND_MEM_ADMIN_TOKEN",
@@ -257,9 +259,13 @@ def test_http_transport_serves_streamable_http_not_deprecated_sse(monkeypatch) -
 
     monkeypatch.setattr(mcp_server.mcp, "run", _capture)
     monkeypatch.setenv("MIND_MEM_TOKEN", "t0ken-for-the-verifier")
+    monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
     monkeypatch.setattr(sys, "argv", ["mind-mem-mcp", "--transport", "http", "--port", "18999"])
 
-    mcp_server.main()
+    # A user-scope-only HTTP listener is a supported configuration, and the
+    # server tells the operator so. Asserted rather than left in the log.
+    with pytest.warns(UserWarning, match="HTTP transport without MIND_MEM_ADMIN_TOKEN"):
+        mcp_server.main()
 
     assert seen["transport"] == "http", seen
     assert seen["transport"] != "sse"

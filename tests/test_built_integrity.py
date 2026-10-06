@@ -119,8 +119,13 @@ def test_semantic_archive_failures_are_refused(tmp_path: Path, kwargs: dict[str,
 
 def test_duplicate_archive_entry_is_refused(tmp_path: Path) -> None:
     source, digests = _source(tmp_path)
+    # Writing the second copy is the point of the fixture, and zipfile says so;
+    # asserting that warning is also the proof the archive really holds a
+    # duplicate, so the refusal below cannot pass against a clean archive.
+    with pytest.warns(UserWarning, match="Duplicate name: 'mind_mem/recall.py'"):
+        archives = _archives(tmp_path, digests, duplicate_wheel_name="mind_mem/recall.py")
     with pytest.raises(gate.IntegrityGateError, match="duplicate archive entry"):
-        gate.verify_dist(_archives(tmp_path, digests, duplicate_wheel_name="mind_mem/recall.py"), source)
+        gate.verify_dist(archives, source)
 
 
 def test_symlink_archive_entry_is_refused(tmp_path: Path) -> None:

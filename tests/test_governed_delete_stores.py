@@ -214,7 +214,7 @@ def _psycopg_importable() -> bool:
 
     ``psycopg`` is in the ``postgres`` extra, not ``test``, so it is present
     on the ``postgres backend`` job and on a developer box with the extra, and
-    absent on all fifteen ``os × python`` rows of the matrix. Written as the
+    absent on every ``os × python`` row of the matrix. Written as the
     real import rather than ``importlib.util.find_spec`` because the real
     import is what ``_sql`` performs, and a probe that asks a different
     question than the code under test is not a probe.
@@ -234,7 +234,7 @@ def _sql_without_psycopg(schema: str, template: str) -> str:
     so the postgres leg RUNS on a row that has no psycopg rather than skipping
     there — the alternative measured on 2026-09-02 was three red tests on
     every matrix row, and a skip would have left this store's delete governance
-    unmeasured on all fifteen of them.
+    unmeasured on every one of them.
 
     This moves the double's boundary from "psycopg's pool" to "psycopg", and
     that is the whole cost: statement composition is driver work, not the

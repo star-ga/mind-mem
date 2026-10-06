@@ -762,7 +762,8 @@ class TestNoUngovernedEdgeWriters:
     """The allowlist IS the invariant; the guards keep the scan honest."""
 
     @pytest.fixture(scope="class")
-    def files(self) -> tuple[str, ...]:
+    @classmethod
+    def files(cls) -> tuple[str, ...]:
         return _iter_src_files()
 
     @pytest.mark.unit

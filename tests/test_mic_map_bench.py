@@ -248,7 +248,7 @@ def _active_tracer() -> str | None:
 
     What this deliberately does **not** test is ``"coverage" in
     sys.modules``. Measured: pytest-cov imports coverage on *every* run,
-    instrumented or not, so that clause is true on all fifteen matrix rows
+    instrumented or not, so that clause is true on every matrix row
     and would turn the guard below into an unconditional skip rather than
     one conditional on a real environment fact.
     ``TestTheFloorsAreGuardedAgainstTheirOwnInstrumentation`` pins both
@@ -278,11 +278,26 @@ _TRACER = _active_tracer()
     reason=(f"a wall-clock throughput floor under line tracing measures the tracer, not the parser ({_TRACER})"),
 )
 class TestThroughputFloors:
-    """Worst-acceptable throughput on a single core. Floors are
-    intentionally conservative so a CI runner under load doesn't
-    flake. The expected pure-Python numbers are well above these
-    floors; a future Cython / Rust accelerator should push them
-    much higher.
+    """Worst-acceptable throughput on a single core, CALIBRATED against the
+    machine it runs on.
+
+    These used to be absolute ops/sec floors (5000 / 1000 / 50 per second),
+    and an absolute number measures the runner as much as the codec:
+    ``parse_micb(large)`` fell under 50/s once on a slow, loaded Windows
+    runner with no change to the parser. Lowering the floor would make it
+    pass there and mean less everywhere else.
+
+    So each floor is now a RATIO: the codec's throughput divided by the
+    throughput of a fixed pure-Python reference workload (``_reference``),
+    both measured in this process, interleaved, best of several short
+    windows. A machine that is uniformly 3x slower moves both numbers and
+    leaves the ratio where it was; a codec that got 10x slower moves only
+    one of them. Measured on this tree (best-of-5, 0.1 s windows, CPython
+    3.10 / 3.13 / 3.14 on a loaded 12-core box), the lowest ratios seen were
+    small emit 9.8, small parse 3.7, medium emit 2.9, medium parse 1.3,
+    large emit 0.096, large parse 0.038; each floor sits at roughly a third
+    of that, so a 10x slowdown lands below it with room to spare.
+    ``test_a_tenfold_slowdown_fails_the_floor`` keeps that claim executable.
 
     Skipped while something is tracing this process, because then the
     number under test is the tracer's. Measured on this tree, same box,
@@ -295,48 +310,97 @@ class TestThroughputFloors:
 
     CI run 33628984458 failed the same two on the one instrumented row
     (ubuntu-3.12, the only row that passes ``--cov``) at 4624/s and
-    44.0/s, while the fourteen uninstrumented rows passed them. The floor
-    is not lowered and the scan is not narrowed: the other fourteen rows
-    still measure it on every push, and the skip states the environment
+    44.0/s, while the uninstrumented rows passed them. The other rows still
+    measure the floors on every push, and the skip states the environment
     fact that makes this row's number meaningless.
     """
 
+    _REFERENCE_INPUT = bytes(range(256)) * 8
+
+    @classmethod
+    def _reference(cls) -> list[tuple[int, int, int]]:
+        """Fixed pure-Python work with no mind_mem code in it: walk bytes and
+        build small tuples, the same kind of interpreter work a pure-Python
+        decoder does."""
+        out = []
+        data = cls._REFERENCE_INPUT
+        i, n = 0, len(data)
+        while i < n:
+            x = data[i]
+            out.append((x, x & 0x7F, x >> 7))
+            i += 1
+        return out
+
     @staticmethod
-    def _measure_ops_per_sec(fn, *args, max_seconds: float = 0.5) -> float:
+    def _window_rate(fn, arg, seconds: float) -> float:
         n = 0
         t0 = time.perf_counter()
-        while time.perf_counter() - t0 < max_seconds:
-            fn(*args)
+        while True:
+            fn(arg) if arg is not None else fn()
             n += 1
-        elapsed = time.perf_counter() - t0
-        return n / elapsed
+            elapsed = time.perf_counter() - t0
+            if elapsed >= seconds:
+                return n / elapsed
 
-    def test_small_emit_micb_above_5k_per_sec(self, small_graph: Graph) -> None:
-        ops = self._measure_ops_per_sec(emit_micb, small_graph)
-        assert ops > 5000, f"emit_micb(small) only {ops:.0f}/s"
+    @classmethod
+    def _calibrated_ratio(cls, fn, arg, *, windows: int = 5, seconds: float = 0.1) -> tuple[float, float, float]:
+        """``(ratio, fn ops/s, reference ops/s)``, best of *windows* each.
 
-    def test_small_parse_micb_above_5k_per_sec(self, small_graph: Graph) -> None:
-        b = emit_micb(small_graph)
-        ops = self._measure_ops_per_sec(parse_micb, b)
-        assert ops > 5000, f"parse_micb(small) only {ops:.0f}/s"
+        Interleaved so a burst of load lands on both sides; best-of so one
+        descheduled window cannot decide the answer.
+        """
+        best_fn = best_ref = 0.0
+        for _ in range(windows):
+            best_ref = max(best_ref, cls._window_rate(cls._reference, None, seconds))
+            best_fn = max(best_fn, cls._window_rate(fn, arg, seconds))
+        return best_fn / best_ref, best_fn, best_ref
 
-    def test_medium_emit_micb_above_1k_per_sec(self, medium_graph: Graph) -> None:
-        ops = self._measure_ops_per_sec(emit_micb, medium_graph)
-        assert ops > 1000, f"emit_micb(medium) only {ops:.0f}/s"
+    def _assert_floor(self, label: str, fn, arg, floor: float) -> None:
+        ratio, ops, ref = self._calibrated_ratio(fn, arg)
+        assert ratio > floor, f"{label}: {ops:.1f}/s is {ratio:.4f}x the reference workload ({ref:.0f}/s); floor is {floor}x"
 
-    def test_medium_parse_micb_above_1k_per_sec(self, medium_graph: Graph) -> None:
-        b = emit_micb(medium_graph)
-        ops = self._measure_ops_per_sec(parse_micb, b)
-        assert ops > 1000, f"parse_micb(medium) only {ops:.0f}/s"
+    def test_small_emit_micb_above_floor(self, small_graph: Graph) -> None:
+        self._assert_floor("emit_micb(small)", emit_micb, small_graph, 3.0)
 
-    def test_large_emit_micb_above_50_per_sec(self, large_graph: Graph) -> None:
-        ops = self._measure_ops_per_sec(emit_micb, large_graph, max_seconds=1.0)
-        assert ops > 50, f"emit_micb(large) only {ops:.1f}/s"
+    def test_small_parse_micb_above_floor(self, small_graph: Graph) -> None:
+        self._assert_floor("parse_micb(small)", parse_micb, emit_micb(small_graph), 1.2)
 
-    def test_large_parse_micb_above_50_per_sec(self, large_graph: Graph) -> None:
-        b = emit_micb(large_graph)
-        ops = self._measure_ops_per_sec(parse_micb, b, max_seconds=1.0)
-        assert ops > 50, f"parse_micb(large) only {ops:.1f}/s"
+    def test_medium_emit_micb_above_floor(self, medium_graph: Graph) -> None:
+        self._assert_floor("emit_micb(medium)", emit_micb, medium_graph, 1.0)
+
+    def test_medium_parse_micb_above_floor(self, medium_graph: Graph) -> None:
+        self._assert_floor("parse_micb(medium)", parse_micb, emit_micb(medium_graph), 0.4)
+
+    def test_large_emit_micb_above_floor(self, large_graph: Graph) -> None:
+        self._assert_floor("emit_micb(large)", emit_micb, large_graph, 0.03)
+
+    def test_large_parse_micb_above_floor(self, large_graph: Graph) -> None:
+        self._assert_floor("parse_micb(large)", parse_micb, emit_micb(large_graph), 0.012)
+
+    @pytest.mark.parametrize(
+        ("label", "codec", "graph", "floor"),
+        [
+            ("emit_micb(small)", emit_micb, "small", 3.0),
+            ("parse_micb(small)", parse_micb, "small", 1.2),
+            ("emit_micb(medium)", emit_micb, "medium", 1.0),
+            ("parse_micb(medium)", parse_micb, "medium", 0.4),
+            ("emit_micb(large)", emit_micb, "large", 0.03),
+            ("parse_micb(large)", parse_micb, "large", 0.012),
+        ],
+    )
+    def test_a_tenfold_slowdown_fails_the_floor(self, request, label, codec, graph, floor) -> None:
+        """Positive control, per floor: the calibration must not have made a
+        floor unreachable from below. Ten real calls per call -- the same
+        codec, ten times the work -- must land under the floor."""
+        g = request.getfixturevalue(f"{graph}_graph")
+        arg = emit_micb(g) if codec is parse_micb else g
+
+        def tenfold(data):
+            for _ in range(10):
+                codec(data)
+
+        with pytest.raises(AssertionError, match=r"is [0-9.]+x the reference workload"):
+            self._assert_floor(label, tenfold, arg, floor)
 
 
 # ---------------------------------------------------------------------------

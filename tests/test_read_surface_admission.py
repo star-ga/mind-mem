@@ -58,6 +58,10 @@ CANARIES: dict[str, str] = {
     "quarantined": "zqxQUARANTINEcanary",
 }
 WITHHELD_CANARIES = (CANARIES["pending"], CANARIES["quarantined"])
+
+#: Registered tools that warn on every call. Still swept -- registration is what
+#: makes them reachable -- with the deprecation asserted instead of leaked.
+DEPRECATED_TOOLS: frozenset[str] = frozenset({"hybrid_search"})
 SEEDED = ((ACTIVE_ID, "active"), (PENDING_ID, "pending"), (QUARANTINED_ID, "quarantined"))
 
 #: Both ACL scopes. An admin-scope tool that refuses at user scope has not been
@@ -306,7 +310,12 @@ def sweep(seed_template: str) -> dict[str, dict[str, Any]]:
             for kwargs in TOOL_INVOCATIONS[tool]:
                 workspace = _fresh(seed_template)
                 try:
-                    outputs.append((scope, kwargs, _call(tool, kwargs, workspace, scope)))
+                    if tool in DEPRECATED_TOOLS:
+                        with pytest.warns(DeprecationWarning, match=f"{tool} is deprecated"):
+                            text = _call(tool, kwargs, workspace, scope)
+                    else:
+                        text = _call(tool, kwargs, workspace, scope)
+                    outputs.append((scope, kwargs, text))
                 finally:
                     shutil.rmtree(workspace, ignore_errors=True)
         blob = "\n".join(text for _, _, text in outputs)
