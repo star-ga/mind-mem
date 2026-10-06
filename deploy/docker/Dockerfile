@@ -32,11 +32,23 @@ RUN pip install --no-cache-dir --prefix=/install ".[mcp,embeddings]" "msgpack>=1
 # Stage 2: runtime — slim final image
 FROM python:3.12-slim AS runtime
 
-# Minimal runtime system deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Minimal runtime system deps. `apt-get upgrade` pulls the distro security
+# channel over the base image's snapshot, mirroring the root Dockerfile: the
+# scheduled Trivy scan (HIGH/CRITICAL, ignore-unfixed) flagged libpcre2-8-0
+# CVE-2026-103111 (fixed in 10.46-1~deb13u3) the first time it scanned this
+# image.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libsqlite3-0 \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# The runtime stage starts from a fresh python:3.12-slim, so the pip upgrade in
+# the builder never reaches it: it carries the base image's pip (25.0.1) and
+# pip's vendored copies of setuptools/urllib3/msgpack, which the image scan
+# reports and which cannot be upgraded independently of pip. Nothing at runtime
+# installs packages (the entrypoint is `python3 -m mind_mem.mcp_server`), so pip
+# is removed, exactly as the root Dockerfile does after its install.
+RUN python3 -m pip uninstall -y pip
 
 # Non-root user
 RUN useradd --create-home --shell /bin/bash --uid 1000 mindmem

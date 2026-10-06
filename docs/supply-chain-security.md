@@ -119,11 +119,12 @@ Gitleaks scans the full commit history on every push and PR.
 
 ## Container Scanning
 
-Trivy scans the Docker image for HIGH/CRITICAL CVEs whenever a `Dockerfile`
-changes or on the weekly schedule.
+Trivy scans both shipped Docker images -- the root `Dockerfile` and the
+multi-stage `deploy/docker/Dockerfile` -- for HIGH/CRITICAL CVEs whenever a
+`Dockerfile` or `deploy/docker/` changes, and on the weekly schedule.
 
-- Config: `.github/workflows/security.yml` → `docker-scan` job
-- Results: **GitHub Security tab** → Code scanning → trivy (SARIF upload)
+- Config: `.github/workflows/security.yml` → `docker-scan` job (one matrix row per image)
+- Results: **GitHub Security tab** → Code scanning → `trivy` (root image) and `trivy-deploy` (deploy image), SARIF upload
 - Severity gate: `HIGH,CRITICAL` with `--ignore-unfixed`
 
 ---

@@ -242,8 +242,26 @@ jobs:
   # Job is unconditional so it concludes SUCCESS instead of SKIPPED on PRs
   # that don't touch Dockerfile. Heavy steps (build + scan) gate on the
   # diff check below.
+  #
+  # One matrix row per shipped image. The scan used to build only the root
+  # Dockerfile, so deploy/docker/Dockerfile -- the multi-stage image that
+  # docker-compose and the deploy docs actually run -- was never scanned on any
+  # schedule. Both rows share every setting; only the Dockerfile and the SARIF
+  # category differ (the root row keeps the original `trivy` category so its
+  # existing code-scanning history stays attached).
   docker-scan:
+    name: docker-scan (${{ matrix.image.name }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: root
+            dockerfile: Dockerfile
+            category: trivy
+          - name: deploy
+            dockerfile: deploy/docker/Dockerfile
+            category: trivy-deploy
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -271,7 +289,7 @@ jobs:
         if: steps.df_changed.outputs.changed == 'true'
         run: |
           docker build -t mind-mem:scan \
-            -f ${DOCKERFILE:-Dockerfile} .
+            -f "${{ matrix.image.dockerfile }}" .
 
       - name: Run Trivy image scan
         if: steps.df_changed.outputs.changed == 'true'
@@ -283,7 +301,7 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
           ignore-unfixed: true
-          # .trivyignore is intentionally empty: the image uninstalls pip, so
+          # .trivyignore is intentionally empty: both images uninstall pip, so
           # pip's vendored deps are absent. Any suppression must be documented there.
           trivyignores: .trivyignore
 
@@ -292,4 +310,4 @@ jobs:
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2  # v4
         with:
           sarif_file: trivy-image.sarif
-          category: trivy
+          category: ${{ matrix.image.category }}

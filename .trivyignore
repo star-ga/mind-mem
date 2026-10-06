@@ -1,8 +1,9 @@
 # Trivy ignore file — intentionally empty.
 #
-# The runtime image (root Dockerfile) uninstalls pip after the package
-# install, so pip's vendored setuptools / msgpack / urllib3 copies are no
-# longer present and no advisory needs to be suppressed. Any finding the image
+# Both scanned images (the root Dockerfile and deploy/docker/Dockerfile)
+# uninstall pip after the package install, so pip's vendored setuptools /
+# msgpack / urllib3 copies are no longer present and no advisory needs to be
+# suppressed. Any finding the image
 # scan reports is now a real, actionable finding.
 #
 # If a suppression is ever added here, it must name one specific advisory ID,
