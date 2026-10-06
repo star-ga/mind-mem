@@ -181,11 +181,17 @@ class Authorities:
     python_classifier_min: str
     python_classifier_max: str
     backends: tuple[str, ...]
+    #: ``(os, python)`` rows the matrix ``exclude:`` list removes.
+    ci_excluded: tuple[tuple[str, str], ...] = ()
 
     @property
     def ci_jobs(self) -> int:
-        """The test matrix is a cross-product, so the job count is derived."""
-        return len(self.ci_python_versions) * len(self.ci_operating_systems)
+        """The cross-product minus the excluded rows -- derived, never typed."""
+        return sum(len(self.ci_versions_for(os_name)) for os_name in self.ci_operating_systems)
+
+    def ci_versions_for(self, os_name: str) -> tuple[str, ...]:
+        """The Python versions the matrix actually runs on *os_name*."""
+        return tuple(v for v in self.ci_python_versions if (os_name, v) not in self.ci_excluded)
 
     @property
     def eval_total_probes(self) -> int:
@@ -225,6 +231,7 @@ def resolve_authorities(root: Path | None = None) -> Authorities:
         python_classifier_min=py_support[1],
         python_classifier_max=py_support[2],
         backends=storage_backends(root),
+        ci_excluded=tuple(sorted(matrix.excluded)),
     )
 
 
@@ -968,25 +975,30 @@ def _table_cells(row: str) -> list[str]:
 
 
 def check_ci_matrix_grid(auth: Authorities, root: Path | None = None) -> list[Finding]:
-    """The OS × Python grid must be the matrix, and must be a full cross-product.
+    """The OS × Python grid must be the matrix, cell for cell.
 
     Three separate things were wrong in the shipped grid and only the first is
     a number: it had no 3.11 column, and it showed macOS and Windows running
-    two of the four versions it did list -- while ``ci.yml`` has always fanned
-    every version out over every OS.
+    two of the four versions it did list -- while ``ci.yml`` then fanned every
+    version out over every OS. The matrix now does run macOS and Windows on
+    the end versions only, so each row is compared against the versions its
+    OS actually runs (the ``exclude:`` list), column by column: a mark in the
+    wrong column is as wrong as a missing one.
     """
     root = root or _project_root()
     path = root / _WORKFLOW_DOC
     if not path.is_file():
         return []
     lines = path.read_text(encoding="utf-8").splitlines()
+    os_by_family = {name.split("-")[0].lower(): name for name in auth.ci_operating_systems}
     out: list[Finding] = []
     for idx, line in enumerate(lines):
         header = _CI_GRID_HEADER.match(line)
         if header is None:
             continue
         cells = _table_cells(header.group("cells"))
-        versions = [m.group("v") for m in (_CI_GRID_VERSION_CELL.match(c) for c in cells) if m]
+        columns = [(m.group("v") if m else None) for m in (_CI_GRID_VERSION_CELL.match(c) for c in cells)]
+        versions = [v for v in columns if v]
         if not versions:
             continue
         if set(versions) != set(auth.ci_python_versions):
@@ -1011,22 +1023,24 @@ def check_ci_matrix_grid(auth: Authorities, root: Path | None = None) -> list[Fi
             if not cells or set(cells[0]) <= {"-", ":", " "}:
                 continue
             labels[cells[0]] = offset + 1
-            marks = [c for c in cells[1:] if c]
-            if len(marks) != len(auth.ci_python_versions):
+            marked = {version for version, cell in zip(columns, cells[1:]) if version and cell}
+            os_name = os_by_family.get(cells[0].lower())
+            expected = set(auth.ci_versions_for(os_name)) if os_name else set(auth.ci_python_versions)
+            if marked != expected:
                 out.append(
                     Finding(
                         _WORKFLOW_DOC,
                         offset + 1,
                         "ci_matrix",
-                        f"{cells[0]}: {len(marks)} of {len(auth.ci_python_versions)} versions",
-                        f"{cells[0]}: all {len(auth.ci_python_versions)} (the matrix is a full cross-product)",
+                        f"{cells[0]}: {', '.join(sorted(marked)) or '(none)'}",
+                        f"{cells[0]}: {', '.join(sorted(expected))}",
                         row[:120],
                         0,
                         0,
                     )
                 )
         claimed_os = {label.lower() for label in labels}
-        actual_os = {name.split("-")[0].lower() for name in auth.ci_operating_systems}
+        actual_os = set(os_by_family)
         if claimed_os != actual_os:
             out.append(
                 Finding(
@@ -1424,7 +1438,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  4b eval probes (main + holdout)  : {auth.eval_main_probes} + {auth.eval_holdout_probes} = {auth.eval_total_probes}")
     print(f"  CI Python versions               : {', '.join(auth.ci_python_versions)}")
     print(f"  CI operating systems             : {', '.join(auth.ci_operating_systems)}")
-    print(f"  CI test jobs (cross-product)     : {auth.ci_jobs}")
+    print(f"  CI test jobs (matrix - exclude)  : {auth.ci_jobs}")
     print(f"  GitHub workflows                 : {len(auth.workflows)}")
     print(f"  Python floor / classifier range  : {auth.python_floor}+ / {auth.python_classifier_min}-{auth.python_classifier_max}")
     print(f"  storage backends                 : {', '.join(auth.backends)}")

@@ -268,9 +268,17 @@ def trained_tool_count(revision: str = TRAINED_REVISION, root: Path | None = Non
         # rather than of what it does, and the two supported versions with no
         # protection are the two the argument was quietly covering for.
         # Code scanning called it (py/tarslip) and it was right to.
+        #
+        # The "data" extraction filter is applied ON TOP of that check wherever
+        # the interpreter has it (3.12+, and the 3.10/3.11 security releases
+        # that backported it). Calling extractall() without a filter is what
+        # 3.12-3.13 deprecate: 3.14 changed the default, and the warning was
+        # in every CI log. Passing it explicitly keeps the behaviour identical
+        # on every version instead of depending on which default applies.
+        extract_kwargs = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
         try:
             with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r|") as tar:
-                tar.extractall(tmp, members=_safe_members(tar, Path(tmp)))  # nosec B202
+                tar.extractall(tmp, members=_safe_members(tar, Path(tmp)), **extract_kwargs)  # nosec B202
         except (OSError, tarfile.TarError, ValueError) as exc:
             raise AuthorityError(f"could not unpack revision {revision}: {exc}") from exc
         base = Path(tmp)
@@ -405,20 +413,88 @@ _WORKFLOW_NAME = re.compile(r"^name:\s*(?P<name>.+?)\s*$", re.MULTILINE)
 
 
 class CIMatrix:
-    """The ``test`` job's OS × Python cross-product, read from ``ci.yml``."""
+    """The ``test`` job's OS × Python matrix, read from ``ci.yml``.
 
-    __slots__ = ("python_versions", "operating_systems")
+    The cross-product of the two lists minus the ``exclude:`` pairs. The
+    matrix used to be a full cross-product and every consumer assumed it; it
+    is now Ubuntu-full with macOS/Windows on the end versions only, so the
+    exclusions are part of the authority rather than something a doc may
+    round away.
+    """
 
-    def __init__(self, python_versions: tuple[str, ...], operating_systems: tuple[str, ...]) -> None:
+    __slots__ = ("python_versions", "operating_systems", "excluded")
+
+    def __init__(
+        self,
+        python_versions: tuple[str, ...],
+        operating_systems: tuple[str, ...],
+        excluded: frozenset[tuple[str, str]] = frozenset(),
+    ) -> None:
         self.python_versions = python_versions
         self.operating_systems = operating_systems
+        self.excluded = excluded
 
     @property
     def job_count(self) -> int:
-        return len(self.python_versions) * len(self.operating_systems)
+        return len(self.python_versions) * len(self.operating_systems) - len(self.excluded)
+
+    def versions_for(self, os_name: str) -> tuple[str, ...]:
+        """The Python versions that actually run on *os_name*."""
+        return tuple(v for v in self.python_versions if (os_name, v) not in self.excluded)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
-        return f"CIMatrix(python_versions={self.python_versions!r}, operating_systems={self.operating_systems!r})"
+        return (
+            f"CIMatrix(python_versions={self.python_versions!r}, "
+            f"operating_systems={self.operating_systems!r}, excluded={sorted(self.excluded)!r})"
+        )
+
+
+_MATRIX_EXCLUDE = re.compile(r"^(?P<indent>\s*)exclude:\s*(#.*)?$")
+_MATRIX_INCLUDE = re.compile(r"^\s*include:")
+_MATRIX_INLINE_EXCLUDE = re.compile(r"^\s*exclude:\s*[^\s#]")
+_FLOW_ENTRY = re.compile(r"^\s*-\s*\{(?P<body>[^}]*)\}\s*(#.*)?$")
+
+
+def _parse_excludes(path: Path, job: str, lines: list[str]) -> frozenset[tuple[str, str]]:
+    """``exclude:`` entries of the matrix, each a one-line ``{os: .., python-version: ..}``.
+
+    Any other shape -- a block-style entry, an ``include:``, an extra key --
+    is an ``AuthorityError``: a matrix this cannot read exactly must stop the
+    gate rather than be counted as if nothing were excluded.
+    """
+    if any(_MATRIX_INCLUDE.match(line) for line in lines):
+        raise AuthorityError(f"{path} job {job!r}: matrix include: is not supported by this parser")
+    if any(_MATRIX_INLINE_EXCLUDE.match(line) for line in lines):
+        raise AuthorityError(
+            f"{path} job {job!r}: an inline exclude: [...] list is not read by this parser -- "
+            "write one {os: .., python-version: ..} entry per line"
+        )
+    out: set[tuple[str, str]] = set()
+    for idx, line in enumerate(lines):
+        header = _MATRIX_EXCLUDE.match(line)
+        if header is None:
+            continue
+        depth = len(header.group("indent"))
+        for entry in lines[idx + 1 :]:
+            stripped = entry.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if len(entry) - len(entry.lstrip()) <= depth and not stripped.startswith("-"):
+                break
+            hit = _FLOW_ENTRY.match(entry)
+            if hit is None:
+                raise AuthorityError(
+                    f"{path} job {job!r}: exclude entry {stripped!r} is not a one-line "
+                    "{os: .., python-version: ..} mapping (a block-style entry would need a parser change)"
+                )
+            pairs = dict(
+                (key.strip(), value.strip().strip("\"'"))
+                for key, _, value in (item.partition(":") for item in hit.group("body").split(","))
+            )
+            if set(pairs) != {"os", "python-version"}:
+                raise AuthorityError(f"{path} job {job!r}: exclude entry {stripped!r} must name exactly os and python-version")
+            out.add((pairs["os"], pairs["python-version"]))
+    return frozenset(out)
 
 
 def _split_yaml_list(items: str) -> tuple[str, ...]:
@@ -426,7 +502,7 @@ def _split_yaml_list(items: str) -> tuple[str, ...]:
 
 
 def ci_matrix(root: Path | None = None, job: str = "test") -> CIMatrix:
-    """The OS and Python lists of one ``ci.yml`` job's ``strategy.matrix``.
+    """The OS and Python lists, and the exclusions, of one ``ci.yml`` job's ``strategy.matrix``.
 
     Scoped to a single job on purpose. ``ci.yml`` holds several jobs that pin
     one Python version and one that fans out; a whole-file scan for
@@ -467,7 +543,14 @@ def ci_matrix(root: Path | None = None, job: str = "test") -> CIMatrix:
         )
     if not found["os"] or not found["python-version"]:
         raise AuthorityError(f"{path} job {job!r}: matrix list is empty")
-    return CIMatrix(python_versions=found["python-version"], operating_systems=found["os"])
+    excluded = _parse_excludes(path, job, lines[start:end])
+    for os_name, version in sorted(excluded):
+        if os_name not in found["os"] or version not in found["python-version"]:
+            raise AuthorityError(f"{path} job {job!r}: exclude ({os_name}, {version}) names a row the matrix does not have")
+    for os_name in found["os"]:
+        if all((os_name, v) in excluded for v in found["python-version"]):
+            raise AuthorityError(f"{path} job {job!r}: every Python version is excluded on {os_name}")
+    return CIMatrix(python_versions=found["python-version"], operating_systems=found["os"], excluded=excluded)
 
 
 def workflow_inventory(root: Path | None = None) -> dict[str, str]:

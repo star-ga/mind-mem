@@ -71,4 +71,4 @@ def test_optional():
 Tests run on:
 - Python: 3.10, 3.11, 3.12, 3.13, 3.14
 - OS: Ubuntu, macOS, Windows
-- Total: 15 CI jobs (a full cross-product; no row is advisory)
+- Total: 9 CI jobs (every Python on Ubuntu; 3.10 and 3.14 on macOS and Windows; no row is advisory)

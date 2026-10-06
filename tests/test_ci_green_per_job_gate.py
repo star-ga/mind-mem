@@ -338,7 +338,7 @@ class TestCiWorkflowShape:
         """Positive control: the two assertions above must not be satisfiable by
         deleting the matrix."""
         assert re.search(r'python-version:\s*\["3\.10", "3\.11", "3\.12", "3\.13", "3\.14"\]', ci_text)
-        assert "os: [ubuntu-24.04, macos-latest, windows-latest]" in ci_text
+        assert "os: [ubuntu-24.04, macos-26, windows-2025]" in ci_text
 
     @staticmethod
     def _run_commands(ci_text: str) -> list[str]:

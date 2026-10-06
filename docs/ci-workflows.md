@@ -24,20 +24,25 @@ or dropped fails this page instead of silently outdating it.
 | Release | `release.yml` | tag push (`v*`); manual | Preflight, build, sign, SBOM, publish, verify-published |
 | Supply-Chain Security | `security.yml` | push to `main`, PR, weekly (Mon 06:00 UTC) | SBOM, dependency and supply-chain scanning |
 | Stale Issues | `stale.yml` | daily (06:00 UTC); manual | Auto-closes stale issues/PRs |
+| Web Console | `web.yml` | PR to `main`; push to `main` touching `web/**` or the workflow | `npm ci`, ESLint (`--max-warnings=0`), `tsc --noEmit` and `next build` for the `web/` console on Node 24 |
 
 ## CI Matrix
 
-The `test` job in `ci.yml` is a full cross-product — every Python version runs on
-every OS, so there are **15 CI jobs** (that number is derived from the matrix,
-not typed here). **No row is advisory**: the `continue-on-error` carve-out that
-used to forgive the 3.14 rows is gone, so a red row fails the run instead of
-being filed as an advisory.
+The `test` job in `ci.yml` runs every supported Python on Ubuntu, and the oldest
+and newest (3.10 and 3.14) on macOS and Windows — the two ends where interpreter
+and stdlib behaviour diverges; Ubuntu still covers the versions in between. That
+is **9 CI jobs** (the number is derived from the matrix and its `exclude:` list,
+not typed here). Runner images are pinned (`ubuntu-24.04`, `macos-26`,
+`windows-2025`) rather than `-latest`, so the platform a green row proved cannot
+move under an unchanged workflow. **No row is advisory**: the `continue-on-error`
+carve-out that used to forgive the 3.14 rows is gone, so a red row fails the run
+instead of being filed as an advisory.
 
 | OS | Python 3.10 | Python 3.11 | Python 3.12 | Python 3.13 | Python 3.14 |
 |----|:-----------:|:-----------:|:-----------:|:-----------:|:-----------:|
 | Ubuntu | x | x | x | x | x |
-| macOS | x | x | x | x | x |
-| Windows | x | x | x | x | x |
+| macOS | x |   |   |   | x |
+| Windows | x |   |   |   | x |
 
 Coverage (`--cov`) is instrumented on the `ubuntu-24.04` / 3.12 row only; the
 other rows run the same selector without instrumentation to stay inside the

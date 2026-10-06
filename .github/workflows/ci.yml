@@ -115,11 +115,37 @@ jobs:
     # question about what we ADVERTISE; it is not a licence to run a row and
     # then ignore its answer. If the segfault resurfaces, this matrix goes red
     # and someone decides deliberately — fix it, or drop the row entirely.
+    #
+    # Runner images are pinned, as ubuntu-24.04 already was: a `-latest` label
+    # moves to a new OS image on GitHub's schedule, not ours, so the platform a
+    # green row proved could change under an unchanged workflow. macos-26 and
+    # windows-2025 are the images `macos-latest` / `windows-latest` resolved to
+    # when this was pinned (actions/runner-images README, 2026-10-05), so the
+    # pin changes no platform -- it only stops it changing silently.
+    #
+    # Ubuntu runs every supported Python. macOS and Windows run the oldest and
+    # the newest (3.10 and 3.14) -- the two ends where interpreter and stdlib
+    # behaviour actually diverges -- and skip the three in between, which Ubuntu
+    # still covers. Concurrent GitHub-hosted macOS jobs are capped per account
+    # (5 on the Free and Team plans), so one run's five macOS rows filled the
+    # cap and every other open PR queued behind them; and the Windows rows run
+    # 50-69 minutes each against 17-37 on Ubuntu (runs 37407167712,
+    # 37401345718). Before: 5 macOS + 5 Windows test jobs (15 in total).
+    # After: 2 + 2 (9 in total). The `exclude:` list is read by
+    # scripts/alignment_authorities.py, so docs/ci-workflows.md cannot drift
+    # from it.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-26, windows-2025]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        exclude:
+          - {os: macos-26, python-version: "3.11"}
+          - {os: macos-26, python-version: "3.12"}
+          - {os: macos-26, python-version: "3.13"}
+          - {os: windows-2025, python-version: "3.11"}
+          - {os: windows-2025, python-version: "3.12"}
+          - {os: windows-2025, python-version: "3.13"}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:

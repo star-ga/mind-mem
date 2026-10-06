@@ -1122,11 +1122,49 @@ def write_ci(tmp_path: Path, body: str) -> Path:
 
 
 class TestCIMatrixAuthority:
-    def test_the_real_matrix_is_a_full_cross_product(self):
+    def test_the_real_matrix_is_ubuntu_full_and_end_versions_elsewhere(self):
         matrix = aa.ci_matrix(ROOT)
-        assert matrix.job_count == len(matrix.python_versions) * len(matrix.operating_systems)
         assert "3.11" in matrix.python_versions, "3.11 has been a matrix row since it was added"
-        assert set(matrix.operating_systems) == {"ubuntu-24.04", "macos-latest", "windows-latest"}
+        assert set(matrix.operating_systems) == {"ubuntu-24.04", "macos-26", "windows-2025"}
+        assert matrix.versions_for("ubuntu-24.04") == matrix.python_versions
+        oldest, newest = matrix.python_versions[0], matrix.python_versions[-1]
+        assert matrix.versions_for("macos-26") == (oldest, newest)
+        assert matrix.versions_for("windows-2025") == (oldest, newest)
+        assert matrix.job_count == len(matrix.python_versions) + 2 * 2
+
+    def test_exclude_entries_are_subtracted(self, tmp_path):
+        body = _CI_STUB.replace(
+            '        python-version: ["3.10", "3.11"]\n',
+            '        python-version: ["3.10", "3.11"]\n        exclude:\n          - {os: macos-latest, python-version: "3.11"}\n',
+        )
+        matrix = aa.ci_matrix(write_ci(tmp_path, body))
+        assert matrix.excluded == frozenset({("macos-latest", "3.11")})
+        assert matrix.versions_for("macos-latest") == ("3.10",)
+        assert matrix.versions_for("ubuntu-latest") == ("3.10", "3.11")
+        assert matrix.job_count == 3
+
+    @pytest.mark.parametrize(
+        ("extra", "message"),
+        [
+            ("        exclude:\n          - os: macos-latest\n            python-version: '3.11'\n", "one-line"),
+            ("        exclude:\n          - {os: macos-latest, python-version: '3.12'}\n", "does not have"),
+            ("        exclude:\n          - {os: macos-latest}\n", "exactly os and python-version"),
+            ("        include:\n          - {os: macos-latest, python-version: '3.12'}\n", "include"),
+            ("        include: [{os: macos-latest, python-version: '3.12'}]\n", "include"),
+            ("        exclude: [{os: macos-latest, python-version: '3.11'}]\n", "inline exclude"),
+            (
+                "        exclude:\n          - {os: macos-latest, python-version: '3.10'}\n"
+                "          - {os: macos-latest, python-version: '3.11'}\n",
+                "every Python version is excluded",
+            ),
+        ],
+    )
+    def test_an_exclude_the_parser_cannot_read_exactly_is_an_error(self, tmp_path, extra, message):
+        """Miscounting an exclusion would make every derived claim wrong at once."""
+        body = _CI_STUB.replace('        python-version: ["3.10", "3.11"]\n', '        python-version: ["3.10", "3.11"]\n' + extra)
+        with pytest.raises(aa.AuthorityError) as exc:
+            aa.ci_matrix(write_ci(tmp_path, body))
+        assert message in str(exc.value)
 
     def test_only_the_named_jobs_matrix_is_read(self, tmp_path):
         """A version PINNED by another job must not be read as a matrix row.
@@ -1464,7 +1502,38 @@ class TestCIMatrixGrid:
         grid = self.GOOD.replace("| macOS | x | x | x | x | x |", "| macOS | | x | | x | |")
         found = cda.check_ci_matrix_grid(make_authorities(), self.make(tmp_path, grid))
         assert [f.kind for f in found] == ["ci_matrix"]
-        assert "2 of 5" in found[0].claimed
+        assert found[0].claimed == "macOS: 3.11, 3.13"
+
+    END_VERSIONS = (
+        "| OS | Python 3.10 | Python 3.11 | Python 3.12 | Python 3.13 | Python 3.14 |\n"
+        "|----|:--:|:--:|:--:|:--:|:--:|\n"
+        "| Ubuntu | x | x | x | x | x |\n"
+        "| macOS | x | | | | x |\n"
+        "| Windows | x | | | | x |\n"
+    )
+
+    @staticmethod
+    def end_versions_auth() -> cda.Authorities:
+        middle = ("3.11", "3.12", "3.13")
+        return make_authorities(ci_excluded=tuple((os_name, v) for os_name in ("macos-latest", "windows-latest") for v in middle))
+
+    def test_an_excluded_row_is_drawn_blank(self, tmp_path):
+        auth = self.end_versions_auth()
+        assert auth.ci_jobs == 9
+        assert cda.check_ci_matrix_grid(auth, self.make(tmp_path, self.END_VERSIONS)) == []
+
+    def test_a_grid_that_hides_the_exclusions_is_caught(self, tmp_path):
+        found = cda.check_ci_matrix_grid(self.end_versions_auth(), self.make(tmp_path, self.GOOD))
+        assert [(f.kind, f.claimed, f.actual) for f in found] == [
+            ("ci_matrix", "macOS: 3.10, 3.11, 3.12, 3.13, 3.14", "macOS: 3.10, 3.14"),
+            ("ci_matrix", "Windows: 3.10, 3.11, 3.12, 3.13, 3.14", "Windows: 3.10, 3.14"),
+        ]
+
+    def test_a_mark_in_the_wrong_column_is_caught(self, tmp_path):
+        """Same number of marks, wrong versions -- a count would miss it."""
+        grid = self.END_VERSIONS.replace("| macOS | x | | | | x |", "| macOS | x | x | | | |")
+        found = cda.check_ci_matrix_grid(self.end_versions_auth(), self.make(tmp_path, grid))
+        assert [(f.kind, f.claimed) for f in found] == [("ci_matrix", "macOS: 3.10, 3.11")]
 
     def test_a_missing_os_row_is_caught(self, tmp_path):
         grid = self.GOOD.replace("| Windows | x | x | x | x | x |\n", "")
