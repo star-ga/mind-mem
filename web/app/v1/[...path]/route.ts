@@ -52,6 +52,7 @@ const TOKEN = process.env.MIND_MEM_TOKEN ?? "";
 // BIND-ADDRESS question, not something this route can decide: bind Next.js to loopback, and
 // set MIND_MEM_CONSOLE_TOKEN if it must listen more widely. `web/README.md` says so.
 const CONSOLE_TOKEN = process.env.MIND_MEM_CONSOLE_TOKEN ?? "";
+const CONSOLE_TOKEN = process.env.MIND_MEM_CONSOLE_TOKEN ?? "";
 
 function tokenMatches(req: Request): boolean {
   if (!CONSOLE_TOKEN) return false;
