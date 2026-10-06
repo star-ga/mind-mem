@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1681 | **Est. tokens:** ~4,927,838
-**Generated:** 2026-10-06 01:55 UTC
+**Files:** 1683 | **Est. tokens:** ~4,931,675
+**Generated:** 2026-10-06 04:38 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~74,396 |
+| `./` | 37 | ~74,405 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -32,10 +32,10 @@
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
 | `bin/` | 1 | ~526 |
 | `deploy/` | 2 | ~772 |
-| `deploy/docker/` | 1 | ~622 |
+| `deploy/docker/` | 1 | ~824 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~215,980 |
+| `docs/` | 95 | ~216,167 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -54,7 +54,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~21,877 |
+| `.github/workflows/` | 12 | ~22,912 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -62,7 +62,7 @@
 | `lib/` | 1 | ~2,451 |
 | `mind/` | 27 | ~9,634 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 24 | ~79,163 |
+| `scripts/` | 24 | ~80,368 |
 | `sdk/go/` | 11 | ~9,920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4,864 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 745 | ~2,192,158 |
+| `tests/` | 745 | ~2,193,132 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -107,11 +107,11 @@
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
 | `train/` | 37 | ~86,802 |
-| `web/` | 5 | ~1,500 |
+| `web/` | 6 | ~1,727 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
 | `web/app/v1/[...path]/` | 1 | ~2,636 |
-| `web/components/` | 4 | ~2,514 |
+| `web/components/` | 4 | ~2,512 |
 | `web/lib/` | 1 | ~855 |
 
 ## Files
@@ -152,7 +152,7 @@
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
 - `SPEC.md` (~6430 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `train_mind7b_runpod.py` (~1659 tok, huge)
-- `.trivyignore` (~128 tok, small) — # Trivy ignore file — intentionally empty.
+- `.trivyignore` (~137 tok, small) — # Trivy ignore file — intentionally empty.
 - `uninstall.sh` (~1505 tok, huge) — mind-mem uninstaller — removes the mind-mem MCP server entry from client configs.
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 ### `.agents/skills/mind-mem-development/`
@@ -270,7 +270,7 @@
 - `docker-compose.yml` (~690 tok, large) — name: mind-mem
 ### `deploy/docker/`
 
-- `Dockerfile` (~622 tok, large) — # Stage 1: build — install all deps and produce a pruned site-packages
+- `Dockerfile` (~824 tok, large) — # Stage 1: build — install all deps and produce a pruned site-packages
 ### `deploy/edge/`
 
 - `pyoxidizer.bzl` (~605 tok, large) — # mind-mem-edge — PyOxidizer build spec (v4.0 prep).
@@ -385,7 +385,7 @@
 - `block-format.md` (~431 tok, medium) — Block Format
 - `block-type-taxonomy-roadmap.md` (~911 tok, large) — Block-Type Taxonomy Enhancement — Roadmap Note
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
-- `ci-workflows.md` (~728 tok, large) — CI Workflows
+- `ci-workflows.md` (~861 tok, large) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~4267 tok, huge) — Client Integrations
 - `cli-reference.md` (~8426 tok, huge) — CLI Reference
@@ -499,9 +499,9 @@
 - `status.md` (~2057 tok, huge) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
-- `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
+- `supply-chain-security.md` (~1096 tok, large) — Supply-Chain Security
 - `task-frames.md` (~2947 tok, huge) — Task Frames & the Dead-End Registry
-- `testing-guide.md` (~382 tok, medium) — Testing Guide
+- `testing-guide.md` (~391 tok, medium) — Testing Guide
 - `tool-output-architecture.md` (~2067 tok, huge) — Tool-output offload — architecture
 - `trajectory-memory.md` (~1346 tok, large) — Trajectory memory
 - `troubleshooting.md` (~809 tok, large) — Troubleshooting
@@ -552,15 +552,16 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~9294 tok, huge) — name: CI
+- `ci.yml` (~9688 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~261 tok, medium) — name: Docs
 - `label-sync.yml` (~111 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
 - `release.yml` (~6918 tok, huge) — name: Release
-- `security.yml` (~3154 tok, huge) — name: Supply-Chain Security
+- `security.yml` (~3350 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
+- `web.yml` (~445 tok, medium) — name: Web Console
 ### `hooks/`
 
 - `hooks.json` (~79 tok, small) — Keys: hooks
@@ -615,7 +616,7 @@
 - `system-prompt.md` (~22 tok, tiny) — mind-mem
 ### `scripts/`
 
-- `alignment_authorities.py` (~8062 tok, huge) — Where each counted doc claim gets its TRUE value from.
+- `alignment_authorities.py` (~9049 tok, huge) — Where each counted doc claim gets its TRUE value from.
 - `anatomy-hook.sh` (~237 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -626,7 +627,7 @@
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
-- `check_docs_alignment.py` (~16874 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
+- `check_docs_alignment.py` (~17092 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1322,7 +1323,7 @@
 - `test_bootstrap_corpus_wiring.py` (~5443 tok, huge) — Wiring + quarantine proof for the ``mind-mem-bootstrap`` ingest door.
 - `test_boundary_witness_cli_e2e.py` (~3954 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_boundary_witness.py` (~2442 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_built_integrity.py` (~1777 tok, huge) — Source-bound controls for the wheel/sdist integrity release gate."""
+- `test_built_integrity.py` (~1862 tok, huge) — Source-bound controls for the wheel/sdist integrity release gate."""
 - `test_calibration.py` (~3269 tok, huge) — Tests for calibration feedback loop.
 - `test_calibration_window_determinism.py` (~1159 tok, large) — The calibration window boundary is UTC-anchored and pinnable.
 - `test_capture_governed_signals.py` (~3277 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1339,7 +1340,7 @@
 - `test_check_version.py` (~271 tok, medium) — Tests for version consistency checker."""
 - `test_check_workspace_backend.py` (~3248 tok, huge) — Backend-aware workspace validation — ``mcp.infra.workspace._check_workspace``.
 - `test_chunk_text.py` (~231 tok, medium) — Tests for text chunking."""
-- `test_ci_green_per_job_gate.py` (~4344 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
+- `test_ci_green_per_job_gate.py` (~4342 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
 - `test_cli_detector_refusal.py` (~1619 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_help_is_harmless.py` (~1776 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_hint_correctness.py` (~1371 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1472,12 +1473,12 @@
 - `test_governed_delete_forward_compat.py` (~3018 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_http.py` (~9979 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_mcp_tool.py` (~6382 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_governed_delete_stores.py` (~8439 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_governed_delete_stores.py` (~8437 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_delete_unmapped_prefix.py` (~2991 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_detector_writes.py` (~5345 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_edge_scope.py` (~3361 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_restore_seam.py` (~5688 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_governed_signal_and_edge.py` (~9813 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_governed_signal_and_edge.py` (~9817 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_governed_write_is_screened.py` (~1252 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_governed_write_paths.py` (~10704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_granularity_align.py` (~3310 tok, huge) — Tests for granularity_align — named merge operation (Group H, v4.0.x).
@@ -1586,7 +1587,7 @@
 - `test_mcp_entity_merge.py` (~4607 tok, huge) — Governed RA.4 entity equivalence controls.
 - `test_mcp_export_corpus_boundary.py` (~923 tok, large) — MCP export must use the same configured, admitted corpus as other exports.
 - `test_mcp_graph_hitl.py` (~1868 tok, huge) — MCP-surface tests for the HITL typed-edge flow + provenance (v4.4.0 Finding 1)
-- `test_mcp_http_gate_matches_enforcement.py` (~2695 tok, huge) — The MCP HTTP startup gate must agree with what actually enforces auth.
+- `test_mcp_http_gate_matches_enforcement.py` (~2775 tok, huge) — The MCP HTTP startup gate must agree with what actually enforces auth.
 - `test_mcp_integration.py` (~5530 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_list_cores.py` (~3407 tok, huge) — ``list_cores`` — the read side of the ``.mmcore`` lifecycle, previously unpinned.
 - `test_mcp_list_evidence.py` (~4569 tok, huge) — ``list_evidence`` — the audit family's only *reader* of the evidence chain.
@@ -1618,7 +1619,7 @@
 - `test_merkle_tree.py` (~3837 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mic_map_accel.py` (~1848 tok, huge) — Regression tests for the optional Cython accelerator at
 - `test_mic_map_adversarial.py` (~3397 tok, huge) — Adversarial corpus for ``mind_mem.mic_map`` parsers.
-- `test_mic_map_bench.py` (~4575 tok, huge) — pytest-benchmark suite for ``mind_mem.mic_map``.
+- `test_mic_map_bench.py` (~5199 tok, huge) — pytest-benchmark suite for ``mind_mem.mic_map``.
 - `test_mic_map_cli.py` (~1659 tok, huge) — Integration tests for the ``mm mic`` CLI subcommand.
 - `test_mic_map_fuzz.py` (~2471 tok, huge) — Property-based fuzz tests for ``mind_mem.mic_map``.
 - `test_mic_map_mcp.py` (~1812 tok, huge) — Integration tests for the MIC/MAP MCP tools (``mic_convert_tool``,
@@ -1691,7 +1692,7 @@
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_proposal_field_screening.py` (~1229 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_protection.py` (~2068 tok, huge) — Tests for mind_mem.protection (v3.3.0+)."""
-- `test_public_mcp_acl.py` (~2658 tok, huge) — Public MCP recall binds verified transport principals before retrieval."""
+- `test_public_mcp_acl.py` (~2718 tok, huge) — Public MCP recall binds verified transport principals before retrieval."""
 - `test_q1616_preimage.py` (~1496 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_quality_gate.py` (~1971 tok, huge) — Tests for the v3.11.0 deterministic block quality gate.
 - `test_quality_gate_recent_window.py` (~2480 tok, huge) — quality_gate rule 6 (``near_duplicate``) must actually execute in the product.
@@ -1714,7 +1715,7 @@
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
 - `test_ra4_proposal_rationale.py` (~932 tok, large) — Every accepted proposal type needs the caller's written rationale."""
-- `test_read_surface_admission.py` (~6772 tok, huge) — Every read surface, swept with a three-status canary.
+- `test_read_surface_admission.py` (~6897 tok, huge) — Every read surface, swept with a three-status canary.
 - `test_read_surface_classification.py` (~9253 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~4156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_resources.py` (~7373 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -2038,19 +2039,20 @@
 ### `web/components/`
 
 - `FactList.tsx` (~276 tok, medium)
-- `GraphView.tsx` (~1100 tok, large) — than treating "not computed" as "no edges".
+- `GraphView.tsx` (~1098 tok, large) — than treating "not computed" as "no edges".
 - `TenantSwitcher.tsx` (~839 tok, large) — HeadersInit can be a Headers, a [string, string][], or a Record.
 - `TimelineView.tsx` (~299 tok, medium)
 ### `web/`
 
-- `.gitignore` (~20 tok, tiny) — node_modules/
+- `eslint.config.mjs` (~192 tok, small) — // Flat ESLint config for the web console.
+- `.gitignore` (~24 tok, tiny) — node_modules/
 ### `web/lib/`
 
 - `api.ts` (~855 tok, large) — adapter does not derive relations, and asserting an empty graph would be a claim it
 ### `web/`
 
-- `next.config.ts` (~104 tok, small) — mind-mem-web is a thin client — the REST API lives on the
-- `package.json` (~196 tok, small) — Keys: name, version, private, description, license
+- `next.config.ts` (~123 tok, small) — mind-mem-web is a thin client — the REST API lives on the
+- `package.json` (~208 tok, medium) — Keys: name, version, private, description, license
 - `README.md` (~1031 tok, large) — MIND-Mem web console
 - `tsconfig.json` (~149 tok, small) — Keys: compilerOptions, include, exclude
 

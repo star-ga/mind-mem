@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
   // NEXT_PUBLIC_MIND_MEM_API_URL to point elsewhere.
   reactStrictMode: true,
   eslint: {
-    // CI runs ``next lint`` separately; keep builds unblocked.
+    // `next build` lints too, so a lint error fails the build. CI also runs
+    // `npm run lint` (eslint --max-warnings=0) as its own step.
     ignoreDuringBuilds: false,
   },
 };
