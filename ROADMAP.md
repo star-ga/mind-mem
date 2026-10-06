@@ -5581,3 +5581,57 @@ after examples are offered, measured against drafts produced without them.
 
 Proposed. Consumer is the naestro morning approval queue (naestro roadmap
 R117), where both kinds of output arrive as items to approve.
+
+## Recorded changes of mind, per-source intake, and a guide-first launch surface (2026-10-05, Proposed)
+
+> Prior-art shape observed in plain-Markdown personal-wiki kits.
+> Ideas only — no code, no dependency. Provenance lives in governed memory, not here.
+
+### 1. "Changed my mind" as a first-class proposal
+
+Today a reversed decision lands through `supersede_decision` or a contradiction
+resolution, and the reason for the reversal lives, at best, in free text. The
+change is to make the reversal itself a recorded event: a proposal type that
+carries the old claim, the new claim, the evidence that moved it, and the date,
+and that still goes through `propose_update` and the HITL gate like any other
+write. The old block is kept and marked superseded, never rewritten.
+
+What this buys: `memory_evolution` and `block_lineage` can answer "when and why
+did we stop believing X?" from structured fields instead of prose, and recall
+can surface the reversal alongside the current claim, so an agent does not
+re-propose an idea that was tried and dropped. This is the same discipline as
+the dead-end registry, applied to beliefs instead of experiments.
+
+### 2. Intake adapters per source type
+
+`importers/` covers filesystems, OKF, Qdrant and note formats, and
+`transcript_capture` covers agent sessions. What people actually feed a memory
+system is wider: web pages, PDFs and papers, video transcripts, newsletters,
+reading highlights, voice notes and exported chats from other assistants. Each
+gets a thin adapter that produces blocks with an `external-ingest` provenance
+class, runs the existing ingest codepoint sanitization, and passes the
+2026-09-28 "new or known?" check before anything is proposed. Adapters never
+write directly; they produce proposals.
+
+Order of work: chat export and PDF first (most frequent inputs here), then
+transcripts and voice (the local `transcribe` path already exists), then the rest.
+
+### 3. A guide-first launch surface
+
+Plain-file kits in this space are gathering attention on packaging, not
+technology: a structured guide, a starter workspace to clone, and an annotated
+map of every component, each item linking to its source. For the mind-mem
+launch, the docs should be shaped the same way: a short concepts track (why
+governed memory, why proposals instead of edits, why contradictions are
+surfaced), a starter workspace that runs in minutes, and a generated component
+map. A quiz over one's own memory is a good live demo of recall.
+
+### Falsification condition
+
+§1 is not worth keeping if, after a month, no recall answer or agent decision
+uses the recorded reversal fields. §2 is not worth keeping for a given source
+type if it produces no proposal the operator approves in that month.
+
+### Status
+
+Proposed. §3 is tied to the mind-mem 4B release docs work.
