@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1681 | **Est. tokens:** ~4,927,836
-**Generated:** 2026-10-05 23:44 UTC
+**Files:** 1681 | **Est. tokens:** ~4,927,838
+**Generated:** 2026-10-06 01:54 UTC
 
 ## Token Budget Guide
 
@@ -110,7 +110,7 @@
 | `web/` | 5 | ~1,500 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
-| `web/app/v1/[...path]/` | 1 | ~2,634 |
+| `web/app/v1/[...path]/` | 1 | ~2,636 |
 | `web/components/` | 4 | ~2,514 |
 | `web/lib/` | 1 | ~855 |
 
@@ -2034,7 +2034,7 @@
 - `page.tsx` (~1036 tok, large)
 ### `web/app/v1/[...path]/`
 
-- `route.ts` (~2634 tok, huge) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
+- `route.ts` (~2636 tok, huge) — 8080 matches `mm serve --port`'s default. The previous 18795 pointed at a port
 ### `web/components/`
 
 - `FactList.tsx` (~276 tok, medium)
