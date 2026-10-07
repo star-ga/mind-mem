@@ -5635,3 +5635,36 @@ type if it produces no proposal the operator approves in that month.
 ### Status
 
 Proposed. §3 is tied to the mind-mem 4B release docs work.
+
+## Hash-addressed bodies and compaction on a live store (2026-10-07, Proposed)
+
+Prior-art shape observed in a recently open-sourced self-hosted assistant (ideas
+only, no code, no dependency).
+
+### 1. Store large block fields once, by content hash
+
+Large fields (evidence payloads, attached tool output, long statements) are stored
+under their content hash and referenced from blocks. Identical bodies are written
+once. The hash the evidence chain already computes is the dedup key, so there is no
+second index to keep in sync. A storage-format change applies only to writes that
+start after the change; an in-flight proposal keeps the format it was created with.
+
+### 2. `mind-mem compact` against the running store
+
+- Runs on the live instance, not on a copy: waits for in-flight writes and pending
+  apply operations to finish, takes a backup, compacts, and prints size before and
+  after.
+- Batch mode stops at the first failure and does not retry; the backup is the
+  recovery path, and the failure is reported with the block it stopped on.
+- Compaction never changes recall results: a fixed query set must return identical
+  ranked IDs before and after, and the evidence chain must still verify.
+
+### Falsification condition
+
+§1 is not worth keeping if dedup saves under 10% of store size on the real
+workspace. §2 is not worth keeping if the before/after recall check ever differs on
+the fixed query set; in that case compaction is a correctness risk, not a cleanup.
+
+### Status
+
+Proposed. Companion to the Naestro runtime items in naestro ROADMAP R125.
