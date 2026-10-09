@@ -5701,3 +5701,94 @@ trains badly.
 
 Proposed. Does not block the 4B model or the backprop-trained 2B plan; it runs after the
 4B model reaches its gates.
+
+## Agent-facing ergonomics: tool hints, safe retries, sighting counts, addressable memory (2026-10-08, Proposed)
+
+Prior-art shape observed in two popular local-first agent memory tools (ideas only, no
+code, no dependency). Both let agents write memory directly; none of the items below
+relaxes propose → review → apply. Already covered elsewhere in this roadmap and not
+repeated here: Obsidian vault sync with wikilinks, the 16-client hook installer, the
+cross-encoder reranker, fact slots, and the single-binary endgame (Pure-MIND port).
+
+### 1. Behavior hints on every MCP tool
+
+Annotate each tool with the MCP hints `readOnlyHint`, `destructiveHint`,
+`idempotentHint` and `openWorldHint`. Agents currently learn which of our tools
+change state by trial and error. Hints are derived from the existing
+`ADMIN_TOOLS` / `USER_TOOLS` classification, so the two cannot disagree; a CI test
+fails if a tool has no hint or if a hint contradicts its ACL class.
+
+### 2. Retry-safe proposals (`operation_id`)
+
+`propose_update` and the other write-path tools accept an optional `operation_id`.
+An exact replay returns the original proposal id without creating a second one; the
+same id with a different payload is refused with a conflict error; an id whose
+proposal was rejected or rolled back returns that outcome. Agents retry on timeouts,
+and today a retry can stage a duplicate proposal for a reviewer to clean up.
+
+### 3. Sighting counts instead of duplicate proposals
+
+When an incoming write normalizes to the same content hash as an existing active
+block, record the sighting (`seen_count`, `last_seen_at`, observing agent) on that
+block and stage nothing. Sightings are evidence, not edits: they never change the
+block body and they are appended to the evidence chain. They feed the existing
+importance and decay signals ("five agents independently re-observed this").
+
+### 4. Review-after dates
+
+A block may carry `review_after`. When the date passes, the block is surfaced in the
+review queue as "re-verify", with its recall rank unchanged. This is the explicit,
+operator-visible counterpart to decay by fact type: decay lowers rank silently,
+review-after asks a person. Status-type facts get a default; decisions get none.
+
+### 5. Addressable memory URIs and a context-build tool
+
+Stable URIs — `memory://block/<id>`, `memory://entity/<name>`,
+`memory://topic/<slot>` — usable in block bodies, recall results and citations. A
+`build_context(uri, depth)` tool walks from a URI along governed edges and returns a
+bounded, cited bundle. It reuses `traverse_graph`; every leg reads through
+`admit_corpus`, so withheld blocks stay unresolvable by URI.
+
+### 6. Inline observation and relation syntax
+
+Parse `- [category] text #tag` and `- relation_type [[Target]]` lines in block
+bodies and vault files. Relations become **edge proposals** (`propose_edge`), never
+direct edges, so this closes part of the open "automatic edge extraction on write"
+item without bypassing review. Same syntax in the Obsidian vault export, so a person
+editing a note in Obsidian adds governed edges the same way an agent does.
+
+### 7. Read-only terminal browser (`mm tui`)
+
+Browse blocks, the proposal queue, contradictions and the evidence chain from the
+terminal. Phase 1 is strictly read-only. Approve/reject from the TUI is a later
+phase and goes through the same `approve_apply` path with an explicit confirmation;
+the TUI never writes the store directly.
+
+### 8. Git-portable team sync
+
+Export the governed store as append-only, content-addressed chunk files under
+`.mind-mem/sync/` so a team shares memory through an ordinary git repo. Deletes
+travel as lifecycle records (RA.3), not by removing files. Imported chunks arrive as
+proposals in the receiving workspace and are applied only after review there. This
+is the cheap path to multi-machine memory; real multi-node replication stays its own
+item.
+
+### What is NOT taken
+
+- Direct agent writes to the store, in any form.
+- A hosted subscription service; MIND-Mem stays local-first.
+- Code from either tool. One is copyleft-licensed; neither is a dependency.
+
+### Falsification condition
+
+§1 is not worth keeping if agents' wrong-tool calls on a fixed task set do not drop.
+§2 if no duplicate proposals from retries appear in a week of real agent logs. §3 if
+sighting counts do not change ranking on any LoCoMo or LongMemEval question. §5–§6
+if they add no recall gain over `traverse_graph` alone on the multi-hop subsets. §8
+if a two-machine round trip ever applies a chunk without a review step.
+
+### Status
+
+Proposed. §1–§3 are small and do not change the model-facing surface beyond adding
+optional fields; §5–§6 change tool schemas and must be settled before the 4B
+model's final training round, not after.
