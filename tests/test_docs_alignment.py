@@ -2210,3 +2210,23 @@ class TestServedLedgerDefault:
             pytest.skip("the default is off again")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
         assert "default ON since 5.0.2" in roadmap, "RA.1 still describes the ledger as default OFF"
+
+
+# --- comparison tables: other products' tool counts are not MIND-Mem claims ---
+
+
+def test_comparison_row_other_products_tool_counts_are_left_alone():
+    # Positive control: the MIND-Mem cell (bold) with a stale count is still caught.
+    line = "| MCP server | — | 23 tools | 27 tools | **95 tools** |"
+    findings = [f for f in scan(line, rel="README.md") if f.kind == "tools"]
+    assert [f.claimed for f in findings] == ["95"]
+
+
+def test_comparison_row_distinct_cell_is_still_checked():
+    line = "| MCP tools | 95 distinct (registrations) | - | 23 | 27 |"
+    assert [f.claimed for f in scan(line, rel="README.md") if f.kind == "tools"] == ["95"]
+
+
+def test_short_table_row_tool_count_is_still_checked():
+    # A two-column row is an ordinary claim, not a product comparison.
+    assert [f.claimed for f in scan("| MCP tools | 95 tools |", rel="README.md") if f.kind == "tools"] == ["95"]
