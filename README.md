@@ -152,7 +152,7 @@ MIND-Mem introduces several techniques not found in existing memory systems:
 | **Adaptive knee cutoff** | Score-drop-based truncation instead of fixed top-K | Eliminates noise that hurts LLM judges — returns 3-15 results adaptively |
 | **Hard negative mining** | Logs BM25-high / cross-encoder-low blocks as misleading, penalizes in future queries | Self-improving retrieval: precision increases over time without retraining |
 | **Deterministic abstention** | Pre-LLM confidence gate using 5-signal scoring (entity, BM25, speaker, evidence, negation) | Prevents hallucinated answers to unanswerable questions — no ML required |
-| **Governance pipeline** | Contradiction detection + drift analysis + safe apply with audit trail | Only memory system that detects when stored knowledge is wrong |
+| **Governance pipeline** | Contradiction detection + drift analysis + safe apply with audit trail | Detects contradictions and drift before a change is applied, and keeps the audit trail |
 | **Agent-agnostic shared memory** | Single MCP workspace shared across Claude Code, Codex, Gemini, Cursor, Windsurf, Zed | Memory compounds across tools instead of fragmenting |
 
 ---
@@ -289,9 +289,9 @@ Cells were checked against each project's public source or, where the engine is 
 | Capability | MM | M0 | SM | CM | Le | Zep | LM | Co | GL | CW | MU | En | BM |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | BM25 lexical | ✓ | ✓ | ◐ | ✓ | ◐ | ✓ | — | ✓ | ◐ | ✓ | — | ✓ | ✓ |
-| Vector semantic | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| Hybrid fusion<sup>1</sup> | ✓ | ◐ | ◐ | ◐ | ◐ | ✓ | — | ◐ | ◐ | ✓ | — | — | ◐ |
-| Cross-encoder | ✓ | opt | opt | — | ◐ | ✓ | — | — | ✓ | ✓ | — | — | opt |
+| Vector semantic | opt | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Hybrid fusion<sup>1</sup> | opt | ◐ | ◐ | ◐ | ◐ | ✓ | — | ◐ | ◐ | ✓ | — | — | ◐ |
+| Cross-encoder | opt | opt | opt | — | ◐ | ✓ | — | — | ✓ | ✓ | — | — | opt |
 | Intent routing<sup>2</sup> | ✓ | — | — | — | — | — | — | ◐ | — | ✓ | — | — | — |
 | Query expansion<sup>3</sup> | ✓ | — | ◐ | — | — | — | ◐ | ◐ | ◐ | ◐ | — | — | — |
 | Graph boost<sup>4</sup> | ✓ | ◐ | ◐ | — | — | ◐ | — | ✓ | ◐ | ✓ | — | — | ◐ |
@@ -319,7 +319,7 @@ Cells were checked against each project's public source or, where the engine is 
 | Capability | MM | M0 | SM | CM | Le | Zep | LM | Co | GL | CW | MU | En | BM |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | Contradictions | ✓ | ◐ | ✓ | — | ◐ | ✓ | ◐ | ◐ | — | ◐ | — | ◐ | — |
-| Drift analysis | ✓ | — | — | — | — | — | — | ◐ | — | — | — | ◐ | ◐ |
+| Drift analysis | ✓ | — | — | — | — | — | — | — | — | — | — | ◐ | ◐ |
 
 **Governance**
 
@@ -328,7 +328,7 @@ Cells were checked against each project's public source or, where the engine is 
 | Propose/apply<sup>1</sup> | ✓ | — | ◐ | — | — | — | — | ◐ | ◐ | — | — | — | — |
 | Shared memory<sup>2</sup> | ✓ | ◐ | ✓ | ✓ | ✓ | ✓ | ◐ | ✓ | ✓ | ✓ | ◐ | ✓ | ◐ |
 
-<sub><sup>1</sup> governance pipeline<br><sup>2</sup> multi-agent, via MCP or API</sub>
+<sub><sup>1</sup> governance pipeline<br><sup>2</sup> several agents can read and write one store, via MCP or API. The Full Feature Matrix row "Multi-agent" is stricter: per-agent identity and isolation (◐ = shared store without per-agent isolation)</sub>
 
 **Operations**
 
@@ -1014,7 +1014,7 @@ Compared against every major memory solution for AI agents, checked against each
 | Vector | **opt** | ✓ | ✓ | <sub>Chroma</sub> | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | ↓<sup>1</sup> |
 | Lexical | <sub>**BM25F**</sub> | <sub>BM25</sub> | <sub>FTS</sub> | <sub>FTS5</sub> | ◐ | <sub>BM25</sub> | — | ◐ | <sub>Keyword</sub> | <sub>BM25</sub> | — | <sub>FTS5</sub> | <sub>FTS5</sub> |
 | Graph | <sub>**2-hop**</sub> | ◐ | ✓ | — | — | ✓ | — | ✓ | ✓ | ↓<sup>2</sup> | — | — | ✓ |
-| Hybrid + RRF | **✓** | ◐<sup>3</sup> | ◐ | ◐ | ◐ | ✓ | — | ◐ | ◐ | **✓** | — | — | ◐<sup>4</sup> |
+| Hybrid + RRF | **opt** | ◐<sup>3</sup> | ◐ | ◐ | ◐ | ✓ | — | ◐ | ◐ | **✓** | — | — | ◐<sup>4</sup> |
 | Cross-encoder | **↓**<sup>5</sup> | opt | opt | — | ◐ | ✓ | — | — | ↓<sup>6</sup> | ↓<sup>7</sup> | — | — | opt |
 | Intent routing | <sub>**9 types**</sub> | — | — | — | — | — | — | ◐ | — | ✓ | — | — | — |
 | Query expansion | **↓**<sup>8</sup> | — | ↓<sup>9</sup> | — | — | — | ◐ | ◐ | ◐ | ↓<sup>10</sup> | — | — | — |
