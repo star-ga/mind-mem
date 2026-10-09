@@ -15,11 +15,11 @@ Step-by-step guide to connect MIND-Mem to Claude Desktop as an MCP server.
 python3 -m mind_mem.init_workspace /path/to/your/workspace
 ```
 
-This creates the full directory structure with 12 directories and 19 template files.
+This creates the directory tree, the template files and `mind-mem.json`.
 
 ## Step 2: Configure Claude Desktop
 
-Edit `~/.claude/claude_desktop_config.json` (create it if it doesn't exist):
+Edit Claude Desktop's config file (create it if it doesn't exist): `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `~/.config/Claude/claude_desktop_config.json` on Linux. These are the paths `./install.sh --claude-desktop` writes.
 
 ```json
 {

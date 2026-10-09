@@ -12,13 +12,13 @@ cd mind-mem
 ./install.sh --all
 ```
 
-The installer auto-detects Claude Code, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, and Claude Desktop.
+`./install.sh` wires eight clients: Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed and OpenClaw. For all 20 registry clients, run `mm install-all` (see [client integrations](client-integrations.md)).
 
 ## 2. Verify
 
 ```bash
 python3 -m mind_mem.validate_py /path/to/your/workspace
-# Expected: 74 checks | 74 passed | 0 issues
+# Expected: 0 issues (17 checks on a fresh workspace; warnings for empty sections are normal)
 ```
 
 ## 3. First Recall

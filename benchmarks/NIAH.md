@@ -92,7 +92,7 @@ Filler blocks are generated from 20+ topic categories (astrophysics, culinary sc
 | 10 blocks | 50/50 | 0 | 100% | ~0.8s |
 | 50 blocks | 50/50 | 0 | 100% | ~2.5s |
 | 100 blocks | 50/50 | 0 | 100% | ~4.4s |
-| 250 blocks | 50/50 | 0 | 100% | ~8.5s |
+| 200 blocks | 50/50 | 0 | 100% | ~8.5s |
 | 500 blocks | 50/50 | 0 | 100% | ~12s |
 
 ### By Burial Depth

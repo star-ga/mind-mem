@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1686 | **Est. tokens:** ~4,960,524
-**Generated:** 2026-10-09 05:57 UTC
+**Files:** 1685 | **Est. tokens:** ~4,937,578
+**Generated:** 2026-10-09 06:18 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 38 | ~99,949 |
+| `./` | 37 | ~74,405 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~824 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~216,167 |
+| `docs/` | 95 | ~217,346 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -78,7 +78,7 @@
 | `skills/mind-mem/` | 1 | ~1,671 |
 | `skills/mind-mem/references/` | 6 | ~18,811 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 241 | ~1,074,853 |
+| `src/mind_mem/` | 241 | ~1,074,877 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 747 | ~2,195,453 |
+| `tests/` | 747 | ~2,196,848 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -144,7 +144,6 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~3869 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25544 tok, huge) — 30-Second Demo
 - `requirements-optional.in` (~137 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
 - `requirements-optional.txt` (~23731 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
@@ -387,8 +386,8 @@
 - `block-type-taxonomy-roadmap.md` (~911 tok, large) — Block-Type Taxonomy Enhancement — Roadmap Note
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~861 tok, large) — CI Workflows
-- `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `client-integrations.md` (~4267 tok, huge) — Client Integrations
+- `claude-desktop-setup.md` (~807 tok, large) — Claude Desktop Setup Guide
+- `client-integrations.md` (~5015 tok, huge) — Client Integrations
 - `cli-reference.md` (~8426 tok, huge) — CLI Reference
 - `companion-tools.md` (~1111 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
@@ -441,7 +440,7 @@
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
 - `install-guide.md` (~2881 tok, huge) — Installation guide — every step + every option
-- `integrations.md` (~1567 tok, huge) — Integrations
+- `integrations.md` (~1845 tok, huge) — Integrations
 - `local-viewer.md` (~629 tok, large) — Local memory viewer
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1625 tok, huge) — `maintenance/` namespaces
@@ -450,7 +449,7 @@
 - `MHS_DEVICE_MEMORY.md` (~522 tok, large) — MHS / Device Memory Boundary
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
-- `migration.md` (~2761 tok, huge) — Migration Guide: mem-os to MIND-Mem
+- `migration.md` (~2798 tok, huge) — Migration Guide: mem-os to MIND-Mem
 - `MIND_CONFIG_VS_MIND_LANG.md` (~743 tok, large) — Pipeline configuration and MIND language sources
 - `mind-kernels.md` (~398 tok, medium) — MIND Kernels
 - `mind-mem-4b-setup.md` (~3193 tok, huge) — Setting up the mind-mem-4b model
@@ -467,7 +466,7 @@
 - `POST-V4.4.0-ROADMAP-PLAN.md` (~1905 tok, huge) — mind-mem — Post-v4.4.0 Roadmap Plan (reference)
 - `protection.md` (~1443 tok, large) — MIND-Mem Library Protection
 - `quality-gate.md` (~1267 tok, large) — Quality Gate — Operator Runbook
-- `quickstart.md` (~602 tok, large) — MIND-Mem Quickstart
+- `quickstart.md` (~644 tok, large) — MIND-Mem Quickstart
 - `recompaction.md` (~3132 tok, huge) — Iterative Re-Compression Engine (Recompaction)
 - `red-team-audit.md` (~1164 tok, large) — Behavioral Audit — Operator Runbook
 - `rest-api.md` (~1650 tok, huge) — MIND-Mem REST API
@@ -497,7 +496,7 @@
 - `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 
-- `status.md` (~2057 tok, huge) — MIND-Mem — implementation status (alignment companion)
+- `status.md` (~2088 tok, huge) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1620 tok, huge) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1096 tok, large) — Supply-Chain Security
@@ -875,7 +874,7 @@
 - `guardrails.py` (~5942 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `guardrail_surface.py` (~1704 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~11016 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~11417 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~11441 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/importers/`
 
 - `engine.py` (~9872 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1717,7 +1716,7 @@
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
 - `test_ra4_proposal_rationale.py` (~932 tok, large) — Every accepted proposal type needs the caller's written rationale."""
-- `test_readme_client_tables.py` (~1104 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_readme_client_tables.py` (~2499 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_admission.py` (~6897 tok, huge) — Every read surface, swept with a three-status canary.
 - `test_read_surface_classification.py` (~9253 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~4156 tok, huge) — # Copyright 2026 STARGA, Inc.

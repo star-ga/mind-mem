@@ -20,6 +20,37 @@ Pass `--no-mcp` to skip the MCP registration phase (hook-only, useful
 when you want to register a custom MCP endpoint yourself or for
 clients behind firewalls).
 
+### Supported clients
+
+These are the entries of `mind_mem.hook_installer.AGENT_REGISTRY`:
+
+| Client | Vendor | `mm install` id | MCP config written |
+|--------|--------|-----------------|--------------------|
+| Claude Code | Anthropic | `claude-code` | No (instructions/hooks only) |
+| Codex CLI | OpenAI | `codex` | Yes |
+| Grok Build CLI | xAI | `grok-build` | Yes |
+| Vibe (Mistral CLI) | Mistral AI | `vibe` | Yes |
+| OpenCode (1.x / 2.x) | OpenCode (open source) | `opencode` | Yes |
+| Gemini CLI | Google | `gemini` | Yes |
+| Cursor | Anysphere | `cursor` | Yes |
+| Windsurf | Cognition (formerly Codeium) | `windsurf` | Yes |
+| aider | Aider-AI (open source) | `aider` | No (instructions/hooks only) |
+| OpenClaw | OpenClaw Foundation (open source) | `openclaw` | No (instructions/hooks only) |
+| NanoClaw | NanoClaw / Qwibit (open source) | `nanoclaw` | No (instructions/hooks only) |
+| NemoClaw | NVIDIA | `nemoclaw` | No (instructions/hooks only) |
+| Continue | Continue.dev | `continue` | Yes |
+| Cline | Cline | `cline` | Yes |
+| Roo Code | Roo Code | `roo` | Yes |
+| Zed | Zed Industries | `zed` | Yes |
+| GitHub Copilot (workspace instructions) | GitHub / Microsoft | `copilot` | No (instructions/hooks only) |
+| GitHub Copilot CLI | GitHub / Microsoft | `copilot-cli` | Yes |
+| Cody | Sourcegraph | `cody` | No (instructions/hooks only) |
+| Qodo Gen | Qodo | `qodo` | No (instructions/hooks only) |
+
+Claude Desktop (Anthropic) is not in the registry; `./install.sh
+--claude-desktop` configures it (see [Claude Desktop setup](claude-desktop-setup.md)).
+Qwen Code, further down, is documented for manual setup only.
+
 Use `mm install <agent>` to configure a single client; use
 `mm install-all --agent <A> --agent <B>` to target an explicit subset.
 
@@ -33,20 +64,25 @@ hand-rolled config you want replaced.
 `mm install-all` writes format-specific MCP entries for 12 MCP-aware clients
 (the writers landed in v3.1.0; four clients have been added since):
 
-| Client | Config path | Format | Stanza |
-| --- | --- | --- | --- |
-| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.mind-mem]` |
-| OpenCode (1.x / 2.x) | `~/.config/opencode/opencode.json` | JSON | `mcp.mind-mem` (or `mcp.servers.mind-mem` in a 2.x-native file) |
-| Gemini | `~/.gemini/settings.json` | JSON | `mcpServers.mind-mem` |
-| Cursor | `~/.cursor/mcp.json` | JSON | `mcpServers.mind-mem` |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` | JSON | `mcpServers.mind-mem` |
-| Continue | `~/.continue/config.json` | JSON | `mcpServers.mind-mem` |
-| Cline | `<vscode-user>/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | JSON | `mcpServers.mind-mem` |
-| Roo | `<vscode-user>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | JSON | `mcpServers.mind-mem` |
-| Zed | `~/.config/zed/settings.json` | JSON | `context_servers.mind-mem` |
-| Copilot CLI | `~/.copilot/mcp-config.json` | JSON | `mcpServers.mind-mem` |
-| Grok Build | `~/.grok/config.toml` | TOML | `[mcp_servers.mind-mem]` |
-| Vibe | `~/.vibe/config.toml` | TOML | `[mcp_servers.mind-mem]` |
+| Client | `mm install` id | Config path | Format | Stanza |
+| --- | --- | --- | --- | --- |
+| Codex | `codex` | `~/.codex/config.toml` | TOML | `[mcp_servers.mind-mem]` |
+| OpenCode (1.x / 2.x) | `opencode` | `~/.config/opencode/opencode.json` | JSON | `mcp.mind-mem` (or `mcp.servers.mind-mem` in a 2.x-native file) |
+| Gemini | `gemini` | `~/.gemini/settings.json` | JSON | `mcpServers.mind-mem` |
+| Cursor | `cursor` | `~/.cursor/mcp.json` | JSON | `mcpServers.mind-mem` |
+| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` | JSON | `mcpServers.mind-mem` |
+| Continue | `continue` | `~/.continue/config.json` | JSON | `mcpServers.mind-mem` |
+| Cline | `cline` | `~/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | JSON | `mcpServers.mind-mem` |
+| Roo | `roo` | `~/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | JSON | `mcpServers.mind-mem` |
+| Zed | `zed` | `~/.config/zed/settings.json` | JSON | `context_servers.mind-mem` |
+| Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` | JSON | `mcpServers.mind-mem` |
+| Grok Build | `grok-build` | `~/.grok/config.toml` | TOML | `[mcp_servers.mind-mem]` |
+| Vibe | `vibe` | `~/.vibe/config.toml` | TOML array | `mcp_servers = [{ name = "mind-mem", ... }]` |
+
+> **Cline and Roo Code:** the installer writes the VS Code Server (remote / WSL)
+> settings tree, `~/.vscode-server/data/User/`. Desktop VS Code keeps its user
+> settings elsewhere (for example `~/.config/Code/User/` on Linux), and those
+> paths are not written yet; add the MCP entry there by hand for now.
 
 All entries point at `<mind-mem-install>/mcp_server.py` with
 `MIND_MEM_WORKSPACE` set to the shared workspace. Clients not on this
@@ -156,7 +192,7 @@ the MCP tools as the `AGENTS.md` protocol instructs. Project-level
 Injects a system instruction pointing at the MIND-Mem workspace. The
 instruction survives `gemini --yolo` and interactive mode.
 
-## Qwen Code (Alibaba)
+## Qwen Code (Alibaba) — manual setup, not in the registry
 
 | | |
 |---|---|
@@ -233,7 +269,7 @@ connected with 107 tools. Verify independently with `mm doctor`.
 Appends a `.cursorrules` block. Cursor picks it up automatically on
 next file open.
 
-## Windsurf (Codeium)
+## Windsurf (Cognition, formerly Codeium)
 
 | | |
 |---|---|
@@ -243,7 +279,7 @@ next file open.
 
 Same pattern as Cursor. Windsurf reads it on every workspace open.
 
-## aider (paul-gauthier)
+## aider (Aider-AI)
 
 | | |
 |---|---|
@@ -254,7 +290,7 @@ Same pattern as Cursor. Windsurf reads it on every workspace open.
 Adds `read: ["<ws>/CLAUDE.md"]` so aider always loads the MIND-Mem
 context file on startup.
 
-## OpenClaw (open-source AI assistant)
+## OpenClaw (OpenClaw Foundation)
 
 | | |
 |---|---|
@@ -266,30 +302,33 @@ Registers the OpenClaw hook entry pointing at the MIND-Mem workspace.
 OpenClaw shares the same `~/.openclaw/workspace/` directory as
 MIND-Mem so no separate storage — writes flow both ways.
 
-## NanoClaw (compact claw variant)
+## NanoClaw (Gavriel Cohen / Qwibit, open source)
 
 | | |
 |---|---|
 | Config path | `~/.nanoclaw/nanoclaw.json` |
-| Format | Same JSON shape as OpenClaw |
+| Format | Same JSON hook shape the OpenClaw writer uses |
 | Install | `mm install nanoclaw` |
 
-NanoClaw is the compact OpenClaw variant. Same hook registry shape;
-reuses the shared workspace. Install writes the config idempotently
-under the `hooks.internal.entries.mind-mem` path.
+[NanoClaw](https://nanoclaw.dev/) is a separate open-source agent project,
+written as a lighter alternative to OpenClaw; it is not an OpenClaw variant.
+`mm install nanoclaw` writes the `hooks.internal.entries.mind-mem` entry to
+`~/.nanoclaw/nanoclaw.json` idempotently. We have not verified that current
+NanoClaw releases read that file.
 
-## NemoClaw (memory-focused claw variant)
+## NemoClaw (NVIDIA)
 
 | | |
 |---|---|
 | Config path | `~/.nemoclaw/nemoclaw.json` |
-| Format | Same JSON shape as OpenClaw |
+| Format | Same JSON hook shape the OpenClaw writer uses |
 | Install | `mm install nemoclaw` |
 
-NemoClaw emphasises long-horizon memory. Its hook loop leans on
-MIND-Mem's `hybrid_search` path more aggressively than the generic
-OpenClaw preset. Install writes the same shape; differences are
-purely runtime behaviour on the NemoClaw side.
+[NVIDIA NemoClaw](https://docs.nvidia.com/nemoclaw/) is NVIDIA's open-source
+stack for running OpenClaw ([announcement](https://nvidianews.nvidia.com/news/nvidia-announces-nemoclaw)).
+`mm install nemoclaw` writes the `hooks.internal.entries.mind-mem` entry to
+`~/.nemoclaw/nemoclaw.json` idempotently. We have not verified that current
+NemoClaw releases read that file.
 
 ## Continue.dev
 
@@ -313,7 +352,7 @@ the VS Code and JetBrains editions.
 Drops a `.clinerules` file at the workspace root. Cline reads it on
 every session start.
 
-## Roo Code (VS Code fork)
+## Roo Code (VS Code extension)
 
 | | |
 |---|---|
@@ -328,7 +367,7 @@ mind-mem-aware and routes Roo's tool calls through the MCP layer.
 
 | | |
 |---|---|
-| Config path | `~/.config/zed/settings.json` (macOS: `~/Library/Application Support/Zed/settings.json`) |
+| Config path | `~/.config/zed/settings.json` (the writer uses this path on every OS) |
 | Format | JSON `assistant.default_system_message` |
 | Install | `mm install zed` |
 
@@ -385,6 +424,20 @@ providers.
 
 Same pattern as Cursor / Windsurf. Qodo picks it up when the plugin
 parses workspace rules.
+
+## Vibe (Mistral CLI, Mistral AI)
+
+| | |
+|---|---|
+| Config path | `<ws>/AGENTS.md` |
+| Format | Markdown block |
+| MCP config | `~/.vibe/config.toml` (a top-level `mcp_servers = [...]` array) |
+| Detected by | the `vibe` binary on `PATH` or `~/.vibe/` |
+| Install | `mm install vibe` |
+
+Writes the memory-protocol block into the workspace `AGENTS.md` and adds a
+`mind-mem` entry to the `mcp_servers` array in `~/.vibe/config.toml`, keeping
+any other entries.
 
 ## Grok Build CLI (xAI)
 
@@ -461,7 +514,7 @@ different clients don't cross-contaminate.
   **milliseconds** for Qwen Code (a Gemini-CLI descendant). Remove
   `timeout` from the shared file or set a millisecond value in Qwen
   Code's own `~/.qwen/settings.json`. See
-  [Qwen Code](#qwen-code-alibaba).
+  [Qwen Code](#qwen-code-alibaba--manual-setup-not-in-the-registry).
 - **Re-running `mm install-all` shows every client as `skipped`** —
   that's correct. The installers are idempotent; the `# mind-mem`
   marker prevents duplicate blocks. Use `--force` to rewrite.

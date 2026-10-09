@@ -110,7 +110,7 @@ The same rename applies to `memory/intel-state.json`.
 
 ## 3. MCP Server Config Update
 
-Update `~/.claude/mcp.json` (or `~/.claude/claude_desktop_config.json` for Claude Desktop).
+Update your MCP client config: for Claude Code, re-run `claude mcp add` (user scope lives in `~/.claude.json`); for Claude Desktop, `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `~/.config/Claude/` on Linux).
 
 ### Before (mem-os)
 

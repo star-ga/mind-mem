@@ -216,7 +216,7 @@ MEMORY_PROTOCOL_SNIPPET = (
 # ---------------------------------------------------------------------------
 # MCP server command — every client that supports MCP points at this.
 # The mcp_server.py script at the mind-mem package root launches the
-# full 57-tool surface with the right workspace via the env var.
+# full MCP tool surface with the right workspace via the env var.
 # ---------------------------------------------------------------------------
 
 
@@ -285,7 +285,7 @@ class AgentSpec:
     always_offer: bool = False
     # v3.1.0: native MCP registration. When set, install_mcp_config()
     # knows how to write the per-client MCP server registration so the
-    # client gets the full 57-tool surface, not just "shell out to mm CLI".
+    # client gets the full MCP tool surface, not just "shell out to mm CLI".
     mcp_fmt: str = ""  # "" = not MCP-aware
     mcp_path_tmpl: str = ""  # file path to write into
 
@@ -725,7 +725,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     ),
     "windsurf": AgentSpec(
         name="windsurf",
-        description="Windsurf editor (Codeium)",
+        description="Windsurf editor (Cognition, formerly Codeium)",
         config_fmt="text-block",
         path_tmpl="{ws}/.windsurfrules",
         content_tmpl=MEMORY_PROTOCOL_SNIPPET,
@@ -740,7 +740,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     ),
     "aider": AgentSpec(
         name="aider",
-        description="aider CLI (paul-gauthier)",
+        description="aider CLI (Aider-AI, open source; created by Paul Gauthier)",
         config_fmt="yaml-block",
         path_tmpl="{ws}/.aider.conf.yml",
         content_tmpl=(f'{_MM_MARKER} auto-config\nread: ["{{ws}}/CLAUDE.md"]\n'),
@@ -756,7 +756,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     ),
     "nanoclaw": AgentSpec(
         name="nanoclaw",
-        description="NanoClaw (compact claw variant)",
+        description="NanoClaw (open-source agent by Gavriel Cohen / Qwibit)",
         config_fmt="json-openclaw-hooks",
         path_tmpl="{home}/.nanoclaw/nanoclaw.json",
         detect_paths=("{home}/.nanoclaw",),
@@ -764,7 +764,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     ),
     "nemoclaw": AgentSpec(
         name="nemoclaw",
-        description="NemoClaw (memory-focused claw variant)",
+        description="NVIDIA NemoClaw (open-source stack that runs OpenClaw)",
         config_fmt="json-openclaw-hooks",
         path_tmpl="{home}/.nemoclaw/nemoclaw.json",
         detect_paths=("{home}/.nemoclaw",),
@@ -794,7 +794,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     ),
     "roo": AgentSpec(
         name="roo",
-        description="Roo Code (VS Code fork / extension)",
+        description="Roo Code (VS Code extension)",
         config_fmt="text-block",
         path_tmpl="{ws}/.roo/system-prompt.md",
         content_tmpl=MEMORY_PROTOCOL_SNIPPET,
@@ -1044,7 +1044,7 @@ def install_mcp_config(
 
     Unlike :func:`install_config` (which writes text hooks telling the
     agent to shell out to the ``mm`` CLI), this writes the per-client
-    MCP spec so the agent discovers all 57 mind-mem tools natively.
+    MCP spec so the agent discovers the full mind-mem tool surface natively.
 
     Returns ``{"agent", "path", "written", "merged", "skipped",
     "content"}`` or ``{"agent", "skipped": True, "reason": ...}`` when

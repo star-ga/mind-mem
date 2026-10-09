@@ -24,29 +24,40 @@ and writes the appropriate config file for each.
 
 Currently supported:
 
-| Client | Vendor | Config |
-|--------|--------|--------|
-| Claude Code | Anthropic | `~/.claude/settings.json` |
-| Claude Desktop | Anthropic | `~/Library/Application Support/Claude/` |
-| Codex CLI | OpenAI | `~/.codex/config.toml` |
-| Gemini CLI | Google | `~/.gemini/settings.json` |
-| Vibe (Mistral CLI) | Mistral | `~/.vibe/config.toml` |
-| Cursor | Anysphere | `~/.cursor/mcp.json` |
-| Windsurf | Codeium | `~/.codeium/windsurf/mcp_config.json` |
-| Zed | Zed Industries | `~/.config/zed/settings.json` |
-| Continue | Continue.dev | `.continue/config.json` |
-| Cline | Cline.bot | VS Code extension settings |
-| Roo | Roo Code | VS Code extension settings |
-| GitHub Copilot | GitHub / Microsoft | VS Code extension settings |
-| Cody | Sourcegraph | `~/.sourcegraph/cody.json` |
-| Qodo | Qodo | `~/.qodo/config.json` |
-| aider | aider-chat | `.aider.conf.yml` |
-| OpenClaw | OpenClaw | `~/.openclaw/openclaw.json` |
-| NanoClaw / NemoClaw | OpenClaw forks | `~/.openclaw/openclaw.json` |
+| Client | Vendor | `mm install` id | MCP config written |
+|--------|--------|-----------------|--------------------|
+| Claude Code | Anthropic | `claude-code` | No (instructions/hooks only) |
+| Codex CLI | OpenAI | `codex` | Yes |
+| Grok Build CLI | xAI | `grok-build` | Yes |
+| Vibe (Mistral CLI) | Mistral AI | `vibe` | Yes |
+| OpenCode (1.x / 2.x) | OpenCode (open source) | `opencode` | Yes |
+| Gemini CLI | Google | `gemini` | Yes |
+| Cursor | Anysphere | `cursor` | Yes |
+| Windsurf | Cognition (formerly Codeium) | `windsurf` | Yes |
+| aider | Aider-AI (open source) | `aider` | No (instructions/hooks only) |
+| OpenClaw | OpenClaw Foundation (open source) | `openclaw` | No (instructions/hooks only) |
+| NanoClaw | NanoClaw / Qwibit (open source) | `nanoclaw` | No (instructions/hooks only) |
+| NemoClaw | NVIDIA | `nemoclaw` | No (instructions/hooks only) |
+| Continue | Continue.dev | `continue` | Yes |
+| Cline | Cline | `cline` | Yes |
+| Roo Code | Roo Code | `roo` | Yes |
+| Zed | Zed Industries | `zed` | Yes |
+| GitHub Copilot (workspace instructions) | GitHub / Microsoft | `copilot` | No (instructions/hooks only) |
+| GitHub Copilot CLI | GitHub / Microsoft | `copilot-cli` | Yes |
+| Cody | Sourcegraph | `cody` | No (instructions/hooks only) |
+| Qodo Gen | Qodo | `qodo` | No (instructions/hooks only) |
 
-**What this means**: each of these tools can call MIND-Mem's 107 MCP
-tools (recall, propose_update, scan, hybrid_search, mic_convert_tool,
-mic_inspect_tool, etc.) the same way it calls any other MCP server.
+Every row is an entry in `mind_mem.hook_installer.AGENT_REGISTRY`; the
+per-client config paths are in
+[`docs/client-integrations.md`](client-integrations.md). Claude Desktop
+(Anthropic) is not in the registry: `./install.sh --claude-desktop`
+configures it, or see [`docs/claude-desktop-setup.md`](claude-desktop-setup.md).
+
+**What this means**: each client marked "Yes" above can call MIND-Mem's
+107 MCP tools (recall, propose_update, scan, hybrid_search,
+mic_convert_tool, mic_inspect_tool, etc.) the same way it calls any other
+MCP server; the others get instructions or hooks that route through the
+`mm` CLI.
 
 **What this does *not* mean**: none of these vendors are commercial
 customers, paying users, partners, or have endorsed mind-mem. The
@@ -67,16 +78,13 @@ pip install mind-mem
 
 ## Compatible with major LLM providers
 
-MIND-Mem's recall pipeline is provider-agnostic. Tested against:
-
-- Anthropic Claude (3.5 Sonnet, 4.x family)
-- OpenAI GPT (4o, 5.4)
-- Google Gemini (2.0 Flash, 3.1 Pro)
-- Mistral Large
-- Local: Ollama, vLLM, llama.cpp endpoints
-
-Compatibility is at the API contract level: clients use the same server
-interface. Replay also requires the same query, admitted corpus,
+MIND-Mem's recall pipeline is provider-agnostic: any MCP-capable client or
+OpenAI-compatible endpoint can use the same server interface. The provider
+adapters (Anthropic; OpenAI-compatible, which Mistral and other OpenAI-style
+APIs route through; Ollama; vLLM; llama.cpp) are covered by mocked contract
+tests, which make no live call. The only model-in-the-loop benchmark run so
+far is LoCoMo, with `mistral-large-latest` as answerer and judge. We do not
+claim live testing against specific versions of other vendors' models. Replay also requires the same query, admitted corpus,
 configuration, scoring instant, execution providers and dependencies.
 Different client models can generate different queries. Provider compatibility
 does not imply a commercial relationship.
@@ -93,12 +101,14 @@ matching pipeline configs in the README.
 | **LoCoMo** (external LLM judge, conv-0, 199 questions, hybrid pipeline) | **92.5% Acc≥50, mean 76.7** | Hybrid: BM25 + Qwen3-Embedding-8B (4096d) → RRF fusion → top-18 → compression → answer → judge. |
 | **LoCoMo Adversarial subset** | **97.9% Acc≥50** | Subset of the conv-0 hybrid run; tests retrieval against intentionally-misleading distractor turns. |
 
-> Comparisons: published numbers for Mem0 (66.88), Zep (65.99),
-> Letta (74.0), Memobase (75.8), LangMem (58.10) on the same
-> benchmark. MIND-Mem surpasses Mem0 and Letta on the same 10-conv
-> LoCoMo benchmark with **zero cloud infrastructure** and
-> **local-only retrieval** — no graph DB, no vector DB service, no
-> LLM in the retrieval loop unless the operator opts in.
+> Comparisons: third-party self-reported numbers for Mem0 (66.88),
+> Zep (65.99), Letta (74.0), Memobase (75.8) and LangMem (58.10) on
+> LoCoMo; none were re-run by MIND-Mem or measured under a shared
+> contract. MIND-Mem's 73.8% is above Mem0's paper figure and below
+> Letta's and Memobase's self-reported figures, and it gets there with
+> **zero cloud infrastructure** and **local-only retrieval** — no graph
+> DB, no vector DB service, no LLM in the retrieval loop unless the
+> operator opts in.
 
 ## Production usage at STARGA
 
@@ -117,9 +127,9 @@ in our own commit history. We do not extrapolate it into a third-party
 - "OpenAI is a customer" — false. OpenAI runs its own memory systems.
   Codex CLI integration is software-level (MCP), not a commercial
   relationship.
-- "Microsoft is a customer" — false. Copilot integration is via the
-  VS Code extension MCP surface, not a Microsoft Inc. commercial
-  relationship.
+- "Microsoft is a customer" — false. The GitHub Copilot integration is
+  a workspace instructions file (plus an MCP entry for Copilot CLI),
+  not a Microsoft Inc. commercial relationship.
 - "Anthropic is a customer" — false. Claude Code is built on the MCP
   spec; MIND-Mem implements that spec; Anthropic has not endorsed,
   contracted with, or partnered with STARGA.
