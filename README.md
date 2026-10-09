@@ -6,6 +6,9 @@
   <strong>Replayable memory for AI agents. Governed recall with canonical, hash-anchored audit evidence.</strong>
 </p>
 <p align="center">
+  The governed memory layer for multi-agent and regulated use: agents propose, reviewers approve, every change is audited.
+</p>
+<p align="center">
   Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 107 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>

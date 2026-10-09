@@ -36,6 +36,15 @@ These additions are not part of the published 5.0.3 archives.
 >    waiting* (a decision, with its trigger) from *no recorded decision* (an
 >    open question). Never let the second silently become a deletion.
 
+## Positioning (2026-10-08)
+
+MIND-Mem is the **governed memory layer for multi-agent and regulated use**: many
+agents share one memory, and no agent can change it unreviewed. Every write is
+proposed, reviewed and applied, contradictions are surfaced rather than overwritten,
+and every change carries hash-anchored audit evidence that replays bit-identically.
+Roadmap items are ranked against that position: features that weaken review, audit or
+replay are out of scope however popular they are elsewhere.
+
 ## Genuinely Open Items (post-5.0.1 reality)
 
 Surfaced at the top so the actual remaining work is visible without
@@ -5773,6 +5782,26 @@ proposals in the receiving workspace and are applied only after review there. Th
 is the cheap path to multi-machine memory; real multi-node replication stays its own
 item.
 
+### 9. Read-only Markdown view of the governed store (`mm export --markdown`)
+
+Render the whole active, admitted corpus as a folder of Markdown notes, one per
+block, with front matter (id, type, status, maturity, supersession, evidence hash)
+and `[[wikilinks]]` for governed edges, so the store opens directly as an Obsidian
+vault or any Markdown tool. Today `vault_sync` writes one caller-supplied note at a
+time; nothing renders the governed store itself. The export reads only through
+`admit_corpus`, so quarantined and pending content never reaches disk, and it is
+**read-only by construction**: edits made in the view are never read back. Changes
+go through §6 (inline syntax → proposals) or `propose_update`. Output is
+deterministic (same store → byte-identical folder), so it diffs cleanly in git and
+doubles as a human-readable audit snapshot.
+
+### 10. Single-binary install and TUI on the Pure-MIND port
+
+When the Pure-MIND port lands, ship `mm` as one self-contained binary (no Python, no
+runtime dependencies) that includes the §7 terminal browser. Until then the Python
+package stays the only supported install; no interim bundler is built (see the
+rejected PyOxidizer item).
+
 ### What is NOT taken
 
 - Direct agent writes to the store, in any form.
@@ -5782,7 +5811,9 @@ item.
 ### Falsification condition
 
 §1 is not worth keeping if agents' wrong-tool calls on a fixed task set do not drop.
-§2 if no duplicate proposals from retries appear in a week of real agent logs. §3 if
+§2 if no duplicate proposals from retries appear in a week of real agent logs. §9 if a
+re-export of an unchanged store is ever not byte-identical, or if any withheld block
+appears in the export. §3 if
 sighting counts do not change ranking on any LoCoMo or LongMemEval question. §5–§6
 if they add no recall gain over `traverse_graph` alone on the multi-hop subsets. §8
 if a two-machine round trip ever applies a chunk without a review step.
