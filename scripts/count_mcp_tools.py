@@ -409,6 +409,47 @@ def _doc_files() -> list[Path]:
     return [p for p in out if not _is_historical(p.relative_to(root).as_posix())]
 
 
+def is_other_product_cell(line: str, offset: int) -> bool:
+    """True when *offset* sits in a comparison-table cell that describes ANOTHER product.
+
+    A comparison row ("| MCP server | 23 tools | 27 tools | **107 tools** |")
+    states one tool count per product. Only MIND-Mem's own cell is a claim this
+    checker owns: the bold cell, or the "N distinct" spelling used in the Quick
+    Comparison table. Rewriting the other cells replaced Engram's and Basic
+    Memory's counts with MIND-Mem's. Rows with fewer than three value cells
+    (``| MCP tools | 107 |``) are ordinary claims and are still checked.
+    """
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        return False
+    cells = stripped.strip("|").split("|")
+    if row_names_other_product(cells[0]):
+        # An "At a Glance" row ("| [**ClawMem**](url) | ... 33 MCP tools | ... |")
+        # describes the product named in its first cell, whatever its width.
+        return True
+    if len(cells) < 4:  # label + at least three value columns
+        return False
+    start = line.index("|") + 1
+    for cell in cells:
+        end = start + len(cell)
+        if start <= offset < end:
+            return "**" not in cell and "distinct" not in cell.lower()
+        start = end + 1
+    return False
+
+
+def row_names_other_product(first_cell: str) -> bool:
+    """True when a table row's first cell is a LINKED product name other than MIND-Mem.
+
+    Only the linked form (``[**Name**](url)`` or ``[Name](url)``) counts: it is
+    how the comparison tables introduce a third-party product, and a plain
+    label cell ("MCP tools", "**MIND-Mem**") never takes it, so MIND-Mem's own
+    rows stay ordinary claims.
+    """
+    cell = first_cell.strip()
+    return cell.startswith("[") and "](" in cell and "mind-mem" not in cell.lower()
+
+
 def _scan_line_claims(line: str, lineno: int) -> list[tuple[int, int, int, int, str]]:
     """``(lineno, start, end, value, excerpt)`` for every tool claim on one line."""
     found: list[tuple[int, int, int, int, str]] = []
@@ -416,7 +457,8 @@ def _scan_line_claims(line: str, lineno: int) -> list[tuple[int, int, int, int, 
         for match in regex.finditer(line):
             # Checked PER CLAIM, not per line -- see _version_qualifies.
             if (
-                _version_qualifies(line, match)
+                is_other_product_cell(line, match.start(1))
+                or _version_qualifies(line, match)
                 or is_trained_claim(line, match.start(1), match.end(1))
                 or is_historical_transition_claim(line, match.start(1), match.end(1))
             ):
@@ -445,7 +487,12 @@ def scan_doc_claims(lines: list[str]) -> list[tuple[int, int, int, int, str]]:
             claims.append((span[0], span[1], span[2], value, excerpt))
     for lineno, start, end, value in table_tool_claims(lines):
         line = lines[lineno - 1]
-        if (lineno, start, end) in seen or is_trained_claim(line, start, end) or version_qualifies_span(line, start, end):
+        if (
+            (lineno, start, end) in seen
+            or is_other_product_cell(line, start)
+            or is_trained_claim(line, start, end)
+            or version_qualifies_span(line, start, end)
+        ):
             continue
         seen.add((lineno, start, end))
         claims.append((lineno, start, end, value, line.strip()))

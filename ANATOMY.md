@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1684 | **Est. tokens:** ~4,933,614
-**Generated:** 2026-10-09 05:40 UTC
+**Files:** 1686 | **Est. tokens:** ~4,960,524
+**Generated:** 2026-10-09 05:57 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~74,405 |
+| `./` | 38 | ~99,949 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -62,7 +62,7 @@
 | `lib/` | 1 | ~2,451 |
 | `mind/` | 27 | ~9,634 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 24 | ~81,050 |
+| `scripts/` | 24 | ~81,312 |
 | `sdk/go/` | 11 | ~9,920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4,864 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 746 | ~2,194,349 |
+| `tests/` | 747 | ~2,195,453 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -144,6 +144,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~3869 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
+- `README.md` (~25544 tok, huge) — 30-Second Demo
 - `requirements-optional.in` (~137 tok, small) — # Direct roots for the reproducible optional embedding/reranking lock.
 - `requirements-optional.txt` (~23731 tok, huge) — # mind-mem optional ML stack — universal, marker-aware SHA256 lock.
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
@@ -627,12 +628,12 @@
 - `check_ci_green.py` (~5240 tok, huge) — Release gate: CI must have concluded success for the EXACT commit being released.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `check_code_scanning_alerts.py` (~5185 tok, huge) — Release gate: zero open code-scanning alerts, AND proof the scanner actually ran.
-- `check_docs_alignment.py` (~17386 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
+- `check_docs_alignment.py` (~17152 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_tool_surface.py` (~2214 tok, huge) — Reachability, applied to the MCP tool surface.
-- `count_mcp_tools.py` (~5819 tok, huge) — Count registered MCP tools and assert the count matches CLAUDE.md.
+- `count_mcp_tools.py` (~6315 tok, huge) — Count registered MCP tools and assert the count matches CLAUDE.md.
 - `docs-alignment-hook.sh` (~454 tok, medium) — docs-alignment-hook.sh — Git pre-commit step to refresh derived doc counts.
 - `gen_skill_cli_reference.py` (~2937 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `pre-commit-hook.sh` (~489 tok, medium) — STARGA author guard (chained first: a wrong-identity commit must never be created).
@@ -1716,6 +1717,7 @@
 - `test_ra1v2_all_doors_snapshot.py` (~3382 tok, huge) — Every serving door binds ONE snapshot, or says it could not.
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
 - `test_ra4_proposal_rationale.py` (~932 tok, large) — Every accepted proposal type needs the caller's written rationale."""
+- `test_readme_client_tables.py` (~1104 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_admission.py` (~6897 tok, huge) — Every read surface, swept with a three-status canary.
 - `test_read_surface_classification.py` (~9253 tok, huge) — The registry-wide read-surface classification — the committed table.
 - `test_read_surface_paths.py` (~4156 tok, huge) — # Copyright 2026 STARGA, Inc.

@@ -200,7 +200,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   block_versioning.py   — block version history
   circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
   feature_flags.py      — 52 flags + is_enabled/require_enabled
-tests/                  — pytest suite (12,608 test functions incl. 376 v4 unit
+tests/                  — pytest suite (12,616 test functions incl. 376 v4 unit
                           + 38 concurrency + 22 paraphrase probes)
 mind/                   — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
@@ -237,7 +237,7 @@ docs/                   — User + integration docs (35+ files)
   competence over the current server's additional tools. See
   `docs/mind-mem-4b-setup.md`.
 - **Client integrations:** the registry contains 20 AI clients, including
-  11 with MCP configuration formats. `mm install-all` uses each client's
+  12 with MCP configuration formats. `mm install-all` uses each client's
   supported integration. See `docs/client-integrations.md`.
 
 ### MCP Tools (107)
@@ -266,7 +266,7 @@ name that no longer exists -- this list previously carried 11 ghosts
 
 ## Testing
 ```bash
-pytest                           # full suite (12,608 test functions)
+pytest                           # full suite (12,616 test functions)
 pytest tests/test_retrieval.py   # specific module
 pytest -x --tb=short             # stop on first failure
 python3 scripts/check_docs_alignment.py --print  # the test-function count (static; a run's count is machine-dependent)

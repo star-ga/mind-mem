@@ -714,29 +714,8 @@ def scan_line(rel: str, lineno: int, line: str, auth: Authorities, historical: b
     return findings
 
 
-def _is_other_product_cell(line: str, offset: int) -> bool:
-    """True when *offset* sits in a comparison-table cell that describes ANOTHER product.
-
-    A comparison row ("| MCP server | 23 tools | 27 tools | **107 tools** |")
-    states one tool count per product. Only MIND-Mem's own cell is a claim this
-    checker owns: the bold cell, or the "N distinct" spelling used in the Quick
-    Comparison table. Rewriting the other cells replaced Engram's and Basic
-    Memory's counts with MIND-Mem's. Rows with fewer than three value cells
-    (``| MCP tools | 107 |``) are ordinary claims and are still checked.
-    """
-    stripped = line.strip()
-    if not stripped.startswith("|"):
-        return False
-    cells = stripped.strip("|").split("|")
-    if len(cells) < 4:  # label + at least three value columns
-        return False
-    start = line.index("|") + 1
-    for cell in cells:
-        end = start + len(cell)
-        if start <= offset < end:
-            return "**" not in cell and "distinct" not in cell.lower()
-        start = end + 1
-    return False
+# Shared with count_mcp_tools so both tool-count gates exempt the same cells.
+_is_other_product_cell = cmt.is_other_product_cell
 
 
 def _scan_retired_tests_spelling(rel: str, lineno: int, line: str, seen: set[tuple[int, int]]) -> list[Finding]:
