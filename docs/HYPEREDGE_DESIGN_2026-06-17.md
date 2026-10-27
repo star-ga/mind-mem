@@ -1,13 +1,14 @@
-# Hyperedge + temporal-anchor design (Hyper-Extract steal)
+# Hyperedge + temporal-anchor design
 
 Date: 2026-06-17
 Status: SPEC — not implemented. Review the shape before any code lands.
-Trigger: github.com/yifanfeng97/Hyper-Extract (Apache-2.0) evaluated as a
-"steal" candidate for the mind-mem knowledge graph.
+Trigger: a third-party Apache-2.0 hypergraph-extraction project, evaluated as a
+source of ideas for the mind-mem knowledge graph. Provenance recorded privately,
+per the no-public-attribution rule.
 
 ## TL;DR
 
-There is **no algorithm worth porting** from Hyper-Extract. Their hyperedge is a
+There is **no algorithm worth porting** from the evaluated project. Their hyperedge is a
 Pydantic `list` field + 3 user lambdas; their "extraction" is two LLM prompts +
 a dangling-edge prune (`participants ⊆ known_nodes`); their temporal model is a
 string-concatenated dedup key. **Our store is already ahead on temporal** (real
@@ -59,7 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_hyperedges_predicate ON hyperedges(predicate);
 ```
 
 `edge_id` = stable hash over `sorted(member_entity_ids) + predicate + source_block_id`
-so `{A,B,C}` and `{C,A,B}` collapse (this is the one correctness rule Hyper-Extract
+so `{A,B,C}` and `{C,A,B}` collapse (this is the one correctness rule the evaluated project
 makes the caller responsible for — we bake it in instead).
 
 ### Tool changes
@@ -82,7 +83,7 @@ In the extractor (`extractor.py`), anchor temporal extraction with a concrete
 against a fixed point before parsing. ~3 lines in the prompt. Independent of the
 hyperedge tables — could ship alone.
 
-## What we deliberately do NOT take from Hyper-Extract
+## What we deliberately do NOT take from the evaluated project
 
 - Their Pydantic-lambda data model (we have a real schema).
 - Their two-prompt extraction pipeline (we have a governed extractor + HITL).

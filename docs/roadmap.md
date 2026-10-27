@@ -533,13 +533,13 @@ Direction:
 > Audit minor (see `ROADMAP.md` root). The originally-bundled
 > social-ingestion thread has been moved to a private agent layer — fetching
 > is an agent-layer concern and inheriting per-platform fetchers
-> would have broken MIND-Mem's zero-dep posture. The Always-On
-> Memory Agent patterns below are deferred to v3.9.0 candidates and
+> would have broken MIND-Mem's zero-dep posture. The always-on
+> memory-agent patterns below are deferred to v3.9.0 candidates and
 > live alongside the walkthrough/persona theme below.
 
-Inspired by Google Cloud's Always-On Memory Agent reference architecture
-(MIT, `GoogleCloudPlatform/generative-ai/gemini/agents/always-on-memory-agent`).
-Their reference validates the category but lacks governance, hybrid search,
+Prompted by a public always-on memory-agent reference architecture (MIT).
+Provenance recorded privately, per the no-public-attribution rule.
+That reference validates the category but lacks governance, hybrid search,
 multi-LLM backends, and MCP compatibility — features MIND-Mem already has.
 Three patterns from their design are worth adopting on top of MIND-Mem's
 production-grade foundation:
@@ -656,7 +656,7 @@ existing functions.
 
 1-2 weeks for one engineer. All three play together: a deployment using
 all three becomes "drop a file in inbox → ingested → consolidated
-automatically → queryable via HTTP" — the Google reference architecture
+automatically → queryable via HTTP" — the public reference architecture's
 pitch with MIND-Mem's governance, hybrid search, and audit chain
 underneath.
 
@@ -774,9 +774,10 @@ transport, no new auth, no new convention.
 
 ## v3.9.0 candidates — Hash-of-code invalidation + per-byte lineage
 
-Third v3.9.0 theme. Inspired by `cocoindex-io/cocoindex` (Apache-2.0,
-~7.4k stars, v1 in preview). Their distinctive value is the
-`target = F(source)` declarative incremental engine: re-run only
+Third v3.9.0 theme. Prompted by a public declarative incremental-indexing
+engine (Apache-2.0; provenance recorded privately, per the no-public-attribution
+rule). Its distinctive value is the
+`target = F(source)` declarative incremental model: re-run only
 the rows whose inputs *or transform code* changed, with byte-level
 provenance from target back to source. MIND-Mem already has incremental
 indexing (mtime + size + partial-hash via `sqlite_index.py`) and partial
@@ -823,7 +824,7 @@ forcing full O(N) reindex on every prompt iteration.
 
 ### 2. Per-byte source lineage
 
-Today blocks carry a source path. cocoindex tracks target byte → source
+Today blocks carry a source path. That engine tracks target byte → source
 byte. MIND-Mem's audit-chain story is stronger if every governed claim
 traces back to an exact byte range, not just a file. Add:
 
@@ -843,7 +844,7 @@ chains: every governed assertion has byte-level provenance.
 
 - The pipeline orchestration framework. MIND-Mem is a recall engine +
   indexer; we don't need a flow DAG, transform composer, or `@flow`
-  decorator surface. Adding cocoindex as a runtime dep would import a
+  decorator surface. Adding that engine as a runtime dep would import a
   Rust core we don't ship today.
 - Multi-source connectors (S3, GDrive, Slack, Postgres CDC, Kafka).
   MIND-Mem's per-workspace file model is the right unit; multi-source
@@ -874,7 +875,7 @@ re-extract).
 > **v3.10**. Together they finish the "set-and-forget memory engine"
 > story so v4.0 can focus purely on networked-mesh / parallelism.
 
-### 1. Per-byte source lineage (cocoindex theme 2)
+### 1. Per-byte source lineage (lineage theme 2)
 
 The hash-of-code primitive landed in v3.9 ships read-only inspection
 (`pipeline_dirty_blocks`). The v3.10 follow-up wires it into the

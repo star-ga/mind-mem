@@ -4576,9 +4576,8 @@ is the first version bump.
   prompt-engineering, model-upgrade, and library-version drift even
   when source bytes are unchanged. v3.9 ships the inspection primitive
   (`mm pipeline-status [--list-dirty] [--json]`); v3.10 wires
-  re-extraction into the dream cycle. Inspired by
-  `cocoindex-io/cocoindex` (Apache-2.0); concept only — no runtime
-  dep on cocoindex.
+  re-extraction into the dream cycle. Concept from recent work on
+  incremental indexing; concept only — no new runtime dependency.
 
 - **Inbox folder ingestion** (`src/mind_mem/inbox.py`).
   Drop a file into a watched directory, MIND-Mem classifies by

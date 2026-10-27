@@ -7,9 +7,10 @@ for the *currently configured pipeline* so callers can detect blocks
 that were extracted by an older pipeline version and need
 re-extraction.
 
-Inspired by the cocoindex (Apache-2.0) `target = F(source)` model
-where the recompute key includes the transform code as well as the
-source. mind-mem keeps its own indexer; we only borrow the concept.
+Follows the declarative ``target = F(source)`` model described in recent
+work on incremental indexing, where the recompute key includes the
+transform code as well as the source. mind-mem keeps its own indexer;
+only the concept is reused.
 
 The hash inputs (in order, NUL-separated to prevent boundary
 ambiguity)::

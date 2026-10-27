@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1686 | **Est. tokens:** ~4,914,847
-**Generated:** 2026-10-24 23:19 UTC
+**Files:** 1686 | **Est. tokens:** ~4,915,261
+**Generated:** 2026-10-27 05:34 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~824 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 95 | ~217,676 |
+| `docs/` | 95 | ~217,718 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -62,7 +62,7 @@
 | `lib/` | 1 | ~2,451 |
 | `mind/` | 27 | ~9,634 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 25 | ~81,712 |
+| `scripts/` | 25 | ~81,750 |
 | `sdk/go/` | 11 | ~9,920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4,864 |
@@ -78,7 +78,7 @@
 | `skills/mind-mem/` | 1 | ~1,671 |
 | `skills/mind-mem/references/` | 6 | ~18,811 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 241 | ~1,074,877 |
+| `src/mind_mem/` | 241 | ~1,074,886 |
 | `src/mind_mem/api/` | 5 | ~27,259 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 747 | ~2,196,917 |
+| `tests/` | 747 | ~2,197,242 |
 | `tests/fixtures/` | 7 | ~11,912 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -391,7 +391,7 @@
 - `cli-reference.md` (~8426 tok, huge) — CLI Reference
 - `companion-tools.md` (~1111 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
-- `competitive-analysis-persistent-memory-2026.md` (~4369 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
+- `competitive-analysis-persistent-memory-2026.md` (~4380 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~18323 tok, huge) — Configuration Reference
 - `content-lifecycle.md` (~1035 tok, large) — Content-category lifetimes
 ### `docs/decisions/`
@@ -438,7 +438,7 @@
 - `GOVERNED_WRITES.md` (~2664 tok, huge) — Governed writes
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
-- `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
+- `HYPEREDGE_DESIGN_2026-06-17.md` (~1369 tok, large) — Hyperedge + temporal-anchor design
 - `install-guide.md` (~2881 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1845 tok, huge) — Integrations
 - `local-viewer.md` (~629 tok, large) — Local memory viewer
@@ -475,7 +475,7 @@
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review.md` (~1647 tok, huge) — `mm review` — batch approval for the HITL queue
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
-- `roadmap.md` (~14527 tok, huge) — Roadmap
+- `roadmap.md` (~14539 tok, huge) — Roadmap
 - `ROADMAP-RETRIEVAL-ACCOUNTABILITY.md` (~2861 tok, huge) — Group R — Retrieval Accountability (memory as rent, not storage)
 - `roadmap-v4.md` (~11275 tok, huge) — mind-mem v4.0 — Design Rationale
 - `scoring.md` (~517 tok, large) — Scoring System
@@ -631,7 +631,7 @@
 - `check_docs_alignment.py` (~17152 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `check_roadmap_ticks.py` (~4425 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_tool_surface.py` (~2214 tok, huge) — Reachability, applied to the MCP tool surface.
 - `count_mcp_tools.py` (~6315 tok, huge) — Count registered MCP tools and assert the count matches CLAUDE.md.
 - `docs-alignment-hook.sh` (~454 tok, medium) — docs-alignment-hook.sh — Git pre-commit step to refresh derived doc counts.
@@ -993,7 +993,7 @@
 - `outcome_store.py` (~4752 tok, huge) — Outcome-attribution persistence over the calibration store.
 - `payload_admission.py` (~3614 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `personas.py` (~1256 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
-- `pipeline_hash.py` (~3573 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
+- `pipeline_hash.py` (~3582 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
 - `prefetch.py` (~7500 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prefix_cache.py` (~3043 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `preimage.py` (~1329 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1655,7 +1655,7 @@
 - `test_network_cert_pinning.py` (~5212 tok, huge) — Certificate pinning is opt-in, and when it is on it refuses — RM-2290 / RM-2382.
 - `test_network_tls_floor.py` (~3100 tok, huge) — The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).
 - `test_niah.py` (~5014 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
-- `test_no_prior_art_attribution_repo_wide.py` (~2555 tok, huge) — No prior-art identifier may appear in a tracked file, anywhere in the repository.
+- `test_no_prior_art_attribution_repo_wide.py` (~2855 tok, huge) — No prior-art identifier may appear in a tracked file, anywhere in the repository.
 - `test_no_silent_success_paths.py` (~3801 tok, huge) — Regressions for paths that used to report success while doing the wrong thing.
 - `test_no_vacuous_skips.py` (~7101 tok, huge) — A skipped test reads as a pass — so the skip surface itself needs a gate.
 - `test_novel_term_gate.py` (~2202 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1832,7 +1832,7 @@
 - `test_review_queue.py` (~2038 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_review_render.py` (~2348 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
-- `test_roadmap_hygiene.py` (~3996 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_roadmap_hygiene.py` (~4021 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_roadmap_ticks_gate.py` (~2742 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_runpod_release_bundle.py` (~3422 tok, huge) — Offline closure tests for the RunPod training/evaluation release bundle."""
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
