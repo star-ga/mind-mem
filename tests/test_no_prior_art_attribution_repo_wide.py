@@ -26,8 +26,9 @@ import subprocess
 
 #: An actual identifier or a paper/repo URL — not the word, and not a subject.
 PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    # Modern arXiv ids (YYMM.NNNNN).
-    (re.compile(r"arxiv\s*:\s*\d{4}\.\d{4,5}", re.I), "an arXiv identifier"),
+    # Modern arXiv ids (YYMM.NNNNN), with or without the colon: "arXiv 2606.15903" is the
+    # same citation as "arXiv:2606.15903", and the colon-only form missed three of them.
+    (re.compile(r"arxiv\s*:?\s*\d{4}\.\d{4,5}", re.I), "an arXiv identifier"),
     # PRE-2007 arXiv ids (`hep-th/9901001`, `cs.AI/0102003`). The first version of this
     # matcher missed them entirely, so an older citation would have passed the gate.
     (re.compile(r"arxiv\s*:\s*[a-z-]+(?:\.[A-Z]{2})?/\d{7}", re.I), "a pre-2007 arXiv identifier"),
@@ -51,7 +52,10 @@ PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # about where an idea came from.
     (
         re.compile(
-            r"\b(?:motivated by|inspired by|adapted from|following the approach (?:of|in))\b"
+            # The verb is matched case-insensitively (scoped flag), the proper noun is not:
+            # "Inspired by Google Cloud's ..." opens a sentence, and a case-sensitive verb
+            # group let exactly that form through in docs/ and src/.
+            r"\b(?i:motivated by|inspired by|adapted from|following the approach (?:of|in))\b"
             r"(?![^.\n]{0,60}?\b(?:recent research|prior work|the literature|recent work)\b)"
             # The proper noun must not be a GENERIC capitalised term. "motivated by
             # incidents in the broader AI ecosystem" is not an attribution, and matching
@@ -179,6 +183,13 @@ def test_the_matcher_actually_matches() -> None:
         # Aligned with the ROADMAP gate, which has always caught this form.
         "following Smith et al. the decay is exponential",
         "LoCoMo (Maharana et al., *Evaluating Very Long-Term Conversational Memory*)",
+        # Missed until 2026-10-26: an id written with a space instead of a colon (three sat
+        # in ROADMAP.md from 2026-09-16), and an attribution verb opening a sentence -- the
+        # verb group was case-sensitive, so "Inspired by <Product>" in docs/ and src/ passed.
+        "- **FORGETEVAL** (arXiv 2606.15903) -- thesis: production memory failures",
+        "Inspired by Google Cloud's Always-On Memory Agent reference architecture",
+        "Inspired by the cocoindex (Apache-2.0) `target = F(source)` model",
+        "Motivated by SomeProduct, we added a decay term.",
     )
     for sample in must_match:
         assert any(p.search(sample) for p, _ in PATTERNS), f"matcher missed {sample!r}"
@@ -190,6 +201,9 @@ def test_the_matcher_actually_matches() -> None:
         "Zep requires Zep Cloud; we are self-hosted",
         # Generic capitalised terms after an attribution verb are NOT attributions.
         "Hardening thread motivated by incidents in the broader AI ecosystem",
+        # The same generic-noun exemption holds when the verb opens the sentence.
+        "Motivated by incidents in the broader AI ecosystem, we hardened ingest.",
+        "Inspired by recent research on memory decay.",
         "motivated by the bi-temporal validity-window model described in recent research",
         # Colloquial "et al." about files, not authors.
         "install them in the test matrix so tests/test_rest_api.py et al. can import",

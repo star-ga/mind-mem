@@ -196,8 +196,10 @@ _MARKER_RE = re.compile("|".join(re.escape(m) for m in NOT_SHIPPED_MARKERS), re.
 #: host-qualified URL, an author credit -- never on a bare topic word, so the
 #: file can still discuss arXiv, GitHub or a paper's subject in prose.
 PRIOR_ART_PATTERNS: tuple[tuple[str, str], ...] = (
-    # "arXiv:2504.19874" / "arxiv: 2606.32032" -- an identifier, not the word.
-    (r"arxiv\s*:\s*\d{4}\.\d{4,5}", "an arXiv identifier"),
+    # "arXiv:2504.19874" / "arxiv: 2606.32032" / "arXiv 2606.15903" -- an
+    # identifier, not the word. The colon is optional: three space-separated
+    # ids sat in this file from 2026-09-16 because the first form required it.
+    (r"arxiv\s*:?\s*\d{4}\.\d{4,5}", "an arXiv identifier"),
     (r"\barxiv\.org\b", "an arXiv URL"),
     (r"\bdoi\.org/10\.\d{4,}", "a DOI URL"),
     (r"\bdoi\s*:\s*10\.\d{4,}", "a DOI"),
