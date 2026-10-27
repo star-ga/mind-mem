@@ -179,9 +179,7 @@ class TestProjectKeyFallback:
         assert key_a.startswith("path:")
         assert key_b.startswith("path:")
 
-    def test_a_marker_at_the_filesystem_root_does_not_pool_projects(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_a_marker_at_the_filesystem_root_does_not_pool_projects(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """A stray go.mod at / must not make every plain directory one project."""
         import mind_mem.project_key as pk
 

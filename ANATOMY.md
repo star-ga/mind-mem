@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1756 | **Est. tokens:** ~5,173,396
-**Generated:** 2026-10-27 11:02 UTC
+**Files:** 1756 | **Est. tokens:** ~5,173,392
+**Generated:** 2026-10-27 11:17 UTC
 
 ## Token Budget Guide
 
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 799 | ~2,355,613 |
+| `tests/` | 799 | ~2,355,609 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1537,7 +1537,7 @@
 - `test_graph_schema_versioning.py` (~5941 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_group_h_robustness.py` (~7219 tok, huge) — Robustness tests for Group-H modules: edge-cases, error-paths, boundary values.
-- `test_group_s_corroboration_breadth.py` (~7068 tok, huge) — Group S — cross-project corroboration as a maturity component.
+- `test_group_s_corroboration_breadth.py` (~7064 tok, huge) — Group S — cross-project corroboration as a maturity component.
 - `test_grpc_server.py` (~2259 tok, huge) — v4.0 prep — gRPC wire protocol (tests for the grpcio-free handlers)."""
 - `test_guardrail_blocks.py` (~10742 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_guardrail_status_and_sources.py` (~1989 tok, huge) — # Copyright 2026 STARGA, Inc.
