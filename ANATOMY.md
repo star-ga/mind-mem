@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1756 | **Est. tokens:** ~5,173,520
-**Generated:** 2026-10-27 11:29 UTC
+**Files:** 1756 | **Est. tokens:** ~5,173,541
+**Generated:** 2026-10-27 11:40 UTC
 
 ## Token Budget Guide
 
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 799 | ~2,355,694 |
+| `tests/` | 799 | ~2,355,715 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1656,7 +1656,7 @@
 - `test_mcp_walkthrough_persona.py` (~2313 tok, huge) — Tests for the v3.9.0 MCP walkthrough + persona wrapper tools."""
 - `test_medlow_batch12_regressions.py` (~3396 tok, huge) — Regression tests for the batch-12 medium/low audit findings.
 - `test_memory_ab_analysis.py` (~2565 tok, huge) — Reps reduction, context poisoning, and disclosure — checked on known inputs.
-- `test_memory_ab_harness.py` (~6844 tok, huge) — The A/B harness's own guarantees, tested rather than asserted in prose.
+- `test_memory_ab_harness.py` (~6848 tok, huge) — The A/B harness's own guarantees, tested rather than asserted in prose.
 - `test_memory_ab_placebo.py` (~1051 tok, large) — The placebo arm must be a fair match, or it is a second memory arm.
 - `test_memory_ab_report.py` (~3423 tok, huge) — Pooling stratum artifacts into one delta -- and refusing to pool dishonestly.
 - `test_memory_index.py` (~3017 tok, huge) — Tests for the auto-generated hierarchical index (Group C).
@@ -1842,7 +1842,7 @@
 - `test_recall_vector.py` (~5496 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_recall_wire_owner.py` (~3251 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_workspace_zero_index_probe.py` (~917 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_recompact_cli.py` (~4743 tok, huge) — Production-path controls for the proposal-only H1 recompaction command."""
+- `test_recompact_cli.py` (~4755 tok, huge) — Production-path controls for the proposal-only H1 recompaction command."""
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
@@ -2016,7 +2016,7 @@
 - `test_v4_health_wiring.py` (~2471 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v4_hnsw_kind_index.py` (~2209 tok, huge) — Tests for the HNSW kind-filtered ANN index."""
 - `test_v4_hnsw_kind_index_wiring.py` (~3436 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_v4_kernels.py` (~4297 tok, huge) — Tests for the v4 kernel strategy implementations.
+- `test_v4_kernels.py` (~4302 tok, huge) — Tests for the v4 kernel strategy implementations.
 - `test_v4_kernels_wiring.py` (~3137 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v4_kind_conn_close.py` (~2197 tok, huge) — Regression: ``v4.block_kinds`` / ``v4.kind_summaries`` must CLOSE connections.
 - `test_v4_kind_summaries_wiring.py` (~2133 tok, huge) — # Copyright 2026 STARGA, Inc.

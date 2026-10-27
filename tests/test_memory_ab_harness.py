@@ -308,7 +308,7 @@ class TestTheControlArmCannotReachMemory:
         system_bin = tmp_path / "usr-bin"
         system_bin.mkdir()
         for name in ("mind-mem-scan", "mm", "git"):
-            (system_bin / name).write_text("#!/bin/sh\n")
+            (system_bin / name).write_text("#!/bin/sh\n", encoding="utf-8")
             (system_bin / name).chmod(0o755)
         real = rtv.sandbox_env
         monkeypatch.setattr(rtv, "sandbox_env", lambda tree, home: real(tree, home) | {"PATH": str(system_bin)})

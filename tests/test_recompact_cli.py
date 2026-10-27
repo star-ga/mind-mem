@@ -44,24 +44,24 @@ def _changed_compressor(text: str, _blocks: list[dict[str, object]]) -> str:
     return "alpha and beta retained as one reviewed proposal" if text != "alpha and beta retained as one reviewed proposal" else text
 
 
-def test_similarity_cluster_reloads_active_bodies_and_source_coordinates(monkeypatch, blocks):
+def test_similarity_cluster_reloads_active_bodies_and_source_coordinates(monkeypatch, blocks, tmp_path):
     _install_blocks(monkeypatch, blocks)
-    cluster = recompact_cli.resolve_similarity_cluster("/tmp/workspace", "DEC-001", finder=_finder)
+    cluster = recompact_cli.resolve_similarity_cluster(str(tmp_path), "DEC-001", finder=_finder)
     assert [item["_id"] for item in cluster] == ["DEC-001", "DEC-002"]
     assert cluster[1]["_source_file"] == "memory/2026-09-14.md"
 
 
-def test_stale_similarity_id_is_refused(monkeypatch, blocks):
+def test_stale_similarity_id_is_refused(monkeypatch, blocks, tmp_path):
     _install_blocks(monkeypatch, blocks)
 
     def stale_finder(_block_id: str, _limit: int) -> str:
         return json.dumps({"similar": [{"block_id": "DEC-404"}]})
 
     with pytest.raises(recompact_cli.RecompactError, match="outside the active corpus"):
-        recompact_cli.resolve_similarity_cluster("/tmp/workspace", "DEC-001", finder=stale_finder)
+        recompact_cli.resolve_similarity_cluster(str(tmp_path), "DEC-001", finder=stale_finder)
 
 
-def test_finder_duplicate_and_malformed_ids_are_refused(monkeypatch, blocks):
+def test_finder_duplicate_and_malformed_ids_are_refused(monkeypatch, blocks, tmp_path):
     _install_blocks(monkeypatch, blocks)
 
     def duplicate(_id, _limit):
@@ -71,19 +71,19 @@ def test_finder_duplicate_and_malformed_ids_are_refused(monkeypatch, blocks):
         return {"similar": [{"block_id": "not-an-id"}]}
 
     with pytest.raises(recompact_cli.RecompactError, match="duplicate"):
-        recompact_cli.resolve_similarity_cluster("/tmp/workspace", "DEC-001", finder=duplicate)
+        recompact_cli.resolve_similarity_cluster(str(tmp_path), "DEC-001", finder=duplicate)
     with pytest.raises(recompact_cli.RecompactError, match="malformed"):
-        recompact_cli.resolve_similarity_cluster("/tmp/workspace", "DEC-001", finder=malformed)
+        recompact_cli.resolve_similarity_cluster(str(tmp_path), "DEC-001", finder=malformed)
 
 
-def test_finder_result_must_respect_requested_limit(monkeypatch, blocks):
+def test_finder_result_must_respect_requested_limit(monkeypatch, blocks, tmp_path):
     _install_blocks(monkeypatch, blocks)
 
     def finder(_id, _limit):
         return {"similar": [{"block_id": "DEC-002"}, {"block_id": "DEC-001"}]}
 
     with pytest.raises(recompact_cli.RecompactError, match="limit=1"):
-        recompact_cli.resolve_similarity_cluster("/tmp/workspace", "DEC-001", limit=1, finder=finder)
+        recompact_cli.resolve_similarity_cluster(str(tmp_path), "DEC-001", limit=1, finder=finder)
 
 
 def test_mm_recompact_is_dry_run_by_default_and_contains_provenance(monkeypatch, blocks, tmp_path, capsys):
@@ -391,7 +391,7 @@ def test_staging_exercises_real_proposal_service_in_temp_workspace(monkeypatch, 
     assert not (tmp_path / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
 
 
-def test_unbounded_compressor_output_is_rejected_before_proposal(monkeypatch, blocks):
+def test_unbounded_compressor_output_is_rejected_before_proposal(monkeypatch, blocks, tmp_path):
     _install_blocks(monkeypatch, blocks)
 
     def too_large(_text: str, _blocks: list[dict[str, object]]) -> str:
@@ -399,7 +399,7 @@ def test_unbounded_compressor_output_is_rejected_before_proposal(monkeypatch, bl
 
     with pytest.raises(recompact_cli.RecompactError, match="exceeds"):
         recompact_cli.make_recompact_proposal(
-            "/tmp/workspace",
+            str(tmp_path),
             "DEC-001",
             compressor=too_large,
             config=RecompactionConfig(min_retention_ratio=0),
@@ -408,7 +408,7 @@ def test_unbounded_compressor_output_is_rejected_before_proposal(monkeypatch, bl
 
 
 @pytest.mark.parametrize("bad", ["\u200b", "\u202e", "\x00", "\ud800"])
-def test_compressor_rejects_invisible_or_surrogate_controls(monkeypatch, blocks, bad):
+def test_compressor_rejects_invisible_or_surrogate_controls(monkeypatch, blocks, bad, tmp_path):
     _install_blocks(monkeypatch, blocks)
 
     def unsafe(_text: str, _blocks: list[dict[str, object]]) -> str:
@@ -416,14 +416,14 @@ def test_compressor_rejects_invisible_or_surrogate_controls(monkeypatch, blocks,
 
     with pytest.raises(recompact_cli.RecompactError, match="control"):
         recompact_cli.make_recompact_proposal(
-            "/tmp/workspace", "DEC-001", compressor=unsafe, config=RecompactionConfig(min_retention_ratio=0), finder=_finder
+            str(tmp_path), "DEC-001", compressor=unsafe, config=RecompactionConfig(min_retention_ratio=0), finder=_finder
         )
 
 
-def test_compressor_allows_structural_newlines_and_tabs(monkeypatch, blocks):
+def test_compressor_allows_structural_newlines_and_tabs(monkeypatch, blocks, tmp_path):
     _install_blocks(monkeypatch, blocks)
     result = recompact_cli.make_recompact_proposal(
-        "/tmp/workspace",
+        str(tmp_path),
         "DEC-001",
         compressor=lambda _text, _blocks: "line 1\n\tline 2",
         config=RecompactionConfig(min_retention_ratio=0),
