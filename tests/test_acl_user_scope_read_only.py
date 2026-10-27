@@ -38,6 +38,7 @@ import os
 import shutil
 import sqlite3
 import tempfile
+from pathlib import Path
 from typing import Any, Callable
 
 import pytest
@@ -258,7 +259,7 @@ def _snapshot_files(root: str) -> dict[str, str]:
             if fname.endswith(("-wal", "-shm", "-journal")):
                 continue
             path = os.path.join(dirpath, fname)
-            rel = os.path.relpath(path, root)
+            rel = Path(os.path.relpath(path, root)).as_posix()  # allowlists use '/' on every OS
             with open(path, "rb") as handle:
                 data = handle.read()
             if data.startswith(b"SQLite format 3"):
@@ -438,7 +439,7 @@ def _runner(template: str, registered: dict[str, Callable[..., Any]], monkeypatc
         files_before = _snapshot_files(work)
         with use_workspace(ws):
             result = registered[name](**call_args)
-        changed = {k.split(os.sep, 1)[1] if k.startswith("ws" + os.sep) else k for k in _diff(files_before, _snapshot_files(work))}
+        changed = {k.split("/", 1)[1] if k.startswith("ws/") else k for k in _diff(files_before, _snapshot_files(work))}
         globals_after = _snapshot_globals()
         global_changes = {k: (globals_before[k], globals_after[k]) for k in globals_before if globals_before[k] != globals_after[k]}
         return str(result), changed, global_changes

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1756 | **Est. tokens:** ~5,172,377
-**Generated:** 2026-10-27 10:26 UTC
+**Files:** 1756 | **Est. tokens:** ~5,172,435
+**Generated:** 2026-10-27 10:32 UTC
 
 ## Token Budget Guide
 
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 799 | ~2,354,983 |
+| `tests/` | 799 | ~2,355,041 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1281,7 +1281,7 @@
 - `test_accountability_views.py` (~6320 tok, huge) — RA.2 — precision and waste as derived views, and the four refusals that shape them.
 - `test_acl_staging_readers.py` (~5568 tok, huge) — A user-scope staging write is allowed only while no reader serves it to others.
 - `test_acl_tool_coverage.py` (~2384 tok, huge) — ACL coverage invariant for the MCP tool surface.
-- `test_acl_user_scope_read_only.py` (~7433 tok, huge) — No USER-scope MCP tool may write, in any argument combination.
+- `test_acl_user_scope_read_only.py` (~7449 tok, huge) — No USER-scope MCP tool may write, in any argument combination.
 - `test_active_only_filter.py` (~312 tok, medium) — Tests for active_only recall filter."""
 - `test_adjacent_public_acl.py` (~3611 tok, huge) — ACL controls for public retrieval doors beside the ranked recall tool."""
 - `test_admissibility_unreadable_status.py` (~1104 tok, large) — An unreadable ``Status`` must be withheld on the stale-index path too.
@@ -1379,7 +1379,7 @@
 - `test_chunk_text.py` (~231 tok, medium) — Tests for text chunking."""
 - `test_ci_green_per_job_gate.py` (~4342 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
 - `test_cli_detector_refusal.py` (~1619 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_client_integrations.py` (~5548 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_client_integrations.py` (~5590 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_help_is_harmless.py` (~1922 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_hint_correctness.py` (~1371 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_codepoint_sanitize.py` (~3333 tok, huge) — Tests for invisible-Unicode ingest sanitization (security).
