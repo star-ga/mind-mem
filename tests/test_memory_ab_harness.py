@@ -301,6 +301,25 @@ class TestTheControlArmCannotReachMemory:
         with pytest.raises(ControlLeak, match="inside the work tree"):
             assert_control_isolated(env, str(tree), str(tree / "ws"))
 
+    def test_a_system_wide_memory_install_is_scrubbed_from_path(self, tmp_path, monkeypatch):
+        """Memory scripts in a shared bin dir are removed; the other tools stay."""
+        import mind_mem.bench.repo_task_validation as rtv
+
+        system_bin = tmp_path / "usr-bin"
+        system_bin.mkdir()
+        for name in ("mind-mem-scan", "mm", "git"):
+            (system_bin / name).write_text("#!/bin/sh\n")
+            (system_bin / name).chmod(0o755)
+        real = rtv.sandbox_env
+        monkeypatch.setattr(rtv, "sandbox_env", lambda tree, home: real(tree, home) | {"PATH": str(system_bin)})
+        with pytest.raises(ControlLeak, match="is on PATH"):  # positive control: unscrubbed, the leak is real
+            assert_control_isolated({"PATH": str(system_bin), "HOME": str(tmp_path / "h")}, str(tmp_path / "t"), "")
+        env = self.base_env(tmp_path)
+        assert assert_control_isolated(env, str(tmp_path / "tree"), str(tmp_path / "ws"))
+        shim = env["PATH"]
+        assert sorted(os.listdir(shim)) == ["git"]
+        assert os.access(os.path.join(shim, "git"), os.X_OK)
+
     def test_a_passthrough_variable_cannot_smuggle_memory_in(self, tmp_path):
         with pytest.raises(ControlLeak, match="hand the control arm a memory"):
             build_env(str(tmp_path / "tree"), str(tmp_path / "home"), {"MIND_MEM_PG_DSN": "postgresql://x"})

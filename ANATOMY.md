@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1756 | **Est. tokens:** ~5,172,032
-**Generated:** 2026-10-27 10:22 UTC
+**Files:** 1756 | **Est. tokens:** ~5,173,127
+**Generated:** 2026-10-27 10:42 UTC
 
 ## Token Budget Guide
 
@@ -78,9 +78,9 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,218 |
+| `src/mind_mem/` | 257 | ~1,147,270 |
 | `src/mind_mem/api/` | 5 | ~28,982 |
-| `src/mind_mem/bench/` | 17 | ~48,632 |
+| `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
 | `src/mind_mem/importers/` | 10 | ~34,469 |
 | `src/mind_mem/mcp/` | 3 | ~7,717 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 799 | ~2,354,716 |
+| `tests/` | 799 | ~2,355,370 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -776,7 +776,7 @@
 ### `src/mind_mem/bench/`
 
 - `ab_agent.py` (~2139 tok, huge) — Agent adapters: the one component the harness does not own.
-- `ab_arms.py` (~3609 tok, huge) — The two arms, and the invariants that make "memory is the only variable" true.
+- `ab_arms.py` (~3998 tok, huge) — The two arms, and the invariants that make "memory is the only variable" true.
 - `ab_cli.py` (~3334 tok, huge) — ``mind-mem-bench-ab`` -- run the with-memory versus without-memory comparison.
 - `ab_grade.py` (~1294 tok, large) — Machine-checked grading. A task passes iff its named tests pass.
 - `ab_harness.py` (~3755 tok, huge) — Drive both arms over a task set and produce one number with its uncertainty.
@@ -1012,7 +1012,7 @@
 - `prefetch.py` (~7500 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prefix_cache.py` (~3043 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `preimage.py` (~1329 tok, large) — # Copyright 2026 STARGA, Inc.
-- `project_key.py` (~3151 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `project_key.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `project_profile.py` (~1681 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `protection.py` (~2372 tok, huge) — Runtime protection layer for mind-mem (v3.3.0+).
 - `provenance_class.py` (~2682 tok, huge) — Provenance class — the FIFTH deterministic component of the validity gate.
@@ -1537,7 +1537,7 @@
 - `test_graph_schema_versioning.py` (~5941 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_group_h_robustness.py` (~7219 tok, huge) — Robustness tests for Group-H modules: edge-cases, error-paths, boundary values.
-- `test_group_s_corroboration_breadth.py` (~6857 tok, huge) — Group S — cross-project corroboration as a maturity component.
+- `test_group_s_corroboration_breadth.py` (~7068 tok, huge) — Group S — cross-project corroboration as a maturity component.
 - `test_grpc_server.py` (~2259 tok, huge) — v4.0 prep — gRPC wire protocol (tests for the grpcio-free handlers)."""
 - `test_guardrail_blocks.py` (~10742 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_guardrail_status_and_sources.py` (~1989 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1578,7 +1578,7 @@
 - `test_init_workspace_postgres.py` (~1650 tok, huge) — Postgres regression tests for ``init_workspace`` (audit bug #8).
 - `test_init_workspace.py` (~4105 tok, huge) — Tests for init_workspace — config validation and workspace scaffolding."""
 - `test_injection_framing_e2e.py` (~4893 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_install_script.py` (~750 tok, large) — # pip --user honours PYTHONUSERBASE on every platform; without it a
+- `test_install_script.py` (~918 tok, large) — # pip --user honours PYTHONUSERBASE on every platform; without it a
 - `test_install_unparseable_configs.py` (~2518 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_integration.py` (~1386 tok, large) — Integration test: full mind-mem lifecycle init → capture → scan → recall."""
 - `test_integrity_manifest_refusals.py` (~1688 tok, huge) — An absent, incomplete or substituted manifest cannot satisfy strict mode."""
@@ -1656,7 +1656,7 @@
 - `test_mcp_walkthrough_persona.py` (~2313 tok, huge) — Tests for the v3.9.0 MCP walkthrough + persona wrapper tools."""
 - `test_medlow_batch12_regressions.py` (~3396 tok, huge) — Regression tests for the batch-12 medium/low audit findings.
 - `test_memory_ab_analysis.py` (~2565 tok, huge) — Reps reduction, context poisoning, and disclosure — checked on known inputs.
-- `test_memory_ab_harness.py` (~6569 tok, huge) — The A/B harness's own guarantees, tested rather than asserted in prose.
+- `test_memory_ab_harness.py` (~6844 tok, huge) — The A/B harness's own guarantees, tested rather than asserted in prose.
 - `test_memory_ab_placebo.py` (~1051 tok, large) — The placebo arm must be a fair match, or it is a second memory arm.
 - `test_memory_ab_report.py` (~3423 tok, huge) — Pooling stratum artifacts into one delta -- and refusing to pool dishonestly.
 - `test_memory_index.py` (~3017 tok, huge) — Tests for the auto-generated hierarchical index (Group C).
