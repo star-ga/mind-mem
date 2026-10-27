@@ -27,10 +27,12 @@ def corpus(tmp_path: Path) -> Path:
     for relative, (block_id, owner) in files.items():
         path = ws / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            f"[{block_id}]\nStatement: aurora memory evidence for {owner}\nStatus: active\nDate: 2020-01-01\n\n",
-            encoding="utf-8",
-        )
+        body = f"[{block_id}]\nStatement: aurora memory evidence for {owner}\nStatus: active\nDate: 2020-01-01\n\n"
+        if owner != "shared":
+            # An exact duplicate inside the agent's own namespace: merge candidates are
+            # only ever exact duplicates, and this one is the authorized merge.
+            body += f"[{block_id}2]\nStatement: aurora memory evidence for {owner}\nStatus: active\nDate: 2020-01-01\n\n"
+        path.write_text(body, encoding="utf-8")
     config_path = ws / "mind-mem.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
     config.setdefault("v4", {})["granularity_align"] = {"enabled": True, "min_similarity": 0.0}
@@ -43,7 +45,8 @@ def corpus(tmp_path: Path) -> Path:
     try:
         _init_schema(conn)
         for relative, (block_id, _) in files.items():
-            _index_file(conn, str(ws), relative, relative, {block_id}, force=True)
+            ids = {block_id} if block_id == "D-SHARED" else {block_id, f"{block_id}2"}
+            _index_file(conn, str(ws), relative, relative, ids, force=True)
         conn.commit()
     finally:
         conn.close()
@@ -68,7 +71,7 @@ def _preview(ws: Path, monkeypatch: pytest.MonkeyPatch, actor: str, *, maturity:
 @pytest.mark.parametrize("maturity", [False, True])
 def test_registered_preview_keeps_private_ids_and_merge_text_isolated(corpus, monkeypatch, actor, other, maturity):
     result = _preview(corpus, monkeypatch, actor, maturity=maturity)
-    assert set(result["plan"]["mark"]) == {"D-SHARED", f"D-{actor.upper()}"}
+    assert set(result["plan"]["mark"]) == {"D-SHARED", f"D-{actor.upper()}", f"D-{actor.upper()}2"}
     assert result["granularity_align"]["candidates"], "authorized merge candidates must still be produced"
     assert f"D-{other.upper()}" not in json.dumps(result)
     assert f"evidence for {other}" not in json.dumps(result)
@@ -127,7 +130,7 @@ def test_project_profile_uses_only_canonical_authorized_sources(corpus, monkeypa
     _bind_principal(monkeypatch, "alice")
     with use_workspace(str(corpus)):
         result = json.loads(project_profile())
-    assert result["total_blocks"] == 2
+    assert result["total_blocks"] == 3
     assert set(result["top_files"]) == {"shared/decisions/DECISIONS.md", "agents/alice/decisions/DECISIONS.md"}
     assert "bob" not in json.dumps(result)
     assert "aurora" in result["top_concepts"]
@@ -142,7 +145,7 @@ def test_explicit_default_deny_withholds_unknown_principal_but_read_default_stil
     policy_path.write_text(json.dumps(policy), encoding="utf-8")
     allowed = _preview(corpus, monkeypatch, "outsider")
     assert allowed["plan"]["mark"] == ["D-SHARED"]
-    assert set(_preview(corpus, monkeypatch, "alice")["plan"]["mark"]) == {"D-SHARED", "D-ALICE"}
+    assert set(_preview(corpus, monkeypatch, "alice")["plan"]["mark"]) == {"D-SHARED", "D-ALICE", "D-ALICE2"}
 
 
 def test_preview_does_not_follow_shared_symlink_into_private_corpus(corpus, monkeypatch):
@@ -153,6 +156,6 @@ def test_preview_does_not_follow_shared_symlink_into_private_corpus(corpus, monk
     except (OSError, NotImplementedError):
         pytest.skip("host does not support symlink controls")
     result = _preview(corpus, monkeypatch, "alice")
-    assert result["plan"]["mark"] == ["D-ALICE"]
+    assert result["plan"]["mark"] == ["D-ALICE", "D-ALICE2"]
     assert "D-BOB" not in json.dumps(result)
-    assert result["granularity_align"]["scanned_blocks"] == 1
+    assert result["granularity_align"]["scanned_blocks"] == 2

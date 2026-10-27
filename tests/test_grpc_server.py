@@ -85,7 +85,7 @@ class TestHealthHandler:
         with patch("mind_mem.mcp.infra.workspace._workspace", return_value="/tmp/ws"):
             resp = handle_health()
         assert resp.status == "ok"
-        assert resp.workspace == "/tmp/ws"
+        assert resp.workspace == "ws", "basename only: the absolute path is a layout disclosure"
         assert resp.schema_version
 
 

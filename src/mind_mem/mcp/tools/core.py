@@ -28,7 +28,7 @@ from typing import Any
 
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import _core_dir, _core_registry, _kg_path
+from ._helpers import _core_dir, _core_registry, _kg_path, _read_scope_or_denied
 
 #: v4 flag gating :func:`export_core`. OFF -> the tool is inert.
 CORE_EXPORT_FLAG = "core_export"
@@ -79,7 +79,9 @@ def build_core(namespace: str, version: str, filename: str = "") -> str:
     try:
         from mind_mem.sqlite_index import merkle_leaves as _leaves
 
-        for bid, content_hash in _leaves(ws):
+        # A bundle ships what recall may serve, never the withheld rows the
+        # integrity anchor also covers.
+        for bid, content_hash in _leaves(ws, admitted_only=True):
             blocks.append({"_id": bid, "content_hash": content_hash})
     except (ImportError, AttributeError):
         pass
@@ -193,7 +195,33 @@ def list_cores() -> str:
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
-    return json.dumps({"cores": _core_registry().stats(), "_schema_version": "1.0"}, indent=2)
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
+    registry = _core_registry()
+    cores = registry.stats()
+    if not scope.whole:
+        # A core is a snapshot of block ids and graph edges. A restricted
+        # caller is told about a core (name, counts, hash) only if it holds
+        # something and every id in it is one the caller may read. An empty
+        # core proves nothing about what it was built from (its name is an
+        # arbitrary operator label), so it is withheld too -- fail closed.
+        cores = [row for row in cores if _core_servable(registry.get(row["namespace"]), scope)]
+    return json.dumps({"cores": cores, "_schema_version": "1.0"}, indent=2)
+
+
+def _core_servable(core: Any, scope: Any) -> bool:
+    """True when *core* is non-empty and every block and edge source in it is servable to the caller."""
+    if core is None or not (core.blocks or core.edges):
+        return False
+    for block in core.blocks:
+        if not isinstance(block, dict) or not scope.allows(block.get("_id")):
+            return False
+    for edge in core.edges:
+        source = edge.get("source_block_id") if isinstance(edge, dict) else None
+        if not source or not scope.allows(source):
+            return False
+    return True
 
 
 def _core_export_enabled() -> bool:

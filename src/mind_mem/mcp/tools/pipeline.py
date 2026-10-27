@@ -25,7 +25,7 @@ from typing import Any
 
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger
+from ._helpers import _read_scope_or_denied, get_logger
 
 _log = get_logger("mcp_server")
 
@@ -56,8 +56,13 @@ def pipeline_status() -> str:
 
     from mind_mem.pipeline_hash import current_pipeline_hash, pipeline_dirty_blocks
 
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
     digest, inputs = current_pipeline_hash(ws, return_inputs=True)
-    dirty = pipeline_dirty_blocks(ws)
+    # The dirty list names block ids and its length counts them: only the
+    # caller's own servable blocks, filtered before the head is cut.
+    dirty = scope.keep(pipeline_dirty_blocks(ws))
     return json.dumps(
         {
             "current_hash": digest,
@@ -104,14 +109,24 @@ def reindex_dirty(
 
     from mind_mem.pipeline_hash import reextract_dirty_blocks
 
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
+    # A dry run is a READ of the dirty list (user scope may call it): cut the
+    # list to the caller's readable blocks first, then apply ``limit``, so the
+    # limit cannot be used to probe how many unreadable ids precede a readable one.
+    scoped_dry_run = bool(dry_run) and scope.restricted
     try:
         result = reextract_dirty_blocks(
             ws,
-            limit=limit if limit > 0 else None,
+            limit=None if scoped_dry_run else (limit if limit > 0 else None),
             dry_run=bool(dry_run),
         )
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
+    if scoped_dry_run:
+        visible = scope.keep(result.get("ids", []))
+        result = {**result, "ids": visible[:limit] if limit > 0 else visible}
 
     return json.dumps(result, indent=2, default=str)
 

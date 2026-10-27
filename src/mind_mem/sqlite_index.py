@@ -22,14 +22,22 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
+import contextlib
+import functools
 import hashlib
 import json
 import os
 import re
 import sqlite3
 import threading
+import time
+from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Any
 
+from ._conn_lease import ConnLeases
 from ._recall_constants import _STOPWORDS
 from .admissibility import is_admissible_status, workspace_release_ids
 from .block_parser import canonical_day, parse_file
@@ -55,6 +63,7 @@ from .recall import (
     resolve_expand_mode,
     tokenize,
 )
+from .recall_supersede import supersede_targets
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 
 _log = get_logger("sqlite_index")
@@ -85,7 +94,10 @@ _BLOCK_ID_WEIGHT = 1.0
 #: be migrated into incrementally. Stored in ``meta``; a mismatch forces one
 #: full rebuild. v2 moved FACT sub-blocks out of ``blocks_fts`` into their own
 #: ``blocks_fts_facts`` surface so a derived row stops reweighting its parent.
-_FTS_SCHEMA_VERSION = "3"
+#: v4 indexes every namespace recall can serve (``shared/``, ``agents/<id>/``,
+#: declared custom namespaces), each on its own statistics surface, and the
+#: ``supersede_edges`` table recall resolves supersession chains from.
+_FTS_SCHEMA_VERSION = "4"
 
 
 #: How many blocks one dialogue may contribute before later ones are held
@@ -269,20 +281,33 @@ _conn_managers: dict[str, ConnectionManager] = {}
 _conn_managers_lock = threading.Lock()
 
 
-def _evict_conn_managers_locked() -> None:
-    """Close and drop least-recently-used managers past the bound.
+_leases = ConnLeases()
+_pinned = threading.local()
 
-    Caller must hold ``_conn_managers_lock``. Closing is best-effort for the
-    same reason the stale-file path is: a manager whose backing file is gone
-    can raise on close, and that must not block the eviction it is part of.
+
+def _evict_conn_managers_locked() -> list[ConnectionManager]:
+    """Drop least-recently-used managers past the bound and return them.
+
+    Caller must hold ``_conn_managers_lock`` and, after releasing it, pass each
+    victim to ``_leases.close_or_retire`` (which defers the close of a manager
+    that is mid-query rather than closing it under the running statement).
     """
+    victims: list[ConnectionManager] = []
     while len(_conn_managers) > _CONN_MANAGER_CACHE_MAX:
-        _path = next(iter(_conn_managers))
-        victim = _conn_managers.pop(_path)
-        try:
-            victim.close()
-        except Exception:  # nosec B110 - eviction must not be blocked by a dying manager
-            _log.warning("conn_manager_evict_close_failed", db_path=_path)
+        victims.append(_conn_managers.pop(next(iter(_conn_managers))))
+    return victims
+
+
+def close_all_conn_managers() -> None:
+    """Close and drop every cached manager (teardown / atexit)."""
+    with _conn_managers_lock:
+        victims = list(_conn_managers.values())
+        _conn_managers.clear()
+    for mgr in victims:
+        _leases.close_or_retire(mgr)
+
+
+atexit.register(close_all_conn_managers)
 
 
 # Per-thread re-entrancy guard for query_index.  When the index file is
@@ -309,6 +334,10 @@ def _get_conn_manager(workspace: str) -> ConnectionManager:
     """
     path = _db_path(workspace)
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    pinned: ConnectionManager | None = getattr(_pinned, "mgrs", {}).get(path)
+    if pinned is not None and os.path.isfile(path):
+        return pinned  # this thread holds a lease on it; do not swap it mid-query
+    stale: list[ConnectionManager] = []
     with _conn_managers_lock:
         mgr = _conn_managers.get(path)
         if mgr is not None and not os.path.isfile(path):
@@ -319,19 +348,8 @@ def _get_conn_manager(workspace: str) -> ConnectionManager:
             # thread-local connection to the now-unlinked inode is harmless
             # (the manager is removed from the cache, so no new caller can
             # reach it, and the OS reclaims the inode once those fds close).
-            try:
-                mgr.close()
-            except Exception:  # nosec B110 — see rationale below.
-                # Best-effort close of a stale ``ConnectionManager`` whose
-                # backing DB file has already been unlinked (workspace was
-                # deleted between runs). Any failure here is non-fatal:
-                # the manager is dropped from the cache on the next line,
-                # so no caller can reach the dead manager again, and the
-                # OS reclaims fds + inode once existing thread-local
-                # connections close. Re-raising would block the legitimate
-                # fresh-manager creation in the common "workspace rebuilt"
-                # path. Audited 2026-05-19 for alert #191.
-                pass
+            # (Retired, not closed outright, if a query is still using it.)
+            stale.append(mgr)
             mgr = None
         if mgr is None:
             mgr = ConnectionManager(path)
@@ -341,8 +359,35 @@ def _get_conn_manager(workspace: str) -> ConnectionManager:
             # the genuinely cold entries rather than whichever was created
             # first.
             _conn_managers[path] = _conn_managers.pop(path)
-        _evict_conn_managers_locked()
+        stale.extend(_evict_conn_managers_locked())
+    for victim in stale:
+        _leases.close_or_retire(victim)
     return mgr
+
+
+@contextlib.contextmanager
+def leased_conn_manager(workspace: str) -> Iterator[ConnectionManager]:
+    """Yield the workspace's manager, guaranteed not to be closed until exit.
+
+    Use this around any raw ``get_read_connection()`` work: an LRU eviction
+    that lands mid-query is deferred to the end of the block instead of
+    closing the handle under the running statement (a C-layer use-after-free).
+    """
+    mgr = _get_conn_manager(workspace)
+    path = mgr.db_path
+    with _leases.leased(mgr):
+        pins = getattr(_pinned, "mgrs", None)
+        if pins is None:
+            pins = _pinned.mgrs = {}
+        prev = pins.get(path)
+        pins[path] = mgr
+        try:
+            yield mgr
+        finally:
+            if prev is None:
+                pins.pop(path, None)
+            else:
+                pins[path] = prev
 
 
 # Core index tables whose presence indicates the FTS schema has been built.
@@ -399,7 +444,10 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             mtime    REAL NOT NULL,
             mtime_ns INTEGER,
             size     INTEGER NOT NULL,
-            hash     TEXT NOT NULL
+            hash     TEXT NOT NULL,
+            ctime_ns INTEGER,
+            ino      INTEGER,
+            observed_ns INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS meta (
@@ -492,11 +540,75 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    # Edit-detection migration: ``(size, mtime_ns)`` cannot see a same-size
+    # rewrite whose mtime was put back, nor one that landed in the tick the
+    # index observed the file in. ``ctime_ns`` + ``ino`` catch the first (the
+    # kernel stamps ctime on every write and ``utime`` cannot set it back; an
+    # atomic replace changes the inode); ``observed_ns`` scopes a content
+    # hash to files racily close to their observation. Legacy NULL rows are
+    # reported changed once, so the next build records the coordinate.
+    for column in ("ctime_ns", "ino", "observed_ns"):
+        try:
+            conn.execute(f"ALTER TABLE file_state ADD COLUMN {column} INTEGER")  # nosec B608 — fixed column names
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
     # Secondary indexes for common query patterns
     conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_parent_id ON blocks(parent_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_file ON blocks(file)")
 
+    _init_namespace_schema(conn)
     conn.commit()
+
+
+def _init_namespace_schema(conn: sqlite3.Connection) -> None:
+    """Tables for namespace corpora and supersession edges (schema v4).
+
+    ``ns_blocks`` is keyed by ``(file, id)``, not by id: the namespace layout
+    keeps a shared copy of a root file under ``shared/<corpus-file>``, so one
+    id legitimately exists in several namespaces. Each namespace gets its OWN
+    FTS5 table (named in ``ns_fts_tables``) because ``bm25()`` statistics are
+    per table and no WHERE clause narrows them: one table for every
+    namespace would let an agent's private rows move the scores another
+    caller sees. Only ADMITTED blocks are written here.
+
+    ``supersede_edges`` holds one row per (superseder, named id) for every
+    admitted superseder in every indexed file, so the query path resolves a
+    chain with indexed lookups and never parses the corpus.
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS ns_blocks (
+            id          TEXT NOT NULL,
+            type        TEXT NOT NULL,
+            file        TEXT NOT NULL,
+            namespace   TEXT NOT NULL,
+            line        INTEGER NOT NULL DEFAULT 0,
+            status      TEXT NOT NULL DEFAULT '',
+            date        TEXT NOT NULL DEFAULT '',
+            speaker     TEXT NOT NULL DEFAULT '',
+            tags        TEXT NOT NULL DEFAULT '',
+            dia_id      TEXT NOT NULL DEFAULT '',
+            parent_id   TEXT NOT NULL DEFAULT '',
+            json_blob   TEXT NOT NULL DEFAULT '{}',
+            PRIMARY KEY (file, id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ns_blocks_id ON ns_blocks(id);
+        CREATE INDEX IF NOT EXISTS idx_ns_blocks_namespace ON ns_blocks(namespace);
+
+        CREATE TABLE IF NOT EXISTS ns_fts_tables (
+            namespace TEXT PRIMARY KEY,
+            fts_table TEXT NOT NULL UNIQUE
+        );
+
+        CREATE TABLE IF NOT EXISTS supersede_edges (
+            superseder_id TEXT NOT NULL,
+            target_id     TEXT NOT NULL,
+            source_file   TEXT NOT NULL,
+            namespace     TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (source_file, superseder_id, target_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_supersede_edges_target ON supersede_edges(target_id);
+    """)
 
 
 # ---------------------------------------------------------------------------
@@ -505,6 +617,14 @@ def _init_schema(conn: sqlite3.Connection) -> None:
 
 
 _FILE_HASH_CHUNK = 1 << 20  # 1 MiB
+
+#: A file whose last change is within this window of the moment the index
+#: observed it is "racily clean": a further write in the same timestamp tick
+#: would leave size, mtime and ctime identical, so only its content can say
+#: whether it changed. Two seconds covers the coarsest common timestamp
+#: granularity (FAT); on ext4/xfs the tick is milliseconds. Only racy files
+#: are hashed on the query path.
+_RACY_WINDOW_NS = 2_000_000_000
 
 
 def _file_hash(path: str) -> str:
@@ -567,12 +687,14 @@ def _get_changed_files(
     the full hash made it linear in corpus BYTES (10.6 ms on 24 MB, ~20% of
     an indexed query — see :func:`_file_hash`).
 
-    RESIDUAL, stated rather than hidden. With ``verify_hash=False`` a file
-    rewritten in place that preserves BOTH its byte size and its
-    *nanosecond* mtime is reported unchanged. It is still caught by the
-    next build (which hashes), so the index cannot end up permanently
-    wrong; what the query path loses is only the ability to notice that
-    one class of edit before the next reindex.
+    RESIDUAL, closed. ``verify_hash=False`` used to report a same-size
+    rewrite that kept its nanosecond mtime as unchanged until the next
+    build. The row now also records ``ctime_ns`` and the inode (which a
+    restored mtime or an atomic replace cannot hide) and the moment the
+    file was observed; a file whose last change is within
+    :data:`_RACY_WINDOW_NS` of that moment — where a same-tick write could
+    leave every coordinate identical — is content-hashed even here. Files
+    outside the window, i.e. the steady state, are still never hashed.
 
     Discovery is :func:`~mind_mem.corpus_registry.discover_corpus_files`
     (I-14): the corpus table PLUS every ``.md`` directly inside a corpus
@@ -591,7 +713,9 @@ def _get_changed_files(
     changed = []
     ws = os.path.abspath(workspace)
 
-    discovered = discover_corpus_files(ws)
+    # Namespace corpora (shared/, agents/<id>/, declared custom) after the
+    # root, so the root corpus is checked exactly as before.
+    discovered = discover_corpus_files(ws) + _namespace_corpus_files(ws)
     for label, rel_path in discovered:
         full_path = os.path.join(ws, rel_path)
         if not os.path.isfile(full_path):
@@ -603,7 +727,7 @@ def _get_changed_files(
 
         stat = os.stat(full_path)
         row = conn.execute(
-            "SELECT mtime, mtime_ns, size, hash FROM file_state WHERE path = ?",
+            "SELECT mtime, mtime_ns, size, hash, ctime_ns, ino, observed_ns FROM file_state WHERE path = ?",
             (rel_path,),
         ).fetchone()
 
@@ -628,11 +752,24 @@ def _get_changed_files(
             changed.append((label, rel_path))
             continue
 
-        # Same size + same nanosecond mtime — verify the full hash to
-        # catch in-place edits that kept the metadata stable. Skipped on
-        # the query path, which is the only reason this branch was linear
-        # in corpus bytes on a corpus where nothing changed.
-        if not verify_hash:
+        # Same size + same mtime. ``ctime`` and the inode still move on a
+        # rewrite whose mtime was restored, or on an atomic replace; a row
+        # that predates these columns cannot vouch for the file at all.
+        if row["ctime_ns"] is None or row["ino"] is None or row["observed_ns"] is None:
+            changed.append((label, rel_path))
+            continue
+        if stat.st_ctime_ns != row["ctime_ns"] or stat.st_ino != row["ino"]:
+            changed.append((label, rel_path))
+            continue
+
+        # Every coordinate matches. That proves nothing for a file whose
+        # last change is racily close to the moment the index observed it:
+        # a write in the same timestamp tick leaves size, mtime and ctime
+        # all identical. Only such a file is content-hashed on the query
+        # path, so the steady state (files older than the window) hashes
+        # nothing — the cost the query path was rid of stays gone.
+        racy = max(stat.st_mtime_ns, stat.st_ctime_ns) + _RACY_WINDOW_NS >= row["observed_ns"]
+        if not verify_hash and not racy:
             continue
         current_hash = _file_hash(full_path)
         if current_hash != row["hash"]:
@@ -676,9 +813,12 @@ def _update_file_state(conn: sqlite3.Connection, workspace: str, rel_path: str) 
 
     stat = os.stat(full_path)
     h = _file_hash(full_path)
+    # Observed AFTER the hash: an edit that lands while hashing has an mtime
+    # inside the racy window of this instant, so the query path re-hashes it.
+    observed_ns = time.time_ns()
     conn.execute(
-        "INSERT OR REPLACE INTO file_state (path, mtime, mtime_ns, size, hash) VALUES (?, ?, ?, ?, ?)",
-        (rel_path, stat.st_mtime, stat.st_mtime_ns, stat.st_size, h),
+        "INSERT OR REPLACE INTO file_state (path, mtime, mtime_ns, size, hash, ctime_ns, ino, observed_ns) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (rel_path, stat.st_mtime, stat.st_mtime_ns, stat.st_size, h, stat.st_ctime_ns, stat.st_ino, observed_ns),
     )
 
 
@@ -704,16 +844,41 @@ def _compute_block_hash(block: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _as_text(value: object) -> str:
+    """A field value as index text: list items one per line, anything else via str()."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple)):
+        return "\n".join(_as_text(v) for v in value)
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True, default=str)
+    return str(value)
+
+
 def _extract_fts_fields(block: dict) -> dict:
-    """Extract FTS5 column values from a block."""
+    """Extract FTS5 column values from a block.
+
+    Every column is bound as text: a list-valued field (``Statement:\n- a\n- b``)
+    is indexed one item per line instead of failing the whole build.
+    """
+
+    def field(*names: str) -> str:
+        for name in names:
+            text = _as_text(block.get(name))
+            if text:
+                return text
+        return ""
+
     return {
-        "statement": block.get("Statement", ""),
-        "title": block.get("Title", "") or block.get("Name", ""),
-        "name": block.get("Name", ""),
-        "description": block.get("Description", "") or block.get("Summary", ""),
+        "statement": field("Statement"),
+        "title": field("Title", "Name"),
+        "name": field("Name"),
+        "description": field("Description", "Summary"),
         "tags": normalise_tags(block.get("Tags", "") or block.get("Keywords", "")),
-        "context": block.get("Context", "") or block.get("Rationale", ""),
-        "all_text": " ".join(str(block.get(f, "")) for f in SEARCH_FIELDS if block.get(f)),
+        "context": field("Context", "Rationale"),
+        "all_text": " ".join(_as_text(block.get(f)) for f in SEARCH_FIELDS if block.get(f)),
     }
 
 
@@ -790,6 +955,7 @@ def _index_file(
             old_ids = list(existing_hashes.keys())
             _delete_blocks(conn, old_ids, rel_path)
             counts["deleted"] = len(old_ids)
+        conn.execute("DELETE FROM supersede_edges WHERE source_file = ?", (rel_path,))
         _update_file_state(conn, workspace, rel_path)
         return counts
 
@@ -813,6 +979,11 @@ def _index_file(
         [(bid, blk.get("Status")) for bid, (blk, _hash) in current_blocks.items()],
         releases=releases if releases is not None else frozenset(),
     )
+
+    # Supersede edges are a property of the whole file's admitted blocks, so
+    # they are rewritten for the file every time the file is visited -- the
+    # same pass, off the same parse, with no second read.
+    _write_supersede_edges(conn, rel_path, "", [blk for bid, (blk, _hash) in current_blocks.items() if bid in admitted_ids])
 
     current_ids = set(current_blocks.keys())
     existing_ids = set(existing_hashes.keys())
@@ -950,7 +1121,7 @@ def _insert_block(
         )
 
     # --- Feature 2: Extract and index atomic fact cards as sub-blocks ---
-    statement = block.get("Statement", "")
+    statement = _as_text(block.get("Statement"))
     if statement and len(statement) > 15:
         block_date = block.get("Date", "")
         try:
@@ -1070,6 +1241,205 @@ def _delete_blocks(
     )
 
 
+# ---------------------------------------------------------------------------
+# Namespace corpora (schema v4)
+# ---------------------------------------------------------------------------
+
+
+def _namespace_config(workspace: str) -> dict:
+    """The workspace config recall reads (request-bound when one is bound)."""
+    from ._recall_core import _get_config
+
+    cfg = _get_config(workspace)
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _declared_custom(workspace: str, config: dict | None = None) -> tuple[str, ...]:
+    from .namespace_retrieval import declared_custom_namespaces
+
+    try:
+        return declared_custom_namespaces(config if config is not None else _namespace_config(workspace))
+    except ValueError:
+        return ()
+
+
+def _namespace_roots(workspace: str) -> list[str]:
+    """Namespace roots besides the workspace root, in a fixed order.
+
+    ``shared``, each valid ``agents/<id>`` directory, then each declared custom
+    namespace -- the roots :func:`mind_mem.namespace_retrieval.admitted_namespace_blocks`
+    walks. A root that is a symlink, or resolves anywhere but where it is
+    named, is skipped: the same rule that function applies.
+    """
+    from .namespaces import InvalidAgentIdError, _validate_agent_id
+
+    root = os.path.realpath(workspace)
+    roots = ["shared"]
+    agents = os.path.join(root, "agents")
+    if not os.path.islink(agents) and os.path.isdir(agents):
+        for name in sorted(os.listdir(agents)):
+            try:
+                _validate_agent_id(name)
+            except InvalidAgentIdError:
+                continue
+            roots.append("agents/" + name)
+    roots.extend(_declared_custom(workspace))
+    kept: list[str] = []
+    for namespace in dict.fromkeys(roots):
+        path = os.path.join(root, *namespace.split("/"))
+        if os.path.islink(path) or not os.path.isdir(path) or os.path.realpath(path) != path:
+            continue
+        kept.append(namespace)
+    return kept
+
+
+def _namespace_corpus_files(workspace: str) -> list[tuple[str, str]]:
+    """``(label, rel_path)`` for every corpus file under a namespace root.
+
+    Discovery under each root is :func:`discover_corpus_files`, so a
+    namespace has exactly the corpus-file boundary the workspace root has.
+    """
+    root = os.path.realpath(workspace)
+    out: list[tuple[str, str]] = []
+    for namespace in _namespace_roots(workspace):
+        base = os.path.join(root, *namespace.split("/"))
+        for _label, local in discover_corpus_files(base):
+            rel = namespace + "/" + local.replace(os.sep, "/")
+            out.append((corpus_label_for(local), rel))
+    return out
+
+
+def _namespace_of(rel_path: str) -> str | None:
+    """The namespace a non-root corpus path belongs to, ``None`` for the root corpus."""
+    from .namespace_retrieval import namespace_for_path
+
+    namespace = namespace_for_path(rel_path)
+    if namespace is None or namespace == "workspace":
+        return None
+    return namespace
+
+
+def _ns_fts_table_name(namespace: str) -> str:
+    return "blocks_fts_ns_" + hashlib.sha256(namespace.encode("utf-8")).hexdigest()[:16]
+
+
+def _ns_fts_table(conn: sqlite3.Connection, namespace: str) -> str:
+    """The FTS table for *namespace*, created and registered on first use."""
+    row = conn.execute("SELECT fts_table FROM ns_fts_tables WHERE namespace = ?", (namespace,)).fetchone()
+    if row is not None:
+        return str(row[0])
+    table = _ns_fts_table_name(namespace)
+    cols = ", ".join(col for col, _ in FTS5_COLUMNS)
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS {table} USING fts5(block_id, {cols}, file UNINDEXED, tokenize='porter unicode61')"  # nosec B608 — table is a fixed prefix plus a hex digest
+    )
+    conn.execute("INSERT INTO ns_fts_tables (namespace, fts_table) VALUES (?, ?)", (namespace, table))
+    return table
+
+
+def _clear_namespace_index(conn: sqlite3.Connection) -> None:
+    """Drop every namespace row, FTS table and supersede edge (full rebuild)."""
+    for row in conn.execute("SELECT fts_table FROM ns_fts_tables").fetchall():
+        table = str(row[0])
+        if re.fullmatch(r"blocks_fts_ns_[0-9a-f]{16}", table):
+            conn.execute(f"DROP TABLE IF EXISTS {table}")  # nosec B608 — validated generated name
+    conn.execute("DELETE FROM ns_fts_tables")
+    conn.execute("DELETE FROM ns_blocks")
+    conn.execute("DELETE FROM supersede_edges")
+
+
+def _write_supersede_edges(conn: sqlite3.Connection, rel_path: str, namespace: str, blocks: list[dict]) -> None:
+    """Replace *rel_path*'s supersede edges with those its ADMITTED *blocks* declare."""
+    conn.execute("DELETE FROM supersede_edges WHERE source_file = ?", (rel_path,))
+    for block in blocks:
+        bid = block.get("_id")
+        if not isinstance(bid, str) or not bid:
+            continue
+        for target in supersede_targets(block):
+            conn.execute(
+                "INSERT OR IGNORE INTO supersede_edges (superseder_id, target_id, source_file, namespace) VALUES (?, ?, ?, ?)",
+                (bid, target, rel_path, namespace),
+            )
+
+
+def _index_namespace_file(conn: sqlite3.Connection, workspace: str, rel_path: str, releases: frozenset[str]) -> dict:
+    """(Re)index one namespace corpus file: admitted blocks only, whole file at a time.
+
+    Admission is :func:`mind_mem.admissibility.admit_corpus` -- the shared
+    egress filter -- so a quarantined or pending block never becomes a row
+    any caller can match, count or score against. Namespace files are small
+    and change rarely, so the file is replaced wholesale rather than diffed
+    block by block.
+    """
+    from .admissibility import admit_corpus
+
+    namespace = _namespace_of(rel_path) or ""
+    counts = {"new": 0, "modified": 0, "deleted": 0, "unchanged": 0, "total": 0}
+    table = _ns_fts_table(conn, namespace)
+    old = conn.execute("SELECT COUNT(*) FROM ns_blocks WHERE file = ?", (rel_path,)).fetchone()[0]
+    conn.execute(f"DELETE FROM {table} WHERE file = ?", (rel_path,))  # nosec B608 — generated table name
+    conn.execute("DELETE FROM ns_blocks WHERE file = ?", (rel_path,))
+    conn.execute("DELETE FROM supersede_edges WHERE source_file = ?", (rel_path,))
+    counts["deleted"] = int(old)
+
+    root = os.path.realpath(workspace)
+    full_path = os.path.join(root, *rel_path.split("/"))
+    real = os.path.realpath(full_path)
+    if os.path.islink(full_path) or not real.startswith(root + os.sep) or not os.path.isfile(real):
+        _update_file_state(conn, workspace, rel_path)
+        return counts
+    try:
+        parsed = parse_file(real)
+    except (OSError, UnicodeDecodeError, ValueError):
+        _update_file_state(conn, workspace, rel_path)
+        return counts
+    for block in parsed:
+        block["_source_file"] = rel_path
+    admitted = admit_corpus(parsed, workspace=workspace, releases=releases)
+
+    seen: set[str] = set()
+    kept: list[dict] = []
+    for block in admitted:
+        bid = block.get("_id")
+        if not isinstance(bid, str) or not bid or bid in seen:
+            continue
+        seen.add(bid)
+        kept.append(block)
+        tags_str = normalise_tags(block.get("Tags", ""))
+        conn.execute(
+            """INSERT OR REPLACE INTO ns_blocks
+               (id, type, file, namespace, line, status, date, speaker, tags, dia_id, parent_id, json_blob)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)""",
+            (
+                bid,
+                get_block_type(bid),
+                rel_path,
+                namespace,
+                block.get("_line", 0),
+                block.get("Status", ""),
+                canonical_day(block.get("Date", "")),
+                _parse_speaker_from_tags(tags_str),
+                tags_str,
+                block.get("DiaID", ""),
+                json.dumps(block, default=str),
+            ),
+        )
+        fts = _extract_fts_fields(block)
+        conn.execute(
+            f"""INSERT INTO {table} (block_id, statement, title, name, description, tags, context, all_text, file)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # nosec B608 — generated table name
+            (bid, fts["statement"], fts["title"], fts["name"], fts["description"], fts["tags"], fts["context"], fts["all_text"], rel_path),
+        )
+    # deferred: namespace blocks get no FACT sub-blocks or xref edges, so small-to-big
+    # aggregation and graph boost stay root-only — upgrade path: give each
+    # namespace a facts table beside its FTS table and key xref_edges by file.
+    _write_supersede_edges(conn, rel_path, namespace, kept)
+    counts["new"] = len(kept)
+    counts["total"] = len(kept)
+    _update_file_state(conn, workspace, rel_path)
+    return counts
+
+
 def _is_markdown_backend(workspace: str) -> bool:
     """Return True when *workspace*'s blocks of record live on the Markdown corpus.
 
@@ -1120,6 +1490,7 @@ def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: dat
     conn.execute("DELETE FROM xref_edges")
     conn.execute("DELETE FROM index_meta")
     conn.execute("DELETE FROM file_state")
+    _clear_namespace_index(conn)
 
     all_block_ids = {b.get("_id", "") for b in blocks if b.get("_id")}
 
@@ -1139,6 +1510,12 @@ def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: dat
             continue
         rel_path = block.get("_source_file", "") or ""
         _insert_block(conn, block, bid, rel_path, all_block_ids, admitted=bid in admitted_ids)
+        if bid in admitted_ids:
+            for target in supersede_targets(block):
+                conn.execute(
+                    "INSERT OR IGNORE INTO supersede_edges (superseder_id, target_id, source_file, namespace) VALUES (?, ?, ?, '')",
+                    (bid, target, rel_path),
+                )
         conn.execute(
             "INSERT OR REPLACE INTO index_meta (file_path, block_id, content_hash, admitted) VALUES (?, ?, ?, ?)",
             (rel_path, bid, _compute_block_hash(block), 1 if bid in admitted_ids else 0),
@@ -1261,6 +1638,8 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
                     )
                 incremental = False
 
+            ns_rows = _namespace_corpus_files(ws)
+
             if incremental:
                 changed = _get_changed_files(conn, workspace)
                 # A release names ids in decisions/DECISIONS.md but ADMITS
@@ -1274,9 +1653,9 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
                 prior = conn.execute("SELECT value FROM meta WHERE key = 'release_set_hash'").fetchone()
                 if (prior["value"] if prior else None) != release_hash:
                     _log.info("release_set_changed", workspace=ws, files=len(corpus_rows))
-                    changed = list(corpus_rows)
+                    changed = list(corpus_rows) + ns_rows
             else:
-                changed = list(corpus_rows)
+                changed = list(corpus_rows) + ns_rows
                 # Clear the index for a full rebuild — the SAME set of tables
                 # ``_build_index_from_store`` clears, which is where this list
                 # comes from. Clearing only file_state/index_meta made every
@@ -1297,6 +1676,7 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
                 conn.execute("DELETE FROM blocks_fts_facts")
                 conn.execute("DELETE FROM blocks_fts_facts_withheld")
                 conn.execute("DELETE FROM xref_edges")
+                _clear_namespace_index(conn)
 
             total_blocks = 0
             total_new = 0
@@ -1304,7 +1684,10 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
             total_deleted = 0
             total_unchanged = 0
             for label, rel_path in changed:
-                counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force, releases=releases)
+                if _namespace_of(rel_path) is not None:
+                    counts = _index_namespace_file(conn, workspace, rel_path, releases)
+                else:
+                    counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force, releases=releases)
                 total_blocks += counts["total"]
                 total_new += counts["new"]
                 total_modified += counts["modified"]
@@ -1345,7 +1728,7 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
 
             elapsed = (datetime.now() - start).total_seconds() * 1000
             summary = {
-                "files_checked": len(corpus_rows),
+                "files_checked": len(corpus_rows) + len(ns_rows),
                 "files_indexed": len(changed),
                 "blocks_indexed": total_blocks,
                 "blocks_new": total_new,
@@ -1536,7 +1919,208 @@ def _aggregate_facts_to_parents(
 # ---------------------------------------------------------------------------
 
 
-def query_index(
+# ---------------------------------------------------------------------------
+# The caller's view of the index
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _CallerView:
+    """What one caller may be served from the index, resolved once per query.
+
+    ``root_files`` is ``None`` when every root-table row is readable (the
+    unbound caller, or a bound one whose ACL covers every indexed root file),
+    else the readable root files -- possibly none. ``namespaces`` lists the
+    namespace FTS tables the caller reads, each with its readable files
+    (``None`` = all of them). The SQL that fetches candidates is narrowed by
+    exactly these, so an unreadable row never takes a fetch slot, a rerank
+    slot or a score.
+    """
+
+    root_files: tuple[str, ...] | None
+    namespaces: tuple[tuple[str, str, tuple[str, ...] | None], ...]
+
+    def readable(self, namespace: str, file: str) -> bool:
+        if not namespace:
+            return self.root_files is None or file in self.root_files
+        for name, _table, files in self.namespaces:
+            if name == namespace:
+                return files is None or file in files
+        return False
+
+
+_UNRESTRICTED_VIEW = _CallerView(None, ())
+
+
+def _file_filter(files: tuple[str, ...] | None) -> tuple[str, tuple[str, ...]]:
+    """SQL narrowing ``b.file`` to *files*; empty when unrestricted."""
+    if files is None:
+        return "", ()
+    return " AND b.file IN (SELECT value FROM json_each(?))", (json.dumps(list(files)),)
+
+
+def _ns_registry(conn: sqlite3.Connection) -> list[tuple[str, str]]:
+    """``(namespace, fts_table)`` rows; empty on an index built before schema v4."""
+    try:
+        rows = conn.execute("SELECT namespace, fts_table FROM ns_fts_tables ORDER BY namespace").fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [(str(r[0]), str(r[1])) for r in rows if re.fullmatch(r"blocks_fts_ns_[0-9a-f]{16}", str(r[1]))]
+
+
+def _caller_view(conn: sqlite3.Connection, workspace: str, agent_id: str | None) -> _CallerView:
+    """Resolve what *agent_id* may read from this index.
+
+    UNBOUND (no principal): the root table, unnarrowed, plus every declared
+    custom namespace -- the set the scan leg serves an unbound caller.
+    ``shared/`` and ``agents/<id>/`` are served to a bound principal only,
+    exactly as on the scan leg.
+
+    BOUND: every indexed file the namespace ACL grants, decided by
+    :func:`mind_mem._recall_core._indexed_hit_is_readable` (the lexical path
+    AND its resolved real path), and kept only where the namespace's
+    retrieval declaration allows search. An agent id the ACL authority
+    rejects reads nothing.
+    """
+    from .namespace_retrieval import namespace_search_allowed
+
+    registry = _ns_registry(conn)
+    config = _namespace_config(workspace)
+    if not agent_id:
+        if not registry:
+            return _UNRESTRICTED_VIEW
+        custom = set(_declared_custom(workspace, config))
+        custom_views = tuple(
+            (name, table, None)
+            for name, table in registry
+            if name in custom and namespace_search_allowed(f"{name}/decisions/DECISIONS.md", config)
+        )
+        return _CallerView(None, custom_views)
+
+    from ._recall_core import _indexed_hit_is_readable
+    from .namespaces import InvalidAgentIdError, NamespaceManager
+
+    try:
+        manager = NamespaceManager(workspace, agent_id=agent_id)
+    except InvalidAgentIdError:
+        return _CallerView((), ())
+
+    def _readable(file: str) -> bool:
+        return _indexed_hit_is_readable(workspace, {"file": file}, manager)
+
+    root_all = [str(r[0]) for r in conn.execute("SELECT DISTINCT file FROM blocks").fetchall()]
+    root_ok = tuple(sorted(f for f in root_all if _readable(f)))
+    root_files = None if len(root_ok) == len(set(root_all)) else root_ok
+    namespaces: list[tuple[str, str, tuple[str, ...] | None]] = []
+    for name, table in registry:
+        files = [str(r[0]) for r in conn.execute("SELECT DISTINCT file FROM ns_blocks WHERE namespace = ?", (name,)).fetchall()]
+        ok = tuple(sorted(f for f in files if _readable(f) and namespace_search_allowed(f, config)))
+        if ok:
+            namespaces.append((name, table, ok))
+    return _CallerView(root_files, tuple(namespaces))
+
+
+def _index_superseders_of(conn: sqlite3.Connection, view: _CallerView):  # type: ignore[no-untyped-def]
+    """``superseders_of`` for :func:`resolve_heads`, answered from ``supersede_edges``.
+
+    An edge counts only when the caller may read the file the superseder
+    lives in. Edges were written from admitted superseders only.
+    """
+
+    def lookup(ids: list[str]) -> dict[str, list[str]]:
+        found: dict[str, list[str]] = {}
+        for start in range(0, len(ids), 500):
+            chunk = ids[start : start + 500]
+            try:
+                rows = conn.execute(
+                    "SELECT target_id, superseder_id, source_file, namespace FROM supersede_edges "
+                    "WHERE target_id IN (SELECT value FROM json_each(?))",
+                    (json.dumps(chunk),),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return {}
+            for row in rows:
+                if view.readable(str(row[3] or ""), str(row[2])):
+                    found.setdefault(str(row[0]), []).append(str(row[1]))
+        return found
+
+    return lookup
+
+
+def _row_to_hit(row: sqlite3.Row, score: float) -> dict:
+    """The hit shape :func:`query_index` returns, for a row pulled in by id."""
+    block_data = json.loads(row["json_blob"]) if row["json_blob"] else {}
+    hit = {
+        "_id": row["id"],
+        "type": row["type"],
+        "score": round(score, 4),
+        "excerpt": get_excerpt(block_data),
+        "speaker": row["speaker"],
+        "tags": row["tags"],
+        "file": row["file"],
+        "line": row["line"],
+        "status": row["status"],
+    }
+    if row["dia_id"]:
+        hit["DiaID"] = row["dia_id"]
+    if row["date"]:
+        hit["Date"] = row["date"]
+    return hit
+
+
+def _index_head_fetcher(conn: sqlite3.Connection, workspace: str, view: _CallerView):  # type: ignore[no-untyped-def]
+    """Fetch a chain head the query did not match, if the caller may read it and it is admitted."""
+
+    def fetch(block_id: str) -> dict | None:
+        try:
+            rows = list(conn.execute("SELECT *, '' AS namespace FROM blocks WHERE id = ? AND parent_id = ''", (block_id,)).fetchall())
+            rows += list(conn.execute("SELECT * FROM ns_blocks WHERE id = ? ORDER BY file", (block_id,)).fetchall())
+        except sqlite3.OperationalError:
+            return None
+        for row in rows:
+            if not view.readable(str(row["namespace"] or ""), str(row["file"])):
+                continue
+            if not _admit_ids([(row["id"], row["status"])], workspace=workspace):
+                continue
+            return _row_to_hit(row, 0.0)
+        return None
+
+    return fetch
+
+
+def _apply_index_supersession(conn: sqlite3.Connection, workspace: str, hits: list[dict], view: _CallerView) -> list[dict]:
+    """Put each retired hit's live chain head directly above it (see :mod:`mind_mem.recall_supersede`)."""
+    if not hits:
+        return hits
+    from .recall_supersede import order_by_supersession, resolve_heads
+
+    ids = [h["_id"] for h in hits if isinstance(h.get("_id"), str)]
+    heads = resolve_heads(ids, _index_superseders_of(conn, view))
+    if not heads:
+        return hits
+    return order_by_supersession(hits, heads, _index_head_fetcher(conn, workspace, view))
+
+
+def _supersession_view(workspace: str, hits: list[dict], agent_id: str | None = None) -> list[dict]:
+    """Apply index supersession to *hits* assembled by another leg (fusion, MCP).
+
+    Answers from the index without parsing the corpus. With no index, or one
+    built before schema v4, *hits* are returned unchanged.
+    """
+    if not hits or not _index_present(workspace):
+        return hits
+    try:
+        with leased_conn_manager(workspace) as mgr:
+            conn = mgr.get_read_connection()
+            conn.row_factory = sqlite3.Row
+            view = _caller_view(conn, workspace, agent_id)
+            return _apply_index_supersession(conn, workspace, hits, view)
+    except sqlite3.Error as exc:
+        _log.debug("supersession_view_skipped", error=str(exc))
+        return hits
+
+
+def _query_index_impl(
     workspace: str,
     query: str,
     limit: int = 10,
@@ -1550,8 +2134,16 @@ def query_index(
     since: str | None = None,
     until: str | None = None,
     return_k: int | None = None,
+    agent_id: str | None = None,
 ) -> list[dict]:
     """Query the FTS5 index. Returns ranked results matching recall() format.
+
+    ``agent_id`` is the caller's namespace principal. The index itself is not
+    filtered by it (callers apply the ACL to the hits); it exists so that when
+    this function falls back to the filesystem scan -- no index, or a database
+    without the FTS schema -- the scan runs AS that principal and walks only
+    the namespaces it may read. A fallback that dropped the principal answered
+    a bound caller from the root corpus alone.
 
     Falls back to filesystem scan (recall.recall()) if index doesn't exist.
 
@@ -1630,6 +2222,7 @@ def query_index(
                 # bounded query from an unbounded pool.
                 since=since,
                 until=until,
+                agent_id=agent_id,
             )
         finally:
             _active.discard(workspace)
@@ -1757,37 +2350,72 @@ def query_index(
         fetch_k = max(retrieve_wide_k, limit)
         if return_k is not None:
             fetch_k = min(max(fetch_k, return_k) * _FILTERED_OVERFETCH, _FILTERED_FETCH_CAP)
-        rows = conn.execute(
-            f"""SELECT b.*, f.rank as fts_rank,
-                       -bm25(blocks_fts, {weights}) as bm25_score
-                FROM blocks_fts f
-                JOIN blocks b ON b.id = f.block_id
-                WHERE blocks_fts MATCH ?{date_sql}
-                ORDER BY bm25_score DESC
-                LIMIT ?""",  # nosec B608 — `weights` is a comma-separated list of floats derived from FTS5_COLUMNS (a static constant), never from user input; `date_sql` is a fixed fragment whose bounds are bound parameters
-            (fts_query, *date_params, fetch_k),
-        ).fetchall()
-        # The FACT surface is queried SEPARATELY so each side's bm25 is computed
-        # over its own corpus. Fact scores are on a different scale from parent
-        # scores by construction -- a fact card is tens of characters where a
-        # session parent is thousands -- so they are never compared numerically
-        # against parents. They identify WHICH parents matched; those parents are
-        # then scored on the PARENT surface in _aggregate_facts_to_parents.
-        fact_rows = conn.execute(
-            f"""SELECT b.*, f.rank as fts_rank,
-                       -bm25(blocks_fts_facts, {weights}) as bm25_score
-                FROM blocks_fts_facts f
-                JOIN blocks b ON b.id = f.block_id
-                WHERE blocks_fts_facts MATCH ?{date_sql}
-                ORDER BY bm25_score DESC
-                LIMIT ?""",  # nosec B608 -- same provenance as the parent query above
-            (fts_query, *date_params, fetch_k),
-        ).fetchall()
-        rows = (
-            list(rows)
-            + list(fact_rows)
-            + _released_withheld_rows(conn, workspace, fts_query, weights, fetch_k, date_sql=date_sql, date_params=date_params)
-        )
+        # The caller's view narrows the candidate SQL itself. An unbound caller
+        # on a root-only corpus gets an empty fragment, so the statement and
+        # its parameters are exactly the historical ones.
+        view = _caller_view(conn, workspace, agent_id)
+        root_sql, root_params = _file_filter(view.root_files)
+        rows = []
+        fact_rows = []
+        if view.root_files != ():
+            rows = conn.execute(
+                f"""SELECT b.*, f.rank as fts_rank,
+                           -bm25(blocks_fts, {weights}) as bm25_score
+                    FROM blocks_fts f
+                    JOIN blocks b ON b.id = f.block_id
+                    WHERE blocks_fts MATCH ?{date_sql}{root_sql}
+                    ORDER BY bm25_score DESC
+                    LIMIT ?""",  # nosec B608 — `weights` is a comma-separated list of floats derived from FTS5_COLUMNS (a static constant), never from user input; `date_sql` / `root_sql` are fixed fragments whose values are bound parameters
+                (fts_query, *date_params, *root_params, fetch_k),
+            ).fetchall()
+            # The FACT surface is queried SEPARATELY so each side's bm25 is computed
+            # over its own corpus. Fact scores are on a different scale from parent
+            # scores by construction -- a fact card is tens of characters where a
+            # session parent is thousands -- so they are never compared numerically
+            # against parents. They identify WHICH parents matched; those parents are
+            # then scored on the PARENT surface in _aggregate_facts_to_parents.
+            fact_rows = conn.execute(
+                f"""SELECT b.*, f.rank as fts_rank,
+                           -bm25(blocks_fts_facts, {weights}) as bm25_score
+                    FROM blocks_fts_facts f
+                    JOIN blocks b ON b.id = f.block_id
+                    WHERE blocks_fts_facts MATCH ?{date_sql}{root_sql}
+                    ORDER BY bm25_score DESC
+                    LIMIT ?""",  # nosec B608 -- same provenance as the parent query above
+                (fts_query, *date_params, *root_params, fetch_k),
+            ).fetchall()
+            rows = _with_live_supplement(
+                conn, "blocks_fts", rows, fts_query, weights, fetch_k, date_sql, date_params, root_sql, root_params
+            )
+            fact_rows = _with_live_supplement(
+                conn, "blocks_fts_facts", fact_rows, fts_query, weights, fetch_k, date_sql, date_params, root_sql, root_params
+            )
+            rows = (
+                list(rows)
+                + list(fact_rows)
+                + _released_withheld_rows(
+                    conn,
+                    workspace,
+                    fts_query,
+                    weights,
+                    fetch_k,
+                    date_sql=date_sql + root_sql,
+                    date_params=(*date_params, *root_params),
+                )
+            )
+        # Each namespace the caller reads, on its own statistics surface.
+        for _namespace, ns_table, ns_files in view.namespaces:
+            ns_sql, ns_params = _file_filter(ns_files)
+            rows += conn.execute(
+                f"""SELECT b.*, f.rank as fts_rank,
+                           -bm25({ns_table}, {weights}) as bm25_score
+                    FROM {ns_table} f
+                    JOIN ns_blocks b ON b.file = f.file AND b.id = f.block_id
+                    WHERE {ns_table} MATCH ?{date_sql}{ns_sql}
+                    ORDER BY bm25_score DESC
+                    LIMIT ?""",  # nosec B608 — ns_table is a validated generated name; weights / fragments as above
+                (fts_query, *date_params, *ns_params, fetch_k),
+            ).fetchall()
     except sqlite3.OperationalError as e:
         _log.warning(
             "fts_query_error_fallback",
@@ -1810,6 +2438,7 @@ def query_index(
             scoring_instant=scoring_instant,
             since=since,
             until=until,
+            agent_id=agent_id,
         )
         for r in fallback_results:
             r["_fallback"] = "bm25_scan"
@@ -1901,7 +2530,7 @@ def query_index(
 
     # Graph boost
     if graph_boost and results:
-        _apply_graph_boost(conn, results, query_type, workspace)
+        _apply_graph_boost(conn, results, query_type, workspace, view=view)
 
     # Note: read connection is managed by ConnectionManager — not closed here (#466)
 
@@ -1956,7 +2585,10 @@ def query_index(
     # ``return_k``.
     if rerank and len(deduped) > limit:
         rerank_cap = min(len(deduped), 200 if return_k is None else max(200, return_k))
-        deduped = rerank_hits(query, deduped[:rerank_cap], debug=rerank_debug)
+        # Dead-status rows do not count against the cap (see _live_aware_window).
+        from ._recall_core import _live_aware_window
+
+        deduped = rerank_hits(query, _live_aware_window(deduped, rerank_cap), debug=rerank_debug)
 
     # Bound how much of the answer any ONE dialogue may occupy.
     #
@@ -1995,6 +2627,18 @@ def query_index(
     # ``return_k`` widens this slice — and only this slice — when the caller
     # has a filter left to apply. It never narrows: ``limit`` is the floor, so
     # a caller can only ever be handed at least what it asked for.
+    # Superseded/revoked rows drop below every live row before the cut, so a
+    # dead block that out-scores its replacement cannot take the replacement's
+    # slot at a small ``limit``. The pool here is the wide ``fetch_k`` one.
+    # Local import: ``_recall_core`` imports from this module.
+    from ._recall_core import _rank_replaced_below_live
+
+    deduped = _rank_replaced_below_live(deduped)
+    # A block an admitted, caller-readable block supersedes keeps its slot,
+    # with the live head of its chain directly above it -- pulled in when the
+    # query did not match it -- so a superseded memory is never returned
+    # instead of its superseder at any limit.
+    deduped = _apply_index_supersession(conn, workspace, deduped, view)
     top = deduped[: limit if return_k is None else max(return_k, limit)]
 
     _log.info(
@@ -2007,6 +2651,14 @@ def query_index(
     )
     metrics.inc("index_queries")
     return top
+
+
+@functools.wraps(_query_index_impl)
+def query_index(workspace: str, *args: Any, **kwargs: Any) -> list[dict]:
+    # Lease the workspace's manager for the whole query so an LRU eviction on
+    # another thread cannot close the raw read connection under it.
+    with leased_conn_manager(workspace):
+        return _query_index_impl(workspace, *args, **kwargs)
 
 
 #: How much wider the FTS fetch goes when the caller still holds a filter this
@@ -2051,6 +2703,52 @@ def _date_predicate(since: str | None, until: str | None) -> tuple[str, tuple[st
         fragment += " AND b.date <= ?"
         params.append(until)
     return fragment, tuple(params)
+
+
+def _with_live_supplement(
+    conn: sqlite3.Connection,
+    fts_table: str,
+    rows: list[sqlite3.Row],
+    fts_query: str,
+    weights: str,
+    fetch_k: int,
+    date_sql: str,
+    date_params: tuple[str, ...],
+    file_sql: str = "",
+    file_params: tuple[str, ...] = (),
+) -> list[sqlite3.Row]:
+    """*rows* plus the live rows a saturated fetch left out because dead rows filled it.
+
+    The FTS fetch is cut at ``fetch_k`` before any demotion can run, so once
+    ``fetch_k`` superseded/revoked rows out-score a live replacement the
+    replacement is never fetched and no later demotion can bring it back.
+    When the fetch came back full AND holds a dead row, a second fetch over
+    live rows only adds every live row a live-only fetch of ``fetch_k`` would
+    have held; rows already present are not repeated. An unsaturated fetch, or
+    one with no dead row, is returned untouched (no extra query runs).
+    """
+    from ._recall_core import _REPLACED_STATUSES
+
+    def _dead(row: sqlite3.Row) -> bool:
+        return str(row["status"] or "").strip().lower() in _REPLACED_STATUSES
+
+    if len(rows) < fetch_k or not any(_dead(r) for r in rows):
+        return rows
+    dead = sorted(_REPLACED_STATUSES)
+    placeholders = ",".join("?" for _ in dead)
+    live_rows = conn.execute(
+        f"""SELECT b.*, f.rank as fts_rank,
+                   -bm25({fts_table}, {weights}) as bm25_score
+            FROM {fts_table} f
+            JOIN blocks b ON b.id = f.block_id
+            WHERE {fts_table} MATCH ?{date_sql}{file_sql}
+              AND LOWER(TRIM(COALESCE(b.status, ''))) NOT IN ({placeholders})
+            ORDER BY bm25_score DESC
+            LIMIT ?""",  # nosec B608 -- fts_table is one of two module constants; weights/date_sql/file_sql as in query_index; values are bound
+        (fts_query, *date_params, *file_params, *dead, fetch_k),
+    ).fetchall()
+    seen = {r["id"] for r in rows}
+    return list(rows) + [r for r in live_rows if r["id"] not in seen]
 
 
 def _released_withheld_rows(
@@ -2117,6 +2815,8 @@ def _apply_graph_boost(
     results: list[dict],
     query_type: str,
     workspace: str | None = None,
+    *,
+    view: _CallerView | None = None,
 ) -> None:
     """Apply cross-reference graph boost to results using xref_edges table.
 
@@ -2153,16 +2853,18 @@ def _apply_graph_boost(
 
         placeholders = ",".join("?" for _ in seed_ids)
         edge_rows = conn.execute(
-            f"""SELECT e.src AS src, e.dst AS dst, b.status AS dst_status
+            f"""SELECT e.src AS src, e.dst AS dst, b.status AS dst_status, b.file AS dst_file
                 FROM xref_edges e JOIN blocks b ON b.id = e.dst
                 WHERE e.src IN ({placeholders})""",  # nosec B608 — placeholders is `? * N`, values passed as bind params; seed_ids sanitized above
             seed_ids,
         ).fetchall()
         # ADMISSION. Destinations only: a seed is either an FTS hit (already
         # admitted, since blocks_fts carries the admitted set) or a neighbour
-        # this same filter let through on an earlier hop.
+        # this same filter let through on an earlier hop. The caller's view
+        # too: a neighbour the caller cannot read neither receives nor passes
+        # on a boost.
         admitted_dst = _admit_ids([(e["dst"], e["dst_status"]) for e in edge_rows], workspace=workspace)
-        edges = [e for e in edge_rows if e["dst"] in admitted_dst]
+        edges = [e for e in edge_rows if e["dst"] in admitted_dst and (view is None or view.readable("", str(e["dst_file"])))]
 
         hop_added = 0
         for edge in edges:
@@ -2340,8 +3042,16 @@ def is_stale(workspace: str, *, verify_hash: bool = False) -> bool:
         return True
 
 
-def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
+def merkle_leaves(workspace: str, *, admitted_only: bool = False) -> list[tuple[str, str]]:
     """Return (block_id, content_hash) tuples for Merkle tree construction.
+
+    *admitted_only* is for a caller that SHIPS the leaf set rather than
+    attesting it — ``build_core`` packs these ids into a portable bundle.
+    The integrity anchor (the default) covers every indexed block, withheld
+    ones included, so it does not churn on a release; a bundle must carry
+    only what recall may serve, so its rows go through the shared admission
+    filter on the LIVE status (the index column is a cache that can be
+    stale in the fail-open direction — see ``admissibility.live_statuses``).
 
     Used by :func:`mcp_server.verify_merkle` and the standalone
     ``mind-mem-verify`` CLI. Leaves are sorted by block_id so two calls
@@ -2368,19 +3078,22 @@ def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
             return []
         rows = conn.execute(
             """
-            SELECT im.block_id AS block_id, im.content_hash AS content_hash
+            SELECT im.block_id AS block_id, im.content_hash AS content_hash, b.status AS status
             FROM index_meta im
             JOIN blocks b ON b.id = im.block_id
             WHERE im.content_hash IS NOT NULL AND im.content_hash != ''
             ORDER BY im.block_id
             """
         ).fetchall()
+        admitted: set[str] | None = None
+        if admitted_only:
+            admitted = _admitted_leaf_ids(workspace, [(r["block_id"], r["status"]) for r in rows])
         # De-dupe when the same block_id appears in multiple files.
         seen: set[str] = set()
         leaves: list[tuple[str, str]] = []
         for r in rows:
             bid = r["block_id"]
-            if bid in seen:
+            if bid in seen or (admitted is not None and bid not in admitted):
                 continue
             seen.add(bid)
             leaves.append((bid, r["content_hash"]))
@@ -2388,6 +3101,19 @@ def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
     finally:
         if conn is not None:
             conn.close()
+
+
+def _admitted_leaf_ids(workspace: str, pairs: list[tuple[str, str]]) -> set[str]:
+    """Ids among ``(block_id, cached status)`` *pairs* the shared filter admits.
+
+    The cached ``status`` column is refreshed from the corpus when the index
+    is stale, then the whole decision — allow-list, governed releases,
+    revoked credentials — is :func:`admissibility.admit_workspace_blocks`'s.
+    """
+    from .admissibility import admit_workspace_blocks, live_statuses, with_live_statuses
+
+    rows = with_live_statuses([{"_id": bid, "Status": status} for bid, status in pairs], live_statuses(workspace), status_key="Status")
+    return {str(row["_id"]) for row in admit_workspace_blocks(rows, workspace=workspace)}
 
 
 def _indexed_block_counts(conn: sqlite3.Connection, workspace: str) -> tuple[int, int]:

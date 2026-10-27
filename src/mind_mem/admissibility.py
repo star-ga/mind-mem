@@ -80,6 +80,7 @@ __all__ = [
     "admissible",
     "admit_corpus",
     "admit_expansion_corpus",
+    "admit_workspace_blocks",
     "admit_leg",
     "count_unresolved",
     "is_admissible_status",
@@ -185,6 +186,8 @@ RECOGNISED_STATUSES: Final[frozenset[str]] = frozenset(
         "planning",
         "roadmap",
         "working",
+        # dead-end registry lifecycle — dead_ends._LIVE_STATUSES
+        "confirmed",
     }
     - UNADMITTED
 )
@@ -318,6 +321,7 @@ def admit_corpus(
     status_key: str = "Status",
     allow: frozenset[str] = frozenset(),
     workspace: str | None = None,
+    releases: frozenset[str] = frozenset(),
 ) -> list[dict]:
     """The servable subset of a parsed corpus, order preserved.
 
@@ -331,14 +335,47 @@ def admit_corpus(
     ``recall(include_pending=True)``, where the operator has explicitly
     asked to see unreviewed signals; it is a per-call widening with a
     caller behind it, never a default.
+
+    *releases* adds ids admitted by a release decision the list itself
+    does not carry — :func:`admit_workspace_blocks` passes the workspace's
+    governed release set here. It is a union with the in-list answer,
+    never a replacement.
     """
     rows = [dict(b) for b in blocks]
     if workspace is not None:
         from .content_lifecycle import filter_revoked_credentials
 
         rows = filter_revoked_credentials(rows, workspace)
-    releases = release_ids(rows)
-    return [dict(b) for b in rows if _admitted(b, status_key, releases, allow)]
+    admitted = release_ids(rows) | releases
+    return [dict(b) for b in rows if _admitted(b, status_key, admitted, allow)]
+
+
+def admit_workspace_blocks(
+    blocks: Sequence[Mapping[str, Any]],
+    *,
+    workspace: str,
+    status_key: str = "Status",
+) -> list[dict]:
+    """:func:`admit_corpus` for a leg whose blocks do not travel with the release set.
+
+    The lifecycle legs (guardrails, task frames, dead ends), the dream
+    cycle's daily-log passes and the index readers each read a slice that
+    does not contain ``decisions/DECISIONS.md``, so the in-list release
+    set :func:`admit_corpus` derives is empty for them by construction —
+    a governed release would never reach them. This resolves the
+    workspace's release set and hands it in.
+
+    Lazily, as :func:`workspace_release_ids` requires: a slice whose every
+    status is admissible cannot be changed by the release set, so the
+    common case pays no decisions-file probe. Revoked-credential filtering
+    and the fail-closed status allow-list are :func:`admit_corpus`'s own,
+    unchanged.
+    """
+    rows = list(blocks)
+    releases: frozenset[str] = frozenset()
+    if any(not is_admissible_status(row.get(status_key)) for row in rows):
+        releases = workspace_release_ids(workspace)
+    return admit_corpus(rows, status_key=status_key, workspace=workspace, releases=releases)
 
 
 def admit_expansion_corpus(

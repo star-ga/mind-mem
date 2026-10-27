@@ -54,7 +54,12 @@ def _hits() -> list[dict]:
 
 
 @pytest.fixture(autouse=True)
-def _fresh_cache():
+def _fresh_cache(monkeypatch):
+    # The bundle generation now carries a stat-only corpus stamp, and a file
+    # written inside the racy-timestamp window makes the state unnameable (the
+    # bundle cache is bypassed). These tests write a fresh tmp_path workspace
+    # and recall at once; a zero window models a quiet store.
+    monkeypatch.setattr("mind_mem.recall_cache._RACY_WINDOW_NS", 0)
     prefetch.reset_cache()
     yield
     prefetch.reset_cache()
@@ -487,6 +492,20 @@ def _seed_recall_workspace(root: str) -> None:
             )
         )
     write_workspace(root, tuple(blocks))
+    # A quiet indexed store. The bundle generation carries a stat-only corpus
+    # stamp over ``.mind-mem-index``; an unindexed scan recall logs into
+    # ``recall.db`` on every miss and the first recall lazily creates its
+    # calibration / outcome tables, and either write moves the stamp (a stat
+    # cannot tell telemetry from a lineage write in the same file). Index the
+    # corpus and take the one-time table creation here, with the feature off
+    # (no config yet) and an explicit backend, so no bundle and no counter moves.
+    from mind_mem.mcp.infra.workspace import use_workspace
+    from mind_mem.mcp.tools.recall import _recall_impl
+    from mind_mem.sqlite_index import build_index
+
+    build_index(root)
+    with use_workspace(root):
+        _recall_impl("warm-up", limit=1, backend="bm25", scoring_instant="2026-01-02")
 
 
 class TestWiredIntoTheRecallSurface:
@@ -614,6 +633,9 @@ class TestWiredIntoTheRecallSurface:
         prefix, target = body.split("[D-20260101-001]", 1)
         with open(decisions, "w", encoding="utf-8") as fh:
             fh.write(prefix + "[D-20260101-001]" + target.replace("Status: active", "Status: archived", 1))
+        from mind_mem.sqlite_index import build_index
+
+        build_index(ws)  # the seed indexed the corpus; carry the archive into the index
         with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as fh:
             json.dump(
                 {"cache": {"enabled": False, "anticipation": {"enabled": True}}, "limits": {"max_recall_results": 20}},
@@ -798,6 +820,21 @@ class TestWiredIntoTheRecallSurface:
 
         with use_workspace(ws):
             filled = json.loads(prefetch_tool("recall,scoring,instant,input", limit=20))
+            # The prefetch door files its bundle under the generation it took
+            # BEFORE its fan-out; the fan-out's own ``retrieval_log`` write in
+            # ``recall.db`` moves the stat-only corpus stamp, so that bundle is
+            # unreachable (the safe direction; pinned in
+            # ``tests/test_anticipation_cache_corpus_stamp.py``). This test is
+            # about the local door's ceiling, so the same hits are re-filed at
+            # the generation the next lookup uses.
+            from mind_mem.mcp.infra.config import _load_config
+            from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
+            from mind_mem.mcp.tools.recall import _anticipation_generation_key
+
+            key = _anticipation_generation_key(ws, prefetch.chain_head(ws))
+            identity = prefetch.anticipation_generation_identity(_load_config(ws), str(MCP_SCHEMA_VERSION))
+            assert key is not None and identity is not None
+            prefetch.get_cache().record(ws, "prefetch", filled["results"], head=key, generation_identity=identity)
             served = json.loads(_recall_impl("recall scoring instant", limit=100, scoring_instant="2026-01-02"))
 
         assert filled["count"] > 2, "the prefetch tool assembled nothing bigger than the ceiling"

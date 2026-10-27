@@ -22,7 +22,7 @@ JSON (for example JSONC with comments) is left untouched with a warning.
 
 Client flags (default: all clients):
   --all             every client below
-  --claude-code     ~/.claude/mcp.json
+  --claude-code     ~/.claude/mcp.json (and ~/.claude.json via mm)
   --claude-desktop  Claude Desktop config
   --codex           ~/.codex/config.toml
   --gemini          ~/.gemini/settings.json
@@ -30,6 +30,10 @@ Client flags (default: all clients):
   --windsurf        ~/.codeium/windsurf/mcp_config.json
   --zed             ~/.config/zed/settings.json
   --openclaw        ~/.openclaw hooks and openclaw.json entry
+  --client NAME     any other client in mind-mem's registry (repeatable);
+                    runs `mm uninstall-all --agent NAME`. With --all (or no
+                    client flags) every detected registry client is also
+                    cleaned this way when `mm` is available.
 
 Options:
   --dry-run         show what would be changed, change nothing
@@ -41,21 +45,32 @@ EOF
 purge=false
 dry_run=false
 selected=()
-for arg in "$@"; do
+registry=()
+all_registry=false
+while [ $# -gt 0 ]; do
+  arg="$1"
   case "$arg" in
     -h|--help) usage; exit 0 ;;
     --purge) purge=true ;;
     --dry-run) dry_run=true ;;
-    --all) selected=("${ALL_TARGETS[@]}") ;;
+    --all) selected=("${ALL_TARGETS[@]}"); all_registry=true ;;
     --claude-code|--claude-desktop|--codex|--gemini|--cursor|--windsurf|--zed|--openclaw)
       selected+=("${arg#--}") ;;
+    --client)
+      if [ $# -lt 2 ]; then err "--client needs a NAME"; exit 2; fi
+      registry+=("$2"); shift ;;
+    --client=*) registry+=("${arg#--client=}") ;;
     *)
       err "unknown argument: $arg"
       usage >&2
       exit 2 ;;
   esac
+  shift
 done
-[ "${#selected[@]}" -eq 0 ] && selected=("${ALL_TARGETS[@]}")
+if [ "${#selected[@]}" -eq 0 ] && [ "${#registry[@]}" -eq 0 ]; then
+  selected=("${ALL_TARGETS[@]}")
+  all_registry=true
+fi
 
 wants() {
   local t
@@ -136,6 +151,7 @@ run() {
 echo -e "\n${BLUE}  mind-mem${NC} uninstaller$($dry_run && echo ' (dry run)')\n"
 
 wants claude-code && run "Claude Code" "$HOME/.claude/mcp.json" json mcpServers mind-mem
+wants claude-code && run "Claude Code (user scope)" "$HOME/.claude.json" json mcpServers mind-mem
 if wants claude-desktop; then
   if [ "$(uname)" = "Darwin" ]; then
     run "Claude Desktop" "$HOME/Library/Application Support/Claude/claude_desktop_config.json" json mcpServers mind-mem
@@ -153,6 +169,39 @@ if wants openclaw; then
     if $dry_run; then info "OpenClaw hooks: would remove"; else rm -rf "$HOME/.openclaw/hooks/mind-mem" && ok "OpenClaw hooks: removed"; fi
   fi
   run "OpenClaw config" "$HOME/.openclaw/openclaw.json" json hooks internal entries mind-mem
+fi
+
+# Registry clients: `mm uninstall-all` removes only the mind-mem entry from
+# each client's MCP config (backing a changed file up first).
+mm_cli() {
+  if command -v mm &>/dev/null; then
+    mm "$@"
+  elif python3 -c 'import mind_mem.mm_cli' 2>/dev/null; then
+    python3 -m mind_mem.mm_cli "$@"
+  else
+    return 127
+  fi
+}
+if $all_registry || [ "${#registry[@]}" -gt 0 ]; then
+  mm_args=(uninstall-all)
+  $dry_run && mm_args+=(--dry-run)
+  for name in ${registry[@]+"${registry[@]}"}; do mm_args+=(--agent "$name"); done
+  rc=0
+  out=$(MIND_MEM_WORKSPACE="${MIND_MEM_WORKSPACE:-$HOME}" mm_cli "${mm_args[@]}" 2>&1) || rc=$?
+  if [ "$rc" -eq 127 ]; then
+    warn "mm not found; registry clients beyond the ones above were not checked"
+  else
+    MM_OUT="$out" python3 - <<'PYEOF' || warn "mm uninstall-all: $out"
+import json, os
+for r in json.loads(os.environ["MM_OUT"]).get("results", []):
+    for x in [r, *r.get("also", [])]:
+        if x.get("removed"):
+            verb = "removed" if x.get("written") else "would remove"
+            print(f"[mind-mem] {x['agent']}: {verb} the mind-mem entry from {x.get('path', '')}")
+        elif x.get("skipped"):
+            print(f"[mind-mem] {x['agent']}: left untouched ({x.get('reason', '')})")
+PYEOF
+  fi
 fi
 
 if $purge; then

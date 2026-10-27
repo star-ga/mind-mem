@@ -90,6 +90,29 @@ def get_mind_kernel(name: str) -> str:
     )
 
 
+def _page_unreadable(ws: str, entity_id: str) -> bool:
+    """True when the caller's namespace ACL denies the page file for *entity_id*.
+
+    Pages live in ``entities/compiled/`` at the workspace root. A denied page is
+    reported as "not found" by the callers, so a denial is not an existence
+    oracle. An id that does not name a page is left to the loader's own error.
+    """
+    from mind_mem.compiled_truth import TruthPagePathError, _compiled_page_path
+    from mind_mem.read_authz import CallerUnresolved, caller_principal, is_bound, source_readable
+
+    try:
+        principal = caller_principal()
+    except CallerUnresolved:
+        return True
+    if not is_bound(principal):
+        return False
+    try:
+        path = _compiled_page_path(ws, entity_id)
+    except TruthPagePathError:
+        return False
+    return not source_readable(ws, os.path.relpath(path, os.path.realpath(ws)), principal)
+
+
 @mcp_tool_observe
 def compiled_truth_load(entity_id: str) -> str:
     """Load a compiled truth page for an entity."""
@@ -98,7 +121,7 @@ def compiled_truth_load(entity_id: str) -> str:
     try:
         from mind_mem.compiled_truth import load_truth_page
 
-        page = load_truth_page(ws, entity_id)
+        page = None if _page_unreadable(ws, entity_id) else load_truth_page(ws, entity_id)
     except Exception as exc:
         return json.dumps(
             {
@@ -217,7 +240,7 @@ def compiled_truth_contradictions(entity_id: str) -> str:
     try:
         from mind_mem.compiled_truth import detect_contradictions, load_truth_page
 
-        page = load_truth_page(ws, entity_id)
+        page = None if _page_unreadable(ws, entity_id) else load_truth_page(ws, entity_id)
         if page is None:
             return json.dumps(
                 {

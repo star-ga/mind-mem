@@ -99,6 +99,12 @@ ALLOWLIST: dict[str, str] = {
         "(quality_gate._near_duplicate -> _fail('near_duplicate', f'... ratio={ratio:.3f} ...')), so no "
         "byte of a withheld block reaches the proposer."
     ),
+    "governance._stage_supersede": (
+        "Write path, not a read surface: parse_blocks runs over the patch text stage_supersede_decision "
+        "JUST BUILT for this proposal (proposal['Ops'][0]['patch']), never over stored corpus rows, and "
+        "only to echo the new block's own id back to its proposer. No byte of a stored, let alone "
+        "withheld, block is read by this function itself."
+    ),
     "governance.scan": (
         "Aggregate counts only -- totals, active counts, drift and signal tallies. It reads the corpus "
         "wide on purpose: a governance scan that could not see quarantined blocks could not report that "

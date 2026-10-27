@@ -548,7 +548,9 @@ class TestTheRestoreIsRecorded:
         write_governed_block(workspace, "D-20260902-001")
         receipt_ts = "20260902-150000"
         snap_dir = create_snapshot(workspace, receipt_ts, files_touched=None)
-        write_receipt(snap_dir, {"ProposalId": "P-20260902-001", "Ops": []}, receipt_ts, ["seeded"])
+        # Seeded as APPLIED: rollback refuses a receipt in any other state
+        # (an in-progress receipt never landed, so there is nothing to undo).
+        write_receipt(snap_dir, {"ProposalId": "P-20260902-001", "Ops": []}, receipt_ts, ["seeded"], status="applied")
 
         assert restore_rows(workspace, ROLLBACK_VERB) == []
 

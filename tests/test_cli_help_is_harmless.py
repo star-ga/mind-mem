@@ -23,6 +23,23 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _child_env() -> dict[str, str]:
+    """Run the child on the SAME mind_mem this test process imported.
+
+    Without this, ``python -m mind_mem.x`` in a subprocess resolves whatever
+    copy is installed in site-packages, so the test silently checks an old
+    release instead of the code under test.
+    """
+    import mind_mem
+
+    src = str(Path(mind_mem.__file__).resolve().parent.parent)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(p for p in (src, env.get("PYTHONPATH", "")) if p)
+    return env
+
+
 UNINSTALL_SH = REPO_ROOT / "uninstall.sh"
 
 posix_only = pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None, reason="POSIX shell script")
@@ -134,6 +151,7 @@ def test_console_script_help_is_help(module: str, prog: str, tmp_path: Path) -> 
     result = subprocess.run(
         [sys.executable, "-m", module, "--help"],
         cwd=tmp_path,
+        env=_child_env(),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -150,6 +168,7 @@ def test_console_script_rejects_unknown_flags(module: str, prog: str, tmp_path: 
     result = subprocess.run(
         [sys.executable, "-m", module, "--definitely-not-a-flag"],
         cwd=tmp_path,
+        env=_child_env(),
         capture_output=True,
         text=True,
         encoding="utf-8",

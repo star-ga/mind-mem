@@ -109,6 +109,16 @@ def _cached_workspace(root: str) -> None:
         json.dump({"cache": {"enabled": True, "ttl_seconds": 3600}}, fh)
 
 
+def _backdate(root: str, seconds: int = 3600) -> None:
+    """Age every file past the recall cache's racy-timestamp window."""
+    import time
+
+    past = time.time() - seconds
+    for dirpath, _dirs, files in os.walk(root):
+        for name in files:
+            os.utime(os.path.join(dirpath, name), (past, past))
+
+
 def _excerpts(envelope: str) -> list[str]:
     return [str(hit.get("excerpt", "")) for hit in json.loads(envelope)["results"]]
 
@@ -129,31 +139,66 @@ def _append_to_governed_ledger(workspace: str, block_id: str, action: str, conte
 
 
 class TestAGovernedWriteRetiresTheCachedAnswer:
-    def test_an_ungoverned_corpus_edit_is_still_served_from_the_cache(self, tmp_path) -> None:
-        """POSITIVE CONTROL, and an honestly-stated bound.
+    def test_the_cache_holds_an_answer_across_calls_when_nothing_changes(self, tmp_path, monkeypatch) -> None:
+        """POSITIVE CONTROL for the negative tests below.
 
-        Rewriting ``DECISIONS.md`` by hand is not a governed write: it appends
-        nothing to the governed ledger, so the head does not move and the cached
-        entry legitimately still belongs to the corpus state the cache knows
-        about. This test exists to prove two things the test below depends on —
-        that the cache is genuinely holding an answer across calls, and that
-        this method can *see* a stale answer when there is one. Without it,
-        "the stale answer was not served" would pass just as well if the cache
-        had never stored anything.
+        Proves the cache genuinely holds an answer across two calls when no
+        write lands. Without it, "the stale answer was not served" would pass
+        just as well if the cache had never stored anything.
+        """
+        from mind_mem.mcp.infra.workspace import use_workspace
+        from mind_mem.mcp.tools import recall as recall_mod
+        from mind_mem.sqlite_index import build_index
+
+        ws = str(tmp_path / "quiet")
+        _cached_workspace(ws)
+        # Indexed, and warmed once: the scan leg (no FTS index) logs retrieval
+        # telemetry into recall.db on every miss, which moves the corpus stamp,
+        # and the first recall on a fresh index lazily creates two tables.
+        build_index(ws)
+        with use_workspace(ws):
+            recall_mod._recall_impl("warm-up", scoring_instant="2026-01-02")
+        _backdate(ws)
+        calls: list[str] = []
+        real = recall_mod._recall_impl_uncached
+
+        def counted(query, *args, **kwargs):
+            calls.append(query)
+            return real(query, *args, **kwargs)
+
+        monkeypatch.setattr(recall_mod, "_recall_impl_uncached", counted)
+        with use_workspace(ws):
+            before = recall_mod._recall_impl("retrieval rollout note", scoring_instant="2026-01-02")
+            after = recall_mod._recall_impl("retrieval rollout note", scoring_instant="2026-01-02")
+
+        assert any("original" in e for e in _excerpts(before)), "recall served nothing — the test would be vacuous"
+        assert _excerpts(after) == _excerpts(before)
+        assert len(calls) == 1, "the cache did not hold the answer across the two calls"
+
+    def test_an_ungoverned_corpus_edit_is_not_served_stale(self, tmp_path) -> None:
+        """A hand edit moves no governed head, but it moves the corpus stamp.
+
+        This used to be the positive control that a hand edit WAS served from
+        the cache until TTL. The corpus stamp in the key (see
+        ``recall_cache.corpus_stamp``) retires that: any change to what recall
+        reads is a different key.
         """
         from mind_mem.mcp.infra.workspace import use_workspace
         from mind_mem.mcp.tools.recall import _recall_impl
 
         ws = str(tmp_path / "ungoverned")
         _cached_workspace(ws)
+        _backdate(ws)
 
         with use_workspace(ws):
             before = _recall_impl("retrieval rollout note", scoring_instant="2026-01-02")
             _write_corpus(ws, "the retrieval rollout note landed on the superseding wording")
+            _backdate(ws)
             after = _recall_impl("retrieval rollout note", scoring_instant="2026-01-02")
 
         assert any("original" in e for e in _excerpts(before)), "recall served nothing — the test would be vacuous"
-        assert any("original" in e for e in _excerpts(after)), "the cache did not hold the answer across the two calls"
+        assert any("superseding" in e for e in _excerpts(after))
+        assert not any("original" in e for e in _excerpts(after))
 
     def test_a_governed_write_through_a_non_invalidating_door_is_not_served_stale(self, tmp_path) -> None:
         """The defect this closes.

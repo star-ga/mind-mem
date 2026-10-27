@@ -445,6 +445,23 @@ def list_outcomes(
     return [dict(row) for row in rows]
 
 
+def _abstention_section(mgr: ConnectionManager) -> dict[str, Any] | None:
+    """The abstention scoring section, or ``None`` when no verdict was ever recorded.
+
+    Absent rather than empty: a workspace that never asked for a verdict gets
+    the exact health report it always got -- no key, no new table read beyond
+    one COUNT that fails cheaply when the table does not exist.
+    """
+    try:
+        from .abstention_store import stats_from_manager
+
+        stats = stats_from_manager(mgr)
+    except Exception as exc:  # pragma: no cover -- a sidecar read must not break the report
+        _log.warning("abstention_stats_unavailable", error=str(exc))
+        return None
+    return stats if stats["predictions"] else None
+
+
 def get_outcome_stats(mgr: ConnectionManager, top_n: int = 20) -> dict[str, Any]:
     """Utility health report — totals, corroborated blocks, implicated blocks."""
     top_n = max(1, min(int(top_n), _MAX_OUTCOME_PAGE))
@@ -490,7 +507,7 @@ def get_outcome_stats(mgr: ConnectionManager, top_n: int = 20) -> dict[str, Any]
         key=lambda s: (s.factor, s.block_id),
     )[:top_n]
 
-    return {
+    report: dict[str, Any] = {
         "total_outcomes": sum(s.total for s in signals),
         "unique_reports": reports,
         "unique_blocks": len(signals),
@@ -498,3 +515,7 @@ def get_outcome_stats(mgr: ConnectionManager, top_n: int = 20) -> dict[str, Any]
         "corroborated": [s.as_dict() for s in corroborated],
         "implicated": [s.as_dict() for s in implicated],
     }
+    abstention = _abstention_section(mgr)
+    if abstention is not None:
+        report["abstention"] = abstention
+    return report

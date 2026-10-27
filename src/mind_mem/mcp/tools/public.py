@@ -87,6 +87,7 @@ def recall(
     lifecycle: str = "",
     event_id: str = "",
     min_maturity: float | None = None,
+    intended_use: str = "",
 ) -> str:
     """Unified retrieval entry point.
 
@@ -142,6 +143,19 @@ def recall(
     filter is not applied, and a request with no filter set is byte-identical
     to one made before they existed -- including its cache key.
 
+    ``intended_use`` (``summary`` | ``answer`` | ``governed_write``) asks for the
+    computed-abstention verdict: a first-class ``abstention`` field that tells
+    "five blocks came back and none is a clear match" from "five blocks came back
+    and the first is clearly right", in the band (``act`` /
+    ``proceed_with_caution`` / ``do_not_act``) that use demands -- a governed
+    write needs more separation than a summary. It applies to the ranked modes
+    (``auto`` / ``bm25`` / ``hybrid``) and is REFUSED for the others rather than
+    accepted and dropped. Empty (default) means no verdict, and the response is
+    byte-identical to one made before the field existed, unless the workspace
+    opted in with ``recall.abstention.enabled``. The verdict is recorded against
+    the run so ``report_outcome`` can score it; read the score in
+    ``outcome_stats``.
+
     ``scoring_instant`` is an ISO-8601 UTC date (``"YYYY-MM-DD"``) that pins the
     recency layer. Recall is deterministic given (corpus, config,
     scoring_instant), so replaying a previous run means passing back the instant
@@ -173,6 +187,7 @@ def recall(
             lifecycle=lifecycle or None,
             event_id=event_id or None,
             min_maturity=min_maturity,
+            intended_use=intended_use or None,
         )
     # Every branch below routes to an implementation that does not produce the
     # ``_explain`` decomposition. Accepting the flag and discarding it is the
@@ -181,6 +196,8 @@ def recall(
         return _err(f"explain=True is not available for mode={mode!r}; supported modes: {', '.join(sorted(EXPLAIN_MODES))}")
     if any(value not in (None, "") for value in (since, until, lifecycle, event_id, min_maturity)):
         return _err(f"recall filters are not available for mode={mode!r}; supported modes: {', '.join(sorted(EXPLAIN_MODES))}")
+    if intended_use:
+        return _err(f"intended_use is not available for mode={mode!r}; supported modes: {', '.join(sorted(EXPLAIN_MODES))}")
     if mode == "similar":
         if not block_id:
             return _err("mode='similar' requires 'block_id'")

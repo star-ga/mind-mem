@@ -134,6 +134,7 @@ def parse_blocks(text: str) -> list[dict]:
     current_op: dict[str, Any] | None = None
     current_op_field: str | None = None
     in_patch = False
+    pending_hash: list[str] = []
 
     for i, line in enumerate(lines):
         lineno = i + 1
@@ -141,6 +142,7 @@ def parse_blocks(text: str) -> list[dict]:
         # New block header: [ID]
         id_match = re.match(r"^\[([A-Z]+-[^\]]+)\]\s*$", line)
         if id_match:
+            pending_hash.clear()
             if current is not None:
                 _finalize_ops(current, in_ops, current_op)
                 _finalize_block(current, in_constraint_sigs, current_sig)
@@ -159,6 +161,12 @@ def parse_blocks(text: str) -> list[dict]:
 
         if current is None:
             continue
+
+        # A held '#' line belongs to this block once any further block content follows it.
+        if pending_hash and line.strip() and not line.lstrip().startswith("#"):
+            for held in pending_hash:
+                _keep_unparsed(current, held)
+            pending_hash.clear()
 
         # ConstraintSignatures: or ConstraintSignature: section start (accept both)
         if re.match(r"^ConstraintSignatures?:\s*$", line):
@@ -241,6 +249,16 @@ def parse_blocks(text: str) -> list[dict]:
                     key, val = time_kv.group(1), time_kv.group(2).strip()
                     time_dict = cast(dict[str, Any], parent_dict["time"])
                     time_dict[key] = _coerce_value(val)
+                    continue
+
+                # A key-only nested sub-field (e.g. "    time:") opens a mapping whose
+                # 6-space entries follow; it is structure, not stray text.
+                nested_key_only = re.match(r"^    ([a-z_]+):\s*$", line)
+                if nested_key_only and current_sig_field in _DICT_FIELDS:
+                    parent = current_sig_field
+                    if not isinstance(current_sig.get(parent), dict):
+                        current_sig[parent] = {}
+                    cast(dict[str, Any], current_sig[parent]).setdefault(nested_key_only.group(1), {})
                     continue
 
                 # List items under sig sub-fields
@@ -368,6 +386,10 @@ def parse_blocks(text: str) -> list[dict]:
         field_match = re.match(r"^([A-Z][A-Za-z]+):\s+(.+)$", line)
         if field_match:
             key, val = field_match.group(1), field_match.group(2).strip()
+            if key in current:
+                # A repeated key keeps the last value, as before; the value it
+                # replaces is kept verbatim so no consumer can ignore it.
+                _keep_unparsed(current, f"{key}: {current[key]}")
             current[key] = val
             current_field = key
             continue
@@ -376,6 +398,12 @@ def parse_blocks(text: str) -> list[dict]:
         field_empty = re.match(r"^([A-Z][A-Za-z]+):\s*$", line)
         if field_empty:
             key = field_empty.group(1)
+            if key in current:
+                # A repeated list key replaces the earlier list, as before; the
+                # replaced items are kept verbatim for the merge identity.
+                old = current[key]
+                for item in old if isinstance(old, list) else [old]:
+                    _keep_unparsed(current, f"{key}: {item}")
             current[key] = []
             current_field = key
             continue
@@ -397,6 +425,8 @@ def parse_blocks(text: str) -> list[dict]:
             field_val2 = current.get(current_field)
             if isinstance(field_val2, list):
                 field_val2.append(indented_item.group(1).strip())
+            else:
+                _keep_unparsed(current, line)  # an item under a single-value field
             continue
 
         # Continuation line: indented text (2+ spaces, not a list item) appends to previous scalar field
@@ -412,7 +442,8 @@ def parse_blocks(text: str) -> list[dict]:
             continue
 
         # Section separator
-        if line.startswith("---"):
+        if re.match(r"^-{3,}\s*$", line):
+            pending_hash.clear()
             if current is not None:
                 _finalize_ops(current, in_ops, current_op)
                 _finalize_block(current, in_constraint_sigs, current_sig)
@@ -427,14 +458,34 @@ def parse_blocks(text: str) -> list[dict]:
                 in_patch = False
             continue
 
-    # Last block
+        # Anything else inside a block (a lowercase key, a nested mapping line,
+        # free text) is kept verbatim so no consumer can treat two blocks as
+        # identical while ignoring text the fields above never captured.
+        # A '#' line is held back: it belongs to the block only if more block
+        # content follows it, otherwise it is the next section's heading.
+        if current is not None:
+            if line.lstrip().startswith("#"):
+                pending_hash.append(line.rstrip())
+                continue
+            _keep_unparsed(current, line)
+
+    # Last block. A '#' line held back at end of file has no next section to
+    # belong to, so it stays with the block (fail closed for merge identity).
     if current is not None:
+        for held in pending_hash:
+            _keep_unparsed(current, held)
         _finalize_ops(current, in_ops, current_op)
         _finalize_block(current, in_constraint_sigs, current_sig)
         _enrich_fact_keys(current)
         blocks.append(current)
 
     return blocks
+
+
+def _keep_unparsed(block: dict[str, Any], line: str) -> None:
+    unparsed = block.setdefault("_unparsed", [])
+    if isinstance(unparsed, list):
+        unparsed.append(line.rstrip())
 
 
 def _enrich_fact_keys(block: dict) -> None:

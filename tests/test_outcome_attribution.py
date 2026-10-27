@@ -413,8 +413,11 @@ def test_flag_off_is_byte_identical_even_with_outcomes_recorded(ws: str) -> None
 # ---------------------------------------------------------------------------
 
 
-def test_mcp_report_outcome_and_outcome_stats(ws: str) -> None:
+def test_mcp_report_outcome_and_outcome_stats(ws: str, monkeypatch: pytest.MonkeyPatch) -> None:
     from mind_mem.mcp.infra.workspace import use_workspace
+
+    # report_outcome is an admin tool: recall_outcome has a cross-client reader.
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
     from mind_mem.mcp.tools.calibration import outcome_stats as mcp_outcome_stats
     from mind_mem.mcp.tools.calibration import report_outcome as mcp_report_outcome
 

@@ -35,7 +35,9 @@ CLIENT_DOC = ROOT / "docs" / "client-integrations.md"
 # Who makes each registry client. Sources: each vendor's own site or repo
 # (NemoClaw: nvidianews.nvidia.com/news/nvidia-announces-nemoclaw and
 # docs.nvidia.com/nemoclaw; NanoClaw: nanoclaw.dev; OpenClaw: the OpenClaw
-# Foundation per github.com/openclaw/openclaw).
+# Foundation per github.com/openclaw/openclaw; goose: github.com/aaif-goose/goose).
+# The per-client documentation each entry was checked against is the
+# "Verified sources" table of docs/client-integrations.md.
 VENDORS: dict[str, str] = {
     "claude-code": "Anthropic",
     "codex": "OpenAI",
@@ -57,6 +59,55 @@ VENDORS: dict[str, str] = {
     "copilot-cli": "GitHub / Microsoft",
     "cody": "Sourcegraph",
     "qodo": "Qodo",
+    "claude-desktop": "Anthropic",
+    "vscode": "Microsoft",
+    "visual-studio": "Microsoft",
+    "qwen-code": "Alibaba",
+    "kimi-code": "Moonshot AI",
+    "amp": "Amp",
+    "goose": "Agentic AI Foundation (created by Block)",
+    "crush": "Charm",
+    "factory-droid": "Factory",
+    "kiro": "AWS",
+    "auggie": "Augment Code",
+    "openhands": "All Hands AI",
+    "mimo-code": "Xiaomi",
+    "junie": "JetBrains",
+    "kilo": "Kilo Code",
+    "antigravity": "Google",
+    "tabnine": "Tabnine",
+    "hermes-agent": "Nous Research",
+    "anythingllm": "Mintplex Labs",
+    "warp": "Warp",
+    "open-interpreter": "Open Interpreter",
+    "amazon-q": "AWS",
+    "lm-studio": "Element Labs",
+    "jan": "Menlo Research",
+    "boltai": "BoltAI",
+    "iflow": "iFlow",
+    "neovim-mcphub": "mcphub.nvim (open source)",
+    "trae": "ByteDance",
+    "android-studio": "Google",
+    "jetbrains-ai-assistant": "JetBrains",
+    "librechat": "LibreChat",
+    "eclipse-copilot": "GitHub / Microsoft",
+    "xcode": "Apple",
+    "witsy": "Witsy (open source)",
+    "emacs-mcp-el": "mcp.el (open source)",
+    "open-webui": "Open WebUI (open source)",
+    "docker-mcp-toolkit": "Docker",
+    "cherry-studio": "CherryHQ",
+    "msty": "Msty",
+    "raycast": "Raycast",
+    "5ire": "5ire (open source)",
+    "perplexity-desktop": "Perplexity",
+    "chatgpt-desktop": "OpenAI",
+    "n8n": "n8n",
+    "dify": "LangGenius",
+    "flowise": "FlowiseAI",
+    "blackbox": "Blackbox",
+    "fast-agent": "fast-agent (open source)",
+    "void": "Void (open source)",
 }
 
 VENDOR_HEADER = "| Client | Vendor | `mm install` id |"
@@ -74,9 +125,9 @@ MCP_TABLE = (CLIENT_DOC, "| Client | `mm install` id | Config path |", 1)
 # Tables whose rows must spell each MCP-aware client's MCP file in full.
 MCP_PATH_TABLES = ("readme-config-location", "readme-config-file")
 
-_ID = re.compile(r"`([a-z][a-z0-9-]*)`")
+_ID = re.compile(r"`([a-z0-9][a-z0-9-]*)`")  # registry ids may start with a digit (5ire)
 _HEADING = re.compile(r"Native integration with (\d+) clients \((\d+) MCP-aware clients\)")
-_INSTALL_ROW = re.compile(r"^\|\s*Install\s*\|\s*`mm install(?:-all --agent)? ([a-z][a-z0-9-]*)`")
+_INSTALL_ROW = re.compile(r"^\|\s*Install\s*\|\s*`mm install(?:-all --agent)? ([a-z0-9][a-z0-9-]*)`")
 
 
 def _table_rows(text: str, header_prefix: str) -> list[list[str]]:
@@ -109,8 +160,26 @@ def _install_ids(text: str) -> list[str]:
     return [m.group(1) for ln in text.splitlines() if (m := _INSTALL_ROW.match(ln))]
 
 
+# Linux spelling of each registry placeholder (docs show Linux paths).
+_LINUX = (
+    ("{vscode_user}", "~/.config/Code/User"),
+    ("{appsupport}", "~/.config"),
+    ("{config}", "~/.config"),
+    ("{data}", "~/.local/share"),
+    ("{home}", "~"),
+)
+
+
 def _home(path_tmpl: str) -> str:
-    return path_tmpl.replace("{home}", "~")
+    for placeholder, linux in _LINUX:
+        path_tmpl = path_tmpl.replace(placeholder, linux)
+    assert "{" not in path_tmpl, f"unrendered placeholder in {path_tmpl!r}"
+    return path_tmpl
+
+
+def _mode(name: str) -> str:
+    spec = AGENT_REGISTRY[name]
+    return "auto MCP" if spec.mcp_fmt else ("manual MCP" if spec.manual else "none")
 
 
 _CACHE: dict[Path, str] = {}
@@ -132,6 +201,11 @@ def test_vendor_map_covers_exactly_the_registry() -> None:
     )
 
 
+def test_registry_vendor_field_matches_vendor_map() -> None:
+    wrong = {k: (s.vendor, VENDORS[k]) for k, s in AGENT_REGISTRY.items() if s.vendor != VENDORS[k]}
+    assert not wrong, f"registry vendor (registry, expected) {wrong}"
+
+
 @pytest.mark.parametrize("table", sorted(TABLES))
 def test_table_names_exactly_the_registry(table: str) -> None:
     doc, header, col = TABLES[table]
@@ -151,10 +225,13 @@ def test_vendor_column_matches_vendor_map(table: str) -> None:
 
 
 @pytest.mark.parametrize("table", VENDOR_TABLES)
-def test_vendor_table_marks_exactly_the_mcp_aware_clients(table: str) -> None:
+def test_vendor_table_install_mode_matches_registry(table: str) -> None:
     doc, header, col = TABLES[table]
-    marked = {_row_id(c, col, table) for c in _table_rows(_read(doc), header) if c[3].startswith("Yes")}
-    assert marked == _mcp_aware()
+    rows = _table_rows(_read(doc), header)
+    wrong = {_row_id(c, col, table): c[3] for c in rows if c[3] != _mode(_row_id(c, col, table))}
+    assert not wrong, f"{table}: install mode differs from the registry: {wrong}"
+    marked = {_row_id(c, col, table) for c in rows if c[3] == "auto MCP"}
+    assert marked == _mcp_aware() and len(marked) >= 30
 
 
 def test_client_doc_mcp_table_names_exactly_the_mcp_aware_clients() -> None:
@@ -233,7 +310,8 @@ def test_positive_control_a_wrong_vendor_is_detected(table: str) -> None:
 def test_positive_control_a_vaguer_mcp_path_is_detected() -> None:
     text = _read(README)
     exact = _home(AGENT_REGISTRY["cline"].mcp_path_tmpl)
-    vague = exact.replace("~/.vscode-server/data/User", "<vscode-user>")
+    vague = exact.replace("~/.config/Code/User", "<vscode-user>")
+    assert vague != exact
     assert text.count(f"`{exact}`") >= 2
     mutated = text.replace(f"`{exact}`", f"`{vague}`")
     doc, header, col = TABLES["readme-config-file"]

@@ -141,12 +141,24 @@ def _capture_logs():
     buf = io.StringIO()
     originals = {name: h.stream for name, h in observability._owned_handlers.items()}
     for name in originals:
-        observability._owned_handlers[name].setStream(buf)
+        _swap_stream(observability._owned_handlers[name], buf)
     try:
         yield buf
     finally:
         for name, stream in originals.items():
-            observability._owned_handlers[name].setStream(stream)
+            _swap_stream(observability._owned_handlers[name], stream)
+
+
+def _swap_stream(handler, stream) -> None:
+    """Swap a handler's stream without flushing the old one.
+
+    ``setStream`` flushes first, and a handler created while another test held
+    capsys still points at that test's capture file, which is closed by now:
+    the flush raised ``ValueError: I/O operation on closed file`` whenever
+    xdist scheduled such a test earlier on the same worker.
+    """
+    with handler.lock:
+        handler.stream = stream
 
 
 def _lines(buf: io.StringIO) -> list[dict]:

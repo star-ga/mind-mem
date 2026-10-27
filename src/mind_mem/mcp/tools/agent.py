@@ -21,6 +21,8 @@ from __future__ import annotations
 import json
 import os
 
+from mind_mem.path_redact import redact_host_paths, supplied_pairs
+
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
 from ._helpers import _change_stream, _kg_path
@@ -115,6 +117,20 @@ def _vault_root_allowed(vault_root: str) -> tuple[bool, str]:
     return False, (f"vault_root {vault_root!r} is outside MIND_MEM_VAULT_ALLOWLIST")
 
 
+def _vault_root_readable(vault_root: str) -> bool:
+    """May the current caller scan *vault_root* (a path the operator allowlist already admitted)?"""
+    from mind_mem.mcp.infra.workspace import _workspace
+    from mind_mem.read_authz import CallerUnresolved, caller_principal, is_bound, path_readable
+
+    try:
+        principal = caller_principal()
+    except CallerUnresolved:
+        return False
+    if not is_bound(principal):
+        return True
+    return path_readable(_workspace(), vault_root.strip(), principal, outside_ok=True)
+
+
 @mcp_tool_observe
 def agent_inject(query: str, agent: str = "generic", limit: int = 10, scoring_instant: str = "") -> str:
     """Render a context snippet in the target agent's expected format.
@@ -194,12 +210,17 @@ def vault_scan(vault_root: str, sync_dirs: str = "") -> str:
     ok, reason = _vault_root_allowed(vault_root)
     if not ok:
         return json.dumps({"error": reason})
+    if not _vault_root_readable(vault_root):
+        # A vault inside the workspace is corpus: a bound caller reaches only what
+        # its namespace ACL grants, and a refusal reads like a vault that is absent.
+        return json.dumps({"error": f"vault root not found: {vault_root.strip()}"})
     dirs = [d.strip() for d in sync_dirs.split(",") if d.strip()] or None
     try:
         bridge = VaultBridge(vault_root=vault_root.strip())
         blocks = bridge.scan(sync_dirs=dirs)
     except (FileNotFoundError, ValueError) as exc:
-        return json.dumps({"error": str(exc)})
+        # The caller's own spelling of the root, never the resolved host path.
+        return json.dumps({"error": redact_host_paths(str(exc), supplied=supplied_pairs(vault_root.strip()))})
     return json.dumps(
         {
             "vault_root": vault_root,

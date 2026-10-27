@@ -317,6 +317,16 @@ _TOOL_PATTERNS = (
     # the stale trained-on count was hiding behind, and it was also hiding two
     # live "89-tool surface" claims in docs/ while that gate reported green.
     re.compile(rf"\b(?P<n>{_SMALL})(?P<plus>)-tool\b", re.IGNORECASE),
+    # "The live server now exposes **102**, so the model does not know the
+    # newest tools" (docs/mind-mem-4b-setup.md) -- a bare count whose noun is
+    # the subject, two releases stale while every pattern above looked for the
+    # word "tools" after the number. "server exposes N" is a tool claim in
+    # this corpus; the lookahead leaves the "N MCP tools" spelling to the first
+    # pattern so one claim is never reported twice.
+    re.compile(
+        rf"\bserver\s+(?:now\s+)?exposes\s+(?P<n>{_SMALL})(?P<plus>)\b(?!\s+(?:distinct\s+)?(?:MCP\s+)?tools?\b)",
+        re.IGNORECASE,
+    ),
 )
 
 # Markdown delimiters are presentation, not part of a numeric claim.  Keep

@@ -391,10 +391,17 @@ class TestOutcomesMoveReliability:
         assert after_second < after_first
         assert _profile(ws)._profiles[_TOOL].total_observations == 2
 
-    def test_the_mcp_report_outcome_tool_feeds_the_profile(self, tmp_path, pinned_config) -> None:
-        """The plug point is the tool an agent actually calls, not just the lib."""
+    def test_the_mcp_report_outcome_tool_feeds_the_profile(self, tmp_path, pinned_config, monkeypatch) -> None:
+        """The plug point is the tool an agent actually calls, not just the lib.
+
+        The profile is shared across clients, so with the flag on the tool is
+        an admin-scope write (tests/test_acl_user_scope_read_only.py pins the
+        user-scope denial); the plug point is exercised at admin scope.
+        """
         from mind_mem.mcp.tools.calibration import report_outcome as mcp_report_outcome
 
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+        monkeypatch.delenv("MIND_MEM_ACL_DISABLED", raising=False)
         ws = pinned_config(_make_workspace(tmp_path, "mcp", {"enabled": True}))
         with use_workspace(ws):
             payload = json.loads(mcp_report_outcome(block_ids=[_ID_A], outcome="failure", task_id="b", tool_id=_TOOL))

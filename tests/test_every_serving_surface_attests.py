@@ -117,6 +117,12 @@ ROLES: dict[str, str] = {
     "mind_mem.bench.ab_arms": DOOR,
     "mind_mem.bench.eval_adapters": DOOR,
     "mind_mem.contradiction_detector": DOOR,
+    # A measurement, not a serve: ``abstention_eval`` drives labelled queries
+    # through the entry under ``serving_scope()`` -- the same shape as the bench
+    # adapters above -- because the result sets are read for their scores and
+    # discarded; recording eighty candidate sets nobody was handed would put
+    # noise in the ledger the outcome join reads.
+    "mind_mem.abstention_eval": DOOR,
     # Legs: reached only from inside a recall that is already underway.
     "mind_mem.hybrid_recall": LEG,
     "mind_mem.sqlite_index": LEG,

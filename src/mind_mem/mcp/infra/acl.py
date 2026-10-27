@@ -18,7 +18,7 @@ import os
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from fastmcp.server.dependencies import get_access_token
 
@@ -324,6 +324,49 @@ ADMIN_TOOLS = frozenset(
         "arch_metric_explain",
         "arch_session_start",
         "arch_session_end",
+        # F14 (architecture review): a tool that writes in ANY argument
+        # combination is admin. Each of these was user-scope and was measured
+        # writing at user scope (tests/test_acl_user_scope_read_only.py):
+        #   add_block_edge             lineage edge + evidence-chain entry
+        #   compiled_truth_add_evidence  entities/compiled/*.md + evidence chain
+        #   ontology_load              the PROCESS-GLOBAL ontology registry, so
+        #                              on HTTP one client changed what every
+        #                              other client's ontology_validate used
+        #                              (make_active=False still replaces a
+        #                              loaded version of the same name)
+        #   vault_sync                 writes a file into an allow-listed vault
+        #   sign_model_tool            writes key material + manifest sidecars
+        #                              at a caller-chosen host path
+        #   build_core / export_core   .mmcore bundle / export artifact files
+        #   load_core / unload_core    the process-global core registry
+        #   governance_health_bench    its drift probe writes signals into the
+        #                              workspace drift store
+        # Their read-only neighbours (ontology_validate, vault_scan,
+        # verify_model_tool, audit_model_tool, list_cores, block_lineage,
+        # compiled_truth_load) stay user-scope.
+        "add_block_edge",
+        "compiled_truth_add_evidence",
+        "ontology_load",
+        "vault_sync",
+        # calibration_feedback writes the calibration_feedback table, which
+        # recall reads on EVERY query (CalibrationManager in _recall_core)
+        # to reweight served scores -- there is no admin step between the
+        # row and every client's ranking, so it is not a staging write.
+        "calibration_feedback",
+        # report_outcome appends to recall_outcome, which the validity gate
+        # serves to every client under the supported opt-in
+        # recall.validity_gate.outcome_attribution. Every row counts (no actor
+        # or scope filter), so a row written while the opt-in is off is served
+        # the moment it turns on: no config read at write time can make the
+        # write staging. Derived from STAGING_STORE_READERS and held there by
+        # tests/test_acl_staging_readers.py.
+        "report_outcome",
+        "sign_model_tool",
+        "build_core",
+        "export_core",
+        "load_core",
+        "unload_core",
+        "governance_health_bench",
     }
 )
 
@@ -348,24 +391,13 @@ USER_TOOLS = frozenset(
         "list_entity_merge_proposals",
         # Entity observations — read-only view of accreted per-entity facts.
         "entity_observations",
-        "build_core",
-        "load_core",
-        # export_core RENDERS a loaded bundle into a static interchange
-        # format under memory/cores/exports/. It reads the corpus snapshot
-        # a user-scope build_core already produced and writes only an
-        # export artifact — never the corpus, never a proposal — so it
-        # carries build_core's scope, not admin.
-        "export_core",
-        "unload_core",
         "list_cores",
         "plan_consolidation",
         "pack_recall_budget",
-        "ontology_load",
         "ontology_validate",
         "stream_status",
         "propagate_staleness",
         "project_profile",
-        "vault_sync",
         "vault_scan",
         "agent_inject",
         "list_contradictions",
@@ -380,14 +412,11 @@ USER_TOOLS = frozenset(
         "prefetch",
         "list_mind_kernels",
         "get_mind_kernel",
-        "calibration_feedback",
         "calibration_stats",
-        "report_outcome",
         "outcome_stats",
-        # similar_trajectories READS the trajectories/ sidecar that
-        # report_outcome (a user-scope tool) writes, through admit_corpus.
-        # It writes nothing, proposes nothing, and never reaches the corpus,
-        # so it carries report_outcome's scope rather than admin.
+        # similar_trajectories READS the trajectories/ sidecar that the admin
+        # tool report_outcome writes, through admit_corpus. It writes nothing,
+        # proposes nothing, and never reaches the corpus.
         "similar_trajectories",
         "list_evidence",
         # Read-only view of the anchor trail (and its integrity problems).
@@ -398,20 +427,16 @@ USER_TOOLS = frozenset(
         "stale_blocks",
         "dream_cycle",
         "compiled_truth_load",
-        "compiled_truth_add_evidence",
         "compiled_truth_contradictions",
-        "governance_health_bench",
         # v3.11.0 — quality gate + typed lineage edges.
         "validate_block",
         "block_lineage",
-        "add_block_edge",
         # v3.11.1 — backfill ACL gaps surfaced by the v3.11.0 audit.
         # These tools were registered in v3.8.x/v3.9.0 but never added
         # to the whitelist; the security-hardening commit that enforced
         # ACL didn't catch them. Tests that exercise them have been
         # silently failing on `acl_unknown_tool` since v3.8.4.
         "audit_model_tool",
-        "sign_model_tool",
         "verify_model_tool",
         "compile_truth_walkthrough",
         "recall_with_persona",
@@ -436,12 +461,13 @@ USER_TOOLS = frozenset(
         # v3.2.0 consolidated dispatchers. These are registered in
         # ``mcp.tools.public`` but were never classified, so the
         # unknown-tool branch rejected every call to them — the
-        # consolidated surface was advertised and unreachable. Each of
-        # these routes only to user-scope callees, except ``graph``,
-        # whose sole admin branch (``add_edge``) enforces the admin
-        # capability itself. ``staged_change`` and ``memory_verify``
-        # reach admin capabilities with no such guard and are in
-        # ADMIN_TOOLS instead.
+        # consolidated surface was advertised and unreachable. Their READ
+        # branches are user-scope; every branch that writes is denied at
+        # user scope by WRITE_MODE_GATES below (graph add_edge, core
+        # build/load/unload, compiled_truth add_evidence) — ``graph`` also
+        # enforces its admin branch itself. ``staged_change`` and
+        # ``memory_verify`` have no read branch worth splitting out and are
+        # in ADMIN_TOOLS instead.
         "graph",
         "core",
         "kernels",
@@ -450,6 +476,259 @@ USER_TOOLS = frozenset(
         # store, diff two baselines, apply rules to a fixture, explain one
         # metric. Nothing here writes an evidence node; the three that do
         # are admin-scoped above.
+    }
+)
+
+#: User-scope tools that WRITE, pinned. Each one appends to its own HITL
+#: staging or feedback store and nothing else: a proposal waits for an admin
+#: approve_* call before it reaches the source of truth, a signal row is an
+#: input the operator-side tuning reads. Staging holds only while NO reader of
+#: the store changes what other clients are served -- on OR off: a row written
+#: while a serving reader is off is served the moment the operator turns it
+#: on. So a store with any ``serving`` reader in ``STAGING_STORE_READERS`` is
+#: never staging (``recall_outcome``; its writer report_outcome is admin), and
+#: ``_gate_staging_readers`` denies such a pin at runtime whatever the config
+#: says. A store that recall reads by default (calibration_feedback) is not
+#: staging either: its writers are admin. This is the only write a
+#: user-scope tool may make; tests/test_acl_user_scope_read_only.py measures
+#: every user tool against it and holds the set as an exact ratchet, so a new
+#: entry is a reviewed decision and not a side effect. Values are the logical
+#: snapshot keys (``<workspace-relative path>`` or ``<db path>::<table>``).
+USER_STAGING_WRITES: dict[str, tuple[str, ...]] = {
+    "observe_signal": ("memory/interaction_signals.jsonl",),
+    "propose_edge": ("memory/knowledge_graph.db::edge_proposals",),
+    "propose_entity_merge": ("memory/knowledge_graph.db::entity_merge_proposals",),
+}
+
+
+def staging_store_token(store: str) -> str:
+    """The name a staged store goes by in code: its table, else its file stem."""
+    if "::" in store:
+        return store.rsplit("::", 1)[1]
+    return os.path.splitext(os.path.basename(store))[0]
+
+
+@dataclass(frozen=True)
+class StoreReader:
+    """How one function touches a staged store.
+
+    ``role`` is ``plumbing`` (passes rows on; whatever calls it is classified
+    in turn), ``writer`` (the staging append itself), ``report`` (shows rows to
+    the caller and moves nothing), ``schema`` (creates the store and reads no
+    row of it), ``derived`` (feeds an artifact that reaches
+    other clients only through a separate admin step), ``approval`` (applies a
+    staged row to shared state; an admin tool) or ``serving`` (changes what
+    OTHER clients are served). A serving reader names the config keys that turn
+    it on -- all of them must be on for it to read -- so the all-readers-on test
+    template can enable it; whether it is on today does not matter to the ACL:
+    its store is never user-writable.
+    """
+
+    role: str
+    enabled_by: tuple[str, ...] = ()
+    why: str = ""
+
+
+_P = StoreReader("plumbing")
+_W = StoreReader("writer")
+_R = StoreReader("report")
+_S = StoreReader("schema")
+
+#: Every function that touches a staged store -- one a user-scope tool writes,
+#: or one taken out of user scope because a reader serves it -- directly,
+#: through plumbing, or through a module/class constant that names it, keyed
+#: by ``staging_store_token``. tests/test_acl_staging_readers.py derives the
+#: touching set from the source (AST, transitively) and fails on any function
+#: missing here, so a new reader -- and the config key that turns it on -- is
+#: classified in the change that adds it; a serving reader makes every MCP
+#: writer of its store admin, and the all-readers-on template in
+#: tests/test_acl_user_scope_read_only.py enables every such key.
+STAGING_STORE_READERS: dict[str, dict[str, StoreReader]] = {
+    "recall_outcome": {
+        "mind_mem.calibration._init_calibration_schema": _S,
+        "mind_mem.outcome_store.record_outcome": _W,
+        "mind_mem.calibration.CalibrationManager.record_outcome": _W,
+        "mind_mem.outcome_attribution.report_outcome": _W,
+        "mind_mem.mcp.tools.calibration.report_outcome": _W,
+        "mind_mem.outcome_store.get_outcome_signals": _P,
+        "mind_mem.calibration.CalibrationManager.get_outcome_signals": _P,
+        "mind_mem.outcome_attribution.load_outcome_signals": _P,
+        "mind_mem.validity_gate._load_outcome_signals": StoreReader(
+            "serving",
+            ("recall.validity_gate", "recall.validity_gate.outcome_attribution"),
+            "every client's recall reweights its served scores by these outcomes",
+        ),
+        "mind_mem.outcome_store.get_outcome_stats": _R,
+        "mind_mem.outcome_store.list_outcomes": _R,
+        "mind_mem.calibration.CalibrationManager.get_outcome_stats": _R,
+        "mind_mem.calibration.CalibrationManager.list_outcomes": _R,
+        "mind_mem.outcome_attribution.outcome_stats": _R,
+        "mind_mem.accountability_views.credit_rows": _R,
+        # Computed abstention is scored by joining its recorded predictions to
+        # these outcomes. Every function below hands the caller AGGREGATE counts
+        # (per band / use / basis: success, failure, neutral) -- no block id, no
+        # text -- and moves nothing; recall never reads either side of the join.
+        "mind_mem.abstention_store.stats_from_manager": _R,
+        "mind_mem.abstention_store.abstention_stats": _R,
+        "mind_mem.calibration.CalibrationManager.get_abstention_stats": _R,
+        "mind_mem.calibration.CalibrationManager.get_calibration_stats": _R,
+        "mind_mem.mcp.tools.calibration.calibration_stats": _R,
+        "mind_mem.outcome_store._abstention_section": _P,
+    },
+    "interaction_signals": {
+        "mind_mem.mcp.tools.signal.observe_signal": _W,
+        "mind_mem.mcp.tools._helpers._signal_store_path": _P,
+        "mind_mem.online_trainer._signal_ledger_path": _P,
+        "mind_mem.online_trainer.run_harvest_job": StoreReader(
+            "derived",
+            why="appends training tuples; weights reach recall only through the governed promotion step",
+        ),
+        "mind_mem.online_trainer.harvest_stats": _R,
+        "mind_mem.mcp.tools.signal.signal_stats": _R,
+        "mind_mem.mcp.tools.memory_ops.index_stats": _R,
+        "mind_mem.mcp.tools.memory_ops._mrr_drift": _R,
+    },
+    "edge_proposals": {
+        "mind_mem.knowledge_graph.KnowledgeGraph.__init__": _S,
+        "mind_mem.knowledge_graph.KnowledgeGraph.propose_edge": _W,
+        "mind_mem.mcp.tools.graph.propose_edge": _W,
+        "mind_mem.knowledge_graph.KnowledgeGraph.get_edge_proposal": _P,
+        "mind_mem.knowledge_graph.KnowledgeGraph.list_edge_proposals": _R,
+        "mind_mem.knowledge_graph.KnowledgeGraph.approve_edge": StoreReader("approval"),
+        "mind_mem.knowledge_graph.KnowledgeGraph.reject_edge": StoreReader("approval"),
+        "mind_mem.mcp.tools.graph.approve_edge": StoreReader("approval"),
+    },
+    "entity_merge_proposals": {
+        "mind_mem.knowledge_graph.KnowledgeGraph.__init__": _S,
+        "mind_mem.knowledge_graph.KnowledgeGraph.propose_entity_merge": _W,
+        "mind_mem.knowledge_graph.KnowledgeGraph.get_entity_merge_proposal": _P,
+        "mind_mem.knowledge_graph.KnowledgeGraph.list_entity_merge_proposals": _R,
+        "mind_mem.knowledge_graph.KnowledgeGraph.approve_entity_merge": StoreReader("approval"),
+        "mind_mem.knowledge_graph.KnowledgeGraph.reverse_entity_merge": StoreReader("approval"),
+        "mind_mem.mcp.tools.graph.approve_entity_merge": StoreReader("approval"),
+        "mind_mem.mcp.tools.graph.reverse_entity_merge": StoreReader("approval"),
+    },
+}
+
+
+def cross_client_reader_config_keys() -> tuple[str, ...]:
+    """Every config key that turns on a reader serving a staged store to others."""
+    keys = {k for readers in STAGING_STORE_READERS.values() for r in readers.values() if r.role == "serving" for k in r.enabled_by}
+    return tuple(sorted(keys))
+
+
+def _gate_staging_readers(tool_name: str) -> WriteMode | None:
+    """Deny a staging write to a store any reader serves to other clients.
+
+    Config-independent on purpose: a row written while the reader is off is
+    served once it is turned on, so "off right now" is no reason to stage.
+    Reads no file and no clock -- the answer is a property of the tables.
+    """
+    for store in USER_STAGING_WRITES.get(tool_name, ()):
+        for func, reader in STAGING_STORE_READERS.get(staging_store_token(store), {}).items():
+            if reader.role == "serving":
+                return WriteMode(f"{tool_name}({reader.enabled_by[-1]})", f"{reader.why} ({func})")
+    return None
+
+
+@dataclass(frozen=True)
+class WriteMode:
+    """An argument combination of a user-scope tool that writes.
+
+    ``capability`` names what the call reaches -- an admin tool for a
+    consolidated dispatcher branch, otherwise ``tool(argument)`` -- and is
+    what the denial reports, so a client learns which admin tool (or mode)
+    does what it asked.
+    """
+
+    capability: str
+    detail: str
+
+
+def _gate_stale_blocks(args: dict[str, Any]) -> WriteMode | None:
+    if args.get("clear_block_id"):
+        return WriteMode("stale_blocks(clear_block_id)", "clears a staleness flag in the causal graph")
+    return None
+
+
+def _gate_memory_evolution(args: dict[str, Any]) -> WriteMode | None:
+    # Fail closed on anything but the read action: an unknown action gets a
+    # scope error at user scope instead of reaching the body.
+    if args.get("action", "get") != "get":
+        return WriteMode("memory_evolution(action=update)", "rewrites stored block importance")
+    return None
+
+
+def _gate_reindex_dirty(args: dict[str, Any]) -> WriteMode | None:
+    if not args.get("dry_run", False):
+        return WriteMode("reindex_dirty(dry_run=False)", "rewrites dirty corpus blocks and appends evidence")
+    return None
+
+
+def _gate_dream_cycle(args: dict[str, Any]) -> WriteMode | None:
+    # The default mode is served at user scope as a dry run (the body asks
+    # request_has_admin_scope); auto_repair is the mode that mutates.
+    if args.get("auto_repair", False):
+        return WriteMode("dream_cycle(auto_repair=True)", "applies repairs to the workspace")
+    return None
+
+
+_CORE_WRITE_ACTIONS = {"build": "build_core", "load": "load_core", "unload": "unload_core"}
+
+
+def _gate_core(args: dict[str, Any]) -> WriteMode | None:
+    capability = _CORE_WRITE_ACTIONS.get(args.get("action", ""))
+    if capability is not None:
+        return WriteMode(capability, "writes a core bundle or the process-global core registry")
+    return None
+
+
+def _gate_compiled_truth(args: dict[str, Any]) -> WriteMode | None:
+    if args.get("action") == "add_evidence":
+        return WriteMode("compiled_truth_add_evidence", "writes compiled truth and the evidence chain")
+    return None
+
+
+def _gate_graph(args: dict[str, Any]) -> WriteMode | None:
+    # The dispatcher also enforces this itself (enforce_capability_acl);
+    # gating it here as well keeps the one table complete.
+    if args.get("action") == "add_edge":
+        return WriteMode("graph_add_edge", "writes a knowledge-graph edge")
+    return None
+
+
+#: Argument-level ACL for user-scope tools whose READ mode is user-scope and
+#: whose WRITE mode is not. ``mcp_tool_observe`` binds the call's arguments
+#: to the tool signature (defaults applied, so positional and keyword calls
+#: are judged alike) and consults this table before the body runs; a write
+#: mode at non-admin scope gets the same denial envelope as an admin tool.
+#: Kept here, beside the scope sets, so classification lives in one file.
+WRITE_MODE_GATES: dict[str, Callable[[dict[str, Any]], WriteMode | None]] = {
+    "stale_blocks": _gate_stale_blocks,
+    "memory_evolution": _gate_memory_evolution,
+    "reindex_dirty": _gate_reindex_dirty,
+    "dream_cycle": _gate_dream_cycle,
+    "core": _gate_core,
+    "compiled_truth": _gate_compiled_truth,
+    "graph": _gate_graph,
+}
+
+#: MCP resources (``@mcp.resource``) carry a scope too. Every one is a
+#: read-only, admission-filtered view, so all are user-scope; the set exists
+#: so a resource reaches the same gate a tool does (fail-closed ``deny``
+#: sentinel, per-client rate limit, unknown-name rejection) and so a new
+#: resource is classified in the change that registers it. Pinned against the
+#: live registration by tests/test_resource_acl_rate_limit.py.
+USER_RESOURCES = frozenset(
+    {
+        "get_decisions",
+        "get_tasks",
+        "get_entities",
+        "get_signals",
+        "get_contradictions",
+        "get_health",
+        "get_recall",
+        "get_ledger",
     }
 )
 
@@ -492,6 +771,62 @@ def check_tool_acl(tool_name: str, scope: str) -> str | None:
             }
         )
     return None
+
+
+#: Every tool whose call is judged by ``write_mode_of``: the argument gates
+#: plus the staging writers, whose write is admin if a reader serves their
+#: store to other clients.
+WRITE_GATED_TOOLS = frozenset(WRITE_MODE_GATES) | frozenset(USER_STAGING_WRITES)
+
+
+def write_mode_of(tool_name: str, arguments: dict[str, Any]) -> WriteMode | None:
+    """The cross-client write this call would make, or None for a read/staging."""
+    gate = WRITE_MODE_GATES.get(tool_name)
+    mode = gate(arguments) if gate is not None else None
+    return mode if mode is not None else _gate_staging_readers(tool_name)
+
+
+def check_write_mode_acl(tool_name: str, arguments: dict[str, Any], scope: str) -> str | None:
+    """Deny a user-scope tool's WRITE mode at non-admin *scope*.
+
+    Returns None when the call is allowed (admin scope, an ungated tool, or a
+    read mode), else the JSON denial. *arguments* must already be bound to
+    the tool signature with defaults applied.
+    """
+    if scope == "admin":
+        return None
+    mode = write_mode_of(tool_name, arguments)
+    if mode is None:
+        return None
+    metrics.inc("mcp_acl_denied")
+    _log.warning("acl_denied", tool=tool_name, scope=scope, write_mode=mode.capability)
+    return json.dumps(
+        {
+            "error": f"Permission denied: '{mode.capability}' requires admin scope",
+            "tool": tool_name,
+            "write_mode": mode.detail,
+            "scope": scope,
+            "hint": "Admin scope is controlled via MIND_MEM_SCOPE=admin env var.",
+        }
+    )
+
+
+def request_has_admin_scope() -> bool:
+    """True when the active call may perform an admin-scope write.
+
+    Same resolution as :func:`enforce_capability_acl`: the ``deny``
+    sentinel is never admin, otherwise the token scope, falling back to
+    ``MIND_MEM_SCOPE`` (default ``user``). The documented
+    ``MIND_MEM_ACL_DISABLED`` dev/test override counts as admin, as it does
+    for every admin tool. Never logs: a body that only asks "may I persist?"
+    must not change what it emits when the answer is no.
+    """
+    scope = _get_request_scope()
+    if scope == "deny":
+        return False
+    if os.environ.get("MIND_MEM_ACL_DISABLED", "").lower() in ("1", "true", "yes"):
+        return True
+    return (scope or os.environ.get("MIND_MEM_SCOPE", "user")) == "admin"
 
 
 def enforce_capability_acl(capability: str) -> str | None:

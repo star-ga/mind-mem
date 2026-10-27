@@ -72,6 +72,8 @@ def validate_block(
     from mind_mem.mcp.tools.governance import _recent_statements
     from mind_mem.quality_gate import validate_block as _validate
 
+    from ._helpers import _readable_sources
+
     if not isinstance(text, str):
         return json.dumps({"error": "text must be a string", "got": type(text).__name__})
 
@@ -85,7 +87,11 @@ def validate_block(
     # preview that omits it silently drops rule 6 (near_duplicate) and then
     # answers ``accept: true`` for a statement the enforcer will reject as a
     # duplicate. That is the failure this tool exists to prevent.
-    verdict = _validate(text, strict=effective_strict, force=bool(force), recent=_recent_statements(ws))
+    # The near-duplicate window is read from the root ``intelligence/SIGNALS.md``;
+    # a verdict that says "this resembles a recent proposal" is a similarity
+    # oracle over that file, so a caller who cannot read it gets an empty window.
+    recent = _recent_statements(ws) if _readable_sources(ws, ("intelligence/SIGNALS.md",)) else []
+    verdict = _validate(text, strict=effective_strict, force=bool(force), recent=recent)
     payload = verdict.to_dict()
     payload["mode"] = mode
     payload["strict"] = effective_strict

@@ -70,6 +70,11 @@ def _workspace(tmp_path: Path) -> Path:
     return ws
 
 
+def _is_miss(body: dict, block_id: str, where: str = "any corpus file") -> bool:
+    """The answer for an id that does not exist -- the only answer a denial may give."""
+    return body.get("found") is False and not body.get("withheld") and body.get("error") == f"Block {block_id} not found in {where}."
+
+
 def _get(ws: Path, block_id: str, namespace: str, agent: str) -> dict:
     import os
 
@@ -99,9 +104,9 @@ def test_agent_acl_and_selector_validation_refuse_private_or_forged_reads(tmp_pa
     denied = _get(ws, "D-BOB-1", "agents/bob", "alice")
     traversal = _get(ws, "D-ALICE-1", "agents/../shared", "alice")
     forged = _get(ws, "D-ALICE-1", "agents/bob", "alice")
-    assert denied["error"] == "namespace access denied"
+    assert _is_miss(denied, "D-BOB-1")
     assert traversal["error"] == "invalid namespace selector"
-    assert forged["error"] == "namespace access denied"
+    assert _is_miss(forged, "D-ALICE-1")
 
 
 def test_selected_namespace_duplicate_ids_are_explicitly_ambiguous(tmp_path: Path) -> None:
@@ -136,7 +141,7 @@ def test_authenticated_id_only_root_read_requires_explicit_acl(monkeypatch, tmp_
     )
     with use_workspace(str(ws)):
         denied = json.loads(get_block("D-ROOT-PRIVATE"))
-    assert denied.get("error") == "namespace access denied"
+    assert _is_miss(denied, "D-ROOT-PRIVATE")
     assert "private root canary" not in json.dumps(denied)
 
     policy_path = ws / "mind-mem-acl.json"
@@ -253,7 +258,7 @@ def test_legacy_id_only_non_markdown_namespaced_rows_still_obey_agent_acl(tmp_pa
         ],
     )
     denied = _get(ws, "D-BACKEND-PRIVATE", "", "alice")
-    assert denied["error"] == "namespace access denied"
+    assert _is_miss(denied, "D-BACKEND-PRIVATE", "the block store")
     allowed = _get(ws, "D-BACKEND-PRIVATE", "", "bob")
     assert allowed["found"] is True
 
@@ -359,7 +364,7 @@ def test_non_markdown_omitted_selector_enforces_shared_acl(tmp_path: Path, monke
     monkeypatch.setattr(storage, "iter_blocks", lambda *_args, **_kwargs: [dict(row)])
     denied = _get(ws, row["_id"], "", "alice")
     allowed = _get(ws, row["_id"], "", "bob")
-    assert denied["error"] == "namespace access denied"
+    assert _is_miss(denied, row["_id"], "the block store")
     assert allowed["found"] is True
 
 

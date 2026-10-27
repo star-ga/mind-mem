@@ -55,6 +55,10 @@ __all__ = [
     "_ontology_registry",
     "_change_stream",
     "_core_registry",
+    "_denied_body",
+    "_read_scope_or_denied",
+    "_readable_sources",
+    "_workspace_view_denied",
     "get_logger",
     "metrics",
     "traced",
@@ -160,3 +164,56 @@ def error_envelope(message: str, code: "ErrorCode | None" = None, **extra: Any) 
         out["error_severity"] = error_severity(code).value
     out.update(extra)
     return json.dumps(out)
+
+
+def _denied_body() -> str:
+    """The content-free refusal every ACL-gated read tool returns."""
+    return json.dumps({"_schema_version": "1.0", "error": "namespace access denied"})
+
+
+def _read_scope_or_denied(ws: str) -> "tuple[Any, str | None]":
+    """``(scope, None)`` for the current caller, or ``(None, refusal_body)``.
+
+    An unresolvable caller is refused, never promoted to the unbound
+    workspace-level caller.
+    """
+    from mind_mem.read_authz import CallerUnresolved, read_scope
+
+    try:
+        return read_scope(ws), None
+    except CallerUnresolved:
+        return None, _denied_body()
+
+
+def _readable_sources(ws: str, sources: "tuple[str, ...]") -> "tuple[str, ...]":
+    """The workspace-relative *sources* the current caller may read.
+
+    An unbound caller keeps every source; a bound caller keeps those its
+    namespace ACL grants (lexically and by real path); an unresolvable caller
+    keeps none.
+    """
+    from mind_mem.read_authz import CallerUnresolved, caller_principal, is_bound, readable_sources
+
+    try:
+        principal = caller_principal()
+    except CallerUnresolved:
+        return ()
+    if not is_bound(principal):
+        return tuple(sources)
+    return readable_sources(ws, sources, principal)
+
+
+def _workspace_view_denied(ws: str, scope: Any = None) -> str | None:
+    """A refusal body unless the caller's view of the corpus IS the workspace.
+
+    For tools whose answer is an aggregate over every namespace (a block
+    count, a health figure, a graph of every entity, a query log). Such a
+    figure cannot be scoped after the fact, so a bound caller that cannot read
+    the whole workspace is refused; an unbound operator and a caller granted
+    every namespace are served.
+    """
+    if scope is None:
+        scope, denied = _read_scope_or_denied(ws)
+        if denied is not None:
+            return denied
+    return None if scope.whole else _denied_body()

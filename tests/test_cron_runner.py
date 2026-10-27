@@ -312,8 +312,13 @@ def _assert_jobs_import_cleanly(ws: str) -> None:
         assert result["status"] == "ok", f"{job_name}: expected status 'ok', got {result['status']} (stderr: {stderr!r})"
 
 
-def test_daemon_jobs_run_on_sqlite_backend(tmp_path):
+def test_daemon_jobs_run_on_sqlite_backend(tmp_path, monkeypatch):
     """E2E: all daemon jobs start cleanly on the default SQLite/markdown workspace."""
+    # transcript_scan reads ~/.claude/projects; on a developer machine that is
+    # the real, large transcript store, and the job timed out under suite load.
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
     ws = str(tmp_path / "ws-sqlite")
     _init_real_workspace(ws, backend="markdown")
     _assert_jobs_import_cleanly(ws)
@@ -328,13 +333,16 @@ def _pg_dsn():
     return os.environ.get(_PG_DSN_ENV)
 
 
-def test_daemon_jobs_run_on_postgres_backend(tmp_path):
+def test_daemon_jobs_run_on_postgres_backend(tmp_path, monkeypatch):
     """E2E: all daemon jobs start cleanly on a Postgres-backed workspace.
 
     Mirrors the tests/test_postgres_*.py pattern — uses a uniquely-named
     scratch schema and tears it down. Skips gracefully when psycopg or a live
     Postgres DSN is unavailable so SQLite-only CI stays green.
     """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
     pytest.importorskip("psycopg", reason="psycopg not installed; skipping Postgres parity test")
     dsn = _pg_dsn()
     if not dsn:

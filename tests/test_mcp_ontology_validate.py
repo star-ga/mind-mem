@@ -340,7 +340,7 @@ class TestActiveOntology:
         out = _validate(ws, block=json.dumps(VALID_PERSON), type_name="PERSON")
         assert out["error"] == "no active ontology; call ontology_load first"
 
-    def test_a_loaded_ontology_redirects_validation(self, ws) -> None:
+    def test_a_loaded_ontology_redirects_validation(self, ws, monkeypatch) -> None:
         """The documented ``ontology_load(make_active=True)`` handoff.
 
         Both directions matter: the new types become validatable AND the old
@@ -352,8 +352,11 @@ class TestActiveOntology:
                 "types": {"WIDGET": {"name": "WIDGET", "required": ["sku"], "property_types": {"sku": "str"}}},
             }
         )
+        # ontology_load is admin-scoped (F14); validation below runs at user.
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
         with use_workspace(str(ws)):
             loaded = json.loads(ontology_load(spec=spec, make_active=True))
+        monkeypatch.setenv("MIND_MEM_SCOPE", "user")
         assert loaded["loaded"] is True and loaded["active"] is True
 
         widget = _validate(ws, block=json.dumps({"sku": "W-1"}), type_name="WIDGET")
@@ -365,11 +368,14 @@ class TestActiveOntology:
         assert person["errors"] == ["unknown type: 'PERSON'"]
         assert person["ontology_version"] == "widgets-1.0"
 
-    def test_loading_without_make_active_leaves_the_verdict_authority_alone(self, ws) -> None:
+    def test_loading_without_make_active_leaves_the_verdict_authority_alone(self, ws, monkeypatch) -> None:
         """Loading is not activating; a stray load must not silently retarget."""
         spec = json.dumps({"version": "widgets-2.0", "types": {"WIDGET": {"name": "WIDGET"}}})
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
         with use_workspace(str(ws)):
-            ontology_load(spec=spec)
+            loaded = json.loads(ontology_load(spec=spec))
+        monkeypatch.setenv("MIND_MEM_SCOPE", "user")
+        assert loaded["loaded"] is True  # positive control: the load really happened
         out = _validate(ws, block=json.dumps(VALID_PERSON), type_name="PERSON")
         assert out["ontology_version"] == "se-1.0"
         assert out["valid"] is True

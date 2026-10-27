@@ -99,6 +99,159 @@ def canonical_workspace_id(workspace: str | None) -> str:
         return str(workspace)
 
 
+#: A file whose mtime is this close to "now" cannot vouch for its own content:
+#: filesystem timestamps tick coarsely (a jiffy on ext4, a second or more on
+#: some network filesystems), so a same-size in-place rewrite inside one tick
+#: leaves ``(size, mtime)`` unchanged. Inside the window the stamp refuses to
+#: name the state and the request bypasses the cache — the racy-timestamp rule
+#: a content-addressed index uses for exactly the same reason.
+_RACY_WINDOW_NS = 1_000_000_000
+
+#: Index-directory files that are written by reads or are not retrieval input.
+#: ``-shm`` is SQLite's shared-memory index (touched by readers); ``usage.json``
+#: is the token-metering ledger.
+_STAMP_EXCLUDED_INDEX_SUFFIXES = ("-shm",)
+_STAMP_EXCLUDED_INDEX_NAMES = frozenset({"usage.json"})
+
+#: Retrieval inputs outside ``.mind-mem-index`` and the corpus directories.
+_STAMP_EXTRA_FILES = (
+    "memory/knowledge_graph.db",
+    "memory/knowledge_graph.db-wal",
+    # v4 PQ side store (``mind_mem.v4.pq``), written by a vector rebuild.
+    "index.db",
+    "index.db-wal",
+)
+
+#: Default local vector-index directory (``recall.index_path``). Hybrid and
+#: vector recall read ``<dir>/index.json`` on every call, and a vector-only
+#: rebuild (``recall_vector.rebuild_index``) writes nothing else, so the whole
+#: directory listing is part of the stamp.
+_DEFAULT_VECTOR_INDEX_DIR = ".mind-mem-vectors"
+
+
+def _vector_stamp_inputs(workspace: str, config: dict | None) -> tuple[list[str], list[str]] | None:
+    """Absolute directories and files the vector leg reads, per the ``recall`` config.
+
+    Every path is resolved by the READER's own resolver, never re-joined here:
+    ``recall_vector.local_index_file`` (what ``VectorBackend._get_index_path``
+    and ``rebuild_index`` use) for the index directory, and
+    ``VectorBackend._sqlite_vec_db_path`` for the sqlite-vec database. A
+    relative, absolute, ``~``-prefixed or symlinked ``recall.index_path`` /
+    ``recall.sqlite_vec_db`` therefore names the file recall actually opens.
+    ``index_path`` is coerced with ``str()`` exactly as ``VectorBackend``
+    coerces it. The default directory is always included.
+
+    Pure: no I/O, no logging (``VectorBackend`` is never constructed — its
+    ``__init__`` logs). Returns ``None`` (the caller bypasses the cache) when a
+    configured value is one the reader's resolver itself cannot resolve.
+    """
+    import os
+    from types import SimpleNamespace
+
+    from .recall_vector import VectorBackend, local_index_file
+
+    recall_cfg = config.get("recall") if isinstance(config, dict) else None
+    if not isinstance(recall_cfg, dict):
+        recall_cfg = {}
+    try:
+        index_paths = [_DEFAULT_VECTOR_INDEX_DIR]
+        if "index_path" in recall_cfg:
+            index_paths.append(str(recall_cfg["index_path"]))
+        dirs = [os.path.dirname(local_index_file(workspace, ip)) for ip in index_paths]
+        vec_db = VectorBackend._sqlite_vec_db_path(SimpleNamespace(config=recall_cfg), workspace)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return list(dict.fromkeys(dirs)), [vec_db, f"{vec_db}-wal"]
+
+
+def corpus_stamp(workspace: str, config: dict | None = None) -> str | None:
+    """Stat-only identity of everything recall reads, or ``None`` if unnameable.
+
+    The governed-ledger head in the key moves only on governed writes. Several
+    writes that change what recall may serve never touch that ledger: an admin
+    ``reindex`` after a status change on disk, ``delete_memory_item``,
+    ``compact``, ``lint_autofix``, lineage / edge writes (``recall.db``), KG
+    writes, and any out-of-band edit. This stamp covers them by construction —
+    every file in ``.mind-mem-index`` (bar the exclusions above), the
+    knowledge-graph database and every corpus file
+    (:func:`~mind_mem.corpus_registry.discover_corpus_files`), each as
+    ``(name, size, mtime_ns, ctime_ns, inode)`` or ``absent``. The vector leg's
+    inputs are covered too: every file in the local vector-index directory
+    (``.mind-mem-vectors`` and, when *config* names one, ``recall.index_path``),
+    a configured ``recall.sqlite_vec_db`` and the v4 PQ side store — a
+    vector-only rebuild or an out-of-band vector-index edit writes nothing
+    else. No file is read: the cost is one ``listdir`` per directory plus one
+    ``stat`` per file. *config* is the already-loaded ``mind-mem.json`` dict;
+    the stamp never opens it.
+
+    Returns ``None`` — the caller must bypass the cache — when a stat fails for
+    a reason other than absence, or when any file was modified inside
+    :data:`_RACY_WINDOW_NS`.
+    """
+    import os
+
+    from .corpus_registry import discover_corpus_files
+
+    root = str(workspace)
+    now_ns = time.time_ns()
+    parts: list[str] = []
+
+    def _add(label: str, path: str) -> bool:
+        try:
+            st = os.stat(path)
+        except FileNotFoundError:
+            parts.append(f"{label}\x00absent")
+            return True
+        except OSError:
+            return False
+        if st.st_mtime_ns > now_ns - _RACY_WINDOW_NS:
+            return False
+        parts.append(f"{label}\x00{st.st_size}\x00{st.st_mtime_ns}\x00{st.st_ctime_ns}\x00{st.st_ino}")
+        return True
+
+    def _listing(label_dir: str, path_dir: str) -> list[tuple[str, str]] | None:
+        try:
+            names = sorted(os.listdir(path_dir))
+        except (FileNotFoundError, NotADirectoryError):
+            parts.append(f"{label_dir}/\x00absent")
+            return []
+        except OSError:
+            return None
+        return [
+            (f"{label_dir}/{name}", os.path.join(path_dir, name))
+            for name in names
+            if name not in _STAMP_EXCLUDED_INDEX_NAMES and not name.endswith(_STAMP_EXCLUDED_INDEX_SUFFIXES)
+        ]
+
+    def _ws(rel: str) -> tuple[str, str]:
+        return rel, os.path.join(root, *rel.split("/"))
+
+    vector_inputs = _vector_stamp_inputs(root, config)
+    if vector_inputs is None:
+        return None
+    vector_dirs, vector_files = vector_inputs
+    # Workspace-relative inputs are labelled by their relative name; vector
+    # inputs by the absolute path their reader resolved (it may lie outside
+    # the workspace, e.g. an absolute ``recall.index_path``).
+    dir_inputs = [_ws(".mind-mem-index"), *((d, d) for d in vector_dirs)]
+    inputs: list[tuple[str, str]] = []
+    for label_dir, path_dir in dir_inputs:
+        listed = _listing(label_dir, path_dir)
+        if listed is None:
+            return None
+        inputs.extend(listed)
+    inputs.extend(_ws(rel) for rel in _STAMP_EXTRA_FILES)
+    inputs.extend((f, f) for f in vector_files)
+    try:
+        inputs.extend(_ws(rel) for _label, rel in discover_corpus_files(root))
+    except OSError:
+        return None
+    for label, path in inputs:
+        if not _add(label, path):
+            return None
+    return hashlib.sha256("\x01".join(parts).encode("utf-8")).hexdigest()[:32]
+
+
 #: Version of the retrieval-config projection itself. A projection change must
 #: change the digest even for the overwhelmingly common empty/default config.
 PROJECTION_VERSION = "p2"
@@ -158,6 +311,7 @@ def make_cache_key(
     schema_version: str = "",
     filters: dict | None = None,
     agent_id: str | None = None,
+    corpus_stamp: str = "",
 ) -> str:
     """Derive a stable cache key for a recall invocation.
 
@@ -187,6 +341,12 @@ def make_cache_key(
 
     The default of ``""`` keeps the signature backward-compatible for callers
     outside the recall path; the recall path always supplies it.
+
+    ``corpus_stamp`` (see :func:`corpus_stamp`) is the second corpus
+    coordinate. The anchor only moves on governed writes; reindex, delete,
+    compact, lint autofix, lineage / edge writes and out-of-band edits change
+    what recall serves without moving it. The stamp is folded in only when
+    non-empty, so callers that do not supply it keep their existing keys.
     """
     payload = {
         "workspace": canonical_workspace_id(workspace),
@@ -214,6 +374,8 @@ def make_cache_key(
         payload["filters"] = {k: str(v) for k, v in sorted(active_filters.items())}
     if agent_id:
         payload["agent_id"] = str(agent_id)
+    if corpus_stamp:
+        payload["corpus_stamp"] = str(corpus_stamp)
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
     return f"mindmem:recall:{_KEY_FORMAT}:{namespace}:{digest[:24]}"
@@ -435,6 +597,7 @@ def cached_recall(
     schema_version: str = "",
     filters: dict | None = None,
     agent_id: str | None = None,
+    corpus_stamp: str = "",
 ) -> str:
     """Cache-wrapped call to a recall function.
 
@@ -476,6 +639,7 @@ def cached_recall(
         schema_version=schema_version,
         filters=filters,
         agent_id=agent_id,
+        corpus_stamp=corpus_stamp,
     )
     cache = get_cache(config)
     hit = cache.get(key)

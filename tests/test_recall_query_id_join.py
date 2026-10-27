@@ -394,6 +394,8 @@ def test_public_run_id_dispatch_defaults_to_the_served_set(tmp_path: pathlib.Pat
     import mind_mem.mcp.tools.calibration as mcp_calibration
 
     monkeypatch.setattr(mcp_calibration, "_workspace", lambda: ws)
+    # report_outcome is an admin tool: recall_outcome has a cross-client reader.
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
     run_id = envelope["attestation"]["query_id"]
     result = json.loads(
         mcp_calibration.report_outcome(

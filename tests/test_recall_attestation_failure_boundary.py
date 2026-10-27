@@ -50,6 +50,22 @@ def test_public_recall_cache_miss_and_hit_with_deriver_failure(monkeypatch, tmp_
         "_resolve_chain_head_resolution",
         lambda workspace: IndexAnchorResolution.genesis(),
     )
+    # A quiet store, so the second serve can be a cache hit under the
+    # stat-only corpus stamp in the key: indexed (the FTS-less scan leg logs
+    # co-retrieval into recall.db on every miss), warmed once (a fresh index
+    # lazily creates two tables on the first recall), and aged past the
+    # racy-timestamp window.
+    import os
+    import time
+
+    from mind_mem.sqlite_index import build_index
+
+    build_index(str(tmp_path))
+    recall_tool._recall_impl("warm-up", limit=1, backend="bm25")
+    past = time.time() - 3600
+    for root, _dirs, files in os.walk(tmp_path):
+        for name in files:
+            os.utime(os.path.join(root, name), (past, past))
     _deriver_failure(monkeypatch)
     _block_served_ledger_import(monkeypatch)
     reset_singleton()

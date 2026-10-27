@@ -62,6 +62,13 @@ def _get(workspace: Path, block_id: str, namespace: str, agent: str | None) -> d
             os.environ["MIND_MEM_WORKSPACE"] = previous
 
 
+def _is_miss(body: dict, block_id: str) -> bool:
+    """The answer for an id that does not exist -- the only answer a denial may give."""
+    return (
+        body.get("found") is False and not body.get("withheld") and body.get("error") == f"Block {block_id} not found in any corpus file."
+    )
+
+
 def test_declared_direct_only_custom_root_is_directly_readable_but_not_searchable(tmp_path: Path) -> None:
     ws = _workspace(tmp_path, "direct-only")
     direct = _get(ws, "D-CUSTOM-1", "custom", "alice")
@@ -87,7 +94,8 @@ def test_custom_selector_honors_agent_acl_and_does_not_borrow_same_id(tmp_path: 
     denied = _get(ws, "D-CUSTOM-1", "custom", "bob")
     assert own["found"] is True and own["block"]["Statement"] == "custom namespace duplicate"
     assert shared["found"] is True and shared["block"]["Statement"] == "shared namespace statement"
-    assert denied["error"] == "namespace access denied"
+    assert _is_miss(denied, "D-CUSTOM-1"), "a denial is indistinguishable from an absent id"
+    assert _is_miss(_get(ws, "D-ABSENT-9", "custom", "bob"), "D-ABSENT-9")
 
 
 def test_custom_namespace_release_is_source_bound(tmp_path: Path) -> None:
@@ -104,7 +112,11 @@ def test_custom_namespace_release_is_source_bound(tmp_path: Path) -> None:
 
 def test_custom_selector_requires_exact_declaration_and_rejects_traversal(tmp_path: Path) -> None:
     ws = _workspace(tmp_path, "searchable")
-    assert _get(ws, "D-CUSTOM-1", "undeclared", "alice")["error"] == "invalid namespace selector"
+    # a caller who cannot read the named namespace cannot tell "undeclared" from "declared but denied"
+    assert _is_miss(_get(ws, "D-CUSTOM-1", "undeclared", "alice"), "D-CUSTOM-1")
+    assert (
+        _get(ws, "D-CUSTOM-1", "undeclared", None)["error"] == "invalid namespace selector"
+    )  # unrestricted operator keeps the specific error
     assert _get(ws, "D-CUSTOM-1", "custom/../shared", "alice")["error"] == "invalid namespace selector"
 
 
@@ -119,7 +131,7 @@ def test_custom_symlink_root_is_refused_and_not_recalled(tmp_path: Path) -> None
         os.symlink(outside, ws / "custom", target_is_directory=True)
     except (OSError, NotImplementedError) as exc:
         pytest.skip(f"directory symlink unavailable: {exc}")
-    assert _get(ws, "D-ESCAPE-1", "custom", "alice")["error"] == "namespace access denied"
+    assert _is_miss(_get(ws, "D-ESCAPE-1", "custom", "alice"), "D-ESCAPE-1")
     hits = recall(str(ws), "custom escape statement", agent_id="alice", limit=10, rerank=False)
     assert all(hit["_id"] != "D-ESCAPE-1" for hit in hits)
 

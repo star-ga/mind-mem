@@ -66,7 +66,7 @@ python3 -m mind_mem.compaction /path/to/workspace
 **Fix:**
 ```bash
 # Restart MCP server
-python3 mcp_server.py --workspace /path/to/workspace
+MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py
 ```
 
 ### propose_update rejected

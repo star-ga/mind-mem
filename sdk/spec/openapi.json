@@ -126,6 +126,13 @@
             "title": "Backend",
             "type": "string"
           },
+          "intended_use": {
+            "default": "",
+            "description": "What the answer will be used for: summary | answer | governed_write. When set, the response carries a first-class 'abstention' verdict (act / proceed_with_caution / do_not_act) whose band scales with the use -- a governed write needs more separation than a summary. Empty means no verdict unless the workspace opted in with recall.abstention.enabled.",
+            "maxLength": 32,
+            "title": "Intended Use",
+            "type": "string"
+          },
           "limit": {
             "default": 10,
             "description": "Maximum number of results",

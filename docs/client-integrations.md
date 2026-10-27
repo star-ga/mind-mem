@@ -1,6 +1,6 @@
 # Client Integrations
 
-MIND-Mem works with **20 AI coding clients** out of the box. Every
+MIND-Mem works with **69 AI coding clients** out of the box. Every
 client reads and writes to the same shared workspace (default
 `~/.openclaw/workspace/`), so a fact captured in one tool is
 immediately visible to every other.
@@ -24,32 +24,86 @@ clients behind firewalls).
 
 These are the entries of `mind_mem.hook_installer.AGENT_REGISTRY`:
 
-| Client | Vendor | `mm install` id | MCP config written |
-|--------|--------|-----------------|--------------------|
-| Claude Code | Anthropic | `claude-code` | No (instructions/hooks only) |
-| Codex CLI | OpenAI | `codex` | Yes |
-| Grok Build CLI | xAI | `grok-build` | Yes |
-| Vibe (Mistral CLI) | Mistral AI | `vibe` | Yes |
-| OpenCode (1.x / 2.x) | OpenCode (open source) | `opencode` | Yes |
-| Gemini CLI | Google | `gemini` | Yes |
-| Cursor | Anysphere | `cursor` | Yes |
-| Windsurf | Cognition (formerly Codeium) | `windsurf` | Yes |
-| aider | Aider-AI (open source) | `aider` | No (instructions/hooks only) |
-| OpenClaw | OpenClaw Foundation (open source) | `openclaw` | No (instructions/hooks only) |
-| NanoClaw | NanoClaw / Qwibit (open source) | `nanoclaw` | No (instructions/hooks only) |
-| NemoClaw | NVIDIA | `nemoclaw` | No (instructions/hooks only) |
-| Continue | Continue.dev | `continue` | Yes |
-| Cline | Cline | `cline` | Yes |
-| Roo Code | Roo Code | `roo` | Yes |
-| Zed | Zed Industries | `zed` | Yes |
-| GitHub Copilot (workspace instructions) | GitHub / Microsoft | `copilot` | No (instructions/hooks only) |
-| GitHub Copilot CLI | GitHub / Microsoft | `copilot-cli` | Yes |
-| Cody | Sourcegraph | `cody` | No (instructions/hooks only) |
-| Qodo Gen | Qodo | `qodo` | No (instructions/hooks only) |
+| Client | Vendor | `mm install` id | Install mode |
+|--------|--------|-----------------|--------------|
+| Claude Code | Anthropic | `claude-code` | auto MCP |
+| Codex CLI | OpenAI | `codex` | auto MCP |
+| Grok Build CLI | xAI | `grok-build` | auto MCP |
+| Vibe (Mistral CLI) | Mistral AI | `vibe` | auto MCP |
+| OpenCode (1.x / 2.x) | OpenCode (open source) | `opencode` | auto MCP |
+| Gemini CLI | Google | `gemini` | auto MCP |
+| Cursor | Anysphere | `cursor` | auto MCP |
+| Windsurf | Cognition (formerly Codeium) | `windsurf` | auto MCP |
+| aider | Aider-AI (open source) | `aider` | none |
+| OpenClaw | OpenClaw Foundation (open source) | `openclaw` | auto MCP |
+| NanoClaw | NanoClaw / Qwibit (open source) | `nanoclaw` | none |
+| NemoClaw | NVIDIA | `nemoclaw` | none |
+| Continue | Continue.dev | `continue` | auto MCP |
+| Cline | Cline | `cline` | auto MCP |
+| Roo Code | Roo Code | `roo` | auto MCP |
+| Zed | Zed Industries | `zed` | auto MCP |
+| GitHub Copilot (workspace instructions) | GitHub / Microsoft | `copilot` | none |
+| GitHub Copilot CLI | GitHub / Microsoft | `copilot-cli` | auto MCP |
+| Cody | Sourcegraph | `cody` | none |
+| Qodo Gen | Qodo | `qodo` | none |
+| Claude Desktop | Anthropic | `claude-desktop` | auto MCP |
+| VS Code (native MCP) | Microsoft | `vscode` | auto MCP |
+| Visual Studio (Windows) | Microsoft | `visual-studio` | auto MCP |
+| Qwen Code | Alibaba | `qwen-code` | auto MCP |
+| Kimi Code CLI | Moonshot AI | `kimi-code` | auto MCP |
+| Amp | Amp | `amp` | auto MCP |
+| goose | Agentic AI Foundation (created by Block) | `goose` | auto MCP |
+| Crush | Charm | `crush` | auto MCP |
+| Factory Droid | Factory | `factory-droid` | auto MCP |
+| Kiro | AWS | `kiro` | auto MCP |
+| Auggie (Augment Code) | Augment Code | `auggie` | auto MCP |
+| OpenHands CLI | All Hands AI | `openhands` | auto MCP |
+| MiMo Code | Xiaomi | `mimo-code` | auto MCP |
+| Junie | JetBrains | `junie` | auto MCP |
+| Kilo Code | Kilo Code | `kilo` | auto MCP |
+| Antigravity | Google | `antigravity` | auto MCP |
+| Tabnine agent | Tabnine | `tabnine` | auto MCP |
+| Hermes Agent | Nous Research | `hermes-agent` | auto MCP |
+| AnythingLLM Desktop | Mintplex Labs | `anythingllm` | auto MCP |
+| Warp | Warp | `warp` | auto MCP |
+| Open Interpreter | Open Interpreter | `open-interpreter` | auto MCP |
+| Amazon Q Developer | AWS | `amazon-q` | auto MCP |
+| LM Studio | Element Labs | `lm-studio` | auto MCP |
+| Jan | Menlo Research | `jan` | auto MCP |
+| BoltAI (macOS) | BoltAI | `boltai` | auto MCP |
+| iFlow CLI | iFlow | `iflow` | auto MCP |
+| Neovim (mcphub.nvim) | mcphub.nvim (open source) | `neovim-mcphub` | auto MCP |
+| Trae | ByteDance | `trae` | manual MCP |
+| Android Studio (Gemini) | Google | `android-studio` | manual MCP |
+| JetBrains AI Assistant | JetBrains | `jetbrains-ai-assistant` | manual MCP |
+| LibreChat | LibreChat | `librechat` | manual MCP |
+| Eclipse (GitHub Copilot) | GitHub / Microsoft | `eclipse-copilot` | manual MCP |
+| Xcode 26.3+ | Apple | `xcode` | manual MCP |
+| Witsy | Witsy (open source) | `witsy` | manual MCP |
+| Emacs (mcp.el) | mcp.el (open source) | `emacs-mcp-el` | manual MCP |
+| Open WebUI | Open WebUI (open source) | `open-webui` | manual MCP |
+| Docker MCP Toolkit | Docker | `docker-mcp-toolkit` | manual MCP |
+| Cherry Studio | CherryHQ | `cherry-studio` | manual MCP |
+| Msty Studio | Msty | `msty` | manual MCP |
+| Raycast | Raycast | `raycast` | manual MCP |
+| 5ire | 5ire (open source) | `5ire` | manual MCP |
+| Perplexity (macOS app) | Perplexity | `perplexity-desktop` | manual MCP |
+| ChatGPT | OpenAI | `chatgpt-desktop` | manual MCP |
+| n8n | n8n | `n8n` | manual MCP |
+| Dify | LangGenius | `dify` | manual MCP |
+| Flowise | FlowiseAI | `flowise` | manual MCP |
+| Blackbox AI | Blackbox | `blackbox` | manual MCP |
+| fast-agent | fast-agent (open source) | `fast-agent` | manual MCP |
+| Void | Void (open source) | `void` | manual MCP |
 
-Claude Desktop (Anthropic) is not in the registry; `./install.sh
---claude-desktop` configures it (see [Claude Desktop setup](claude-desktop-setup.md)).
-Qwen Code, further down, is documented for manual setup only.
+- **auto MCP** (41) -- the mind-mem server entry is merged into the client's
+  own config file (paths below).
+- **manual MCP** (22) -- the client supports MCP but keeps its server list in
+  the app UI, a per-deployment file, or accepts HTTP servers only, so there is
+  no per-user file to merge into; `mm install-all --agent <id>` writes nothing
+  and prints the exact steps and snippet.
+- **none** (6) -- no native MCP; an instruction or hook file routes memory
+  access through the `mm` CLI.
 
 Use `mm install <agent>` to configure a single client; use
 `mm install-all --agent <A> --agent <B>` to target an explicit subset.
@@ -61,33 +115,225 @@ hand-rolled config you want replaced.
 
 ### Native MCP formats per client
 
-`mm install-all` writes format-specific MCP entries for 12 MCP-aware clients
-(the writers landed in v3.1.0; four clients have been added since):
+`mm install-all` writes format-specific MCP entries for 41 MCP-aware clients.
+Every write merges only the `mind-mem` entry: other servers, settings and (in
+TOML and YAML files) comments are kept, a changed file is backed up first
+(`<file>.bak-mind-mem-<timestamp>`) and replaced atomically, and a second run
+leaves the file byte-identical. A file that cannot be merged safely (JSONC
+with comments, invalid JSON, YAML flow style) is left untouched and the
+snippet to paste is printed instead.
 
-| Client | `mm install` id | Config path | Format | Stanza |
-| --- | --- | --- | --- | --- |
-| Codex | `codex` | `~/.codex/config.toml` | TOML | `[mcp_servers.mind-mem]` |
-| OpenCode (1.x / 2.x) | `opencode` | `~/.config/opencode/opencode.json` | JSON | `mcp.mind-mem` (or `mcp.servers.mind-mem` in a 2.x-native file) |
-| Gemini | `gemini` | `~/.gemini/settings.json` | JSON | `mcpServers.mind-mem` |
-| Cursor | `cursor` | `~/.cursor/mcp.json` | JSON | `mcpServers.mind-mem` |
-| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` | JSON | `mcpServers.mind-mem` |
-| Continue | `continue` | `~/.continue/config.json` | JSON | `mcpServers.mind-mem` |
-| Cline | `cline` | `~/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | JSON | `mcpServers.mind-mem` |
-| Roo | `roo` | `~/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | JSON | `mcpServers.mind-mem` |
-| Zed | `zed` | `~/.config/zed/settings.json` | JSON | `context_servers.mind-mem` |
-| Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` | JSON | `mcpServers.mind-mem` |
-| Grok Build | `grok-build` | `~/.grok/config.toml` | TOML | `[mcp_servers.mind-mem]` |
-| Vibe | `vibe` | `~/.vibe/config.toml` | TOML array | `mcp_servers = [{ name = "mind-mem", ... }]` |
+Modes:
 
-> **Cline and Roo Code:** the installer writes the VS Code Server (remote / WSL)
-> settings tree, `~/.vscode-server/data/User/`. Desktop VS Code keeps its user
-> settings elsewhere (for example `~/.config/Code/User/` on Linux), and those
-> paths are not written yet; add the MCP entry there by hand for now.
+- **auto** -- the entry is merged into the file, creating it if needed.
+- **guarded** -- the entry is written only when the client's config directory
+  already exists (the client is absent otherwise, or the location is only
+  partly documented upstream).
+- **existing file only** -- Continue: merged only into a `config.yaml`
+  Continue has already created (writing a new one would shadow a legacy
+  `config.json`).
+- Paths shown are Linux; macOS and Windows locations are resolved per platform
+  (`~/Library/Application Support/...`, `%APPDATA%\...`). A client's own
+  relocation variable is honoured: `VIBE_HOME`, `COPILOT_HOME`,
+  `CLINE_MCP_SETTINGS_PATH`, `AMP_SETTINGS_FILE`, `KIMI_CODE_HOME`,
+  `JAN_DATA_FOLDER`.
+
+| Client | `mm install` id | Config path | Format | Stanza | Mode |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code | `claude-code` | `~/.claude.json` | JSON | `mcpServers.mind-mem` (type stdio) | auto |
+| Codex CLI | `codex` | `~/.codex/config.toml` | TOML | `[mcp_servers.mind-mem]` | auto |
+| Grok Build CLI | `grok-build` | `~/.grok/config.toml` | TOML | `[mcp_servers.mind-mem]` | auto |
+| Vibe (Mistral CLI) | `vibe` | `~/.vibe/config.toml` | TOML | `[[mcp_servers]] name = "mind-mem"` | auto |
+| OpenCode (1.x / 2.x) | `opencode` | `~/.config/opencode/opencode.json` | JSON | `mcp.mind-mem` (type local) | auto |
+| Gemini CLI | `gemini` | `~/.gemini/settings.json` | JSON | `mcpServers.mind-mem` | auto |
+| Cursor | `cursor` | `~/.cursor/mcp.json` | JSON | `mcpServers.mind-mem` (type stdio) | auto |
+| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` | JSON | `mcpServers.mind-mem` | also `~/.config/devin/mcp_config.json` if present; also `%APPDATA%/devin/mcp_config.json` if present |
+| OpenClaw | `openclaw` | `~/.openclaw/openclaw.json` | JSON | `mcp.servers.mind-mem` | auto |
+| Continue | `continue` | `~/.continue/config.yaml` | YAML | `mcpServers: - name: mind-mem` | existing file only |
+| Cline | `cline` | `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | JSON | `mcpServers.mind-mem` (disabled false, autoApprove []) | also `~/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` if present; also `~/.cline/data/settings/cline_mcp_settings.json` if present |
+| Roo Code | `roo` | `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | JSON | `mcpServers.mind-mem` | also `~/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` if present |
+| Zed | `zed` | `~/.config/zed/settings.json` | JSON | `context_servers.mind-mem` | auto |
+| GitHub Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` | JSON | `mcpServers.mind-mem` (type local, tools ["*"]) | auto |
+| Claude Desktop | `claude-desktop` | `~/.config/Claude/claude_desktop_config.json` | JSON | `mcpServers.mind-mem` | guarded on linux |
+| VS Code (native MCP) | `vscode` | `~/.config/Code/User/mcp.json` | JSON | `servers.mind-mem` (type stdio) | guarded |
+| Visual Studio (Windows) | `visual-studio` | `~/.mcp.json` | JSON | `servers.mind-mem` | Windows only |
+| Qwen Code | `qwen-code` | `~/.qwen/settings.json` | JSON | `mcpServers.mind-mem` | auto |
+| Kimi Code CLI | `kimi-code` | `~/.kimi-code/mcp.json` | JSON | `mcpServers.mind-mem` | also `~/.kimi/mcp.json` if present |
+| Amp | `amp` | `~/.config/amp/settings.json` | JSON | `"amp.mcpServers".mind-mem` | auto |
+| goose | `goose` | `~/.config/goose/config.yaml` | YAML | `extensions.mind-mem` | auto |
+| Crush | `crush` | `~/.config/crush/crush.json` | JSON | `mcp.mind-mem` (type stdio) | auto |
+| Factory Droid | `factory-droid` | `~/.factory/mcp.json` | JSON | `mcpServers.mind-mem` (type stdio, disabled false) | auto |
+| Kiro | `kiro` | `~/.kiro/settings/mcp.json` | JSON | `mcpServers.mind-mem` (disabled false, autoApprove []) | auto |
+| Auggie (Augment Code) | `auggie` | `~/.augment/settings.json` | JSON | `mcpServers.mind-mem` | auto |
+| OpenHands CLI | `openhands` | `~/.openhands/mcp.json` | JSON | `mcpServers.mind-mem` (transport stdio) | auto |
+| MiMo Code | `mimo-code` | `~/.config/mimocode/mimocode.jsonc` | JSON | `mcp.mind-mem` (type local) | auto |
+| Junie | `junie` | `~/.junie/mcp/mcp.json` | JSON | `mcpServers.mind-mem` | auto |
+| Kilo Code | `kilo` | `~/.config/kilo/kilo.jsonc` | JSON | `mcp.mind-mem` (type local) | auto |
+| Antigravity | `antigravity` | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers.mind-mem` | auto |
+| Tabnine agent | `tabnine` | `~/.tabnine/mcp_servers.json` | JSON | `mcpServers.mind-mem` | auto |
+| Hermes Agent | `hermes-agent` | `~/.hermes/config.yaml` | YAML | `mcp_servers.mind-mem` | auto |
+| AnythingLLM Desktop | `anythingllm` | `~/.config/anythingllm-desktop/storage/plugins/anythingllm_mcp_servers.json` | JSON | `mcpServers.mind-mem` (anythingllm.autoStart) | guarded |
+| Warp | `warp` | `~/.warp/.mcp.json` | JSON | `mcpServers.mind-mem` | guarded |
+| Open Interpreter | `open-interpreter` | `~/.openinterpreter/config.toml` | TOML | `[mcp_servers.mind-mem]` | guarded |
+| Amazon Q Developer | `amazon-q` | `~/.aws/amazonq/mcp.json` | JSON | `mcpServers.mind-mem` | guarded |
+| LM Studio | `lm-studio` | `~/.lmstudio/mcp.json` | JSON | `mcpServers.mind-mem` | guarded |
+| Jan | `jan` | `~/.local/share/Jan/data/mcp_config.json` | JSON | `mcpServers.mind-mem` (active true) | guarded |
+| BoltAI (macOS) | `boltai` | `~/.boltai/mcp.json` | JSON | `mcpServers.mind-mem` | guarded; macOS only |
+| iFlow CLI | `iflow` | `~/.iflow/settings.json` | JSON | `mcpServers.mind-mem` | guarded |
+| Neovim (mcphub.nvim) | `neovim-mcphub` | `~/.config/mcphub/servers.json` | JSON | `mcpServers.mind-mem` | guarded |
 
 All entries point at `<mind-mem-install>/mcp_server.py` with
 `MIND_MEM_WORKSPACE` set to the shared workspace. Clients not on this
 list still get the text-hook fallback, which routes tool calls
 through the `mm` CLI.
+
+### Clients with manual MCP setup
+
+| Client | `mm install` id | Steps |
+| --- | --- | --- |
+| Trae | `trae` | Settings > MCP > Add > Raw config, or enable workspace MCP and add it to .trae/mcp.json: paste the mcpServers JSON below (server "mind-mem") |
+| Android Studio (Gemini) | `android-studio` | Settings > Tools > AI > MCP Servers accepts HTTP servers only: start `mind-mem-mcp --transport http` (bearer token required) and register its URL as `httpUrl` |
+| JetBrains AI Assistant | `jetbrains-ai-assistant` | Settings > Tools > AI Assistant > Model Context Protocol: use 'Import from Claude' after `mm install-all --agent claude-desktop`, or paste the mcpServers JSON below (server "mind-mem") |
+| LibreChat | `librechat` | add `mcpServers.mind-mem` (type: stdio, command, args, env) to your deployment's librechat.yaml and restart |
+| Eclipse (GitHub Copilot) | `eclipse-copilot` | Preferences > GitHub Copilot > MCP: paste the mcpServers JSON below (server "mind-mem") (under `servers`) |
+| Xcode 26.3+ | `xcode` | Xcode's agents use the Claude Code and Codex registrations: run `mm install-all --agent claude-code --agent codex` |
+| Witsy | `witsy` | Settings > MCP > Add server: paste the mcpServers JSON below (server "mind-mem") |
+| Emacs (mcp.el) | `emacs-mcp-el` | add ("mind-mem" :command "<command>" :args (...)) to `mcp-hub-servers` in your init file |
+| Open WebUI | `open-webui` | Admin > Settings > Tools: start `mind-mem-mcp --transport http` (bearer token required) and register its URL (or expose it through mcpo) |
+| Docker MCP Toolkit | `docker-mcp-toolkit` | the toolkit is a gateway for containerised servers; register mind-mem in each client directly with `mm install-all` |
+| Cherry Studio | `cherry-studio` | Settings > MCP Servers > Add > Import from JSON: paste the mcpServers JSON below (server "mind-mem") |
+| Msty Studio | `msty` | Settings > Tools > Add MCP server (JSON): paste the mcpServers JSON below (server "mind-mem") |
+| Raycast | `raycast` | Raycast AI > Manage MCP Servers > Install Server: paste the mcpServers JSON below (server "mind-mem") |
+| 5ire | `5ire` | Tools > New: paste the mcpServers JSON below (server "mind-mem") |
+| Perplexity (macOS app) | `perplexity-desktop` | Settings > Connectors > Add connector (advanced): paste the mcpServers JSON below (server "mind-mem") |
+| ChatGPT | `chatgpt-desktop` | remote HTTPS connectors only: start `mind-mem-mcp --transport http` (bearer token required) and register its URL behind HTTPS and add it under Settings > Connectors |
+| n8n | `n8n` | use the MCP Client Tool node: start `mind-mem-mcp --transport http` (bearer token required) and register its URL |
+| Dify | `dify` | Tools > MCP > Add MCP server (HTTP): start `mind-mem-mcp --transport http` (bearer token required) and register its URL |
+| Flowise | `flowise` | add a Custom MCP tool node with the stdio command and MIND_MEM_WORKSPACE env shown below |
+| Blackbox AI | `blackbox` | open the extension's MCP settings and paste the mcpServers JSON below (server "mind-mem") |
+| fast-agent | `fast-agent` | add the server under `mcp.servers.mind-mem` (transport: stdio, command, args, env) in your project's fast-agent.yaml |
+| Void | `void` | open Void's MCP settings (Settings > MCP) and paste the mcpServers JSON below (server "mind-mem") |
+
+### Clients without native MCP
+
+These keep their instruction-file integration, which routes memory access
+through the `mm` CLI:
+
+- aider (`aider`) -- `<workspace>/.aider.conf.yml`
+- NanoClaw (`nanoclaw`) -- `~/.nanoclaw/nanoclaw.json`
+- NemoClaw (`nemoclaw`) -- `~/.nemoclaw/nemoclaw.json`
+- GitHub Copilot (workspace instructions) (`copilot`) -- `<workspace>/.github/copilot-instructions.md`
+- Cody (`cody`) -- `<workspace>/.cody/config.json`
+- Qodo Gen (`qodo`) -- `<workspace>/.codium/ai-rules.md`
+
+### Agent frameworks and SDKs
+
+CrewAI, OpenAI Agents SDK, Mastra, VoltAgent, LangChain MCP adapters,
+smolagents, Pydantic AI, mcp-agent and Google ADK are libraries rather than
+installed clients, so there is no file to write. Point their stdio MCP client
+at the same command `mm install-all --dry-run` prints:
+
+```python
+# Python frameworks: one stdio server definition
+command = "mind-mem-mcp"           # or: python3 /path/to/mcp_server.py
+args = []
+env = {"MIND_MEM_WORKSPACE": "/path/to/workspace"}
+```
+
+### Removing mind-mem from clients
+
+```bash
+mm uninstall-all --dry-run            # show which entries would be removed
+mm uninstall-all                      # every detected client
+mm uninstall-all --agent goose        # one client
+```
+
+Only the `mind-mem` entry is removed; other servers and settings stay. When
+the file existed before install, uninstall writes back its original bytes
+(from the `<file>.bak-mind-mem-*` backup install took, used only when it holds
+the same document as the post-removal content, so later edits are never
+lost). When mind-mem created the file, uninstall deletes it. Instruction-file
+blocks (`# mind-mem`) are left in place.
+
+### Verified sources
+
+Each registry entry was checked against the client's current documentation
+(October 2026): the config path, the file format and the MCP key for every
+**auto MCP** client, and the setup route for every **manual MCP** client. A
+client whose user-level file could not be verified is listed as manual, never
+guessed. Linux paths above; the source states the per-OS locations.
+
+| Client | `mm install` id | Install mode | Source |
+| --- | --- | --- | --- |
+| Claude Code | `claude-code` | auto MCP | <https://code.claude.com/docs/en/mcp> |
+| Codex CLI | `codex` | auto MCP | <https://developers.openai.com/codex/mcp> |
+| Grok Build CLI | `grok-build` | auto MCP | <https://docs.x.ai/build/features/mcp-servers> |
+| Vibe (Mistral CLI) | `vibe` | auto MCP | <https://github.com/mistralai/mistral-vibe> |
+| OpenCode (1.x / 2.x) | `opencode` | auto MCP | <https://opencode.ai/docs/mcp-servers> |
+| Gemini CLI | `gemini` | auto MCP | <https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md> |
+| Cursor | `cursor` | auto MCP | <https://cursor.com/docs/context/mcp> |
+| Windsurf | `windsurf` | auto MCP | <https://docs.devin.ai/desktop/cascade/mcp> — Windsurf is now Devin Desktop; its doc lists `~/.config/devin/mcp_config.json`, written too when that directory exists |
+| aider | `aider` | none | <https://aider.chat/docs/config/aider_conf.html> — no native MCP; instruction file only |
+| OpenClaw | `openclaw` | auto MCP | <https://docs.openclaw.ai/tools/mcp> |
+| NanoClaw | `nanoclaw` | none | <https://nanoclaw.dev> — no native MCP writer; hook file only |
+| NemoClaw | `nemoclaw` | none | <https://docs.nvidia.com/nemoclaw> — no native MCP writer; hook file only |
+| Continue | `continue` | auto MCP | <https://docs.continue.dev/customize/deep-dives/mcp> — global `~/.continue/config.yaml`, `mcpServers` list; merged only into an existing file |
+| Cline | `cline` | auto MCP | <https://docs.cline.bot/mcp/configuring-mcp-servers> |
+| Roo Code | `roo` | auto MCP | <https://docs.roocode.com/features/mcp/using-mcp-in-roo> |
+| Zed | `zed` | auto MCP | <https://zed.dev/docs/ai/mcp> |
+| GitHub Copilot (workspace instructions) | `copilot` | none | <https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions> — workspace instructions; VS Code MCP is the `vscode` entry |
+| GitHub Copilot CLI | `copilot-cli` | auto MCP | <https://docs.github.com/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers> — `~/.copilot/mcp-config.json` per the Copilot CLI overview; entry shape `type`, `tools` |
+| Cody | `cody` | none | <https://sourcegraph.com/docs/cody> — no native MCP writer |
+| Qodo Gen | `qodo` | none | <https://docs.qodo.ai> — no native MCP writer |
+| Claude Desktop | `claude-desktop` | auto MCP | <https://modelcontextprotocol.io/docs/develop/connect-local-servers> — official builds are macOS and Windows; on Linux the file is written only into an existing directory |
+| VS Code (native MCP) | `vscode` | auto MCP | <https://code.visualstudio.com/docs/copilot/customization/mcp-servers> |
+| Visual Studio (Windows) | `visual-studio` | auto MCP | <https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers> |
+| Qwen Code | `qwen-code` | auto MCP | <https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp> |
+| Kimi Code CLI | `kimi-code` | auto MCP | <https://moonshotai.github.io/kimi-code/en/configuration/data-locations.html> — `$KIMI_CODE_HOME/mcp.json` (default `~/.kimi-code/`); the older kimi-cli `~/.kimi/mcp.json` is written when present |
+| Amp | `amp` | auto MCP | <https://ampcode.com/docs/customize/mcp> |
+| goose | `goose` | auto MCP | <https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md> — Windows: `%APPDATA%\Block\goose\config\config.yaml` |
+| Crush | `crush` | auto MCP | <https://github.com/charmbracelet/crush> |
+| Factory Droid | `factory-droid` | auto MCP | <https://docs.factory.ai/cli/configuration/mcp> |
+| Kiro | `kiro` | auto MCP | <https://kiro.dev/docs/mcp/configuration> |
+| Auggie (Augment Code) | `auggie` | auto MCP | <https://docs.augmentcode.com/cli/integrations> |
+| OpenHands CLI | `openhands` | auto MCP | <https://docs.openhands.dev/openhands/usage/cli/mcp-servers> |
+| MiMo Code | `mimo-code` | auto MCP | <https://mimo.xiaomi.com/mimocode/mcp-servers> |
+| Junie | `junie` | auto MCP | <https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html> |
+| Kilo Code | `kilo` | auto MCP | <https://kilo.ai/docs/automate/mcp/using-in-cli> — doc lists `kilo.json`, `kilo.jsonc` and `config.json`; an existing one is preferred |
+| Antigravity | `antigravity` | auto MCP | <https://antigravity.google/docs/cli/mcp> — CLI doc: global servers in `~/.gemini/config/mcp_config.json` |
+| Tabnine agent | `tabnine` | auto MCP | <https://docs.tabnine.com/main/getting-started/tabnine-agent/mcp-intro-and-setup> |
+| Hermes Agent | `hermes-agent` | auto MCP | <https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp> |
+| AnythingLLM Desktop | `anythingllm` | auto MCP | <https://docs.anythingllm.com/mcp-compatibility/desktop> — `<storage>/plugins/anythingllm_mcp_servers.json`; desktop storage is `anythingllm-desktop/storage` under the OS app-data dir |
+| Warp | `warp` | auto MCP | <https://docs.warp.dev/agents/capabilities/mcp/> |
+| Open Interpreter | `open-interpreter` | auto MCP | <https://openinterpreter.com/docs/terminal/mcp> |
+| Amazon Q Developer | `amazon-q` | auto MCP | <https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/mcp-ide.html> — legacy `mcp.json`, still read while `useLegacyMcpJson` is true; written only into an existing directory |
+| LM Studio | `lm-studio` | auto MCP | <https://lmstudio.ai/docs/app/mcp> |
+| Jan | `jan` | auto MCP | <https://www.jan.ai/docs/desktop/integrations/mcp-servers> — doc confirms `mcp_config.json` in the Jan data folder; the `mcpServers` map and `active` flag are from Jan's source (janhq/jan `src-tauri/src/core/mcp`) |
+| BoltAI (macOS) | `boltai` | auto MCP | <https://docs.boltai.com/docs/plugins/mcp-servers> |
+| iFlow CLI | `iflow` | auto MCP | <https://platform.iflow.cn/cli/examples/mcp> |
+| Neovim (mcphub.nvim) | `neovim-mcphub` | auto MCP | <https://ravitemer.github.io/mcphub.nvim/mcp/servers_json.html> |
+| Trae | `trae` | manual MCP | <https://docs.trae.ai/ide/model-context-protocol> — per-project `.trae/mcp.json` or the Settings UI |
+| Android Studio (Gemini) | `android-studio` | manual MCP | <https://developer.android.com/studio/gemini/add-mcp-server> — HTTP servers only (stdio unsupported per the doc) |
+| JetBrains AI Assistant | `jetbrains-ai-assistant` | manual MCP | <https://www.jetbrains.com/help/ai-assistant/mcp.html> |
+| LibreChat | `librechat` | manual MCP | <https://librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers> |
+| Eclipse (GitHub Copilot) | `eclipse-copilot` | manual MCP | <https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp> |
+| Xcode 26.3+ | `xcode` | manual MCP | <https://developer.apple.com/xcode/> — Xcode 26.3 hosts Claude Agent and Codex, which read the Claude Code and Codex registrations |
+| Witsy | `witsy` | manual MCP | <https://github.com/nbonamy/witsy> |
+| Emacs (mcp.el) | `emacs-mcp-el` | manual MCP | <https://github.com/lizqwerscott/mcp.el> |
+| Open WebUI | `open-webui` | manual MCP | <https://docs.openwebui.com/features/extensibility/plugin/tools/openapi-servers/mcp> |
+| Docker MCP Toolkit | `docker-mcp-toolkit` | manual MCP | <https://docs.docker.com/ai/mcp-catalog-and-toolkit/toolkit> |
+| Cherry Studio | `cherry-studio` | manual MCP | <https://docs.cherry-ai.com> |
+| Msty Studio | `msty` | manual MCP | <https://docs.msty.ai/studio/toolbox/tools> |
+| Raycast | `raycast` | manual MCP | <https://manual.raycast.com/ai/model-context-protocol> |
+| 5ire | `5ire` | manual MCP | <https://github.com/nanbingxyz/5ire> |
+| Perplexity (macOS app) | `perplexity-desktop` | manual MCP | <https://perplexity.ai/help-center/en/articles/11502712-local-and-remote-mcps-for-perplexity> |
+| ChatGPT | `chatgpt-desktop` | manual MCP | <https://help.openai.com/en/articles/11487775-connectors-in-chatgpt> |
+| n8n | `n8n` | manual MCP | <https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.toolmcp/> |
+| Dify | `dify` | manual MCP | <https://docs.dify.ai/en/cloud/use-dify/build/mcp> |
+| Flowise | `flowise` | manual MCP | <https://docs.flowiseai.com/tutorials/tools-and-mcp> |
+| Blackbox AI | `blackbox` | manual MCP | <https://www.blackbox.ai> — vendor MCP documentation could not be verified; manual steps only |
+| fast-agent | `fast-agent` | manual MCP | <https://fast-agent.ai/mcp/> — config is `fast-agent.yaml` found from the working directory; no per-user file is documented, so manual |
+| Void | `void` | manual MCP | <https://github.com/voideditor/void> — no maintained documentation of a user-level MCP file (guides disagree on `~/.void` vs `~/.void-editor`), so manual |
 
 ## Claude Code (Anthropic)
 
@@ -95,7 +341,8 @@ through the `mm` CLI.
 |---|---|
 | Config path | `~/.claude/settings.json` |
 | Format | JSON `hooks` section |
-| Install | `mm install claude-code` |
+| MCP path | `~/.claude.json` (top-level `mcpServers`, user scope, `type: stdio`) |
+| Install | `mm install claude-code` (hooks) / `mm install-all --agent claude-code` (hooks + MCP) |
 
 Configures two hooks (v3.1.1+):
 - `SessionStart` → `mm status` — report workspace + memory status at
@@ -192,13 +439,17 @@ the MCP tools as the `AGENTS.md` protocol instructs. Project-level
 Injects a system instruction pointing at the MIND-Mem workspace. The
 instruction survives `gemini --yolo` and interactive mode.
 
-## Qwen Code (Alibaba) — manual setup, not in the registry
+## Qwen Code (Alibaba)
 
 | | |
 |---|---|
-| Config path | `~/.qwen/settings.json` (user) or per-project `.mcp.json` |
+| Instructions | `~/.qwen/QWEN.md` |
+| MCP config | `~/.qwen/settings.json` (user) or per-project `.mcp.json` |
 | Format | JSON `mcpServers.mind-mem` (stdio) |
-| Install | Manual — no `mm install qwen` writer yet |
+| Install | `mm install-all --agent qwen-code` |
+
+`mm install-all --agent qwen-code` merges the `mcpServers.mind-mem` entry into
+`~/.qwen/settings.json`. The notes below cover setting it up by hand.
 
 Qwen Code is a Gemini-CLI descendant, so it reads MCP servers from
 two places and merges them, with the **project `.mcp.json` entry
@@ -336,6 +587,7 @@ NemoClaw releases read that file.
 |---|---|
 | Config path | `~/.continue/config.json` |
 | Format | JSON `systemMessage` |
+| MCP config | `~/.continue/config.yaml` (`mcpServers` list), merged only into an existing file |
 | Install | `mm install continue` |
 
 Injects a `systemMessage` into the continue config. Applies to both
@@ -347,6 +599,7 @@ the VS Code and JetBrains editions.
 |---|---|
 | Config path | `<ws>/.clinerules` |
 | Format | Text block |
+| MCP config | `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` (also the VS Code Server and `~/.cline` CLI copies when present) |
 | Install | `mm install cline` |
 
 Drops a `.clinerules` file at the workspace root. Cline reads it on
@@ -358,6 +611,7 @@ every session start.
 |---|---|
 | Config path | `<ws>/.roo/system-prompt.md` |
 | Format | Markdown block |
+| MCP config | `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` (also the VS Code Server copy when present) |
 | Install | `mm install roo` |
 
 Writes a system-prompt override under `.roo/`. The prompt is
@@ -454,6 +708,480 @@ mind-mem as a native MCP server in `~/.grok/config.toml`. Because the file is
 shared with other tools that read `AGENTS.md`, the block is fenced by the
 `# mind-mem` marker and rewritten in place rather than appended.
 
+## More clients
+
+### Claude Desktop (Anthropic)
+
+| | |
+|---|---|
+| MCP config | `~/.config/Claude/claude_desktop_config.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | guarded on linux |
+| Install | `mm install-all --agent claude-desktop` |
+| Detected by | `~/.config/Claude` |
+| Source | <https://modelcontextprotocol.io/docs/develop/connect-local-servers> |
+
+### VS Code (native MCP) (Microsoft)
+
+| | |
+|---|---|
+| MCP config | `~/.config/Code/User/mcp.json` (JSON, `servers.mind-mem` (type stdio)) |
+| Mode | guarded |
+| Install | `mm install-all --agent vscode` |
+| Detected by | `code` on `PATH`, `code-insiders` on `PATH`, `codium` on `PATH`, `~/.config/Code/User` |
+| Source | <https://code.visualstudio.com/docs/copilot/customization/mcp-servers> |
+
+### Visual Studio (Windows) (Microsoft)
+
+| | |
+|---|---|
+| MCP config | `~/.mcp.json` (JSON, `servers.mind-mem`) |
+| Mode | Windows only |
+| Install | `mm install-all --agent visual-studio` |
+| Detected by | `devenv.exe` on `PATH`, `vswhere.exe` on `PATH` |
+| Source | <https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers> |
+
+### Kimi Code CLI (Moonshot AI)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.kimi-code/mcp.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | also `~/.kimi/mcp.json` if present |
+| Install | `mm install-all --agent kimi-code` |
+| Detected by | `kimi` on `PATH`, `~/.kimi-code`, `~/.kimi` |
+| Source | <https://moonshotai.github.io/kimi-code/en/configuration/data-locations.html> |
+
+### Amp (Amp)
+
+| | |
+|---|---|
+| Instructions | `~/.config/amp/AGENTS.md` (Markdown block) |
+| MCP config | `~/.config/amp/settings.json` (JSON, `"amp.mcpServers".mind-mem`) |
+| Mode | auto |
+| Install | `mm install-all --agent amp` |
+| Detected by | `amp` on `PATH`, `~/.config/amp` |
+| Source | <https://ampcode.com/docs/customize/mcp> |
+
+### goose (Agentic AI Foundation (created by Block))
+
+| | |
+|---|---|
+| Instructions | `~/.config/goose/.goosehints` (Markdown block) |
+| MCP config | `~/.config/goose/config.yaml` (YAML, `extensions.mind-mem`) |
+| Mode | auto |
+| Install | `mm install-all --agent goose` |
+| Detected by | `goose` on `PATH`, `~/.config/goose` |
+| Source | <https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md> |
+
+### Crush (Charm)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.config/crush/crush.json` (JSON, `mcp.mind-mem` (type stdio)) |
+| Mode | auto |
+| Install | `mm install-all --agent crush` |
+| Detected by | `crush` on `PATH`, `~/.config/crush` |
+| Source | <https://github.com/charmbracelet/crush> |
+
+### Factory Droid (Factory)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.factory/mcp.json` (JSON, `mcpServers.mind-mem` (type stdio, disabled false)) |
+| Mode | auto |
+| Install | `mm install-all --agent factory-droid` |
+| Detected by | `droid` on `PATH`, `~/.factory` |
+| Source | <https://docs.factory.ai/cli/configuration/mcp> |
+
+### Kiro (AWS)
+
+| | |
+|---|---|
+| Instructions | `~/.kiro/steering/mind-mem.md` (Markdown block) |
+| MCP config | `~/.kiro/settings/mcp.json` (JSON, `mcpServers.mind-mem` (disabled false, autoApprove [])) |
+| Mode | auto |
+| Install | `mm install-all --agent kiro` |
+| Detected by | `kiro` on `PATH`, `kiro-cli` on `PATH`, `~/.kiro` |
+| Source | <https://kiro.dev/docs/mcp/configuration> |
+
+### Auggie (Augment Code) (Augment Code)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.augment/settings.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | auto |
+| Install | `mm install-all --agent auggie` |
+| Detected by | `auggie` on `PATH`, `~/.augment` |
+| Source | <https://docs.augmentcode.com/cli/integrations> |
+
+### OpenHands CLI (All Hands AI)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.openhands/mcp.json` (JSON, `mcpServers.mind-mem` (transport stdio)) |
+| Mode | auto |
+| Install | `mm install-all --agent openhands` |
+| Detected by | `openhands` on `PATH`, `~/.openhands` |
+| Source | <https://docs.openhands.dev/openhands/usage/cli/mcp-servers> |
+
+### MiMo Code (Xiaomi)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.config/mimocode/mimocode.jsonc` (JSON, `mcp.mind-mem` (type local)) |
+| Mode | auto |
+| Install | `mm install-all --agent mimo-code` |
+| Detected by | `mimo` on `PATH`, `mimocode` on `PATH`, `~/.config/mimocode` |
+| Source | <https://mimo.xiaomi.com/mimocode/mcp-servers> |
+
+### Junie (JetBrains)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.junie/mcp/mcp.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | auto |
+| Install | `mm install-all --agent junie` |
+| Detected by | `junie` on `PATH`, `~/.junie` |
+| Source | <https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html> |
+
+### Kilo Code (Kilo Code)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.config/kilo/kilo.jsonc` (JSON, `mcp.mind-mem` (type local)) |
+| Mode | auto |
+| Install | `mm install-all --agent kilo` |
+| Detected by | `kilo` on `PATH`, `~/.config/kilo`, `~/.vscode/extensions/kilocode.kilo-code-*` |
+| Source | <https://kilo.ai/docs/automate/mcp/using-in-cli> |
+
+### Antigravity (Google)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.gemini/config/mcp_config.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | auto |
+| Install | `mm install-all --agent antigravity` |
+| Detected by | `agy` on `PATH`, `antigravity` on `PATH`, `~/.gemini/config`, `~/.gemini/antigravity` |
+| Source | <https://antigravity.google/docs/cli/mcp> |
+
+### Tabnine agent (Tabnine)
+
+| | |
+|---|---|
+| MCP config | `~/.tabnine/mcp_servers.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | auto |
+| Install | `mm install-all --agent tabnine` |
+| Detected by | `~/.tabnine`, `~/.vscode/extensions/tabnine.tabnine-vscode-*` |
+| Source | <https://docs.tabnine.com/main/getting-started/tabnine-agent/mcp-intro-and-setup> |
+
+### Hermes Agent (Nous Research)
+
+| | |
+|---|---|
+| MCP config | `~/.hermes/config.yaml` (YAML, `mcp_servers.mind-mem`) |
+| Mode | auto |
+| Install | `mm install-all --agent hermes-agent` |
+| Detected by | `hermes` on `PATH`, `~/.hermes` |
+| Source | <https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp> |
+
+### AnythingLLM Desktop (Mintplex Labs)
+
+| | |
+|---|---|
+| MCP config | `~/.config/anythingllm-desktop/storage/plugins/anythingllm_mcp_servers.json` (JSON, `mcpServers.mind-mem` (anythingllm.autoStart)) |
+| Mode | guarded |
+| Install | `mm install-all --agent anythingllm` |
+| Detected by | `~/.config/anythingllm-desktop` |
+| Source | <https://docs.anythingllm.com/mcp-compatibility/desktop> |
+
+### Warp (Warp)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.warp/.mcp.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | guarded |
+| Install | `mm install-all --agent warp` |
+| Detected by | `warp` on `PATH`, `warp-terminal` on `PATH`, `~/.warp` |
+| Source | <https://docs.warp.dev/agents/capabilities/mcp/> |
+
+### Open Interpreter (Open Interpreter)
+
+| | |
+|---|---|
+| MCP config | `~/.openinterpreter/config.toml` (TOML, `[mcp_servers.mind-mem]`) |
+| Mode | guarded |
+| Install | `mm install-all --agent open-interpreter` |
+| Detected by | `interpreter` on `PATH`, `~/.openinterpreter` |
+| Source | <https://openinterpreter.com/docs/terminal/mcp> |
+
+### Amazon Q Developer (AWS)
+
+| | |
+|---|---|
+| MCP config | `~/.aws/amazonq/mcp.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | guarded |
+| Install | `mm install-all --agent amazon-q` |
+| Detected by | `~/.aws/amazonq` |
+| Source | <https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/mcp-ide.html> |
+
+### LM Studio (Element Labs)
+
+| | |
+|---|---|
+| MCP config | `~/.lmstudio/mcp.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | guarded |
+| Install | `mm install-all --agent lm-studio` |
+| Detected by | `lms` on `PATH`, `~/.lmstudio` |
+| Source | <https://lmstudio.ai/docs/app/mcp> |
+
+### Jan (Menlo Research)
+
+| | |
+|---|---|
+| MCP config | `~/.local/share/Jan/data/mcp_config.json` (JSON, `mcpServers.mind-mem` (active true)) |
+| Mode | guarded |
+| Install | `mm install-all --agent jan` |
+| Detected by | `~/.local/share/Jan` |
+| Source | <https://www.jan.ai/docs/desktop/integrations/mcp-servers> |
+
+### BoltAI (macOS) (BoltAI)
+
+| | |
+|---|---|
+| MCP config | `~/.boltai/mcp.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | guarded; macOS only |
+| Install | `mm install-all --agent boltai` |
+| Detected by | `~/.boltai` |
+| Source | <https://docs.boltai.com/docs/plugins/mcp-servers> |
+
+### iFlow CLI (iFlow)
+
+| | |
+|---|---|
+| Instructions | `<workspace>/AGENTS.md` (Markdown block) |
+| MCP config | `~/.iflow/settings.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | guarded |
+| Install | `mm install-all --agent iflow` |
+| Detected by | `iflow` on `PATH`, `~/.iflow` |
+| Source | <https://platform.iflow.cn/cli/examples/mcp> |
+
+### Neovim (mcphub.nvim) (mcphub.nvim (open source))
+
+| | |
+|---|---|
+| MCP config | `~/.config/mcphub/servers.json` (JSON, `mcpServers.mind-mem`) |
+| Mode | guarded |
+| Install | `mm install-all --agent neovim-mcphub` |
+| Detected by | `~/.config/mcphub` |
+| Source | <https://ravitemer.github.io/mcphub.nvim/mcp/servers_json.html> |
+
+### Trae (ByteDance)
+
+| | |
+|---|---|
+| MCP | manual: Settings > MCP > Add > Raw config, or enable workspace MCP and add it to .trae/mcp.json: paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent trae` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.trae.ai/ide/model-context-protocol> |
+
+### Android Studio (Gemini) (Google)
+
+| | |
+|---|---|
+| MCP | manual: Settings > Tools > AI > MCP Servers accepts HTTP servers only: start `mind-mem-mcp --transport http` (bearer token required) and register its URL as `httpUrl` |
+| Install | `mm install-all --agent android-studio` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://developer.android.com/studio/gemini/add-mcp-server> |
+
+### JetBrains AI Assistant (JetBrains)
+
+| | |
+|---|---|
+| MCP | manual: Settings > Tools > AI Assistant > Model Context Protocol: use 'Import from Claude' after `mm install-all --agent claude-desktop`, or paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent jetbrains-ai-assistant` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://www.jetbrains.com/help/ai-assistant/mcp.html> |
+
+### LibreChat (LibreChat)
+
+| | |
+|---|---|
+| MCP | manual: add `mcpServers.mind-mem` (type: stdio, command, args, env) to your deployment's librechat.yaml and restart |
+| Install | `mm install-all --agent librechat` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers> |
+
+### Eclipse (GitHub Copilot) (GitHub / Microsoft)
+
+| | |
+|---|---|
+| MCP | manual: Preferences > GitHub Copilot > MCP: paste the mcpServers JSON below (server "mind-mem") (under `servers`) |
+| Install | `mm install-all --agent eclipse-copilot` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp> |
+
+### Xcode 26.3+ (Apple)
+
+| | |
+|---|---|
+| MCP | manual: Xcode's agents use the Claude Code and Codex registrations: run `mm install-all --agent claude-code --agent codex` |
+| Install | `mm install-all --agent xcode` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://developer.apple.com/xcode/> |
+
+### Witsy (Witsy (open source))
+
+| | |
+|---|---|
+| MCP | manual: Settings > MCP > Add server: paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent witsy` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://github.com/nbonamy/witsy> |
+
+### Emacs (mcp.el) (mcp.el (open source))
+
+| | |
+|---|---|
+| MCP | manual: add ("mind-mem" :command "<command>" :args (...)) to `mcp-hub-servers` in your init file |
+| Install | `mm install-all --agent emacs-mcp-el` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://github.com/lizqwerscott/mcp.el> |
+
+### Open WebUI (Open WebUI (open source))
+
+| | |
+|---|---|
+| MCP | manual: Admin > Settings > Tools: start `mind-mem-mcp --transport http` (bearer token required) and register its URL (or expose it through mcpo) |
+| Install | `mm install-all --agent open-webui` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.openwebui.com/features/extensibility/plugin/tools/openapi-servers/mcp> |
+
+### Docker MCP Toolkit (Docker)
+
+| | |
+|---|---|
+| MCP | manual: the toolkit is a gateway for containerised servers; register mind-mem in each client directly with `mm install-all` |
+| Install | `mm install-all --agent docker-mcp-toolkit` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.docker.com/ai/mcp-catalog-and-toolkit/toolkit> |
+
+### Cherry Studio (CherryHQ)
+
+| | |
+|---|---|
+| MCP | manual: Settings > MCP Servers > Add > Import from JSON: paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent cherry-studio` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.cherry-ai.com> |
+
+### Msty Studio (Msty)
+
+| | |
+|---|---|
+| MCP | manual: Settings > Tools > Add MCP server (JSON): paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent msty` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.msty.ai/studio/toolbox/tools> |
+
+### Raycast (Raycast)
+
+| | |
+|---|---|
+| MCP | manual: Raycast AI > Manage MCP Servers > Install Server: paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent raycast` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://manual.raycast.com/ai/model-context-protocol> |
+
+### 5ire (5ire (open source))
+
+| | |
+|---|---|
+| MCP | manual: Tools > New: paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent 5ire` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://github.com/nanbingxyz/5ire> |
+
+### Perplexity (macOS app) (Perplexity)
+
+| | |
+|---|---|
+| MCP | manual: Settings > Connectors > Add connector (advanced): paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent perplexity-desktop` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://perplexity.ai/help-center/en/articles/11502712-local-and-remote-mcps-for-perplexity> |
+
+### ChatGPT (OpenAI)
+
+| | |
+|---|---|
+| MCP | manual: remote HTTPS connectors only: start `mind-mem-mcp --transport http` (bearer token required) and register its URL behind HTTPS and add it under Settings > Connectors |
+| Install | `mm install-all --agent chatgpt-desktop` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://help.openai.com/en/articles/11487775-connectors-in-chatgpt> |
+
+### n8n (n8n)
+
+| | |
+|---|---|
+| MCP | manual: use the MCP Client Tool node: start `mind-mem-mcp --transport http` (bearer token required) and register its URL |
+| Install | `mm install-all --agent n8n` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.toolmcp/> |
+
+### Dify (LangGenius)
+
+| | |
+|---|---|
+| MCP | manual: Tools > MCP > Add MCP server (HTTP): start `mind-mem-mcp --transport http` (bearer token required) and register its URL |
+| Install | `mm install-all --agent dify` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.dify.ai/en/cloud/use-dify/build/mcp> |
+
+### Flowise (FlowiseAI)
+
+| | |
+|---|---|
+| MCP | manual: add a Custom MCP tool node with the stdio command and MIND_MEM_WORKSPACE env shown below |
+| Install | `mm install-all --agent flowise` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://docs.flowiseai.com/tutorials/tools-and-mcp> |
+
+### Blackbox AI (Blackbox)
+
+| | |
+|---|---|
+| MCP | manual: open the extension's MCP settings and paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent blackbox` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | - |
+| Source | <https://www.blackbox.ai> |
+
+### fast-agent (fast-agent (open source))
+
+| | |
+|---|---|
+| MCP | manual: add the server under `mcp.servers.mind-mem` (transport: stdio, command, args, env) in your project's fast-agent.yaml |
+| Install | `mm install-all --agent fast-agent` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | `fast-agent` on `PATH`, `~/.fast-agent` |
+| Source | <https://fast-agent.ai/mcp/> |
+
+### Void (Void (open source))
+
+| | |
+|---|---|
+| MCP | manual: open Void's MCP settings (Settings > MCP) and paste the mcpServers JSON below (server "mind-mem") |
+| Install | `mm install-all --agent void` (prints the steps and the JSON snippet; writes nothing) |
+| Detected by | `void` on `PATH`, `~/.void-editor`, `~/.void` |
+| Source | <https://github.com/voideditor/void> |
+
 ## Running `install-all` end-to-end
 
 The typical first-time flow after installing mind-mem:
@@ -514,7 +1242,7 @@ different clients don't cross-contaminate.
   **milliseconds** for Qwen Code (a Gemini-CLI descendant). Remove
   `timeout` from the shared file or set a millisecond value in Qwen
   Code's own `~/.qwen/settings.json`. See
-  [Qwen Code](#qwen-code-alibaba--manual-setup-not-in-the-registry).
+  [Qwen Code](#qwen-code-alibaba).
 - **Re-running `mm install-all` shows every client as `skipped`** —
   that's correct. The installers are idempotent; the `# mind-mem`
   marker prevents duplicate blocks. Use `--force` to rewrite.

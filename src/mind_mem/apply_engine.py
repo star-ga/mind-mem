@@ -13,6 +13,7 @@ Usage:
 Exit codes: 0 = applied, 1 = failed (rolled back), 2 = validation error
 """
 
+import contextlib
 import difflib
 import hashlib
 import importlib.util
@@ -106,6 +107,8 @@ VALID_TYPES = {"decision", "task", "edit"}
 #: ``error`` loses nothing by ignoring the stage.
 STAGE_OP: Final = "op"
 STAGE_POST_CHECK: Final = "post_check"
+#: The proposal's ``Status: applied`` line could not be written.
+STAGE_STATUS: Final = "status"
 
 
 class ApplyAborted(Exception):
@@ -132,16 +135,18 @@ class ApplyAborted(Exception):
     it — which is why the ``except`` clause sits as tightly around the
     scope as the ``with`` does.
 
-    Two branches raise it, and they are the *only* two paths that undo a
-    committed op: the op-failure branch and the post-check branch. The
-    second is why the post-checks moved inside the scope — see the
-    comment at that call site.
+    Three branches raise it, and they are the *only* paths that undo a
+    committed op: the op-failure branch, the post-check branch, and the
+    status branch (the proposal's ``applied`` status could not be
+    written). The second is why the post-checks moved inside the scope —
+    see the comment at that call site; the third is inside for the same
+    reason.
 
     Attributes:
         step: Index of the op that failed, or ``None`` when the abort was
             not attributable to a single op (the post-check branch).
-        stage: Which phase withdrew the work — :data:`STAGE_OP` or
-            :data:`STAGE_POST_CHECK`. Carried for the transcript and for
+        stage: Which phase withdrew the work — :data:`STAGE_OP`,
+            :data:`STAGE_POST_CHECK` or :data:`STAGE_STATUS`. Carried for the transcript and for
             the tests; the chain records both as ``scope_outcome=error``,
             because "the work did not stand" is one fact, not two.
         message: The message ``apply_proposal`` returns to its caller.
@@ -661,6 +666,59 @@ def _snapshot_target_file(ws, snap_dir):
         return snap_dir
 
 
+#: Files a restore must leave exactly as it found them: the config the gate
+#: reads, and the binding that attests it. Restoring either rewinds settings
+#: (not memory) and puts the pair out of step, which is drift.
+_LIVE_GOVERNANCE_FILES = ("mind-mem.json", ".spec_binding.json")
+
+
+def _read_live(path):
+    """The bytes at *path*, or ``None`` when it does not exist. Any other error raises."""
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        return None
+
+
+@contextlib.contextmanager
+def _live_config_kept(ws, *, fill_missing=False):
+    """Leave the live config and its spec binding exactly as they were, whatever the body restores.
+
+    A restore rewinds MEMORY, never configuration. For each governance file
+    (:data:`_LIVE_GOVERNANCE_FILES`): if it existed, its live bytes are put
+    back; if it did NOT exist, whatever the body landed there is removed —
+    previously an absent live config let the snapshot's copy land, which is
+    the same rewind by another route.
+
+    ``fill_missing`` is for a backup restored into a workspace that has
+    neither file (disaster recovery onto an empty directory): there is no
+    live configuration to protect, so the archive's pair is allowed to land
+    as a consistent pair. With either file live, it has no effect.
+
+    A live file that exists but cannot be read raises here, before the body
+    runs: a restore that cannot preserve the attested config is refused,
+    not performed with the config left to chance.
+    """
+    from .governance_gate import config_path_for
+
+    config = config_path_for(ws)
+    paths = [config, os.path.join(os.path.dirname(config), _LIVE_GOVERNANCE_FILES[1])]
+    live = {path: _read_live(path) for path in paths}
+    keep_absent = not (fill_missing and all(v is None for v in live.values()))
+    try:
+        yield
+    finally:
+        for path, data in live.items():
+            if data is not None:
+                tmp = path + ".restore_tmp"
+                with open(tmp, "wb") as handle:
+                    handle.write(data)
+                os.replace(tmp, path)
+            elif keep_absent and os.path.lexists(path):
+                os.remove(path)
+
+
 def restore_snapshot(ws, snap_dir, *, action=RESTORE_VERB, actor="apply_engine", metadata=None):
     """Restore workspace from a snapshot directory, inside a recorded scope.
 
@@ -749,7 +807,13 @@ def restore_snapshot(ws, snap_dir, *, action=RESTORE_VERB, actor="apply_engine",
         metadata=door_metadata,
         provenance=restore_provenance,
     ) as receipt:
-        _store_for(ws).restore(snap_dir)
+        # A restore rewinds MEMORY, never configuration. The snapshot carries
+        # a copy of mind-mem.json, and putting it back silently undid every
+        # setting attested after the snapshot (and left the config out of
+        # step with its spec binding, so this scope's own CLOSE record was
+        # refused as drift and the workspace stayed write-blocked).
+        with _live_config_kept(ws):
+            _store_for(ws).restore(snap_dir)
         _log.info(
             "restore_recorded",
             snapshot=snap_name,
@@ -1484,6 +1548,215 @@ def _op_supersede_decision(filepath, op, store=None, ws=None):
 
 
 # ═══════════════════════════════════════════════
+# Supersede staging (MCP propose_update(supersedes=...))
+# ═══════════════════════════════════════════════
+
+#: Where a staged supersession is queued; ``Type: edit`` routes here.
+SUPERSEDE_PROPOSAL_FILE: Final = "intelligence/proposed/EDITS_PROPOSED.md"
+#: The one corpus file ``supersede_decision`` retires decisions in.
+SUPERSEDE_DECISION_FILE: Final = "decisions/DECISIONS.md"
+#: A decision id as the corpus writes it (``D-20261001-001``). Anything else --
+#: spaces, newlines, brackets -- is refused before it can reach a block field.
+_SUPERSEDE_TARGET_RE = re.compile(r"^D-[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+#: Statuses a supersession may retire: a live decision.
+_SUPERSEDABLE_STATUSES = frozenset({"active", "in_progress", "monitoring", "completed"})
+#: Provenance fields copied onto the staged proposal, in emission order.
+_SUPERSEDE_PROVENANCE_ORDER: Final = ("ActorId", "ActorRole", "SessionId", "ToolId", "Purpose", "ContentSource")
+
+
+class SupersedeStagingError(ValueError):
+    """A supersede proposal was refused; nothing was staged."""
+
+
+def _one_line(text: str, limit: int) -> str:
+    """Collapse whitespace so a value can never open a second block field."""
+    return " ".join(str(text).split())[:limit]
+
+
+def resolve_supersede_target(ws: str, target: str) -> dict[str, Any]:
+    """Return the live decision *target* names, or raise :class:`SupersedeStagingError`.
+
+    Read-only: the format is checked before any lookup, and the lookup goes
+    through the configured block store so a Postgres workspace resolves the
+    same id the apply will retire.
+    """
+    if not isinstance(target, str) or not _SUPERSEDE_TARGET_RE.fullmatch(target):
+        raise SupersedeStagingError(f"invalid supersedes id {target!r}: expected a decision id such as D-YYYYMMDD-NNN")
+    from .storage import get_block_store
+
+    block = get_block_store(ws).get_by_id(target)
+    if not block:
+        raise SupersedeStagingError(f"supersedes target {target} not found")
+    status = str(block.get("Status", "")).strip().lower()
+    if status not in _SUPERSEDABLE_STATUSES:
+        raise SupersedeStagingError(f"supersedes target {target} is not active (Status: {status or 'none'})")
+    return block
+
+
+def _render_supersede_proposal(proposal: dict[str, Any]) -> str:
+    op = proposal["Ops"][0]
+    patch = "\n".join(f"    {line}" for line in str(op["patch"]).splitlines())
+    provenance = "".join(f"{field}: {proposal[field]}\n" for field in _SUPERSEDE_PROVENANCE_ORDER if proposal.get(field))
+    evidence = "\n".join(f"- {line}" for line in proposal["Evidence"])
+    return (
+        f"\n[{proposal['ProposalId']}]\n"
+        f"ProposalId: {proposal['ProposalId']}\nType: {proposal['Type']}\n"
+        f"TargetBlock: {proposal['TargetBlock']}\nRisk: {proposal['Risk']}\n"
+        f"Evidence:\n{evidence}\nRollback: {proposal['Rollback']}\nOps:\n"
+        f"- op: {op['op']}\n  file: {op['file']}\n  target: {op['target']}\n  patch: |\n{patch}\n"
+        f"Fingerprint: {proposal['Fingerprint']}\nStatus: {proposal['Status']}\n"
+        f"{provenance}"
+        f"FilesTouched:\n- {SUPERSEDE_DECISION_FILE}\nSources:\n- mcp:propose_update\n"
+    )
+
+
+def build_supersede_proposal(
+    ws: str,
+    *,
+    target: str,
+    statement: str,
+    rationale: str,
+    tags: list[str],
+    provenance: dict[str, str],
+    proposal_id: str,
+    new_id: str,
+    date_iso: str,
+) -> dict[str, Any]:
+    """Build the staged ``supersede_decision`` proposal for a correction (no writes).
+
+    *provenance* maps block field names (``ActorId`` ...) to cleaned values.
+    The successor inherits the retired block's ``Scope`` so a project-scoped
+    fact is corrected inside its project rather than promoted to global.
+    """
+    from .block_store import _render_block
+
+    old = resolve_supersede_target(ws, target)
+    block: dict[str, Any] = {
+        "_id": new_id,
+        "Statement": _one_line(statement, 500),
+        "Date": date_iso,
+        "Status": "active",
+        "Type": "decision",
+        "Scope": _one_line(old.get("Scope") or "global", 200),
+        "Rationale": _one_line(rationale, 2000),
+        "Supersedes": target,
+        "Sources": ["mcp:propose_update"],
+    }
+    # Tags is a required decision field (validate_py): the caller's, else the
+    # retired block's, so the successor stays findable under the same labels.
+    inherited = old.get("Tags")
+    if tags:
+        block["Tags"] = ", ".join(_one_line(t, 64) for t in tags)
+    elif isinstance(inherited, str) and inherited.strip():
+        block["Tags"] = _one_line(inherited, 1024)
+    else:
+        block["Tags"] = "correction"
+    block.update({field: _one_line(value, 500) for field, value in provenance.items() if value})
+    patch = _render_block(block).rstrip("\n")
+    proposal: dict[str, Any] = {
+        "ProposalId": proposal_id,
+        "Type": "edit",
+        "TargetBlock": target,
+        "Risk": "medium",
+        "Evidence": [_one_line(f"Correction of {target} proposed via MCP propose_update(supersedes={target})", 280)],
+        "Rollback": "restore_snapshot",
+        "Ops": [{"op": "supersede_decision", "file": SUPERSEDE_DECISION_FILE, "target": target, "patch": patch}],
+        "Status": "staged",
+        "FilesTouched": [SUPERSEDE_DECISION_FILE],
+        "Sources": ["mcp:propose_update"],
+    }
+    proposal.update({field: block[field] for field in provenance if field in block})
+    proposal["Fingerprint"] = compute_fingerprint(proposal)
+    return proposal
+
+
+def _staged_supersede_of(ws: str, target: str) -> str:
+    """ProposalId of a staged ``supersede_decision`` of *target*, or ``""``."""
+    for pfile in PROPOSED_FILES:
+        path = os.path.join(ws, pfile)
+        if not os.path.isfile(path):
+            continue
+        for proposal in parse_file(path):
+            if proposal.get("Status") != "staged":
+                continue
+            ops = proposal.get("Ops")
+            if isinstance(ops, list) and any(
+                isinstance(op, dict) and op.get("op") == "supersede_decision" and op.get("target") == target for op in ops
+            ):
+                return str(proposal.get("ProposalId") or proposal.get("_id", ""))
+    return ""
+
+
+def stage_supersede_decision(
+    ws: str,
+    *,
+    target: str,
+    statement: str,
+    rationale: str,
+    tags: list[str] | None = None,
+    provenance: dict[str, str] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Stage a ``supersede_decision`` that retires *target* in favour of *statement*.
+
+    Never touches source truth: it appends one proposal to
+    :data:`SUPERSEDE_PROPOSAL_FILE` for ``approve_apply``. The proposal is
+    built, validated and admitted (backlog limit, fingerprint dedup) under the
+    proposal-file lock, so two concurrent corrections cannot allocate the same
+    proposal or block id. Raises :class:`SupersedeStagingError` (nothing
+    written) when the target is not a live decision or admission refuses.
+    """
+    from .closed_slots import ClosedSlotError, _next_block_id, _next_proposal_id
+
+    stamp = now or datetime.now(timezone.utc)
+    date_iso = stamp.astimezone(timezone.utc).strftime("%Y-%m-%d")
+    date_compact = date_iso.replace("-", "")
+    path = os.path.join(ws, SUPERSEDE_PROPOSAL_FILE)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with FileLock(path):
+        staged_text = ""
+        for pfile in PROPOSED_FILES:
+            ppath = os.path.join(ws, pfile)
+            if os.path.isfile(ppath):
+                with open(ppath, encoding="utf-8") as handle:
+                    staged_text += handle.read() + "\n"
+        try:
+            new_id = _next_block_id(ws, date_compact, staged_text)
+            proposal_id = _next_proposal_id(staged_text, date_compact)
+        except ClosedSlotError as exc:
+            raise SupersedeStagingError(str(exc)) from exc
+        proposal = build_supersede_proposal(
+            ws,
+            target=target,
+            statement=statement,
+            rationale=rationale,
+            tags=list(tags or []),
+            provenance=dict(provenance or {}),
+            proposal_id=proposal_id,
+            new_id=new_id,
+            date_iso=date_iso,
+        )
+        errors = validate_proposal(proposal)
+        if errors:
+            raise SupersedeStagingError(f"generated supersede proposal failed validation: {errors}")
+        backlog_count, over_limit = check_backlog_limit(ws)
+        if over_limit:
+            raise SupersedeStagingError(f"proposal backlog limit exceeded ({backlog_count} staged)")
+        pending = _staged_supersede_of(ws, target)
+        if pending:
+            # A second staged supersession of the same block could only fail
+            # at apply (its target is no longer active) -- or, applied in the
+            # other order, retire the correction the reviewer just approved.
+            raise SupersedeStagingError(f"a supersede proposal for {target} is already staged as {pending}")
+        duplicate, duplicate_id = check_fingerprint_dedup(ws, proposal)
+        if duplicate:
+            raise SupersedeStagingError(f"an identical supersede proposal is already staged as {duplicate_id}")
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(_render_supersede_proposal(proposal))
+    return proposal
+
+
+# ═══════════════════════════════════════════════
 # v2.1.2 Operational Hardening
 # ═══════════════════════════════════════════════
 
@@ -2052,6 +2325,24 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
                 _mark_proposal_status(source_file, proposal_id, "rolled_back")
                 _record_belief_update(ws, proposal.get("TargetBlock", ""), 0.0, "rollback")
                 raise ApplyAborted(None, "Post-checks failed, rolled back", stage=STAGE_POST_CHECK)
+
+            # 6c. Record the proposal as applied — INSIDE the scope, and
+            # checked. The status line is what stops a second apply
+            # (validate_proposal requires 'staged'), so an apply whose status
+            # write failed used to report success, write an `applied`
+            # receipt, and leave the proposal `staged` for anyone to apply
+            # again. A status that cannot be recorded withdraws the apply,
+            # by raising, like every other withdrawal in this scope.
+            if not _mark_proposal_status(source_file, proposal_id, "applied"):
+                print("\nPROPOSAL STATUS WRITE FAILED — rolling back.")
+                restore_snapshot(ws, snap_dir)
+                _cleanup_orphan_files(ws, pre_apply_files)
+                update_receipt(receipt_path, ["ABORTED: proposal status could not be recorded"], delta, "rolled_back")
+                raise ApplyAborted(
+                    None,
+                    f"Proposal status could not be recorded as applied in {source_file}; rolled back",
+                    stage=STAGE_STATUS,
+                )
     except ApplyAborted as aborted:
         # The rollback, the receipt, the proposal status and the WAL entry were
         # all handled inside the scope; the exception exists to end the scope
@@ -2069,9 +2360,9 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     all_touched = set(files_touched) | actually_modified_files
     diff_text = generate_diff_text(ws, snap_dir, list(all_touched))
 
-    # 8. Commit receipt + mark proposal as applied + update last_apply_ts
+    # 8. Commit receipt + update last_apply_ts (the proposal status was
+    # recorded, and checked, inside the scope — step 6c)
     update_receipt(receipt_path, post_report, delta, "applied", diff_text)
-    _mark_proposal_status(source_file, proposal_id, "applied")
     update_last_apply_ts(ws)
     _record_belief_update(ws, proposal.get("TargetBlock", ""), 1.0, "approve_apply")
 
@@ -2128,6 +2419,36 @@ def _sanitize_reason_for_markdown(reason: str) -> str:
     return "\n".join(out_lines)
 
 
+_PROPOSAL_BLOCK_HEADER_RE = re.compile(r"^\[[A-Z]+-[^\]]+\]")
+
+
+def _proposal_status_line(lines, proposal_id):
+    """Index of the ``Status:`` line of *proposal_id*'s block in *lines*, or ``-1``.
+
+    The block is the span from its ``[ID]`` header to the next header, and
+    it is the one whose ``ProposalId:`` line is exactly *proposal_id* (not a
+    prefix of a longer id). Field order inside a block is free — the parser
+    that ``find_proposal`` uses accepts ``Status:`` before ``ProposalId:`` —
+    so the Status line is searched for in the whole block, not only after
+    the ProposalId line.
+    """
+    target = f"ProposalId: {proposal_id}"
+    for idx, line in enumerate(lines):
+        if line.strip() != target:
+            continue
+        start = idx
+        while start > 0 and not _PROPOSAL_BLOCK_HEADER_RE.match(lines[start]):
+            start -= 1
+        end = idx + 1
+        while end < len(lines) and not _PROPOSAL_BLOCK_HEADER_RE.match(lines[end]):
+            end += 1
+        for j in range(start, end):
+            if lines[j].startswith("Status:"):
+                return j
+        return -1
+    return -1
+
+
 def _mark_proposal_status(source_file, proposal_id, new_status, *, reason=""):
     """Update the Status field in the proposal's source file.
 
@@ -2159,21 +2480,20 @@ def _mark_proposal_status(source_file, proposal_id, new_status, *, reason=""):
         with lock:
             with open(source_file, "r", encoding="utf-8") as f:
                 content = f.read()
-            # Find the proposal block and update its Status
-            # Simple approach: find line with "ProposalId: <id>" then find "Status:" nearby
             lines = content.split("\n")
-            in_proposal = False
-            status_idx = -1
-            for i, line in enumerate(lines):
-                if f"ProposalId: {proposal_id}" in line:
-                    in_proposal = True
-                    continue
-                if in_proposal and line.startswith("Status:"):
-                    lines[i] = f"Status: {new_status}"
-                    status_idx = i
-                    break
-                if in_proposal and re.match(r"^\[[A-Z]+-[^\]]+\]", line):
-                    break
+            status_idx = _proposal_status_line(lines, proposal_id)
+            if status_idx < 0:
+                # Nothing to write: no block carries this exact ProposalId,
+                # or its block has no Status line. Reporting success here is
+                # what let an apply write an `applied` receipt while the
+                # proposal stayed `staged` (the Status line came before the
+                # ProposalId line, which the old forward-only scan missed).
+                print(
+                    f"WARNING: no Status line for proposal {proposal_id} in {source_file}; status not recorded",
+                    file=sys.stderr,
+                )
+                return False
+            lines[status_idx] = f"Status: {new_status}"
             if reason and status_idx >= 0:
                 sanitized = _sanitize_reason_for_markdown(reason.strip())
                 first, *rest = sanitized.split("\n")
@@ -2193,6 +2513,13 @@ def _mark_proposal_status(source_file, proposal_id, new_status, *, reason=""):
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))
             os.replace(tmp_path, source_file)
+            # Read it back: the status is only recorded if the file now says so.
+            with open(source_file, "r", encoding="utf-8") as f:
+                landed = f.read().split("\n")
+            landed_idx = _proposal_status_line(landed, proposal_id)
+            if landed_idx < 0 or landed[landed_idx].strip() != f"Status: {new_status}":
+                print(f"WARNING: proposal status write for {proposal_id} did not land in {source_file}", file=sys.stderr)
+                return False
         return True
     except LockTimeout as e:
         print(
@@ -2220,6 +2547,77 @@ def _proposal_id_from_receipt(receipt_path):
     except OSError:
         return None
     return None
+
+
+def _receipt_result(receipt_path):
+    """The receipt's current state: its LAST ``Result:`` line, or ``None``.
+
+    :func:`write_receipt` writes ``Result: in_progress`` and every later
+    transition appends another ``Result:`` line, so the last one wins.
+    An unreadable receipt reports ``None``, which no caller treats as
+    ``applied``.
+    """
+    result = None
+    try:
+        with open(receipt_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("Result:"):
+                    result = line.split(":", 1)[1].strip()
+    except OSError:
+        return None
+    return result
+
+
+def _rollback_refusal(ws, snap_dir, receipt_ts):
+    """Why the snapshot at *snap_dir* may NOT be rolled back, or ``None``. Reads only; restores nothing.
+
+    Returns ``(reason, receipt_path)``. ``reason`` is ``None`` only when all
+    of these hold:
+
+    * neither the snapshot directory nor its ``APPLY_RECEIPT.md`` is a
+      symlink, and the receipt is a regular file inside the snapshot;
+    * the receipt names a ``Proposal:``;
+    * the receipt's current state (its last ``Result:`` line) is
+      ``applied`` and it carries no ``RolledBack:`` line;
+    * if that proposal is still on file, its ``Status`` is ``applied``
+      (a proposal already rolled back has nothing left to undo).
+
+    A snapshot directory with no receipt is never a rollback target: it is
+    what an apply that failed its preconditions leaves behind, and it
+    proves nothing was applied.
+    """
+    literal_snap = os.path.join(ws, "intelligence", "applied", receipt_ts)
+    if os.path.islink(literal_snap):
+        return "the snapshot directory is a symlink", None
+    literal_receipt = os.path.join(snap_dir, "APPLY_RECEIPT.md")
+    if os.path.islink(literal_receipt):
+        return "APPLY_RECEIPT.md is a symlink, not a receipt this workspace wrote", None
+    if not os.path.lexists(literal_receipt):
+        return "no APPLY_RECEIPT.md — a snapshot without a receipt proves no applied proposal", None
+    try:
+        receipt_path = _safe_resolve(snap_dir, "APPLY_RECEIPT.md")
+    except ValueError as exc:
+        return f"receipt path escaped the snapshot dir: {exc}", None
+    if not os.path.isfile(receipt_path):
+        return "APPLY_RECEIPT.md is not a regular file", None
+    proposal_id = _proposal_id_from_receipt(receipt_path)
+    if not proposal_id:
+        return "the receipt names no Proposal", None
+    state = _receipt_result(receipt_path)
+    if state != "applied":
+        return f"receipt state is {state!r}, not 'applied'", None
+    try:
+        with open(receipt_path, "r", encoding="utf-8") as fh:
+            if any(line.startswith("RolledBack:") for line in fh):
+                return "the receipt records an earlier rollback", None
+    except OSError as exc:
+        return f"receipt unreadable: {exc}", None
+    proposal, _source = find_proposal(ws, proposal_id)
+    if proposal is not None:
+        status = str(proposal.get("Status", "")).strip()
+        if status != "applied":
+            return f"proposal {proposal_id} is {status!r}, not 'applied'", None
+    return None, receipt_path
 
 
 def rollback(ws, receipt_ts, reason="", strict=False):
@@ -2261,20 +2659,23 @@ def rollback(ws, receipt_ts, reason="", strict=False):
         print(f"ERROR: Snapshot directory not found: {snap_dir}")
         return False
 
+    # Decide whether this snapshot may be rolled back at all — BEFORE the
+    # restore. Only a snapshot whose receipt proves an applied, not yet
+    # rolled-back proposal is a rollback target. Each check below closes a
+    # path that used to rewind every write made after the snapshot:
+    # a receipt-less snapshot dir (left by an apply that failed its
+    # preconditions), a deleted receipt on an already rolled-back snapshot,
+    # and a symlinked receipt (whose state check was skipped while the
+    # restore still ran, so the caller heard "refused" after the rewind).
+    refusal, _pre_receipt = _rollback_refusal(ws, snap_dir, receipt_ts)
+    if refusal is not None:
+        msg = f"ERROR: refusing rollback of {receipt_ts}: {refusal}"
+        print(msg)
+        print(msg, file=sys.stderr)
+        _log.warning("rollback_refused", receipt_ts=receipt_ts, reason=refusal)
+        return False
+    rolled_back_proposal = _proposal_id_from_receipt(_pre_receipt)
     print(f"Restoring from snapshot: {snap_dir}")
-    # Read the proposal id BEFORE the restore: it belongs in the record the
-    # restore mints, and the receipt is the only place it is written down.
-    # The guarded twin of this exact read is 40 lines below at :2238, which
-    # routes the same literal filename through _safe_resolve. This one joined
-    # raw, so a symlinked receipt let a foreign file's Proposal: id be recorded
-    # as the thing that was rolled back. Audible on refusal, mirroring :2240 --
-    # a silent None here would look like "no receipt", which is a real state.
-    try:
-        _pre_receipt = _safe_resolve(snap_dir, "APPLY_RECEIPT.md")
-    except ValueError as exc:
-        print(f"WARNING: pre-restore receipt path escaped snapshot dir: {exc}", file=sys.stderr)
-        _pre_receipt = None
-    rolled_back_proposal = _proposal_id_from_receipt(_pre_receipt) if _pre_receipt is not None else None
     restore_snapshot(  # nosec — snap_dir validated by _safe_resolve above
         ws,
         snap_dir,
@@ -2355,20 +2756,12 @@ def rollback(ws, receipt_ts, reason="", strict=False):
                 file=sys.stderr,
             )
             return False
-    else:
-        # Reachable without anyone deleting anything: a precondition failure
-        # inside apply_proposal restores the snapshot and returns BEFORE
-        # write_receipt, leaving intelligence/applied/<ts>/ with no receipt.
-        # Rolling that ts back restores the files but has no Proposal: id to
-        # reconcile the governance record against — a legitimate outcome, but
-        # it must not print the same banner as a fully reconciled rollback.
-        msg = (
-            f"WARNING: no APPLY_RECEIPT.md in {snap_dir} — files were restored, but no "
-            "proposal status was reconciled and no rollback record was appended."
-        )
+    else:  # pragma: no cover - _rollback_refusal proved the receipt exists before the restore
+        msg = f"WARNING: APPLY_RECEIPT.md in {snap_dir} disappeared during the rollback; no rollback record was appended."
         print(msg)
         print(msg, file=sys.stderr)
-        _log.warning("rollback_receipt_missing", receipt_ts=receipt_ts, snap_dir=snap_dir)
+        _log.warning("rollback_receipt_vanished", receipt_ts=receipt_ts, snap_dir=snap_dir)
+        return False
 
     if not postcheck_ok:
         print(f"\n═══ ROLLED BACK from {receipt_ts} — POST-ROLLBACK VALIDATION FAILED ═══")

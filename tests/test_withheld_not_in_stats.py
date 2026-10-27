@@ -564,6 +564,9 @@ class TestAttestedAnchorStillCoversEverything:
 #:     void every anchor recorded before 5.0.2.
 #: ``cli``
 #:     ``argparse`` entry point; returns no aggregate of its own.
+#: ``resource``
+#:     Connection-manager lifecycle (lease, close). Returns a handle or
+#:     nothing, never a count or a score, so it has no side of the gate.
 _PUBLIC_SURFACE: dict[str, str] = {
     "build_index": "indexer-truth",
     # Returns ``build_index``'s summary verbatim, or ``None``. Same numbers,
@@ -576,6 +579,8 @@ _PUBLIC_SURFACE: dict[str, str] = {
     "merkle_leaves": "attestation",
     "index_status": "egress",
     "main": "cli",
+    "leased_conn_manager": "resource",
+    "close_all_conn_managers": "resource",
 }
 
 #: Readings that must not move, keyed for the failure message.

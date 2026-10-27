@@ -374,6 +374,16 @@ class TestResumeOnStart:
 
 
 class TestTheHookInstallsTheVerb:
+    @pytest.fixture(autouse=True)
+    def _isolated_home(self, tmp_path, monkeypatch):
+        """install_config merges into the user's existing settings file, so a
+        test that reads the real HOME sees that machine's own hooks (it saw a
+        mind-nerve hook here). Point HOME at an empty directory."""
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
+
     def test_session_start_runs_resume_on_start(self, tmp_path) -> None:
         from mind_mem.hook_installer import install_config
 

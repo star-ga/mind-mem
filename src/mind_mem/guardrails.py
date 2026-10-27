@@ -64,6 +64,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from .admissibility import admit_workspace_blocks
 from .block_parser import parse_file
 from .block_provenance import CONTENT_SOURCE_EXTERNAL, CONTENT_SOURCE_FIELD, extract_provenance, read_content_source
 from .guardrail_patterns import (
@@ -137,6 +138,11 @@ _TRIGGER_FIELDS: tuple[tuple[str, str], ...] = (
 
 #: Statuses that keep a guardrail live.  Anything else (deprecated,
 #: archived, superseded) is parsed but never fires.
+#:
+#: A LIFECYCLE refinement applied only to blocks the shared admission filter
+#: (:func:`mind_mem.admissibility.admit_workspace_blocks`) already admitted —
+#: never the admission decision itself.  Every member must be a status
+#: admission recognises; ``tests/test_admission_routing_read_legs`` pins it.
 _LIVE_STATUSES = frozenset({"", "active", "wip"})
 
 #: Separator used to render a multi-valued ``Status`` field back to text.
@@ -528,11 +534,25 @@ def load_guardrails(workspace: str, policy: GuardrailPolicy | None = None) -> tu
         except (OSError, UnicodeDecodeError, ValueError) as exc:
             _log.warning("guardrail_source_parse_failed", source=rel_path, error=str(exc))
             continue
+        candidates = []
         for raw in blocks:
             if not str(raw.get("_id", "")).startswith(GUARDRAIL_ID_PREFIX):
                 continue
             enriched = dict(raw)
             enriched.setdefault("_source_file", rel_path)
+            # The parser renders ``Status:`` + ``- active`` as a list; the
+            # admission filter withholds a populated non-string as unreadable.
+            # Put the canonical text in front of it (a multi-valued status
+            # joins to text no allow-list names, so it still fails closed).
+            if "Status" in enriched:
+                enriched["Status"] = normalise_status(enriched["Status"])
+            candidates.append(enriched)
+        # ADMISSION GATE, the shared one. ``is_live`` below is a lifecycle
+        # refinement (a retired guardrail does not fire); whether the block
+        # may be served at all — status allow-list, governed releases,
+        # revoked credentials — is the admission filter's call, never a
+        # private whitelist's.
+        for enriched in admit_workspace_blocks(candidates, workspace=workspace):
             try:
                 guardrail = parse_guardrail_block(enriched)
             except GuardrailProvenanceError as exc:

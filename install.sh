@@ -341,6 +341,9 @@ install_claude_code() {
   local config="$HOME/.claude/mcp.json"
   info "Claude Code CLI: $config"
   install_json_mcp "$config" "mcpServers" "$ws" "$cmd"
+  # Current Claude Code reads user-scope servers from ~/.claude.json; the
+  # registry writer merges there atomically with a backup.
+  install_registry_client "$ws" "claude-code"
   ok "Claude Code CLI configured"
 }
 
@@ -485,6 +488,52 @@ PYEOF
   ok "OpenClaw hooks + MCP configured"
 }
 
+# ---------- every other registry client (via mind-mem's own CLI) ----------
+
+# The clients above have hand-written installers kept for compatibility. Every
+# other client in mind-mem's registry (see `mm detect`, docs/client-integrations.md)
+# is wired by `mm install-all --agent NAME`, which merges only the mind-mem
+# entry, backs a changed file up first, and prints manual steps for clients
+# that have no config file to merge into.
+LEGACY_CLIENTS=" claude-code claude-desktop codex gemini cursor windsurf zed openclaw "
+
+mm_cli() {
+  local dir
+  dir=$(dirname "$MCP_COMMAND_RESOLVED")
+  if [ -x "$dir/mm" ]; then
+    "$dir/mm" "$@"
+  elif command -v mm &>/dev/null; then
+    mm "$@"
+  else
+    python3 -m mind_mem.mm_cli "$@"
+  fi
+}
+
+registry_detected() {
+  local ws="$1"
+  MIND_MEM_WORKSPACE="$ws" mm_cli detect 2>/dev/null \
+    | python3 -c 'import json, sys; print(" ".join(json.load(sys.stdin).get("detected", [])))' 2>/dev/null || true
+}
+
+install_registry_client() {
+  local ws="$1" name="$2" out
+  info "$name: mm install-all --agent $name"
+  if out=$(MIND_MEM_WORKSPACE="$ws" mm_cli install-all --agent "$name" 2>&1); then
+    if printf '%s' "$out" | grep -q '"reason": "manual setup required"'; then
+      warn "$name has no config file to merge into; manual steps:"
+      printf '%s' "$out" | python3 -c 'import json, sys
+for r in json.load(sys.stdin)["results"]:
+    if r.get("reason") == "manual setup required":
+        print(r["content"])' 2>/dev/null || true
+    else
+      ok "$name configured"
+    fi
+  else
+    warn "$name: mm install-all failed"
+    printf '%s\n' "$out" >&2
+  fi
+}
+
 # ---------- auto-detect ----------
 
 detect_clients() {
@@ -522,6 +571,9 @@ Options:
   --windsurf         Install for Windsurf
   --zed              Install for Zed
   --openclaw         Install for OpenClaw
+  --client NAME      Install for any registry client by key (repeatable),
+                     e.g. --client qwen-code --client goose. `mm detect`
+                     and docs/client-integrations.md list every key.
   --workspace PATH   Set workspace path (default: ~/.mind-mem/workspace)
   --installer KIND   Force pipx or pip (default: auto)
   --package SPEC     Override the package spec (default: local checkout if
@@ -562,6 +614,8 @@ main() {
       --windsurf)       clients+=("windsurf"); shift ;;
       --zed)            clients+=("zed"); shift ;;
       --openclaw)       clients+=("openclaw"); shift ;;
+      --client)         clients+=("$2"); shift 2 ;;
+      --client=*)       clients+=("${1#--client=}"); shift ;;
       --workspace)      workspace="$2"; shift 2 ;;
       --installer)      installer_choice="$2"; shift 2 ;;
       --package)        package_override="$2"; shift 2 ;;
@@ -600,13 +654,19 @@ main() {
   local mcp_command
   mcp_command=$(resolve_mcp_command "$resolve_mode")
   verify_install "$mcp_command"
+  MCP_COMMAND_RESOLVED="$mcp_command"
 
   if $auto || [ ${#clients[@]} -eq 0 ]; then
     local detected
     detected=$(detect_clients)
+    # Every other detected registry client is wired through `mm`.
+    local extra
+    for extra in $(registry_detected "$workspace"); do
+      case "$LEGACY_CLIENTS" in *" $extra "*) ;; *) detected="${detected:+$detected }$extra" ;; esac
+    done
     if [ -z "$detected" ]; then
       err "No supported AI coding clients detected."
-      err "Install Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Zed, or OpenClaw first."
+      err "Install a supported client first (\`mm detect\` lists what mind-mem looks for)."
       exit 1
     fi
 
@@ -659,7 +719,7 @@ main() {
       windsurf)        install_windsurf "$workspace" "$mcp_command" ;;
       zed)             install_zed "$workspace" "$mcp_command" ;;
       openclaw)        install_openclaw "$workspace" "$mcp_command" ;;
-      *)               warn "Unknown client: $client" ;;
+      *)               install_registry_client "$workspace" "$client" ;;
     esac
   done
 

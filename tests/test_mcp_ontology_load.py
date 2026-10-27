@@ -75,14 +75,15 @@ def _pristine_registry():
 
 
 @pytest.fixture(autouse=True)
-def _user_scope(monkeypatch):
-    """Run at plain user scope -- loading an ontology is not an admin act.
+def _admin_scope(monkeypatch):
+    """Run at admin scope with the ACL on -- loading an ontology IS an admin act.
 
-    Explicit rather than inherited: another module leaving MIND_MEM_SCOPE=admin
-    set would otherwise make these pass for the wrong reason, and the point is
-    that an ordinary caller can reach this tool.
+    F14 (architecture review): the registry is process-global, so on HTTP one
+    client's load (``make_active`` or not -- a same-version load replaces the
+    loaded one) changed what every other client's ``ontology_validate`` used.
+    Explicit rather than inherited, so a leaked scope cannot decide the result.
     """
-    monkeypatch.setenv("MIND_MEM_SCOPE", "user")
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
     monkeypatch.delenv("MIND_MEM_ACL_DISABLED", raising=False)
 
 
@@ -398,20 +399,27 @@ class TestReachability:
         register(_Mcp())
         assert "ontology_load" in registered
 
-    def test_tool_is_user_scoped_not_admin(self):
+    def test_tool_is_admin_scoped_not_user(self):
         """Unclassified is unreachable at every scope, not merely unprivileged.
 
-        User scope is the deliberate classification: the tool writes only to a
-        process-local registry, never to the store or the corpus. Pinning it
-        also catches an accidental promotion to ADMIN_TOOLS, which would break
-        every ordinary caller.
+        Admin is the deliberate classification (F14): the tool writes the
+        process-global ontology registry every client validates against.
         """
         from mind_mem.mcp.infra.acl import ADMIN_TOOLS, USER_TOOLS
 
-        assert "ontology_load" in USER_TOOLS
-        assert "ontology_load" not in ADMIN_TOOLS
+        assert "ontology_load" in ADMIN_TOOLS
+        assert "ontology_load" not in USER_TOOLS
 
-    def test_tool_is_callable_at_user_scope(self, ws):
+    def test_tool_is_callable_at_admin_scope(self, ws):
         """The ACL classification, exercised rather than asserted."""
         out = json.loads(ontology_load(_spec("test-1.0", WIDGET=WIDGET)))
         assert out.get("loaded") is True
+
+    def test_tool_is_refused_at_user_scope_and_registry_is_unchanged(self, ws, monkeypatch):
+        from mind_mem.mcp.tools._helpers import _ontology_registry
+
+        before = (tuple(_ontology_registry().versions()), _ontology_registry().active().version)
+        monkeypatch.setenv("MIND_MEM_SCOPE", "user")
+        out = json.loads(ontology_load(_spec("test-1.0", WIDGET=WIDGET), make_active=True))
+        assert out["error"] == "Permission denied: 'ontology_load' requires admin scope"
+        assert (tuple(_ontology_registry().versions()), _ontology_registry().active().version) == before

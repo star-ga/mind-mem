@@ -73,6 +73,22 @@ def _check_available() -> bool:
     return _CE_AVAILABLE
 
 
+def ce_model_args(ce_cfg: object) -> dict[str, str]:
+    """Constructor kwargs for :class:`CrossEncoderReranker` from a ``cross_encoder`` config section.
+
+    Only well-formed, non-empty string values are passed through; anything else falls back to the
+    constructor defaults, so an unconfigured deployment keeps loading the default model.
+    """
+    if not isinstance(ce_cfg, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key in ("model", "device"):
+        val = ce_cfg.get(key)
+        if isinstance(val, str) and val.strip():
+            out[key] = val.strip()
+    return out
+
+
 class CrossEncoderReranker:
     """CPU-friendly cross-encoder reranker."""
 

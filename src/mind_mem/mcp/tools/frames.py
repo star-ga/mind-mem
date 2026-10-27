@@ -23,6 +23,7 @@ never refuse an action and never filter a plan.  The operator decides.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Any, Sequence
 
@@ -35,7 +36,7 @@ from ..infra.config import _load_config
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger
+from ._helpers import _readable_sources, get_logger
 
 _log = get_logger("mcp_server")
 
@@ -78,6 +79,20 @@ def _build_context(
     )
 
 
+def _scoped_policy(ws: str, policy: FramePolicy) -> FramePolicy:
+    """*policy* restricted to the frame / dead-end sources the caller may read.
+
+    The sources are fixed corpus files (``frames/FRAMES.md`` by default), read
+    straight off disk by the engine: without this a bound caller was served
+    frames and dead ends from files its namespace ACL denies.
+    """
+    return dataclasses.replace(
+        policy,
+        frame_sources=_readable_sources(ws, policy.frame_sources),
+        dead_end_sources=_readable_sources(ws, policy.dead_end_sources),
+    )
+
+
 @mcp_tool_observe
 def resume_brief(frame_id: str = "") -> str:
     """Return the resume brief for the active task frame.
@@ -115,7 +130,7 @@ def resume_brief(frame_id: str = "") -> str:
     if ws_err:
         return ws_err
 
-    policy = FramePolicy.from_config(_load_config(ws))
+    policy = _scoped_policy(ws, FramePolicy.from_config(_load_config(ws)))
     try:
         brief = resume_brief_engine(ws, frame_id.strip(), policy=policy)
     except FrameSpecError as exc:
@@ -170,7 +185,7 @@ def check_dead_ends(
     except GuardrailSpecError as exc:
         return json.dumps({"error": str(exc)})
 
-    policy = FramePolicy.from_config(_load_config(ws))
+    policy = _scoped_policy(ws, FramePolicy.from_config(_load_config(ws)))
     surface = ApproachSurface.from_context(context)
     registry, rejected = load_dead_ends_with_rejections(ws, policy)
     matched = match_surface(surface, registry)

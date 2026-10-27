@@ -184,8 +184,10 @@ def test_export_core_is_registered_and_acl_classified() -> None:
 
     core_tools.register(_Recorder())
     assert "export_core" in registered
-    assert "export_core" in USER_TOOLS
-    assert "export_core" not in ADMIN_TOOLS
+    # F14: export_core writes an export artifact, and a tool that writes in
+    # any mode is admin-scoped.
+    assert "export_core" in ADMIN_TOOLS
+    assert "export_core" not in USER_TOOLS
 
 
 def test_export_core_survives_the_acl_decorator() -> None:

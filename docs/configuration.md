@@ -1384,6 +1384,43 @@ contract. Actor and tool labels remain descriptive, not authenticated principals
 Outcome reporting does not directly promote memory tiers or mutate governed
 block content; the existing optional calibration projection remains opt-in.
 
+## Computed abstention (`recall.abstention`)
+
+Off by default and invisible when off: with neither the section below nor a
+per-call `intended_use`, the recall response is byte-identical to one from a build
+that never had the field. See [computed abstention](computed-abstention.md).
+
+```json
+{
+  "recall": {
+    "abstention": {
+      "enabled": true,
+      "default_use": "answer",
+      "bands": {
+        "summary":        {"act": 0.35, "caution": 0.10},
+        "answer":         {"act": 0.55, "caution": 0.20},
+        "governed_write": {"act": 0.70, "caution": 0.35}
+      }
+    }
+  }
+}
+```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `enabled` | `false` | Only a literal `true` enables it: every MCP / REST / gRPC recall then carries the `abstention` field. A per-call `intended_use` asks for it regardless. `mm recall` and the stdlib `POST /query` route are per-request only. |
+| `default_use` | `"answer"` | Band set used when the call names no `intended_use`. |
+| `bands.<use>.act` | see above | Minimum separation (0–1) to `act`. |
+| `bands.<use>.caution` | see above | Minimum separation to `proceed_with_caution`; below it the verdict is `do_not_act`. |
+
+Overrides are merged over the defaults per use and per edge. The table is validated
+as a whole: every value must be a number in `[0, 1]`, `caution` may not exceed
+`act`, and a stricter use (`summary` < `answer` < `governed_write`) may not be
+looser than a less strict one at either edge. A table that fails any of these falls
+back to the shipped defaults for **every** use and says why in the response's
+`config_warnings`. The shipped thresholds are provisional; run
+`mm abstention-eval` on a labelled set before relying on them.
+
 ## LLM Reliability Profile (`v4.llm_noise_profile`)
 
 Models each reporting agent as a noisy sensor and tracks how often it turns out

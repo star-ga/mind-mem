@@ -56,14 +56,27 @@ mm install claude-code          # configure one client
 * Install is a non-destructive merge; `--force` overwrites instead.
 * `mm install-all --no-mcp` writes only the text/hook integration and skips
   native MCP server registration.
+* `mm uninstall-all` removes only the mind-mem MCP entry from each detected
+  (or `--agent`-named) client; `--dry-run` previews.
+* Clients that keep MCP servers in their UI (Trae, Cherry Studio, Raycast, ...)
+  get printed manual steps instead of a file write.
 * `mm install-all --agent codex --agent gemini` restricts the run to named
   clients.
 * Both commands configure the workspace `mm` resolves (see above), so set
   `MIND_MEM_WORKSPACE` first.
 * Client keys accepted by `mm install` and `--agent`: `claude-code`, `codex`,
-  `grok-build`, `vibe`, `gemini`, `cursor`, `windsurf`, `aider`, `openclaw`,
-  `nanoclaw`, `nemoclaw`, `continue`, `cline`, `roo`, `zed`, `copilot`,
-  `copilot-cli`, `cody`, `qodo`.
+  `grok-build`, `vibe`, `opencode`, `gemini`, `cursor`, `windsurf`, `aider`,
+  `openclaw`, `nanoclaw`, `nemoclaw`, `continue`, `cline`, `roo`, `zed`,
+  `copilot`, `copilot-cli`, `cody`, `qodo`, `claude-desktop`, `vscode`,
+  `visual-studio`, `qwen-code`, `kimi-code`, `amp`, `goose`, `crush`,
+  `factory-droid`, `kiro`, `auggie`, `openhands`, `mimo-code`, `junie`,
+  `kilo`, `antigravity`, `tabnine`, `hermes-agent`, `anythingllm`, `warp`,
+  `open-interpreter`, `amazon-q`, `lm-studio`, `jan`, `boltai`, `iflow`,
+  `fast-agent`, `neovim-mcphub`, `void`, `trae`, `android-studio`,
+  `jetbrains-ai-assistant`, `librechat`, `eclipse-copilot`, `xcode`, `witsy`,
+  `emacs-mcp-el`, `open-webui`, `docker-mcp-toolkit`, `cherry-studio`, `msty`,
+  `raycast`, `5ire`, `perplexity-desktop`, `chatgpt-desktop`, `n8n`, `dify`,
+  `flowise`, `blackbox`.
 
 Restart a client after wiring it; most clients read their configuration only
 at startup.
@@ -71,7 +84,8 @@ at startup.
 From a source checkout, `./install.sh` installs the package and wires clients
 in one step (`./install.sh --all`, or per client: `--claude-code`, `--codex`,
 `--gemini`, `--cursor`, `--windsurf`, `--zed`, `--openclaw`,
-`--claude-desktop`; `--workspace PATH`; `--no-install` to only wire clients).
+`--claude-desktop`, or `--client KEY` for any other key above; `--workspace PATH`;
+`--no-install` to only wire clients).
 
 ## Install this skill
 

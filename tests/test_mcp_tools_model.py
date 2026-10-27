@@ -16,6 +16,14 @@ from mind_mem.mcp.tools.model import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _admin_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    """sign_model_tool writes key and signature sidecars: an admin tool. Pin
+    the scope here instead of inheriting whatever a prior test left set."""
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+    monkeypatch.delenv("MIND_MEM_ACL_DISABLED", raising=False)
+
+
 @pytest.fixture
 def tiny_ckpt(tmp_path: Path) -> Path:
     """Two-file synthetic checkpoint with a real-shaped safetensors header."""

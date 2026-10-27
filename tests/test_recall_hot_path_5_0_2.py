@@ -92,14 +92,16 @@ def test_query_path_skips_the_hash_and_the_build_path_does_not(workspace: str) -
     path = os.path.join(workspace, "decisions", "DECISIONS.md")
     _rewrite_preserving_metadata(path, "recall index block 1\n", "recall index BLOCK 1\n")
 
-    # The cheap (default, query-side) verdict cannot see this edit...
-    assert sqlite_index.is_stale(workspace) is False
-    # ...and the expensive one, which is what the build path runs, can.
+    # The cheap (default, query-side) verdict sees this edit too now: the
+    # kernel moved ctime on the write and ``utime`` cannot put it back, so
+    # the metadata coordinate answers without a content hash ...
+    assert sqlite_index.is_stale(workspace) is True
+    # ... and the expensive one, which is what the build path runs, agrees.
     assert sqlite_index.is_stale(workspace, verify_hash=True) is True
 
     conn = sqlite_index._connect(workspace, readonly=True)
     try:
-        assert sqlite_index._get_changed_files(conn, workspace, verify_hash=False) == []
+        assert sqlite_index._get_changed_files(conn, workspace, verify_hash=False) != []
         assert sqlite_index._get_changed_files(conn, workspace, verify_hash=True) != []
     finally:
         conn.close()

@@ -278,6 +278,46 @@ _BLOCK_HEADER_RE = re.compile(r"^\[([\w-]+(?:-\d{8}-\d{3})?)\]", re.MULTILINE)
 _DATE_FILE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.md$")
 
 
+# --- Admission over raw Markdown text ---
+
+
+def _admitted_text_lines(workspace: str, rel_path: str, text: str) -> list[str]:
+    """*text*'s lines with every WITHHELD block's lines blanked.
+
+    The Markdown passes mine raw file text, and a daily log or corpus file
+    can hold a quarantined / pending block beside admitted prose. Mining the
+    raw text surfaced that block's content (an entity excerpt, a promoted
+    fact) through a USER-scope tool. Admission is the shared filter's call
+    (:func:`mind_mem.admissibility.admit_workspace_blocks`), never a status
+    check here.
+
+    A block's lines run from its header to the line before the next header
+    (or end of file) — the block parser's own extent, so text the parser
+    would attribute to a withheld block is withheld with it. Prose before
+    the first header belongs to no block and is kept. Lines are blanked,
+    not removed, so reported line numbers stay true to the file.
+    """
+    from .admissibility import admit_workspace_blocks
+    from .block_parser import parse_blocks
+
+    lines = text.split("\n")
+    blocks = parse_blocks(text)
+    if not blocks:
+        return lines
+    for block in blocks:
+        block["_source_file"] = rel_path
+    admitted_starts = {int(b["_line"]) for b in admit_workspace_blocks(blocks, workspace=workspace)}
+    starts = [int(b["_line"]) for b in blocks]
+    masked = list(lines)
+    for index, start in enumerate(starts):
+        if start in admitted_starts:
+            continue
+        end = starts[index + 1] - 1 if index + 1 < len(starts) else len(lines)
+        for lineno in range(start, end + 1):
+            masked[lineno - 1] = ""
+    return masked
+
+
 # --- Pass 1: Entity Discovery ---
 
 
@@ -441,6 +481,7 @@ def pass_entity_discovery(
         except OSError:
             continue
 
+        content = "\n".join(_admitted_text_lines(workspace, f"memory/{fname}", content))
         entities = _extract_raw_entities(content)
         for ent in entities:
             slug = ent["slug"]
@@ -554,11 +595,12 @@ def pass_citation_repair(workspace: str) -> list[BrokenCitation]:
     for fpath in _scan_workspace_md_files(workspace):
         try:
             with open(fpath, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+                content = f.read()
         except OSError:
             continue
 
         rel_path = os.path.relpath(fpath, workspace)
+        lines = _admitted_text_lines(workspace, rel_path.replace(os.sep, "/"), content)
         for line_num, line in enumerate(lines, start=1):
             # Skip block header lines (definitions, not references)
             if line.startswith("[") and _BLOCK_HEADER_RE.match(line):
@@ -815,10 +857,11 @@ def pass_consolidation(
         fpath = os.path.join(memory_dir, fname)
         try:
             with open(fpath, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+                content = f.read()
         except OSError:
             continue
 
+        lines = _admitted_text_lines(workspace, f"memory/{fname}", content)
         seen_in_file: set[str] = set()
         for line in lines:
             normalized = _normalize_line(line)

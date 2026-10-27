@@ -48,16 +48,26 @@ through the seam or write its own file I/O in plain sight of review.
 resource with the canary and holds an exact-equality ratchet on the set
 that leaks, which is empty.
 
-A resource cannot ask who is calling. ``register`` binds these functions
-onto FastMCP directly, with none of the ACL wrapping ``mcp_tool_observe``
-gives a tool, so ``MIND_MEM_SCOPE`` / the admin token never reach here.
-Anything that needs an operator behind it — reviewing what admission
-withheld, above all — belongs on the tool side, which is classified in
-``ADMIN_TOOLS`` / ``USER_TOOLS`` and enforced per call.
+**Every resource goes through the tool gate.** ``register`` used to bind
+these functions onto FastMCP directly, so a resource read sat outside both
+the ACL and the per-client rate limiter (architecture review F14): a client
+could read ``mind-mem://recall/{query}`` -- a full recall -- in a loop with
+no budget, and an introspection failure that fails every TOOL closed still
+served every resource. :func:`_gated` now wraps each registration: one
+auth snapshot per read, the ``deny`` sentinel refuses, the caller's
+rate-limit bucket is charged, and the resource must be classified in
+``acl.USER_RESOURCES`` (an unclassified resource is refused, as an
+unclassified tool is). The module-level functions stay unwrapped so direct
+callers and the admission sweep keep reading them as plain functions.
+
+All eight resources are user-scope reads. Anything that needs an operator
+behind it — reviewing what admission withheld, above all — belongs on the
+tool side, which is classified in ``ADMIN_TOOLS`` / ``USER_TOOLS``.
 """
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 from collections.abc import Callable
@@ -66,8 +76,12 @@ from typing import Any
 from mind_mem.admission import admit_read
 from mind_mem.block_parser import get_active, parse_file
 from mind_mem.observability import get_logger
+from mind_mem.read_authz import CallerUnresolved, caller_principal, readable_blocks, source_readable
 from mind_mem.recall import recall as recall_engine
 
+from .infra.acl import USER_RESOURCES, bind_auth_snapshot, check_tool_acl
+from .infra.constants import MCP_SCHEMA_VERSION
+from .infra.rate_limit import _get_client_id, _get_client_rate_limiter
 from .infra.workspace import _validate_path, _workspace
 
 _log = get_logger("mcp_resources")
@@ -123,6 +137,17 @@ def _admitted_corpus(
         path that leaves the workspace, which is a refusal and not a read.
     """
     ws = _workspace()
+    # NAMESPACE ACL, before any byte is read. These resources serve fixed
+    # workspace-relative corpus files; the tool path (``get_block``) refuses a
+    # bound caller a source its ACL does not grant, and a resource must not be
+    # the door next to it. ``caller_principal`` raises ``CallerUnresolved`` when
+    # the identity cannot be established -- the read fails closed, it is never
+    # downgraded to an unbound (workspace-wide) caller. A denied file answers
+    # exactly like an absent one: no blocks, no withheld count.
+    principal = caller_principal()
+    if not source_readable(ws, rel_path, principal):
+        _log.info("resource_acl_denied", surface=surface)
+        return [], 0
     try:
         path = _validate_path(ws, rel_path)
     except ValueError:
@@ -222,9 +247,12 @@ def get_health() -> str:
         "signals": "intelligence/SIGNALS.md",
     }
 
+    principal = caller_principal()
     for label, rel_path in corpus.items():
         path = os.path.join(ws, rel_path)
-        if os.path.isfile(path):
+        # Counts are content: a bound caller gets zeros for a file its ACL
+        # does not grant, the same answer an absent file gives.
+        if os.path.isfile(path) and source_readable(ws, rel_path, principal):
             blocks = parse_file(path)
             result["files"][label] = {
                 "total": len(blocks),
@@ -235,7 +263,7 @@ def get_health() -> str:
 
     # State snapshot metrics
     state_path = os.path.join(ws, "memory", "intel-state.json")
-    if os.path.isfile(state_path):
+    if os.path.isfile(state_path) and source_readable(ws, "memory/intel-state.json", principal):
         with open(state_path, "r", encoding="utf-8") as f:
             try:
                 state = json.load(f)
@@ -256,7 +284,12 @@ def get_recall(query: str) -> str:
     serialized text or expose a new direct-read receipt contract.
     """
     ws = _workspace()
-    results = recall_engine(ws, query, limit=10)
+    principal = caller_principal()
+    # The engine filters by principal; the post-filter is the shared source
+    # check again, so a result whose source cannot be resolved is dropped
+    # rather than trusted (fail closed), exactly as the tool path does.
+    served = recall_engine(ws, query, limit=10, agent_id=principal)
+    results = readable_blocks(ws, served, principal)
     return json.dumps(results, indent=2, default=str)
 
 
@@ -277,13 +310,52 @@ def get_ledger() -> str:
     return _blocks_to_json(admitted)
 
 
+def _gated(fn: Callable[..., str]) -> Callable[..., str]:
+    """Run a resource body behind the same ACL + rate limit a tool gets.
+
+    Order mirrors ``mcp_tool_observe``: bind one auth snapshot (so the scope
+    and the rate-limit identity cannot change mid-read), refuse the ``deny``
+    sentinel, charge the caller's bucket, then refuse a resource that is not
+    classified. ``functools.wraps`` keeps the signature, so FastMCP still
+    derives the URI-template parameters from the original function.
+    """
+    name = fn.__name__
+
+    @functools.wraps(fn)
+    def _resource(*args: Any, **kwargs: Any) -> str:
+        with bind_auth_snapshot() as auth:
+            if auth.status == "denied":
+                return check_tool_acl(name, "deny") or json.dumps({"error": "Permission denied"})
+            client_id = _get_client_id()
+            allowed, retry_after = _get_client_rate_limiter(client_id).allow()
+            if not allowed:
+                _log.warning("rate_limit_exceeded", resource=name, client=client_id, retry_after=retry_after)
+                return json.dumps(
+                    {
+                        "error": "Rate limit exceeded. Try again later.",
+                        "retry_after_seconds": round(retry_after, 1),
+                        "_schema_version": MCP_SCHEMA_VERSION,
+                    }
+                )
+            if name not in USER_RESOURCES:
+                _log.warning("acl_unknown_resource", resource=name)
+                return json.dumps({"error": f"Resource '{name}' is not in ACL policy", "_schema_version": "1.0"})
+            try:
+                return fn(*args, **kwargs)
+            except CallerUnresolved:
+                _log.warning("resource_caller_unresolved", resource=name)
+                return check_tool_acl(name, "deny") or json.dumps({"error": "Permission denied"})
+
+    return _resource
+
+
 def register(mcp) -> None:
-    """Wire every resource body onto *mcp*. Called once from mcp_server.py."""
-    mcp.resource("mind-mem://decisions")(get_decisions)
-    mcp.resource("mind-mem://tasks")(get_tasks)
-    mcp.resource("mind-mem://entities/{entity_type}")(get_entities)
-    mcp.resource("mind-mem://signals")(get_signals)
-    mcp.resource("mind-mem://contradictions")(get_contradictions)
-    mcp.resource("mind-mem://health")(get_health)
-    mcp.resource("mind-mem://recall/{query}")(get_recall)
-    mcp.resource("mind-mem://ledger")(get_ledger)
+    """Wire every resource body onto *mcp*, behind :func:`_gated`. Called once from mcp_server.py."""
+    mcp.resource("mind-mem://decisions")(_gated(get_decisions))
+    mcp.resource("mind-mem://tasks")(_gated(get_tasks))
+    mcp.resource("mind-mem://entities/{entity_type}")(_gated(get_entities))
+    mcp.resource("mind-mem://signals")(_gated(get_signals))
+    mcp.resource("mind-mem://contradictions")(_gated(get_contradictions))
+    mcp.resource("mind-mem://health")(_gated(get_health))
+    mcp.resource("mind-mem://recall/{query}")(_gated(get_recall))
+    mcp.resource("mind-mem://ledger")(_gated(get_ledger))

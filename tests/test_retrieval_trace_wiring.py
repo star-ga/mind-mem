@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 
 import pytest
 
@@ -53,6 +54,12 @@ def _make_workspace(trace_attribution: bool) -> str:
         )
     with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
         json.dump({"recall": _recall_config(trace_attribution)}, f)
+    # The cache's corpus stamp refuses files modified within the last second
+    # (racy-timestamp rule), so age the fixture as a quiet store would be.
+    past = time.time() - 600
+    for dirpath, _dirs, files in os.walk(ws):
+        for name in files:
+            os.utime(os.path.join(dirpath, name), (past, past))
     return ws
 
 

@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from mind_mem import hook_installer
+from mind_mem import client_mcp, hook_installer
 from mind_mem.client_config_io import BACKUP_INFIX
 from mind_mem.hook_installer import AGENT_REGISTRY, install_config, install_mcp_config
 
@@ -207,7 +207,9 @@ class TestGuardIsLoadBearing:
             return loaded if isinstance(loaded, dict) else {}
 
         p = _seed(AGENT_REGISTRY["cursor"].expand_mcp_path(str(ws)), JSONC)
-        monkeypatch.setattr(hook_installer, "read_json_object", lenient)
+        # MCP registration lives in client_mcp (hook_installer re-exports it),
+        # so the guard to disable is the loader that module calls.
+        monkeypatch.setattr(client_mcp, "read_json_object", lenient)
         result = install_mcp_config("cursor", str(ws))
         assert result["written"] is True
         assert p.read_bytes() != JSONC

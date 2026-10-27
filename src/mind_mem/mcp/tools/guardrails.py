@@ -25,6 +25,7 @@ prohibition.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Any, Sequence
 
@@ -36,7 +37,7 @@ from ..infra.config import _load_config
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger
+from ._helpers import _readable_sources, get_logger
 
 _log = get_logger("mcp_server")
 
@@ -111,6 +112,8 @@ def check_guardrails(
         return json.dumps({"error": str(exc)})
 
     policy = GuardrailPolicy.from_config(_load_config(ws))
+    # The sources are corpus files read straight off disk: serve only those the caller may read.
+    policy = dataclasses.replace(policy, sources=_readable_sources(ws, policy.sources))
     hits = guardrail_hits(ws, context, policy)
     _log.info("mcp_check_guardrails", tool=context.tool, intent=context.intent, count=len(hits))
     return json.dumps(
@@ -176,12 +179,17 @@ def recall_with_guardrails(
 
     from ..infra.acl import authenticated_agent_id
 
+    # The engine loads the guardrail sources itself, so a bound caller who may
+    # not read ALL of them gets ranked recall with no force-surfaced
+    # constraints rather than a constraint from a file its ACL denies.
+    configured = GuardrailPolicy.from_config(_load_config(ws)).sources
+    surfaced_context = context if _readable_sources(ws, configured) == configured else None
     results: list[dict[str, Any]] = recall_engine(
         ws,
         query,
         limit=bounded_limit,
         active_only=bool(active_only),
-        guardrail_context=context,
+        guardrail_context=surfaced_context,
         agent_id=authenticated_agent_id(),
     )
     guardrail_count = sum(1 for r in results if r.get("guardrail"))

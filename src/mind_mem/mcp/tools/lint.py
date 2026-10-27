@@ -28,10 +28,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from mind_mem.path_redact import workspace_label
+
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger
+from ._helpers import _workspace_view_denied, get_logger
 
 _log = get_logger("mcp_server")
 
@@ -39,11 +41,15 @@ __all__ = ["lint", "lint_autofix", "register"]
 
 
 def _disabled_payload(ws: str) -> str:
-    """The one answer both tools give when ``v4.lint`` is off."""
+    """The one answer both tools give when ``v4.lint`` is off.
+
+    It runs before any ACL gate, so it names the workspace only by its
+    directory name, never its absolute host path.
+    """
     return json.dumps(
         {
             "_schema_version": MCP_SCHEMA_VERSION,
-            "workspace": ws,
+            "workspace": workspace_label(ws),
             "error": "v4.lint is disabled",
             "enable": 'mind-mem.json: "v4": { "lint": { "enabled": true } }',
         },
@@ -82,6 +88,10 @@ def lint(rule: str = "") -> str:
 
     if not flag_enabled(ws):
         return _disabled_payload(ws)
+    # Findings name files and block ids across the corpus.
+    denied = _workspace_view_denied(ws)
+    if denied is not None:
+        return denied
 
     if not isinstance(rule, str):
         return json.dumps({"error": "rule must be a string", "got": type(rule).__name__})
@@ -97,7 +107,7 @@ def lint(rule: str = "") -> str:
     return json.dumps(
         {
             "_schema_version": MCP_SCHEMA_VERSION,
-            "workspace": ws,
+            "workspace": workspace_label(ws),
             "rules": list(selected) if selected else list(RULES),
             "count": len(findings),
             "autofixable": sum(1 for f in findings if f.autofixable),
@@ -151,7 +161,7 @@ def lint_autofix(finding_id: str) -> str:
     return json.dumps(
         {
             "_schema_version": MCP_SCHEMA_VERSION,
-            "workspace": ws,
+            "workspace": workspace_label(ws),
             "finding_id": finding_id,
             "proposal_id": proposal_id,
             "status": "staged",

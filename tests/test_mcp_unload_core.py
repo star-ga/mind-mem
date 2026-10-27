@@ -32,7 +32,9 @@ observable, and worth a test that will notice if it ever changes.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 
 import pytest
 
@@ -89,9 +91,23 @@ def _make_ws(path):
     return path
 
 
+@contextlib.contextmanager
+def _admin_scope():
+    """Admin scope for one call: the core lifecycle writes are ADMIN_TOOLS (F14)."""
+    saved = os.environ.get("MIND_MEM_SCOPE")
+    os.environ["MIND_MEM_SCOPE"] = "admin"
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop("MIND_MEM_SCOPE", None)
+        else:
+            os.environ["MIND_MEM_SCOPE"] = saved
+
+
 def _mount(w, namespace: str, version: str = "1.0") -> None:
     """Build and load a real .mmcore so the registry holds a genuine core."""
-    with use_workspace(str(w)):
+    with use_workspace(str(w)), _admin_scope():
         built = json.loads(build_core(namespace, version))
         assert "error" not in built, built
         loaded = json.loads(load_core(f"{namespace}-{version}.mmcore"))
@@ -99,7 +115,7 @@ def _mount(w, namespace: str, version: str = "1.0") -> None:
 
 
 def _unload(w, namespace) -> dict:
-    with use_workspace(str(w)):
+    with use_workspace(str(w)), _admin_scope():
         return json.loads(unload_core(namespace))
 
 
@@ -176,7 +192,7 @@ class TestEnvelope:
         assert miss["unloaded"] is False
 
     def test_the_result_is_always_a_json_string(self, ws) -> None:
-        with use_workspace(str(ws)):
+        with use_workspace(str(ws)), _admin_scope():
             raw = unload_core("alpha")
         assert isinstance(raw, str)
         assert json.loads(raw) == {"unloaded": False}
@@ -271,19 +287,24 @@ class TestReachability:
         register(_Mcp())
         assert "unload_core" in registered
 
-    def test_the_tool_is_classified_as_user_scope(self) -> None:
-        """Registered but unclassified is refused as an unknown tool by the ACL."""
+    def test_the_tool_is_classified_as_admin_scope(self) -> None:
+        """F14: unload_core changes the PROCESS-GLOBAL core registry, so on HTTP
+        one client could unmount another client's core. Admin, not user."""
         from mind_mem.mcp.infra.acl import ADMIN_TOOLS, USER_TOOLS
 
-        assert "unload_core" in USER_TOOLS
-        assert "unload_core" not in ADMIN_TOOLS
+        assert "unload_core" in ADMIN_TOOLS
+        assert "unload_core" not in USER_TOOLS
 
-    def test_it_is_callable_without_admin_scope(self, ws, monkeypatch) -> None:
-        """The ACL classification has to hold through the live decorator, not
-        just in the frozenset: user scope must reach the tool body."""
-        monkeypatch.delenv("MIND_MEM_SCOPE", raising=False)
+    def test_it_is_refused_at_user_scope_and_leaves_the_core_mounted(self, ws, monkeypatch) -> None:
+        """The classification exercised through the live decorator."""
         monkeypatch.delenv("MIND_MEM_ACL_DISABLED", raising=False)
         _mount(ws, "alpha")
+        monkeypatch.setenv("MIND_MEM_SCOPE", "user")
+        with use_workspace(str(ws)):
+            out = json.loads(unload_core("alpha"))
+        assert out["error"] == "Permission denied: 'unload_core' requires admin scope"
+        with use_workspace(str(ws)):
+            assert [c["namespace"] for c in json.loads(list_cores())["cores"]] == ["alpha"]
         assert _unload(ws, "alpha") == {"unloaded": True}
 
 
@@ -298,7 +319,7 @@ class TestPublicFacadeParity:
         from mind_mem.mcp.tools.public import core
 
         _mount(ws, "alpha")
-        with use_workspace(str(ws)):
+        with use_workspace(str(ws)), _admin_scope():
             out = json.loads(core("unload", namespace="alpha"))
         assert out == {"unloaded": True}
         assert _mounted(ws) == []
@@ -306,6 +327,6 @@ class TestPublicFacadeParity:
     def test_the_facade_forwards_the_namespace_refusal(self, ws) -> None:
         from mind_mem.mcp.tools.public import core
 
-        with use_workspace(str(ws)):
+        with use_workspace(str(ws)), _admin_scope():
             out = json.loads(core("unload"))
         assert out == {"error": "namespace must be a non-empty string"}

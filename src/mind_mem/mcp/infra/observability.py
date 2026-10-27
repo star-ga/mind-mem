@@ -20,6 +20,7 @@ ordering is identical.
 from __future__ import annotations
 
 import functools
+import inspect
 import json
 import os
 import sqlite3
@@ -27,7 +28,16 @@ import time
 
 from mind_mem.observability import get_logger, log_context_active, metrics
 
-from .acl import ADMIN_TOOLS, USER_TOOLS, _get_request_scope, bind_auth_snapshot, check_tool_acl
+from .acl import (
+    ADMIN_TOOLS,
+    USER_TOOLS,
+    WRITE_GATED_TOOLS,
+    _get_request_scope,
+    bind_auth_snapshot,
+    check_tool_acl,
+    check_write_mode_acl,
+    write_mode_of,
+)
 from .constants import MCP_SCHEMA_VERSION
 from .rate_limit import _get_client_id, _get_client_rate_limiter
 
@@ -81,6 +91,11 @@ def mcp_tool_observe(fn):
     runs inside a fresh correlation-ID scope, so every log line the tool (and
     everything it calls) emits carries the id of the call that produced it.
     """
+
+    try:
+        _signature = inspect.signature(fn)
+    except (TypeError, ValueError):  # pragma: no cover - builtins only
+        _signature = None
 
     @functools.wraps(fn)
     def _observed_body(*args, **kwargs):
@@ -148,6 +163,31 @@ def mcp_tool_observe(fn):
         elif tool_name not in USER_TOOLS:
             _log.warning("acl_unknown_tool", tool=tool_name)
             return json.dumps({"error": f"Tool '{tool_name}' is not in ACL policy", "_schema_version": "1.0"})
+
+        # F14: a user-scope tool's WRITE mode is admin-scope. The arguments
+        # are bound to the signature (defaults applied) so a positional and a
+        # keyword call are judged alike. A call that does not bind will raise
+        # TypeError in ``fn`` before any body runs, so it needs no verdict.
+        if tool_name in WRITE_GATED_TOOLS:
+            if _signature is None:  # pragma: no cover - a gated tool is a plain def
+                return json.dumps({"error": f"Tool '{tool_name}' write-mode gate cannot inspect its arguments"})
+            try:
+                bound = _signature.bind(*args, **kwargs)
+            except TypeError:
+                bound = None
+            if bound is not None:
+                bound.apply_defaults()
+                if acl_disabled:
+                    gate = write_mode_of(tool_name, dict(bound.arguments))
+                    if gate is not None:
+                        _log.warning(
+                            "acl_bypassed_via_env",
+                            extra={"tool": tool_name, "write_mode": gate.capability, "scope": acl_scope},
+                        )
+                else:
+                    write_error = check_write_mode_acl(tool_name, dict(bound.arguments), acl_scope)
+                    if write_error:
+                        return write_error
 
         start = time.monotonic()
         error_type = None

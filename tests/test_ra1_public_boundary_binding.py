@@ -28,6 +28,36 @@ from mind_mem.served_ledger import ServedRunV2, context_digest, read_served_runs
 QUERY = "deterministic compiler"
 
 
+def _refile_at_current_generation(workspace: str, hits: list[Any]) -> None:
+    """Re-file prefetch-served *hits* at the generation the next lookup uses."""
+    from mind_mem.mcp.infra.config import _load_config
+    from mind_mem.mcp.tools.recall import _anticipation_generation_key
+
+    usable = [hit for hit in hits if isinstance(hit, dict)]
+    key = _anticipation_generation_key(workspace, prefetch.chain_head(workspace))
+    identity = prefetch.anticipation_generation_identity(_load_config(workspace), str(MCP_SCHEMA_VERSION))
+    assert key is not None and identity is not None, (key, identity)
+    assert usable, "prefetch served nothing -- the warm would be vacuous"
+    prefetch.get_cache().record(workspace, "prefetch", usable, head=key, generation_identity=identity)
+
+
+def _prefetch_warm(workspace: str) -> dict[str, Any]:
+    """Warm the anticipation cache through the public prefetch door.
+
+    The prefetch door files its bundle under the generation it captured BEFORE
+    its fan-out (governed head + stat-only corpus stamp). That fan-out runs the
+    engine, whose ``retrieval_log`` write lands in ``recall.db``; a stat cannot
+    tell that telemetry row from a lineage/edge write in the same file, so the
+    stamp moves and the door's own bundle is unreachable -- the safe direction
+    (pinned in ``tests/test_anticipation_cache_corpus_stamp.py``). These tests
+    are about the serving receipt of a local hit, not about the producer, so the
+    same served hits are re-filed at the CURRENT generation the next lookup uses.
+    """
+    payload = json.loads(public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5))
+    _refile_at_current_generation(workspace, payload.get("results", []))
+    return payload
+
+
 def _seed_workspace(root: Path, *, anticipation: bool = False) -> str:
     (root / "decisions").mkdir(parents=True)
     for name in ("tasks", "entities", "intelligence"):
@@ -118,7 +148,12 @@ def _assert_coherent_or_unproven(
 
 
 @pytest.fixture(autouse=True)
-def _reset_anticipation_cache() -> Any:
+def _reset_anticipation_cache(monkeypatch: pytest.MonkeyPatch) -> Any:
+    # The bundle generation now carries a stat-only corpus stamp, and a file
+    # written inside the racy-timestamp window makes the state unnameable (the
+    # bundle cache is bypassed). These tests write a fresh tmp_path workspace
+    # and recall at once; a zero window models a quiet store.
+    monkeypatch.setattr("mind_mem.recall_cache._RACY_WINDOW_NS", 0)
     prefetch.reset_cache()
     yield
     prefetch.reset_cache()
@@ -240,7 +275,7 @@ def test_public_anticipation_positive_is_explicitly_unattested(tmp_path: Path) -
     workspace = _seed_workspace(tmp_path / "anticipation", anticipation=True)
 
     with use_workspace(workspace):
-        warm = json.loads(public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5))
+        warm = _prefetch_warm(workspace)
         served = json.loads(public.recall(QUERY, mode="auto", limit=5))
 
     assert warm.get("results"), warm
@@ -299,7 +334,7 @@ def test_public_rejected_anticipation_hit_falls_through_without_receipt(tmp_path
     workspace = _seed_workspace(tmp_path / "anticipation-rejected", anticipation=True)
 
     with use_workspace(workspace):
-        warm = json.loads(public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5))
+        warm = _prefetch_warm(workspace)
         rejected = json.loads(public.recall("kubernetes ingress certificate", mode="auto", limit=5))
 
     assert warm.get("results"), warm
@@ -315,7 +350,7 @@ def test_public_anticipation_unresolved_generation_falls_through_without_downgra
     workspace = _seed_workspace(tmp_path / "anticipation-unresolved-generation", anticipation=True)
 
     with use_workspace(workspace):
-        warm = json.loads(public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5))
+        warm = _prefetch_warm(workspace)
         monkeypatch.setattr(prefetch, "anticipation_generation_identity", lambda *_args, **_kwargs: None)
         served = json.loads(public.recall(QUERY, mode="auto", limit=5))
 
@@ -332,7 +367,7 @@ def test_public_anticipation_malformed_result_id_stays_unproven(tmp_path: Path, 
     workspace = _seed_workspace(tmp_path / "anticipation-malformed-id", anticipation=True)
 
     with use_workspace(workspace):
-        public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5)
+        _prefetch_warm(workspace)
         cache = prefetch.get_cache()
         original_lookup = cache.lookup
 
@@ -388,7 +423,7 @@ def test_public_anticipation_receipt_respects_disabled_ledger(tmp_path: Path) ->
     config_path.write_text(json.dumps(config), encoding="utf-8", newline="\n")
 
     with use_workspace(workspace):
-        public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5)
+        _prefetch_warm(workspace)
         served = json.loads(public.recall(QUERY, mode="auto", limit=5))
 
     assert served.get("backend") == "anticipation_cache", served
@@ -405,7 +440,7 @@ def test_public_anticipation_receipt_reports_a_corrupt_ledger(tmp_path: Path) ->
     ledger_dir = Path(workspace) / ".mind-mem-ledger"
 
     with use_workspace(workspace):
-        public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5)
+        _prefetch_warm(workspace)
         assert json.loads(public.recall(QUERY, mode="auto", limit=5))["backend"] == "anticipation_cache"
         ledger_dir.unlink() if ledger_dir.is_file() else None
         if ledger_dir.is_dir():
@@ -430,7 +465,7 @@ def test_public_anticipation_receipt_refuses_unresolved_config_hash(tmp_path: Pa
 
     workspace = _seed_workspace(tmp_path / "anticipation-unresolved", anticipation=True)
     with use_workspace(workspace):
-        public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5)
+        _prefetch_warm(workspace)
         before = read_served_runs(workspace)
 
         def fail_hash(*_args: Any, **_kwargs: Any) -> str:
@@ -465,6 +500,7 @@ def test_public_anticipation_lookup_uses_the_captured_limit_after_disk_mutation(
     with use_workspace(workspace):
         filled = json.loads(prefetch_tool("recall,scoring,instant,input", limit=20))
         assert filled.get("count", 0) > 3, filled
+        _refile_at_current_generation(workspace, filled.get("results", []))
         captured_hash = current_pipeline_hash(workspace)
         import mind_mem.pipeline_hash as pipeline_hash
 
@@ -554,7 +590,7 @@ def test_public_anticipation_import_failure_preserves_answer_without_record(tmp_
 
     workspace = _seed_workspace(tmp_path / "public-anticipation-missing-ledger", anticipation=True)
     with use_workspace(workspace):
-        public.recall(QUERY, mode="prefetch", signals=QUERY, limit=5)
+        _prefetch_warm(workspace)
         before = read_served_runs(workspace)
         assert before, "positive control: prefetch must create its normal ranked receipt"
         with monkeypatch.context() as missing:
