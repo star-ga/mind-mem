@@ -107,18 +107,6 @@ _BARE_SEEDS = {
 
 
 @pytest.mark.parametrize("agent", AUTO)
-def test_install_then_uninstall_restores_crlf_file_byte_identical(agent: str, home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    path, kind, keys = _setup(agent, home, monkeypatch)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    original = _seed_text(kind, keys).replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
-    assert b"\r\n" in original, "positive control: the seed really has CRLF line endings"
-    path.write_bytes(original)
-    assert install_mcp_config(agent, WS)["written"] is True
-    assert uninstall_mcp_config(agent, WS)["removed"] is True
-    assert path.read_bytes() == original, f"{agent}: uninstall restores CRLF bytes untouched"
-
-
-@pytest.mark.parametrize("agent", AUTO)
 def test_install_then_uninstall_restores_file_without_server_container(agent: str, home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path, kind, keys = _setup(agent, home, monkeypatch)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,3 +177,16 @@ def test_detection_creates_no_files(plat: str, home: Path, monkeypatch: pytest.M
     assert len(found) > 30, found
     assert _tree(home) == populated
     assert not os.path.exists(WS), "the workspace path is not created by detection"
+
+
+@pytest.mark.parametrize("agent", AUTO)
+def test_uninstall_restores_crlf_file_byte_identical(agent: str, home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A config saved with Windows line endings comes back with them, on every OS."""
+    path, kind, keys = _setup(agent, home, monkeypatch)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    original = _seed_text(kind, keys).replace("\n", "\r\n").encode("utf-8")
+    assert b"\r\n" in original, "positive control: the seed really has CRLF line endings"
+    path.write_bytes(original)
+    assert install_mcp_config(agent, WS)["written"] is True
+    assert uninstall_mcp_config(agent, WS)["removed"] is True
+    assert path.read_bytes() == original, f"{agent}: uninstall restores CRLF bytes"

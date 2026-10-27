@@ -305,7 +305,7 @@ def _compare_seconds(a: str, b: str) -> float:
     return time.perf_counter() - start
 
 
-# Short ids: a 300 kB value as a test id overflows the 32767-char limit on a Windows env var.
+# Short ids: pytest puts the test id in an environment variable, capped at 32,767 characters on Windows.
 @pytest.mark.parametrize(("a", "b"), _QUADRATIC, ids=[f"case{i}" for i in range(len(_QUADRATIC))])
 def test_linear_time(a, b):
     # Linearity is the property: doubling the input must not much more than double the time.

@@ -126,12 +126,13 @@ def matching_backup_path(fmt: str, path: str, removed_text: str) -> tuple[str, s
     candidates = sorted(glob.glob(glob.escape(path) + BACKUP_INFIX + "*"), reverse=True)  # newest stamp first
     for backup in candidates:
         try:
-            with open(backup, "r", encoding="utf-8", newline="") as fh:  # keep CRLF: the restore is byte-exact
-                text = fh.read()
+            with open(backup, "r", encoding="utf-8", newline="") as fh:
+                raw = fh.read()  # exact text, so a CRLF file is restored as CRLF
         except (OSError, UnicodeDecodeError):
             continue
+        text = raw.replace("\r\n", "\n").replace("\r", "\n")  # compare as the reader saw the live file
         if _same(kind, text, removed_text) or _same_with_container(kind, skel, text, removed_text):
-            return backup, text
+            return backup, raw
     return None
 
 

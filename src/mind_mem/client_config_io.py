@@ -92,7 +92,8 @@ def atomic_write_text(path: str, text: str) -> None:
     os.makedirs(directory, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".mind-mem-", suffix=".tmp", dir=directory)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:  # no \n -> \r\n translation on Windows
+        # newline="": write the text as given; Windows text mode would turn every "\n" into "\r\n".
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
             fh.write(text)
         if os.path.isfile(path):
             shutil.copymode(path, tmp)
