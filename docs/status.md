@@ -42,7 +42,7 @@ Package is a flat `src/mind_mem/` — there is no `governance/` subpackage.
 | Component | Source | Notes |
 |---|---|---|
 | MCP server entry | `src/mind_mem/mcp_server.py` | 107 tools across recall / write / governance / observability / audit. |
-| Native MCP integration (20 clients) | `src/mind_mem/hook_installer.py` | `mm install-all` covers the 20 registry clients (12 get a native MCP entry), including Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed and OpenClaw; Claude Desktop is configured by `./install.sh --claude-desktop`, not the registry. |
+| Native MCP integration (69 clients) | `src/mind_mem/hook_installer.py`, `src/mind_mem/client_registry_data.py` | `mm install-all` covers the 69 registry clients, of which 41 get an automatic native MCP entry (Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw, VS Code and more), 22 get printed manual MCP steps, 6 get an instruction or hook file only. Each entry's path, format and key are checked against the client's documentation (source table in `docs/client-integrations.md`); `mm uninstall-all` restores a file's original bytes or deletes a file mind-mem created. |
 | Multi-backend LLM extractor | `src/mind_mem/llm_extractor.py` | ollama / openai-compatible / vLLM / exllamav2 backends selected by `backend="auto"`. |
 | Model provenance (audit / sign / verify) | `src/mind_mem/model_provenance.py`, `src/mind_mem/mcp/tools/model.py` | `audit_model_tool`, `sign_model_tool`, `verify_model_tool` are in the shipped tool surface — no feature flag — with 28 tests and their own `Audit Pinned Models` workflow. This row said "not yet shipped" while all three were counted in the tool badge. |
 

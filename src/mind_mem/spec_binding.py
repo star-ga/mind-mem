@@ -40,6 +40,79 @@ _BINDING_FILENAME = ".spec_binding.json"
 _CURRENT_VERSION = "1.0.0"
 
 
+#: Arming record: written whenever a workspace is armed or re-attested
+#: (``init``, ``mm config set``, and the gate the first time it verifies a
+#: binding). Unlike the binding it never stops existing on a normal path —
+#: nothing un-arms a workspace — so its presence answers "was this workspace
+#: ever armed?" after the binding itself is gone. Kept in TWO places, see
+#: :func:`arming_record_paths`, so deleting any single file cannot erase it.
+_ARMING_FILENAME = ".spec_armed.json"
+_ARMING_AUDIT_DIR = ".mind-mem-audit"
+
+
+def arming_record_paths(config_path: str, workspace: Optional[str] = None) -> tuple[str, str]:
+    """Where the arming record for *config_path* lives: beside the binding, and in the audit dir.
+
+    The first copy sits next to the config and its binding. The second sits
+    in the workspace's ``.mind-mem-audit/`` directory (the audit ledger's
+    home, outside every snapshot and restore scope), so removing the binding
+    together with the record beside it still leaves the workspace armed.
+    *workspace* defaults to the config's directory, which is where
+    :func:`~mind_mem.governance_gate.config_path_for` puts it.
+    """
+    config_dir = os.path.dirname(os.path.abspath(config_path))
+    ws = os.path.abspath(workspace) if workspace else config_dir
+    return (
+        os.path.join(config_dir, _ARMING_FILENAME),
+        os.path.join(ws, _ARMING_AUDIT_DIR, "spec_armed.json"),
+    )
+
+
+def record_arming(config_path: str, workspace: Optional[str] = None, *, spec_hash: str = "") -> list[str]:
+    """Write the arming record to every location in :func:`arming_record_paths`.
+
+    Returns the paths written. A location that cannot be written is logged
+    and skipped — the other copy still stands, and the binding written
+    alongside is what the gate verifies; this record only ever makes the
+    gate STRICTER (a missing binding reads as drift, not as "unbound").
+    A path that is a symlink is replaced, never written through.
+    """
+    # No clock and no absolute path: the record's presence is the signal, and
+    # two identical workspaces must stay byte-identical (the flag-off
+    # byte-identity gates compare whole workspace trees).
+    record = {
+        "config_file": os.path.basename(os.path.abspath(config_path)),
+        "spec_hash": spec_hash,
+        "version": _CURRENT_VERSION,
+    }
+    data = json.dumps(record, indent=2, sort_keys=True)
+    written: list[str] = []
+    for path in arming_record_paths(config_path, workspace):
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp_path = path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+            written.append(path)
+        except OSError as exc:
+            _log.warning("spec_binding.arming_record_unwritable", path=path, error=str(exc))
+    return written
+
+
+def armed_on_record(config_path: str, workspace: Optional[str] = None) -> bool:
+    """True when any arming record for *config_path* exists. A stat per location, never a read.
+
+    Presence is the signal: any entry at the path (file, symlink, even a
+    directory someone put there) counts, because the only way to make it
+    read as absent is to remove it, and removal is exactly the tampering
+    this exists to survive.
+    """
+    return any(os.path.lexists(path) for path in arming_record_paths(config_path, workspace))
+
+
 class SpecBindingCorruptedError(Exception):
     """Raised when the binding file exists but cannot be parsed.
 
@@ -157,6 +230,7 @@ class SpecBindingManager:
         self._config_path = os.path.abspath(config_path)
         self._binding_path = os.path.join(os.path.dirname(self._config_path), _BINDING_FILENAME)
         self._cached: Optional[SpecBinding] = None
+        self._cached_stamp: Optional[tuple[int, int, int]] = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -182,6 +256,7 @@ class SpecBindingManager:
         )
         self._persist(binding)
         self._cached = binding
+        self._cached_stamp = self._binding_stamp()
         _log.info(
             "spec_binding.bound",
             config_path=abs_path,
@@ -206,14 +281,22 @@ class SpecBindingManager:
         if binding is None:
             return False, "no binding found — call bind() before verify()"
 
-        if not os.path.exists(binding.config_path):
+        # Hash THIS manager's config, never the path recorded at bind time.
+        # The recorded path is absolute, so a copied workspace (backup
+        # unpacked elsewhere, a moved directory) used to attest the SOURCE
+        # workspace's config: an edit to its own mind-mem.json verified
+        # clean, and an edit to an unrelated workspace read as drift here.
+        # The binding sits next to the config it attests (see __init__), so
+        # the config beside it is the only one it can speak for.
+        config_path = self._config_path
+        if not os.path.exists(config_path):
             return (
                 False,
-                f"config file missing: '{binding.config_path}'",
+                f"config file missing: '{config_path}'",
             )
 
         try:
-            current_hash = _compute_config_hash(binding.config_path)
+            current_hash = _compute_config_hash(config_path)
         except (FileNotFoundError, ValueError) as exc:
             return False, f"could not hash config: {exc}"
 
@@ -221,7 +304,7 @@ class SpecBindingManager:
             if binding.attestation_signature is not None:
                 _log.warning(
                     "spec_binding.attestation_unverified",
-                    config_path=binding.config_path,
+                    config_path=config_path,
                     msg="attestation_signature is present but has not been cryptographically verified",
                 )
             return True, "binding valid — config hash matches"
@@ -262,9 +345,18 @@ class SpecBindingManager:
                 corrupted. Callers must decide explicitly whether to
                 rebuild the binding or refuse to operate.
         """
-        if self._cached is not None:
+        stamp = self._binding_stamp()
+        if self._cached is not None and stamp == self._cached_stamp:
             return self._cached
         return self._load()
+
+    def _binding_stamp(self) -> Optional[tuple[int, int, int]]:
+        """Cheap identity of the binding file on disk (a stat, never a read)."""
+        try:
+            st = os.stat(self._binding_path)
+        except FileNotFoundError:
+            return None
+        return (st.st_ino, st.st_mtime_ns, st.st_size)
 
     def has_drifted(self) -> bool:
         """Return ``True`` if the config has changed or no binding exists.
@@ -308,6 +400,7 @@ class SpecBindingManager:
                 data = json.load(f)
             binding = SpecBinding.from_dict(data)
             self._cached = binding
+            self._cached_stamp = self._binding_stamp()
             return binding
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
             _log.warning("spec_binding.load_failed", error=str(exc))

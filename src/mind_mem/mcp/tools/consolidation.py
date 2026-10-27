@@ -24,7 +24,7 @@ from typing import Any
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger, metrics
+from ._helpers import _workspace_view_denied, get_logger, metrics
 
 _log = get_logger("mcp_server")
 
@@ -396,7 +396,10 @@ def _bounded_int(raw: Any, default: int, low: int, high: int) -> int:
 
 
 def _granularity_block(block_id: str, status: str, tags: str, raw: dict[str, Any]) -> dict[str, Any]:
-    text = " ".join(str(raw[field]) for field in _GRANULARITY_TEXT_FIELDS if isinstance(raw.get(field), str) and raw[field])
+    from mind_mem.granularity_align import _as_text
+
+    # List-valued text fields (``Statement:\n- ...``) are text too, one item per line.
+    text = " ".join(_as_text(raw[field]) for field in _GRANULARITY_TEXT_FIELDS if raw.get(field))
     entry: dict[str, Any] = {
         "_id": block_id,
         "content": text,
@@ -405,6 +408,14 @@ def _granularity_block(block_id: str, status: str, tags: str, raw: dict[str, Any
     }
     if "Maturity" in raw:
         entry["Maturity"] = raw["Maturity"]
+    # Every frontmatter field travels with the block so the merge check compares
+    # who/when/scope fields (Date, Scope, speaker, ...), not only the claim text.
+    # List- and mapping-valued fields (``Participants:\n- Ilona``,
+    # ConstraintSignatures) count too: a who/when held in a list still
+    # separates two blocks.
+    entry["fields"] = {k: v for k, v in raw.items() if not str(k).startswith("_") and v is not None}
+    if raw.get("_unparsed"):
+        entry["_unparsed"] = raw["_unparsed"]
     return entry
 
 
@@ -488,6 +499,54 @@ def _load_granularity_blocks(
     return blocks
 
 
+def _load_superseded_ids(
+    db_path: str,
+    *,
+    workspace: str | None = None,
+    canonical_blocks: dict[str, dict[str, Any]] | None = None,
+) -> set[str]:
+    """Ids named by any admitted block's Supersedes, across the whole corpus.
+
+    :func:`_load_granularity_blocks` reads a bounded window (``ORDER BY id LIMIT``);
+    a superseder that sorts after the window would otherwise leave its target
+    looking live. Only rows that mention ``Supersedes`` are parsed, and only
+    admitted rows count, so a quarantined block cannot retire a live one.
+    Never raises: an unreadable index yields an empty set.
+    """
+    import sqlite3 as _sqlite3
+
+    from mind_mem.granularity_align import _superseded_by_reference
+
+    if canonical_blocks is not None:
+        return _superseded_by_reference(raw for raw in canonical_blocks.values() if isinstance(raw, dict))
+    if not os.path.isfile(db_path):
+        return set()
+    try:
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT id, status, json_blob FROM blocks WHERE parent_id = '' AND json_blob LIKE '%Supersedes%' ORDER BY id"
+            ).fetchall()
+        finally:
+            conn.close()
+    except _sqlite3.Error as exc:
+        _log.warning("granularity_supersedes_read_failed", error=str(exc))
+        return set()
+    from mind_mem.admissibility import admit_corpus
+
+    admitted = admit_corpus([{"_id": r["id"], "Status": r["status"], "_row": r} for r in rows], workspace=workspace)
+    parsed: list[dict[str, Any]] = []
+    for entry in admitted:
+        try:
+            raw = json.loads(entry["_row"]["json_blob"] or "{}")
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+        if isinstance(raw, dict):
+            parsed.append(raw)
+    return _superseded_by_reference(parsed)
+
+
 def _granularity_section(
     db_path: str,
     settings: dict[str, Any],
@@ -510,8 +569,8 @@ def _granularity_section(
     """
     from mind_mem.granularity_align import (
         DEFAULT_MIN_SIMILARITY,
-        find_merge_candidates,
         merge_blocks,
+        scan_pairs,
     )
 
     min_similarity = _bounded_float(settings.get("min_similarity", DEFAULT_MIN_SIMILARITY), DEFAULT_MIN_SIMILARITY, 0.0, 1.0)
@@ -519,7 +578,12 @@ def _granularity_section(
     max_blocks = _bounded_int(settings.get("max_blocks", _GRANULARITY_MAX_BLOCKS), _GRANULARITY_MAX_BLOCKS, 1, 5000)
 
     blocks = _load_granularity_blocks(db_path, max_blocks, workspace=workspace, canonical_blocks=canonical_blocks)
-    candidates = find_merge_candidates(blocks, min_similarity=min_similarity, max_candidates=max_candidates)
+    # A block superseded by one outside the scanned window is still history.
+    superseded = _load_superseded_ids(db_path, workspace=workspace, canonical_blocks=canonical_blocks)
+    # One pairwise pass yields both the exact-duplicate merges and the look-alikes.
+    candidates, similar = scan_pairs(
+        blocks, min_similarity=min_similarity, max_candidates=max_candidates, max_pairs=max_candidates, superseded_ids=superseded
+    )
 
     entries: list[dict[str, Any]] = []
     for cand in candidates:
@@ -531,6 +595,10 @@ def _granularity_section(
             "tags": str(merged.get("tags", "")),
             "statement": str(merged.get("content") or merged.get("excerpt") or "")[:500],
         }
+        provenance = {k: v for k, v in (merged.get("fields") or {}).items() if k in ("Sources", "Evidence", "History") and v}
+        if provenance:
+            # The union of both duplicates' provenance, so the merge loses no source.
+            entry["merged"]["provenance"] = provenance
         entries.append(entry)
 
     return {
@@ -540,6 +608,9 @@ def _granularity_section(
         "scanned_blocks": len(blocks),
         "truncated": len(blocks) >= max_blocks,
         "candidates": entries,
+        # Look-alike pairs that are NOT exact duplicates: never merge candidates,
+        # shown so a reviewer can decide by hand (fact_slots fails closed).
+        "similar_pairs": [p.to_dict() for p in similar],
         "applied": False,
         "route": "propose_update -> approve_apply",
     }
@@ -640,28 +711,40 @@ def project_profile(name: str = "", top_k: int = 10) -> str:
         conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
         conn.row_factory = _sqlite3.Row
         try:
-            rows = conn.execute("SELECT id, type, file, date, json_blob FROM blocks LIMIT 50000").fetchall()
-            for r in rows:
-                entry: dict[str, Any] = {
-                    "_id": r["id"],
-                    "type": r["type"],
-                    "file": r["file"],
-                    "date": r["date"],
-                }
-                try:
-                    raw = json.loads(r["json_blob"] or "{}")
-                except (json.JSONDecodeError, TypeError, ValueError):
-                    raw = {}
-                if isinstance(raw, dict):
-                    for key in ("text", "statement", "excerpt", "content"):
-                        if key in raw:
-                            entry[key] = raw[key]
-                    for key in ("entities", "mentions"):
-                        if key in raw:
-                            entry[key] = raw[key]
-                blocks.append(entry)
+            rows = conn.execute("SELECT id, type, file, date, status, json_blob FROM blocks LIMIT 50000").fetchall()
         finally:
             conn.close()
+        # ADMISSION GATE. Selecting rows is not admitting them: this unbound
+        # path mined QUARANTINED / PENDING block text into a USER-scope
+        # tool's output. The cached ``status`` column is refreshed from the
+        # corpus when the index is stale, then the shared filter decides.
+        from mind_mem.admissibility import admit_workspace_blocks, live_statuses, with_live_statuses
+
+        candidates = with_live_statuses(
+            [{"_id": r["id"], "Status": r["status"], "_row": r} for r in rows],
+            live_statuses(ws),
+            status_key="Status",
+        )
+        for admitted in admit_workspace_blocks(candidates, workspace=ws):
+            r = admitted["_row"]
+            entry: dict[str, Any] = {
+                "_id": r["id"],
+                "type": r["type"],
+                "file": r["file"],
+                "date": r["date"],
+            }
+            try:
+                raw = json.loads(r["json_blob"] or "{}")
+            except (json.JSONDecodeError, TypeError, ValueError):
+                raw = {}
+            if isinstance(raw, dict):
+                for key in ("text", "statement", "excerpt", "content"):
+                    if key in raw:
+                        entry[key] = raw[key]
+                for key in ("entities", "mentions"):
+                    if key in raw:
+                        entry[key] = raw[key]
+            blocks.append(entry)
     else:
         _log.warning("consolidation_index_missing", tool="project_profile", path=db_path)
 
@@ -675,16 +758,30 @@ def dream_cycle(
     lookback_days: int = 7,
     stale_days: int = 30,
 ) -> str:
-    """Run the dream cycle — autonomous memory enrichment."""
+    """Run the dream cycle — autonomous memory enrichment.
+
+    At user scope this is a READ: the passes run with ``dry_run=True``, so the
+    findings come back but nothing is persisted (no integrity summary, no
+    signal harvest). Admin scope persists, and only admin may ``auto_repair``
+    (``WRITE_MODE_GATES`` rejects it at user scope before this body runs).
+    """
+    from ..infra.acl import request_has_admin_scope
+
     ws = _workspace()
+    # Findings carry entity slugs, cited ids, source files and quoted fact text
+    # from every namespace.
+    denied = _workspace_view_denied(ws)
+    if denied is not None:
+        return denied
+    persist = request_has_admin_scope()
 
     try:
         from mind_mem.dream_cycle import run_dream_cycle
 
         report = run_dream_cycle(
             ws,
-            dry_run=False,
-            auto_repair=auto_repair,
+            dry_run=not persist,
+            auto_repair=auto_repair and persist,
             lookback_days=lookback_days,
             stale_days=stale_days,
         )
@@ -705,6 +802,7 @@ def dream_cycle(
         "stale_blocks": len(report.stale_blocks),
         "consolidation_candidates": len(report.consolidation_candidates),
         "total_findings": report.total_findings,
+        "persisted": persist,
     }
 
     if report.entity_proposals:

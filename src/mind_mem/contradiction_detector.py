@@ -25,7 +25,9 @@ import json
 import os
 import re
 
-from .block_parser import parse_file
+from .block_parser import parse_blocks, parse_file
+from .fact_slots import changed_fact
+from .granularity_align import _marked_superseded
 from .observability import get_logger, metrics
 
 _log = get_logger("contradiction_detector")
@@ -72,7 +74,7 @@ def _extract_proposal_text(proposal: dict) -> str:
     parts = []
 
     # Title / summary
-    for field in ("Title", "Summary", "Description", "Rationale"):
+    for field in ("Statement", "Title", "Summary", "Description", "Rationale"):
         val = proposal.get(field)
         if isinstance(val, str) and val.strip():
             parts.append(val.strip())
@@ -97,10 +99,78 @@ def _extract_proposal_text(proposal: dict) -> str:
     return " ".join(parts)[:_MAX_TEXT_LENGTH]
 
 
+#: Ops whose patch is the block the proposal would commit.
+_BLOCK_PAYLOAD_OPS = frozenset({"append_block", "insert_after_block", "supersede_decision"})
+
+
+def _payload_blocks(proposal: dict) -> list[dict]:
+    """Blocks carried in the proposal's op patches (what an apply would write)."""
+    blocks: list[dict] = []
+    ops = proposal.get("Ops", [])
+    if not isinstance(ops, list):
+        return blocks
+    for op in ops:
+        if not isinstance(op, dict) or op.get("op") not in _BLOCK_PAYLOAD_OPS:
+            continue
+        patch = op.get("new_block") or op.get("patch")
+        if not isinstance(patch, str) or not patch.strip():
+            continue
+        try:
+            blocks.extend(parse_blocks(patch))
+        except Exception as exc:  # a malformed patch falls back to the raw-text path
+            _log.debug("proposal_patch_parse_failed", error=str(exc))
+    return blocks
+
+
+def _proposal_claim(proposal: dict) -> str:
+    """The Statement a proposal would commit, or ``""`` when it carries none.
+
+    A proposal from ``propose_update`` states it directly; a staged proposal
+    carries it inside the op patch, beside field labels (``Date:``,
+    ``Status:``, ``Sources:``) that are not part of the claim. Reading the
+    patch's ``Statement`` is what makes propose time and apply time compare
+    the same text and reach the same verdict.
+    """
+    direct = proposal.get("Statement")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()[:_MAX_TEXT_LENGTH]
+    claims = [b["Statement"].strip() for b in _payload_blocks(proposal) if isinstance(b.get("Statement"), str) and b["Statement"].strip()]
+    return " ".join(claims)[:_MAX_TEXT_LENGTH]
+
+
+def _superseded_targets(proposal: dict) -> frozenset[str]:
+    """Block ids this proposal retires: a conflict with them is the one it resolves."""
+    ops = proposal.get("Ops", [])
+    if not isinstance(ops, list):
+        return frozenset()
+    return frozenset(str(op["target"]) for op in ops if isinstance(op, dict) and op.get("op") == "supersede_decision" and op.get("target"))
+
+
+def _resolve_supersede(entry: dict, resolved: frozenset[str]) -> dict:
+    """Downgrade a contradiction with a block this proposal retires.
+
+    The conflict with the retired value is exactly what a
+    ``supersede_decision`` resolves; counting it would block every
+    correction at the apply gate. It stays in the report, as a refinement
+    marked ``resolved_by_supersede``, so the reviewer still sees what the
+    apply replaces.
+    """
+    if entry["block_id"] in resolved and entry["conflict_type"] == "contradiction":
+        return {**entry, "conflict_type": "refinement", "resolved_by_supersede": True}
+    return entry
+
+
+def _is_committed_status(status: object) -> bool:
+    """True for a live status, or for a block that states none (legacy corpus)."""
+    if not isinstance(status, str) or not status.strip():
+        return True
+    return status.strip().lower() in COMMITTED_STATUSES
+
+
 def _extract_block_text(block: dict) -> str:
     """Extract searchable text from a committed block."""
     parts = []
-    for field in ("Title", "Summary", "Description", "Rationale", "Decision", "Content", "Action", "Details"):
+    for field in ("Statement", "Title", "Summary", "Description", "Rationale", "Decision", "Content", "Action", "Details"):
         val = block.get(field)
         if isinstance(val, str) and val.strip():
             parts.append(val.strip())
@@ -121,9 +191,19 @@ def _extract_block_text(block: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+_WORD_RE = re.compile(r"[^\W_]+(?:'[^\W_]+)?")
+
+
+def _words(text: str) -> list[str]:
+    """Unicode word tokens, case-folded; CJK ideographs one per token (they carry no spaces)."""
+    from .fact_slots import _cjk_spaced
+
+    return _WORD_RE.findall(_cjk_spaced(text).casefold())
+
+
 def _tokenize(text: str) -> set[str]:
     """Simple word tokenization with lowering and dedup."""
-    return set(re.findall(r"\b[a-z0-9]+(?:'[a-z]+)?\b", text.lower()))
+    return set(_words(text))
 
 
 def _jaccard_similarity(text_a: str, text_b: str) -> float:
@@ -149,8 +229,8 @@ def _tfidf_cosine_similarity(text_a: str, text_b: str) -> float:
     import math
     from collections import Counter
 
-    tokens_a = re.findall(r"\b[a-z0-9]+(?:'[a-z]+)?\b", text_a.lower())
-    tokens_b = re.findall(r"\b[a-z0-9]+(?:'[a-z]+)?\b", text_b.lower())
+    tokens_a = _words(text_a)
+    tokens_b = _words(text_b)
 
     if not tokens_a or not tokens_b:
         return 0.0
@@ -177,7 +257,47 @@ def _tfidf_cosine_similarity(text_a: str, text_b: str) -> float:
 # ---------------------------------------------------------------------------
 
 
-def _classify_conflict(proposal_text: str, existing_text: str, similarity: float) -> str:
+#: Below the flag threshold a pair is still a candidate when it is a changed
+#: fact: a correction rewrites the very slot that carries the meaning.
+_CHANGED_FACT_MIN_SIMILARITY = 0.3
+
+
+def _statement(block: dict, fallback: str) -> str:
+    """The claim itself; who/when slots are read from it, never from a rationale."""
+    for key in ("Statement", "excerpt"):
+        val = block.get(key)
+        if isinstance(val, str) and val.strip():
+            return val
+    return fallback
+
+
+def _same_subject(proposal_text: str, existing_text: str, reversal: tuple[str, ...] = ()) -> bool:
+    """False when the statements differ only in who or what they are about.
+
+    Set aside the reversal words ("enable"/"disable"); if every remaining word
+    that appears in only one statement is a capitalised name on both sides
+    ("Ilona" vs "Bob"), the two are separate facts about different subjects,
+    not a reversal. Any other difference keeps the older keyword rules.
+    """
+    from .fact_slots import _raw_tokens
+
+    def words(text: str) -> dict[str, bool]:
+        out: dict[str, bool] = {}
+        for tok in _raw_tokens(text):
+            if tok.isalpha():
+                key = tok.casefold()
+                out[key] = out.get(key, False) or tok[:1].isupper()
+        return out
+
+    skip = {w.casefold() for w in reversal}
+    wa, wb = words(proposal_text), words(existing_text)
+    only_a = [w for w in wa if w not in wb and not any(w.startswith(r) for r in skip)]
+    only_b = [w for w in wb if w not in wa and not any(w.startswith(r) for r in skip)]
+    names_only = bool(only_a) and bool(only_b) and all(wa[w] for w in only_a) and all(wb[w] for w in only_b)
+    return not names_only
+
+
+def _classify_conflict(proposal_text: str, existing_text: str, similarity: float, *, changed: bool | None = None) -> str:
     """Classify the type of relationship between a proposal and an existing block.
 
     Returns one of:
@@ -186,6 +306,14 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
         "duplicate"     — Near-identical content
         "related"       — Similar topic but no clear conflict
     """
+    # A restatement about the same people with a different day, time or zone
+    # is a changed fact, however similar the wording: "Tuesday" -> "Thursday"
+    # changes one token and used to read as a duplicate. Checked first.
+    if changed is None:
+        changed = changed_fact(proposal_text, existing_text)
+    if similarity > _CHANGED_FACT_MIN_SIMILARITY and changed:
+        return "contradiction"
+
     # Very high similarity suggests duplicate or refinement
     if similarity > 0.9:
         return "duplicate"
@@ -221,7 +349,7 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
     # If one has significantly more negation language than the other,
     # and they're discussing the same topic (high similarity), likely a contradiction
     negation_diff = abs(proposal_negations - existing_negations)
-    if negation_diff >= 3 and similarity > 0.5:
+    if negation_diff >= 3 and similarity > 0.5 and _same_subject(proposal_text, existing_text):
         return "contradiction"
 
     # Check for status change patterns (e.g., "active" → "deprecated")
@@ -242,7 +370,9 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
         b_in_proposal = bool(re.search(r"\b" + re.escape(word_b) + r"\b", proposal_lower))
         a_in_existing = bool(re.search(r"\b" + re.escape(word_a) + r"\b", existing_lower))
         if (a_in_proposal and b_in_existing) or (b_in_proposal and a_in_existing):
-            if similarity > 0.4:
+            # Only a reversal about the same subject: "Enable the report for Ilona"
+            # vs "Disable the report for Bob" is two facts, not a contradiction.
+            if similarity > 0.4 and _same_subject(proposal_text, existing_text, (word_a, word_b)):
                 return "contradiction"
 
     # High similarity but no contradiction signals = refinement
@@ -255,6 +385,39 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
 # ---------------------------------------------------------------------------
 # Core detection pipeline
 # ---------------------------------------------------------------------------
+
+
+_BLOCK_ID_RE = re.compile(r"\b[A-Z]+-[A-Za-z0-9_.-]+\b")
+
+
+def _store_block(workspace: str, block_id: str) -> dict | None:
+    """The full admitted block from the configured store (store-backed corpora carry no committed files)."""
+    try:
+        from .admissibility import admit_corpus
+        from .storage import get_block_store  # the configured backend (mind-mem.json), not only markdown
+
+        block = get_block_store(workspace).get_by_id(block_id)
+        if not block:
+            return None
+        admitted = admit_corpus([block], workspace=workspace)
+        return admitted[0] if admitted else None
+    except Exception:  # a store that cannot answer leaves the recall hit as the only text
+        return None
+
+
+def _superseded_ids(blocks: list[dict]) -> set[str]:
+    """IDs named in any block's Supersedes field (string or list form)."""
+    out: set[str] = set()
+    for block in blocks:
+        raw = block.get("Supersedes")
+        for value in raw if isinstance(raw, list) else [raw]:
+            if isinstance(value, str) and value.strip().lower() not in ("", "none", "n/a"):
+                out.update(
+                    t.casefold()
+                    for t in re.findall(r"[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?", value)
+                    if t.casefold() not in ("none", "n/a")
+                )
+    return out
 
 
 def _load_committed_blocks(workspace: str) -> list[dict]:
@@ -274,7 +437,12 @@ def _load_committed_blocks(workspace: str) -> list[dict]:
         except Exception as e:
             _log.warning("parse_error", file=rel_path, error=str(e))
 
-    return blocks
+    # Admission-filtered: the conflict report echoes existing block text
+    # (existing_excerpt) back to the proposer, so a quarantined or pending
+    # block must be unresolvable here exactly as it is in recall.
+    from .admissibility import admit_corpus
+
+    return admit_corpus(blocks, workspace=ws)
 
 
 def detect_contradictions(
@@ -308,7 +476,11 @@ def detect_contradictions(
         }]
     """
     ws = os.path.abspath(workspace)
-    proposal_text = _extract_proposal_text(proposal)
+    # Compare the claim when the proposal carries one, wherever it carries it.
+    claim = _proposal_claim(proposal)
+    proposal_text = claim or _extract_proposal_text(proposal)
+    proposal_claim = claim or _statement(proposal, proposal_text)
+    resolved = _superseded_targets(proposal)
 
     if not proposal_text.strip():
         _log.info("empty_proposal_text", proposal_id=proposal.get("ProposalId"))
@@ -321,6 +493,12 @@ def detect_contradictions(
 
     # Load committed blocks for direct comparison
     committed_blocks = _load_committed_blocks(ws)
+    corpus_status = {b.get("_id", ""): b.get("Status", "") for b in committed_blocks}
+    # A block named in another block's Supersedes field is history even when
+    # its own Status was never updated: it is not a live fact to contradict.
+    replaced_ids = _superseded_ids(committed_blocks)
+    # Recall hits carry a truncated excerpt (300 chars); comparisons use the full admitted block.
+    committed_by_id = {str(b.get("_id", "")): b for b in committed_blocks if b.get("_id")}
 
     # Build results: compare proposal against each candidate
     conflicts = []
@@ -333,16 +511,38 @@ def detect_contradictions(
             if block_id in seen_ids:
                 continue
             seen_ids.add(block_id)
+            if (
+                str(block_id).casefold() in replaced_ids
+                or _marked_superseded(result)
+                or _marked_superseded(committed_by_id.get(str(block_id), {}))
+            ):
+                continue
+            # Superseded, archived or retracted memory is history: a proposal cannot contradict it.
+            result_status = str(result.get("status") or result.get("Status") or "active").strip().lower()
+            if result_status not in COMMITTED_STATUSES:
+                continue
+
+            # The same live-status rule as the direct scan below: a superseded
+            # or revoked block is history, never a live contradiction. A hit
+            # that does not carry its status is judged by the corpus copy.
+            if not _is_committed_status(result.get("Status") or corpus_status.get(block_id, "")):
+                continue
 
             existing_text = result.get("excerpt", result.get("text", ""))
             if not existing_text:
                 existing_text = _extract_block_text(result)
 
             similarity = _tfidf_cosine_similarity(proposal_text, existing_text)
-            if similarity < threshold:
+            # The recall hit carries a 300-char excerpt; the changed-fact comparison reads the
+            # full admitted statement (a store-backed corpus without committed files keeps the hit).
+            full_block = committed_by_id.get(str(block_id)) or _store_block(ws, str(block_id)) or result
+            if _marked_superseded(full_block):
+                continue  # the full block says it was superseded: history, not a live fact
+            changed = changed_fact(proposal_claim, _statement(full_block, existing_text))
+            if similarity < threshold and not (changed and similarity > _CHANGED_FACT_MIN_SIMILARITY):
                 continue
 
-            conflict_type = _classify_conflict(proposal_text, existing_text, similarity)
+            conflict_type = _classify_conflict(proposal_text, existing_text, similarity, changed=changed)
             conflicts.append(
                 {
                     "block_id": block_id,
@@ -361,20 +561,22 @@ def detect_contradictions(
             continue
 
         # Skip non-committed blocks
-        status = block.get("Status", "active")
-        if status and status.lower() not in COMMITTED_STATUSES and status.lower() != "":
+        if not _is_committed_status(block.get("Status", "active")):
             continue
 
         seen_ids.add(block_id)
+        if str(block_id).casefold() in replaced_ids or _marked_superseded(block):
+            continue
         existing_text = _extract_block_text(block)
         if not existing_text.strip():
             continue
 
         similarity = _tfidf_cosine_similarity(proposal_text, existing_text)
-        if similarity < threshold:
+        changed = changed_fact(proposal_claim, _statement(block, existing_text))
+        if similarity < threshold and not (changed and similarity > _CHANGED_FACT_MIN_SIMILARITY):
             continue
 
-        conflict_type = _classify_conflict(proposal_text, existing_text, similarity)
+        conflict_type = _classify_conflict(proposal_text, existing_text, similarity, changed=changed)
         conflicts.append(
             {
                 "block_id": block_id,
@@ -385,6 +587,8 @@ def detect_contradictions(
                 "proposal_excerpt": proposal_text[:300],
             }
         )
+
+    conflicts = [_resolve_supersede(c, resolved) for c in conflicts]
 
     # Sort by similarity (highest first), limit to top_k
     conflicts.sort(key=lambda c: c["similarity"], reverse=True)

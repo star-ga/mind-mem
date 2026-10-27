@@ -40,6 +40,18 @@ def test_sdk_envelopes_are_produced_by_current_rest(tmp_path: Path, monkeypatch)
     (tmp_path / "decisions/DECISIONS.md").write_text(
         "[D-20260914-001]\nDate: 2026-09-14\nStatus: active\nStatement: Orchid is the SDK contract sentinel.\n\n", encoding="utf-8"
     )
+    # The REST door binds the bearer's principal ("user"), so the namespace ACL
+    # applies exactly as it does on the MCP tool path: reading the root corpus
+    # needs an explicit grant.
+    (tmp_path / "mind-mem-acl.json").write_text(
+        json.dumps(
+            {
+                "default_policy": "deny",
+                "agents": {"user": {"namespaces": ["shared"], "read": ["shared", "decisions", "intelligence"], "write": []}},
+            }
+        ),
+        encoding="utf-8",
+    )
     token = "fixture-sdk-contract-token"
     monkeypatch.setenv("MIND_MEM_TOKEN", token)
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))

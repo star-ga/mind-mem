@@ -512,6 +512,10 @@ _VALID_RECALL_KEYS = frozenset(
         "min_score",
         "dedup",
         "validity_gate",
+        # Computed abstention (mind_mem.recall_abstention): read by the serving
+        # doors, never by the ranking. Listed so a workspace that opts in does
+        # not log ``unknown_recall_config_keys`` on every recall.
+        "abstention",
         "feedback_credit",
         "namespace_properties",
         # Vector / hybrid recall keys (Postgres pgvector + RRF path). These

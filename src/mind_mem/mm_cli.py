@@ -220,6 +220,61 @@ def _cmd_kernel_recall(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_recall_with_abstention(args: argparse.Namespace, results: Any) -> int:
+    """``mm recall --intended-use USE`` -- the ranked hits plus the abstention verdict.
+
+    Opt-in per invocation because the default output is a bare JSON list a
+    script may already parse; asking for a verdict changes the shape, so the
+    shape change is the caller's explicit choice. The workspace-wide
+    ``recall.abstention.enabled`` switch deliberately does not apply here.
+    """
+    from mind_mem._recall_core import _get_config
+    from mind_mem.abstention_store import judge_served
+
+    ws = _workspace()
+    config = _get_config(ws)
+    section = config.get("recall") if isinstance(config, dict) else None
+    verdict, config_warnings, problem = judge_served(ws, results, intended_use=args.intended_use, recall_cfg=section)
+    payload: dict[str, Any] = {
+        "query": args.query,
+        "count": len(results),
+        "results": list(results),
+        "abstention": verdict,
+        "attestation": getattr(results, "attestation", None),
+    }
+    if config_warnings:
+        payload["config_warnings"] = list(config_warnings)
+    if problem:
+        payload["warnings"] = [problem]
+    print(json.dumps(payload, indent=2, default=str))
+    return 0
+
+
+def _cmd_abstention_eval(args: argparse.Namespace) -> int:
+    """``mm abstention-eval --labelled FILE`` -- run the falsification experiment.
+
+    Exit 0 when the statistic separates (or the sample is too small to say),
+    3 when it does NOT -- so a script can gate on "computed abstention carries
+    signal for this workspace" -- and 2 for unreadable input.
+    """
+    from mind_mem.abstention_eval import evaluate, load_labelled
+
+    try:
+        labelled = load_labelled(args.labelled)
+        report = evaluate(
+            _workspace(),
+            labelled,
+            limit=args.limit,
+            intended_use=args.intended_use,
+            scoring_instant=args.scoring_instant,
+        )
+    except ValueError as exc:
+        print(f"mm abstention-eval: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report, indent=2, default=str))
+    return 3 if report["verdict"] == "no_signal" else 0
+
+
 def _cmd_recall(args: argparse.Namespace) -> int:
     # v4 cognitive kernels are opt-in per invocation: with no --kernel the
     # path below is byte-for-byte what it was, and no feature flag is read.
@@ -236,6 +291,8 @@ def _cmd_recall(args: argparse.Namespace) -> int:
         since=getattr(args, "since", None),
         until=getattr(args, "until", None),
     )
+    if getattr(args, "intended_use", None):
+        return _print_recall_with_abstention(args, results)
     if getattr(args, "receipt_envelope", False):
         print(
             json.dumps(
@@ -1132,6 +1189,28 @@ def _cmd_install_all(args: argparse.Namespace) -> int:
     return 0 if errored == 0 else 1
 
 
+def _cmd_uninstall_all(args: argparse.Namespace) -> int:
+    """Remove only the mind-mem MCP entry from each named or detected client."""
+    from mind_mem.hook_installer import detect_installed_agents, uninstall_all
+
+    ws = _workspace()
+    agents = args.agent or None  # None → auto-detect
+    results = uninstall_all(ws, dry_run=args.dry_run, agents=agents)
+    errored = sum(1 for r in results if "error" in r)
+    summary: dict[str, Any] = {
+        "workspace": ws,
+        "agents": agents if agents is not None else detect_installed_agents(ws),
+        "results": results,
+        "summary": {
+            "removed": sum(1 for r in results if r.get("removed")),
+            "errored": errored,
+            "total": len(results),
+        },
+    }
+    print(json.dumps(summary, indent=2))
+    return 0 if errored == 0 else 1
+
+
 def _cmd_migrate(args: argparse.Namespace) -> int:
     """``mm migrate --maintenance`` — run the v3.2.0 §2.2 layout split now.
 
@@ -1267,6 +1346,8 @@ def _cmd_detect(args: argparse.Namespace) -> int:
             name: {
                 "description": AGENT_REGISTRY[name].description,
                 "config_path": AGENT_REGISTRY[name].expand_path(ws),
+                "mcp_config_path": AGENT_REGISTRY[name].expand_mcp_path(ws) if AGENT_REGISTRY[name].mcp_fmt else None,
+                "mcp": "auto" if AGENT_REGISTRY[name].mcp_fmt else ("manual" if AGENT_REGISTRY[name].manual else "none"),
             }
             for name in detected
         },
@@ -3044,7 +3125,7 @@ def config_set(config_path: str, key: str, value: Any) -> dict[str, Any]:
             config, or a path that runs through a non-object value.
             Raised before any write, so nothing is left half-applied.
     """
-    from mind_mem.spec_binding import SpecBindingManager
+    from mind_mem.spec_binding import SpecBindingManager, armed_on_record, record_arming
 
     path = _split_config_key(key)
     abs_path = os.path.abspath(os.path.expanduser(config_path))
@@ -3063,6 +3144,15 @@ def config_set(config_path: str, key: str, value: Any) -> dict[str, Any]:
     binding_path = os.path.join(os.path.dirname(abs_path), ".spec_binding.json")
     manager = SpecBindingManager(abs_path)
     armed = os.path.exists(binding_path)
+    if not armed and armed_on_record(abs_path):
+        # The workspace was armed and its binding is gone. Writing here
+        # would either leave it disarmed under a new value (no rebind) or
+        # re-arm it over a config nobody reviewed — both are the disarm the
+        # gate refuses. Re-attesting is `mm bind`'s job, after a review.
+        raise ConfigSetError(
+            f"refusing to set {key!r}: this workspace was armed but its spec binding {binding_path!r} is "
+            "missing, which is drift. Review mind-mem.json and re-attest it with `mm bind` first."
+        )
     if armed:
         valid, reason = manager.verify()
         if not valid:
@@ -3089,6 +3179,9 @@ def config_set(config_path: str, key: str, value: Any) -> dict[str, Any]:
         binding = manager.rebind(abs_path)
         spec_hash = binding.spec_hash
         rebound = True
+        # Every re-attestation refreshes the durable arming record, so a
+        # workspace armed before the record existed gains it here.
+        record_arming(abs_path, spec_hash=spec_hash)
 
     result: dict[str, Any] = {
         "config_path": abs_path,
@@ -4641,7 +4734,29 @@ def build_parser() -> argparse.ArgumentParser:
             "mind-mem.json. Omit for unchanged v3 recall."
         ),
     )
+    p_recall_output.add_argument(
+        "--intended-use",
+        choices=["summary", "answer", "governed_write"],
+        default=None,
+        help=(
+            "Print the ranked hits plus an 'abstention' verdict (act / proceed_with_caution / "
+            "do_not_act) for what the answer will be used for; a governed write needs more "
+            "separation than a summary. Changes the output from a bare list to an object. "
+            "The verdict is recorded so report_outcome can score it."
+        ),
+    )
     p_recall.set_defaults(func=_cmd_recall)
+
+    # abstention-eval
+    p_abst = sub.add_parser(
+        "abstention-eval",
+        help="Measure whether computed abstention separates present from absent answers on this workspace.",
+    )
+    p_abst.add_argument("--labelled", required=True, help='JSONL file of {"query": str, "present": bool} rows.')
+    p_abst.add_argument("--limit", type=int, default=10)
+    p_abst.add_argument("--intended-use", choices=["summary", "answer", "governed_write"], default=None)
+    p_abst.add_argument("--scoring-instant", default=None, help="UTC date (YYYY-MM-DD) to pin the recency layer for a reproducible run.")
+    p_abst.set_defaults(func=_cmd_abstention_eval)
 
     # context
     p_ctx = sub.add_parser(
@@ -4863,11 +4978,25 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Skip native MCP server registration. Default: write both "
             "the text hook AND the MCP registration for every agent "
-            "that supports MCP (Codex, OpenCode, Gemini, Cursor, "
-            "Windsurf, Continue, Cline, Roo, Zed)."
+            "with an MCP config file (see `mm detect` and "
+            "docs/client-integrations.md); clients without one get "
+            "printed manual steps."
         ),
     )
     p_install_all.set_defaults(func=_cmd_install_all)
+
+    # uninstall-all — remove only the mind-mem MCP entry
+    p_uninstall_all = sub.add_parser(
+        "uninstall-all",
+        help="Remove the mind-mem MCP entry from every detected (or named) AI client; other entries are kept.",
+    )
+    p_uninstall_all.add_argument(
+        "--agent",
+        action="append",
+        help="Restrict to these named agents. Repeat flag for multiple. Default = auto-detect.",
+    )
+    p_uninstall_all.add_argument("--dry-run", action="store_true")
+    p_uninstall_all.set_defaults(func=_cmd_uninstall_all)
 
     # install-model — pull mind-mem-4b GGUF from HF + import to Ollama
     p_install_model = sub.add_parser(

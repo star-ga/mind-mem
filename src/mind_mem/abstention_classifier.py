@@ -13,8 +13,11 @@ Reference: "Building a best-in-class agent memory system in 2026" (§ Roadmap #1
            LongMemEval (ICLR 2025) — abstention as first-class behavior
 
 Integration points:
-  - locomo_judge.py: between pack_evidence() and answer_question()
-  - evidence_packer.py: exposed for production MCP recall path
+  - benchmarks/locomo_judge.py: between pack_evidence() and answer_question()
+  - evidence_packer.check_abstention(): a Python-level wrapper that also
+    records hard negatives. No MCP tool calls it today -- neither recall nor
+    any other tool under ``mind_mem.mcp`` reaches this classifier -- so
+    abstention is not part of the MCP surface.
 """
 
 from __future__ import annotations

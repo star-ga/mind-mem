@@ -13,6 +13,21 @@ from mind_mem.mcp.tools import recall as recall_tools
 from mind_mem.sqlite_index import build_index
 
 
+def _age_past_racy_window(root, seconds: int = 600) -> None:
+    """Age every file past the cache's racy-timestamp window, as a quiet store would be.
+
+    The corpus stamp refuses to name a state whose files changed within the last
+    second, so a freshly written fixture would (correctly) bypass the cache.
+    """
+    import os
+    import time
+
+    past = time.time() - seconds
+    for dirpath, _dirs, files in os.walk(root):
+        for name in files:
+            os.utime(os.path.join(dirpath, name), (past, past))
+
+
 def _indexed_filter_workspace(tmp_path: Path) -> str:
     workspace = tmp_path / "workspace"
     decisions = workspace / "decisions"
@@ -41,6 +56,7 @@ def _indexed_filter_workspace(tmp_path: Path) -> str:
     )
     (decisions / "DECISIONS.md").write_text("".join(blocks), encoding="utf-8")
     build_index(str(workspace), incremental=False)
+    _age_past_racy_window(workspace)
     return str(workspace)
 
 
@@ -48,6 +64,11 @@ def test_indexed_public_path_preserves_filter_metadata_and_warm_cache(monkeypatc
     """A real indexed, cached call applies all three json-backed filters."""
     workspace = _indexed_filter_workspace(tmp_path)
     monkeypatch.setattr(recall_tools, "_workspace", lambda: workspace)
+    # The first read of a freshly built index touches ``recall.db-wal``, which
+    # moves the corpus stamp once. Prime that one-off before measuring so the
+    # stamp is stable (and aged past the racy window) across the two real calls.
+    recall_tools._recall_impl("quartz", limit=1, backend="bm25")
+    _age_past_racy_window(workspace)
     uncached = Mock(wraps=recall_tools._recall_impl_uncached)
     monkeypatch.setattr(recall_tools, "_recall_impl_uncached", uncached)
 

@@ -40,7 +40,9 @@ per-workspace answer nothing in ``src/`` promises.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 
 import pytest
 
@@ -108,6 +110,20 @@ def ws(tmp_path):
 # --------------------------------------------------------------------------
 
 
+@contextlib.contextmanager
+def _admin_scope():
+    """Admin scope for one call: the core lifecycle writes are ADMIN_TOOLS (F14)."""
+    saved = os.environ.get("MIND_MEM_SCOPE")
+    os.environ["MIND_MEM_SCOPE"] = "admin"
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop("MIND_MEM_SCOPE", None)
+        else:
+            os.environ["MIND_MEM_SCOPE"] = saved
+
+
 def _list_raw(w) -> str:
     with use_workspace(str(w)):
         return list_cores()
@@ -118,17 +134,17 @@ def _list(w) -> dict:
 
 
 def _build(w, namespace: str, version: str, **kw) -> dict:
-    with use_workspace(str(w)):
+    with use_workspace(str(w)), _admin_scope():
         return json.loads(build_core(namespace, version, **kw))
 
 
 def _load(w, filename: str, **kw) -> dict:
-    with use_workspace(str(w)):
+    with use_workspace(str(w)), _admin_scope():
         return json.loads(load_core(filename, **kw))
 
 
 def _unload(w, namespace: str) -> dict:
-    with use_workspace(str(w)):
+    with use_workspace(str(w)), _admin_scope():
         return json.loads(unload_core(namespace))
 
 

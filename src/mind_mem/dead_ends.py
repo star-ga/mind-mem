@@ -55,6 +55,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from .admissibility import admit_workspace_blocks
 from .frame_fields import RejectedBlock, handle_entries, load_blocks, prose_entries
 from .guardrail_patterns import (
     GuardrailSpecError,
@@ -105,6 +106,10 @@ TRIGGER_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 #: Statuses that keep a dead end live.  A superseded dead end is history.
+#:
+#: A LIFECYCLE refinement over blocks the shared admission filter already
+#: admitted — never the admission decision itself.  Every member must be a
+#: status admission recognises (pinned by test_admission_routing_read_legs).
 _LIVE_STATUSES = frozenset({"", "active", "confirmed"})
 
 
@@ -279,7 +284,9 @@ def load_dead_ends_with_rejections(
     policy = policy or FramePolicy()
     found: dict[str, DeadEnd] = {}
     refused: dict[str, RejectedBlock] = {}
-    for raw in load_blocks(workspace, policy.dead_end_sources, DEAD_END_ID_PREFIX):
+    # ADMISSION GATE, the shared one: ``is_live`` below only refines the
+    # lifecycle of what the admission filter already let through.
+    for raw in admit_workspace_blocks(load_blocks(workspace, policy.dead_end_sources, DEAD_END_ID_PREFIX), workspace=workspace):
         source = str(raw.get("_source_file", ""))
         try:
             dead_end = parse_dead_end_block(raw)

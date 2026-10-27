@@ -119,10 +119,11 @@ class TestSQLiteBusyError(unittest.TestCase):
 
     def test_recall_catches_locked_db(self):
         """Recall tool should catch sqlite3.OperationalError for locked DB."""
-        db_path = self.mod.fts_db_path(self.td)
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        with open(db_path, "w", encoding="utf-8") as f:
-            f.write("")  # dummy file
+        # Recall takes the indexed leg only when the FTS SCHEMA exists (a bare
+        # recall.db written by a side table is not an index), so build a real one.
+        from mind_mem.sqlite_index import build_index
+
+        build_index(self.td)
 
         # v3.2.0 §1.2 PR-3: recall moved to mind_mem.mcp.tools.recall;
         # patch the real call site instead of the mcp_server re-export.

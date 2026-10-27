@@ -277,6 +277,7 @@ def test_vault_sync_finds_the_knowledge_graph_in_its_real_location(tmp_path: Pat
     vault.mkdir()
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
     monkeypatch.setenv("MIND_MEM_VAULT_ALLOWLIST", str(vault))
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")  # vault_sync writes: admin-scoped (F14)
 
     payload: dict[str, Any] = json.loads(
         vault_sync(

@@ -22,6 +22,15 @@ Initialize a new MIND-Mem workspace with the standard directory structure.
 #### `parse_blocks(workspace: str) -> list[dict]`
 Parse all memory blocks from `.md` files in a workspace.
 
+### Intent Drift Baselines (`mind_mem.baseline_snapshot`)
+
+Intent-distribution drift detection is a Python API, not an MCP tool.
+`freeze_baseline(workspace, ...)` captures a versioned snapshot of the intent
+classification distribution, `detect_drift(workspace, ...)` compares the
+current state against a frozen baseline with a chi-squared test,
+`compare_baselines(workspace, v1, v2)` diffs two snapshots, and
+`list_baselines(workspace)` enumerates them.
+
 ### Client Installation (`mind_mem.hook_installer`)
 
 v3.1.0 added programmatic access to the hook + MCP installers. Use these when embedding MIND-Mem into bootstrap scripts, package installers, or custom orchestrators.
@@ -34,12 +43,24 @@ marker block. Returns `{agent, path, written, skipped, reason}`.
 
 #### `install_mcp_config(agent: str, workspace: str, *, force: bool = False, dry_run: bool = False) -> dict`
 **(New in v3.1.0)** Write the native MCP server entry for `agent` into
-its MCP config file. Supports 12 MCP-aware clients: `codex` /
-`grok-build` / `vibe` (TOML), `gemini` / `cursor` / `continue` /
-`cline` / `roo` / `windsurf` / `copilot-cli` (JSON `mcpServers`),
-`zed` (JSON `context_servers`). Returns
-`{agent, path, written, merged, skipped, reason}`. Skipped with
-`reason="no_mcp_format"` for clients that don't speak MCP.
+its MCP config file. Supports 41 MCP-aware clients across TOML
+(`[mcp_servers.mind-mem]`, `[[mcp_servers]]`), YAML (Goose `extensions`,
+Hermes `mcp_servers`, Continue `mcpServers` list)
+and JSON dialects (`mcpServers`, VS Code `servers`, Zed `context_servers`,
+OpenClaw `mcp.servers`, Amp `"amp.mcpServers"`, OpenCode-style `mcp`); the
+per-client table is in `docs/client-integrations.md`. Only the mind-mem entry
+changes; further documented locations that exist are written too and returned
+under `also`. Returns `{agent, path, written, merged, skipped, reason}`.
+Skipped with `reason="agent does not support native MCP"` for clients
+without MCP, and `reason="manual setup required"` (steps in `content`) for
+clients whose MCP list lives in their UI.
+
+#### `uninstall_mcp_config(agent: str, workspace: str, *, dry_run: bool = False) -> dict`
+Remove only the `mind-mem` entry from `agent`'s MCP config file(s); other
+servers and settings are kept and a changed file is backed up first. Returns
+`{agent, path, written, removed, reason}`. `uninstall_all(workspace, *,
+agents=None, dry_run=False)` applies it to every detected or named client
+(CLI: `mm uninstall-all`).
 
 #### `install_all(workspace: str, *, agents: list[str] | None = None, include_mcp: bool = True, force: bool = False, dry_run: bool = False) -> list[dict]`
 **(Updated in v3.1.0)** Install configs for every detected agent. When
@@ -67,8 +88,13 @@ The MCP server exposes 107 distinct tools via JSON-RPC. See [MCP Tool Examples](
 ### Starting the Server
 
 ```bash
-python3 mcp_server.py --workspace /path/to/workspace
+MIND_MEM_WORKSPACE=/path/to/workspace mind-mem-mcp
 ```
+
+The workspace is read from `MIND_MEM_WORKSPACE`; the server has no
+`--workspace` flag. From a source checkout, `python3 mcp_server.py` is
+equivalent. HTTP transport: `--transport http --port 8765` (token via
+`MIND_MEM_TOKEN`).
 
 ### Tool Reference
 
@@ -111,12 +137,6 @@ the current declaration, occupancy and configured write policies. See the
 configuration, provenance fields and refusal cases. Slot namespaces name sets
 of fields; they do not grant access to retrieval namespaces.
 
-#### Drift Detection
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `baseline_snapshot` | Freeze/detect-drift/compare intent baselines | `action` (`freeze`/`drift`/`compare`/`list`), `tag`, `significance` |
-
 #### Workspace Operations
 
 | Tool | Description | Key Parameters |
@@ -131,9 +151,9 @@ of fields; they do not grant access to retrieval namespaces.
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `validate_block` | Deterministic quality gate: validate schema, coherence, reference integrity | `block_id` |
-| `block_lineage` | Retrieve typed relationship edges for a block (cites/implements/refines/contradicts/cooccurrence/supersedes) | `block_id`, `direction` (`forward`/`backward`/`both`) |
-| `add_block_edge` | Create a typed relationship edge between two blocks | `source_block_id`, `target_block_id`, `relationship` (`cites`/`implements`/`refines`/`contradicts`/`cooccurrence`/`supersedes`) |
+| `validate_block` | Deterministic quality gate over candidate block text, honouring the workspace's `quality_gate.mode` (the same verdict `propose_update` would reach) | `text`, `strict`, `force` |
+| `block_lineage` | Breadth-first traversal of the typed lineage graph rooted at a block (cites/implements/refines/contradicts/cooccurrence/supersedes) | `block_id`, `max_depth` (1-3), `kind_filter`, `node_cap` |
+| `add_block_edge` | Record a typed lineage edge between two blocks; re-adding the same triple bumps its hit count | `src`, `dst`, `kind` (`cites`/`implements`/`refines`/`contradicts`/`cooccurrence`/`supersedes`), `weight` |
 
 #### Corpus Lint (`v4.lint`, default OFF)
 
@@ -216,6 +236,128 @@ oracle outside the workspace.
 | `arch_check_rules` | Apply a `rules.mind` to a fresh Arch-MIND scan | `repo`, rules path |
 | `arch_history` | List events in the Arch-MIND store at a repo | `repo` |
 | `arch_metric_explain` | Per-metric human-readable breakdown for a fixture | `metric` |
+
+### Complete Tool Index
+
+The tables above describe tools by task. This index lists every registered
+tool and is regenerated from the server's registry by
+`python3 scripts/check_tool_surface.py --write-api-index`;
+`--check-doc-names` (run in CI) fails when it is stale, when a registered tool
+has no row, or when any row in this section names a tool that does not exist.
+
+<!-- tool-index:begin (generated by scripts/check_tool_surface.py --write-api-index; do not edit by hand) -->
+All 107 registered tools, generated from the live registry. `[param]` is optional; scope `admin` needs an admin-scoped token.
+
+| Tool | Scope | Module | Parameters | Summary |
+|------|-------|--------|------------|---------|
+| `add_block_edge` | admin | `lineage` | `src`, `dst`, `kind`, `[weight]` | Record an explicit typed lineage edge from ``src`` to ``dst``. |
+| `agent_inject` | user | `agent` | `query`, `[agent]`, `[limit]`, `[scoring_instant]` | Render a context snippet in the target agent's expected format. |
+| `anchor_history` | user | `audit` | `[limit]` | List recorded external anchors, newest last, with integrity problems. |
+| `anchor_root` | admin | `audit` | `[chain]`, `[tx_hash]`, `[block_height]` | Record the CURRENT Merkle root in the local external-anchor trail. |
+| `approve_apply` | admin | `governance` | `proposal_id`, `[dry_run]` | Apply a staged proposal from intelligence/proposed/. |
+| `approve_edge` | admin | `graph` | `proposal_id` | Commit a staged typed-edge proposal to the graph (ADMIN-scope). |
+| `approve_entity_merge` | admin | `graph` | `proposal_id` | Approve a staged entity-equivalence proposal (admin-scope). |
+| `arch_baseline` | admin | `arch_mind` | `repo`, `fixture` | Initialise the arch-mind store at *repo* with a baseline event. |
+| `arch_check_rules` | admin | `arch_mind` | `repo`, `fixture`, `[rules]`, `[mode]` | Apply a ``rules.mind`` to a fresh arch-mind scan. |
+| `arch_delta` | admin | `arch_mind` | `repo`, `before`, `after` | Compute the per-metric delta between two arch-mind baselines. |
+| `arch_history` | admin | `arch_mind` | `repo`, `[days]`, `[verify]` | List events in the arch-mind store at *repo*. |
+| `arch_metric_explain` | admin | `arch_mind` | `metric`, `fixture` | Per-metric human-readable breakdown for a given fixture. |
+| `arch_session_end` | admin | `arch_mind` | `repo`, `fixture` | Close the open arch-mind session at *repo*. |
+| `arch_session_start` | admin | `arch_mind` | `repo`, `fixture`, `agent_id`, `commit_sha` | Open an arch-mind session evidence node. |
+| `audit_model_tool` | user | `model` | `path`, `[allow_publisher]`, `[include_manifest]` | Static security scan of a local model checkpoint. |
+| `block_lineage` | user | `lineage` | `block_id`, `[max_depth]`, `[kind_filter]`, `[node_cap]` | BFS-traverse the block-lineage graph rooted at ``block_id``. |
+| `build_core` | admin | `core` | `namespace`, `version`, `[filename]` | Build a .mmcore bundle from the active workspace's blocks. |
+| `calibration_feedback` | admin | `calibration` | `query_id`, `[block_ids_useful]`, `[block_ids_not_useful]`, `[feedback_type]` | Record retrieval quality feedback for calibration. |
+| `calibration_stats` | user | `calibration` | - | Report calibration health — per-block scores, per-query-type accuracy. |
+| `category_summary` | user | `benchmark` | `topic`, `[limit]` | Returns category summaries for the ADMITTED blocks matching a topic. |
+| `chat_with_memory` | user | `chat` | `question`, `[limit]`, `[generator]`, `[on_invalid]`, `[require_in_evidence]`, `[semantic_required]`, `[graph_seed]` | Answer *question* from workspace memory with verified citations. |
+| `check_dead_ends` | user | `frames` | `[tool]`, `[command]`, `[intent]`, `[paths]` | Return the recorded failures that overlap an about-to-happen action. |
+| `check_guardrails` | user | `guardrails` | `[tool]`, `[command]`, `[intent]`, `[paths]` | Return the guardrails that fire for an about-to-happen action. |
+| `compact` | admin | `memory_ops` | `[dry_run]`, `[archive_days]`, `[signal_days]`, `[snapshot_days]` | Run workspace compaction — archive old blocks, clean snapshots, remove resolved signals. |
+| `compile_truth_walkthrough` | user | `walkthrough_persona` | `topic`, `[limit]`, `[active_only]` | Return *topic* memories in dependency order (foundations → current). |
+| `compiled_truth` | user | `public` | `action`, `[entity_id]`, `[observation]`, `[source]`, `[confidence]`, `[entity_type]` | Unified compiled-truth page lifecycle. |
+| `compiled_truth_add_evidence` | admin | `kernels` | `entity_id`, `observation`, `[source]`, `[confidence]`, `[entity_type]` | Add evidence to a compiled truth page and auto-recompile. |
+| `compiled_truth_contradictions` | user | `kernels` | `entity_id` | Detect contradictions in a compiled truth page. |
+| `compiled_truth_load` | user | `kernels` | `entity_id` | Load a compiled truth page for an entity. |
+| `core` | user | `public` | `action`, `[namespace]`, `[version]`, `[filename]`, `[verify]` | Unified .mmcore bundle lifecycle. |
+| `decrypt_file` | admin | `encryption` | `file_path` | Return plaintext bytes (base64-encoded) for an encrypted file. |
+| `delete_memory_item` | admin | `memory_ops` | `block_id`, `[rationale]` | Delete a block by ID from the workspace's blocks of record (admin-scope). |
+| `dream_cycle` | user | `consolidation` | `[auto_repair]`, `[lookback_days]`, `[stale_days]` | Run the dream cycle — autonomous memory enrichment. |
+| `encrypt_file` | admin | `encryption` | `file_path` | Encrypt a single workspace file at rest. |
+| `entity_add_observation` | admin | `graph` | `entity`, `fact` | Append an accreted fact to an entity's observation list (ADMIN-scope). |
+| `entity_observations` | user | `graph` | `entity` | Return an entity's accreted observation facts (user-scope, read-only). |
+| `export_core` | admin | `core` | `name`, `[format]` | Render a .mmcore bundle into a static interchange format. |
+| `export_memory` | admin | `memory_ops` | `[format]`, `[include_metadata]`, `[max_blocks]` | Export every ADMITTED workspace block as JSONL. |
+| `find_similar` | user | `recall` | `block_id`, `[limit]`, `[kind]` | Find blocks co-retrieved with a given block (co-occurrence, not embeddings). |
+| `get_block` | user | `memory_ops` | `block_id`, `[namespace]` | Retrieve a single ADMITTED block by its ID, with full content. |
+| `get_mind_kernel` | user | `kernels` | `name` | Read a specific .mind kernel configuration as structured JSON. |
+| `governance_health_bench` | admin | `benchmark` | - | Run the governance health benchmark suite. |
+| `graph` | user | `public` | `action`, `[subject]`, `[predicate]`, `[object]`, `[source_block_id]`, `[confidence]`, `[entity]`, `[depth]`, `[direction]`, `[limit]`, `[block_id]` | Unified knowledge/causal graph entry point. |
+| `graph_add_edge` | admin | `graph` | `subject`, `predicate`, `object`, `source_block_id`, `[confidence]` | Record a typed relationship in the knowledge graph — DIRECT admin write. |
+| `graph_query` | user | `graph` | `entity`, `[depth]`, `[predicate]`, `[direction]`, `[limit]`, `[resolve_same_as]` | N-hop traversal from *entity*. |
+| `graph_stats` | user | `graph` | - | Aggregated knowledge-graph stats for the active workspace. |
+| `hybrid_search` | user | `recall` | `query`, `[limit]`, `[active_only]`, `[explain]`, `[scoring_instant]`, `[intended_use]` | Hybrid BM25+Vector recall with RRF fusion. |
+| `index_stats` | user | `memory_ops` | - | Block counts, index staleness, vector coverage, and MIND kernel status. |
+| `intent_classify` | user | `recall` | `query` | Show the routing strategy for a query. |
+| `kernels` | user | `public` | `[action]`, `[name]` | Unified .mind kernel read surface. |
+| `lint` | user | `lint` | `[rule]` | Report deterministic corpus defects (read-only, USER-scope). |
+| `lint_autofix` | admin | `lint` | `finding_id` | Stage a repair PROPOSAL for one lint finding (ADMIN-scope). |
+| `list_contradictions` | user | `governance` | - | List detected contradictions with resolution analysis. |
+| `list_cores` | user | `core` | - | List every currently-loaded .mmcore bundle (namespace + stats). |
+| `list_edge_proposals` | user | `graph` | `[status]`, `[limit]` | List typed-edge proposals, optionally filtered by status (user-scope). |
+| `list_entity_merge_proposals` | user | `graph` | `[status]`, `[limit]` | List governed entity-equivalence proposals (user-scope). |
+| `list_evidence` | user | `audit` | `[block_id]`, `[action]`, `[limit]` | List governance evidence objects, optionally filtered by block_id or action. |
+| `list_mind_kernels` | user | `kernels` | - | List available .mind kernel configuration files. |
+| `load_core` | admin | `core` | `filename`, `[verify]` | Load a .mmcore bundle from the workspace's cores/ directory. |
+| `memory_evolution` | user | `governance` | `block_id`, `[action]` | A-MEM metadata for a block — importance, access patterns, keywords. |
+| `memory_health` | user | `memory_ops` | - | Deep health dashboard for the memory workspace. |
+| `memory_verify` | admin | `public` | `[mode]`, `[block_id]`, `[content_hash]`, `[snapshot]` | Unified memory-integrity verification. |
+| `mic_convert_tool` | user | `mic_map` | `input`, `[input_format]`, `[output_format]` | Convert a MIND IR graph between mic@2 (text) and mic-b (binary). |
+| `mic_inspect_tool` | user | `mic_map` | `input`, `[input_format]` | Return a structural summary of a MIC/MAP payload without re-emitting it. |
+| `mind_mem_verify` | user | `audit` | `[snapshot]` | Run the standalone `mind-mem-verify` CLI against the current workspace. |
+| `observe_signal` | user | `signal` | `session_id`, `previous_query`, `new_query`, `[previous_results]` | Capture a re-query / refinement / correction feedback signal. |
+| `ontology_load` | admin | `ontology` | `spec`, `[make_active]` | Load an ontology from an inline JSON spec. |
+| `ontology_validate` | user | `ontology` | `block`, `type_name`, `[strict]` | Validate *block* (JSON object) against the active ontology. |
+| `outcome_stats` | user | `calibration` | `[block_id]`, `[task_id]`, `[top_n]` | Query recorded outcomes — which memories actually earned their keep. |
+| `pack_recall_budget` | user | `recall` | `query`, `[max_tokens]`, `[limit]`, `[scoring_instant]`, `[model]` | Run a recall, then pack the result list under a token budget. |
+| `pipeline_status` | user | `pipeline` | - | Return current pipeline hash + dirty-block summary. |
+| `plan_consolidation` | user | `consolidation` | `[importance_threshold]`, `[stale_days]`, `[archive_after_days]`, `[grace_days]`, `[maturity_gate]`, `[min_maturity]` | Dry-run the cognitive forgetting cycle. |
+| `prefetch` | user | `recall` | `signals`, `[limit]` | Pre-assembles likely-needed context from recent conversation signals. |
+| `project_profile` | user | `consolidation` | `[name]`, `[top_k]` | Auto-generate a structured project intelligence profile. |
+| `propagate_staleness` | user | `consolidation` | `seed_block_ids`, `[max_hops]` | Diffuse staleness outward from seed blocks over the xref graph. |
+| `propose_edge` | user | `graph` | `subject`, `predicate`, `object`, `source_block_id`, `[confidence]` | Stage a typed knowledge-graph edge as an HITL proposal (user-scope). |
+| `propose_entity_merge` | user | `graph` | `winner_id`, `loser_id`, `rationale` | Stage an explicit winner/loser ``SAME_AS`` proposal (user-scope). |
+| `propose_slot_update` | admin | `governance` | `namespace`, `slot`, `value`, `rationale`, `[actor_id]`, `[actor_role]`, `[session_id]`, `[tool_id]`, `[purpose]` | Stage a closed-slot update for review by ``approve_apply``. |
+| `propose_update` | admin | `governance` | `block_type`, `statement`, `[rationale]`, `[tags]`, `[confidence]`, `[actor_id]`, `[actor_role]`, `[session_id]`, `[tool_id]`, `[purpose]`, `[content_source]`, `[supersedes]` | Propose a new decision or task. |
+| `recall` | user | `public` | `query`, `[mode]`, `[limit]`, `[active_only]`, `[backend]`, `[block_id]`, `[axes]`, `[weights]`, `[max_tokens]`, `[signals]`, `[scoring_instant]`, `[explain]`, `[since]`, `[until]`, `[lifecycle]`, `[event_id]`, `[min_maturity]`, `[intended_use]` | Unified retrieval entry point. |
+| `recall_with_axis` | user | `recall` | `query`, `[axes]`, `[weights]`, `[limit]`, `[active_only]`, `[adversarial]`, `[allow_rotation]`, `[scoring_instant]` | Axis-aware recall under the Observer-Dependent Cognition model. |
+| `recall_with_guardrails` | user | `guardrails` | `query`, `[tool]`, `[command]`, `[intent]`, `[paths]`, `[limit]`, `[active_only]` | Recall *query*, with the constraints for this context surfaced first. |
+| `recall_with_persona` | user | `walkthrough_persona` | `query`, `[persona]`, `[limit]`, `[active_only]`, `[scoring_instant]` | Recall memories and project the result list through *persona*. |
+| `reindex` | admin | `memory_ops` | `[include_vectors]` | Trigger FTS index rebuild, optionally with vector indexing. |
+| `reindex_dirty` | user | `pipeline` | `[limit]`, `[dry_run]` | Re-stamp blocks whose pipeline hash is stale. |
+| `reject_edge` | admin | `graph` | `proposal_id` | Reject a staged typed-edge proposal (ADMIN-scope). |
+| `reject_proposal` | admin | `governance` | `proposal_id`, `reason` | Reject a staged proposal explicitly, preserving the rationale. |
+| `report_outcome` | admin | `calibration` | `[block_ids]`, `[outcome]`, `[query_id]`, `[run_id]`, `[task_id]`, `[actor_id]`, `[session_id]`, `[tool_id]`, `[evidence]`, `[project_to_calibration]` | Report whether recalled blocks actually *helped* — utility, not relevance. |
+| `resume_brief` | user | `frames` | `[frame_id]` | Return the resume brief for the active task frame. |
+| `retrieval_diagnostics` | user | `recall` | `[last_n]`, `[max_age_days]` | Pipeline diagnostics: per-stage rejection rates, intent distribution, and hard negative summary. |
+| `reverse_entity_merge` | admin | `graph` | `proposal_id` | Retract an approved entity-equivalence edge (admin-scope). |
+| `rollback_proposal` | admin | `governance` | `receipt_ts`, `[reason]` | Rollback an applied proposal using its receipt timestamp. |
+| `scan` | user | `governance` | - | Run integrity scan — contradictions, drift, dead decisions, impact graph. |
+| `sign_model_tool` | admin | `model` | `path`, `[key_file]`, `[generate_key_prefix]`, `[write_sidecars]` | Sign every file in a local model checkpoint with Ed25519. |
+| `signal_stats` | user | `signal` | - | Return aggregated interaction-signal counts for the workspace. |
+| `similar_trajectories` | user | `trajectory` | `task`, `[tools]`, `[outcome]`, `[limit]`, `[scoring_instant]` | Recall past task executions similar to the one you are about to attempt. |
+| `staged_change` | admin | `public` | `phase`, `[block_type]`, `[statement]`, `[rationale]`, `[tags]`, `[confidence]`, `[proposal_id]`, `[dry_run]`, `[receipt_ts]` | Single entry point for the propose / apply / rollback flow. |
+| `stale_blocks` | user | `memory_ops` | `[limit]`, `[clear_block_id]` | List blocks flagged as stale, or clear a staleness flag. |
+| `stream_status` | user | `agent` | - | Current change-stream publish / delivery / drop counters. |
+| `traverse_graph` | user | `graph` | `block_id`, `[depth]`, `[direction]` | Navigate the causal dependency graph from a block. |
+| `unload_core` | admin | `core` | `namespace` | Unload a previously-loaded core by namespace. |
+| `validate_block` | user | `quality` | `text`, `[strict]`, `[force]` | Run the deterministic quality gate against ``text``. |
+| `vault_scan` | user | `agent` | `vault_root`, `[sync_dirs]` | Walk an Obsidian-style vault and return parsed VaultBlocks (JSON). |
+| `vault_sync` | admin | `agent` | `vault_root`, `block_id`, `relative_path`, `body`, `[block_type]`, `[title]`, `[overwrite]`, `[include_links]` | Write a single block back into a vault at a relative path. |
+| `verify_chain` | admin | `audit` | - | Verify every hash-linked ledger in the workspace, as one verdict. |
+| `verify_merkle` | user | `audit` | `block_id`, `content_hash` | Verify a block's Merkle inclusion against the live tree. |
+| `verify_model_tool` | user | `model` | `path`, `[pubkey_path]` | Verify a previously-signed checkpoint. |
+<!-- tool-index:end -->
 
 ### Configuration
 

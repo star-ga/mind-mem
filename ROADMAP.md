@@ -51,9 +51,44 @@ Surfaced at the top so the actual remaining work is visible without
 scrolling 1500 lines of historical sections. Each item is followed
 by its full description below.
 
-### Model — retrained `mind-mem-4b` (1 item, not started)
+### Correctness — found by the internal pre-release check on 5.0.4 (4 items, fixed 2026-10-08)
 
-- [ ] **Retrain `mind-mem-4b` on a newer base model.** The published weights are a
+A throwaway-workspace check (three look-alike Tuesday calls, then a correction
+moving one of them to Thursday) found four defects. Each was fixed test-first and
+the original reproduction re-run against the fixed tree.
+
+- [x] **The merge planner proposed merging memories that differ in who, when or time zone.**
+  "Ilona Tue 10am Arizona" and "contractor Tue 10am Pacific" scored 0.82 and were offered
+  as a `keep_longer` merge, which would have dropped the Ilona memory. A merge is now never
+  proposed when people, day/date, clock time or time zone differ (`fact_slots.py`, used by
+  `granularity_align.find_merge_candidates`). Test: `tests/test_granularity_align_discriminators.py`.
+- [x] **A superseded memory still ranked #1 in recall.** Every recall leg (scan, SQLite FTS,
+  hybrid) now demotes superseded/revoked hits on its own wide pool before its own limit cut:
+  a dead hit scoring at or above the lowest live hit is re-scored below that live score (the original
+  score is kept in `_replaced_demoted_from`), dead hits do not count against the wide window,
+  the FTS fetch or the rerank caps, and the scan knee keeps its historical cut plus any live
+  hit it keeps when judged among live hits. The post-filter funnel sort remains as a
+  backstop. The live replacement keeps its slot at every limit and the old one stays
+  recallable as history. Tests: `tests/test_recall_superseded_rank.py`,
+  `tests/test_recall_superseded_leg_cut.py`, `tests/test_recall_superseded_wide_pool.py`,
+  `tests/test_recall_replaced_demotion_invariants.py`.
+- [x] **Rolling back a correction also reverted later config changes, then blocked the workspace.**
+  Two causes: every restore put back the snapshot's `mind-mem.json`, and
+  `SpecBindingManager.get_binding` cached the binding forever (its docstring promised to
+  reload on change), so a long-running process never saw a later `mm config set`. A restore
+  now keeps the live attested config, and the binding cache is keyed on a stat of the
+  binding file. Test: `tests/test_rollback_restores_memory_only.py`.
+- [x] **A changed fact (Tuesday → Thursday) was not flagged as a contradiction.** The
+  classifier only knew negation words and status pairs, and both text extractors skipped the
+  `Statement` field. A restatement about the same people with a different day, time or zone
+  is now a contradiction, and `propose_update` returns a `contradicts` list naming the
+  committed block (present only when one exists). Test: `tests/test_contradiction_changed_fact.py`.
+
+### Model — retrained `mind-mem-4b` (1 item, in progress since early October 2026)
+
+- [~] **Retrain `mind-mem-4b` on a newer base model.** In progress on Qwen3.8-4B (full fine-tune);
+  acceptance rule: every gate and every benchmark at 100% (the rule is kept with the
+  retraining work and lands with it). The published weights are a
   full fine-tune of Qwen3.5-4B built against an earlier tree, so they describe a tool
   surface that has since moved. Several planned features depend on a model trained
   against the current surface. Full fine-tune (not QLoRA), corpus regenerated from a
@@ -2049,7 +2084,7 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (same model as answerer 
 - [x] **Probabilistic truth score** — shipped in `src/mind_mem/truth_score.py` (commit `e98c144`). Bayesian posterior ``prior × age_decay − contradiction_mass + access_bonus``, clamped [0.01, 0.99]. Exposed via ``annotate_results(results, contradiction_graph=…)``; caller surfaces as ``block.truth_score``. Feeds into EvidenceBundle confidence. 22 tests.
 - [x] **Streaming ingest + back-pressure queue** — shipped in `src/mind_mem/streaming.py` (commit `9956b7a`). Bounded mpsc deque with drop-oldest policy + per-client token bucket. ``build_queue_from_config`` opt-in via ``streaming.enabled``. Thread-safe multi-producer. 14 tests including a 4-thread concurrency test.
 - [x] **Consensus voting** — shipped in `src/mind_mem/consensus_vote.py` (commit `f644096`). ``reach_consensus(votes, quorum_threshold, min_votes)`` returns a typed ``ConsensusDecision(winner, margin, confidence, reason, vote_counts)``; trust weights pulled from ``Vote.trust_weight`` or ``namespaces.<id>.trust_weight``; 0-weight excludes. **Wired 5.0.1** into `conflict_resolver.analyze_contradiction`'s `manual_review` fallback behind `governance.consensus.enabled` (default off); votes read from `intelligence/VOTES.md` through `admit_corpus`, winner staged as a `pending-review` proposal, never applied. 41 tests.
-- [ ] **mind-mem-4b v2 retrain — rebase to Qwen3.8-4B + catch up to the current surface** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **NOT required by the v4.5.0 recall-noise fix or the v4.6.0 validity gate** — both are backend / flag-gated and add no MCP tool, and the 4b is only the swappable KG-extraction/dispatch model (recall + hybrid *scoring* is the `mind/*.mind` kernels + Python, never the 4b). The refresh is warranted because the current 4b was trained knowing **83** tools while the live surface is now **107** (the typed-edge KG tools — `propose_edge` / `approve_edge` / `reject_edge` / `list_edge_proposals` / `entity_add_observation` — landed in v4.3/v4.4 *after* the 4b was trained). Proposed model = **full retrain on a Qwen3.8-4B base**, subject to verifying the base checkpoint's availability and suitability before training (current base: Qwen3.5-4B) over the surface + v3.2.x dispatchers + v3.3.0/v4.x retrieval shapes (incl. the validity-gate config, OKF v0.2, and hybrid fusion-provenance fields) + LoCoMo replay. **Sequencing (operator decision 2026-08-18): deferred to AFTER the full Pure-MIND port** — do the Qwen3.8-4B rebase + retrain once, over the *post-port* tool/surface, bundled with that milestone rather than now. The current 4b remains the swappable KG-extraction/dispatch model (never on the recall-scoring path — that is the `mind/*.mind` kernels + Python). The runtime continues to execute its registered tools, but the checkpoint's evaluation does not establish dispatch competence over the full current surface; the 83-versus-107 counts alone are not a tool-set compatibility proof. The current training-readiness corpus is development data with evaluation-target overlap; it does not establish an independent holdout or a retrain result. Runpod H200 kickoff (~$55, 8-12 hr external GPU) runs on operator approval at that time.
+- [~] **mind-mem-4b v2 retrain — rebase to Qwen3.8-4B + catch up to the current surface** — **In progress since early October 2026; this supersedes the 2026-08-18 deferral below.** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **NOT required by the v4.5.0 recall-noise fix or the v4.6.0 validity gate** — both are backend / flag-gated and add no MCP tool, and the 4b is only the swappable KG-extraction/dispatch model (recall + hybrid *scoring* is the `mind/*.mind` kernels + Python, never the 4b). The refresh is warranted because the current 4b was trained knowing **83** tools while the live surface is now **107** (the typed-edge KG tools — `propose_edge` / `approve_edge` / `reject_edge` / `list_edge_proposals` / `entity_add_observation` — landed in v4.3/v4.4 *after* the 4b was trained). Proposed model = **full retrain on a Qwen3.8-4B base**, subject to verifying the base checkpoint's availability and suitability before training (current base: Qwen3.5-4B) over the surface + v3.2.x dispatchers + v3.3.0/v4.x retrieval shapes (incl. the validity-gate config, OKF v0.2, and hybrid fusion-provenance fields) + LoCoMo replay. **Sequencing (operator decision 2026-08-18): deferred to AFTER the full Pure-MIND port** — do the Qwen3.8-4B rebase + retrain once, over the *post-port* tool/surface, bundled with that milestone rather than now. The current 4b remains the swappable KG-extraction/dispatch model (never on the recall-scoring path — that is the `mind/*.mind` kernels + Python). The runtime continues to execute its registered tools, but the checkpoint's evaluation does not establish dispatch competence over the full current surface; the 83-versus-107 counts alone are not a tool-set compatibility proof. The current training-readiness corpus is development data with evaluation-target overlap; it does not establish an independent holdout or a retrain result. Runpod H200 kickoff (~$55, 8-12 hr external GPU) runs on operator approval at that time.
 
 **Estimated (v3.3.0):** ~2400 lines retrieval (Tier 1+2+3) + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`, `mind-mem[rerank-ensemble]` (Tier 4).
 
@@ -6362,9 +6397,9 @@ agent CLI's Stop hook only prints status, so none of its sessions reach capture.
 
 **Owner:** STARGA, Inc.  
 **Status:** Proposed; no implementation or performance claims.  
-**Research:** K. Marathe et al., *Breaking the Token Ceiling: Distilling Smaller, Stronger Byte Models* (2026), https://arxiv.org/abs/2609.12303
+**Research:** recent research on byte-level distillation.
 
-This paper studies decoder-only byte versus token models and token-teacher-to-byte-student supervision via approximate Marginalize-It and exact End-of-Token (EOT). Raw bytes are not synonymous with byte-level BPE. Paper-specific scaling estimates do not constitute STARGA results.
+Recent research studies decoder-only byte versus token models and token-teacher-to-byte-student supervision via approximate Marginalize-It and exact End-of-Token (EOT). Raw bytes are not synonymous with byte-level BPE. Published scaling estimates do not constitute STARGA results.
 
 ### Project scope
 
@@ -6386,9 +6421,9 @@ First regenerate training data against the live MCP tool definitions, resolving 
 
 **Owner:** STARGA, Inc.  
 **Status:** Proposed, not shipped.  
-**Research reference:** EAGLE-4, *One Flexible Drafter for All Batch Sizes and Hardware*, https://github.com/eagle-hq/EAGLE-4
+**Research reference:** recent research on a single speculative drafter that adapts to batch size and hardware.
 
-**License boundary:** EAGLE-4 is source-available, not a default permissive open-source implementation. Do not copy its source, tests, models, trained weights, unique implementation or assets without legal authorization. Independently implement generally described ideas after license and patent review; research citation is not a license.
+**License boundary:** the reference implementation is source-available, not a default permissive open-source implementation. Do not copy its source, tests, models, trained weights, unique implementation or assets without legal authorization. Independently implement generally described ideas after license and patent review; research citation is not a license.
 
 ### Scope
 
@@ -6399,7 +6434,7 @@ Opt-in acceleration for generative model only; retain retrieval, MCP, governance
 - Measure baseline ordinary and current speculative decoding, matched model, hardware, workload and sampling policy; concurrency 1, 8, 32, 64 when supported.
 - Track accepted tokens per verification, target-call cost, drafter overhead, throughput, TTFT, p50/p95 latency, peak memory and cost per token.
 - Verify output-distribution preservation for rejection/acceptance under temperature/top-k/top-p, including boundary cases and RNG reproducibility limitations.
-- Preserve governance, admission, evidence generation and normal-decoding fallback; feature-flag everything and do not promise numerical EAGLE-4 gains.
+- Preserve governance, admission, evidence generation and normal-decoding fallback; feature-flag everything and do not promise numerical gains from the published results.
 - Treat byte-model distillation as a separate experiment; tokenizer alignment and proposal distributions must be verified before combining.
 
 ### Addendum 2026-10-24: copy-heavy calls first, evidence preimages protected
@@ -6494,3 +6529,35 @@ to release gating.
 ### Status
 
 Proposed. Nothing built. Needs an architecture audit before implementation.
+
+## A learned evidence harness for `mind-mem:4b`: revise the program, not the weights (2026-10-27, Proposed)
+
+Recent research trains a small proposer model to revise a frozen solver's *harness* (the program that builds the context for each model call and runs its tools and checks), rewarded by how the revised harness scores on questions the proposer never sees. Reported: on 21 task families excluded from training, a 4B proposer's single revisions rose from 0.32 to 0.62 mean score, ahead of the 35B model it was first trained to imitate (0.56; the larger model still wins when an oracle picks the best of eight proposals). A proposer trained on one multi-hop QA benchmark also improved harnesses on two it never saw. Both models stay frozen at test time. No code was released, so ideas only.
+
+### Why it fits here
+
+- **We already revise this harness, one rule at a time.** The opt-in computed-evidence layer for `chat_with_memory` (`answer_facts`, on the 4B retrain branches, not yet on `main`) decides which deterministic facts the 4B answers from: event dates, elapsed time, gaps between named events, the options a choice question offers. Between 2026-10-06 and 2026-10-20 its rules were revised 13 times across two branches, each after reading the failures of the last run, and one revision was a revert after a rule refused 413 answerable training questions. That loop is the one a proposer learns to run.
+- **A harness revision keeps the replay promise; a weight update does not.** Same memory, same question and same harness digest give the same answer. A revision is a content-addressed diff that can be reviewed, recorded in the answer's receipt and reverted. The v2.1.0 weight-training loop stays, but adapting to a new workspace or question class goes through the harness first.
+- **This harness is already safe to revise automatically.** `answer_facts` is pure functions: no clock, no I/O, no logging. A proposed revision that adds any of those is rejected by a static check before it runs.
+- **A harness round is cheap.** It reruns the development suite on the served model. A weights round is a training run plus a rerun of every gate.
+
+### Plan
+
+1. **Prompted proposer first, no training.** The served `mind-mem:4b` stays frozen. Each round, the proposer gets the current harness plus its execution report on the development split and returns one revision. At most 5 rounds. A revision is kept only if the development score improves, and the final harness is chosen on a fresh slice that produced no reward.
+2. **Trained proposer second.** Supervised training on the recorded revisions (the October rounds plus the phase-1 ledger: harness, report, edit, outcome), then reinforcement learning rewarded by the revised harness's development score. The proposer is a separate small model or adapter and is never merged into the served `mind-mem:4b` weights, so the served model's acceptance results are untouched.
+3. **Tool-surface drift as an unseen family.** The published 4B was trained against an older tool surface. Treat the tools added since as families it never saw, and test whether a harness revision that supplies the current [MCP contract inventory](train/source-corpus.md) recovers dispatch on them without a retrain. If it does, tool-surface changes stop forcing model retrains.
+
+### Contamination and governance
+
+- The proposer and its reward see only the development split. The true holdout, the memory-answering holdout and the sealed sets are never a reward or a selection signal. They are scored once, at acceptance, under the unchanged 4B acceptance rule (100% on every gate).
+- Every kept revision is a proposal: human approval, the harness digest recorded in each answer's receipt, and rollback to the previous harness.
+
+### Gate and falsification
+
+- **Phase 1 gate:** the proposed harness beats the current hand-tuned harness on the development main gate and loses nothing on any other development suite. Positive control: a deliberately broken revision scored in the same run must score lower, or the run is void.
+- **Phase 2 gate:** at a matched proposal budget, the trained proposer beats the prompted one on question classes held out from its training, and the untrained copy of the same base scores lower.
+- **Falsification:** dropped if phase 1 cannot beat the hand-tuned harness within 5 rounds, or if its development gains do not appear on the true holdout at acceptance. Phase 3 is dropped if the frozen 4B does not recover dispatch on the newer tools.
+
+### Status
+
+Proposed, not built. Needs an architecture audit before implementation. Does not block or change the in-flight 4B retrain.

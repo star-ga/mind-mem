@@ -82,6 +82,27 @@ def validate_recall_config(cfg: dict[str, Any]) -> list[str]:
 DEFAULT_RERANK_DEPTH = 50
 
 
+def _is_replaced(hit: Mapping[str, Any]) -> bool:
+    """True when *hit* carries a superseded/revoked/dead status."""
+    from ._recall_core import _is_replaced as _core_is_replaced
+
+    return _core_is_replaced(hit)
+
+
+def _demote_replaced(hits: list[dict]) -> list[dict]:
+    """Dead-status hits re-scored below every live hit, before a leg cuts to ``limit``.
+
+    The single demotion rule lives in ``_recall_core._rank_replaced_below_live``;
+    this is the local-import seam (``_recall_core`` imports this module).
+    Supersession order is restored after it from the chain markers the BM25
+    leg put on retired hits, because fusion and validity re-sort by score.
+    """
+    from ._recall_core import _rank_replaced_below_live
+    from .recall_supersede import reapply_supersession
+
+    return reapply_supersession(_rank_replaced_below_live(hits))
+
+
 def resolve_rerank_depth(config: dict[str, Any] | None, limit: int) -> int:
     """How many fused candidates the reranker may see for this request.
 
@@ -200,6 +221,10 @@ def rrf_fuse(
     # per (id, arm) as the lists are walked is the only point at which both
     # legs' values are still in scope.
     leg_raw: dict[str, dict[str, float]] = {}
+    # Every leg's dict per id, in arrival order. The fused item copies ONE of them (R-1); fields that
+    # only the other legs carry (the lexical leg's ``speaker`` / ``DiaID`` / ``tags``, the dense
+    # leg's ``Date``) are filled in from these so fusion never erases metadata a leg returned.
+    leg_dicts: dict[str, list[dict]] = {}
 
     for list_idx, results in enumerate(ranked_lists):
         w = weights[list_idx] if list_idx < len(weights) else 1.0
@@ -212,6 +237,7 @@ def rrf_fuse(
                 leg_raw.setdefault(bid, {})[arm] = float(item.get("score", 0.0) or 0.0)
             except (TypeError, ValueError):
                 leg_raw.setdefault(bid, {})[arm] = 0.0
+            leg_dicts.setdefault(bid, []).append(item)
             existing = block_data.get(bid)
             if existing is None:
                 block_data[bid] = item
@@ -239,6 +265,10 @@ def rrf_fuse(
     fused = []
     for bid in sorted_ids:
         item = block_data[bid].copy()
+        for other in leg_dicts.get(bid, ()):
+            for key, value in other.items():
+                if key not in item and value not in (None, ""):
+                    item[key] = value
         item["rrf_score"] = round(scores[bid], 6)
         # ONE SCORE CONTRACT: ``score`` is the sort key at every stage exit.
         # Before this, fusion wrote ``rrf_score`` and left ``score`` holding
@@ -1085,7 +1115,7 @@ class HybridBackend:
                     vector_degraded = {"leg": "vector", "reason": "unavailable"}
                 if not _skip_validity:
                     results = self._apply_validity(results, workspace, scoring_instant)
-                results = results[:limit]
+                results = _demote_replaced(results)[:limit]
                 return _as_results(results, _merge_leg_markers(bm25_degraded, vector_degraded))
 
             # Run BM25 + vector in parallel
@@ -1299,10 +1329,18 @@ class HybridBackend:
             if not _skip_validity:
                 result = self._apply_validity(result, workspace, scoring_instant)
 
+            # A retired block the VECTOR leg alone surfaced carries no chain
+            # marker from the BM25 leg, so the fused pool is resolved against
+            # the index's supersede edges once, for this caller.
+            from .sqlite_index import _supersession_view
+
+            result = _supersession_view(workspace, result, agent_id)
+
             # Final slice so callers never receive more than they asked for.
             # Validity must sort the full fused pool first; otherwise a stale
             # hit at the requested boundary can crowd out a fresh candidate.
-            result = result[:limit]
+            # Dead statuses drop below live ones for the same reason.
+            result = _demote_replaced(result)[:limit]
 
             _log.info(
                 "hybrid_search_complete",
@@ -1463,7 +1501,7 @@ class HybridBackend:
         fused = _as_results(fused, combined_degraded)
         if not _skip_validity:
             fused = _as_results(self._apply_validity(fused, workspace, scoring_instant), combined_degraded)
-        return _as_results(fused[:limit], combined_degraded)
+        return _as_results(_demote_replaced(fused)[:limit], combined_degraded)
 
     def _maybe_session_boost(self, results: list[dict]) -> list[dict]:
         """Apply session-boundary preservation (v3.3.0 Tier 2 #5)."""
@@ -1961,10 +1999,26 @@ class HybridBackend:
         if ce_active is None:
             ce_active = self._cross_encoder_active(self._detect_query_type(query))
         if not ce_active:
-            return result[:limit]
+            return _demote_replaced(result)[:limit]
         if rerank_depth is None:
             rerank_depth = resolve_rerank_depth(self._config, limit)
+        # Demote BEFORE slicing the reranker's candidates: the fused pool
+        # still ranks dead hits by their own score (the vector leg never
+        # demotes, and RRF then places superseded versions above their
+        # replacement), so a narrow ``rerank_depth`` slice of it can hold
+        # nothing but dead hits and the replacement never reaches the
+        # reranker or its failure fallback. Returns ``result`` itself when
+        # nothing needs demoting.
+        result = _demote_replaced(result)
         candidates = result[:rerank_depth]
+        # A reranker returns only its own top-k, so a dead-status candidate it
+        # scores high would take a live replacement's slot before any later
+        # demotion could see it. Ask for one extra slot per dead candidate
+        # (bounded by the candidate pool), demote, then cut back. With no dead
+        # candidate the request is exactly the historical one.
+        top_k = ce_cfg.get("top_k", limit)
+        n_dead = sum(1 for r in candidates if _is_replaced(r))
+        rerank_k = min(len(candidates), top_k + n_dead) if n_dead else top_k
         # ``None`` until a reranker actually produced an ordering. The
         # distinction is load-bearing: on a failure we must hand back
         # ``limit`` blocks, not the ``rerank_depth`` candidates we fetched
@@ -1985,7 +2039,7 @@ class HybridBackend:
                 reranked = ensemble.rerank(
                     query,
                     candidates,
-                    top_k=ce_cfg.get("top_k", limit),
+                    top_k=rerank_k,
                     blend_weight=ce_cfg.get("blend_weight", 0.6),
                 )
                 _log.info("reranker_ensemble_applied", candidates=len(candidates), depth=rerank_depth)
@@ -1994,17 +2048,17 @@ class HybridBackend:
             reranked = None
         if reranked is None:
             try:
-                from .cross_encoder_reranker import CrossEncoderReranker
+                from . import cross_encoder_reranker as _cer
 
-                if CrossEncoderReranker.is_available():
-                    ce = CrossEncoderReranker()
+                if _cer.CrossEncoderReranker.is_available():
+                    ce = _cer.CrossEncoderReranker(**_cer.ce_model_args(ce_cfg))
                     for r in candidates:
                         if "content" not in r:
                             r["content"] = r.get("excerpt", "")
                     reranked = ce.rerank(
                         query,
                         candidates,
-                        top_k=ce_cfg.get("top_k", limit),
+                        top_k=rerank_k,
                         blend_weight=ce_cfg.get("blend_weight", 0.6),
                     )
                     _log.info(
@@ -2018,7 +2072,9 @@ class HybridBackend:
             except Exception as e:
                 _log.warning("cross_encoder_unavailable", error=str(e))
         if reranked is None:
-            return candidates[:limit]
+            return _demote_replaced(candidates)[:limit]
+        if n_dead:
+            return _demote_replaced(reranked)[:top_k]
         return reranked
 
     # -- backend wrappers ---------------------------------------------------
@@ -2102,17 +2158,20 @@ class HybridBackend:
         """
         agent_id = kwargs.pop("agent_id", None)
         try:
-            from .sqlite_index import _db_path, ensure_index, query_index
+            from .sqlite_index import _index_present, ensure_index, query_index
 
-            db = _db_path(workspace)
             # Flag first, deliberately: with ``auto_build_index`` off this is
             # one attribute test and NOTHING else — no stat, no config read,
             # no import cost beyond the one already taken above. ``stat`` is
             # only reached by the ``os.path.isfile`` that was always here.
             if self._auto_build_index:
                 ensure_index(workspace, enabled=True)
-            if os.path.isfile(db):
-                return query_index(workspace, query, limit=limit, scoring_instant=scoring_instant, **kwargs)
+            # The FTS SCHEMA is the question, not the file: recall.db is created by
+            # side tables (calibration, retrieval_log) on the first recall, and a
+            # file with no ``blocks_fts`` would divert every later recall into
+            # query_index's fallback instead of the scan below.
+            if _index_present(workspace):
+                return query_index(workspace, query, limit=limit, scoring_instant=scoring_instant, agent_id=agent_id, **kwargs)
         except ImportError:
             _log.debug("sqlite_index_not_available")
         except Exception as exc:

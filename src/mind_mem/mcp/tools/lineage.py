@@ -14,12 +14,13 @@ Two tools:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Any
 
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger
+from ._helpers import _read_scope_or_denied, get_logger
 
 _log = get_logger("mcp_server")
 
@@ -56,16 +57,31 @@ def block_lineage(
 
     from mind_mem.block_lineage import block_lineage as _read
 
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
+    # A restricted caller gets the lineage of the VISIBLE subgraph: the walk
+    # never enters or steps through a block the caller may not read, so a
+    # visible block reachable only via a hidden one is absent and every
+    # distance is one the caller could derive from blocks they may read. A root
+    # the caller cannot read answers exactly like a root with no edges.
+    walkable = (not scope.restricted) or scope.allows(block_id)
+    # An unreadable root walks a surrogate id that carries no edges, so the
+    # work (and latency) of a denied root is that of an edgeless/missing one.
+    walk_root = str(block_id) if walkable else "\x01-unreadable-root"
     try:
         result = _read(
             ws,
-            str(block_id),
+            walk_root,
             max_depth=int(max_depth),
             kind_filter=kind_filter,
             node_cap=int(node_cap),
+            visible=scope.allows if scope.restricted else None,
         )
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
+    if not walkable:
+        result = dataclasses.replace(result, root=str(block_id), edges=[], truncated=False)
 
     return json.dumps(result.to_dict(), indent=2)
 

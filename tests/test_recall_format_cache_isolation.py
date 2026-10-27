@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any
 
 import pytest
@@ -32,6 +33,13 @@ def _workspace(tmp_path: Any) -> str:
         fh.write(f"[D-20260829-001]\nStatement: The {QUERY} decision is approved.\nDate: 2026-08-29\nStatus: active\n\n---\n\n")
     with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as fh:
         json.dump({"recall": {"vector_enabled": False, "provider": "local"}}, fh)
+    # Age the files past the recall cache's racy-timestamp window: a file
+    # modified within it makes the corpus stamp unnameable and the request
+    # bypasses the cache, which would turn every test here into a no-op.
+    past = time.time() - 3600
+    for root, _dirs, files in os.walk(ws):
+        for name in files:
+            os.utime(os.path.join(root, name), (past, past))
     return ws
 
 
@@ -108,11 +116,16 @@ def test_the_cached_payload_is_the_blocks_shape_regardless_of_the_first_caller(
 
     from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
     from mind_mem.prefetch import chain_head
-    from mind_mem.recall_cache import get_cache, make_cache_key, retrieval_config_fingerprint
+    from mind_mem.recall_cache import corpus_stamp, get_cache, make_cache_key, retrieval_config_fingerprint
 
     # The instant is resolved inside _recall_impl, so it is bracketed here
     # rather than guessed: sampling only after the call would miss the key by a
     # day on a run that crosses UTC midnight.
+    # The corpus stamp is taken BEFORE the call, as the recall path takes it:
+    # the scan leg logs retrieval telemetry into recall.db on a miss, so a
+    # stamp read afterwards names a later state than the entry was keyed under.
+    stamp = corpus_stamp(cached_recall_module._workspace())
+    assert stamp is not None, "the workspace is inside the racy window — the cache would be bypassed"
     before = datetime.now(timezone.utc).date().isoformat()
     cached_recall_module._recall_impl(QUERY, limit=5, backend="bm25", format="bundle")
     after = datetime.now(timezone.utc).date().isoformat()
@@ -135,6 +148,7 @@ def test_the_cached_payload_is_the_blocks_shape_regardless_of_the_first_caller(
             workspace=cached_recall_module._workspace(),
             config_fingerprint=retrieval_config_fingerprint(cached_recall_module._load_config(cached_recall_module._workspace())),
             schema_version=str(MCP_SCHEMA_VERSION),
+            corpus_stamp=stamp,
         )
         stored = stored or cache.get(key)
     assert stored is not None, "cache should have been populated on the miss"

@@ -228,11 +228,13 @@ class TestRollbackReportsWhatItFound:
             _snapshot_workspace(ws, "20260829-120002")
             assert rollback(ws, "20260829-120002", strict=True) is True
 
-    def test_receiptless_snapshot_says_nothing_was_reconciled(self, monkeypatch, capsys) -> None:
+    def test_receiptless_snapshot_is_refused_and_says_why(self, monkeypatch, capsys) -> None:
         """A snapshot with no receipt is reachable (apply aborts before writing one).
 
-        Before the fix the entire reconciliation block was skipped in silence
-        and the run printed the same banner as a fully reconciled rollback.
+        It proves no applied proposal, so it is never a rollback target:
+        restoring it rewound every write made after it. Previously it was
+        restored with a warning; now it is refused, audibly, before any
+        restore runs (no "Restoring from snapshot" line, no banner).
         """
         monkeypatch.setattr(
             apply_engine,
@@ -243,9 +245,11 @@ class TestRollbackReportsWhatItFound:
             _snapshot_workspace(ws, "20260829-120003", with_receipt=False)
             ok = rollback(ws, "20260829-120003")
         out = capsys.readouterr()
-        assert ok is True
+        assert ok is False
         assert "no APPLY_RECEIPT.md" in out.out
-        assert "no proposal status was reconciled" in out.err
+        assert "refusing rollback" in out.err
+        assert "Restoring from snapshot" not in out.out
+        assert "ROLLED BACK" not in out.out
 
 
 class TestReceiptDateIsUtc:

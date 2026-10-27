@@ -39,7 +39,7 @@ from typing import Any
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import _kg_path, get_logger, metrics
+from ._helpers import _kg_path, _read_scope_or_denied, _workspace_view_denied, get_logger, metrics
 
 _log = get_logger("mcp_server")
 
@@ -178,6 +178,7 @@ def propose_edge(
             object,
             source_block_id=source_block_id,
             confidence=float(confidence),
+            metadata=_proposer_metadata(ws, (source_block_id.strip(),)),
         )
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
@@ -287,6 +288,74 @@ def reject_edge(proposal_id: str) -> str:
     return json.dumps({**proposal.as_dict(), "_schema_version": "1.0"}, indent=2)
 
 
+def _proposer_metadata(ws: str, derives_from: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Provenance stamped on a staged proposal.
+
+    * ``proposer`` -- the authenticated principal (bound callers only); shown
+      back only to that principal and to whole-view callers.
+    * ``proposer_view`` -- the namespace roots the proposer could read when it
+      staged the proposal. Free text (subject / object / rationale) may come
+      from any of them, so another viewer is shown the proposal only when it
+      can read all of them too. An unbound (operator) proposer could read
+      everything, so its proposals carry every root.
+    * ``derives_from`` -- block ids the proposal is derived from.
+    """
+    from mind_mem.read_authz import CallerUnresolved, caller_principal, readable_namespace_roots
+
+    try:
+        principal = caller_principal()
+    except CallerUnresolved:
+        return {}
+    meta: dict[str, Any] = {"proposer_view": list(readable_namespace_roots(ws, principal))}
+    if principal:
+        meta["proposer"] = principal
+    if derives_from:
+        meta["derives_from"] = sorted(set(derives_from))
+    return meta
+
+
+_PROVENANCE_KEYS = ("proposer", "proposer_view", "derives_from")
+
+
+def _proposal_visible(scope: Any, proposal: Any, *, blocks: tuple[str, ...]) -> bool:
+    """May the caller see this staged proposal?
+
+    * a whole-view caller sees everything;
+    * a caller always sees the proposals it staged itself;
+    * a proposal stamped with the proposer's view is shown to another caller
+      only if that caller can read every namespace the proposer could, and
+      every block the proposal cites or derives from is servable to it;
+    * a legacy proposal (no stamp) is shown only when it cites blocks and all
+      of them are servable; an entity merge staged by someone else, which
+      cites no block, is not shown to a restricted caller.
+    """
+    if scope.whole:
+        return True
+    meta = proposal.metadata if isinstance(proposal.metadata, dict) else {}
+    if scope.principal and meta.get("proposer") == scope.principal:
+        return True
+    derived = tuple(b for b in (*blocks, *(meta.get("derives_from") or ())) if isinstance(b, str))
+    view = meta.get("proposer_view")
+    if isinstance(view, list):
+        from mind_mem.read_authz import roots_readable
+
+        return roots_readable(scope.workspace, view, scope.principal) and all(scope.allows(b) for b in derived)
+    return bool(blocks) and all(scope.allows(b) for b in blocks)
+
+
+def _proposal_dict(scope: Any, proposal: Any) -> dict[str, Any]:
+    """The proposal as served: who staged it is shown only to them and whole views."""
+    out: dict[str, Any] = proposal.as_dict()
+    meta = out.get("metadata")
+    if scope.whole or not isinstance(meta, dict):
+        return out
+    own = bool(scope.principal) and meta.get("proposer") == scope.principal
+    if own:
+        return out
+    out["metadata"] = {k: v for k, v in meta.items() if k not in _PROVENANCE_KEYS}
+    return out
+
+
 @mcp_tool_observe
 def list_edge_proposals(status: str = "staged", limit: int = 64) -> str:
     """List typed-edge proposals, optionally filtered by status (user-scope).
@@ -307,6 +376,9 @@ def list_edge_proposals(status: str = "staged", limit: int = 64) -> str:
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
 
     valid_status = {PROPOSAL_STAGED, PROPOSAL_APPLIED, PROPOSAL_REJECTED, "all"}
     if status not in valid_status:
@@ -325,12 +397,12 @@ def list_edge_proposals(status: str = "staged", limit: int = 64) -> str:
         proposals = kg.list_edge_proposals(status=None if status == "all" else status)
     finally:
         kg.close()
-    proposals = proposals[:limit]
+    proposals = [p for p in proposals if _proposal_visible(scope, p, blocks=(p.source_block_id,))][:limit]
     return json.dumps(
         {
             "status": status,
             "count": len(proposals),
-            "proposals": [p.as_dict() for p in proposals],
+            "proposals": [_proposal_dict(scope, p) for p in proposals],
             "_schema_version": "1.0",
         },
         indent=2,
@@ -350,14 +422,48 @@ def propose_entity_merge(winner_id: str, loser_id: str, rationale: str) -> str:
         return json.dumps({"error": "winner_id and loser_id must be non-empty entity ids"})
     if not isinstance(rationale, str):
         return json.dumps({"error": "rationale must be a string"})
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
     kg = KnowledgeGraph(_kg_path(ws))
     try:
-        proposal = kg.propose_entity_merge(winner_id, loser_id, rationale=rationale)
+        sources: list[str] = []
+        if scope.restricted and not scope.whole:
+            # A restricted caller may name an entity only if it derives from
+            # blocks the caller may read. Every other pair -- existing but
+            # unreadable, or absent -- gets the one answer a missing entity
+            # gets, so the error text cannot be used to probe the graph.
+            winner, loser = winner_id.strip(), loser_id.strip()
+            if winner == loser:
+                return json.dumps({"error": "winner_id and loser_id must be distinct"})
+            if sum(not char.isspace() for char in rationale) < 8:
+                return json.dumps({"error": "entity merge rationale must be at least 8 non-whitespace characters"})
+            for entity in (winner, loser):
+                entity_sources = _readable_entity_sources(kg, entity, scope)
+                if entity_sources is None:
+                    return json.dumps({"error": "winner_id and loser_id must name existing entities"})
+                sources.extend(entity_sources)
+        proposal = kg.propose_entity_merge(winner_id, loser_id, rationale=rationale, metadata=_proposer_metadata(ws, tuple(sources)))
     except (EntityMergeError, ValueError) as exc:
         return json.dumps({"error": str(exc)})
     finally:
         kg.close()
     return json.dumps({**proposal.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+def _readable_entity_sources(kg: Any, entity: str, scope: Any) -> list[str] | None:
+    """Source blocks of *entity* when it exists and every one is servable, else ``None``.
+
+    An entity with no recorded source block cannot be shown to derive from
+    anything the caller may read, so it counts as unreadable.
+    """
+    with kg._lock:
+        exists = kg._conn.execute("SELECT 1 FROM entities WHERE id = ?", (entity,)).fetchone()
+        rows = kg._conn.execute("SELECT DISTINCT source_block_id FROM edges WHERE subject = ? OR object = ?", (entity, entity)).fetchall()
+    sources = [str(row[0]) for row in rows if row[0]]
+    if exists is None or not sources or not all(scope.allows(b) for b in sources):
+        return None
+    return sources
 
 
 @mcp_tool_observe
@@ -375,6 +481,9 @@ def list_entity_merge_proposals(status: str = "staged", limit: int = 64) -> str:
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
     valid = {PROPOSAL_STAGED, PROPOSAL_APPLIED, PROPOSAL_REJECTED, MERGE_REVERSED, "all"}
     if status not in valid:
         return json.dumps({"error": f"status must be one of {sorted(valid)}"})
@@ -384,11 +493,12 @@ def list_entity_merge_proposals(status: str = "staged", limit: int = 64) -> str:
         return json.dumps({"status": status, "count": 0, "proposals": [], "_schema_version": "1.0"}, indent=2)
     kg = KnowledgeGraph(_kg_path(ws))
     try:
-        proposals = kg.list_entity_merge_proposals(status=None if status == "all" else status)[:limit]
+        proposals = kg.list_entity_merge_proposals(status=None if status == "all" else status)
     finally:
         kg.close()
+    proposals = [p for p in proposals if _proposal_visible(scope, p, blocks=())][:limit]
     return json.dumps(
-        {"status": status, "count": len(proposals), "proposals": [p.as_dict() for p in proposals], "_schema_version": "1.0"},
+        {"status": status, "count": len(proposals), "proposals": [_proposal_dict(scope, p) for p in proposals], "_schema_version": "1.0"},
         indent=2,
     )
 
@@ -528,6 +638,24 @@ def entity_add_observation(entity: str, fact: str) -> str:
     )
 
 
+def _has_observations_column(kg_path: str) -> bool:
+    """Whether the graph's ``entities`` table has the observations column.
+
+    Opened read-only, so asking cannot create a table or a column.
+    """
+    try:
+        con = sqlite3.connect(f"file:{kg_path}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return False
+    try:
+        cols = {row[1] for row in con.execute("PRAGMA table_info(entities)")}
+    except sqlite3.Error:
+        return False
+    finally:
+        con.close()
+    return "observations" in cols
+
+
 @mcp_tool_observe
 def entity_observations(entity: str) -> str:
     """Return an entity's accreted observation facts (user-scope, read-only).
@@ -537,20 +665,38 @@ def entity_observations(entity: str) -> str:
     ``entity_observations`` flag.
     """
     from mind_mem.knowledge_graph import KnowledgeGraph
-    from mind_mem.v4.feature_flags import FeatureDisabledError
+    from mind_mem.v4.feature_flags import FeatureDisabledError, require_enabled
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    # The entity graph is built from every namespace and its rows are not
+    # namespace-attributed: only a caller whose view is the workspace may read it.
+    denied = _workspace_view_denied(ws)
+    if denied is not None:
+        return denied
 
     if not isinstance(entity, str) or not entity.strip():
         return json.dumps({"error": "entity must be a non-empty string"})
     if len(entity) > 512:
         return json.dumps({"error": "entity name must be ≤512 chars"})
 
+    empty = json.dumps({"entity": entity, "observations": [], "count": 0, "_schema_version": "1.0"}, indent=2)
     if not os.path.isfile(_kg_path(ws)):
-        return json.dumps({"entity": entity, "observations": [], "count": 0, "_schema_version": "1.0"}, indent=2)
+        return empty
+
+    # A read must not migrate the schema it reads: ``observations`` runs
+    # ``migrate_observations`` (ALTER TABLE ... ADD COLUMN), a write to the
+    # shared graph store. A graph without the column has never recorded an
+    # observation, so the answer is [] once the flag check has passed; the
+    # migration happens on the write path (entity_add_observation), not here.
+    try:
+        require_enabled("entity_observations")
+    except FeatureDisabledError as exc:
+        return json.dumps({"error": str(exc)})
+    if not _has_observations_column(_kg_path(ws)):
+        return empty
 
     kg = KnowledgeGraph(_kg_path(ws))
     try:
@@ -581,6 +727,11 @@ def graph_query(
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    # The entity graph is built from every namespace and its rows are not
+    # namespace-attributed: only a caller whose view is the workspace may read it.
+    denied = _workspace_view_denied(ws)
+    if denied is not None:
+        return denied
 
     if not isinstance(entity, str) or not entity.strip():
         return json.dumps({"error": "entity must be a non-empty string"})
@@ -599,20 +750,29 @@ def graph_query(
     if direction not in {"outgoing", "incoming", "both"}:
         return json.dumps({"error": "direction must be 'outgoing' / 'incoming' / 'both'"})
 
-    kg = KnowledgeGraph(_kg_path(ws))
-    try:
-        neighbours = kg.neighbors(
-            entity,
-            depth=depth,
-            predicate=pred_obj,
-            direction=direction,
-            max_results=limit,
-            resolve_same_as=resolve_same_as,
-        )
-    except ValueError as exc:
-        return json.dumps({"error": str(exc)})
-    finally:
-        kg.close()
+    # A read must not mint the entity it looks up: ``neighbors`` resolves its
+    # start through ``EntityRegistry.resolve``, which INSERTs an unknown
+    # name. An unknown entity (or no graph at all) has no neighbours, so
+    # answer that without opening a write path -- graph_stats does the same
+    # for a missing graph file.
+    kg_file = _kg_path(ws)
+    neighbours: list = []
+    if os.path.isfile(kg_file):
+        kg = KnowledgeGraph(kg_file)
+        try:
+            if kg.entities.lookup(entity) is not None:
+                neighbours = kg.neighbors(
+                    entity,
+                    depth=depth,
+                    predicate=pred_obj,
+                    direction=direction,
+                    max_results=limit,
+                    resolve_same_as=resolve_same_as,
+                )
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+        finally:
+            kg.close()
     return json.dumps(
         {
             "entity": entity,
@@ -635,6 +795,11 @@ def graph_stats() -> str:
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    # The entity graph is built from every namespace and its rows are not
+    # namespace-attributed: only a caller whose view is the workspace may read it.
+    denied = _workspace_view_denied(ws)
+    if denied is not None:
+        return denied
 
     kg_file = _kg_path(ws)
     if not os.path.isfile(kg_file):
@@ -768,6 +933,20 @@ def _downstream_confidences(
     return {h.block_id: h.confidence for h in propagator.propagate(hops)}
 
 
+def _visible_chains(chains: list[list[str]], scope: Any, root: str) -> list[list[str]]:
+    """Cut each causal chain at its first unreadable block, dropping duplicates."""
+    cut: list[list[str]] = []
+    for chain in chains:
+        kept: list[str] = []
+        for node in chain:
+            if not scope.allows(node):
+                break
+            kept.append(node)
+        if kept and kept not in cut:
+            cut.append(kept)
+    return cut or [[root]]
+
+
 @mcp_tool_observe
 def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> str:
     """Navigate the causal dependency graph from a block.
@@ -798,6 +977,9 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
         )
 
     ws = _workspace()
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
     try:
         from mind_mem.causal_graph import CausalGraph
         from mind_mem.graph_recall import is_uncertainty_enabled, resolve_chain_decay
@@ -818,9 +1000,17 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
             "depth": depth,
         }
 
+        # A root the caller cannot read is walked as a root with no edges, so a
+        # denied id and a missing id answer alike. For a readable root every
+        # edge, chain and node that touches an unreadable block is dropped
+        # before it is walked, not after.
+        walk = scope.allows(block_id)
         if direction in ("upstream", "both"):
-            chains = cg.causal_chain(block_id, max_depth=depth)
-            deps = cg.dependencies(block_id)
+            chains = cg.causal_chain(block_id, max_depth=depth) if walk else [[block_id]]
+            deps = cg.dependencies(block_id) if walk else []
+            if scope.restricted:
+                chains = _visible_chains(chains, scope, block_id)
+                deps = scope.keep(deps, key=lambda e: e.target_id)
             result["upstream"] = {
                 "direct_dependencies": [
                     {
@@ -836,14 +1026,14 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
                 result["upstream"]["chain_confidence"] = _chain_confidences(chains, edge_weights, chain_decay)
 
         if direction in ("downstream", "both"):
-            dependents = cg.dependents(block_id)
+            dependents = scope.keep(cg.dependents(block_id), key=lambda e: e.source_id) if walk else []
             downstream_nodes: list[dict] = []
             visited: set[str] = {block_id}
             current_layer = [block_id]
             for d in range(depth):
                 next_layer: list[str] = []
                 for node_id in current_layer:
-                    node_deps = cg.dependents(node_id)
+                    node_deps = scope.keep(cg.dependents(node_id), key=lambda e: e.source_id) if walk else []
                     for e in node_deps:
                         if e.source_id not in visited:
                             visited.add(e.source_id)
@@ -877,8 +1067,9 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
                 "reachable_nodes": downstream_nodes,
             }
 
-        summary = cg.summary()
-        result["graph_summary"] = summary
+        if scope.whole:
+            # edge / node / stale totals span every namespace
+            result["graph_summary"] = cg.summary()
 
         metrics.inc("mcp_traverse_graph")
         _log.info("mcp_traverse_graph", block_id=block_id, direction=direction, depth=depth)

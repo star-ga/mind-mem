@@ -7,11 +7,19 @@ docs/v3.2.0-mcp-decomposition-plan.md. This file is now a thin
 re-export shim that keeps every documented import path working:
 
 * ``from mind_mem.mcp_server import mcp, main`` (entry point)
-* ``from mind_mem.mcp_server import recall, propose_update, ...`` (every tool)
+* ``from mind_mem.mcp_server import recall, propose_update, ...`` (every
+  registered tool, each the very function object the server registers --
+  ``tests/test_tool_registry_alignment.py`` fails if a registered tool is
+  missing here or re-exported as a different function)
 * ``from mind_mem.mcp_server import get_decisions, ...`` (every resource)
 * ``from mind_mem.mcp_server import check_tool_acl, ADMIN_TOOLS, ...`` (infra)
 * ``mcp_server.verify_token`` / ``mcp_server.metrics`` / etc.
   (attribute access from tests)
+
+``recall`` here is the wire tool (``mind_mem.mcp.tools.public.recall``,
+the one an MCP client calls), not the six-parameter engine function at
+``mind_mem.mcp.tools.recall.recall`` that the wire tool dispatches to.
+Import that one from its own module when you mean it.
 
 Nothing is removed — the shim stays for at least one major
 version of overlap (until v4.0). The split lets new code import
@@ -146,7 +154,7 @@ from mind_mem.mcp.tools._helpers import (  # noqa: E402, F401
     _signal_store_path,
 )
 
-# Tools — every @mcp.tool name the monolith exposed.
+# Tools — every name registered on the server, one import per owning module.
 from mind_mem.mcp.tools.agent import (  # noqa: E402, F401
     _vault_allowlist,
     _vault_root_allowed,
@@ -155,7 +163,18 @@ from mind_mem.mcp.tools.agent import (  # noqa: E402, F401
     vault_scan,
     vault_sync,
 )
+from mind_mem.mcp.tools.arch_mind import (  # noqa: E402, F401
+    arch_baseline,
+    arch_check_rules,
+    arch_delta,
+    arch_history,
+    arch_metric_explain,
+    arch_session_end,
+    arch_session_start,
+)
 from mind_mem.mcp.tools.audit import (  # noqa: E402, F401
+    anchor_history,
+    anchor_root,
     list_evidence,
     mind_mem_verify,
     verify_chain,
@@ -170,6 +189,9 @@ from mind_mem.mcp.tools.calibration import (  # noqa: E402, F401
     calibration_stats,
     outcome_stats,
     report_outcome,
+)
+from mind_mem.mcp.tools.chat import (  # noqa: E402, F401
+    chat_with_memory,
 )
 from mind_mem.mcp.tools.consolidation import (  # noqa: E402, F401
     dream_cycle,
@@ -190,26 +212,39 @@ from mind_mem.mcp.tools.encryption import (  # noqa: E402, F401
     decrypt_file,
     encrypt_file,
 )
+from mind_mem.mcp.tools.frames import (  # noqa: E402, F401
+    check_dead_ends,
+    resume_brief,
+)
 from mind_mem.mcp.tools.governance import (  # noqa: E402, F401
     approve_apply,
     list_contradictions,
     memory_evolution,
     propose_update,
     propose_slot_update,
+    reject_proposal,
     rollback_proposal,
     scan,
 )
 from mind_mem.mcp.tools.graph import (  # noqa: E402, F401
     approve_edge,
+    approve_entity_merge,
     entity_add_observation,
     entity_observations,
     graph_add_edge,
     graph_query,
     graph_stats,
     list_edge_proposals,
+    list_entity_merge_proposals,
     propose_edge,
+    propose_entity_merge,
     reject_edge,
+    reverse_entity_merge,
     traverse_graph,
+)
+from mind_mem.mcp.tools.guardrails import (  # noqa: E402, F401
+    check_guardrails,
+    recall_with_guardrails,
 )
 from mind_mem.mcp.tools.kernels import (  # noqa: E402, F401
     compiled_truth_add_evidence,
@@ -217,6 +252,10 @@ from mind_mem.mcp.tools.kernels import (  # noqa: E402, F401
     compiled_truth_load,
     get_mind_kernel,
     list_mind_kernels,
+)
+from mind_mem.mcp.tools.lint import (  # noqa: E402, F401
+    lint,
+    lint_autofix,
 )
 from mind_mem.mcp.tools.memory_ops import (  # noqa: E402, F401
     _BLOCK_PREFIX_MAP,
@@ -230,6 +269,15 @@ from mind_mem.mcp.tools.memory_ops import (  # noqa: E402, F401
     reindex,
     stale_blocks,
 )
+from mind_mem.mcp.tools.mic_map import (  # noqa: E402, F401
+    mic_convert_tool,
+    mic_inspect_tool,
+)
+from mind_mem.mcp.tools.model import (  # noqa: E402, F401
+    audit_model_tool,
+    sign_model_tool,
+    verify_model_tool,
+)
 from mind_mem.mcp.tools.ontology import (  # noqa: E402, F401
     ontology_load,
     ontology_validate,
@@ -237,6 +285,19 @@ from mind_mem.mcp.tools.ontology import (  # noqa: E402, F401
 from mind_mem.mcp.tools.lineage import (  # noqa: E402, F401
     add_block_edge,
     block_lineage,
+)
+from mind_mem.mcp.tools.pipeline import (  # noqa: E402, F401
+    pipeline_status,
+    reindex_dirty,
+)
+from mind_mem.mcp.tools.public import (  # noqa: E402, F401
+    compiled_truth,
+    core,
+    graph,
+    kernels,
+    memory_verify,
+    recall,  # the wire tool; see the module docstring
+    staged_change,
 )
 from mind_mem.mcp.tools.quality import (  # noqa: E402, F401
     validate_block,
@@ -248,13 +309,19 @@ from mind_mem.mcp.tools.recall import (  # noqa: E402, F401
     intent_classify,
     pack_recall_budget,
     prefetch,
-    recall,
     recall_with_axis,
     retrieval_diagnostics,
 )
 from mind_mem.mcp.tools.signal import (  # noqa: E402, F401
     observe_signal,
     signal_stats,
+)
+from mind_mem.mcp.tools.trajectory import (  # noqa: E402, F401
+    similar_trajectories,
+)
+from mind_mem.mcp.tools.walkthrough_persona import (  # noqa: E402, F401
+    compile_truth_walkthrough,
+    recall_with_persona,
 )
 
 

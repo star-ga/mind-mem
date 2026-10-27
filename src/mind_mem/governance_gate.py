@@ -134,7 +134,7 @@ from .evidence_objects import EvidenceAction, EvidenceChain, EvidenceObject
 from .hash_chain_v2 import HashChainV2, HashEntry
 from .merkle_tree import MerkleTree
 from .observability import get_logger
-from .spec_binding import SpecBindingManager
+from .spec_binding import SpecBindingManager, armed_on_record, record_arming
 
 __all__ = [
     "AdmissionReceipt",
@@ -172,6 +172,12 @@ PHASE_REMOVED: Final = "removed"
 #: :attr:`EvidenceAction.DRIFT`, which already existed — recording config
 #: drift adds no enum member.
 DRIFT_VERB: Final = "DRIFT"
+
+#: Evidence ``metadata`` keys that only an ARMED workspace's gate ever writes:
+#: ``spec_hash`` on an admission verified against a binding, ``drift_reason``
+#: on a DRIFT row, ``binding_disarmed`` on a disarm record. Any one of them in
+#: the chain proves the workspace was armed — see ``GovernanceGate._was_armed``.
+_ARMED_HISTORY_KEYS: Final = ("spec_hash", "drift_reason", "binding_disarmed")
 
 #: ``block_id`` prefix for a record whose subject is the config file
 #: rather than a block. Prefixed rather than bare so a config record can
@@ -517,6 +523,13 @@ class GovernanceGate:
         # rather than on every admission for the life of the process. A
         # *different* drift is a new observation and records again.
         self._last_drift_reason: Optional[str] = None
+        # Whether this workspace has ever been armed — see _was_armed().
+        # ``_armed_seen`` flips True the first time this gate observes a
+        # binding; ``_armed_history`` caches the one-time scan of the
+        # evidence chain for a record only an armed workspace writes. Both
+        # are monotone: a workspace that was armed cannot become never-armed.
+        self._armed_seen = False
+        self._armed_history: Optional[bool] = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -742,7 +755,10 @@ class GovernanceGate:
         visible; the warning names ``mm bind`` because that is the fix.
         :func:`~mind_mem.init_workspace.init` now writes a binding for
         every workspace it creates, so this is the state of a workspace
-        made before 5.0.2 or one whose binding was removed.
+        made before 5.0.2. A workspace that was ever armed and has lost its
+        binding is NOT this case: :meth:`_was_armed` says so, and
+        :meth:`_refuse_disarm` records the disarm and refuses the write
+        under every mode.
 
         **Drift, any mode.** Record one ``DRIFT`` row naming the drift and
         the mode about to be applied, and warn. Recorded *before* the mode
@@ -778,6 +794,12 @@ class GovernanceGate:
         read ``enforce`` as "an attacker cannot turn this off".
         """
         spec_hash = self._current_spec_hash()
+        if spec_hash is not None:
+            if not self._armed_seen:
+                self._ensure_arming_record(spec_hash)
+            self._armed_seen = True
+        elif self._was_armed():
+            self._refuse_disarm(block_id)
         if spec_hash is None:
             if not self._warned_unbound:
                 self._warned_unbound = True
@@ -821,7 +843,92 @@ class GovernanceGate:
             )
         return spec_hash
 
-    def _record_drift(self, reason: str, mode: str) -> None:
+    def _ensure_arming_record(self, spec_hash: str) -> None:
+        """Make sure the durable arming record exists. Once per gate, a stat per location.
+
+        ``init`` and ``mm config set`` write the record; this covers every
+        other way a workspace gets armed (``mm bind`` on a pre-5.0.2
+        workspace, a workspace restored or copied from one made before the
+        record existed). Only ever adds a record — it can make the gate
+        stricter, never laxer.
+        """
+        if not armed_on_record(self._config_path, self._ws):
+            record_arming(self._config_path, self._ws, spec_hash=spec_hash)
+
+    def _was_armed(self) -> bool:
+        """Has this workspace ever been armed? Monotone, and cheap after the first call.
+
+        Consulted only when no binding is on disk, to tell a workspace that
+        was never armed (pre-5.0.2, or a hand-built one: admit, as before)
+        from one whose binding was **removed** (refuse). Before this, both
+        took the unbound branch, so deleting ``.spec_binding.json`` silently
+        lifted a drift block on a live gate — including an ``enforce`` one.
+
+        Independent sources, any one of which proves the workspace armed,
+        so deleting any single file (or the binding plus any one other)
+        cannot make an armed workspace read as never-armed:
+
+        * this gate observed a binding earlier in its life;
+        * the durable arming record, kept in two places
+          (:func:`~mind_mem.spec_binding.arming_record_paths`): written by
+          ``init`` when it arms a workspace, by every ``mm config set``
+          re-attestation, and by the gate the first time it sees a binding
+          — so it exists from birth, before any governed write;
+        * the evidence chain holds a row only an armed gate writes — an
+          admission stamped with ``spec_hash``, a ``DRIFT`` row
+          (``drift_reason``), or an earlier disarm record
+          (``binding_disarmed``).
+
+        A ``True`` answer is cached for the life of the gate (monotone).
+        The evidence scan is cached either way (one scan per gate); the
+        arming-record check is a stat per location and is repeated while
+        the answer is ``False``, so a record written by another process is
+        seen at once.
+        """
+        if self._armed_seen:
+            return True
+        if armed_on_record(self._config_path, self._ws):
+            self._armed_seen = True
+            return True
+        if self._armed_history is None:
+            count = len(self._evidence)
+            rows = self._evidence.get_latest(n=count) if count else []
+            self._armed_history = any(
+                isinstance(row.metadata, dict) and any(key in row.metadata for key in _ARMED_HISTORY_KEYS) for row in rows
+            )
+        return bool(self._armed_history)
+
+    def _refuse_disarm(self, block_id: str) -> None:
+        """Record that an armed workspace lost its binding, then refuse. Always raises.
+
+        Recorded *before* refusing, through the same once-per-observation
+        :meth:`_record_drift` path, so the ledger — not a log line — is
+        where the disarm is found. The record carries ``binding_disarmed``,
+        which is also what keeps the NEXT process's gate refusing (see
+        :meth:`_was_armed`) until someone re-attests with ``mm bind``.
+
+        Refused under **every** ``governance_mode``, unlike config drift.
+        ``detect_only`` admits drift because hand-editing ``mind-mem.json``
+        used to be the only configuration path; removing the binding is
+        not part of any configuration path (``mm config set`` keeps an
+        armed workspace armed), and with the binding gone nothing attests
+        the mode the response would be read from.
+        """
+        binding_path = os.path.join(os.path.dirname(self._config_path), ".spec_binding.json")
+        reason = (
+            f"spec binding removed from an armed workspace: {binding_path!r} is missing, so the config "
+            f"at {self._config_path!r} is no longer attested"
+        )
+        mode = self._governance_mode()
+        _log.warning("governance_gate.binding_disarmed", workspace=self._ws, block_id=block_id, governance_mode=mode)
+        self._record_drift(reason, mode, {"binding_disarmed": True})
+        raise GovernanceBypassError(
+            f"GovernanceGate blocked write to '{block_id}': {reason}. This workspace was armed, and a "
+            f"missing binding is treated as drift, never as 'unbound'. Review mind-mem.json and re-attest "
+            f"it with `mm bind` for this workspace."
+        )
+
+    def _record_drift(self, reason: str, mode: str, extra: Optional[Mapping[str, object]] = None) -> None:
         """Append one ``DRIFT`` row for a newly observed drift. Idempotent per drift.
 
         Recorded once per distinct drift *observation* rather than once
@@ -850,7 +957,7 @@ class GovernanceGate:
                 reason,
                 "governance_gate",
                 self._config_path,
-                {"governance_mode": mode, "drift_reason": reason},
+                {"governance_mode": mode, "drift_reason": reason, **(extra or {})},
                 None,
             )
         except Exception:  # pragma: no cover - a ledger that cannot record must not swallow the write

@@ -402,7 +402,11 @@ def generate_resolution_proposals(workspace: str, resolutions: list[dict] | None
     """Generate supersede proposals for auto-resolvable contradictions.
 
     Writes proposals to intelligence/proposed/RESOLUTIONS_PROPOSED.md
-    for human review before application.
+    for human review. They are ADVISORY: each block carries
+    ``Advisory: true`` and no ``Ops``, and the file is not one the apply
+    engine reads, so a reviewer who agrees files a staged
+    ``supersede_decision`` proposal to act on it. Nothing here can change
+    a block's status by being approved.
 
     Returns:
         Number of proposals generated.
@@ -479,6 +483,14 @@ def generate_resolution_proposals(workspace: str, resolutions: list[dict] | None
                 f.write(f"Action: Supersede {res['loser_id']} with SupersededBy: {res['winner_id']}\n")
                 f.write(f"Rationale: {res['rationale']}\n")
                 f.write("Status: pending-review\n")
+                # ADVISORY, and labelled as such. This block has no Ops and
+                # lives in a file the apply engine does not read
+                # (apply_engine.PROPOSED_FILES), so nothing can apply it;
+                # without the label a reviewer could approve it and believe
+                # the loser was superseded. Acting on it means filing a
+                # staged decision proposal with a supersede_decision op.
+                f.write("Advisory: true\n")
+                f.write(f"ToApply: file a staged proposal with op supersede_decision target {res['loser_id']}\n")
                 f.write("\n---\n")
 
     _log.info("resolution_proposals_generated", count=len(auto))

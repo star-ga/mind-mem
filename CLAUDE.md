@@ -200,7 +200,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   block_versioning.py   — block version history
   circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
   feature_flags.py      — 52 flags + is_enabled/require_enabled
-tests/                  — pytest suite (12,624 test functions incl. 376 v4 unit
+tests/                  — pytest suite (13,250 test functions incl. 376 v4 unit
                           + 38 concurrency + 22 paraphrase probes)
 mind/                   — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
@@ -236,9 +236,10 @@ docs/                   — User + integration docs (35+ files)
   v3.0.0 QLoRA at `v3.0.0`. These historical evaluations do not establish
   competence over the current server's additional tools. See
   `docs/mind-mem-4b-setup.md`.
-- **Client integrations:** the registry contains 20 AI clients, including
-  12 with MCP configuration formats. `mm install-all` uses each client's
-  supported integration. See `docs/client-integrations.md`.
+- **Client integrations:** the registry contains 69 AI clients, including
+  41 with MCP configuration formats (22 more get printed manual MCP steps).
+  `mm install-all` uses each client's supported integration. See
+  `docs/client-integrations.md`.
 
 ### MCP Tools (107)
 Grouped surfaces (full list in `docs/api-reference.md` and
@@ -266,7 +267,7 @@ name that no longer exists -- this list previously carried 11 ghosts
 
 ## Testing
 ```bash
-pytest                           # full suite (12,624 test functions)
+pytest                           # full suite (13,250 test functions)
 pytest tests/test_retrieval.py   # specific module
 pytest -x --tb=short             # stop on first failure
 python3 scripts/check_docs_alignment.py --print  # the test-function count (static; a run's count is machine-dependent)

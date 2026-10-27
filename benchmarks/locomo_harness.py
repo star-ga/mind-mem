@@ -103,6 +103,21 @@ def _parse_sessions(conversation: dict) -> list[tuple[int, str, list[dict]]]:
     return sessions
 
 
+def turn_text(turn: dict) -> str:
+    """The text of one dialogue turn, including what the speaker SHARED with it.
+
+    A turn that shares an image carries the image's description (``blip_caption``) next to its
+    text. The description is part of what was said ("Here's our latest work" + a painting of a
+    sunset), so a memory of the turn that drops it loses the content the turn refers to. It is
+    appended as ``[shared image: <caption>]``; turns without an image are unchanged.
+    """
+    text = str(turn.get("text", "") or "")
+    caption = str(turn.get("blip_caption", "") or "").strip()
+    if caption:
+        text = f"{text} [shared image: {caption}]".strip()
+    return text
+
+
 def build_workspace(sample: dict, base_dir: str) -> str:
     """Convert a LoCoMo conversation sample into a mind-mem workspace directory.
 
@@ -136,7 +151,7 @@ def build_workspace(sample: dict, base_dir: str) -> str:
             dia_id = turn.get("dia_id", "")
             raw_speaker = turn.get("speaker", "unknown")
             resolved_speaker = speaker_names.get(raw_speaker, raw_speaker)
-            text = turn.get("text", "")
+            text = turn_text(turn)
 
             # Use dia_id as block ID. LoCoMo uses "D1:3" format.
             # Block parser needs [A-Z]+-... format, so prefix with DIA-.

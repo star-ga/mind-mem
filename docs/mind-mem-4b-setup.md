@@ -2,15 +2,15 @@
 
 > **Tool-surface drift as of 5.0.1 — read this before trusting the model on
 > surfaces.** The shipped v4 weights were trained against an 83-tool surface.
-> The live server now exposes **102**, so the model does not know the newest
+> The live server now exposes **107**, so the model does not know the newest
 > tools at all.
 >
 > **Correction (2026-09-01): this note said 96 and the published model card on
 > the hub said 84.** Both were wrong. 83 is measured — `count_mcp_tools.py`'s
-> AST rule, the one that produces the live 102, applied to
+> AST rule, the same rule that counts the live surface, applied to
 > `git show v4.1.1:src/mind_mem/mcp/`. The 84 was that revision's
-> *registration* total, which counts `recall` twice because it is registered
-> in both `public.py` and `recall.py` and exposed once.
+> *registration* total, which counts `recall` twice because at that revision
+> it was registered in both `public.py` and `recall.py` and exposed once.
 > `scripts/check_docs_alignment.py` recomputes it from the trained revision on
 > every CI run.
 >
@@ -25,7 +25,7 @@
 >
 > The number below is left at the trained-on 83 deliberately: it is a fact
 > about the WEIGHTS, not about the server, and editing it to the live count of
-> 102 would state something untrue about the model you are running. The
+> 107 would state something untrue about the model you are running. The
 > corpus is regenerated and the model retrained as a separate, sequenced
 > piece of work — and the corpus that
 > generated these weights described the pre-5.0.0 tree, so it needs

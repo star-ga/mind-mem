@@ -57,6 +57,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, ClassVar, Mapping, Sequence
 
+from .admissibility import admit_workspace_blocks
 from .frame_fields import (
     MAX_PROSE_ENTRIES,
     STEP_STATUSES,
@@ -104,6 +105,10 @@ DEFAULT_DEAD_END_FILES: tuple[str, ...] = ("frames/DEAD-ENDS.md",)
 DEFAULT_MAX_WARNINGS = 5
 
 #: Statuses that keep a frame live.  Anything else is parsed but ignored.
+#:
+#: A LIFECYCLE refinement over blocks the shared admission filter already
+#: admitted — never the admission decision itself.  Every member must be a
+#: status admission recognises (pinned by test_admission_routing_read_legs).
 _LIVE_STATUSES = frozenset({"", "active", "wip", "doing"})
 
 # ---------------------------------------------------------------------------
@@ -320,7 +325,9 @@ def load_task_frames_with_rejections(
     policy = policy or FramePolicy()
     found: dict[str, TaskFrame] = {}
     refused: dict[str, RejectedBlock] = {}
-    for raw in load_blocks(workspace, policy.frame_sources, TASK_FRAME_ID_PREFIX):
+    # ADMISSION GATE, the shared one: ``is_live`` below only refines the
+    # lifecycle of what the admission filter already let through.
+    for raw in admit_workspace_blocks(load_blocks(workspace, policy.frame_sources, TASK_FRAME_ID_PREFIX), workspace=workspace):
         source = str(raw.get("_source_file", ""))
         try:
             frame = parse_task_frame_block(raw)

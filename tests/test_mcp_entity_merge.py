@@ -30,6 +30,13 @@ def ws(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     (workspace / "decisions").mkdir(parents=True)
     (workspace / "decisions" / "DECISIONS.md").write_text("# decisions\n", encoding="utf-8")
+    # These tests exercise merge governance, not the namespace ACL: the fixture
+    # principals are granted every namespace so they hold a whole view of the corpus.
+    every = ["shared", "agents", "decisions", "tasks", "entities", "intelligence", "memory"]
+    grants = {"namespaces": every, "read": every, "write": every}
+    (workspace / "mind-mem-acl.json").write_text(
+        json.dumps({"default_policy": "deny", "agents": {name: grants for name in ("fixture-user", "fixture-admin")}}), encoding="utf-8"
+    )
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(workspace))
     monkeypatch.delenv("MIND_MEM_SCOPE", raising=False)
     monkeypatch.delenv("MIND_MEM_ACL_DISABLED", raising=False)

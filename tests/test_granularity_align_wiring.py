@@ -114,12 +114,19 @@ BLOCK_A = "DEC-20200101-001"
 BLOCK_B = "DEC-20200101-002"
 BLOCK_C = "DEC-20200101-003"
 BLOCK_D = "DEC-20200101-004"
+BLOCK_E = "DEC-20200101-005"
+BLOCK_F = "DEC-20200101-006"
 
+# Merge candidates are exact duplicates (only spacing and a trailing full stop
+# may differ); differently worded look-alikes (E/F, similarity 0.92) are
+# reported in ``similar_pairs`` and are never merge candidates.
 CORPUS: tuple[tuple[str, str], ...] = (
     (BLOCK_A, "use Q16.16 fixed-point arithmetic for deterministic scoring across substrates"),
-    (BLOCK_B, "all scoring must use fixed-point Q16.16 arithmetic for deterministic scoring across every substrate"),
+    (BLOCK_B, "use Q16.16 fixed-point arithmetic for  deterministic scoring across substrates."),
     (BLOCK_C, "the release workflow publishes wheels to PyPI on tag push"),
-    (BLOCK_D, "release workflow publishes the wheels on a tag push to PyPI"),
+    (BLOCK_D, "the release workflow publishes wheels to PyPI on tag push."),
+    (BLOCK_E, "nightly deterministic scoring audit of q16 fixed-point arithmetic across substrates"),
+    (BLOCK_F, "nightly deterministic scoring audit runs q16 fixed-point arithmetic checks across substrates"),
 )
 
 
@@ -205,15 +212,20 @@ class TestMergeCandidatesReachThePlan:
         _write_config(indexed_workspace, {"enabled": True})
         section = _plan(indexed_workspace)["granularity_align"]
 
-        assert section["scanned_blocks"] == 4
+        assert section["scanned_blocks"] == 6
         pairs = {(c["id_a"], c["id_b"]) for c in section["candidates"]}
         assert pairs == {(BLOCK_C, BLOCK_D), (BLOCK_A, BLOCK_B)}
 
-        # Descending similarity is the module's own ordering contract.
+        # Descending similarity is the module's own ordering contract; exact
+        # duplicates score as near-identical.
         sims = [c["similarity"] for c in section["candidates"]]
         assert sims == sorted(sims, reverse=True)
-        assert sims[0] > 0.99  # near-identical restatement
-        assert 0.75 <= sims[1] < 0.95  # same claim, different abstraction
+        assert all(sim > 0.99 for sim in sims)
+
+        # The reworded look-alike is surfaced for a reviewer, not proposed for merge.
+        similar = {(p["id_a"], p["id_b"]): p["similarity"] for p in section["similar_pairs"]}
+        assert 0.75 <= similar[(BLOCK_E, BLOCK_F)] < 0.95
+        assert (BLOCK_E, BLOCK_F) not in pairs
 
     def test_each_candidate_carries_the_merged_block(self, indexed_workspace) -> None:
         """``merge_blocks`` runs too — the section is actionable, not a hint."""
@@ -230,13 +242,14 @@ class TestMergeCandidatesReachThePlan:
         assert merged["statement"] == dict(CORPUS)[BLOCK_B]
 
     def test_threshold_from_config_drives_the_candidate_set(self, indexed_workspace) -> None:
-        """The configured threshold reaches ``find_merge_candidates`` itself."""
+        """The configured threshold reaches the module: look-alikes below it drop out."""
         _write_config(indexed_workspace, {"enabled": True, "min_similarity": 0.95})
         section = _plan(indexed_workspace)["granularity_align"]
 
         assert section["min_similarity"] == 0.95
-        # Only the near-identical pair survives a 0.95 threshold.
-        assert [(c["id_a"], c["id_b"]) for c in section["candidates"]] == [(BLOCK_C, BLOCK_D)]
+        assert {(c["id_a"], c["id_b"]) for c in section["candidates"]} == {(BLOCK_A, BLOCK_B), (BLOCK_C, BLOCK_D)}
+        # The 0.92 look-alike (and every weaker pair) is below 0.95.
+        assert section["similar_pairs"] == []
 
     def test_an_out_of_range_threshold_falls_back_to_the_default(self, indexed_workspace) -> None:
         _write_config(indexed_workspace, {"enabled": True, "min_similarity": "loose"})
@@ -252,7 +265,8 @@ class TestMergeCandidatesReachThePlan:
         section = _plan(indexed_workspace)["granularity_align"]
 
         assert section["max_candidates"] == 1
-        assert [(c["id_a"], c["id_b"]) for c in section["candidates"]] == [(BLOCK_C, BLOCK_D)]
+        # Equal similarity: the deterministic id-pair tie-break keeps A/B.
+        assert [(c["id_a"], c["id_b"]) for c in section["candidates"]] == [(BLOCK_A, BLOCK_B)]
 
     def test_block_scan_is_bounded_and_says_so(self, indexed_workspace) -> None:
         """An O(n^2) comparison over an unbounded corpus is a DoS, not a feature."""
@@ -298,7 +312,7 @@ class TestMergeCandidatesReachThePlan:
         _write_config(indexed_workspace, {"enabled": True})
         section = _plan(indexed_workspace)["granularity_align"]
 
-        assert section["scanned_blocks"] == 4
+        assert section["scanned_blocks"] == 6
         ids = {c["id_a"] for c in section["candidates"]} | {c["id_b"] for c in section["candidates"]}
         assert "FACT-1" not in ids
 

@@ -1,0 +1,950 @@
+[
+ {
+  "id": "sign1",
+  "new": "The margin is -5%",
+  "old": "The margin is -10%",
+  "changed": true
+ },
+ {
+  "id": "sign2",
+  "new": "The margin is -5%",
+  "old": "The margin is 5%",
+  "changed": true
+ },
+ {
+  "id": "sign3",
+  "new": "Freezer is set to -18 degrees",
+  "old": "Freezer is set to -20 degrees",
+  "changed": true
+ },
+ {
+  "id": "sign4",
+  "new": "Freezer is set to -18 degrees",
+  "old": "Freezer is set to 18 degrees",
+  "changed": true
+ },
+ {
+  "id": "range%1",
+  "new": "The discount is 5-10%",
+  "old": "The discount is 5-15%",
+  "changed": true
+ },
+ {
+  "id": "range%2",
+  "new": "The discount is 5 - 10%",
+  "old": "The discount is 5 - 15%",
+  "changed": true
+ },
+ {
+  "id": "range%3",
+  "new": "Growth target is 5–10%",
+  "old": "Growth target is 5–12%",
+  "changed": true
+ },
+ {
+  "id": "hyph1",
+  "new": "Re-sign the lease with Bob on Tuesday",
+  "old": "Re-sign the lease with Bob on Thursday",
+  "changed": true
+ },
+ {
+  "id": "hyph2",
+  "new": "Server node-5 is down",
+  "old": "Server node-6 is down",
+  "changed": false
+ },
+ {
+  "id": "hyph3",
+  "new": "Use port 8080 on host web-01",
+  "old": "Use port 8080 on host web-02",
+  "changed": false
+ },
+ {
+  "id": "hyph5",
+  "new": "Ticket INV-10% applies to Bob",
+  "old": "Ticket INV-12% applies to Bob",
+  "changed": false
+ },
+ {
+  "id": "hyph6",
+  "new": "Floor -1 is parking",
+  "old": "Floor -2 is parking",
+  "changed": false
+ },
+ {
+  "id": "hyph7",
+  "new": "Error code is -1",
+  "old": "Error code is -2",
+  "changed": false
+ },
+ {
+  "id": "hyph8",
+  "new": "Locker 5-10 belongs to Ilona",
+  "old": "Locker 5-12 belongs to Ilona",
+  "changed": false
+ },
+ {
+  "id": "hyph9",
+  "new": "Temperature range is -5 to 5 degrees",
+  "old": "Temperature range is -10 to 5 degrees",
+  "changed": true
+ },
+ {
+  "id": "hyph10",
+  "new": "Alice lives at 12-14 Elm Street",
+  "old": "Alice lives at 12-16 Elm Street",
+  "changed": false
+ },
+ {
+  "id": "hyph11",
+  "new": "Call me on Tuesday-ish",
+  "old": "Call me on Thursday-ish",
+  "changed": true
+ },
+ {
+  "id": "hyph12",
+  "new": "Gate A-5 opens at 9am",
+  "old": "Gate A-6 opens at 9am",
+  "changed": false
+ },
+ {
+  "id": "hyph13",
+  "new": "Balance went from 5 to -5 USD",
+  "old": "Balance went from 5 to -7 USD",
+  "changed": true
+ },
+ {
+  "id": "cur1",
+  "new": "Budget is $5,000",
+  "old": "Budget is $6,000",
+  "changed": true
+ },
+ {
+  "id": "cur2",
+  "new": "Budget is $5000",
+  "old": "Budget is $5,000",
+  "changed": false
+ },
+ {
+  "id": "cur3",
+  "new": "Budget is 5000 dollars",
+  "old": "Budget is 6000 dollars",
+  "changed": true
+ },
+ {
+  "id": "cur4",
+  "new": "Budget is 5.000 €",
+  "old": "Budget is 6.000 €",
+  "changed": true
+ },
+ {
+  "id": "cur5",
+  "new": "Budget is €5k",
+  "old": "Budget is €6k",
+  "changed": true
+ },
+ {
+  "id": "cur6",
+  "new": "Budget is USD 5000",
+  "old": "Budget is 5000 USD",
+  "changed": false
+ },
+ {
+  "id": "cur7",
+  "new": "Refund is -$50",
+  "old": "Refund is -$60",
+  "changed": true
+ },
+ {
+  "id": "cur8",
+  "new": "Fee is 10 euros",
+  "old": "Fee is 12 euros",
+  "changed": true
+ },
+ {
+  "id": "cur9",
+  "new": "Fee is CHF 10",
+  "old": "Fee is CHF 12",
+  "changed": true
+ },
+ {
+  "id": "cur10",
+  "new": "Fee is Rs 500",
+  "old": "Fee is Rs 600",
+  "changed": true
+ },
+ {
+  "id": "cur11",
+  "new": "Fee is US$5",
+  "old": "Fee is US$6",
+  "changed": true
+ },
+ {
+  "id": "cur12",
+  "new": "Fee is 100 kr",
+  "old": "Fee is 120 kr",
+  "changed": true
+ },
+ {
+  "id": "cur13",
+  "new": "Fee is 50 zł",
+  "old": "Fee is 60 zł",
+  "changed": true
+ },
+ {
+  "id": "cur14",
+  "new": "Fee is ¥500",
+  "old": "Fee is ¥600",
+  "changed": true
+ },
+ {
+  "id": "cur15",
+  "new": "Fee is 500円",
+  "old": "Fee is 600円",
+  "changed": true
+ },
+ {
+  "id": "cur16",
+  "new": "Fee is $5 million",
+  "old": "Fee is $6 million",
+  "changed": true
+ },
+ {
+  "id": "cur17",
+  "new": "Fee is $5",
+  "old": "Fee is $5.00",
+  "changed": false
+ },
+ {
+  "id": "cur18",
+  "new": "Budget $5000",
+  "old": "Budget $6000",
+  "changed": true
+ },
+ {
+  "id": "cur19",
+  "new": "Price is 5 bucks",
+  "old": "Price is 6 bucks",
+  "changed": true
+ },
+ {
+  "id": "cur20",
+  "new": "Fee is £5",
+  "old": "Fee is €5",
+  "changed": true
+ },
+ {
+  "id": "cur21",
+  "new": "Fee is $5",
+  "old": "Fee is -$5",
+  "changed": true
+ },
+ {
+  "id": "cur22",
+  "new": "Fee is 5 GBP",
+  "old": "Fee is 5 EUR",
+  "changed": true
+ },
+ {
+  "id": "pct1",
+  "new": "Tax is 5 percent",
+  "old": "Tax is 6 percent",
+  "changed": true
+ },
+ {
+  "id": "pct2",
+  "new": "Tax is 5 per cent",
+  "old": "Tax is 6 per cent",
+  "changed": true
+ },
+ {
+  "id": "pct3",
+  "new": "Tax is 5 pct",
+  "old": "Tax is 6 pct",
+  "changed": true
+ },
+ {
+  "id": "pct4",
+  "new": "Tax is 5%",
+  "old": "Tax is 5 percent",
+  "changed": false
+ },
+ {
+  "id": "pct5",
+  "new": "Tax is 5％",
+  "old": "Tax is 6％",
+  "changed": true
+ },
+ {
+  "id": "deg1",
+  "new": "Set thermostat to 21°C",
+  "old": "Set thermostat to 22°C",
+  "changed": true
+ },
+ {
+  "id": "deg2",
+  "new": "Set thermostat to 21 ℃",
+  "old": "Set thermostat to 22 ℃",
+  "changed": true
+ },
+ {
+  "id": "deg3",
+  "new": "Set thermostat to 21C",
+  "old": "Set thermostat to 22C",
+  "changed": true
+ },
+ {
+  "id": "deg4",
+  "new": "Set thermostat to 21°C",
+  "old": "Set thermostat to 21°F",
+  "changed": true
+ },
+ {
+  "id": "deg5",
+  "new": "Turn the valve 90 degrees",
+  "old": "Turn the valve 45 degrees",
+  "changed": true
+ },
+ {
+  "id": "deg6",
+  "new": "Set thermostat to 21 °C",
+  "old": "Set thermostat to 21°C",
+  "changed": false
+ },
+ {
+  "id": "dur1",
+  "new": "The call lasts 30 minutes",
+  "old": "The call lasts 45 minutes",
+  "changed": true
+ },
+ {
+  "id": "dur2",
+  "new": "The call lasts 30 min",
+  "old": "The call lasts 45 min",
+  "changed": true
+ },
+ {
+  "id": "dur3",
+  "new": "The call lasts 30min",
+  "old": "The call lasts 45min",
+  "changed": true
+ },
+ {
+  "id": "dur4",
+  "new": "The call lasts 1h",
+  "old": "The call lasts 2h",
+  "changed": true
+ },
+ {
+  "id": "ver1",
+  "new": "Prod runs 1.2.4",
+  "old": "Prod runs 1.2.5",
+  "changed": true
+ },
+ {
+  "id": "ver2",
+  "new": "Use Python 3.12",
+  "old": "Use Python 3.13",
+  "changed": true
+ },
+ {
+  "id": "ver3",
+  "new": "use python 3.12",
+  "old": "use python 3.13",
+  "changed": true
+ },
+ {
+  "id": "ver4",
+  "new": "Release 10.8 is out",
+  "old": "Release 10.9 is out",
+  "changed": false
+ },
+ {
+  "id": "ver5",
+  "new": "Python 3.12 is released",
+  "old": "Python 3.13 is released",
+  "changed": false
+ },
+ {
+  "id": "ver6",
+  "new": "MIND-Mem 5.0.3 is out",
+  "old": "MIND-Mem 5.0.4 is out",
+  "changed": false
+ },
+ {
+  "id": "ver7",
+  "new": "1.2.4 is deployed to prod",
+  "old": "1.2.5 is deployed to prod",
+  "changed": false
+ },
+ {
+  "id": "ver8",
+  "new": "Section 1.2.3 covers refunds",
+  "old": "Section 1.2.4 covers refunds",
+  "changed": false
+ },
+ {
+  "id": "ver9",
+  "new": "Prod runs v1.2",
+  "old": "Prod runs v1.3",
+  "changed": true
+ },
+ {
+  "id": "ver11",
+  "new": "Prod runs 1.2.4",
+  "old": "Prod runs 1.2.4-rc1",
+  "changed": true
+ },
+ {
+  "id": "ver12",
+  "new": "We upgraded to 2.0",
+  "old": "We upgraded to 3.0",
+  "changed": true
+ },
+ {
+  "id": "ver13",
+  "new": "Pin numpy 1.26",
+  "old": "Pin numpy 2.0",
+  "changed": true
+ },
+ {
+  "id": "ver14",
+  "new": "Prod runs Postgres 16.2",
+  "old": "Prod runs Postgres 16.3",
+  "changed": true
+ },
+ {
+  "id": "ver15",
+  "new": "Install package version 2.1",
+  "old": "Install package version 2.2",
+  "changed": true
+ },
+ {
+  "id": "ver16",
+  "new": "Bob uses Python 3.12",
+  "old": "Alice uses Python 3.12",
+  "changed": false
+ },
+ {
+  "id": "ver17",
+  "new": "Version 2.1 adds dark mode",
+  "old": "Version 2.2 adds dark mode",
+  "changed": false
+ },
+ {
+  "id": "noon1",
+  "new": "Lunch is at noon",
+  "old": "Lunch is at 12:00",
+  "changed": false
+ },
+ {
+  "id": "noon2",
+  "new": "Lunch is at noon",
+  "old": "Lunch is at 12pm",
+  "changed": false
+ },
+ {
+  "id": "noon3",
+  "new": "Lunch is at noon",
+  "old": "Lunch is at 1pm",
+  "changed": true
+ },
+ {
+  "id": "noon4",
+  "new": "Lunch is at 12 noon",
+  "old": "Lunch is at 1pm",
+  "changed": true
+ },
+ {
+  "id": "mid1",
+  "new": "Backup runs at midnight",
+  "old": "Backup runs at 00:00",
+  "changed": false
+ },
+ {
+  "id": "mid2",
+  "new": "Backup runs at midnight",
+  "old": "Backup runs at 24:00",
+  "changed": false
+ },
+ {
+  "id": "mid3",
+  "new": "Backup runs at midnight",
+  "old": "Backup runs at 12am",
+  "changed": false
+ },
+ {
+  "id": "mid4",
+  "new": "Backup runs at midnight",
+  "old": "Backup runs at noon",
+  "changed": true
+ },
+ {
+  "id": "mid5",
+  "new": "Backup runs at 24:00",
+  "old": "Backup runs at 23:00",
+  "changed": true
+ },
+ {
+  "id": "mid6",
+  "new": "Backup runs at 12 midnight",
+  "old": "Backup runs at 1am",
+  "changed": true
+ },
+ {
+  "id": "mid7",
+  "new": "Backup runs at 00:00",
+  "old": "Backup runs at 12:00",
+  "changed": true
+ },
+ {
+  "id": "mid8",
+  "new": "Backup runs at 0:00",
+  "old": "Backup runs at 00:00",
+  "changed": false
+ },
+ {
+  "id": "mid9",
+  "new": "Midnight Oil is the band",
+  "old": "Noon Oil is the band",
+  "changed": false
+ },
+ {
+  "id": "de1",
+  "new": "Das Meeting ist am Dienstag",
+  "old": "Das Meeting ist am Donnerstag",
+  "changed": true
+ },
+ {
+  "id": "de2",
+  "new": "Das Meeting ist um 10 Uhr",
+  "old": "Das Meeting ist um 11 Uhr",
+  "changed": true
+ },
+ {
+  "id": "de3",
+  "new": "Um 10 Uhr ist das Meeting",
+  "old": "Um 11 Uhr ist das Meeting",
+  "changed": true
+ },
+ {
+  "id": "de4",
+  "new": "Das Meeting ist am 9. Oktober",
+  "old": "Das Meeting ist am 10. Oktober",
+  "changed": true
+ },
+ {
+  "id": "de5",
+  "new": "Das Meeting ist am 9.10.",
+  "old": "Das Meeting ist am 10.10.",
+  "changed": true
+ },
+ {
+  "id": "de6",
+  "new": "Das Meeting ist dienstags",
+  "old": "Das Meeting ist donnerstags",
+  "changed": true
+ },
+ {
+  "id": "de7",
+  "new": "Das Meeting ist im Mai",
+  "old": "Das Meeting ist im Juni",
+  "changed": true
+ },
+ {
+  "id": "de8",
+  "new": "Das Meeting ist am Dienstag um 10:30",
+  "old": "Das Meeting ist am Dienstag um 11:30",
+  "changed": true
+ },
+ {
+  "id": "de9",
+  "new": "Das Meeting ist um halb zehn",
+  "old": "Das Meeting ist um halb elf",
+  "changed": true
+ },
+ {
+  "id": "nl1",
+  "new": "De vergadering is op dinsdag",
+  "old": "De vergadering is op donderdag",
+  "changed": true
+ },
+ {
+  "id": "nl2",
+  "new": "De vergadering is om 10 uur",
+  "old": "De vergadering is om 11 uur",
+  "changed": true
+ },
+ {
+  "id": "nl3",
+  "new": "De vergadering is op 9 oktober",
+  "old": "De vergadering is op 10 oktober",
+  "changed": true
+ },
+ {
+  "id": "sv1",
+  "new": "Mötet är på tisdag",
+  "old": "Mötet är på torsdag",
+  "changed": true
+ },
+ {
+  "id": "sv2",
+  "new": "Mötet är klockan 10",
+  "old": "Mötet är klockan 11",
+  "changed": true
+ },
+ {
+  "id": "sv3",
+  "new": "Mötet är tisdagen den 9 oktober",
+  "old": "Mötet är torsdagen den 9 oktober",
+  "changed": true
+ },
+ {
+  "id": "sv4",
+  "new": "Mötet är i mars",
+  "old": "Mötet är i maj",
+  "changed": true
+ },
+ {
+  "id": "pl1",
+  "new": "Spotkanie jest we wtorek",
+  "old": "Spotkanie jest w czwartek",
+  "changed": true
+ },
+ {
+  "id": "pl2",
+  "new": "Spotkanie jest w środę",
+  "old": "Spotkanie jest w piątek",
+  "changed": true
+ },
+ {
+  "id": "pl3",
+  "new": "Spotkanie jest w sobotę",
+  "old": "Spotkanie jest w niedzielę",
+  "changed": true
+ },
+ {
+  "id": "pl4",
+  "new": "Spotkanie jest 9 października",
+  "old": "Spotkanie jest 10 października",
+  "changed": true
+ },
+ {
+  "id": "pl5",
+  "new": "Spotkanie jest w maju",
+  "old": "Spotkanie jest w czerwcu",
+  "changed": true
+ },
+ {
+  "id": "tr1",
+  "new": "Toplantı salı günü",
+  "old": "Toplantı perşembe günü",
+  "changed": true
+ },
+ {
+  "id": "tr2",
+  "new": "Toplantı Salı'ya taşındı",
+  "old": "Toplantı Perşembe'ye taşındı",
+  "changed": true
+ },
+ {
+  "id": "tr3",
+  "new": "Toplantı cuma günü",
+  "old": "Toplantı cumartesi günü",
+  "changed": true
+ },
+ {
+  "id": "tr4",
+  "new": "Toplantı pazar günü",
+  "old": "Toplantı pazartesi günü",
+  "changed": true
+ },
+ {
+  "id": "tr5",
+  "new": "Toplantı 9 Ekim'de",
+  "old": "Toplantı 10 Ekim'de",
+  "changed": true
+ },
+ {
+  "id": "ru1",
+  "new": "Встреча во вторник",
+  "old": "Встреча в четверг",
+  "changed": true
+ },
+ {
+  "id": "ru2",
+  "new": "Встреча в среду",
+  "old": "Встреча в пятницу",
+  "changed": true
+ },
+ {
+  "id": "ru3",
+  "new": "Встреча в субботу",
+  "old": "Встреча в воскресенье",
+  "changed": true
+ },
+ {
+  "id": "ru4",
+  "new": "Встреча 9 октября",
+  "old": "Встреча 10 октября",
+  "changed": true
+ },
+ {
+  "id": "ru5",
+  "new": "Встреча в 10 часов",
+  "old": "Встреча в 11 часов",
+  "changed": true
+ },
+ {
+  "id": "ru6",
+  "new": "Встреча в 10:00",
+  "old": "Встреча в 11:00",
+  "changed": true
+ },
+ {
+  "id": "ja1",
+  "new": "会議は火曜日です",
+  "old": "会議は木曜日です",
+  "changed": true
+ },
+ {
+  "id": "ja2",
+  "new": "会議は10月9日です",
+  "old": "会議は10月10日です",
+  "changed": true
+ },
+ {
+  "id": "ja3",
+  "new": "会議は午前10時です",
+  "old": "会議は午後10時です",
+  "changed": true
+ },
+ {
+  "id": "ja4",
+  "new": "会議は10時30分です",
+  "old": "会議は11時30分です",
+  "changed": true
+ },
+ {
+  "id": "ja5",
+  "new": "田中さんの会議は火曜日です",
+  "old": "佐藤さんの会議は火曜日です",
+  "changed": false
+ },
+ {
+  "id": "ja6",
+  "new": "会議は火曜日です",
+  "old": "会議は火曜です",
+  "changed": false
+ },
+ {
+  "id": "ko1",
+  "new": "회의는 화요일에 있습니다",
+  "old": "회의는 목요일에 있습니다",
+  "changed": true
+ },
+ {
+  "id": "ko2",
+  "new": "회의는 10월 9일입니다",
+  "old": "회의는 10월 10일입니다",
+  "changed": true
+ },
+ {
+  "id": "ko3",
+  "new": "회의는 오전 10시입니다",
+  "old": "회의는 오후 10시입니다",
+  "changed": true
+ },
+ {
+  "id": "ko4",
+  "new": "김씨 회의는 화요일에 있습니다",
+  "old": "박씨 회의는 화요일에 있습니다",
+  "changed": false
+ },
+ {
+  "id": "ff1",
+  "new": "The rover lands on Mars on Tuesday",
+  "old": "The rover lands on Venus on Tuesday",
+  "changed": false
+ },
+ {
+  "id": "ff2",
+  "new": "Mars bars are on sale Tuesday",
+  "old": "Mars bars are on sale Thursday",
+  "changed": true
+ },
+ {
+  "id": "ff3",
+  "new": "Call Mai on Tuesday",
+  "old": "Call May on Thursday",
+  "changed": false
+ },
+ {
+  "id": "ff4",
+  "new": "Buy fruit at the pazar on Monday",
+  "old": "Buy fruit at the bazaar on Monday",
+  "changed": false
+ },
+ {
+  "id": "ff5",
+  "new": "Cuma Ali leads the team on Monday",
+  "old": "Cuma Ali leads the team on Tuesday",
+  "changed": true
+ },
+ {
+  "id": "ff6",
+  "new": "The salı key is in drawer 5",
+  "old": "The salı key is in drawer 6",
+  "changed": false
+ },
+ {
+  "id": "ff7",
+  "new": "Mars Inc pays on Tuesday",
+  "old": "May Inc pays on Thursday",
+  "changed": false
+ },
+ {
+  "id": "ff8",
+  "new": "Mai Tran meets Bob at 10am",
+  "old": "May Tran meets Bob at 11am",
+  "changed": false
+ },
+ {
+  "id": "ff10",
+  "new": "The Mars team meets at 10am",
+  "old": "The March team meets at 10am",
+  "changed": false
+ },
+ {
+  "id": "ff12",
+  "new": "Pazar Street office opens at 9am",
+  "old": "Pazar Street office opens at 10am",
+  "changed": true
+ },
+ {
+  "id": "ff13",
+  "new": "Bob works at Mars",
+  "old": "Bob works at Pazar",
+  "changed": false
+ },
+ {
+  "id": "ff14",
+  "new": "Bob works at Mars on Monday",
+  "old": "Bob works at Pazar on Monday",
+  "changed": false
+ },
+ {
+  "id": "ff15",
+  "new": "Lunch with Juni at noon",
+  "old": "Lunch with Juli at noon",
+  "changed": false
+ },
+ {
+  "id": "ff16",
+  "new": "Lunch with Maj on Monday",
+  "old": "Lunch with Maja on Monday",
+  "changed": false
+ },
+ {
+  "id": "nf1",
+  "new": "The ﬁnal review is on Tuesday",
+  "old": "The final review is on Thursday",
+  "changed": true
+ },
+ {
+  "id": "nf2",
+  "new": "Area is 10 m²",
+  "old": "Area is 10 m³",
+  "changed": false
+ },
+ {
+  "id": "nf3",
+  "new": "The rate is 10²",
+  "old": "The rate is 102",
+  "changed": false
+ },
+ {
+  "id": "nf4",
+  "new": "Meeting at １０：００",
+  "old": "Meeting at 11:00",
+  "changed": true
+ },
+ {
+  "id": "nf5",
+  "new": "Meeting at １０：００",
+  "old": "Meeting at 10:00",
+  "changed": false
+ },
+ {
+  "id": "nf6",
+  "new": "Step ① runs on Tuesday",
+  "old": "Step ② runs on Tuesday",
+  "changed": false
+ },
+ {
+  "id": "nf7",
+  "new": "Revenue grew 5%¹",
+  "old": "Revenue grew 5%²",
+  "changed": false
+ },
+ {
+  "id": "nf8",
+  "new": "Bob has x² apples on Tuesday",
+  "old": "Bob has x2 apples on Thursday",
+  "changed": true
+ },
+ {
+  "id": "base1",
+  "new": "The standup is on Tuesday at 10am",
+  "old": "The standup is on Thursday at 10am",
+  "changed": true
+ },
+ {
+  "id": "base2",
+  "new": "Ilona's call is on Tuesday",
+  "old": "Bob's call is on Tuesday",
+  "changed": false
+ },
+ {
+  "id": "base3",
+  "new": "The train is at 9:00",
+  "old": "The train is at 8:00",
+  "changed": true
+ },
+ {
+  "id": "base4",
+  "new": "Bob joined in 2019",
+  "old": "Bob joined in 2020",
+  "changed": true
+ },
+ {
+  "id": "base6",
+  "new": "Locker 12 is Bob's",
+  "old": "Locker 14 is Bob's",
+  "changed": false
+ },
+ {
+  "id": "base7",
+  "new": "Release 10.8 is out",
+  "old": "Release 10.8 is out",
+  "changed": false
+ },
+ {
+  "id": "base8",
+  "new": "The office is at 14 Elm Street",
+  "old": "The office is at 16 Elm Street",
+  "changed": false
+ },
+ {
+  "id": "base9",
+  "new": "Team of 12 people",
+  "old": "Team of 14 people",
+  "changed": true
+ },
+ {
+  "id": "base10",
+  "new": "The call is not on Tuesday",
+  "old": "The call is on Tuesday",
+  "changed": true
+ }
+]

@@ -23,7 +23,7 @@ import os
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger, metrics
+from ._helpers import _read_scope_or_denied, _workspace_view_denied, get_logger, metrics
 
 _log = get_logger("mcp_server")
 
@@ -57,6 +57,14 @@ def verify_merkle(block_id: str, content_hash: str) -> str:
         return json.dumps({"ok": False, "error": "block_id must be a non-empty string"})
     if not isinstance(content_hash, str) or not content_hash.strip():
         return json.dumps({"ok": False, "error": "content_hash must be a non-empty string"})
+    # An inclusion proof carries the sibling hashes of neighbouring blocks, and
+    # "ok" confirms a guessed content hash: both are oracles over blocks the
+    # caller may not read. The tree spans the whole corpus, so only a caller
+    # whose view is the whole corpus gets one; every other id, present or not,
+    # gets the same refusal.
+    denied = _workspace_view_denied(ws)
+    if denied is not None:
+        return denied
 
     try:
         from mind_mem.sqlite_index import merkle_leaves
@@ -118,6 +126,13 @@ def mind_mem_verify(snapshot: str = "") -> str:
     if ws_err:
         return ws_err
 
+    # Ledger lengths, per-check counts and hash-chain heads span every
+    # namespace and cannot be scoped after the fact: only a caller whose view
+    # IS the workspace gets them.
+    denied = _workspace_view_denied(ws)
+    if denied is not None:
+        return denied
+
     snap = snapshot.strip() or None
     if snap is not None:
         if len(snap) > 512:
@@ -130,7 +145,26 @@ def mind_mem_verify(snapshot: str = "") -> str:
     report = verify_workspace(ws, snapshot=snap)
     envelope = report.as_dict()
     envelope["_schema_version"] = "1.0"
-    return json.dumps(envelope, indent=2)
+    return _without_host_paths(json.dumps(envelope, indent=2), ws)
+
+
+def _without_host_paths(body: str, ws: str) -> str:
+    """Replace the absolute workspace path in *body* unless the caller is an admin.
+
+    The verifier reports the workspace it ran against, and some check
+    messages quote file paths under it. At user scope that is a free
+    filesystem-layout disclosure, so it is replaced by ``<workspace>``.
+    """
+    from mind_mem.mcp.infra.acl import request_has_admin_scope
+
+    if request_has_admin_scope():
+        return body
+    for variant in dict.fromkeys((os.path.realpath(ws), os.path.abspath(ws), ws)):
+        if variant:
+            # The path may sit in the body JSON-escaped (backslashes on Windows).
+            for form in dict.fromkeys((variant, json.dumps(variant)[1:-1])):
+                body = body.replace(form, "<workspace>")
+    return body
 
 
 #: Non-ledger checks :func:`~mind_mem.verify_cli.verify_workspace` also
@@ -197,12 +231,15 @@ def verify_chain() -> str:
         report = verify_workspace(ws)
     except Exception as exc:
         _log.warning("verify_chain_failed", error=str(exc))
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"Chain verification failed: {exc}",
-            },
-            indent=2,
+        return _without_host_paths(
+            json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "error": f"Chain verification failed: {exc}",
+                },
+                indent=2,
+            ),
+            ws,
         )
 
     # ``get`` defaults to False, not True: a ledger the verifier did not
@@ -233,7 +270,7 @@ def verify_chain() -> str:
         checks=dict(report.checks),
         missing=list(report.missing),
     )
-    return json.dumps(envelope, indent=2)
+    return _without_host_paths(json.dumps(envelope, indent=2), ws)
 
 
 @mcp_tool_observe
@@ -262,9 +299,16 @@ def list_evidence(
 
         gate = get_gate(ws)
         evidence = gate.evidence
+        scope, denied = _read_scope_or_denied(ws)
+        if denied is not None:
+            return denied
 
         if block_id:
-            records = evidence.get_evidence_for_block(block_id)
+            # An unreadable block id looks up a surrogate id that no record
+            # carries, so a denied id costs exactly what a missing one costs
+            # (no matching records to build, then discard).
+            readable = (not scope.restricted) or scope.allows(block_id)
+            records = evidence.get_evidence_for_block(block_id if readable else "\x01-unreadable-block")
         elif action:
             try:
                 ev_action = EvidenceAction(action.upper())
@@ -280,8 +324,11 @@ def list_evidence(
                 )
             records = evidence.get_evidence_by_action(ev_action)
         else:
-            records = evidence.get_latest(limit)
+            # a restricted caller's rows may sit anywhere in the chain: read it all, filter, then cut
+            records = evidence.get_latest(limit if not scope.restricted else 1_000_000)
 
+        # An evidence row names the block it acted on, its file and its actor.
+        records = scope.keep(records, key=lambda rec: rec.target_block_id)
         records = records[-limit:] if len(records) > limit else records
 
     except Exception as exc:

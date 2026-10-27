@@ -36,7 +36,7 @@ from mind_mem.v4.feature_flags import is_enabled_quiet as _v4_enabled_quiet
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import get_logger, metrics
+from ._helpers import _read_scope_or_denied, get_logger, metrics
 from ._helpers import traced as _traced
 
 _log = get_logger("mcp_server")
@@ -205,6 +205,7 @@ def propose_update(
     tool_id: str = "",
     purpose: str = "",
     content_source: str = "",
+    supersedes: str = "",
 ) -> str:
     """Propose a new decision or task. Writes to SIGNALS.md for human review.
 
@@ -230,6 +231,16 @@ def propose_update(
     with an error envelope and **nothing is written**. Omitting it leaves
     the field absent — there is no default, because stamping ``agent`` on
     an untagged proposal would invent a claim the caller never made.
+
+    Corrections: ``supersedes=<decision id>`` (``decision`` only) says the
+    statement replaces that live decision. Instead of a SIGNALS.md entry it
+    stages a ``supersede_decision`` proposal in
+    ``intelligence/proposed/EDITS_PROPOSED.md`` and returns its
+    ``proposal_id``; ``approve_apply`` then retires the old block
+    (``Status: superseded``, ``SupersededBy:`` the new id) in the same write
+    that adds the correction, so the old value never stays a second active
+    truth. A proposal without it that contradicts committed memory gets a
+    ``contradicts`` list whose ``supersedes`` field is the id to pass back.
     """
     ws = _workspace()
 
@@ -277,6 +288,18 @@ def propose_update(
 
     if block_type not in ("decision", "task"):
         return json.dumps({"error": f"block_type must be 'decision' or 'task', got '{block_type}'"})
+
+    if supersedes:
+        # Refused before screening or any write: a bad target must leave no
+        # signal, no staged proposal and no redaction-ledger entry behind.
+        if block_type != "decision":
+            return json.dumps({"error": "supersedes is only valid for block_type 'decision'", "block_type": block_type})
+        from mind_mem.apply_engine import SupersedeStagingError, resolve_supersede_target
+
+        try:
+            resolve_supersede_target(ws, supersedes)
+        except SupersedeStagingError as exc:
+            return json.dumps({"error": str(exc), "field": "supersedes"})
 
     rationale_length = sum(not char.isspace() for char in rationale)
     if rationale_length < 8:
@@ -416,7 +439,14 @@ def propose_update(
         # `recent` is what makes rule 6 (near_duplicate) run at all. Without
         # it the rule reports as skipped and a re-proposal that is 97%+
         # identical to one staged an hour ago sails through.
-        _qg_verdict = validate_block(statement, strict=_qg_is_strict, recent=_recent_statements(ws))
+        _qg_recent = _recent_statements(ws)
+        if supersedes:
+            # Re-proposing a contradicted statement as a supersession is the
+            # documented next step, not a near-duplicate: drop the caller's own
+            # identical prior. The staged proposal is fingerprint-deduped.
+            _qg_norm = " ".join(statement.split())
+            _qg_recent = [(text, ts) for text, ts in _qg_recent if " ".join(text.split()) != _qg_norm]
+        _qg_verdict = validate_block(statement, strict=_qg_is_strict, recent=_qg_recent)
         if not _qg_verdict.accept:
             # Increment aggregate rejection counter.
             metrics.inc("quality_gate_rejections")
@@ -533,6 +563,9 @@ def propose_update(
 
     statement = statement[:500]
 
+    if supersedes:
+        return _stage_supersede(ws, supersedes, statement, rationale, raw_tags, provenance)
+
     signal = {
         "line": 0,
         "type": block_type,
@@ -569,7 +602,87 @@ def propose_update(
     }
     if provenance:
         response["provenance_attached"] = sorted(provenance)
+    contradicts = _committed_contradictions(ws, {"Statement": statement})
+    if contradicts:
+        # Present only when a committed memory states a different value for
+        # the same fact, so the reviewer sees the conflict at proposal time
+        # (a correction should be applied as a supersede, not as a second truth).
+        response["contradicts"] = contradicts
+        response["next_step"] = _SUPERSEDE_HINT.format(block_id=contradicts[0]["block_id"])
     return json.dumps(response, indent=2)
+
+
+_SUPERSEDE_HINT = (
+    "This statement contradicts committed memory. If it is a correction, call propose_update again with "
+    "supersedes='{block_id}' (each contradicts entry names its id) so the old block is retired, "
+    "not kept as a second active truth; approve_apply blocks this proposal while the contradiction stands."
+)
+
+
+def _stage_supersede(
+    ws: str,
+    target: str,
+    statement: str,
+    rationale: str,
+    tags: list[str],
+    provenance: dict[str, str],
+) -> str:
+    """Stage ``supersede_decision`` for a screened correction; the MCP envelope.
+
+    The contradiction report is computed on the staged proposal itself -- the
+    same dict ``approve_apply`` will re-read -- so propose time and apply time
+    give the same verdict. The retired target is not in it: that conflict is
+    the one this proposal resolves.
+    """
+    from mind_mem.apply_engine import SupersedeStagingError, stage_supersede_decision
+    from mind_mem.block_provenance import PROVENANCE_FIELDS
+
+    fields = {PROVENANCE_FIELDS[key]: value for key, value in provenance.items()}
+    try:
+        proposal = stage_supersede_decision(ws, target=target, statement=statement, rationale=rationale, tags=tags, provenance=fields)
+    except SupersedeStagingError as exc:
+        return json.dumps({"error": str(exc), "field": "supersedes"})
+    metrics.inc("mcp_proposals")
+    _log.info("mcp_propose_supersede", target=target, proposal_id=proposal["ProposalId"])
+    _invalidate_recall_cache()
+    new_id = parse_blocks(proposal["Ops"][0]["patch"])[0]["_id"]
+    response: dict[str, Any] = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "status": "staged",
+        "proposal_id": proposal["ProposalId"],
+        "operation": "supersede_decision",
+        "target_block": target,
+        "new_block": new_id,
+        "location": "intelligence/proposed/EDITS_PROPOSED.md",
+        "next_step": f"Review, then approve_apply('{proposal['ProposalId']}', dry_run=False).",
+        "safety": f"Staged only. {target} stays active until approve_apply retires it.",
+    }
+    if provenance:
+        response["provenance_attached"] = sorted(provenance)
+    contradicts = _committed_contradictions(ws, proposal)
+    if contradicts:
+        response["contradicts"] = contradicts
+    return json.dumps(response, indent=2)
+
+
+def _committed_contradictions(ws: str, proposal: dict[str, Any]) -> list[dict[str, str]]:
+    """Committed blocks *proposal* contradicts (fail-soft: [] on detector error).
+
+    Each entry carries ``supersedes``: the id to pass back to
+    ``propose_update(supersedes=...)`` when the proposal is a correction.
+    """
+    from mind_mem.contradiction_detector import check_proposal_contradictions
+
+    try:
+        report = check_proposal_contradictions(ws, proposal)
+    except Exception as exc:  # detector failure must not block a proposal
+        _log.warning("propose_contradiction_check_failed", error=str(exc))
+        return []
+    return [
+        {"block_id": c["block_id"], "supersedes": c["block_id"], "existing": c["existing_excerpt"][:200]}
+        for c in report.get("conflicts", [])
+        if c.get("conflict_type") == "contradiction"
+    ]
 
 
 def _invalidate_recall_cache() -> None:
@@ -935,6 +1048,29 @@ def _world_staleness_summary(ws: str) -> dict[str, Any]:
         }
 
 
+def _root_corpus_denied(ws: str, rel_paths: tuple[str, ...]) -> str | None:
+    """A refusal body when the bound caller may not read every root file, else ``None``.
+
+    ``scan`` and ``list_contradictions`` summarise or return root-corpus content
+    and used to ignore the caller's namespace ACL; the decision is the shared
+    :func:`mind_mem.read_authz.source_readable`, the one ``get_block`` makes. An
+    unbound caller (stdio / operator) is unrestricted; an unresolvable caller is
+    refused.
+    """
+    from mind_mem.read_authz import CallerUnresolved, caller_principal, source_readable
+
+    try:
+        principal = caller_principal()
+    except CallerUnresolved:
+        return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+    if all(source_readable(ws, rel, principal) for rel in rel_paths):
+        return None
+    return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": "namespace access denied"})
+
+
+_SCAN_ROOT_FILES = ("decisions/DECISIONS.md", "intelligence/CONTRADICTIONS.md", "intelligence/SIGNALS.md")
+
+
 @mcp_tool_observe
 @_traced("scan")
 def scan() -> str:
@@ -955,6 +1091,9 @@ def scan() -> str:
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    denied = _root_corpus_denied(ws, _SCAN_ROOT_FILES)
+    if denied is not None:
+        return denied
 
     backend = _resolve_backend(ws)
     is_markdown = backend in _MARKDOWN_BACKENDS
@@ -1051,6 +1190,9 @@ def scan() -> str:
 def list_contradictions() -> str:
     """List detected contradictions with resolution analysis."""
     ws = _workspace()
+    denied = _root_corpus_denied(ws, ("decisions/DECISIONS.md", "intelligence/CONTRADICTIONS.md"))
+    if denied is not None:
+        return denied
 
     from mind_mem.conflict_resolver import resolve_contradictions
 
@@ -1429,6 +1571,9 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
         return json.dumps({"error": f"Invalid block_id format: {block_id}"})
     ws = _workspace()
+    scope, denied = _read_scope_or_denied(ws)
+    if denied is not None:
+        return denied
 
     try:
         from mind_mem.block_metadata import BlockMetadataManager, block_meta_db_path
@@ -1452,9 +1597,21 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
                 },
                 indent=2,
             )
+        elif not scope.allows(block_id):
+            # Importance, co-retrieval partners and provenance of a block the
+            # caller cannot read: answer as for a block with no telemetry.
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "block_id": block_id,
+                    "importance": 1.0,
+                    "co_occurring_blocks": [],
+                },
+                indent=2,
+            )
         else:
             importance = mgr.get_importance_boost(block_id)
-            co_blocks = mgr.get_co_occurring_blocks(block_id)
+            co_blocks = scope.keep(mgr.get_co_occurring_blocks(block_id))
             metrics.inc("mcp_evolution_reads")
             payload: dict[str, Any] = {
                 "_schema_version": MCP_SCHEMA_VERSION,

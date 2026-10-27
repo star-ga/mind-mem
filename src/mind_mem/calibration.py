@@ -45,15 +45,19 @@ Copyright (c) STARGA, Inc.
 
 from __future__ import annotations
 
+import atexit
+import functools
 import hashlib
 import os
 import sqlite3
+import threading
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from ._conn_lease import ConnLeases
 from .connection_manager import ConnectionManager
 from .observability import get_logger, metrics
 from .outcome_attribution import (
@@ -206,19 +210,65 @@ def make_query_id(query: str) -> str:
 # Calibration Manager
 # ---------------------------------------------------------------------------
 
+
+# BOUNDED LRU, closed on eviction. Each ConnectionManager pins ~3 descriptors
+# (db, -wal, -shm); an unbounded per-workspace cache exhausts RLIMIT_NOFILE
+# under workspace churn and the collector never reclaims them. The same shape
+# as sqlite_index._conn_managers. A caller still holding an evicted manager is
+# safe: ConnectionManager.close() bumps a generation so the next use reopens.
+def _cache_max_from_env() -> int:
+    try:
+        return max(1, int(os.environ.get("MIND_MEM_CALIBRATION_CONN_CACHE_MAX", "16")))
+    except ValueError:
+        return 16
+
+
+_CONN_MANAGER_CACHE_MAX = _cache_max_from_env()
+
 _conn_managers: dict[str, ConnectionManager] = {}
-_conn_managers_lock = __import__("threading").Lock()
+_conn_managers_lock = threading.Lock()
+
+
+def _close_all_conn_managers() -> None:
+    """Close and drop every cached manager (teardown / atexit)."""
+    with _conn_managers_lock:
+        victims = list(_conn_managers.values())
+        _conn_managers.clear()
+    for mgr in victims:
+        _leases.close_or_retire(mgr)
+
+
+atexit.register(_close_all_conn_managers)
+
+# In-flight protection shared with sqlite_index; see _conn_lease.
+_leases = ConnLeases()
+
+
+def _leased(fn: Any) -> Any:
+    """Hold the instance's manager open for the duration of one call."""
+
+    @functools.wraps(fn)
+    def wrapper(self: "CalibrationManager", *args: Any, **kwargs: Any) -> Any:
+        with _leases.leased(self._mgr):
+            return fn(self, *args, **kwargs)
+
+    return wrapper
 
 
 def _get_conn_manager(workspace: str) -> ConnectionManager:
     """Return a shared ConnectionManager for the workspace DB."""
     path = _db_path(workspace)
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    victims: list[ConnectionManager] = []
     with _conn_managers_lock:
-        mgr = _conn_managers.get(path)
+        mgr = _conn_managers.pop(path, None)
         if mgr is None:
             mgr = ConnectionManager(path)
-            _conn_managers[path] = mgr
+        _conn_managers[path] = mgr  # most-recently-used goes last
+        while len(_conn_managers) > _CONN_MANAGER_CACHE_MAX:
+            victims.append(_conn_managers.pop(next(iter(_conn_managers))))
+    for victim in victims:
+        _leases.close_or_retire(victim)
     return mgr
 
 
@@ -253,6 +303,7 @@ class CalibrationManager:
     # Read labels
     # -----------------------------------------------------------------------
 
+    @_leased
     def accepted_ids_by_fingerprint(self, fingerprints: Iterable[str]) -> dict[str, set[str]]:
         """Block ids marked ``accepted`` for each query fingerprint.
 
@@ -284,6 +335,7 @@ class CalibrationManager:
     # Record feedback
     # -----------------------------------------------------------------------
 
+    @_leased
     def record_feedback(
         self,
         query_id: str,
@@ -382,6 +434,7 @@ class CalibrationManager:
     # Outcome attribution — utility, not quality
     # -----------------------------------------------------------------------
 
+    @_leased
     def record_outcome(
         self,
         block_ids: Iterable[str] | None,
@@ -418,23 +471,48 @@ class CalibrationManager:
             project_to_calibration=project_to_calibration,
         )
 
+    @_leased
     def get_outcome_signals(self, block_ids: list[str]) -> dict[str, OutcomeSignal]:
         """Batch per-block utility evidence — unwindowed, clock-free."""
         from .outcome_store import get_outcome_signals
 
         return get_outcome_signals(self._mgr, block_ids)
 
+    @_leased
     def list_outcomes(self, block_id: str = "", task_id: str = "", limit: int = 100) -> list[dict[str, Any]]:
         """Recorded outcomes with full provenance, newest first."""
         from .outcome_store import list_outcomes
 
         return list_outcomes(self._mgr, block_id=block_id, task_id=task_id, limit=limit)
 
+    @_leased
     def get_outcome_stats(self, top_n: int = 20) -> dict[str, Any]:
         """Utility health report — corroborated vs. implicated blocks."""
         from .outcome_store import get_outcome_stats
 
         return get_outcome_stats(self._mgr, top_n=top_n)
+
+    # -----------------------------------------------------------------------
+    # Abstention predictions -- scored against the outcomes above
+    # -----------------------------------------------------------------------
+
+    @_leased
+    def record_abstention(self, run_id: str, assessment: Any, recorded_at: str) -> bool:
+        """Record the abstention verdict shown for a run. Idempotent.
+
+        See :func:`mind_mem.abstention_store.insert_prediction`. Sidecar table
+        in this same store; nothing recall reads.
+        """
+        from .abstention_store import insert_prediction
+
+        return insert_prediction(self._mgr, run_id, assessment, recorded_at)
+
+    @_leased
+    def get_abstention_stats(self) -> dict[str, Any]:
+        """How well abstention predicted the outcomes reported against its runs."""
+        from .abstention_store import stats_from_manager
+
+        return stats_from_manager(self._mgr)
 
     # -----------------------------------------------------------------------
     # Compute calibration weights
@@ -461,6 +539,7 @@ class CalibrationManager:
         cutoff = now.timestamp() - (CALIBRATION_WINDOW_DAYS * 86400)
         return datetime.fromtimestamp(cutoff, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    @_leased
     def get_block_weight(self, block_id: str, *, now: datetime | None = None) -> float:
         """Compute calibration weight for a single block.
 
@@ -495,6 +574,7 @@ class CalibrationManager:
 
         return _compute_weight(counts["accepted"], counts["rejected"], counts["ignored"])
 
+    @_leased
     def get_block_weights(self, block_ids: list[str], *, now: datetime | None = None) -> dict[str, float]:
         """Compute calibration weights for multiple blocks in one query.
 
@@ -546,6 +626,7 @@ class CalibrationManager:
     # Per-query-type accuracy
     # -----------------------------------------------------------------------
 
+    @_leased
     def get_query_type_accuracy(self) -> dict[str, dict[str, Any]]:
         """Compute per-query-type accuracy rates over the rolling window.
 
@@ -591,6 +672,7 @@ class CalibrationManager:
     # Stats / diagnostics
     # -----------------------------------------------------------------------
 
+    @_leased
     def get_calibration_stats(self, top_n: int = 20) -> dict[str, Any]:
         """Return calibration health report.
 
@@ -727,6 +809,16 @@ class CalibrationManager:
         llm_reliability = reliability_report(self._workspace)
         if llm_reliability is not None:
             stats["llm_reliability"] = llm_reliability
+
+        # How well computed abstention predicted the outcomes reported against
+        # its runs. Same shape of guarantee as the key above: ``None`` (no verdict
+        # ever recorded) leaves the key absent, so a workspace that never asked
+        # for one gets the report it always got.
+        from .outcome_store import _abstention_section
+
+        abstention = _abstention_section(self._mgr)
+        if abstention is not None:
+            stats["abstention"] = abstention
 
         return stats
 

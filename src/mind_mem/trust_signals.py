@@ -94,10 +94,11 @@ def load_calibration_weights(
     try:
         from .calibration import CalibrationManager
 
-        return CalibrationManager(workspace).get_block_weights(
+        weights: dict[str, float] = CalibrationManager(workspace).get_block_weights(
             block_ids,
             now=as_utc_datetime(resolve_scoring_instant(scoring_instant)),
         )
+        return weights
     except Exception as exc:  # pragma: no cover — defensive, degrade to neutral
         _log.warning("trust_calibration_unavailable", error=str(exc))
         return {}

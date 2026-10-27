@@ -29,7 +29,7 @@ from typing import Any
 
 from . import __version__ as _pkg_version
 from .observability import get_logger
-from .spec_binding import SpecBindingManager
+from .spec_binding import SpecBindingManager, record_arming
 
 _log = get_logger("init_workspace")
 
@@ -499,6 +499,14 @@ def init(
     if wrote_config and not os.path.exists(binding_path):
         SpecBindingManager(config_path).bind(config_path)
         created.append("file: .spec_binding.json")
+    # Record that this workspace is armed, durably and in more than one
+    # place (see spec_binding.arming_record_paths). Without it, a binding
+    # deleted before the workspace's first governed write left no trace that
+    # the workspace had ever been armed, and the gate read it as a
+    # never-armed (pre-5.0.2) workspace and admitted under a tampered config.
+    # Recorded for an existing binding too: that workspace is armed as well.
+    if os.path.isfile(binding_path) and not os.path.islink(binding_path):
+        record_arming(config_path, ws)
 
     # Create empty weekly summary placeholder
     placeholder = os.path.join(ws, "summaries/weekly/.gitkeep")

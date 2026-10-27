@@ -393,6 +393,9 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
     "hybrid_search": (
         {"query": "architecture decision", "limit": 10},
         {"query": "frost telemetry", "limit": 10, "active_only": True, "explain": True, "scoring_instant": "2026-06-01"},
+        # The computed-abstention verdict is derived from the served set only;
+        # sweeping it proves a withheld block cannot surface through it.
+        {"query": "frost telemetry", "limit": 10, "intended_use": "governed_write"},
     ),
     "index_stats": ({},),
     "intent_classify": ({"query": "architecture decision"},),
@@ -436,6 +439,8 @@ TOOL_INVOCATIONS: dict[str, tuple[dict, ...]] = {
         {"query": "frost telemetry", "mode": "hybrid", "explain": True, "scoring_instant": "2026-06-01"},
         {"query": "frost telemetry", "mode": "bm25", "active_only": False, "scoring_instant": "2026-06-01"},
         {"query": "frost telemetry", "mode": "hybrid", "active_only": True},
+        {"query": "frost telemetry", "mode": "bm25", "intended_use": "summary"},
+        {"query": "frost telemetry", "mode": "hybrid", "intended_use": "governed_write"},
         {
             "query": "frost telemetry",
             "mode": "bm25",

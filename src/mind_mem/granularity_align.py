@@ -74,11 +74,16 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .fact_slots import canonical_tokens
+
 __all__ = [
     "DEFAULT_MIN_SIMILARITY",
     "MERGE_STRATEGIES",
     "GranularityMergeCandidate",
+    "SimilarPair",
+    "find_similar_pairs",
     "find_merge_candidates",
+    "scan_pairs",
     "merge_blocks",
 ]
 
@@ -255,6 +260,188 @@ def _similarity(a: dict[str, Any], b: dict[str, Any]) -> float:
     return _cosine(_term_vec(ta), _term_vec(tb))
 
 
+#: Block fields that are bookkeeping, not content: they may differ between exact
+#: duplicates. Everything else (Date, Scope, speaker, Tags, Supersedes, ...) is
+#: content and must be identical for a merge to be proposed.
+_BOOKKEEPING = frozenset(
+    {
+        "_id",
+        "id",
+        "_source_file",
+        "file",
+        "line",
+        "score",
+        "status",
+        "Status",
+        "importance",
+        "Importance",
+        "Maturity",
+        "maturity",
+        "access_count",
+        "AccessCount",
+        "lifecycle",
+        "Lifecycle",
+        "created",
+        "updated",
+        "Created",
+        "Updated",
+        "last_access",
+        "LastAccess",
+        "Sources",
+        "sources",
+        # Handled by _marked_superseded: a real successor blocks the merge; an empty one is noise.
+        "SupersededBy",
+        "Superseded_by",
+        "superseded_by",
+        "supersededBy",
+        "History",
+        "history",
+        "Evidence",
+        "evidence",
+        "fields",
+    }
+)
+
+
+#: Provenance fields: they may differ between exact duplicates, and a merge
+#: keeps the union of both blocks' values (see :func:`merge_blocks`).
+_PROVENANCE = ("Sources", "sources", "Evidence", "evidence", "History", "history")
+
+#: Statuses whose blocks may be merged. A superseded, archived or retracted copy
+#: is history, not a duplicate: merging it would erase the record of the change.
+_MERGEABLE_STATUSES = frozenset({"", "active"})
+
+
+def _as_text(value: Any) -> str:
+    """A field value as text: list items one per line, anything else via str()."""
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        return "\n".join(_as_text(v) for v in value)
+    return str(value)
+
+
+def _key_order(key: Any) -> tuple[str, str]:
+    """Sort key for mapping keys of any type (str, int, tuple, ...): never compares across types."""
+    return (type(key).__name__, repr(key))
+
+
+def _canon_value(value: Any) -> Any:
+    """A hashable, order-stable normal form of a field value of any shape.
+
+    Strings use the merge normal form (fact_slots.canonical_tokens). Lists keep
+    their order (``Participants: - Ilona`` vs ``- the contractor`` differ);
+    mappings are compared key by key, whatever the key types.
+    """
+    if isinstance(value, str):
+        return ("s", canonical_tokens(value))
+    if isinstance(value, (list, tuple)):
+        return ("l", tuple(_canon_value(v) for v in value))
+    if isinstance(value, dict):
+        return ("d", tuple((_key_order(k), _canon_value(v)) for k, v in sorted(value.items(), key=lambda kv: _key_order(kv[0]))))
+    if isinstance(value, (set, frozenset)):
+        return ("S", tuple(sorted((_canon_value(v) for v in value), key=repr)))
+    return ("v", type(value).__name__, repr(value))
+
+
+def _content_fields(block: dict[str, Any]) -> dict[Any, Any]:
+    def keep(k: Any, v: Any) -> bool:
+        return k not in _BOOKKEEPING and not str(k).startswith("_") and v not in (None, "", [], {})
+
+    out = {k: v for k, v in block.items() if keep(k, v)}
+    nested = block.get("fields")
+    if isinstance(nested, dict):  # full frontmatter carried by the plan_consolidation projection
+        out.update({k: v for k, v in nested.items() if keep(k, v)})
+    return out
+
+
+def _status(block: dict[str, Any]) -> str:
+    raw = block.get("Status", block.get("status"))
+    if raw is None and isinstance(block.get("fields"), dict):
+        raw = block["fields"].get("Status", block["fields"].get("status"))
+    return str(raw or "").strip().lower()
+
+
+_ID_RE = re.compile(r"\b[A-Z]+-[A-Za-z0-9_.-]+\b")
+
+
+def _superseded_by_reference(blocks: Any) -> set[str]:
+    """IDs named in any block's Supersedes field (top level or carried frontmatter).
+
+    Such a block is history even if its own Status was never updated, so it is
+    never a merge survivor.
+    """
+    out: set[str] = set()
+    for blk in blocks:
+        nested = blk.get("fields") if isinstance(blk.get("fields"), dict) else {}
+        for raw in (blk.get("Supersedes"), nested.get("Supersedes")):
+            for value in raw if isinstance(raw, list) else [raw]:
+                if isinstance(value, str) and value.strip().lower() not in ("", "none", "n/a"):
+                    out.update(
+                        t.casefold()
+                        for t in re.findall(r"[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?", value)
+                        if t.casefold() not in ("none", "n/a")
+                    )
+    return out
+
+
+def _empty_ref(value: Any) -> bool:
+    """None, '', 'none', 'null', 'n/a', '-' and whitespace are placeholders, not a successor."""
+    return value is None or str(value).strip().lower() in ("", "none", "null", "n/a", "na", "-", "—")
+
+
+def _marked_superseded(block: dict[str, Any]) -> bool:
+    """A block whose own SupersededBy / Superseded_by field names a successor is history."""
+    raw_fields = block.get("fields")
+    nested: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
+    for key in ("SupersededBy", "Superseded_by", "superseded_by", "supersededBy"):
+        for raw in (block.get(key), nested.get(key)):
+            if isinstance(raw, list) and any(not _empty_ref(v) for v in raw):
+                return True
+            if isinstance(raw, str) and not _empty_ref(raw):
+                return True
+            if raw is not None and not isinstance(raw, (str, list)) and raw not in (0, {}, False):
+                return True  # a store may hold an int or a mapping
+    return False
+
+
+def _identity(block: dict[str, Any]) -> tuple:
+    """Everything that makes a block the memory it is, normalised (see fact_slots.canonical_tokens).
+
+    Two blocks are the SAME memory only when their identities are equal. Every
+    content field counts, whatever its shape (string, list, mapping), so a
+    who/when/zone value held in a list field still separates two blocks.
+    Computed once per block per call, so the pairwise scan compares cheap tuples.
+    """
+    text = " ".join(_as_text(block.get(k)) for k in ("excerpt", "content") if block.get(k))
+    fields = _content_fields(block)
+    for key in ("excerpt", "content"):
+        fields.pop(key, None)
+    # Lines the block parser did not map to a field still make the block what it is.
+    raw_fields = block.get("fields")
+    nested: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
+    unparsed = block.get("_unparsed") or nested.get("_unparsed") or []
+    ordered = sorted(fields.items(), key=lambda kv: _key_order(kv[0]))
+    return (
+        canonical_tokens(text),
+        tuple((_key_order(k), _canon_value(v)) for k, v in ordered),
+        _canon_value(list(unparsed)),
+    )
+
+
+def _facts_conflict(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """True unless the two blocks are the SAME memory (every content field equal after normalisation).
+
+    A merge proposal is only ever made for exact duplicates: deciding that two
+    differently worded statements mean the same thing is a semantic judgement
+    that text overlap cannot make safely ("call with Ilona Tue 10am Arizona"
+    vs "call with the contractor Tue 10am Pacific" share most words, yet
+    merging them loses a memory). Differently worded look-alikes are reported
+    as ``similar_pairs`` for a human, never as merge candidates.
+    """
+    return _identity(a) != _identity(b)
+
+
 def _suggest_strategy(a: dict[str, Any], b: dict[str, Any]) -> str:
     """Heuristically pick a merge strategy for the pair.
 
@@ -277,72 +464,105 @@ def _build_reason(similarity: float) -> str:
     return f"moderate overlap (similarity={similarity:.2f}); may be redundant"
 
 
+@dataclass(frozen=True)
+class SimilarPair:
+    """Two look-alike blocks that are NOT exact duplicates: shown to a reviewer, never proposed for merge."""
+
+    id_a: str
+    id_b: str
+    similarity: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id_a": self.id_a,
+            "id_b": self.id_b,
+            "similarity": round(self.similarity, 4),
+            "reason": "similar wording but the statements differ; not proposed for merge (review by hand)",
+        }
+
+
+def scan_pairs(
+    blocks: list[dict[str, Any]],
+    *,
+    min_similarity: float = DEFAULT_MIN_SIMILARITY,
+    max_candidates: int = 50,
+    max_pairs: int = 50,
+    superseded_ids: set[str] | None = None,
+) -> tuple[list[GranularityMergeCandidate], list[SimilarPair]]:
+    """One pairwise pass returning (merge candidates, advisory look-alike pairs).
+
+    ``superseded_ids`` adds ids superseded by blocks outside ``blocks`` (a caller
+    that scans a window of a larger corpus passes the corpus-wide set).
+
+    A merge candidate is a pair of EXACT duplicates (equal :func:`_identity`),
+    both active. ``min_similarity`` bounds the look-alike report; exact
+    duplicates score ~1.0, so it never removes a merge candidate.
+    Blocks with empty combined text are skipped (no signal to compare).
+    """
+    threshold = max(0.0, min(1.0, float(min_similarity)))
+    # Non-mapping entries carry no fields to compare: skipped, never a crash.
+    indexed = [(blk, _term_vec(toks)) for blk in blocks if isinstance(blk, dict) and (toks := _tokenize(_block_text(blk)))]
+    identities = [_identity(blk) for blk, _ in indexed]
+    # Every block's Supersedes counts, including one with no comparable text of its own.
+    replaced = _superseded_by_reference(blk for blk in blocks if isinstance(blk, dict))
+    replaced |= {str(bid).casefold() for bid in (superseded_ids or ())}
+    mergeable = [
+        _status(blk) in _MERGEABLE_STATUSES and str(_block_id(blk)).casefold() not in replaced and not _marked_superseded(blk)
+        for blk, _ in indexed
+    ]
+    candidates: list[GranularityMergeCandidate] = []
+    pairs: list[SimilarPair] = []
+    for i in range(len(indexed)):
+        a_blk, va = indexed[i]
+        for j in range(i + 1, len(indexed)):
+            b_blk, vb = indexed[j]
+            same = identities[i] == identities[j]
+            sim = _cosine(va, vb)
+            if same and mergeable[i] and mergeable[j]:
+                candidates.append(
+                    GranularityMergeCandidate(
+                        block_a=a_blk,
+                        block_b=b_blk,
+                        similarity=round(sim, 6),
+                        reason=_build_reason(sim),
+                        suggested_strategy=_suggest_strategy(a_blk, b_blk),
+                    )
+                )
+            elif not same and sim >= threshold:
+                pairs.append(SimilarPair(_block_id(a_blk), _block_id(b_blk), round(sim, 6)))
+    candidates.sort(key=lambda c: (-c.similarity, _block_id(c.block_a), _block_id(c.block_b)))
+    pairs.sort(key=lambda p: (-p.similarity, p.id_a, p.id_b))
+    if max_candidates > 0:
+        candidates = candidates[: int(max_candidates)]
+    if max_pairs > 0:
+        pairs = pairs[: int(max_pairs)]
+    return candidates, pairs
+
+
 def find_merge_candidates(
     blocks: list[dict[str, Any]],
     *,
     min_similarity: float = DEFAULT_MIN_SIMILARITY,
     max_candidates: int = 50,
 ) -> list[GranularityMergeCandidate]:
-    """Detect block pairs that are candidates for granularity alignment.
+    """Exact-duplicate, active block pairs, sorted by descending similarity then id pair.
 
-    Computes pairwise cosine similarity between all block pairs.  Pairs
-    whose similarity meets ``min_similarity`` are returned as
-    :class:`GranularityMergeCandidate` records, sorted by descending
-    similarity, then by ``(id_a, id_b)`` for determinism.
-
-    Blocks with empty combined text are skipped (no signal to compare).
-
-    Args:
-        blocks: List of block dicts as returned by the recall pipeline or
-            ``block_parser``.
-        min_similarity: Minimum cosine similarity (in [0, 1]) for a pair
-            to be flagged.  Default 0.75.  Set to 0.0 to return all pairs;
-            set to 1.0 to return only exact duplicates.
-        max_candidates: Safety cap on the number of returned candidates.
-            Default 50.  Set to ``0`` to disable the cap.
-
-    Returns:
-        List of :class:`GranularityMergeCandidate` records, sorted
-        descending by similarity (deterministic tie-breaking by id pair).
+    Only blocks whose every content field is equal after normalisation are
+    proposed (see :func:`_facts_conflict`). ``min_similarity`` is kept for API
+    compatibility and bounds only :func:`find_similar_pairs`. ``max_candidates``
+    caps the result (``0`` disables the cap).
     """
-    threshold = max(0.0, min(1.0, float(min_similarity)))
-    cap = int(max_candidates) if max_candidates > 0 else 0
+    return scan_pairs(blocks, min_similarity=min_similarity, max_candidates=max_candidates, max_pairs=1)[0]
 
-    # Pre-compute term vectors (skip blocks with no text signal)
-    indexed: list[tuple[dict[str, Any], dict[str, int]]] = []
-    for blk in blocks:
-        tokens = _tokenize(_block_text(blk))
-        if tokens:
-            indexed.append((blk, _term_vec(tokens)))
 
-    candidates: list[GranularityMergeCandidate] = []
-
-    for i in range(len(indexed)):
-        a_blk, va = indexed[i]
-        for j in range(i + 1, len(indexed)):
-            b_blk, vb = indexed[j]
-            sim = _cosine(va, vb)
-            if sim < threshold:
-                continue
-            strategy = _suggest_strategy(a_blk, b_blk)
-            reason = _build_reason(sim)
-            candidates.append(
-                GranularityMergeCandidate(
-                    block_a=a_blk,
-                    block_b=b_blk,
-                    similarity=round(sim, 6),
-                    reason=reason,
-                    suggested_strategy=strategy,
-                )
-            )
-
-    # Deterministic sort: descending similarity, then by id pair
-    candidates.sort(key=lambda c: (-c.similarity, _block_id(c.block_a), _block_id(c.block_b)))
-
-    if cap:
-        candidates = candidates[:cap]
-
-    return candidates
+def find_similar_pairs(
+    blocks: list[dict[str, Any]],
+    *,
+    min_similarity: float = DEFAULT_MIN_SIMILARITY,
+    max_pairs: int = 50,
+) -> list[SimilarPair]:
+    """Look-alike pairs above ``min_similarity`` that are not exact duplicates (advisory only)."""
+    return scan_pairs(blocks, min_similarity=min_similarity, max_candidates=1, max_pairs=max_pairs)[1]
 
 
 # ---------------------------------------------------------------------------
@@ -384,6 +604,20 @@ def _merge_tags(a: dict[str, Any], b: dict[str, Any]) -> str:
                 seen.add(t)
                 parts.append(t)
     return ", ".join(parts)
+
+
+def _union_values(a: Any, b: Any) -> Any:
+    """Order-preserving union of two provenance values (strings or lists)."""
+    items: list[Any] = []
+    for value in (a, b):
+        if value in (None, ""):
+            continue
+        for item in value if isinstance(value, (list, tuple)) else [value]:
+            if item not in items:
+                items.append(item)
+    if all(isinstance(i, str) for i in items) and not isinstance(a, (list, tuple)) and not isinstance(b, (list, tuple)):
+        return "; ".join(items)
+    return items
 
 
 def merge_blocks(
@@ -446,6 +680,16 @@ def merge_blocks(
     merged = dict(winner)
     # Enrich the winner's tags from the loser
     merged["tags"] = merged_tags
+    # Exact duplicates may carry different provenance: keep both blocks' records.
+    for key in _PROVENANCE:
+        if key in winner or key in loser:
+            merged[key] = _union_values(winner.get(key), loser.get(key))
+    w_fields, l_fields = winner.get("fields"), loser.get("fields")
+    if isinstance(w_fields, dict) and isinstance(l_fields, dict):
+        merged["fields"] = dict(w_fields)
+        for key in _PROVENANCE:
+            if key in w_fields or key in l_fields:
+                merged["fields"][key] = _union_values(w_fields.get(key), l_fields.get(key))
     # Preserve the loser's id for audit trail
     merged["_merged_from"] = [_block_id(winner), _block_id(loser)]
     return merged

@@ -65,14 +65,16 @@ def _reset_rate_limiter():
 
 
 @pytest.fixture(autouse=True)
-def _enforced_user_scope(monkeypatch):
-    """Run every call the way a plain agent runs it: ACL on, user scope.
+def _enforced_admin_scope(monkeypatch):
+    """Run every call with the ACL ON at admin scope -- the scope this tool needs.
 
+    F14 (architecture review): the tool writes ``entities/compiled/*.md`` and an
+    evidence-chain entry, and a tool that writes in any mode is ADMIN.
     ``MIND_MEM_ACL_DISABLED`` leaking in from the environment would turn the
     ACL assertions below into tautologies, so it is removed rather than trusted.
     """
     monkeypatch.delenv("MIND_MEM_ACL_DISABLED", raising=False)
-    monkeypatch.setenv("MIND_MEM_SCOPE", "user")
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
 
 
 @pytest.fixture
@@ -250,23 +252,31 @@ class TestAclAndReachability:
         register(_Mcp())
         assert "compiled_truth_add_evidence" in registered
 
-    def test_it_is_user_scoped_not_admin_scoped(self) -> None:
+    def test_it_is_admin_scoped_not_user_scoped(self) -> None:
         """Registered-but-unclassified is unreachable at EVERY scope.
 
-        And admin-classified would silently strip every agent of the ability to
-        record an observation, which is the tool's entire reason to exist.
+        Admin, not user (F14): it writes a compiled page and appends to the
+        evidence chain. Agents at user scope read pages with
+        ``compiled_truth_load``; recording an observation is an operator act.
         """
         from mind_mem.mcp.infra.acl import ADMIN_TOOLS, USER_TOOLS
 
-        assert "compiled_truth_add_evidence" in USER_TOOLS
-        assert "compiled_truth_add_evidence" not in ADMIN_TOOLS
+        assert "compiled_truth_add_evidence" in ADMIN_TOOLS
+        assert "compiled_truth_add_evidence" not in USER_TOOLS
 
-    def test_a_user_scope_call_passes_the_enforced_acl(self, ws: Path) -> None:
+    def test_an_admin_scope_call_passes_the_enforced_acl(self, ws: Path) -> None:
         """Behavioural counterpart to the classification assert above."""
         out = _add(ws, entity_id="E", observation="obs")
 
         assert "error" not in out
         assert out["version"] == 1
+
+    def test_a_user_scope_call_is_refused_and_writes_nothing(self, ws: Path, monkeypatch) -> None:
+        monkeypatch.setenv("MIND_MEM_SCOPE", "user")
+        out = _add(ws, entity_id="E", observation="obs")
+
+        assert out["error"] == "Permission denied: 'compiled_truth_add_evidence' requires admin scope"
+        assert not (ws / "entities" / "compiled" / "E.md").exists()
 
 
 class TestUnvalidatedInput:

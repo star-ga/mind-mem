@@ -24,9 +24,9 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/test_functions-12%2C624-brightgreen?style=flat-square" alt="Test functions: 12,624">
+  <img src="https://img.shields.io/badge/test_functions-13%2C250-brightgreen?style=flat-square" alt="Test functions: 13,250">
   <img src="https://img.shields.io/badge/MCP_tools-107-blue?style=flat-square" alt="MCP Tools: 107">
-  <img src="https://img.shields.io/badge/clients-20-blueviolet?style=flat-square" alt="AI Clients: 20">
+  <img src="https://img.shields.io/badge/clients-69-blueviolet?style=flat-square" alt="AI Clients: 69">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
   <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>
@@ -115,7 +115,7 @@ Output:
 
 - [`docs/setup.md`](docs/setup.md) — install, configure, wire MCP, opt in to MIND native kernels
 - [`docs/usage.md`](docs/usage.md) — every surface (MCP tools by category, `mm` CLI, `mind-mem-verify`, Python library) with worked examples
-- [`docs/client-integrations.md`](docs/client-integrations.md) — **20 AI client integrations** (Claude Code, Codex, OpenCode, Grok Build, Vibe, Gemini, Cursor, Windsurf, aider, OpenClaw, NanoClaw, NemoClaw, Continue, Cline, Roo, Zed, Copilot, Copilot CLI, Cody, Qodo) with `mm install-all` auto-detection
+- [`docs/client-integrations.md`](docs/client-integrations.md) — **69 AI client integrations** (Claude Code, Claude Desktop, Codex, Grok Build, Vibe, OpenCode, Gemini, Cursor, Windsurf, VS Code, Zed, Copilot CLI, Qwen Code, Kimi Code, Amp, goose, Kiro, Junie, Cline, Roo, Continue, Antigravity and more; manual steps for UI-only apps) with `mm install-all` auto-detection and a per-client source table
 - [`docs/task-frames.md`](docs/task-frames.md) — **task frames + the dead-end registry**: `[TF-...]` multi-session continuity (`resume_brief`, `mm resume`) and `[DE-...]` negative action-space memory, matched by a deterministic declarative overlap that warns and never blocks
 - [`docs/review.md`](docs/review.md) — **`mm review`**: batch approval for the HITL queue — pending proposals with their pre-apply diff, provenance, chain status and staleness inline, approved or rejected many at once through the governed `approve_apply` path, with no auto-approve at any risk level
 - [`docs/mind-mem-4b-setup.md`](docs/mind-mem-4b-setup.md) — download + run the `star-ga/mind-mem-4b` full-FT model locally (transformers, exllamav2, vLLM, llama.cpp, Ollama, **MindLLM**)
@@ -253,8 +253,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (107 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 107 distinct tools and 8 read-only resources (6 static + 2 templated). Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
-### Structural Validation + 12,624 Test Functions
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 12,624 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
+### Structural Validation + 13,250 Test Functions
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 13,250 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -344,14 +344,14 @@ Cells were checked against each project's public source or, where the engine is 
 
 ## Integrations are the substrate working
 
-MIND-Mem provides integrations for 20 supported clients, including 12 MCP-aware clients. They can share a governed memory workspace. Reproducing a recall result requires the same request, corpus, configuration, scoring instant and execution dependencies; the client count alone does not establish cross-client output identity.
+MIND-Mem provides integrations for 69 supported clients, including 41 MCP-aware clients (22 more get printed manual MCP steps). They can share a governed memory workspace. Reproducing a recall result requires the same request, corpus, configuration, scoring instant and execution dependencies; the client count alone does not establish cross-client output identity.
 
 > Honest positioning: the integrations below are *software-level* —
 > clients use their configured MCP connection or local integration.
 > They are **not** commercial-customer relationships with any vendor.
 > Full positioning policy: [`docs/integrations.md`](docs/integrations.md).
 
-### Native integration with 20 clients (12 MCP-aware clients)
+### Native integration with 69 clients (41 MCP-aware clients)
 
 ```bash
 pip install mind-mem
@@ -363,28 +363,85 @@ and writes the appropriate config file for each. MIND-Mem speaks the
 [Model Context Protocol](https://modelcontextprotocol.io/) — any
 MCP-compatible client connects with one command.
 
-| Client | Vendor | `mm install` id | MCP config written |
-|--------|--------|-----------------|--------------------|
-| Claude Code | Anthropic | `claude-code` | No (instructions/hooks only) |
-| Codex CLI | OpenAI | `codex` | Yes |
-| Grok Build CLI | xAI | `grok-build` | Yes |
-| Vibe (Mistral CLI) | Mistral AI | `vibe` | Yes |
-| OpenCode (1.x / 2.x) | OpenCode (open source) | `opencode` | Yes |
-| Gemini CLI | Google | `gemini` | Yes |
-| Cursor | Anysphere | `cursor` | Yes |
-| Windsurf | Cognition (formerly Codeium) | `windsurf` | Yes |
-| aider | Aider-AI (open source) | `aider` | No (instructions/hooks only) |
-| OpenClaw | OpenClaw Foundation (open source) | `openclaw` | No (instructions/hooks only) |
-| NanoClaw | NanoClaw / Qwibit (open source) | `nanoclaw` | No (instructions/hooks only) |
-| NemoClaw | NVIDIA | `nemoclaw` | No (instructions/hooks only) |
-| Continue | Continue.dev | `continue` | Yes |
-| Cline | Cline | `cline` | Yes |
-| Roo Code | Roo Code | `roo` | Yes |
-| Zed | Zed Industries | `zed` | Yes |
-| GitHub Copilot (workspace instructions) | GitHub / Microsoft | `copilot` | No (instructions/hooks only) |
-| GitHub Copilot CLI | GitHub / Microsoft | `copilot-cli` | Yes |
-| Cody | Sourcegraph | `cody` | No (instructions/hooks only) |
-| Qodo Gen | Qodo | `qodo` | No (instructions/hooks only) |
+| Client | Vendor | `mm install` id | Install mode |
+|--------|--------|-----------------|--------------|
+| Claude Code | Anthropic | `claude-code` | auto MCP |
+| Codex CLI | OpenAI | `codex` | auto MCP |
+| Grok Build CLI | xAI | `grok-build` | auto MCP |
+| Vibe (Mistral CLI) | Mistral AI | `vibe` | auto MCP |
+| OpenCode (1.x / 2.x) | OpenCode (open source) | `opencode` | auto MCP |
+| Gemini CLI | Google | `gemini` | auto MCP |
+| Cursor | Anysphere | `cursor` | auto MCP |
+| Windsurf | Cognition (formerly Codeium) | `windsurf` | auto MCP |
+| aider | Aider-AI (open source) | `aider` | none |
+| OpenClaw | OpenClaw Foundation (open source) | `openclaw` | auto MCP |
+| NanoClaw | NanoClaw / Qwibit (open source) | `nanoclaw` | none |
+| NemoClaw | NVIDIA | `nemoclaw` | none |
+| Continue | Continue.dev | `continue` | auto MCP |
+| Cline | Cline | `cline` | auto MCP |
+| Roo Code | Roo Code | `roo` | auto MCP |
+| Zed | Zed Industries | `zed` | auto MCP |
+| GitHub Copilot (workspace instructions) | GitHub / Microsoft | `copilot` | none |
+| GitHub Copilot CLI | GitHub / Microsoft | `copilot-cli` | auto MCP |
+| Cody | Sourcegraph | `cody` | none |
+| Qodo Gen | Qodo | `qodo` | none |
+| Claude Desktop | Anthropic | `claude-desktop` | auto MCP |
+| VS Code (native MCP) | Microsoft | `vscode` | auto MCP |
+| Visual Studio (Windows) | Microsoft | `visual-studio` | auto MCP |
+| Qwen Code | Alibaba | `qwen-code` | auto MCP |
+| Kimi Code CLI | Moonshot AI | `kimi-code` | auto MCP |
+| Amp | Amp | `amp` | auto MCP |
+| goose | Agentic AI Foundation (created by Block) | `goose` | auto MCP |
+| Crush | Charm | `crush` | auto MCP |
+| Factory Droid | Factory | `factory-droid` | auto MCP |
+| Kiro | AWS | `kiro` | auto MCP |
+| Auggie (Augment Code) | Augment Code | `auggie` | auto MCP |
+| OpenHands CLI | All Hands AI | `openhands` | auto MCP |
+| MiMo Code | Xiaomi | `mimo-code` | auto MCP |
+| Junie | JetBrains | `junie` | auto MCP |
+| Kilo Code | Kilo Code | `kilo` | auto MCP |
+| Antigravity | Google | `antigravity` | auto MCP |
+| Tabnine agent | Tabnine | `tabnine` | auto MCP |
+| Hermes Agent | Nous Research | `hermes-agent` | auto MCP |
+| AnythingLLM Desktop | Mintplex Labs | `anythingllm` | auto MCP |
+| Warp | Warp | `warp` | auto MCP |
+| Open Interpreter | Open Interpreter | `open-interpreter` | auto MCP |
+| Amazon Q Developer | AWS | `amazon-q` | auto MCP |
+| LM Studio | Element Labs | `lm-studio` | auto MCP |
+| Jan | Menlo Research | `jan` | auto MCP |
+| BoltAI (macOS) | BoltAI | `boltai` | auto MCP |
+| iFlow CLI | iFlow | `iflow` | auto MCP |
+| Neovim (mcphub.nvim) | mcphub.nvim (open source) | `neovim-mcphub` | auto MCP |
+| Trae | ByteDance | `trae` | manual MCP |
+| Android Studio (Gemini) | Google | `android-studio` | manual MCP |
+| JetBrains AI Assistant | JetBrains | `jetbrains-ai-assistant` | manual MCP |
+| LibreChat | LibreChat | `librechat` | manual MCP |
+| Eclipse (GitHub Copilot) | GitHub / Microsoft | `eclipse-copilot` | manual MCP |
+| Xcode 26.3+ | Apple | `xcode` | manual MCP |
+| Witsy | Witsy (open source) | `witsy` | manual MCP |
+| Emacs (mcp.el) | mcp.el (open source) | `emacs-mcp-el` | manual MCP |
+| Open WebUI | Open WebUI (open source) | `open-webui` | manual MCP |
+| Docker MCP Toolkit | Docker | `docker-mcp-toolkit` | manual MCP |
+| Cherry Studio | CherryHQ | `cherry-studio` | manual MCP |
+| Msty Studio | Msty | `msty` | manual MCP |
+| Raycast | Raycast | `raycast` | manual MCP |
+| 5ire | 5ire (open source) | `5ire` | manual MCP |
+| Perplexity (macOS app) | Perplexity | `perplexity-desktop` | manual MCP |
+| ChatGPT | OpenAI | `chatgpt-desktop` | manual MCP |
+| n8n | n8n | `n8n` | manual MCP |
+| Dify | LangGenius | `dify` | manual MCP |
+| Flowise | FlowiseAI | `flowise` | manual MCP |
+| Blackbox AI | Blackbox | `blackbox` | manual MCP |
+| fast-agent | fast-agent (open source) | `fast-agent` | manual MCP |
+| Void | Void (open source) | `void` | manual MCP |
+
+*auto MCP*: the mind-mem server entry is merged into the client's own config
+file. *manual MCP*: the client has MCP but no per-user file to merge into (UI,
+per-deployment or HTTP-only); `mm install-all --agent <id>` prints the exact
+steps and snippet. *none*: no native MCP; an instruction or hook file routes
+memory access through the `mm` CLI. Each entry was checked against the client's
+current documentation; the source per client is in
+[`docs/client-integrations.md`](docs/client-integrations.md#verified-sources).
 
 ### Compatible with major LLM providers
 
@@ -655,18 +712,20 @@ cd mind-mem
 ./install.sh --all
 ```
 
-`./install.sh` wires the MCP server into a fixed set of eight clients:
-Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed and
-OpenClaw. Each client launches the same `mind-mem-mcp` binary, so all agents
-share one workspace.
+`./install.sh` has dedicated flags for eight clients (Claude Code, Claude
+Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed and OpenClaw); every
+other registry client is wired with `./install.sh --client <id>`, and `--all`
+covers every detected one. Each client launches the same MCP server, so all
+agents share one workspace.
 
-For the full set of 20 clients (12 of them get an MCP config), use
+For the full set of 69 clients (41 of them get an automatic MCP entry), use
 `mm install-all` after installing the package; it auto-detects what is on
-your machine and writes these files:
+your machine and writes these files (Linux paths shown; macOS and Windows
+locations are resolved per platform):
 
 | Client | Config Location | Format |
 | ------ | --------------- | ------ |
-| **Claude Code** (`claude-code`) | `~/.claude/settings.json` | JSON (hooks) |
+| **Claude Code** (`claude-code`) | `~/.claude/settings.json` + MCP `~/.claude.json` | JSON (hooks) + JSON |
 | **Codex CLI** (`codex`) | `<workspace>/AGENTS.md` + MCP `~/.codex/config.toml` | Markdown block + TOML |
 | **Grok Build CLI** (`grok-build`) | `<workspace>/AGENTS.md` + MCP `~/.grok/config.toml` | Markdown block + TOML |
 | **Vibe (Mistral CLI)** (`vibe`) | `<workspace>/AGENTS.md` + MCP `~/.vibe/config.toml` | Markdown block + TOML |
@@ -675,22 +734,70 @@ your machine and writes these files:
 | **Cursor** (`cursor`) | `<workspace>/.cursorrules` + MCP `~/.cursor/mcp.json` | Markdown block + JSON |
 | **Windsurf** (`windsurf`) | `<workspace>/.windsurfrules` + MCP `~/.codeium/windsurf/mcp_config.json` | Markdown block + JSON |
 | **aider** (`aider`) | `<workspace>/.aider.conf.yml` | YAML |
-| **OpenClaw** (`openclaw`) | `~/.openclaw/openclaw.json` | JSON (hooks) |
+| **OpenClaw** (`openclaw`) | `~/.openclaw/openclaw.json` + MCP `~/.openclaw/openclaw.json` | JSON (hooks) + JSON |
 | **NanoClaw** (`nanoclaw`) | `~/.nanoclaw/nanoclaw.json` | JSON (hooks) |
 | **NemoClaw** (`nemoclaw`) | `~/.nemoclaw/nemoclaw.json` | JSON (hooks) |
-| **Continue** (`continue`) | `~/.continue/config.json` (instructions + MCP) | JSON |
-| **Cline** (`cline`) | `<workspace>/.clinerules` + MCP `~/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | Markdown block + JSON |
-| **Roo Code** (`roo`) | `<workspace>/.roo/system-prompt.md` + MCP `~/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | Markdown block + JSON |
-| **Zed** (`zed`) | `~/.config/zed/settings.json` (instructions + MCP) | JSON |
+| **Continue** (`continue`) | `~/.continue/config.json` + MCP `~/.continue/config.yaml` | JSON + YAML |
+| **Cline** (`cline`) | `<workspace>/.clinerules` + MCP `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | Markdown block + JSON |
+| **Roo Code** (`roo`) | `<workspace>/.roo/system-prompt.md` + MCP `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | Markdown block + JSON |
+| **Zed** (`zed`) | `~/.config/zed/settings.json` + MCP `~/.config/zed/settings.json` | JSON |
 | **GitHub Copilot (workspace instructions)** (`copilot`) | `<workspace>/.github/copilot-instructions.md` | Markdown block |
 | **GitHub Copilot CLI** (`copilot-cli`) | `<workspace>/AGENTS.md` + MCP `~/.copilot/mcp-config.json` | Markdown block + JSON |
 | **Cody** (`cody`) | `<workspace>/.cody/config.json` | JSON |
 | **Qodo Gen** (`qodo`) | `<workspace>/.codium/ai-rules.md` | Markdown block |
+| **Claude Desktop** (`claude-desktop`) | MCP `~/.config/Claude/claude_desktop_config.json` | JSON |
+| **VS Code (native MCP)** (`vscode`) | MCP `~/.config/Code/User/mcp.json` | JSON |
+| **Visual Studio (Windows)** (`visual-studio`) | MCP `~/.mcp.json` | JSON |
+| **Qwen Code** (`qwen-code`) | `~/.qwen/QWEN.md` + MCP `~/.qwen/settings.json` | Markdown block + JSON |
+| **Kimi Code CLI** (`kimi-code`) | `<workspace>/AGENTS.md` + MCP `~/.kimi-code/mcp.json` | Markdown block + JSON |
+| **Amp** (`amp`) | `~/.config/amp/AGENTS.md` + MCP `~/.config/amp/settings.json` | Markdown block + JSON |
+| **goose** (`goose`) | `~/.config/goose/.goosehints` + MCP `~/.config/goose/config.yaml` | Markdown block + YAML |
+| **Crush** (`crush`) | `<workspace>/AGENTS.md` + MCP `~/.config/crush/crush.json` | Markdown block + JSON |
+| **Factory Droid** (`factory-droid`) | `<workspace>/AGENTS.md` + MCP `~/.factory/mcp.json` | Markdown block + JSON |
+| **Kiro** (`kiro`) | `~/.kiro/steering/mind-mem.md` + MCP `~/.kiro/settings/mcp.json` | Markdown block + JSON |
+| **Auggie (Augment Code)** (`auggie`) | `<workspace>/AGENTS.md` + MCP `~/.augment/settings.json` | Markdown block + JSON |
+| **OpenHands CLI** (`openhands`) | `<workspace>/AGENTS.md` + MCP `~/.openhands/mcp.json` | Markdown block + JSON |
+| **MiMo Code** (`mimo-code`) | `<workspace>/AGENTS.md` + MCP `~/.config/mimocode/mimocode.jsonc` | Markdown block + JSON |
+| **Junie** (`junie`) | `<workspace>/AGENTS.md` + MCP `~/.junie/mcp/mcp.json` | Markdown block + JSON |
+| **Kilo Code** (`kilo`) | `<workspace>/AGENTS.md` + MCP `~/.config/kilo/kilo.jsonc` | Markdown block + JSON |
+| **Antigravity** (`antigravity`) | `<workspace>/AGENTS.md` + MCP `~/.gemini/config/mcp_config.json` | Markdown block + JSON |
+| **Tabnine agent** (`tabnine`) | MCP `~/.tabnine/mcp_servers.json` | JSON |
+| **Hermes Agent** (`hermes-agent`) | MCP `~/.hermes/config.yaml` | YAML |
+| **AnythingLLM Desktop** (`anythingllm`) | MCP `~/.config/anythingllm-desktop/storage/plugins/anythingllm_mcp_servers.json` | JSON |
+| **Warp** (`warp`) | `<workspace>/AGENTS.md` + MCP `~/.warp/.mcp.json` | Markdown block + JSON |
+| **Open Interpreter** (`open-interpreter`) | MCP `~/.openinterpreter/config.toml` | TOML |
+| **Amazon Q Developer** (`amazon-q`) | MCP `~/.aws/amazonq/mcp.json` | JSON |
+| **LM Studio** (`lm-studio`) | MCP `~/.lmstudio/mcp.json` | JSON |
+| **Jan** (`jan`) | MCP `~/.local/share/Jan/data/mcp_config.json` | JSON |
+| **BoltAI (macOS)** (`boltai`) | MCP `~/.boltai/mcp.json` | JSON |
+| **iFlow CLI** (`iflow`) | `<workspace>/AGENTS.md` + MCP `~/.iflow/settings.json` | Markdown block + JSON |
+| **Neovim (mcphub.nvim)** (`neovim-mcphub`) | MCP `~/.config/mcphub/servers.json` | JSON |
+| **Trae** (`trae`) | manual MCP: `mm install-all --agent trae` prints the steps | - |
+| **Android Studio (Gemini)** (`android-studio`) | manual MCP: `mm install-all --agent android-studio` prints the steps | - |
+| **JetBrains AI Assistant** (`jetbrains-ai-assistant`) | manual MCP: `mm install-all --agent jetbrains-ai-assistant` prints the steps | - |
+| **LibreChat** (`librechat`) | manual MCP: `mm install-all --agent librechat` prints the steps | - |
+| **Eclipse (GitHub Copilot)** (`eclipse-copilot`) | manual MCP: `mm install-all --agent eclipse-copilot` prints the steps | - |
+| **Xcode 26.3+** (`xcode`) | manual MCP: `mm install-all --agent xcode` prints the steps | - |
+| **Witsy** (`witsy`) | manual MCP: `mm install-all --agent witsy` prints the steps | - |
+| **Emacs (mcp.el)** (`emacs-mcp-el`) | manual MCP: `mm install-all --agent emacs-mcp-el` prints the steps | - |
+| **Open WebUI** (`open-webui`) | manual MCP: `mm install-all --agent open-webui` prints the steps | - |
+| **Docker MCP Toolkit** (`docker-mcp-toolkit`) | manual MCP: `mm install-all --agent docker-mcp-toolkit` prints the steps | - |
+| **Cherry Studio** (`cherry-studio`) | manual MCP: `mm install-all --agent cherry-studio` prints the steps | - |
+| **Msty Studio** (`msty`) | manual MCP: `mm install-all --agent msty` prints the steps | - |
+| **Raycast** (`raycast`) | manual MCP: `mm install-all --agent raycast` prints the steps | - |
+| **5ire** (`5ire`) | manual MCP: `mm install-all --agent 5ire` prints the steps | - |
+| **Perplexity (macOS app)** (`perplexity-desktop`) | manual MCP: `mm install-all --agent perplexity-desktop` prints the steps | - |
+| **ChatGPT** (`chatgpt-desktop`) | manual MCP: `mm install-all --agent chatgpt-desktop` prints the steps | - |
+| **n8n** (`n8n`) | manual MCP: `mm install-all --agent n8n` prints the steps | - |
+| **Dify** (`dify`) | manual MCP: `mm install-all --agent dify` prints the steps | - |
+| **Flowise** (`flowise`) | manual MCP: `mm install-all --agent flowise` prints the steps | - |
+| **Blackbox AI** (`blackbox`) | manual MCP: `mm install-all --agent blackbox` prints the steps | - |
+| **fast-agent** (`fast-agent`) | manual MCP: `mm install-all --agent fast-agent` prints the steps | - |
+| **Void** (`void`) | manual MCP: `mm install-all --agent void` prints the steps | - |
 
-> **Cline and Roo Code:** the installer writes the VS Code Server (remote / WSL)
-> settings tree, `~/.vscode-server/data/User/`. Desktop VS Code keeps its user
-> settings elsewhere (for example `~/.config/Code/User/` on Linux), and those
-> paths are not written yet; add the MCP entry there by hand for now.
+> **Cline and Roo Code:** the installer writes desktop VS Code's settings tree
+> (`~/.config/Code/User/` on Linux) and, when present, the VS Code Server
+> (remote / WSL) copy under `~/.vscode-server/data/User/`.
 
 Selective install:
 
@@ -974,7 +1081,7 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Semantic + BM25 + entity, additive<sup>h</sup> | Vector<sup>i</sup> | Graph + BM25 + vector, RRF / cross-encoder | FTS5 only | FTS5 + vector, score fusion | Vector, optional rerank; BM25 / sparse only with hosted VikingDB |
 | Governance (propose/review/apply) | Yes | No | No | No | No | No | No |
 | Contradiction detection | Yes | Platform only<sup>j</sup> | LLM prompt only | Yes<sup>k</sup> | Agent-judged | No | LLM, at merge |
-| Test functions | 12,624 test functions | - | - | - | - | - | - |
+| Test functions | 13,250 test functions | - | - | - | - | - | - |
 | LoCoMo benchmark (full 10-conv, Acc>=50)¹ | 73.8% | 66.9%² | 74.0% | - | - | - | -³ |
 | MCP tools | 107 distinct<sup>l</sup> | Hosted<sup>m</sup> | Client only | 13 | 23 | 27 | 24 |
 | Core dependencies | 0 | Many | Many | Many | 0<sup>n</sup> | Many | Many |
@@ -1013,6 +1120,10 @@ Competitive Landscape table.
 | [**Engram**](https://github.com/Gentleman-Programming/engram) | Single Go binary, FTS5 search, agent-judged conflict/supersession relations, Git sync | Lexical-only recall; no vector search or propose/review/apply pipeline |
 | [**Basic Memory**](https://github.com/basicmachines-co/basic-memory) | Markdown knowledge graph, FTS + vector hybrid search, valid-time filters | Python with many dependencies; no contradiction detection or propose/review/apply pipeline |
 | [**OpenViking**](https://github.com/volcengine/OpenViking) | Context database that stores memory, documents and skills as one `viking://` file tree; generated one-line abstracts and overviews let agents read summaries before full files; multi-tenant server with ACLs; 24 MCP tools | AGPL-3.0; needs a server and a configured vision-language model; BM25 and sparse retrieval only with Volcengine's hosted VikingDB; LLM-extracted memories are written directly, with no review |
+| [**Memary**](https://github.com/kingjulio8238/memary) | Knowledge-graph memory with multi-hop retrieval and per-agent graphs (MIT) | Needs Neo4j or FalkorDB plus an LLM API; no commits since October 2024 |
+| [**Memvid**](https://github.com/memvid/memvid) | Single portable `.mv2` file holding data, embeddings and index; BM25 (Tantivy) + HNSW vector search; WAL and time index (Apache-2.0) | Binary capsule format; no propose/review/apply pipeline |
+| [**SimpleMem**](https://github.com/aiming-lab/SimpleMem) | LLM-compressed memory units that cut recall tokens; text and multimodal; MCP server (MIT) | Needs an LLM API for writes; no propose/review/apply pipeline |
+| [**Engrava**](https://github.com/sovantica/engrava) | In-process memory database over one SQLite file: thought graph, hybrid search, bi-temporal valid-time, tamper-evident journal (MIT) | Very new project; no propose/review/apply pipeline |
 | **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 107 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audits (published for v3.11 and v3.12; see `audits/`) | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
@@ -1519,7 +1630,7 @@ out of a source checkout instead, replace `"command": "mind-mem-mcp"` with
 
 | Client | Config File |
 | ------ | ----------- |
-| **Claude Code** (`claude-code`) | `~/.claude.json`, written by `claude mcp add --scope user mind-mem -e MIND_MEM_WORKSPACE=/path/to/your/workspace -- mind-mem-mcp`; `mm install claude-code` itself writes hooks to `~/.claude/settings.json` |
+| **Claude Code** (`claude-code`) | `~/.claude.json` (JSON) |
 | **Codex CLI** (`codex`) | `~/.codex/config.toml` (TOML) |
 | **Grok Build CLI** (`grok-build`) | `~/.grok/config.toml` (TOML) |
 | **Vibe (Mistral CLI)** (`vibe`) | `~/.vibe/config.toml` (TOML) |
@@ -1528,27 +1639,78 @@ out of a source checkout instead, replace `"command": "mind-mem-mcp"` with
 | **Cursor** (`cursor`) | `~/.cursor/mcp.json` (JSON) |
 | **Windsurf** (`windsurf`) | `~/.codeium/windsurf/mcp_config.json` (JSON) |
 | **aider** (`aider`) | no MCP writer — `mm install aider` writes `<workspace>/.aider.conf.yml` |
-| **OpenClaw** (`openclaw`) | no MCP writer — `mm install openclaw` writes `~/.openclaw/openclaw.json` |
+| **OpenClaw** (`openclaw`) | `~/.openclaw/openclaw.json` (JSON) |
 | **NanoClaw** (`nanoclaw`) | no MCP writer — `mm install nanoclaw` writes `~/.nanoclaw/nanoclaw.json` |
 | **NemoClaw** (`nemoclaw`) | no MCP writer — `mm install nemoclaw` writes `~/.nemoclaw/nemoclaw.json` |
-| **Continue** (`continue`) | `~/.continue/config.json` (JSON) |
-| **Cline** (`cline`) | `~/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` (JSON) |
-| **Roo Code** (`roo`) | `~/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` (JSON) |
+| **Continue** (`continue`) | `~/.continue/config.yaml` (YAML) |
+| **Cline** (`cline`) | `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` (JSON) |
+| **Roo Code** (`roo`) | `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` (JSON) |
 | **Zed** (`zed`) | `~/.config/zed/settings.json` (JSON) |
 | **GitHub Copilot (workspace instructions)** (`copilot`) | no MCP writer — `mm install copilot` writes `<workspace>/.github/copilot-instructions.md` |
 | **GitHub Copilot CLI** (`copilot-cli`) | `~/.copilot/mcp-config.json` (JSON) |
 | **Cody** (`cody`) | no MCP writer — `mm install cody` writes `<workspace>/.cody/config.json` |
 | **Qodo Gen** (`qodo`) | no MCP writer — `mm install qodo` writes `<workspace>/.codium/ai-rules.md` |
+| **Claude Desktop** (`claude-desktop`) | `~/.config/Claude/claude_desktop_config.json` (JSON) |
+| **VS Code (native MCP)** (`vscode`) | `~/.config/Code/User/mcp.json` (JSON) |
+| **Visual Studio (Windows)** (`visual-studio`) | `~/.mcp.json` (JSON) |
+| **Qwen Code** (`qwen-code`) | `~/.qwen/settings.json` (JSON) |
+| **Kimi Code CLI** (`kimi-code`) | `~/.kimi-code/mcp.json` (JSON) |
+| **Amp** (`amp`) | `~/.config/amp/settings.json` (JSON) |
+| **goose** (`goose`) | `~/.config/goose/config.yaml` (YAML) |
+| **Crush** (`crush`) | `~/.config/crush/crush.json` (JSON) |
+| **Factory Droid** (`factory-droid`) | `~/.factory/mcp.json` (JSON) |
+| **Kiro** (`kiro`) | `~/.kiro/settings/mcp.json` (JSON) |
+| **Auggie (Augment Code)** (`auggie`) | `~/.augment/settings.json` (JSON) |
+| **OpenHands CLI** (`openhands`) | `~/.openhands/mcp.json` (JSON) |
+| **MiMo Code** (`mimo-code`) | `~/.config/mimocode/mimocode.jsonc` (JSON) |
+| **Junie** (`junie`) | `~/.junie/mcp/mcp.json` (JSON) |
+| **Kilo Code** (`kilo`) | `~/.config/kilo/kilo.jsonc` (JSON) |
+| **Antigravity** (`antigravity`) | `~/.gemini/config/mcp_config.json` (JSON) |
+| **Tabnine agent** (`tabnine`) | `~/.tabnine/mcp_servers.json` (JSON) |
+| **Hermes Agent** (`hermes-agent`) | `~/.hermes/config.yaml` (YAML) |
+| **AnythingLLM Desktop** (`anythingllm`) | `~/.config/anythingllm-desktop/storage/plugins/anythingllm_mcp_servers.json` (JSON) |
+| **Warp** (`warp`) | `~/.warp/.mcp.json` (JSON) |
+| **Open Interpreter** (`open-interpreter`) | `~/.openinterpreter/config.toml` (TOML) |
+| **Amazon Q Developer** (`amazon-q`) | `~/.aws/amazonq/mcp.json` (JSON) |
+| **LM Studio** (`lm-studio`) | `~/.lmstudio/mcp.json` (JSON) |
+| **Jan** (`jan`) | `~/.local/share/Jan/data/mcp_config.json` (JSON) |
+| **BoltAI (macOS)** (`boltai`) | `~/.boltai/mcp.json` (JSON) |
+| **iFlow CLI** (`iflow`) | `~/.iflow/settings.json` (JSON) |
+| **Neovim (mcphub.nvim)** (`neovim-mcphub`) | `~/.config/mcphub/servers.json` (JSON) |
+| **Trae** (`trae`) | manual MCP setup: `mm install-all --agent trae` prints the steps and the JSON snippet |
+| **Android Studio (Gemini)** (`android-studio`) | manual MCP setup: `mm install-all --agent android-studio` prints the steps and the JSON snippet |
+| **JetBrains AI Assistant** (`jetbrains-ai-assistant`) | manual MCP setup: `mm install-all --agent jetbrains-ai-assistant` prints the steps and the JSON snippet |
+| **LibreChat** (`librechat`) | manual MCP setup: `mm install-all --agent librechat` prints the steps and the JSON snippet |
+| **Eclipse (GitHub Copilot)** (`eclipse-copilot`) | manual MCP setup: `mm install-all --agent eclipse-copilot` prints the steps and the JSON snippet |
+| **Xcode 26.3+** (`xcode`) | manual MCP setup: `mm install-all --agent xcode` prints the steps and the JSON snippet |
+| **Witsy** (`witsy`) | manual MCP setup: `mm install-all --agent witsy` prints the steps and the JSON snippet |
+| **Emacs (mcp.el)** (`emacs-mcp-el`) | manual MCP setup: `mm install-all --agent emacs-mcp-el` prints the steps and the JSON snippet |
+| **Open WebUI** (`open-webui`) | manual MCP setup: `mm install-all --agent open-webui` prints the steps and the JSON snippet |
+| **Docker MCP Toolkit** (`docker-mcp-toolkit`) | manual MCP setup: `mm install-all --agent docker-mcp-toolkit` prints the steps and the JSON snippet |
+| **Cherry Studio** (`cherry-studio`) | manual MCP setup: `mm install-all --agent cherry-studio` prints the steps and the JSON snippet |
+| **Msty Studio** (`msty`) | manual MCP setup: `mm install-all --agent msty` prints the steps and the JSON snippet |
+| **Raycast** (`raycast`) | manual MCP setup: `mm install-all --agent raycast` prints the steps and the JSON snippet |
+| **5ire** (`5ire`) | manual MCP setup: `mm install-all --agent 5ire` prints the steps and the JSON snippet |
+| **Perplexity (macOS app)** (`perplexity-desktop`) | manual MCP setup: `mm install-all --agent perplexity-desktop` prints the steps and the JSON snippet |
+| **ChatGPT** (`chatgpt-desktop`) | manual MCP setup: `mm install-all --agent chatgpt-desktop` prints the steps and the JSON snippet |
+| **n8n** (`n8n`) | manual MCP setup: `mm install-all --agent n8n` prints the steps and the JSON snippet |
+| **Dify** (`dify`) | manual MCP setup: `mm install-all --agent dify` prints the steps and the JSON snippet |
+| **Flowise** (`flowise`) | manual MCP setup: `mm install-all --agent flowise` prints the steps and the JSON snippet |
+| **Blackbox AI** (`blackbox`) | manual MCP setup: `mm install-all --agent blackbox` prints the steps and the JSON snippet |
+| **fast-agent** (`fast-agent`) | manual MCP setup: `mm install-all --agent fast-agent` prints the steps and the JSON snippet |
+| **Void** (`void`) | manual MCP setup: `mm install-all --agent void` prints the steps and the JSON snippet |
 
-> **Cline and Roo Code:** the installer writes the VS Code Server (remote / WSL)
-> settings tree, `~/.vscode-server/data/User/`. Desktop VS Code keeps its user
-> settings elsewhere (for example `~/.config/Code/User/` on Linux), and those
-> paths are not written yet; add the MCP entry there by hand for now.
+> **Cline and Roo Code:** the installer writes desktop VS Code's settings tree
+> (`~/.config/Code/User/` on Linux) and, when present, the VS Code Server
+> (remote / WSL) copy under `~/.vscode-server/data/User/`.
 
-Claude Desktop is not in the `mm install-all` registry. Configure it with
-`./install.sh --claude-desktop` or by hand in
-`~/.config/Claude/claude_desktop_config.json` (macOS:
-`~/Library/Application Support/Claude/claude_desktop_config.json`).
+Claude Desktop is in the registry (`mm install-all --agent claude-desktop`) and
+also has `./install.sh --claude-desktop`. Its file is
+`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS and
+`%APPDATA%\Claude\claude_desktop_config.json` on Windows; the Linux path above
+is written only when that directory already exists. Uninstall
+(`mm uninstall-all`) removes only the mind-mem entry and restores a file's
+original bytes, or deletes the file if mind-mem created it.
 
 For **Codex CLI** (TOML format), add to `~/.codex/config.toml`:
 

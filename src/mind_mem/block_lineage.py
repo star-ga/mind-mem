@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import datetime as _dt
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -438,8 +439,14 @@ def block_lineage(
     *,
     kind_filter: str | None = None,
     node_cap: int = LINEAGE_NODE_CAP,
+    visible: Callable[[str], bool] | None = None,
 ) -> LineageResult:
     """BFS-traverse the lineage graph rooted at ``block_id``.
+
+    ``visible`` restricts the walk to the subgraph a caller may read: a block
+    for which it returns False is never entered, reported, counted against
+    ``node_cap`` or stepped through, so distances and reachability are exactly
+    those derivable from visible blocks alone.
 
     Bounded by:
         * ``max_depth`` — clamped to ``[1, LINEAGE_DEPTH_CAP]``.
@@ -467,6 +474,8 @@ def block_lineage(
     for neighbour, kind in _outgoing(workspace, block_id, kind_filter=kind_filter):
         if neighbour == block_id or neighbour in visited:
             continue
+        if visible is not None and not visible(neighbour):
+            continue
         visited.add(neighbour)
         queue.append((neighbour, 1, kind))
         edges.append(
@@ -487,6 +496,8 @@ def block_lineage(
             continue
         for neighbour, n_kind in _outgoing(workspace, node, kind_filter=kind_filter):
             if neighbour in visited:
+                continue
+            if visible is not None and not visible(neighbour):
                 continue
             visited.add(neighbour)
             next_hop = hop + 1

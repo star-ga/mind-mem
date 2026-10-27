@@ -28,6 +28,7 @@ OUT = ROOT / "skills" / "mind-mem" / "references" / "cli.md"
 # example can never name a flag the CLI does not accept.
 EXAMPLES: dict[str, str] = {
     "recall": 'mm recall "database decision" --limit 5 --active-only',
+    "abstention-eval": "mm abstention-eval --labelled queries.jsonl --intended-use answer",
     "context": 'mm context "billing service" --max-tokens 1500',
     "inject": 'mm inject "auth migration" --agent claude-code',
     "resume": "mm resume --json",
@@ -45,6 +46,7 @@ EXAMPLES: dict[str, str] = {
     "detect": "mm detect",
     "install": "mm install claude-code --dry-run",
     "install-all": "mm install-all --dry-run",
+    "uninstall-all": "mm uninstall-all --dry-run --agent cursor",
     "install-model": "mm install-model --dry-run",
     "doctor": "mm doctor",
     "token rotate": "mm token rotate",

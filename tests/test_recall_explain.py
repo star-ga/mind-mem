@@ -38,6 +38,16 @@ def ws(tmp_path):
     return workspace
 
 
+def _age_files(ws: str, seconds: int = 3600) -> None:
+    """Age every workspace file past the recall cache's racy-timestamp window."""
+    import time
+
+    past = time.time() - seconds
+    for root, _dirs, files in os.walk(ws):
+        for name in files:
+            os.utime(os.path.join(root, name), (past, past))
+
+
 def _call_recall(ws: str, query: str, explain: bool = False) -> dict:
     """Call the MCP recall tool via the workspace context manager."""
     import mind_mem.mcp.tools.recall as recall_tool
@@ -292,6 +302,19 @@ class TestRecallExplainMCPIntegration:
         )
 
         per_serve = (SERVED_SEQ_KEY, SERVED_ROW_HASH_KEY)
+
+        # The equality below rides on the second serve being a recall-cache
+        # hit. The cache key carries a stat-only corpus stamp, so the workspace
+        # must be quiet: indexed (the FTS-less scan leg logs co-retrieval into
+        # recall.db on every miss, which moves the stamp and feeds the next
+        # ranking), warmed once (a fresh index lazily creates two tables on the
+        # first recall), and aged past the racy-timestamp window.
+        from mind_mem.sqlite_index import build_index
+
+        build_index(ws)
+        with use_workspace(ws):
+            recall_tool.recall("warm-up", limit=1)
+        _age_files(ws)
 
         def _split(raw: str) -> tuple[dict, dict]:
             """Split a payload into (everything else, the per-serve pointers)."""

@@ -9,7 +9,7 @@
 
 ## What MIND-Mem actually ships
 
-### Native integration with 20 clients (12 MCP-aware clients)
+### Native integration with 69 clients (41 MCP-aware clients)
 
 MIND-Mem speaks the [Model Context Protocol](https://modelcontextprotocol.io/).
 Any MCP-compatible client connects with one command:
@@ -24,36 +24,87 @@ and writes the appropriate config file for each.
 
 Currently supported:
 
-| Client | Vendor | `mm install` id | MCP config written |
-|--------|--------|-----------------|--------------------|
-| Claude Code | Anthropic | `claude-code` | No (instructions/hooks only) |
-| Codex CLI | OpenAI | `codex` | Yes |
-| Grok Build CLI | xAI | `grok-build` | Yes |
-| Vibe (Mistral CLI) | Mistral AI | `vibe` | Yes |
-| OpenCode (1.x / 2.x) | OpenCode (open source) | `opencode` | Yes |
-| Gemini CLI | Google | `gemini` | Yes |
-| Cursor | Anysphere | `cursor` | Yes |
-| Windsurf | Cognition (formerly Codeium) | `windsurf` | Yes |
-| aider | Aider-AI (open source) | `aider` | No (instructions/hooks only) |
-| OpenClaw | OpenClaw Foundation (open source) | `openclaw` | No (instructions/hooks only) |
-| NanoClaw | NanoClaw / Qwibit (open source) | `nanoclaw` | No (instructions/hooks only) |
-| NemoClaw | NVIDIA | `nemoclaw` | No (instructions/hooks only) |
-| Continue | Continue.dev | `continue` | Yes |
-| Cline | Cline | `cline` | Yes |
-| Roo Code | Roo Code | `roo` | Yes |
-| Zed | Zed Industries | `zed` | Yes |
-| GitHub Copilot (workspace instructions) | GitHub / Microsoft | `copilot` | No (instructions/hooks only) |
-| GitHub Copilot CLI | GitHub / Microsoft | `copilot-cli` | Yes |
-| Cody | Sourcegraph | `cody` | No (instructions/hooks only) |
-| Qodo Gen | Qodo | `qodo` | No (instructions/hooks only) |
+| Client | Vendor | `mm install` id | Install mode |
+|--------|--------|-----------------|--------------|
+| Claude Code | Anthropic | `claude-code` | auto MCP |
+| Codex CLI | OpenAI | `codex` | auto MCP |
+| Grok Build CLI | xAI | `grok-build` | auto MCP |
+| Vibe (Mistral CLI) | Mistral AI | `vibe` | auto MCP |
+| OpenCode (1.x / 2.x) | OpenCode (open source) | `opencode` | auto MCP |
+| Gemini CLI | Google | `gemini` | auto MCP |
+| Cursor | Anysphere | `cursor` | auto MCP |
+| Windsurf | Cognition (formerly Codeium) | `windsurf` | auto MCP |
+| aider | Aider-AI (open source) | `aider` | none |
+| OpenClaw | OpenClaw Foundation (open source) | `openclaw` | auto MCP |
+| NanoClaw | NanoClaw / Qwibit (open source) | `nanoclaw` | none |
+| NemoClaw | NVIDIA | `nemoclaw` | none |
+| Continue | Continue.dev | `continue` | auto MCP |
+| Cline | Cline | `cline` | auto MCP |
+| Roo Code | Roo Code | `roo` | auto MCP |
+| Zed | Zed Industries | `zed` | auto MCP |
+| GitHub Copilot (workspace instructions) | GitHub / Microsoft | `copilot` | none |
+| GitHub Copilot CLI | GitHub / Microsoft | `copilot-cli` | auto MCP |
+| Cody | Sourcegraph | `cody` | none |
+| Qodo Gen | Qodo | `qodo` | none |
+| Claude Desktop | Anthropic | `claude-desktop` | auto MCP |
+| VS Code (native MCP) | Microsoft | `vscode` | auto MCP |
+| Visual Studio (Windows) | Microsoft | `visual-studio` | auto MCP |
+| Qwen Code | Alibaba | `qwen-code` | auto MCP |
+| Kimi Code CLI | Moonshot AI | `kimi-code` | auto MCP |
+| Amp | Amp | `amp` | auto MCP |
+| goose | Agentic AI Foundation (created by Block) | `goose` | auto MCP |
+| Crush | Charm | `crush` | auto MCP |
+| Factory Droid | Factory | `factory-droid` | auto MCP |
+| Kiro | AWS | `kiro` | auto MCP |
+| Auggie (Augment Code) | Augment Code | `auggie` | auto MCP |
+| OpenHands CLI | All Hands AI | `openhands` | auto MCP |
+| MiMo Code | Xiaomi | `mimo-code` | auto MCP |
+| Junie | JetBrains | `junie` | auto MCP |
+| Kilo Code | Kilo Code | `kilo` | auto MCP |
+| Antigravity | Google | `antigravity` | auto MCP |
+| Tabnine agent | Tabnine | `tabnine` | auto MCP |
+| Hermes Agent | Nous Research | `hermes-agent` | auto MCP |
+| AnythingLLM Desktop | Mintplex Labs | `anythingllm` | auto MCP |
+| Warp | Warp | `warp` | auto MCP |
+| Open Interpreter | Open Interpreter | `open-interpreter` | auto MCP |
+| Amazon Q Developer | AWS | `amazon-q` | auto MCP |
+| LM Studio | Element Labs | `lm-studio` | auto MCP |
+| Jan | Menlo Research | `jan` | auto MCP |
+| BoltAI (macOS) | BoltAI | `boltai` | auto MCP |
+| iFlow CLI | iFlow | `iflow` | auto MCP |
+| Neovim (mcphub.nvim) | mcphub.nvim (open source) | `neovim-mcphub` | auto MCP |
+| Trae | ByteDance | `trae` | manual MCP |
+| Android Studio (Gemini) | Google | `android-studio` | manual MCP |
+| JetBrains AI Assistant | JetBrains | `jetbrains-ai-assistant` | manual MCP |
+| LibreChat | LibreChat | `librechat` | manual MCP |
+| Eclipse (GitHub Copilot) | GitHub / Microsoft | `eclipse-copilot` | manual MCP |
+| Xcode 26.3+ | Apple | `xcode` | manual MCP |
+| Witsy | Witsy (open source) | `witsy` | manual MCP |
+| Emacs (mcp.el) | mcp.el (open source) | `emacs-mcp-el` | manual MCP |
+| Open WebUI | Open WebUI (open source) | `open-webui` | manual MCP |
+| Docker MCP Toolkit | Docker | `docker-mcp-toolkit` | manual MCP |
+| Cherry Studio | CherryHQ | `cherry-studio` | manual MCP |
+| Msty Studio | Msty | `msty` | manual MCP |
+| Raycast | Raycast | `raycast` | manual MCP |
+| 5ire | 5ire (open source) | `5ire` | manual MCP |
+| Perplexity (macOS app) | Perplexity | `perplexity-desktop` | manual MCP |
+| ChatGPT | OpenAI | `chatgpt-desktop` | manual MCP |
+| n8n | n8n | `n8n` | manual MCP |
+| Dify | LangGenius | `dify` | manual MCP |
+| Flowise | FlowiseAI | `flowise` | manual MCP |
+| Blackbox AI | Blackbox | `blackbox` | manual MCP |
+| fast-agent | fast-agent (open source) | `fast-agent` | manual MCP |
+| Void | Void (open source) | `void` | manual MCP |
 
 Every row is an entry in `mind_mem.hook_installer.AGENT_REGISTRY`; the
-per-client config paths are in
-[`docs/client-integrations.md`](client-integrations.md). Claude Desktop
-(Anthropic) is not in the registry: `./install.sh --claude-desktop`
-configures it, or see [`docs/claude-desktop-setup.md`](claude-desktop-setup.md).
+per-client config paths, and the documentation each entry was checked
+against, are in [`docs/client-integrations.md`](client-integrations.md).
+*auto MCP* clients (41) get the server entry merged into their own config
+file; *manual MCP* clients (22) have MCP but no per-user file, so
+`mm install-all --agent <id>` prints the steps; *none* (6) get an
+instruction or hook file only.
 
-**What this means**: each client marked "Yes" above can call MIND-Mem's
+**What this means**: each client marked "auto MCP" above can call MIND-Mem's
 107 MCP tools (recall, propose_update, scan, hybrid_search,
 mic_convert_tool, mic_inspect_tool, etc.) the same way it calls any other
 MCP server; the others get instructions or hooks that route through the

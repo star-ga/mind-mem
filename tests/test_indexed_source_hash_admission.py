@@ -39,7 +39,9 @@ def test_equal_size_mtime_status_change_is_withheld(tmp_path: Path) -> None:
 
     source.write_text(after, encoding="utf-8")
     os.utime(source, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
-    assert is_stale(str(workspace)) is False
+    # The index now notices the metadata-preserving edit itself (ctime moves
+    # on every write); the admission assertion below must hold either way.
+    assert is_stale(str(workspace)) is True
     assert recall(str(workspace), "same metadata status canary", limit=10) == []
 
 

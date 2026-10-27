@@ -38,6 +38,7 @@ from ._recall_constants import (
     RM3_BLEND_WEIGHT,
     STATUS_BOOST_ACTIVE,
     STATUS_BOOST_WIP,
+    VALIDITY_STATUS_DEAD,
 )
 from ._recall_context import context_pack
 from ._recall_detection import (
@@ -71,6 +72,7 @@ from .guardrails import GuardrailContext, GuardrailPolicy
 from .namespace_retrieval import declared_custom_namespaces, filter_search_hits, namespace_search_allowed
 from .observability import get_logger, metrics
 from .recall_smart_chunk import chunk_statement, resolve_smart_chunking_config
+from .recall_supersede import edges_from_blocks, order_by_supersession, reapply_supersession, resolve_heads
 from .retrieval_graph import (
     feedback_quality_credit,
     get_hard_negative_ids,
@@ -1118,6 +1120,169 @@ def _apply_validity_and_resort(
     return hits
 
 
+_REPLACED_STATUSES = VALIDITY_STATUS_DEAD | {"revoked"}
+
+
+def _is_replaced(hit: Mapping[str, Any]) -> bool:
+    """True when *hit* carries a superseded/revoked/dead status (either key case)."""
+    return str(hit.get("status") or hit.get("Status") or "").strip().lower() in _REPLACED_STATUSES
+
+
+#: Marker recording a dead hit's score before :func:`_rank_replaced_below_live`
+#: re-scored it (mirrors the validity gate's ``_validity_demoted``).
+REPLACED_DEMOTED_MARKER = "_replaced_demoted_from"
+
+
+def _hit_score(hit: Mapping[str, Any]) -> float:
+    try:
+        return float(hit.get("score", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _demoted_score(score: float, lowest_live: float) -> float:
+    """A dead hit's score in ``[0, lowest_live)``, increasing in its own score.
+
+    Strictly below every live score whenever that score is positive (the
+    case on every leg; a live score of exactly ``0`` can only be tied), never
+    negative, deterministic, and order-preserving among demoted hits.
+    """
+    own = max(score, 0.0)
+    return max(lowest_live, 0.0) * own / (1.0 + own)
+
+
+def _rank_replaced_below_live(hits: list[dict]) -> list[dict]:
+    """Demote superseded/revoked hits, BY SCORE, below every live hit.
+
+    A corrected memory stays recallable as history, but it must never outrank
+    the memory that replaced it. Every recall leg calls this on its WIDE pool,
+    before its own limit cut, so the live replacement keeps its slot at any
+    limit; the funnel in :func:`_apply_post_filters` calls it again as a
+    backstop.
+
+    The demotion is a score change, not a bare reorder, so the
+    score-descending contract every leg promises still holds: each dead hit
+    scoring at or above the lowest live score is re-scored strictly below
+    every live score (see :func:`_demoted_score`), on a copy carrying
+    :data:`REPLACED_DEMOTED_MARKER` with its original score; the input hits
+    are never mutated. Live hits keep their order, followed by the dead hits
+    in descending score (stable). When no hit needs re-scoring the input list
+    itself is returned, untouched, so carrier identity and every attached
+    attribute survive.
+    """
+    live = [h for h in hits if not _is_replaced(h)]
+    if not live or len(live) == len(hits):
+        return hits
+    anchor = min(live, key=_hit_score)
+    lowest_live = _hit_score(anchor)
+    # A demoted score is derived from the anchor's score, so when that score
+    # came from co-retrieval propagation the demoted one did too: carry the
+    # provenance flag rather than present a boost-dependent score as stable.
+    inherited = {"_co_retrieval_boost": True} if anchor.get("_co_retrieval_boost") else {}
+    dead: list[dict] = []
+    changed = False
+    for hit in hits:
+        if not _is_replaced(hit):
+            continue
+        score = _hit_score(hit)
+        if score < lowest_live:
+            dead.append(hit)
+            continue
+        original = hit.get(REPLACED_DEMOTED_MARKER, score)
+        dead.append({**hit, **inherited, "score": _demoted_score(score, lowest_live), REPLACED_DEMOTED_MARKER: original})
+        changed = True
+    if not changed and all(a is b for a, b in zip(hits, live)):
+        return hits
+    dead.sort(key=_hit_score, reverse=True)
+    return live + dead
+
+
+def _live_aware_window(hits: list[dict], k: int) -> list[dict]:
+    """``hits[:k]`` that dead-status hits cannot crowd live hits out of.
+
+    A leg's wide pool is cut at a fixed size before demotion runs, so once
+    ``k`` superseded/revoked hits out-score a live replacement, the cut drops
+    the replacement and no later demotion can bring it back. Every dead hit in
+    the window therefore buys one extra slot for the next live hit beyond it:
+    the window keeps everything ``hits[:k]`` kept, in the original order and
+    with the original scores, plus as many live hits as a live-only window of
+    size ``k`` would have held. With no dead hit in the window, or nothing
+    beyond it, this is exactly ``hits[:k]``.
+    """
+    head = hits[:k]
+    if len(hits) <= k:
+        return head
+    n_dead = sum(1 for h in head if _is_replaced(h))
+    if not n_dead:
+        return head
+    extra = [h for h in hits[k:] if not _is_replaced(h)][:n_dead]
+    if not extra:
+        return head
+    keep = {id(h) for h in extra}
+    return head + [h for h in hits[k:] if id(h) in keep]
+
+
+def _knee_cutoff_live_aware(results: list[dict], *, min_results: int, min_score: float) -> list[dict]:
+    """``knee_cutoff`` whose decision about LIVE hits is not anchored on a dead hit's score.
+
+    The knee measures every drop against the top score, so a superseded block
+    that out-scores its replacement can push the replacement past the knee
+    (and the ``min_results`` floor is then filled by the dead block alone).
+    The historical knee still decides everything it decided before; on top of
+    it, every live hit the knee keeps when judged among live hits only is kept
+    too. With no dead hit in *results* this is exactly ``knee_cutoff``.
+    """
+    base = knee_cutoff(results, min_results=min_results, min_score=min_score)
+    live = [r for r in results if not _is_replaced(r)]
+    if len(live) == len(results):
+        return base
+    keep = {id(r) for r in base}
+    keep.update(id(r) for r in knee_cutoff(live, min_results=1, min_score=min_score))
+    return [r for r in results if id(r) in keep]
+
+
+def _scan_supersession(hits: list[dict], corpus: list[dict]) -> list[dict]:
+    """Supersession order for the scan leg, from the corpus it already holds.
+
+    *corpus* is the call's admitted, ACL-readable, search-allowed block list,
+    so every edge here comes from a superseder the caller may read and
+    recall may serve. Returns *hits* unchanged when nothing is retired.
+    """
+    if not hits:
+        return hits
+    edges = edges_from_blocks(corpus)
+    if not edges:
+        return hits
+    heads = resolve_heads([h["_id"] for h in hits if isinstance(h.get("_id"), str)], lambda ids: {i: edges[i] for i in ids if i in edges})
+    if not heads:
+        return hits
+    wanted = {path[-1] for path in heads.values()}
+    by_id: dict[str, dict] = {}
+    for block in corpus:
+        bid = block.get("_id")
+        if isinstance(bid, str) and bid in wanted and bid not in by_id:
+            by_id[bid] = block
+
+    def fetch(block_id: str) -> dict | None:
+        block = by_id.get(block_id)
+        if block is None:
+            return None
+        tags = normalise_tags(block.get("Tags", ""))
+        return {
+            "_id": block_id,
+            "type": get_block_type(block_id),
+            "score": 0.0,
+            "excerpt": get_excerpt(block),
+            "speaker": _parse_speaker_from_tags(tags),
+            "tags": tags,
+            "file": block.get("_source_file", "?"),
+            "line": block.get("_line", 0),
+            "status": block.get("Status", ""),
+        }
+
+    return order_by_supersession(hits, heads, fetch)
+
+
 def _apply_post_filters(
     hits: list[dict],
     *,
@@ -1172,6 +1337,12 @@ def _apply_post_filters(
         hits = _apply_event_id_filter(hits, event_id)
     if min_maturity is not None:
         hits = _apply_min_maturity_filter(hits, min_maturity)
+    hits = _rank_replaced_below_live(hits)
+    # A stage after the leg may have re-sorted by score (validity, fusion,
+    # a score-only sort). Restore supersession order from the chain each
+    # retired hit carries before the cut, so the cut can never keep a
+    # superseded block and drop its superseder.
+    hits = reapply_supersession(hits)
     # Apply the full conjunction before making the single result-size decision.
     # Slicing after each predicate can discard a later hit that satisfies all
     # filters and makes the answer depend on predicate order.
@@ -1392,6 +1563,7 @@ def recall(
             since=since,
             until=until,
             return_k=_wide_pool_k,
+            agent_id=agent_id,
         )
         indexed_source = hits
         indexed_marker = getattr(hits, "degraded", None)
@@ -1697,6 +1869,7 @@ def recall(
                 all_merged = _apply_min_maturity_filter(all_merged, min_maturity)
             if as_of is not None:
                 all_merged = _apply_as_of_projection(all_merged, workspace, as_of)
+            all_merged = reapply_supersession(_rank_replaced_below_live(all_merged))
             return apply_guardrail_surfacing(
                 all_merged[:limit],
                 workspace=workspace,
@@ -2558,7 +2731,14 @@ def recall(
         t_start, t_end = resolve_time_reference(query, reference_date=_scoring_instant)
         if t_start is not None or t_end is not None:
             pre_count = len(results)
-            results = apply_temporal_filter(results, t_start, t_end)
+            filtered = apply_temporal_filter(results, t_start, t_end)
+            if filtered:
+                results = filtered
+            else:
+                # A block is dated by when it was RECORDED; the event it mentions ("last month") is often
+                # earlier. A window that removes every candidate would turn an answerable question into
+                # "no record", so keep the unfiltered ranking instead.
+                _log.info("temporal_hard_filter_empty_fallback", start=str(t_start), end=str(t_end), pre=pre_count)
             _log.info("temporal_hard_filter", start=str(t_start), end=str(t_end), pre=pre_count, post=len(results))
 
     _stage_counts["temporal_filtered"] = len(results)
@@ -2573,7 +2753,8 @@ def recall(
     # --- v7: Two-stage pipeline — wide BM25 retrieve -> dedup -> rerank -> top-k ---
     # Stage 1: Take wide candidate set (retrieve_wide_k)
     wide_k = max(retrieve_wide_k, limit)  # never retrieve fewer than final limit
-    wide_candidates = results[:wide_k]
+    # Dead-status hits do not count against the window (see _live_aware_window).
+    wide_candidates = _live_aware_window(results, wide_k)
 
     # Deduplicate by (file, line) stable key — prevents near-duplicate slots
     seen_keys = set()
@@ -2609,26 +2790,37 @@ def recall(
     # Stage 2: Deterministic rerank (v7) — cap candidates to prevent latency (#9)
     if rerank and len(deduped) > limit:
         rerank_cap = min(len(deduped), MAX_RERANK_CANDIDATES)
-        deduped = rerank_hits(query, deduped[:rerank_cap], debug=rerank_debug)
+        deduped = rerank_hits(query, _live_aware_window(deduped, rerank_cap), debug=rerank_debug)
 
     # Stage 2.5: Optional cross-encoder neural reranking — capped (#9)
     if ce_config.get("enabled", False):
         try:
-            from .cross_encoder_reranker import CrossEncoderReranker
+            from .cross_encoder_reranker import CrossEncoderReranker, ce_model_args
 
             if CrossEncoderReranker.is_available():
-                ce = CrossEncoderReranker()
+                ce = CrossEncoderReranker(**ce_model_args(ce_config))
                 ce_cap = min(len(deduped), MAX_RERANK_CANDIDATES)
-                ce_input = deduped[:ce_cap]
+                ce_input = _live_aware_window(deduped, ce_cap)
                 for r in ce_input:
                     if "content" not in r:
                         r["content"] = r.get("excerpt", "")
+                # The reranker returns only its own top-k, so a dead-status
+                # candidate it keeps on top would take a live replacement's
+                # slot before the later demotion could see it. Ask for one
+                # extra slot per dead candidate (bounded by the pool), demote,
+                # then cut back to the historical size. With no dead candidate
+                # the request and the result are exactly the historical ones.
+                ce_top_k = ce_config.get("top_k", limit)
+                ce_dead = sum(1 for r in ce_input if _is_replaced(r))
+                ce_request = min(len(ce_input), ce_top_k + ce_dead) if ce_dead else ce_top_k
                 deduped = ce.rerank(
                     query,
                     ce_input,
-                    top_k=ce_config.get("top_k", limit),
+                    top_k=ce_request,
                     blend_weight=ce_config.get("blend_weight", 0.6),
                 )
+                if ce_dead:
+                    deduped = _rank_replaced_below_live(deduped)[:ce_top_k]
                 _log.info("cross_encoder_rerank", candidates=len(ce_input), blend_weight=ce_config.get("blend_weight", 0.6))
                 # #429: Record hard negatives — blocks BM25 liked but CE rejected
                 try:
@@ -2710,7 +2902,17 @@ def recall(
     # Stage 2.9: Knee score cutoff — adaptive truncation before context packing
     if recall_cfg.get("knee_cutoff", True) and deduped:
         min_sc = float(recall_cfg.get("min_score", 0.0))
-        deduped = knee_cutoff(deduped, min_results=min(3, limit), min_score=min_sc)
+        deduped = _knee_cutoff_live_aware(deduped, min_results=min(3, limit), min_score=min_sc)
+
+    # Superseded/revoked hits are re-scored below every live hit BEFORE the
+    # limit cut: the funnel's own demotion runs on a list this leg has already
+    # narrowed, so a replacement cut here never reaches it. Returns the same
+    # list when no hit needs demoting.
+    deduped = _rank_replaced_below_live(deduped)
+    # Supersession by link, from the blocks this call already parsed and
+    # admitted (no second corpus read): a block a readable, admitted, live
+    # block supersedes gets the head of its chain directly above it.
+    deduped = _scan_supersession(deduped, all_blocks)
 
     _stage_counts["knee_cutoff"] = len(deduped)
 

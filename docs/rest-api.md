@@ -155,6 +155,7 @@ Request body:
 | `limit` | int | 10 | 1–200 |
 | `active_only` | bool | false | Only non-superseded blocks |
 | `backend` | string | `"auto"` | `auto` \| `bm25` \| `hybrid` |
+| `intended_use` | string | `""` | `summary` \| `answer` \| `governed_write`. When set the response carries an `abstention` verdict whose band scales with the use; see [computed abstention](computed-abstention.md). Unknown values are rejected (422). |
 
 ---
 

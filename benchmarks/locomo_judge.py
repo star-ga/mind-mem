@@ -819,6 +819,20 @@ def _answerer_rewrite_queries(question: str, llm_fn: Callable[[str], str], max_r
     return [question] + rewrites[:max_rewrites]
 
 
+def evidence_max_chars(top_k: int) -> int:
+    """Character budget for the packed evidence.
+
+    The packer stops adding notes once this budget is spent, so a fixed 6,000 characters silently
+    dropped retrieved blocks whenever ``top_k`` was raised (one chain-of-note block is ~400-450
+    characters). ``MIND_MEM_EVIDENCE_MAX_CHARS`` sets it explicitly; otherwise it scales with
+    ``top_k`` (500 characters per requested block) and never falls below the historical 6,000.
+    """
+    raw = os.environ.get("MIND_MEM_EVIDENCE_MAX_CHARS", "").strip()
+    if raw:
+        return max(1000, int(raw))
+    return max(6000, 500 * int(top_k))
+
+
 def evaluate_sample_with_judge(
     sample: dict,
     workspace: str,
@@ -969,6 +983,7 @@ def evaluate_sample_with_judge(
             retrieved,
             question=question,
             query_type=detected_type,
+            max_chars=evidence_max_chars(top_k),
         )
 
         # Step 2b: Abstention gate — deterministic pre-LLM confidence check

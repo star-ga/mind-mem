@@ -416,7 +416,8 @@ def load_outcome_signals(workspace: str, block_ids: Sequence[str]) -> dict[str, 
     try:
         from .calibration import CalibrationManager
 
-        return CalibrationManager(workspace).get_outcome_signals(list(block_ids))
+        signals: dict[str, OutcomeSignal] = CalibrationManager(workspace).get_outcome_signals(list(block_ids))
+        return signals
     except Exception as exc:  # pragma: no cover — degradation path
         _log.warning("outcome_signals_unavailable", error=str(exc))
         return {}
@@ -426,7 +427,8 @@ def outcome_stats(workspace: str, top_n: int = 20) -> dict[str, Any]:
     """Utility health report: totals, most-corroborated, most-implicated."""
     from .calibration import CalibrationManager
 
-    return CalibrationManager(workspace).get_outcome_stats(top_n=top_n)
+    stats: dict[str, Any] = CalibrationManager(workspace).get_outcome_stats(top_n=top_n)
+    return stats
 
 
 # ---------------------------------------------------------------------------

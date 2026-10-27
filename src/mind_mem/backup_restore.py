@@ -514,6 +514,7 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
     Raises:
         GovernanceBypassError: the gate refused; nothing was extracted.
     """
+    from .apply_engine import _live_config_kept
     from .governance_gate import get_gate
 
     ws = os.path.abspath(workspace)
@@ -568,6 +569,16 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
                 "force": bool(force),
             },
         ) as receipt,
+        # A restore rewinds MEMORY, never configuration — the same rule
+        # restore_snapshot follows. BACKUP_FILES carries mind-mem.json, and
+        # ``force`` used to write the archive's copy over the live, attested
+        # one: every setting attested after the backup was silently undone,
+        # and the config fell out of step with its binding, so under
+        # ``enforce`` this scope's own close record was refused as drift and
+        # every later governed write with it. ``fill_missing``: restoring
+        # into a workspace with no config and no binding has nothing live to
+        # protect, so the archive's config lands there as it always did.
+        _live_config_kept(ws, fill_missing=True),
     ):
         for member in tar.getmembers():
             # The ledgers ride under a prefix no restore extracts: they are

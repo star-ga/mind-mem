@@ -28,10 +28,12 @@ from __future__ import annotations
 
 import json
 
+from mind_mem.trajectory import TRAJECTORY_DIR
+
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _workspace
-from ._helpers import get_logger, metrics
+from ._helpers import _readable_sources, get_logger, metrics
 
 _log = get_logger("mcp_server")
 
@@ -111,14 +113,20 @@ def similar_trajectories(
 
     ws = _workspace()
     try:
-        matches = _similar(
-            ws,
-            task.strip(),
-            tools=tools if isinstance(tools, str) else "",
-            outcome=outcome if isinstance(outcome, str) else "",
-            limit=min(limit, MAX_TRAJECTORY_RESULTS) if limit else None,
-            scoring_instant=instant,
-        )
+        # The trajectory sidecar is a root-level directory of task / lesson
+        # text; a bound caller whose ACL does not grant it is served the empty
+        # answer, not the sidecar.
+        if _readable_sources(ws, (f"{TRAJECTORY_DIR}/TRAJ-00000000-000.md",)):
+            matches = _similar(
+                ws,
+                task.strip(),
+                tools=tools if isinstance(tools, str) else "",
+                outcome=outcome if isinstance(outcome, str) else "",
+                limit=min(limit, MAX_TRAJECTORY_RESULTS) if limit else None,
+                scoring_instant=instant,
+            )
+        else:
+            matches = []
     except OSError as exc:
         _log.warning("similar_trajectories_failed", error=str(exc))
         return json.dumps({"_schema_version": MCP_SCHEMA_VERSION, "error": f"Failed to read trajectories: {exc}"})

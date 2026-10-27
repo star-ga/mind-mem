@@ -21,6 +21,7 @@ Conventions that hold for every command:
 | Command | What it does |
 | --- | --- |
 | [`mm recall`](#mm-recall) | Search memory and print JSON results. |
+| [`mm abstention-eval`](#mm-abstention-eval) | Measure whether computed abstention separates present from absent answers on this workspace. |
 | [`mm context`](#mm-context) | Recall + token-budget pack into a context snippet (JSON). |
 | [`mm inject`](#mm-inject) | Render a context snippet in the format a specific agent expects. |
 | [`mm resume`](#mm-resume) | Print the resume brief for the active task frame, with dead-end warnings. |
@@ -38,6 +39,7 @@ Conventions that hold for every command:
 | [`mm detect`](#mm-detect) | Auto-detect installed AI coding clients for this workspace. |
 | [`mm install`](#mm-install) | Configure mind-mem for one named AI coding client. |
 | [`mm install-all`](#mm-install-all) | Auto-detect + configure every installed AI coding client. |
+| [`mm uninstall-all`](#mm-uninstall-all) | Remove the mind-mem MCP entry from every detected (or named) AI client; other entries are kept. |
 | [`mm install-model`](#mm-install-model) | Download `mind-mem-4b` GGUF (~2.5GB) from HuggingFace and import into Ollama as `mind-mem:4b`. Idempotent. |
 | [`mm doctor`](#mm-doctor) | Diagnose workspace state (block-store parity, recall-log schema drift). Add --rebuild-cache or --migrate-recall-log to actually repair. |
 | [`mm token`](#mm-token) | Federation/HTTP transport token management (rotation primitive). |
@@ -84,7 +86,7 @@ Conventions that hold for every command:
 Search memory and print JSON results.
 
 ```text
-mm recall <query> [--limit LIMIT] [--active-only] [--receipt-envelope] [--since SINCE] [--until UNTIL] [--kernel KERNEL]
+mm recall <query> [--limit LIMIT] [--active-only] [--receipt-envelope] [--since SINCE] [--until UNTIL] [--kernel KERNEL] [--intended-use {summary,answer,governed_write}]
 ```
 
 | Argument | Meaning |
@@ -96,11 +98,33 @@ mm recall <query> [--limit LIMIT] [--active-only] [--receipt-envelope] [--since 
 | `--since` | ISO-8601 lower bound on block Date (inclusive). E.g. --since 2026-01-01. |
 | `--until` | ISO-8601 upper bound on block Date (inclusive). E.g. --until 2026-12-31. |
 | `--kernel` | Route through a v4 cognitive-kernel strategy instead of plain recall: default, surprise_weighted, lineage_first, contradicts_first, graph_walk. Requires v4.cognitive_kernel in mind-mem.json. Omit for unchanged v3 recall. |
+| `--intended-use` | Print the ranked hits plus an 'abstention' verdict (act / proceed_with_caution / do_not_act) for what the answer will be used for; a governed write needs more separation than a summary. Changes the output from a bare list to an object. The verdict is recorded so report_outcome can score it. Choices: `summary`, `answer`, `governed_write`. |
 
 Example:
 
 ```bash
 mm recall "database decision" --limit 5 --active-only
+```
+
+## mm abstention-eval
+
+Measure whether computed abstention separates present from absent answers on this workspace.
+
+```text
+mm abstention-eval --labelled LABELLED [--limit LIMIT] [--intended-use {summary,answer,governed_write}] [--scoring-instant SCORING_INSTANT]
+```
+
+| Argument | Meaning |
+| --- | --- |
+| `--labelled` | (required) JSONL file of {"query": str, "present": bool} rows. |
+| `--limit` | - |
+| `--intended-use` | Choices: `summary`, `answer`, `governed_write`. |
+| `--scoring-instant` | UTC date (YYYY-MM-DD) to pin the recency layer for a reproducible run. |
+
+Example:
+
+```bash
+mm abstention-eval --labelled queries.jsonl --intended-use answer
 ```
 
 ## mm context
@@ -419,12 +443,31 @@ mm install-all [--agent AGENT] [--dry-run] [--force] [--no-mcp]
 | `--agent` | Restrict installation to these named agents. Repeat flag for multiple. Default = auto-detect every installed client. |
 | `--dry-run` | - |
 | `--force` | - |
-| `--no-mcp` | Skip native MCP server registration. Default: write both the text hook AND the MCP registration for every agent that supports MCP (Codex, OpenCode, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed). |
+| `--no-mcp` | Skip native MCP server registration. Default: write both the text hook AND the MCP registration for every agent with an MCP config file (see `mm detect` and docs/client-integrations.md); clients without one get printed manual steps. |
 
 Example:
 
 ```bash
 mm install-all --dry-run
+```
+
+## mm uninstall-all
+
+Remove the mind-mem MCP entry from every detected (or named) AI client; other entries are kept.
+
+```text
+mm uninstall-all [--agent AGENT] [--dry-run]
+```
+
+| Argument | Meaning |
+| --- | --- |
+| `--agent` | Restrict to these named agents. Repeat flag for multiple. Default = auto-detect. |
+| `--dry-run` | - |
+
+Example:
+
+```bash
+mm uninstall-all --dry-run --agent cursor
 ```
 
 ## mm install-model
