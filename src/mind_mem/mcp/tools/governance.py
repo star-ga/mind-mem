@@ -1044,7 +1044,8 @@ def _world_staleness_summary(ws: str) -> dict[str, Any]:
             "stale_blocks": [],
             "dead_anchor_count": 0,
             "dead_anchors": [],
-            "error": str(exc),
+            # Detail stays in the server log above; scan() output reaches API clients.
+            "error": "world staleness check failed; see the server log",
         }
 
 

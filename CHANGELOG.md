@@ -58,6 +58,11 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- Code-scanning findings closed at the cause: rollback confines the receipt
+  timestamp to the applied-snapshots directory before any filesystem call; `scan`
+  reports a generic world-staleness error (detail stays in the server log) instead of
+  the exception text; two install-path `assert`s that guard runtime behaviour are now
+  explicit exceptions, so they hold under `python -O`.
 - `mm install` / `mm install-all` no longer overwrite a client config they
   cannot parse. A Cursor, Windsurf, Zed, Gemini, Continue, Cline, Roo,
   Copilot CLI, Claude Code or OpenClaw config that is JSONC, invalid JSON,

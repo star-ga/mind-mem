@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1757 | **Est. tokens:** ~5,173,082
-**Generated:** 2026-10-27 10:15 UTC
+**Files:** 1757 | **Est. tokens:** ~5,173,154
+**Generated:** 2026-10-27 10:17 UTC
 
 ## Token Budget Guide
 
@@ -78,14 +78,14 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,218 |
+| `src/mind_mem/` | 257 | ~1,147,258 |
 | `src/mind_mem/api/` | 5 | ~28,982 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
 | `src/mind_mem/importers/` | 10 | ~34,469 |
 | `src/mind_mem/mcp/` | 3 | ~7,717 |
 | `src/mind_mem/mcp/infra/` | 8 | ~20,711 |
-| `src/mind_mem/mcp/tools/` | 28 | ~112,899 |
+| `src/mind_mem/mcp/tools/` | 28 | ~112,931 |
 | `src/mind_mem/skill_opt/` | 11 | ~20,899 |
 | `src/mind_mem/spec/` | 4 | ~6,845 |
 | `src/mind_mem/storage/` | 2 | ~11,712 |
@@ -818,12 +818,12 @@
 - `chat_memory.py` (~10891 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
 - `client_config_io.py` (~1088 tok, large) — # Copyright 2026 STARGA, Inc.
-- `client_mcp.py` (~2886 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `client_mcp.py` (~2905 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_paths.py` (~760 tok, large) — # Copyright 2026 STARGA, Inc.
 - `client_registry_data.py` (~6077 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_registry.py` (~2117 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_restore.py` (~1459 tok, large) — # Copyright 2026 STARGA, Inc.
-- `client_writers.py` (~5521 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `client_writers.py` (~5542 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
@@ -958,7 +958,7 @@
 - `core.py` (~3203 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2195 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~17653 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~17685 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~11036 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1988 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_helpers.py` (~1919 tok, huge) — Shared tool-internal helpers — workspace paths + lazy-init singletons.

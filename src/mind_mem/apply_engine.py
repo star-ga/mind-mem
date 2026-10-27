@@ -260,9 +260,10 @@ def _safe_resolve(ws, rel_path):
     Raises ValueError if the path escapes the workspace.
     """
     ws_real = os.path.realpath(ws)
-    joined = os.path.join(ws, rel_path)
-    resolved = os.path.realpath(joined)
-    if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
+    resolved = os.path.realpath(os.path.join(ws, rel_path))
+    if resolved == ws_real:
+        return ws_real
+    if not resolved.startswith(ws_real + os.sep):
         raise ValueError(f"Path escapes workspace: {rel_path}")
     return resolved
 
@@ -2586,10 +2587,16 @@ def _rollback_refusal(ws, snap_dir, receipt_ts):
     what an apply that failed its preconditions leaves behind, and it
     proves nothing was applied.
     """
-    literal_snap = os.path.join(ws, "intelligence", "applied", receipt_ts)
+    # The lexical (unresolved) path is what the symlink checks need, so it
+    # cannot go through realpath; confine it to the applied dir by hand so a
+    # hostile *receipt_ts* ("..", absolute) never reaches a filesystem call.
+    applied_root = os.path.normpath(os.path.join(ws, "intelligence", "applied"))
+    literal_snap = os.path.normpath(os.path.join(applied_root, receipt_ts))
+    if not literal_snap.startswith(applied_root + os.sep):
+        return "snapshot path escapes the applied directory", None
     if os.path.islink(literal_snap):
         return "the snapshot directory is a symlink", None
-    literal_receipt = os.path.join(snap_dir, "APPLY_RECEIPT.md")
+    literal_receipt = os.path.join(literal_snap, "APPLY_RECEIPT.md")
     if os.path.islink(literal_receipt):
         return "APPLY_RECEIPT.md is a symlink, not a receipt this workspace wrote", None
     if not os.path.lexists(literal_receipt):
