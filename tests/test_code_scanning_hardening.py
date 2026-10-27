@@ -74,9 +74,7 @@ def test_scan_does_not_leak_exception_text(tmp_path: Path, monkeypatch: pytest.M
     ws = tmp_path / "ws"
     (ws / "decisions").mkdir(parents=True)
     (ws / "decisions" / "DECISIONS.md").write_text("", encoding="utf-8")
-    (ws / "mind-mem.json").write_text(
-        json.dumps({"version": "4.1.1", "v4": {"world_staleness": {"enabled": True}}}), encoding="utf-8"
-    )
+    (ws / "mind-mem.json").write_text(json.dumps({"version": "4.1.1", "v4": {"world_staleness": {"enabled": True}}}), encoding="utf-8")
     import mind_mem.world_staleness as ws_mod
 
     def _boom(_ws: str) -> dict:
