@@ -126,7 +126,7 @@ def matching_backup_path(fmt: str, path: str, removed_text: str) -> tuple[str, s
     candidates = sorted(glob.glob(glob.escape(path) + BACKUP_INFIX + "*"), reverse=True)  # newest stamp first
     for backup in candidates:
         try:
-            with open(backup, "r", encoding="utf-8") as fh:
+            with open(backup, "r", encoding="utf-8", newline="") as fh:  # keep CRLF: the restore is byte-exact
                 text = fh.read()
         except (OSError, UnicodeDecodeError):
             continue

@@ -746,6 +746,7 @@ def test_round9_not_changes(new: str, old: str) -> None:
         "node 1.2 and python 3.11 and go 1.22 and rust 1.80 and java 21.0 " * 500,
         "The window is 14h and 30min long " * 2_000,
     ],
+    ids=["decimals", "versions", "durations"],  # long values as ids overflow a Windows env var
 )
 def test_context_checks_stay_linear(text: str) -> None:
     import time

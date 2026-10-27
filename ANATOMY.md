@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1756 | **Est. tokens:** ~5,173,127
-**Generated:** 2026-10-27 10:42 UTC
+**Files:** 1756 | **Est. tokens:** ~5,173,396
+**Generated:** 2026-10-27 11:02 UTC
 
 ## Token Budget Guide
 
@@ -78,7 +78,7 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,270 |
+| `src/mind_mem/` | 257 | ~1,147,296 |
 | `src/mind_mem/api/` | 5 | ~28,982 |
 | `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 799 | ~2,355,370 |
+| `tests/` | 799 | ~2,355,613 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -817,12 +817,12 @@
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
 - `chat_memory.py` (~10891 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
-- `client_config_io.py` (~1088 tok, large) — # Copyright 2026 STARGA, Inc.
+- `client_config_io.py` (~1101 tok, large) — # Copyright 2026 STARGA, Inc.
 - `client_mcp.py` (~2886 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_paths.py` (~760 tok, large) — # Copyright 2026 STARGA, Inc.
 - `client_registry_data.py` (~6077 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_registry.py` (~2117 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `client_restore.py` (~1459 tok, large) — # Copyright 2026 STARGA, Inc.
+- `client_restore.py` (~1472 tok, large) — # Copyright 2026 STARGA, Inc.
 - `client_writers.py` (~5521 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
@@ -1379,7 +1379,7 @@
 - `test_chunk_text.py` (~231 tok, medium) — Tests for text chunking."""
 - `test_ci_green_per_job_gate.py` (~4342 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
 - `test_cli_detector_refusal.py` (~1619 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_client_integrations.py` (~5590 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_client_integrations.py` (~5594 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_help_is_harmless.py` (~1922 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_hint_correctness.py` (~1371 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_codepoint_sanitize.py` (~3333 tok, huge) — Tests for invisible-Unicode ingest sanitization (security).
@@ -1486,8 +1486,8 @@
 - `test_extractor_windowed_scan.py` (~1838 tok, huge) — Regression tests for the windowed extract_facts scan (issue #530).
 - `test_fact_card_context.py` (~1339 tok, large) — A fact card must stay SMALL. It must not become a copy of its parent.
 - `test_fact_indexing.py` (~3305 tok, huge) — Tests for Feature 2 (fact card indexing) and Feature 4 (metadata-augmented embeddings)."""
-- `test_fact_slots_context.py` (~10964 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_fact_slots_failclosed.py` (~4830 tok, huge) — # ruff: noqa: E501  (tables of natural-language test sentences)
+- `test_fact_slots_context.py` (~10988 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_fact_slots_failclosed.py` (~4866 tok, huge) — # ruff: noqa: E501  (tables of natural-language test sentences)
 - `test_feature_gate.py` (~7614 tok, huge) — Tests for FeatureGate — the shared config-resolver for retrieval features."""
 - `test_federation_connect.py` (~3244 tok, huge) — ``mind-mem-connect`` — the join, and the three ways a join can go wrong.
 - `test_federation_lww_vclock_convergence.py` (~1699 tok, huge) — LAST_WRITER_WINS must converge the version vector, not just the log.
@@ -1544,7 +1544,7 @@
 - `test_guardrail_surface_never_grows.py` (~1279 tok, large) — Guardrail surfacing must never return more hits than it was given.
 - `test_hash_chain_v2.py` (~5528 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_health_embedding_coverage.py` (~3068 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_hook_installer_client_roundtrip.py` (~2152 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_hook_installer_client_roundtrip.py` (~2331 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_client_sources.py` (~1085 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_mcp_force_preserves_siblings.py` (~1490 tok, large) — Regression test: install_mcp_config(force=True) must merge, not clobber.

@@ -352,7 +352,7 @@ def test_extra_locations_written_only_when_present(home: Path) -> None:
     assert json.loads((devin / "mcp_config.json").read_text(encoding="utf-8"))["mcpServers"]["mind-mem"] == STD
     (home / ".cline" / "data" / "settings").mkdir(parents=True)
     cline = install_mcp_config("cline", WS)
-    assert any(r["path"].endswith(".cline/data/settings/cline_mcp_settings.json") and r["written"] for r in cline["also"])
+    assert any(Path(r["path"]) == home / ".cline" / "data" / "settings" / "cline_mcp_settings.json" and r["written"] for r in cline["also"])
     gone = uninstall_mcp_config("windsurf", WS)
     assert gone["removed"] and gone["also"][0]["removed"]
 
