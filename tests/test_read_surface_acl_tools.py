@@ -751,9 +751,13 @@ def test_the_anticipation_cache_is_neither_filled_nor_read_for_a_bound_caller(
 @pytest.fixture
 def no_fts(ws: Path) -> Path:
     """The workspace as a default install has it: corpus on disk, no FTS index yet."""
+    import gc
+
     from mind_mem.sqlite_index import close_all_conn_managers
 
-    close_all_conn_managers()  # Windows cannot unlink a database file a cached connection still holds
+    close_all_conn_managers()
+    gc.collect()  # a connection dropped in a reference cycle still holds the file until collected
+    # Windows cannot unlink a database file a cached connection still holds
     for name in ("recall.db", "recall.db-wal", "recall.db-shm"):
         (ws / ".mind-mem-index" / name).unlink(missing_ok=True)
     return ws
