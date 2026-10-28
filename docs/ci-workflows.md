@@ -20,6 +20,7 @@ or dropped fails this page instead of silently outdating it.
 | Dependency Review | `dependency-review.yml` | PR | Checks dependency security on incoming changes |
 | Docs | `docs.yml` | push to `main` / PR touching `docs/**`, `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`; manual | Documentation validation |
 | Label Sync | `label-sync.yml` | push to `main` touching `.github/labels.yml`; manual | Syncs repo labels from the checked-in definition |
+| pr-review | `pr-review.yml` | PR opened, synchronized, reopened or edited (same-repo branches only; Dependabot skipped) | Posts an automated review comment and fails if the diff, new file names, commit messages, title or body carry private or attribution text; fails closed when the leak list is unavailable |
 | Red Team Audit | `red-team.yml` | tag push (`v*`) | Adversarial `petri-audit` sweep before a tag is promoted |
 | Release | `release.yml` | tag push (`v*`); manual | Preflight, build, sign, SBOM, publish, verify-published |
 | Supply-Chain Security | `security.yml` | push to `main`, PR, weekly (Mon 06:00 UTC) | SBOM, dependency and supply-chain scanning |
