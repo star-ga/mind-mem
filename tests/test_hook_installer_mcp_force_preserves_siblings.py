@@ -24,13 +24,20 @@ def _fake_home(tmp_path: Path):
     # on POSIX — patch both so nothing touches the real user home.
     return mock.patch.dict(
         os.environ,
-        {"HOME": str(tmp_path), "USERPROFILE": str(tmp_path)},
+        {"HOME": str(tmp_path), "USERPROFILE": str(tmp_path), "APPDATA": str(tmp_path / "AppData" / "Roaming")},
     )
+
+
+def _zed_settings(tmp_path: Path) -> Path:
+    """Zed's settings file for the current platform under the fake home."""
+    if os.name == "nt":
+        return tmp_path / "AppData" / "Roaming" / "Zed" / "settings.json"
+    return tmp_path / ".config" / "zed" / "settings.json"
 
 
 def test_install_mcp_config_force_preserves_json_siblings(tmp_path: Path) -> None:
     """Zed settings.json keeps its editor keys and other context servers."""
-    cfg = tmp_path / ".config" / "zed" / "settings.json"
+    cfg = _zed_settings(tmp_path)
     cfg.parent.mkdir(parents=True)
     prior = {
         "theme": "sentinel-theme",
@@ -130,7 +137,7 @@ def test_install_mcp_config_force_still_rewrites_identical_config(tmp_path: Path
 
 def test_install_mcp_config_force_dry_run_does_not_clobber(tmp_path: Path) -> None:
     """dry_run + force must preview the *merged* content, not a stub."""
-    cfg = tmp_path / ".config" / "zed" / "settings.json"
+    cfg = _zed_settings(tmp_path)
     cfg.parent.mkdir(parents=True)
     cfg.write_text(json.dumps({"theme": "sentinel-theme"}, indent=2), encoding="utf-8")
 

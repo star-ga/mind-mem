@@ -66,7 +66,7 @@ def fake_v3_recall(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 
 
 @pytest.mark.unit
-def test_all_four_strategies_registered(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
+def test_all_four_strategies_registered(cfg_on: Path, fake_v3_recall: list[dict], tmp_path: Path) -> None:
     """After importing the kernels module, every built-in strategy is
     reachable. ``RECENT_FIRST`` is deliberately absent: RA.0 deleted the
     recall-tier ladder it read, and the routing name now carries no
@@ -77,7 +77,7 @@ def test_all_four_strategies_registered(cfg_on: Path, fake_v3_recall: list[dict]
         KernelKind.CONTRADICTS_FIRST,
         KernelKind.GRAPH_WALK,
     ):
-        out = mind_recall("/tmp/ws", "q", kernel=k)
+        out = mind_recall(str(tmp_path), "q", kernel=k)
         assert out.kernel is k
 
 

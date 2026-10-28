@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -228,6 +229,44 @@ def build_prompt(task: Task, arm: str, budget: Budget, workspace: str = "") -> P
     )
 
 
+def _is_memory_executable(name: str) -> bool:
+    return name in _MEMORY_EXECUTABLES or name.startswith(_MEMORY_EXECUTABLE_PREFIX)
+
+
+def _link_or_copy(source: str, link: str) -> None:
+    try:
+        os.symlink(source, link)
+    except OSError:  # Windows without symlink rights
+        shutil.copy2(source, link)
+
+
+def _memory_free_path(path: str, shim_root: str) -> str:
+    """``path`` with every memory console script removed, nothing else changed.
+
+    A host that installed mind-mem system-wide has its scripts in a directory
+    both arms need for ordinary tools, so the directory cannot simply be
+    dropped.  Such a directory is replaced by a directory of symlinks to every
+    other entry; a directory without a memory script is passed through as is.
+    """
+    parts: list[str] = []
+    for index, directory in enumerate(path.split(os.pathsep)):
+        if not os.path.isdir(directory):
+            parts.append(directory)
+            continue
+        names = os.listdir(directory)
+        if not any(_is_memory_executable(name) for name in names):
+            parts.append(directory)
+            continue
+        shim = os.path.join(shim_root, f"path{index}")
+        os.makedirs(shim, exist_ok=True)
+        for name in names:
+            link = os.path.join(shim, name)
+            if not _is_memory_executable(name) and not os.path.lexists(link):
+                _link_or_copy(os.path.join(directory, name), link)
+        parts.append(shim)
+    return os.pathsep.join(parts)
+
+
 def build_env(tree: str, home: str, passthrough: Mapping[str, str] | None = None) -> dict[str, str]:
     """The single environment both arms run in.
 
@@ -238,6 +277,7 @@ def build_env(tree: str, home: str, passthrough: Mapping[str, str] | None = None
     from .repo_task_validation import sandbox_env
 
     env = sandbox_env(tree, home)
+    env["PATH"] = _memory_free_path(env.get("PATH", ""), os.path.join(home, ".sandbox-path"))
     for key, value in sorted(dict(passthrough or {}).items()):
         if key.startswith(_FORBIDDEN_ENV_PREFIX) and key not in _ALLOWED_MIND_MEM_ENV:
             raise ControlLeak(f"passthrough variable {key} would hand the control arm a memory")
@@ -254,7 +294,7 @@ def assert_control_isolated(env: Mapping[str, str], tree: str, workspace: str) -
         if not os.path.isdir(directory):
             continue
         for name in os.listdir(directory):
-            if name in _MEMORY_EXECUTABLES or name.startswith(_MEMORY_EXECUTABLE_PREFIX):
+            if _is_memory_executable(name):
                 raise ControlLeak(f"{os.path.join(directory, name)} is on PATH")
     home = os.path.realpath(env.get("HOME", ""))
     if not home or home == os.path.realpath(os.path.expanduser("~")):
