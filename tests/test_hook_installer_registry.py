@@ -36,6 +36,7 @@ def _isolated_home(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest
     home = tmp_path_factory.mktemp("isolated-home")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))  # Windows-style templates resolve here
     assert os.path.expanduser("~") == str(home)
     return home
 

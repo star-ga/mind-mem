@@ -45,8 +45,13 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _mask(text: str, token: str) -> str:
+    """Replace ``token`` as written and as JSON-escaped (a Windows path has backslashes)."""
+    return text.replace(token, "<X>").replace(json.dumps(token)[1:-1], "<X>")
+
+
 def _same_but_for(a: str, a_token: str, b: str, b_token: str) -> bool:
-    return a.replace(a_token, "<X>") == b.replace(b_token, "<X>")
+    return _mask(a, a_token) == _mask(b, b_token)
 
 
 # --- 1. model tools -------------------------------------------------------------

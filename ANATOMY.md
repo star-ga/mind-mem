@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1756 | **Est. tokens:** ~5,173,541
-**Generated:** 2026-10-27 11:40 UTC
+**Files:** 1756 | **Est. tokens:** ~5,173,957
+**Generated:** 2026-10-28 06:03 UTC
 
 ## Token Budget Guide
 
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 799 | ~2,355,715 |
+| `tests/` | 799 | ~2,356,131 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1544,11 +1544,11 @@
 - `test_guardrail_surface_never_grows.py` (~1279 tok, large) — Guardrail surfacing must never return more hits than it was given.
 - `test_hash_chain_v2.py` (~5528 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_health_embedding_coverage.py` (~3068 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_hook_installer_client_roundtrip.py` (~2342 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_hook_installer_client_roundtrip.py` (~2367 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_client_sources.py` (~1085 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
-- `test_hook_installer_mcp_force_preserves_siblings.py` (~1490 tok, large) — Regression test: install_mcp_config(force=True) must merge, not clobber.
-- `test_hook_installer_registry.py` (~5297 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_hook_installer_mcp_force_preserves_siblings.py` (~1561 tok, huge) — Regression test: install_mcp_config(force=True) must merge, not clobber.
+- `test_hook_installer_registry.py` (~5324 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1884 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_auth_optin_not_honoured_when_auth_configured.py` (~1049 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_http_read_admission.py` (~10548 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1764,13 +1764,13 @@
 - `test_ra1v2_live_serve_binding.py` (~4335 tok, huge) — The live serve binding: a real serve records a v2 row, and a failed bind is visible.
 - `test_ra4_proposal_rationale.py` (~932 tok, large) — Every accepted proposal type needs the caller's written rationale."""
 - `test_readme_client_tables.py` (~3191 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_read_surface_acl_enumeration.py` (~4399 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_read_surface_acl_enumeration.py` (~4430 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_acl.py` (~5475 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_read_surface_acl_residual.py` (~7691 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_read_surface_acl_tools.py` (~9919 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_read_surface_acl_residual.py` (~7740 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_read_surface_acl_tools.py` (~9960 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_admission.py` (~6897 tok, huge) — Every read surface, swept with a three-status canary.
 - `test_read_surface_classification.py` (~9355 tok, huge) — The registry-wide read-surface classification — the committed table.
-- `test_read_surface_host_paths.py` (~4180 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_read_surface_host_paths.py` (~4308 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_paths.py` (~4260 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_read_surface_resources.py` (~7373 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_abstention.py` (~5431 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1948,7 +1948,7 @@
 - `test_spend_approval_consumer.py` (~2487 tok, huge) — Controls for the approval parser and the RunPod launch boundary."""
 - `test_sqlite_handle_close_tool_output_hnsw.py` (~2197 tok, huge) — Every SQLite connection ``tool_output/store.py`` opens must be CLOSED before
 - `test_sqlite_index_backends.py` (~2781 tok, huge) — Backend-parity regression tests for ``sqlite_index`` (audit bugs 4, 9, 13, 14).
-- `test_sqlite_index_edit_detection.py` (~1736 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_sqlite_index_edit_detection.py` (~1780 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sqlite_index_evict_race.py` (~956 tok, large) — Evicting a cached ConnectionManager must not close it under a running query.
 - `test_sqlite_index_namespaces.py` (~2807 tok, huge) — The sqlite index covers every namespace recall can serve, filtered by the caller.
 - `test_sqlite_index.py` (~5547 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""

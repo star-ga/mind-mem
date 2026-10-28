@@ -167,9 +167,9 @@ def _normal(body: str, ws: Path, *tokens: str) -> str:
         text = json.dumps(_scrub(json.loads(body)), sort_keys=True)
     except ValueError:
         text = body
-    text = text.replace(str(ws), "<WS>")
+    text = text.replace(str(ws), "<WS>").replace(json.dumps(str(ws))[1:-1], "<WS>")
     for token in tokens:
-        text = text.replace(token, "<ID>")
+        text = text.replace(token, "<ID>").replace(json.dumps(token)[1:-1], "<ID>")
     return re.sub(r"\d{4}-\d\d-\d\d[T ][\d:.+Z-]*", "<TS>", text)
 
 
@@ -363,7 +363,7 @@ def test_a_denied_id_answers_exactly_like_a_missing_id(ws: Path, tool: str, para
     for value in denied_values:
         got = run(value)
         assert _normal(got, ws, value) == reference, f"{tool}({param}={value}) differs from a miss:\n{got[:300]}\nvs\n{run(missing)[:300]}"
-        stripped = got.replace(value, "")
+        stripped = got.replace(value, "").replace(json.dumps(value)[1:-1], "")
         assert not [c for c in CANARIES if c in stripped], f"{tool}({param}={value}) leaked {stripped[:200]}"
 
 

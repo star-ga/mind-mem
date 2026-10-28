@@ -83,8 +83,10 @@ def test_mtime_restoring_same_size_edit_is_seen(tmp_path, monkeypatch) -> None:
     real = sqlite_index._file_hash
     monkeypatch.setattr(sqlite_index, "_file_hash", lambda p: calls.append(p) or real(p))
     assert is_stale(ws) is True, "a same-size, mtime-restored status flip must make the index stale"
-    # The ctime coordinate answers this alone — no content hash needed.
-    assert calls == [], calls
+    # The ctime coordinate answers this alone — no content hash needed. On Windows
+    # st_ctime is the creation time, not the change time, so only the hash can tell.
+    if os.name != "nt":
+        assert calls == [], calls
 
 
 def test_same_tick_edit_is_seen(tmp_path) -> None:
@@ -180,4 +182,4 @@ def test_racy_file_is_hashed_and_only_it(tmp_path, monkeypatch) -> None:
     real = sqlite_index._file_hash
     monkeypatch.setattr(sqlite_index, "_file_hash", lambda p: calls.append(p) or real(p))
     assert is_stale(ws) is False
-    assert path in calls
+    assert os.path.normpath(path) in [os.path.normpath(c) for c in calls]
