@@ -1,4 +1,5 @@
 """PR review + public-leak check for this repository (comment only; never pushes or merges)."""
+
 import os
 import re
 
@@ -73,8 +74,11 @@ review = redact("".join(b.text for b in msg.content if b.type == "text").strip()
 
 out = ["<!-- pr-review -->", "### Automated review", ""]
 if hits:
-    out += ["**Leak check: FAILED.** Private or attribution text found in this PR "
-            "(pattern numbers only, so this public comment repeats nothing):", ""]
+    out += [
+        "**Leak check: FAILED.** Private or attribution text found in this PR "
+        "(pattern numbers only, so this public comment repeats nothing):",
+        "",
+    ]
     out += [f"- {h}" for h in hits] + [""]
 else:
     out += ["**Leak check: passed.**", ""]
