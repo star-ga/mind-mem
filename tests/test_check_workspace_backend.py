@@ -159,12 +159,17 @@ def test_nonmarkdown_ping_ok_is_valid_without_decisions(tmp_path: Path, monkeypa
 
 
 def test_nonmarkdown_ping_not_ok_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """ping() ok=False surfaces a structured (non-crashing) error."""
+    """ping() ok=False surfaces a structured (non-crashing) error.
+
+    The store's own detail goes to the server log, not the caller: this
+    string is every ws-gated tool's result (code-scanning #294).
+    """
     ws = tmp_path / "ws"
     ws.mkdir()
     _patch_backend(monkeypatch, "postgres", _FakeStore({"ok": False, "error": "blocks table unavailable"}))
     msg = _error_of(_check_workspace(str(ws)))
-    assert "blocks table unavailable" in msg
+    assert "not ready" in msg
+    assert "blocks table unavailable" not in msg
     assert "decisions/" not in msg  # not a markdown error
 
 

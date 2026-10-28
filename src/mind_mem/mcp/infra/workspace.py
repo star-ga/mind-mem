@@ -22,6 +22,10 @@ import json
 import os
 from collections.abc import Iterator
 
+from mind_mem.observability import get_logger
+
+_log = get_logger("mcp_server")
+
 _workspace_override: contextvars.ContextVar[str | None] = contextvars.ContextVar("mind_mem_workspace_override", default=None)
 
 
@@ -84,7 +88,11 @@ def _check_workspace(ws: str) -> str | None:
 
     Never raises: a store probe failure (unreachable DB, missing extra,
     misconfiguration) is converted to an error JSON string so the calling
-    tool returns a structured error rather than crashing the server.
+    tool returns a structured error rather than crashing the server. The
+    error names the backend and the failing step only; the exception text
+    (which can carry a DSN, host, user or path) goes to the server log,
+    because every ws-gated tool returns this string to its caller and the
+    REST layer forwards it.
     """
     if not os.path.isdir(ws):
         return json.dumps({"error": "Workspace not found. Run: mind-mem-init <path>"})
@@ -138,31 +146,34 @@ def _check_store_backend(ws: str, backend: str) -> str | None:
 
         store = get_block_store(ws)
     except Exception as exc:
-        return json.dumps(
-            {
-                "error": (
-                    f"Workspace block store ({backend!r}) could not be initialised: {exc}. Check block_store config in mind-mem.json."
-                ),
-            }
-        )
+        return _store_failure(backend, "could not be initialised", exc)
 
     ping = getattr(store, "ping", None)
     if callable(ping):
         try:
             status = ping()
         except Exception as exc:  # defensive: ping is documented never to raise
-            return json.dumps({"error": (f"Workspace block store ({backend!r}) is unreachable: {exc}.")})
+            return _store_failure(backend, "is unreachable", exc)
         if isinstance(status, dict) and not status.get("ok", False):
-            detail = status.get("error") or "store reported not ok"
-            return json.dumps({"error": (f"Workspace block store ({backend!r}) is not ready: {detail}.")})
+            return _store_failure(backend, "is not ready", status.get("error") or "store reported not ok")
         return None
 
     # No ping(): fall back to a lightweight list_blocks() probe.
     try:
         store.list_blocks()
     except Exception as exc:
-        return json.dumps({"error": (f"Workspace block store ({backend!r}) is unreachable: {exc}.")})
+        return _store_failure(backend, "is unreachable", exc)
     return None
+
+
+def _store_failure(backend: str, problem: str, detail: object) -> str:
+    """Log *detail* server-side and return the caller-safe error JSON."""
+    _log.warning("workspace_store_check_failed", backend=backend, problem=problem, detail=str(detail))
+    return json.dumps(
+        {
+            "error": (f"Workspace block store ({backend!r}) {problem}; see the server log. Check block_store config in mind-mem.json."),
+        }
+    )
 
 
 def _validate_path(ws: str, rel_path: str) -> str:

@@ -874,12 +874,17 @@ def _parse_tool_json(raw: str) -> Any:
     """Parse JSON string returned by MCP tool functions.
 
     Strips internal diagnostic fields (log, traceback, etc.) so that
-    server-side stack traces are never forwarded to REST callers.
+    server-side stack traces are never forwarded to REST callers. Output
+    that is not JSON is not a tool envelope (an uncaught traceback, a stray
+    print), so it is logged and replaced, never echoed.
     """
     try:
         parsed = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
-        return {"raw": raw}
+        from mind_mem.observability import get_logger as _get_logger
+
+        _get_logger("rest").warning("tool_output_not_json", output=str(raw)[:2000])
+        return {"error": "tool returned an unreadable response; see the server log"}
     return _strip_sensitive_fields(parsed)
 
 

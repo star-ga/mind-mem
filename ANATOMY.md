@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1757 | **Est. tokens:** ~5,174,015
-**Generated:** 2026-10-28 06:48 UTC
+**Files:** 1758 | **Est. tokens:** ~5,176,799
+**Generated:** 2026-10-28 07:28 UTC
 
 ## Token Budget Guide
 
@@ -78,13 +78,13 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,336 |
-| `src/mind_mem/api/` | 5 | ~28,982 |
+| `src/mind_mem/` | 257 | ~1,147,359 |
+| `src/mind_mem/api/` | 5 | ~29,070 |
 | `src/mind_mem/bench/` | 17 | ~48,632 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
 | `src/mind_mem/importers/` | 10 | ~34,469 |
 | `src/mind_mem/mcp/` | 3 | ~7,717 |
-| `src/mind_mem/mcp/infra/` | 8 | ~20,711 |
+| `src/mind_mem/mcp/infra/` | 8 | ~20,822 |
 | `src/mind_mem/mcp/tools/` | 28 | ~112,931 |
 | `src/mind_mem/skill_opt/` | 11 | ~20,899 |
 | `src/mind_mem/spec/` | 4 | ~6,845 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 800 | ~2,356,473 |
+| `tests/` | 801 | ~2,359,035 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -744,7 +744,7 @@
 
 - `abstention_classifier.py` (~3315 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `abstention_eval.py` (~2621 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `abstention_store.py` (~3978 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `abstention_store.py` (~4001 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `accountability_dashboard.py` (~6670 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `accountability_views.py` (~10307 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `admissibility.py` (~6855 tok, huge) — What recall is allowed to serve — the servability allow-list.
@@ -762,7 +762,7 @@
 - `auth.py` (~4581 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `grpc_server.py` (~4235 tok, huge) — gRPC wire protocol for mind-mem (v4.0 prep).
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~17429 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
+- `rest.py` (~17517 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
 
 - `append_only.py` (~3657 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -935,7 +935,7 @@
 - `__init__.py` (~838 tok, large) — MCP infrastructure compatibility exports, resolved only when requested.
 - `observability.py` (~2894 tok, huge) — Observability + DB-busy helpers for the MCP surface.
 - `rate_limit.py` (~1147 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
-- `workspace.py` (~2237 tok, huge) — Workspace resolution + path-safety helpers.
+- `workspace.py` (~2348 tok, huge) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
@@ -1375,7 +1375,7 @@
 - `test_chat_with_memory.py` (~7563 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_check_version_gate.py` (~475 tok, medium) — Regression tests for the version-consistency gate.
 - `test_check_version.py` (~271 tok, medium) — Tests for version consistency checker."""
-- `test_check_workspace_backend.py` (~3248 tok, huge) — Backend-aware workspace validation — ``mcp.infra.workspace._check_workspace``.
+- `test_check_workspace_backend.py` (~3293 tok, huge) — Backend-aware workspace validation — ``mcp.infra.workspace._check_workspace``.
 - `test_chunk_text.py` (~231 tok, medium) — Tests for text chunking."""
 - `test_ci_green_per_job_gate.py` (~4342 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
 - `test_cli_detector_refusal.py` (~1619 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1782,7 +1782,7 @@
 - `test_recall_attestation_completeness.py` (~3691 tok, huge) — An attestation must distinguish two runs that served different answers.
 - `test_recall_attestation_failure_boundary.py` (~1196 tok, large) — Failure-boundary controls for the post-cache recall attestation rail."""
 - `test_recall_attestation.py` (~5631 tok, huge) — Tests for the per-run recall attestation (recall_attestation.py).
-- `test_recall_attestation_served_backend.py` (~3611 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_recall_attestation_served_backend.py` (~3676 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_attestation_unrequested_leg.py` (~789 tok, large) — An unrequested vector leg must not be attested as degraded.
 - `test_recall_attestation_v2.py` (~8107 tok, huge) — Acceptance gate for the ``RECALL_ATTEST_v2`` preimage.
 - `test_recall_cache_chain_head.py` (~2914 tok, huge) — The recall cache belongs to a corpus state, not to a clock.
@@ -1953,6 +1953,7 @@
 - `test_sqlite_index_evict_race.py` (~956 tok, large) — Evicting a cached ConnectionManager must not close it under a running query.
 - `test_sqlite_index_namespaces.py` (~2807 tok, huge) — The sqlite index covers every namespace recall can serve, filtered by the caller.
 - `test_sqlite_index.py` (~5547 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
+- `test_stack_trace_exposure_294.py` (~2452 tok, huge) — Exception text never reaches an API caller (code-scanning #294).
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
 - `test_storage_factory.py` (~3280 tok, huge) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
 - `test_streaming_front_gate.py` (~5460 tok, huge) — # Copyright 2026 STARGA, Inc.

@@ -1043,7 +1043,8 @@ def _apply_abstention(
         )
     except Exception as exc:  # noqa: BLE001 -- a verdict that fails must not fail recall
         _log.warning("recall_abstention_failed", error=str(exc))
-        return _note_warning(raw_json, f"Abstention verdict unavailable: {exc}"), None
+        # Warnings reach API clients; the exception text stays in the log.
+        return _note_warning(raw_json, "Abstention verdict unavailable; see the server log"), None
     envelope["abstention"] = verdict
     if policy.warnings:
         existing = envelope.get("config_warnings")
@@ -1104,7 +1105,7 @@ def _apply_explain(query: str, raw_json: str) -> str:
         # asked for the decomposition and is handed a response that never says
         # it could not be produced. Leave the trace where the caller looks.
         _log.warning("recall_explain_injection_failed", error=str(exc))
-        return _note_warning(raw_json, f"Explain annotation unavailable: {exc}")
+        return _note_warning(raw_json, "Explain annotation unavailable; see the server log")
 
 
 def _recall_impl_uncached(
@@ -1201,7 +1202,7 @@ def _recall_impl_uncached(
         except (OSError, ValueError, KeyError) as exc:
             _log.warning("recall_hybrid_failed", query=query, error=str(exc))
             if backend == "hybrid":
-                warnings.append(f"Hybrid search failed — falling back to BM25: {exc}")
+                warnings.append("Hybrid search failed — falling back to BM25; see the server log")
 
     if used_backend != "hybrid":
         try:

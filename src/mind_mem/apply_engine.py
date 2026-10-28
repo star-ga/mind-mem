@@ -425,7 +425,9 @@ def check_preconditions(ws):
             report.append(f"validate: FAIL ({why})")
             return False, report
     except Exception as e:
-        report.append(f"validate: ERROR ({e})")
+        # The report reaches approve_apply callers; the detail stays in the log.
+        _log.warning("precondition_check_error", check="validate", error=str(e))
+        report.append("validate: ERROR (see the server log)")
         return False, report
 
     # P3: intel_scan, run as a module (from installation, not workspace).
@@ -470,7 +472,8 @@ def check_preconditions(ws):
             report.append(f"intel_scan: FAIL ({detail})")
             return False, report
     except Exception as e:
-        report.append(f"intel_scan: ERROR ({e})")
+        _log.warning("precondition_check_error", check="intel_scan", error=str(e))
+        report.append("intel_scan: ERROR (see the server log)")
         return False, report
 
     return True, report
@@ -2103,8 +2106,10 @@ def apply_proposal(ws, proposal_id, dry_run=False, agent_id=None):
     try:
         lock.acquire()
     except Exception as e:
-        print(f"\nERROR: Could not acquire workspace lock: {e}")
-        return False, f"Workspace lock timeout: {e}"
+        # Both the message and stdout (approve_apply's ``log``) reach callers.
+        _log.warning("workspace_lock_failed", lock_path=lock_path, error=str(e))
+        print("\nERROR: Could not acquire workspace lock; see the server log")
+        return False, "Workspace lock timeout; see the server log"
 
     try:
         _migrate_maintenance_layout(ws)
