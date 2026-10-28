@@ -1,0 +1,56 @@
+name: pr-review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  review:
+    # Same-repo branches only: fork PRs never get an identity token or model access.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ANTHROPIC_FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+      ANTHROPIC_ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+      ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+      LEAK_TERMS: ${{ secrets.LEAK_TERMS }}
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Collect the diff
+        run: |
+          git diff "$BASE...$HEAD" > /tmp/pr.diff
+          git log --format='%an <%ae>%n%B' "$BASE..$HEAD" > /tmp/pr.log
+          wc -c /tmp/pr.diff /tmp/pr.log
+      - name: Mint the identity token
+        run: |
+          token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" | jq -r .value)
+          echo "::add-mask::$token"
+          echo "ANTHROPIC_IDENTITY_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Review and leak check
+        run: |
+          python3 -m pip install --quiet --upgrade anthropic
+          python3 .github/scripts/pr_review.py > /tmp/review.md
+      - name: Post or update the review comment
+        run: |
+          marker='<!-- pr-review -->'
+          id=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | tail -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$id" -F body=@/tmp/review.md > /dev/null
+          else
+            gh api -X POST "repos/${{ github.repository }}/issues/$PR/comments" -F body=@/tmp/review.md > /dev/null
+          fi
+      - name: Fail on a leak
+        run: test ! -s /tmp/leaks.txt
