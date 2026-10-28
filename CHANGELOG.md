@@ -63,6 +63,14 @@ All notable changes to MIND-Mem are documented in this file.
   reports a generic world-staleness error (detail stays in the server log) instead of
   the exception text; two install-path `assert`s that guard runtime behaviour are now
   explicit exceptions, so they hold under `python -O`.
+- Exception text no longer reaches API callers (code-scanning #294). On a
+  non-Markdown backend the workspace check formatted the block-store exception (a
+  DSN, host, user or path) into the error that every ws-gated MCP tool returns and
+  that `GET /v1/scan`, `GET /v1/block/{id}` and `POST /v1/recall` forwarded. It now
+  names the backend and the failing step, and the detail goes to the server log. The
+  same applies to the recall warnings (abstention verdict and sidecar write, explain
+  annotation, hybrid fallback) and to the `approve_apply` message (precondition
+  errors, workspace lock). The REST layer no longer echoes non-JSON tool output.
 - `mm install` / `mm install-all` no longer overwrite a client config they
   cannot parse. A Cursor, Windsurf, Zed, Gemini, Continue, Cline, Roo,
   Copilot CLI, Claude Code or OpenClaw config that is JSONC, invalid JSON,

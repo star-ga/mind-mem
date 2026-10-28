@@ -131,6 +131,8 @@ class TestFallbackServeAttestsOnlyTheLegItRan:
         assert envelope["backend"] in ("sqlite", "scan"), envelope["backend"]
         assert envelope.get("results"), "no hits: the legs assertion would be thin"
         assert any("falling back to BM25" in w for w in envelope.get("warnings", []))
+        # The exception text stays in the server log; warnings reach API clients.
+        assert not any("vector index unreadable" in w for w in envelope.get("warnings", []))
 
         # ...and the receipt agrees with that warning instead of contradicting it.
         legs = envelope["attestation"]["legs_ran"]
@@ -300,6 +302,7 @@ class TestExplainFailureIsVisible:
         assert all("_explain" not in h for h in hits), "explain did not actually fail: the trace would be untested"
         warnings = envelope.get("warnings", [])
         assert any("Explain annotation unavailable" in w for w in warnings), warnings
+        assert not any("ordering invariant misfired" in w for w in warnings), warnings
 
     def test_a_successful_explain_adds_no_warning(self, ws) -> None:
         """The trace must be the failure signal, not noise on every request."""

@@ -259,12 +259,15 @@ def _project_marker_root(directory: str) -> str | None:
     """
     current = directory
     while True:
+        parent = os.path.dirname(current)
+        if parent == current:
+            # The filesystem root is never a project: a stray marker there
+            # (a leftover go.mod on a shared host) would pool every
+            # non-repository directory on the machine into one key.
+            return None
         for marker in _PROJECT_MARKERS:
             if os.path.exists(os.path.join(current, marker)):
                 return current
-        parent = os.path.dirname(current)
-        if parent == current:
-            return None
         current = parent
 
 

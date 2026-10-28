@@ -268,8 +268,9 @@ class TestGoldenPerClient:
         assert agent not in detect_installed_agents(WS), "negative control: clean HOME, empty PATH"
         if spec.detect_binaries:
             # Windows `which` only finds names with a PATHEXT suffix; ".exe" is always in PATHEXT.
-            suffix = ".exe" if os.name == "nt" else ""
-            exe = Path(os.environ["PATH"]) / (spec.detect_binaries[0] + suffix)
+            name = spec.detect_binaries[0]
+            suffix = ".exe" if os.name == "nt" and not name.lower().endswith(".exe") else ""
+            exe = Path(os.environ["PATH"]) / (name + suffix)
             exe.write_text("#!/bin/sh\n", encoding="utf-8")
             exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
             assert agent in detect_installed_agents(WS)

@@ -31,6 +31,18 @@ def test_install_sh_bootstraps_clean_home(tmp_path):
     # and time out the runner.
     install_args = ["--codex", "--installer", "pip"]
 
+    # ``pip install --user`` is refused inside a virtualenv, so a suite run from
+    # one (a CI runner venv, ``uv venv``) must hand install.sh the base
+    # interpreter a clean-home user would have, not the venv's python3.
+    if os.name != "nt" and sys.prefix != sys.base_prefix:
+        base_bin = tmp_path / "base-bin"
+        base_bin.mkdir()
+        (base_bin / "python3").symlink_to(sys._base_executable)
+        venv_bin = os.path.join(sys.prefix, "bin")
+        rest = [p for p in env.get("PATH", "").split(os.pathsep) if p and os.path.normpath(p) != venv_bin]
+        env["PATH"] = os.pathsep.join([str(base_bin), *rest])
+        env.pop("VIRTUAL_ENV", None)
+
     if os.name == "nt":
         bash = shutil.which("bash")
         assert bash is not None, "bash is required to run install.sh on Windows"

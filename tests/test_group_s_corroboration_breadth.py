@@ -179,6 +179,24 @@ class TestProjectKeyFallback:
         assert key_a.startswith("path:")
         assert key_b.startswith("path:")
 
+    def test_a_marker_at_the_filesystem_root_does_not_pool_projects(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A stray go.mod at / must not make every plain directory one project."""
+        import mind_mem.project_key as pk
+
+        root_marker = os.path.join(tmp_path.anchor, "go.mod")
+        real_exists = os.path.exists
+        monkeypatch.setattr(os.path, "exists", lambda p: p == root_marker or real_exists(p))
+        assert os.path.exists(root_marker)  # positive control: the fake marker is visible
+        a = tmp_path / "plain-a"
+        b = tmp_path / "plain-b"
+        a.mkdir()
+        b.mkdir()
+        pk.clear_project_key_cache()
+        try:
+            assert resolve_project_key(str(a)) != resolve_project_key(str(b))
+        finally:
+            pk.clear_project_key_cache()
+
     def test_missing_path_falls_back_to_a_parent_or_unknown(self, tmp_path: Path) -> None:
         key = resolve_project_key(str(tmp_path / "does-not-exist"))
         assert isinstance(key, str) and key

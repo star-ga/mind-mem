@@ -161,8 +161,9 @@ def _tree(root: Path) -> set[str]:
 @pytest.mark.parametrize("plat", ["linux", "darwin", "win32"])
 def test_detection_creates_no_files(plat: str, home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _platform(monkeypatch, plat)
+    ws = str(home.parent / "never-created-ws")  # WS itself may exist on a host that ran other tests
     before = _tree(home)
-    detect_installed_agents(WS)
+    detect_installed_agents(ws)
     assert _tree(home) == before, "detection on an empty HOME is read-only"
     # Positive control: with every non-glob detect dir present, detection
     # finds clients and still adds nothing.
@@ -171,12 +172,12 @@ def test_detection_creates_no_files(plat: str, home: Path, monkeypatch: pytest.M
     for spec in AGENT_REGISTRY.values():
         for p in spec.detect_paths:
             if "*" not in p and "{ws}" not in p:
-                Path(client_paths.expand(p, WS)).mkdir(parents=True, exist_ok=True)
+                Path(client_paths.expand(p, ws)).mkdir(parents=True, exist_ok=True)
     populated = _tree(home)
-    found = detect_installed_agents(WS)
+    found = detect_installed_agents(ws)
     assert len(found) > 30, found
     assert _tree(home) == populated
-    assert not os.path.exists(WS), "the workspace path is not created by detection"
+    assert not os.path.exists(ws), "the workspace path is not created by detection"
 
 
 @pytest.mark.parametrize("agent", AUTO)

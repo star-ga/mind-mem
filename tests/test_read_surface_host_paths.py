@@ -41,6 +41,12 @@ from mind_mem.path_redact import redact_host_paths, workspace_label
 
 DENIED = "namespace access denied"
 
+
+def has(body: str, text: str) -> bool:
+    """``text`` appears in a JSON ``body``, as written or JSON-escaped (Windows paths carry backslashes)."""
+    return text in body or json.dumps(text)[1:-1] in body
+
+
 # --- 1. the model tools echo the caller's own spelling --------------------------
 
 SPELLINGS = ("~/zq-absent/no-such-key.pub", "relative/zq-absent.pub", "/zq-absent//double//slash.pub", "/zq-absent/trailing/")
@@ -50,6 +56,7 @@ SPELLINGS = ("~/zq-absent/no-such-key.pub", "relative/zq-absent.pub", "/zq-absen
 def home(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
     h = tmp_path_factory.mktemp("zq-home-distinctive")
     monkeypatch.setenv("HOME", str(h))
+    monkeypatch.setenv("USERPROFILE", str(h))  # expanduser reads this on Windows
     return h
 
 
@@ -61,7 +68,9 @@ def test_verify_model_tool_echoes_the_pubkey_path_as_supplied(
     body = call("verify_model_tool", who, path=str(ws / "shared"), pubkey_path=spelling)
     err = json.loads(body)["error"]
     assert err == f"pubkey_path not found: {spelling}", err
-    assert str(home) not in body and str(ws) not in body.replace(str(ws / "shared"), "")
+    assert not has(body, str(home)) and not has(
+        body.replace(str(ws / "shared"), "").replace(json.dumps(str(ws / "shared"))[1:-1], ""), str(ws)
+    )
 
 
 @pytest.mark.parametrize("who", [None, "eve"], ids=["unbound", "shared-only-bound"])
@@ -76,7 +85,7 @@ def test_verify_model_tool_wrong_length_error_does_not_resolve_the_key_path(
         return
     err = json.loads(body)["error"]
     assert "got 5" in err, "the unbound caller must really reach the length check"
-    assert err.endswith("(~/k.pub)") and str(home) not in body
+    assert err.endswith("(~/k.pub)") and not has(body, str(home))
 
 
 @pytest.mark.parametrize("who", [None, "eve"], ids=["unbound", "shared-only-bound"])
@@ -87,13 +96,13 @@ def test_model_tool_errors_keep_the_supplied_model_path(
     gone = str(ws / "shared" / "zq-no-such-checkpoint") + variant
     for tool in ("audit_model_tool", "verify_model_tool"):
         body = call(tool, who, path=gone)
-        assert gone in body, f"{tool} must echo {gone!r} unnormalised: {body}"
-        assert str(home) not in body
+        assert has(body, gone), f"{tool} must echo {gone!r} unnormalised: {body}"
+        assert not has(body, str(home))
     # a file given where a directory is expected keeps the caller's spelling too
     a_file = str(ws / "shared" / "decisions" / "DECISIONS.md")
     for tool in ("audit_model_tool", "verify_model_tool"):
         body = call(tool, who, path=a_file + variant if variant in ("/", "//") else a_file)
-        assert str(ws.parent) not in body.replace(a_file, ""), f"{tool}: {body}"
+        assert not has(body.replace(a_file, "").replace(json.dumps(a_file)[1:-1], ""), str(ws.parent)), f"{tool}: {body}"
 
 
 def test_model_tools_reply_with_the_supplied_directory_when_it_works(ws: Path, call: Callable[..., str]) -> None:
@@ -109,11 +118,11 @@ def test_sign_model_tool_echoes_key_file_as_supplied(
     monkeypatch.setenv("MIND_MEM_SCOPE", "admin")  # sign_model_tool is admin-scope
     with use_workspace(str(ws)):
         body = registered["sign_model_tool"](path=str(ws / "shared"), key_file="~/zq-no-such.sk")
-    assert json.loads(body)["error"] == "key_file not found: ~/zq-no-such.sk" and str(home) not in body
+    assert json.loads(body)["error"] == "key_file not found: ~/zq-no-such.sk" and not has(body, str(home))
     (home / "k.sk").write_bytes(b"x")  # positive control: exists, wrong length
     with use_workspace(str(ws)):
         body = registered["sign_model_tool"](path=str(ws / "shared"), key_file="~/k.sk")
-    assert "got 1" in body and str(home) not in body and "(~/k.sk)" in body
+    assert "got 1" in body and not has(body, str(home)) and "(~/k.sk)" in body
 
 
 def test_sign_model_tool_replies_name_sidecars_relative_to_the_supplied_path(
@@ -145,6 +154,7 @@ def test_redact_helper_rewrites_workspace_and_home_and_keeps_supplied_spelling(t
     h = tmp_path / "zq-h"
     h.mkdir()
     monkeypatch.setenv("HOME", str(h))
+    monkeypatch.setenv("USERPROFILE", str(h))  # expanduser reads this on Windows
     text = f"in {root}/decisions/D.md and {h}/x and {root} end"
     out = redact_host_paths(text, workspace=str(root))
     assert str(root) not in out and str(h) not in out and "zq-root" not in out
@@ -191,7 +201,7 @@ def test_lint_never_returns_the_absolute_workspace(ws: Path, call: Callable[...,
         got = json.loads(body)
         assert "findings" in got, "positive control: the lint really ran"
         assert got["workspace"] == workspace_label(str(ws)) and not got["workspace"].startswith("/")
-    assert str(ws) not in body and str(ws.parent) not in body
+    assert not has(body, str(ws)) and not has(body, str(ws.parent))
 
 
 def test_lint_autofix_disabled_payload_has_no_path(ws: Path, registered: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
@@ -354,7 +364,7 @@ def test_no_user_scope_tool_or_resource_returns_an_absolute_host_path(
     assert "zqSHAREDACTIVEcanary" in joined or "D-SHARED-ACT" in joined, "the sweep never read the seeded corpus"
     assert sum(1 for b in seen.values() if not b.startswith("EXC")) >= 40
     markers = {str(ws), os.path.realpath(ws), str(ws.parent), str(home), os.path.realpath(home)}
-    hits = {label: [m for m in markers if m in body] for label, body in seen.items()}
+    hits = {label: [m for m in markers if has(body, m)] for label, body in seen.items()}
     hits = {k: v for k, v in hits.items() if v}
     assert not hits, f"absolute host paths in user-scope responses: {hits}"
 
@@ -367,7 +377,7 @@ def test_the_sweep_can_fail_when_a_tool_leaks(
     leaky = dict(registered)
     leaky["lint"] = lambda **_kw: json.dumps({"workspace": str(ws)})
     seen = _sweep(ws, leaky, None)
-    assert str(ws) in seen["lint[plain]"]
+    assert has(seen["lint[plain]"], str(ws))
 
 
 def test_vault_scan_refusal_echoes_the_supplied_root(sweep_env: Path, call: Callable[..., str]) -> None:

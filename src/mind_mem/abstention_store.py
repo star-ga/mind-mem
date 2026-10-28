@@ -202,7 +202,8 @@ def record_assessment(workspace: str, assessment: Mapping[str, Any], attestation
         record_prediction(workspace, run_id, assessment, stamp)
     except Exception as exc:  # noqa: BLE001 -- a sidecar write must never cost the answer
         _log.warning("abstention_prediction_not_recorded", error=str(exc))
-        return f"Abstention prediction not recorded: {exc}"
+        # The detail stays in the log: this warning is returned to API clients.
+        return "Abstention prediction not recorded; see the server log"
     return None
 
 
