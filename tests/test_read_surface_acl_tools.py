@@ -753,9 +753,11 @@ def no_fts(ws: Path) -> Path:
     """The workspace as a default install has it: corpus on disk, no FTS index yet."""
     import gc
 
+    from mind_mem.calibration import _close_all_conn_managers as close_calibration_managers
     from mind_mem.sqlite_index import close_all_conn_managers
 
     close_all_conn_managers()
+    close_calibration_managers()  # calibration keeps its own manager on the same recall.db
     gc.collect()  # a connection dropped in a reference cycle still holds the file until collected
     # Windows cannot unlink a database file a cached connection still holds
     for name in ("recall.db", "recall.db-wal", "recall.db-shm"):
