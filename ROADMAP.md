@@ -4962,7 +4962,7 @@ Two constraints this must respect:
 Two 2026 papers independently name this exact plane. Recorded for vocabulary
 and evaluation shape, not as a dependency:
 
-- **FORGETEVAL** (arXiv 2606.15903) — thesis: production memory failures are
+- **FORGETEVAL** (a 2026 benchmark paper) — thesis: production memory failures are
   forgetting failures, not recall failures, *"yet existing memory benchmarks
   measure only recall."* Decomposes forgetting into 5 primitive families and 10
   adversarial categories. At least four map onto live defects in our own note
@@ -4974,7 +4974,7 @@ and evaluation shape, not as a dependency:
   **Caveat:** its adapter protocol scores N/A for missing primitives, and we
   have no `purge` and no partial-`supersede` — so the aggregate would understate
   the gap. The per-category profile is the output worth having, not the headline.
-- **GPM** (arXiv 2608.12476) — describes this architecture in academic
+- **GPM** (a 2026 paper) — describes this architecture in academic
   vocabulary: bitemporal state transitions, source-bound admission, non-revival
   after retraction, fail-closed structured release. Independent confirmation that
   governed memory is a real category. **Nothing to steal — we built it.** Take
@@ -4986,7 +4986,7 @@ The item that prompted this group was a typeset explainer ("Agent Memory
 Architecture — 5 Layers"), which carries a model vendor's wordmark on every page
 while disclaiming affiliation with that vendor, cites a vendor site for its headline
 numbers, and attributes an entire section to an unlocatable blog post. Its
-CoALA taxonomy is real and is not its own (arXiv 2309.02427). Recorded here so a
+CoALA taxonomy is real and is not its own (it predates the document in published research). Recorded here so a
 later pass does not re-import it:
 
 - ~~**The five-layer architecture** (working / episodic / semantic / procedural / forgetting)~~
@@ -6412,7 +6412,7 @@ First regenerate training data against the live MCP tool definitions, resolving 
 - Preserve existing public APIs, admission/governance gates and determinism contracts by default; use feature flags. Revert or defer when benefits are not established.
 - Dependency order: mind-inference reference -> mind-nerve benchmark -> MindLLM optional dispatch -> naestro/mind-mem pilots; mind-flow orchestrates experiments and mind/mind-runtime implement only proven optimizations.
 
-**Attribution:** STARGA, Inc. Research source is cited above. No software-development co-authors are designated.
+**Attribution:** STARGA, Inc. The research source is recorded privately, not cited here. No software-development co-authors are designated.
 
 
 ---
@@ -6458,7 +6458,7 @@ Status: proposed, not built. A Fable audit verdict is required before any build.
 
 **Owner:** STARGA, Inc.  
 **Status:** Proposed; not shipped or independently benchmarked.  
-**Competitive reference:** https://sun-asterisk.us/takumi/ — learn from engineering workflow patterns; no copying of restricted assets.
+**Competitive reference:** a commercial verified-engineering-delivery product (provenance recorded privately, per the no-public-attribution rule) — learn from engineering workflow patterns; no copying of restricted assets.
 
 ### Repository-specific work
 
@@ -6561,3 +6561,247 @@ Recent research trains a small proposer model to revise a frozen solver's *harne
 ### Status
 
 Proposed, not built. Needs an architecture audit before implementation. Does not block or change the in-flight 4B retrain.
+
+## A plan-ready trust label on every recall hit (2026-10-27, Proposed)
+
+An agent planning an irreversible step (a push, a deploy, a sent message) needs to know whether a recalled
+fact can carry that step. Today the answer is spread across several signals: the block's `status`, its
+approval history (`propose_update` → `approve_apply`), the score from `validity_gate.py`, staleness inside the
+corpus from `lineage_staleness.py`, staleness against the outside world from `world_staleness.py`, and
+`block_maturity.py`. Each signal is useful, but a planner should not have to combine five of them itself.
+
+### Plan
+
+- Add one field to every recall hit: `trust`, with exactly one of `verified`, `unverified`, `stale` or
+  `missing` (for a cited block id that no longer resolves).
+- `verified` means human-approved through `approve_apply`, with no staleness flag from either staleness
+  module. `stale` means either module flags it. Everything else is `unverified`. The validity score and
+  maturity stay visible next to the label but never upgrade it.
+- The label is a pure function of stored state: no clock beyond the stored timestamps, no I/O, no model
+  call. Same memory and same question give the same label, so replayable memory still holds.
+- Consumer: NAESTRO's premise-checked plans, which refuse an irreversible step unless every block it rests
+  on is `verified`.
+
+### Acceptance
+
+- A table test covers every combination of the input signals, including the case where the label must
+  not be `verified` even though the validity score is high.
+- A block whose cited file is deleted moves from `verified` to `stale` on the next recall.
+- Turning the field off returns recall output byte-identical to today's.
+
+### Status
+
+Proposed, not built. Needs an architecture audit before implementation.
+
+## Write-time memory for agents that write MIND: verified examples and compile-error fixes (2026-10-28, Proposed)
+
+> Basis: recent research on code generation for low-resource languages.
+> Ideas only, no code or dependency adopted. Provenance lives in governed memory, not here.
+
+### Why
+
+An agent writing MIND starts from almost no training signal, and many first-attempt failures
+are compile errors (a missing import, a wrong signature, a wrong type). Memory can close part
+of that gap without retraining: a store of programs that compiled and passed their tests, and
+of the diagnostic a past attempt hit together with the edit that cleared it, lets the agent
+meet the fix before its first compile. A grep of `src/` and `docs/` finds no store of compiler
+verdicts and no recall path keyed on a compile error, so this is not built.
+
+### 1. Store only compiler-verified material
+
+- A MIND example enters the store only when the exact file compiles with the pinned `mindc`
+  and its tests pass. The entry records the compiler version, the source hash and the test result.
+- A compile-error lesson is stored only as a triple: the diagnostic code and message, the minimal
+  edit that made the same file compile, and a re-check that the edited file compiles. A lesson
+  whose edit does not compile is refused, not stored as a note.
+- Writes go through `propose_update` like every other block. Each lesson carries one verdict
+  label from the verdict-labelled lessons entry above (helped, hurt, no observed effect, confounded).
+
+### 2. Recall at write time
+
+- Before an agent's first compile of a MIND file, recall returns up to k matching examples and
+  error-to-fix lessons, matched on the modules the file imports and the diagnostic codes seen
+  for similar tasks.
+- Each returned item shows its compile record, so the agent can tell a verified example from
+  an unverified note.
+
+### 3. Measured effect on first-compile success
+
+Done when all of the following hold:
+
+- On a held-out set of at least 100 MIND tasks that the store has never seen (the leak scan of
+  the verdict-labelled lessons entry runs before each run), the first-compile pass rate with
+  recall is higher than without it. Same model, same prompts, same seeds, paired by task.
+- The gain is larger than seed spread across at least three seeds.
+- A distractor control (the same number of unverified snippets injected in the same slots)
+  does not reproduce the gain.
+- The compile-error rate per task is reported alongside pass rate, so a gain cannot hide a rise
+  in one error class.
+
+### Falsification condition
+
+Dropped if the paired gain does not exceed seed spread, or if the distractor control matches it.
+
+### Status
+
+Proposed. Nothing built. Needs an architecture audit before implementation. Depends on the
+compiler's machine-readable diagnostics, to be confirmed against the pinned compiler version.
+
+## Independently reproduced release artifacts (2026-10-28, Proposed)
+
+> Basis: recent research and public practice on reproducible builds.
+> Ideas only, no code or dependency adopted. Provenance lives in governed memory, not here.
+
+### Why
+
+Release artifacts are already signed: the wheel and sdist carry Sigstore keyless signatures,
+PyPI uploads carry PEP 740 attestations, and a CycloneDX SBOM is bound to the wheel
+(`.github/workflows/release.yml`, `docs/supply-chain-security.md`). A signature shows who built
+the bytes. It does not show that the bytes come from the tagged source. Nothing in the build or
+release path rebuilds a tag and compares the result, and `SOURCE_DATE_EPOCH` is not set anywhere
+in that path, so a second build of the same tag would not be expected to match. Users who run
+mind-mem as governed memory for regulated work need that check.
+
+This item does not reopen the "SLSA build provenance level 3" decision under
+"Deliberately not pursued". It needs no isolated hosted builder, only a deterministic build and
+a second rebuilder.
+
+### Plan
+
+1. **Pin the build.** Set `SOURCE_DATE_EPOCH` from the tag's commit time, keep the build backend
+   version fixed by the existing `build-system` floor, write archive members in sorted order and
+   strip build-host paths. Document the single command that builds the wheel and sdist from a tag.
+2. **Rebuild on a second runner.** A release job rebuilds each tag from source on an independent
+   runner and compares the SHA-256 of the wheel and sdist with the published files.
+3. **Gate the publish.** The PyPI publish job waits for the rebuild job. A mismatch stops the
+   publish and names the differing members.
+4. **Publish a receipt.** Each release gets a short reproduction record under `docs/`: both
+   hashes, both builders' toolchain versions and the build command.
+
+### Acceptance
+
+- For the next two tagged releases, the second builder produces byte-identical wheel and sdist.
+- A control in which one build input is deliberately altered (an extra file or a changed
+  timestamp) turns the gate red.
+- The publish job cannot run without a passing rebuild.
+
+### Falsification condition
+
+If bit-identity is not reached within two release cycles after step 1, the receipt records which
+members differ, and the release notes stop claiming reproducibility for the artifacts that differ.
+
+### Status
+
+Proposed. Nothing built. Needs an architecture audit of the release workflow's gate ordering
+before implementation.
+
+## Secret detectors for token shapes the registry misses, and a redact-rescan-drop write rule (2026-10-28, Proposed)
+
+> Basis: recent prior art on secret redaction in agent-memory pipelines.
+> Ideas only, no code or dependency adopted. Provenance lives in governed memory, not here.
+
+### Why
+
+Agent transcripts and tool output are ingested into durable, recallable memory, and the
+package ships publicly. The eight built-in detectors in `src/mind_mem/compliance/detectors.py`
+cover AWS keys, `gh[pousr]_` tokens, Slack, Google API keys, `sk-`/`pypi-` prefixes, PEM
+private-key blocks and credit cards. They do not cover JWTs, `Authorization: Bearer` values,
+credentialed URLs or `github_pat_` tokens. The hook privacy filter (`_SECRET_PATTERNS` in
+`src/mind_mem/hook_installer.py`) misses the same shapes and applies its substitutions once,
+with no re-scan. The DSN redactors (`mm_cli._redact_dsn`, `federation_connect.redact_url`)
+cover two display paths only, not the write path.
+
+### What to build
+
+1. Add detectors to the compliance registry, one `RegexDetector` subclass each: JWTs (three
+   base64url segments, first segment beginning `eyJ`); the credential value of an
+   `Authorization: Bearer` header (the token, not the word); credentialed URLs of the form
+   `scheme://user:pass@host` for postgres, postgresql, mysql, mongodb, mongodb+srv and redis;
+   and `github_pat_` tokens.
+2. Redact, re-scan, drop. After redaction the text is scanned again with the same detector set.
+   A record that still matches is dropped, not stored, and the drop is counted on the existing
+   metrics surface. No record is stored in a partly redacted state.
+3. Route the hook privacy filter through the same registry and the same re-scan, so the two
+   pattern sets agree. This is the upgrade path already noted in `detectors.py`.
+
+### Done criterion
+
+- One positive fixture per new detector is redacted; the test asserts the secret string is
+  absent from the output.
+- Negative controls are left unchanged: a 40-hex git SHA, a file path, a credential-free
+  `https://` URL, and the word "Bearer" in prose with no token.
+- A fixture whose redaction still leaves a match (one crafted so a replacement re-creates a
+  match) is dropped, and the drop counter increments. This case has its own test.
+- Removing any one new detector turns its positive test red. Checked by mutation, once per
+  detector.
+- The full mind-mem test suite stays green.
+- Ingest of secret-free input is byte-identical to today's output. A fixed corpus is hashed
+  before and after the change.
+
+### Falsification condition
+
+Dropped if any new detector fires on a negative control in the corpus, or if the byte-identity
+check on secret-free input fails.
+
+### Status
+
+Proposed. Nothing built. Needs an architecture audit before implementation: the hook filter and
+the compliance registry are separate pattern sets today, and reconciling them changes hook output
+bytes, so the byte-identity criterion has to be checked on both paths.
+
+## Non-destructive consolidation validator for merged blocks (2026-10-28, Proposed)
+
+> Basis: recent prior art on guarded memory consolidation.
+> Ideas only, no code or dependency adopted. Provenance lives in governed memory, not here.
+
+### Why
+
+The destructive merge is deferred (the `# deferred:` marker in
+`src/mind_mem/consolidation_maturity_gate.py`). A weaker merge path is already live:
+`src/mind_mem/recompaction.py` proposes a rewrite with `supersedes=source_ids` and checks only a
+retention floor (25% of the largest source). It checks no rationale and no citation. A validator
+in front of every merged-block proposal closes that gap before the destructive step lands.
+
+### What to build
+
+A pure function `validate_merge(proposal, sources, workspace)` that accepts a merged block only
+when all of the following hold:
+
+1. It has a rationale of at least eight non-whitespace characters, the same floor the RA.4
+   proposal rule uses.
+2. It cites at least one source block, and no citation points to a block that does not exist in
+   the workspace. One dangling citation rejects the merge.
+3. Its length is strictly less than the combined length of its cited sources.
+4. Every source it cites is still in place after the proposal. The validator does not remove or
+   rewrite a source.
+
+An accepted merge is emitted only as a `propose_update` proposal. Only `approve_apply` writes it.
+The validator sits behind a feature flag in `src/mind_mem/v4/flag_registry.py`, off by default.
+
+### Done criterion
+
+- A table test with one case per rejection reason: no rationale, no citation, citation to a
+  deleted block, not shorter than the combined sources, and a source removed by the proposal. It
+  also has one accepted case, so the rejections are shown not to be vacuous.
+- An accepted merge changes no block until `approve_apply`. A test asserts the workspace hash is
+  unchanged after `propose_update`.
+- With the flag off, `plan_consolidation` and `dream_cycle` output is byte-identical to today's,
+  hashed over a fixed workspace.
+- Disabling any one of the four checks turns its table case red. Checked by mutation.
+
+### Falsification condition
+
+Dropped if the validator accepts any case the table marks as rejected, or if flag-off output
+differs from today's.
+
+### Open question
+
+`recompaction.py` already passes `supersedes=source_ids`, while this item requires sources to stay
+in place. The two conflict. The audit has to decide whether recompaction's supersession is routed
+through this validator, or whether supersession is a separate, later step. Until that is decided,
+the validator gates only new merge proposals.
+
+### Status
+
+Proposed. Nothing built. Needs an architecture audit of the recompaction supersession conflict
+before implementation.

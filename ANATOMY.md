@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1756 | **Est. tokens:** ~5,173,987
-**Generated:** 2026-10-28 06:54 UTC
+**Files:** 1757 | **Est. tokens:** ~5,175,573
+**Generated:** 2026-10-28 12:37 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `deploy/docker/` | 1 | ~824 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 97 | ~240,831 |
+| `docs/` | 97 | ~240,862 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -62,7 +62,7 @@
 | `lib/` | 1 | ~2,451 |
 | `mind/` | 27 | ~9,634 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 25 | ~83,839 |
+| `scripts/` | 25 | ~83,877 |
 | `sdk/go/` | 11 | ~9,920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4,864 |
@@ -78,14 +78,14 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,339 |
+| `src/mind_mem/` | 257 | ~1,147,388 |
 | `src/mind_mem/api/` | 5 | ~28,982 |
 | `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
 | `src/mind_mem/importers/` | 10 | ~34,469 |
 | `src/mind_mem/mcp/` | 3 | ~7,717 |
 | `src/mind_mem/mcp/infra/` | 8 | ~20,711 |
-| `src/mind_mem/mcp/tools/` | 28 | ~112,899 |
+| `src/mind_mem/mcp/tools/` | 28 | ~112,931 |
 | `src/mind_mem/skill_opt/` | 11 | ~20,899 |
 | `src/mind_mem/spec/` | 4 | ~6,845 |
 | `src/mind_mem/storage/` | 2 | ~11,712 |
@@ -93,7 +93,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 799 | ~2,356,161 |
+| `tests/` | 800 | ~2,357,590 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -107,7 +107,7 @@
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
 | `train/` | 37 | ~86,802 |
-| `web/` | 6 | ~1,727 |
+| `web/` | 6 | ~1,734 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
 | `web/app/v1/[...path]/` | 1 | ~2,636 |
@@ -442,7 +442,7 @@
 - `GOVERNED_WRITES.md` (~2664 tok, huge) — Governed writes
 - `guardrails.md` (~1920 tok, huge) — GUARDRAIL blocks
 - `hf-mind-mem-4b-v2-README.md` (~2426 tok, huge) — mind-mem-4b v2 (2026-04-21)
-- `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
+- `HYPEREDGE_DESIGN_2026-06-17.md` (~1369 tok, large) — Hyperedge + temporal-anchor design
 - `install-guide.md` (~2881 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~2527 tok, huge) — Integrations
 - `local-viewer.md` (~629 tok, large) — Local memory viewer
@@ -479,7 +479,7 @@
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review.md` (~1647 tok, huge) — `mm review` — batch approval for the HITL queue
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
-- `roadmap.md` (~14527 tok, huge) — Roadmap
+- `roadmap.md` (~14539 tok, huge) — Roadmap
 - `ROADMAP-RETRIEVAL-ACCOUNTABILITY.md` (~2861 tok, huge) — Group R — Retrieval Accountability (memory as rent, not storage)
 - `roadmap-v4.md` (~11275 tok, huge) — mind-mem v4.0 — Design Rationale
 - `scoring.md` (~517 tok, large) — Scoring System
@@ -635,7 +635,7 @@
 - `check_docs_alignment.py` (~17302 tok, huge) — Recompute every counted doc claim from its authority and fail on drift.
 - `check_index_absence.py` (~2246 tok, huge) — Release gate: the version being released must not exist on the index in ANY state.
 - `check_reachable_modules.py` (~5034 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `check_roadmap_ticks.py` (~4387 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `check_roadmap_ticks.py` (~4425 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_tool_surface.py` (~4151 tok, huge) — Reachability, applied to the MCP tool surface.
 - `count_mcp_tools.py` (~6315 tok, huge) — Count registered MCP tools and assert the count matches CLAUDE.md.
 - `docs-alignment-hook.sh` (~454 tok, medium) — docs-alignment-hook.sh — Git pre-commit step to refresh derived doc counts.
@@ -818,12 +818,12 @@
 - `chat_memory.py` (~10891 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
 - `client_config_io.py` (~1116 tok, large) — # Copyright 2026 STARGA, Inc.
-- `client_mcp.py` (~2886 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `client_mcp.py` (~2905 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_paths.py` (~760 tok, large) — # Copyright 2026 STARGA, Inc.
 - `client_registry_data.py` (~6077 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_registry.py` (~2117 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_restore.py` (~1500 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `client_writers.py` (~5521 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `client_writers.py` (~5542 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
 - `codepoint_sanitize.py` (~2007 tok, huge) — Invisible-Unicode codepoint sanitization for block ingestion (security).
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
@@ -958,7 +958,7 @@
 - `core.py` (~3203 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2670 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `frames.py` (~2195 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `governance.py` (~17653 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~17685 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~11036 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `guardrails.py` (~1988 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `_helpers.py` (~1919 tok, huge) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
@@ -1008,7 +1008,7 @@
 - `path_redact.py` (~887 tok, large) — # Copyright 2026 STARGA, Inc.
 - `payload_admission.py` (~3614 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `personas.py` (~1256 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
-- `pipeline_hash.py` (~3573 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
+- `pipeline_hash.py` (~3582 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
 - `prefetch.py` (~7500 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prefix_cache.py` (~3043 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `preimage.py` (~1329 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -1383,6 +1383,7 @@
 - `test_cli_help_is_harmless.py` (~1922 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_hint_correctness.py` (~1371 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_codepoint_sanitize.py` (~3333 tok, huge) — Tests for invisible-Unicode ingest sanitization (security).
+- `test_code_scanning_hardening.py` (~1104 tok, large) — Regression tests for the code-scanning findings closed together.
 - `test_coding_schemas.py` (~1284 tok, large) — Tests for mind-mem coding-native memory schemas."""
 - `test_cognitive_forget.py` (~2315 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compaction.py` (~1905 tok, huge) — Tests for compaction.py — GC and archival engine."""
@@ -1701,7 +1702,7 @@
 - `test_network_cert_pinning.py` (~5212 tok, huge) — Certificate pinning is opt-in, and when it is on it refuses — RM-2290 / RM-2382.
 - `test_network_tls_floor.py` (~3100 tok, huge) — The TLS 1.3 floor holds by construction — roadmap v4.0.0 Group D (RM-2290).
 - `test_niah.py` (~5014 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
-- `test_no_prior_art_attribution_repo_wide.py` (~2555 tok, huge) — No prior-art identifier may appear in a tracked file, anywhere in the repository.
+- `test_no_prior_art_attribution_repo_wide.py` (~2855 tok, huge) — No prior-art identifier may appear in a tracked file, anywhere in the repository.
 - `test_no_silent_success_paths.py` (~3823 tok, huge) — Regressions for paths that used to report success while doing the wrong thing.
 - `test_no_vacuous_skips.py` (~7101 tok, huge) — A skipped test reads as a pass — so the skip surface itself needs a gate.
 - `test_novel_term_gate.py` (~2202 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1895,7 +1896,7 @@
 - `test_review_queue.py` (~2038 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_review_render.py` (~2348 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
-- `test_roadmap_hygiene.py` (~3996 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_roadmap_hygiene.py` (~4021 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_roadmap_ticks_gate.py` (~2742 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rollback_restores_memory_only.py` (~893 tok, large) — Rolling back a correction restores memory, never the configuration.
 - `test_rrf_fuse_metadata_union.py` (~456 tok, medium) — RRF fusion keeps every leg's metadata, not only the dict it picked.
@@ -2127,7 +2128,7 @@
 ### `web/`
 
 - `next.config.ts` (~123 tok, small) — mind-mem-web is a thin client — the REST API lives on the
-- `package.json` (~208 tok, medium) — Keys: name, version, private, description, license
+- `package.json` (~215 tok, medium) — Keys: name, version, private, description, license
 - `README.md` (~1031 tok, large) — MIND-Mem web console
 - `tsconfig.json` (~149 tok, small) — Keys: compilerOptions, include, exclude
 

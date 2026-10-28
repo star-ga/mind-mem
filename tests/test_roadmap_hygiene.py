@@ -77,6 +77,7 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
 _LEAKS: tuple[tuple[str, str], ...] = (
     ("  (arXiv:2504.19874) to cached KV embeddings for 6x memory reduction.", "an arXiv identifier"),
     ('> **Paper:** "Train Any Agent Simply by Talking" (arxiv: 2603.10165)', "an arXiv identifier"),
+    ("- **FORGETEVAL** (arXiv 2606.15903) -- thesis: forgetting failures", "an arXiv identifier"),
     ("  See https://arxiv.org/abs/2504.19874 for the derivation.", "an arXiv URL"),
     ("  Published at https://doi.org/10.1145/3641519 — see table 3.", "a DOI URL"),
     ("  The method (doi:10.1145/3641519) reports a 2x speedup.", "a DOI"),

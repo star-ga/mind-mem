@@ -103,7 +103,8 @@ def merge_json_mcp(
     """Set ``<keys>.mind-mem`` to the shaped entry; keep every other key."""
     out = json.loads(json.dumps(existing))
     servers = _descend(out, keys, create=True)
-    assert servers is not None
+    if servers is None:
+        raise UnsafeConfigError(f"`{'.'.join(keys)}` could not be created; left untouched")
     target = _SHAPES[shape](srv)
     if servers.get(SERVER) == target:
         return out, False

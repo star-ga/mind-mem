@@ -24,7 +24,7 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/test_functions-13%2C253-brightgreen?style=flat-square" alt="Test functions: 13,253">
+  <img src="https://img.shields.io/badge/test_functions-13%2C260-brightgreen?style=flat-square" alt="Test functions: 13,260">
   <img src="https://img.shields.io/badge/MCP_tools-107-blue?style=flat-square" alt="MCP Tools: 107">
   <img src="https://img.shields.io/badge/clients-69-blueviolet?style=flat-square" alt="AI Clients: 69">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres_%7C_encrypted-teal?style=flat-square" alt="Storage: Markdown + Postgres + Encrypted">
@@ -253,8 +253,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (107 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 107 distinct tools and 8 read-only resources (6 static + 2 templated). Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
-### Structural Validation + 13,253 Test Functions
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 13,253 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
+### Structural Validation + 13,260 Test Functions
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. The repository contains 13,260 test functions across the core and optional surfaces; collected case counts also depend on parametrization, optional dependencies and test selectors.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -1081,7 +1081,7 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Semantic + BM25 + entity, additive<sup>h</sup> | Vector<sup>i</sup> | Graph + BM25 + vector, RRF / cross-encoder | FTS5 only | FTS5 + vector, score fusion | Vector, optional rerank; BM25 / sparse only with hosted VikingDB |
 | Governance (propose/review/apply) | Yes | No | No | No | No | No | No |
 | Contradiction detection | Yes | Platform only<sup>j</sup> | LLM prompt only | Yes<sup>k</sup> | Agent-judged | No | LLM, at merge |
-| Test functions | 13,253 test functions | - | - | - | - | - | - |
+| Test functions | 13,260 test functions | - | - | - | - | - | - |
 | LoCoMo benchmark (full 10-conv, Acc>=50)¹ | 73.8% | 66.9%² | 74.0% | - | - | - | -³ |
 | MCP tools | 107 distinct<sup>l</sup> | Hosted<sup>m</sup> | Client only | 13 | 23 | 27 | 24 |
 | Core dependencies | 0 | Many | Many | Many | 0<sup>n</sup> | Many | Many |

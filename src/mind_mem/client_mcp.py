@@ -187,7 +187,8 @@ def install_mcp_config(agent: str, workspace: str, *, dry_run: bool = False, for
             if blocked
             else _install_one(spec, path, workspace, srv, dry_run=dry_run, force=force)
         )
-    assert primary is not None
+    if primary is None:
+        raise RuntimeError(f"no required MCP config target for agent {agent!r}")
     if also:
         primary["also"] = also
     return primary
