@@ -1,7 +1,7 @@
 name: pr-review
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
 permissions:
   contents: read
   pull-requests: write
@@ -12,7 +12,8 @@ concurrency:
 jobs:
   review:
     # Same-repo branches only: fork PRs never get an identity token or model access.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Dependabot PRs are skipped: they get no repository secrets, and their diffs are version bumps.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -32,6 +33,7 @@ jobs:
         run: |
           git diff "$BASE...$HEAD" > /tmp/pr.diff
           git log --format='%an <%ae>%n%B' "$BASE..$HEAD" > /tmp/pr.log
+          jq -r '.pull_request.title, (.pull_request.body // "")' "$GITHUB_EVENT_PATH" > /tmp/pr.meta
           wc -c /tmp/pr.diff /tmp/pr.log
       - name: Mint the identity token
         run: |
@@ -42,7 +44,9 @@ jobs:
       - name: Review and leak check
         run: |
           python3 -m pip install --quiet --upgrade anthropic
-          python3 .github/scripts/pr_review.py > /tmp/review.md
+          # The checker runs from the base branch once it exists there, so a PR cannot weaken its own check.
+          git show "$BASE:.github/scripts/pr_review.py" > /tmp/pr_review.py 2>/dev/null || cp .github/scripts/pr_review.py /tmp/pr_review.py
+          python3 /tmp/pr_review.py > /tmp/review.md
       - name: Post or update the review comment
         run: |
           marker='<!-- pr-review -->'

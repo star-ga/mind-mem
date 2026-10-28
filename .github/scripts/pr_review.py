@@ -20,9 +20,36 @@ def redact(text: str) -> str:
     return text
 
 
-added = "\n".join(l[1:] for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++"))
-hits = sorted({f"{where}: pattern #{i + 1}" for i, p in enumerate(pats)
-               for text, where in ((added, "added lines"), (log, "commit messages")) if p.search(text)})
+meta = open("/tmp/pr.meta", errors="replace").read() if os.path.exists("/tmp/pr.meta") else ""
+
+
+def split_diff(text: str) -> tuple[str, str]:
+    """Added content lines and newly introduced file paths. Headers are told apart by position
+    (before the first @@ of a file), so added content that itself starts with "++" is still scanned."""
+    added, paths, in_hunk, old = [], [], False, ""
+    for line in text.splitlines():
+        if line.startswith("diff --git "):
+            in_hunk, old = False, ""
+        elif line.startswith("@@"):
+            in_hunk = True
+        elif in_hunk:
+            if line.startswith("+"):
+                added.append(line[1:])
+        elif line.startswith("--- "):
+            old = line[4:]
+        elif line.startswith("+++ ") and old == "/dev/null":
+            paths.append(line[4:])
+        elif line.startswith(("rename to ", "copy to ")):
+            paths.append(line.split(" ", 2)[2])
+    return "\n".join(added), "\n".join(paths)
+
+
+added, new_paths = split_diff(diff)
+sources = ((added, "added lines"), (new_paths, "new file names"), (log, "commit messages"), (meta, "PR title/body"))
+hits = sorted({f"{where}: pattern #{i + 1}" for i, p in enumerate(pats) for text, where in sources if p.search(text)})
+if not pats:
+    # Fail closed: without the private list nothing was checked, so the job must not report a pass.
+    hits = ["leak list unavailable: the LEAK_TERMS secret is missing or empty"]
 open("/tmp/leaks.txt", "w").write("\n".join(hits))
 
 rubric = (
