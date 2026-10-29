@@ -92,13 +92,15 @@ def test_manifest_tampering_and_vote_integrity(tmp_path):
     prompt = "A generic evidence prompt"
     h = hashlib.sha256(prompt.encode()).hexdigest()
     row = {**answer(), "prompt_sha256": h, "votes": [{"ok": False}]}
-    (tmp_path / "answers.jsonl").write_text(json.dumps(row) + "\n")
-    (tmp_path / "prompts.jsonl").write_text(json.dumps({"id": row["id"], "prompt_sha256": h, "messages": [{"content": prompt}]}) + "\n")
+    (tmp_path / "answers.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    (tmp_path / "prompts.jsonl").write_text(
+        json.dumps({"id": row["id"], "prompt_sha256": h, "messages": [{"content": prompt}]}) + "\n", encoding="utf-8"
+    )
     manifest = {"rows": 1, "artifacts": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in tmp_path.iterdir()}}
-    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ValueError, match="majority"):
         verify_bundle(tmp_path)
-    (tmp_path / "answers.jsonl").write_text("{}\n")
+    (tmp_path / "answers.jsonl").write_text("{}\n", encoding="utf-8")
     with pytest.raises(ValueError, match="hash mismatch"):
         verify_bundle(tmp_path)
 
@@ -118,11 +120,11 @@ def test_drop_in_key_cannot_change_unreviewed_content(tmp_path):
     revised = copy.deepcopy(original)
     revised[0]["qa"][0]["answer"] = "red"
     evidence = {"id": row["id"], "source_row_sha256": digest(row), "quoted_turns": row["evidence"], "dia_ids": ["D1:1"]}
-    (tmp_path / "locomo10.official.json").write_text(json.dumps(original))
-    (tmp_path / "locomo10.corrected.json").write_text(json.dumps(revised))
-    (tmp_path / "correction_evidence.jsonl").write_text(json.dumps(evidence) + "\n")
+    (tmp_path / "locomo10.official.json").write_text(json.dumps(original), encoding="utf-8")
+    (tmp_path / "locomo10.corrected.json").write_text(json.dumps(revised), encoding="utf-8")
+    (tmp_path / "correction_evidence.jsonl").write_text(json.dumps(evidence) + "\n", encoding="utf-8")
     assert verify_correction_evidence(tmp_path, [row])["literal_citations"] == 1
     revised[0]["conversation"]["session_1"][0]["text"] = "Changed without review"
-    (tmp_path / "locomo10.corrected.json").write_text(json.dumps(revised))
+    (tmp_path / "locomo10.corrected.json").write_text(json.dumps(revised), encoding="utf-8")
     with pytest.raises(ValueError, match="unreviewed changes"):
         verify_correction_evidence(tmp_path, [row])

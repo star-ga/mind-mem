@@ -38,9 +38,11 @@ def test_text_free_prompt_manifest_still_binds_answers(tmp_path):
     from benchmarks.release_scoring import sha256, verify_bundle
 
     row = {"id": "example", "prompt_sha256": text_hash("synthetic"), "votes": [{"ok": True}], "official_ok": True}
-    (tmp_path / "answers.jsonl").write_text(json.dumps(row) + "\n")
-    (tmp_path / "prompt_hashes.jsonl").write_text(json.dumps({"id": "example", "prompt_sha256": text_hash("changed")}) + "\n")
+    (tmp_path / "answers.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    (tmp_path / "prompt_hashes.jsonl").write_text(
+        json.dumps({"id": "example", "prompt_sha256": text_hash("changed")}) + "\n", encoding="utf-8"
+    )
     manifest = {"rows": 1, "artifacts": {p.name: sha256(p) for p in tmp_path.iterdir()}}
-    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ValueError, match="binding mismatch"):
         verify_bundle(tmp_path)

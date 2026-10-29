@@ -68,7 +68,7 @@ def prepare_workspace(workspace: str, recall_config: dict):
     from mind_mem.recall_vector import VectorBackend
     from mind_mem.sqlite_index import build_index
 
-    Path(workspace, "mind-mem.json").write_text(json.dumps({"recall": recall_config}))
+    Path(workspace, "mind-mem.json").write_text(json.dumps({"recall": recall_config}), encoding="utf-8")
     build_index(workspace, incremental=False)
     vector = VectorBackend(recall_config)
     vector.index(workspace)
@@ -171,9 +171,9 @@ def run(args, config: dict, dataset: Path) -> dict:
     require_pin(encoder["model_id"], encoder["revision"])
     recall["model"] = snapshot_download(encoder["model_id"], revision=encoder["revision"])
     templates_path = args.bundle / "judge_prompts.json"
-    templates = json.loads(templates_path.read_text())
-    split = json.loads((args.bundle / "HELDOUT_SPLIT_20261029.json").read_text())
-    data = json.loads(dataset.read_text())
+    templates = json.loads(templates_path.read_text(encoding="utf-8"))
+    split = json.loads((args.bundle / "HELDOUT_SPLIT_20261029.json").read_text(encoding="utf-8"))
+    data = json.loads(dataset.read_text(encoding="utf-8"))
     count = sum(len(s["qa"]) for s in data) if args.benchmark == "locomo" else len(data)
     expected = 1986 if args.benchmark == "locomo" else 500
     if count != expected:
@@ -187,7 +187,7 @@ def run(args, config: dict, dataset: Path) -> dict:
     def call(messages, n):
         return request(messages, judge_id, args.judge_url, os.environ.get("BENCH_JUDGE_API_KEY", ""), n)
 
-    with raw_path.open("w") as output:
+    with raw_path.open("w", encoding="utf-8") as output:
         for index, sample in enumerate(data):
             with tempfile.TemporaryDirectory(prefix="public-eval-") as temp:
                 if args.benchmark == "locomo":
@@ -234,7 +234,9 @@ def run(args, config: dict, dataset: Path) -> dict:
         except importlib.metadata.PackageNotFoundError:
             environment[dependency] = "unavailable"
     environment["answer_device"] = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
-    code_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], text=True).strip()
+    code_revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], text=True, encoding="utf-8"
+    ).strip()
     return {
         "code_revision": code_revision,
         "environment": environment,

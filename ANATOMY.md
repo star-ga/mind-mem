@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1782 | **Est. tokens:** ~5224589
-**Generated:** 2026-10-29 09:51 UTC
+**Files:** 1782 | **Est. tokens:** ~5224755
+**Generated:** 2026-10-29 10:10 UTC
 
 ## Token Budget Guide
 
@@ -33,8 +33,8 @@
 | `.github/workflows/` | 13 | ~23673 |
 | `.roo/` | 1 | ~22 |
 | `audits/` | 5 | ~24039 |
-| `benchmarks/` | 73 | ~197292 |
-| `benchmarks/public_release/` | 9 | ~24731 |
+| `benchmarks/` | 73 | ~197380 |
+| `benchmarks/public_release/` | 9 | ~24753 |
 | `benchmarks/repro/` | 1 | ~689 |
 | `benchmarks/repro/niah/` | 4 | ~2557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4684 |
@@ -95,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5895 |
 | `src/mind_mem/v4/` | 24 | ~96311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 806 | ~2363367 |
+| `tests/` | 806 | ~2363423 |
 | `tests/fixtures/` | 8 | ~16356 |
 | `tests/fixtures/importers/` | 5 | ~1218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -296,8 +296,8 @@
 - `release_frozen_facts.py` (~3838 tok, huge) — Historical rendering arithmetic, retained only for archive reconstruction."""
 - `release_inputs.py` (~1283 tok, large) — Reconstruct licensed inputs from pinned downloads and text-free source references.
 - `release_judge.py` (~900 tok, large) — Frozen scoring protocol and explicit HTTP transport, separate from answering.
-- `release_runtime.py` (~2956 tok, huge) — Dataset adapters feeding the Python serving path without evaluation labels.
-- `release_scoring.py` (~2754 tok, huge) — Offline evidence verification and aggregate scoring for frozen answer records.
+- `release_runtime.py` (~2985 tok, huge) — Dataset adapters feeding the Python serving path without evaluation labels.
+- `release_scoring.py` (~2770 tok, huge) — Offline evidence verification and aggregate scoring for frozen answer records.
 ### `benchmarks/repro/`
 
 - `README.md` (~689 tok, large) — Repro packages
@@ -319,7 +319,7 @@
 - `repro_manifest.py` (~2145 tok, huge) — Write a repro package: raw rows, recomputed metrics, and a manifest that pins
 - `repro_metrics.py` (~2213 tok, huge) — Recompute every headline metric from RAW per-unit rows, and nothing else.
 - `repro_niah.py` (~3976 tok, huge) — Reproducible NIAH benchmark harness -- emits an independently-verifiable package.
-- `repro_release.py` (~2633 tok, huge) — Public benchmark entry point: verify saved evidence or run a pinned evaluation.
+- `repro_release.py` (~2665 tok, huge) — Public benchmark entry point: verify saved evidence or run a pinned evaluation.
 - `repro_verify.py` (~4137 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `strat_probe.py` (~936 tok, large) — Stratified LongMemEval probe.
@@ -1866,12 +1866,12 @@
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
 - `test_release_archive.py` (~295 tok, medium) — Non-dataset examples for exact prompt/answer reuse."""
-- `test_release_inputs.py` (~554 tok, large) — Synthetic coverage for download-only dataset reconstruction."""
+- `test_release_inputs.py` (~571 tok, large) — Synthetic coverage for download-only dataset reconstruction."""
 - `test_release_judge.py` (~303 tok, medium) — Synthetic scoring protocol tests; no network or model needed."""
 - `test_release_preflight_gates.py` (~5507 tok, huge) — Tests for the release-preflight gates.
 - `test_release_runtime.py` (~457 tok, medium) — Serving-boundary tests use invented questions and fake retrieval only."""
 - `test_release_sbom.py` (~3035 tok, huge) — Fail-closed controls for the wheel-bound release SBOM helper."""
-- `test_release_scoring.py` (~1199 tok, large) — Synthetic tests of evidence binding, correction selection and offline metrics."""
+- `test_release_scoring.py` (~1238 tok, large) — Synthetic tests of evidence binding, correction selection and offline metrics."""
 - `test_remote_vector_admission.py` (~2441 tok, huge) — Remote vector hits must be checked against the current corpus authority."""
 - `test_replay_check.py` (~4122 tok, huge) — Replay — does the ledger corroborate what one recall attestation claims?
 - `test_repo_task_generation.py` (~3390 tok, huge) — Tests for the real-repo A/B task generator.

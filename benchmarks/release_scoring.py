@@ -107,7 +107,7 @@ class CorrectedKey:
 
 
 def verify_bundle(root: Path) -> tuple[dict, list[dict]]:
-    manifest = json.loads((root / "manifest.json").read_text())
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     prompt_file = "prompt_hashes.jsonl" if "prompt_hashes.jsonl" in manifest["artifacts"] else "prompts.jsonl"
     if not {"answers.jsonl", prompt_file} <= set(manifest["artifacts"]):
         raise ValueError("Manifest omits required evidence artifacts")
@@ -178,8 +178,10 @@ def require_no_regression(before: dict, after: dict) -> None:
 
 def verify_correction_evidence(root: Path, rows: list[dict], dataset=None, corrected_dataset=None) -> dict:
     """Check literal citations and drop-in answers without judging their meaning."""
-    dataset = dataset if dataset is not None else json.loads((root / "locomo10.official.json").read_text())
-    corrected_dataset = corrected_dataset if corrected_dataset is not None else json.loads((root / "locomo10.corrected.json").read_text())
+    dataset = dataset if dataset is not None else json.loads((root / "locomo10.official.json").read_text(encoding="utf-8"))
+    corrected_dataset = (
+        corrected_dataset if corrected_dataset is not None else json.loads((root / "locomo10.corrected.json").read_text(encoding="utf-8"))
+    )
     expected_dataset = copy.deepcopy(dataset)
     changed = unique(read_rows(root / "correction_evidence.jsonl"))
     expected = {r["id"] for r in rows if r["verdict"] != "AUDIT_WRONG"}

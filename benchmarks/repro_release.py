@@ -66,7 +66,7 @@ def rescore(benchmark: str, bundle: Path, historical_audit: bool = False, cache:
     manifest, rows = verify_bundle(bundle)
     from benchmarks.release_inputs import corrected_dataset, reconstruct
 
-    config = json.loads((bundle / "protocol.json").read_text())
+    config = json.loads((bundle / "protocol.json").read_text(encoding="utf-8"))
     cache = cache or ROOT / "benchmarks" / ".cache" / "release"
     datasets = {}
     for name in ("locomo", "longmemeval_s"):
@@ -74,9 +74,9 @@ def rescore(benchmark: str, bundle: Path, historical_audit: bool = False, cache:
         path = cache / spec["filename"]
         if not path.exists() or sha256(path) != spec["sha256"]:
             raise ValueError("Pinned dataset cache missing or corrupt; run --prepare first")
-        datasets[name] = json.loads(path.read_text())
+        datasets[name] = json.loads(path.read_text(encoding="utf-8"))
     rows = reconstruct(bundle, datasets, rows)
-    split = json.loads((bundle / "HELDOUT_SPLIT_20261029.json").read_text())
+    split = json.loads((bundle / "HELDOUT_SPLIT_20261029.json").read_text(encoding="utf-8"))
     verify_partitions(rows, split)
     corrections = read_rows(bundle / "corrections.jsonl")
     if any(r["source"] != "independent audit" for r in corrections):
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.historical_baseline or args.historical_audit:
             raise ValueError("Excluded historical artifacts are not distributed in this kit")
         if args.prepare:
-            config = json.loads(args.config.read_text())
+            config = json.loads(args.config.read_text(encoding="utf-8"))
             for name in ("locomo", "longmemeval_s"):
                 download(config["datasets"][name], args.cache)
             rescore(args.benchmark, args.bundle, cache=args.cache)
@@ -165,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.rescore:
             result = niah_rescore() if args.benchmark == "niah" else rescore(args.benchmark, args.bundle, args.historical_audit, args.cache)
         else:
-            config = json.loads(args.config.read_text())
+            config = json.loads(args.config.read_text(encoding="utf-8"))
             if args.benchmark == "niah":
                 if args.download_only:
                     path = download(config["datasets"]["niah"], args.cache)
@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
                     descriptor = download(config["datasets"]["niah"], args.cache)
                     if descriptor.read_bytes() != (ROOT / "benchmarks/repro/niah/dataset.json").read_bytes():
                         raise ValueError("Pinned synthetic dataset differs from the local generator descriptor")
-                    if json.loads(descriptor.read_text())["generator_sha256"] != sha256(ROOT / "tests/test_niah.py"):
+                    if json.loads(descriptor.read_text(encoding="utf-8"))["generator_sha256"] != sha256(ROOT / "tests/test_niah.py"):
                         raise ValueError("Synthetic generator source differs from the pinned descriptor")
                     os.environ["PYTHONHASHSEED"] = str(config["seed"])
                     from benchmarks.repro_niah import main as run_niah
@@ -194,14 +194,14 @@ def main(argv: list[str] | None = None) -> int:
                 expected_name = (
                     "historical_baseline" if args.historical_baseline else {"longmemeval_s": "lme"}.get(args.benchmark, args.benchmark)
                 )
-                expected = json.loads(expected_path.read_text())[expected_name]
+                expected = json.loads(expected_path.read_text(encoding="utf-8"))[expected_name]
                 if not args.historical_audit:
                     expected.pop("legacy_selection_audit_not_publishable", None)
                 if result != expected:
                     raise ValueError("Recomputed aggregates differ from the committed expected outputs")
         if args.out:
             args.out.parent.mkdir(parents=True, exist_ok=True)
-            args.out.write_text(json.dumps(result, indent=2) + "\n")
+            args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(result, indent=2))
         return 0
     except (ValueError, OSError, KeyError) as exc:
