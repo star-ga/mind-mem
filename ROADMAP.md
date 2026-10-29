@@ -6870,3 +6870,73 @@ deduplication, retrieval, and reproducible replay.
 - Benchmarks use reproducible baselines; no unmeasured state-of-the-art claim.
 - Research on open mathematical conjectures stays paused and their scientific statuses are
   unchanged.
+
+## A plain-retrieval baseline beside every memory number, and a rule that gates defaults on it (2026-10-28, Proposed)
+
+Recent research reports that a plain retrieval pipeline over the raw history (dense retrieval, a reranker, no
+extraction, summarising, graph building or rewriting) matched or beat most agentic memory systems on the same
+long-conversation benchmarks, mainly because it puts the needed evidence in front of the reader more often.
+Our published numbers have no such control. Live state, checked 2026-10-28 on origin/main `cb8675a3`: the
+LoCoMo number (1986 questions, external answerer and judge, Acc>=50) and the LongMemEval-S table (470 eligible
+questions, BM25F with the vector leg off, `recall_any@5`, `recall_all@5`, MRR) report mind-mem against other
+memory systems and against a BM25 baseline, and nowhere against dense retrieval plus a reranker over the
+unprocessed text. A reader cannot tell what our extraction, tiers and fusion add over that control. This entry
+adds the control and a rule that uses it. It does not change any published number.
+
+### Deliverables (all `.mind`, tested with `mindc test`; the current Python harness is replaced, not extended)
+
+1. **The baseline, fixed before any run.** Serialize each conversation with its timestamps, split it into
+   256-token windows with a 32-token overlap, embed the windows with one pinned embedding model, take the 128
+   windows nearest the question by cosine similarity, rerank them with one pinned cross-encoder and keep the
+   top 15. The answerer sees the question and those windows only. Every parameter lives in one config file whose
+   hash goes into the result row. Windowing, nearest-neighbour selection with a total tie-break order (score
+   descending, window index ascending), reranked ordering and the top-k cut are `.mind` code over Q16.16 or
+   integers, reusing the existing fusion and cross-encoder modules where they fit. Embedding and reranker scores
+   are input artifacts pinned by hash, so the selection step is byte-identical on every substrate.
+2. **Scored on exactly what we report.** LoCoMo: the full 1986 questions and the non-adversarial subset, same
+   answerer, same judge, same repetitions as the canonical number. LongMemEval-S: the same 470 eligible
+   questions, `recall_any@5`, `recall_all@5` and MRR, plus answer accuracy wherever we report it. Same
+   context-token budget as the system it sits beside; a baseline given a larger budget does not count.
+3. **Published next to every memory number.** Each table in `README.md`, `docs/benchmarks.md` and each scorecard
+   that lists a mind-mem result carries a Raw-RAG row from the same run, with its config hash. Latency and tokens
+   per question are reported next to accuracy.
+4. **Coverage and utilization reported apart.** Coverage is the share of questions whose gold evidence is inside
+   the context the answerer received (a deterministic check against the evidence ids the benchmarks ship).
+   Utilization is accuracy among those covered questions. Two oracle rows sit beside them: gold evidence only,
+   and the full history where it fits. These separate "did not find it" from "found it, answered wrong".
+5. **Default-gate rule.** No new memory layer, model or retrieval mode becomes a default unless it beats the
+   baseline on the same questions, answerer, judge and budget as the run that justifies the default.
+   - Decision rule: paired per question. Count questions the candidate answers correctly and the baseline does
+     not (b) and the reverse (c). The candidate beats the baseline only if the one-sided exact binomial
+     probability of at least b successes among b + c discordant pairs at p = 1/2 is below 0.05, computed in
+     integer arithmetic. Ties and discordant counts are published. No post-hoc subset, and no second
+     attempt on the same questions after a loss.
+   - A change that cannot alter what is retrieved (the governed write path, audit chain, rollback, trust
+     labels) is judged on non-regression instead: the candidate must not lose to the baseline's paired result by
+     a margin declared before the run. Governance properties are not scored by these benchmarks.
+   - Failing the rule leaves the feature available and off by default, with the measurement recorded.
+
+### Acceptance
+
+- Unit tests cover window boundaries (first, last, shorter-than-window input, overlap), tie-break order,
+  top-k selection and a fixed fixture whose selected window ids match a committed golden table.
+- The selection step gives byte-identical output on x86 and ARM for the fixture.
+- Mutation controls, each of which must turn a test red: remove the reranker; set the overlap to zero; swap
+  the tie-break to window index descending; swap b and c in the decision rule.
+- Positive control for the gate: a candidate that is the baseline with its context cut to a third must fail the
+  rule on a fixture; the baseline compared with itself must report no win.
+- A MIND check over the benchmark tables fails when a table lists a mind-mem result with no Raw-RAG row from
+  the same run.
+
+### Falsification condition
+
+If the baseline beats the current default on the full LoCoMo set or the LongMemEval-S eligible set, the result
+is published as measured, the headline claims on those benchmarks are narrowed to say so, and the default
+changes only through the rule above. The product claim then rests on the governed write path and the audit
+properties, not on retrieval score.
+
+### Status
+
+Proposed, not built. Extends the standing LoCoMo and LongMemEval evals and the continuous benchmark
+regression item; replaces the Python harness for the baseline run only. Its consumer on the NAESTRO side is the
+roadmap entry R154. Needs an architecture audit before implementation.
