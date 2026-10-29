@@ -1,0 +1,254 @@
+{
+  "locomo": {
+    "benchmark": "locomo",
+    "status": "historical evidence; verification pending; not a fair release claim",
+    "configuration_a": {
+      "official_key": {
+        "all": {
+          "full": {
+            "correct": 1230,
+            "total": 1986,
+            "accuracy": 0.6193353474320241,
+            "exact_match": 0.004531722054380665,
+            "token_f1": 0.18980102047559239
+          },
+          "dev": {
+            "correct": 649,
+            "total": 1042,
+            "accuracy": 0.6228406909788867,
+            "exact_match": 0.0028790786948176585,
+            "token_f1": 0.19401718112833816
+          },
+          "held_out": {
+            "correct": 581,
+            "total": 944,
+            "accuracy": 0.6154661016949152,
+            "exact_match": 0.006355932203389831,
+            "token_f1": 0.18514716517881094
+          }
+        },
+        "categories_1_4": {
+          "full": {
+            "correct": 1002,
+            "total": 1540,
+            "accuracy": 0.6506493506493507,
+            "exact_match": 0.005194805194805195,
+            "token_f1": 0.2233435450382212
+          },
+          "dev": {
+            "correct": 531,
+            "total": 802,
+            "accuracy": 0.6620947630922693,
+            "exact_match": 0.003740648379052369,
+            "token_f1": 0.23377740748552853
+          },
+          "held_out": {
+            "correct": 471,
+            "total": 738,
+            "accuracy": 0.6382113821138211,
+            "exact_match": 0.006775067750677507,
+            "token_f1": 0.21200484899114713
+          }
+        },
+        "category_5": {
+          "full": {
+            "correct": 228,
+            "total": 446,
+            "accuracy": 0.5112107623318386,
+            "exact_match": 0.002242152466367713,
+            "token_f1": 0.07398154104409287
+          },
+          "dev": {
+            "correct": 118,
+            "total": 240,
+            "accuracy": 0.49166666666666664,
+            "exact_match": 0.0,
+            "token_f1": 0.061151758051393716
+          },
+          "held_out": {
+            "correct": 110,
+            "total": 206,
+            "accuracy": 0.5339805825242718,
+            "exact_match": 0.0048543689320388345,
+            "token_f1": 0.08892886103558702
+          }
+        }
+      },
+      "corrected_key_verification_pending": {
+        "all": {
+          "full": {
+            "correct": 1231,
+            "total": 1986,
+            "accuracy": 0.6198388721047331,
+            "exact_match": 0.0055387713997985906,
+            "token_f1": 0.19343253443664107
+          },
+          "dev": {
+            "correct": 654,
+            "total": 1042,
+            "accuracy": 0.6276391554702495,
+            "exact_match": 0.0047984644913627635,
+            "token_f1": 0.19809345826588184
+          },
+          "held_out": {
+            "correct": 577,
+            "total": 944,
+            "accuracy": 0.611228813559322,
+            "exact_match": 0.006355932203389831,
+            "token_f1": 0.18828774351495708
+          }
+        },
+        "categories_1_4": {
+          "full": {
+            "correct": 1003,
+            "total": 1540,
+            "accuracy": 0.6512987012987013,
+            "exact_match": 0.006493506493506494,
+            "token_f1": 0.2280267831724048
+          },
+          "dev": {
+            "correct": 536,
+            "total": 802,
+            "accuracy": 0.6683291770573566,
+            "exact_match": 0.006234413965087282,
+            "token_f1": 0.23907351818044192
+          },
+          "held_out": {
+            "correct": 467,
+            "total": 738,
+            "accuracy": 0.6327913279132791,
+            "exact_match": 0.006775067750677507,
+            "token_f1": 0.21602206572464566
+          }
+        },
+        "category_5": {
+          "full": {
+            "correct": 228,
+            "total": 446,
+            "accuracy": 0.5112107623318386,
+            "exact_match": 0.002242152466367713,
+            "token_f1": 0.07398154104409287
+          },
+          "dev": {
+            "correct": 118,
+            "total": 240,
+            "accuracy": 0.49166666666666664,
+            "exact_match": 0.0,
+            "token_f1": 0.061151758051393716
+          },
+          "held_out": {
+            "correct": 110,
+            "total": 206,
+            "accuracy": 0.5339805825242718,
+            "exact_match": 0.0048543689320388345,
+            "token_f1": 0.08892886103558702
+          }
+        }
+      }
+    },
+    "configuration_b": {
+      "status": "not measured; reference answer-model and immutable judge revision unresolved",
+      "full": null,
+      "dev": null,
+      "held_out": null
+    },
+    "correction_selection": {
+      "included": 96,
+      "excluded": 0
+    },
+    "judge_replay": "saved majority votes; semantic correctness is not independently rejudged",
+    "exact_match_and_token_f1": "computed from raw answers without a model"
+  },
+  "lme": {
+    "benchmark": "longmemeval_s",
+    "status": "historical evidence; verification pending; not a fair release claim",
+    "configuration_a": {
+      "official_key": {
+        "all": {
+          "full": {
+            "correct": 216,
+            "total": 500,
+            "accuracy": 0.432,
+            "exact_match": 0.034,
+            "token_f1": 0.19904222870200047
+          },
+          "dev": {
+            "correct": 105,
+            "total": 257,
+            "accuracy": 0.4085603112840467,
+            "exact_match": 0.023346303501945526,
+            "token_f1": 0.18974060817753832
+          },
+          "held_out": {
+            "correct": 111,
+            "total": 243,
+            "accuracy": 0.4567901234567901,
+            "exact_match": 0.04526748971193416,
+            "token_f1": 0.20887974505914678
+          }
+        }
+      },
+      "corrected_key_verification_pending": {
+        "all": {
+          "full": {
+            "correct": 216,
+            "total": 500,
+            "accuracy": 0.432,
+            "exact_match": 0.034,
+            "token_f1": 0.19904222870200047
+          },
+          "dev": {
+            "correct": 105,
+            "total": 257,
+            "accuracy": 0.4085603112840467,
+            "exact_match": 0.023346303501945526,
+            "token_f1": 0.18974060817753832
+          },
+          "held_out": {
+            "correct": 111,
+            "total": 243,
+            "accuracy": 0.4567901234567901,
+            "exact_match": 0.04526748971193416,
+            "token_f1": 0.20887974505914678
+          }
+        }
+      }
+    },
+    "configuration_b": {
+      "status": "not measured; reference answer-model and immutable judge revision unresolved",
+      "full": null,
+      "dev": null,
+      "held_out": null
+    },
+    "correction_selection": {
+      "included": 96,
+      "excluded": 0
+    },
+    "judge_replay": "saved majority votes; semantic correctness is not independently rejudged",
+    "exact_match_and_token_f1": "computed from raw answers without a model"
+  },
+  "niah": {
+    "benchmark": "NIAH",
+    "configuration": "retrieval only; no answer model or judge",
+    "split_note": "No untouched held-out NIAH set exists; every saved case was previously exposed.",
+    "full": {
+      "metric": "top_k_hit_rate",
+      "passed": 250,
+      "total": 250,
+      "as_text": "250/250",
+      "value": 1.0
+    },
+    "dev": {
+      "metric": "top_k_hit_rate",
+      "passed": 250,
+      "total": 250,
+      "as_text": "250/250",
+      "value": 1.0
+    },
+    "held_out": {
+      "passed": null,
+      "total": 0,
+      "value": null
+    }
+  }
+}

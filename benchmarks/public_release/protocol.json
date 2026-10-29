@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "status": "Release model and reference protocol pins pending; historical replay available",
+  "seed": 0,
+  "max_input_tokens": 8192,
+  "max_new_tokens": 256,
+  "limit": 8,
+  "max_evidence_chars": 4000,
+  "system_prompt": "You are mind-mem-4b, a memory-governance assistant.",
+  "configurations": {
+    "a": {
+      "answer_model_id": "star-ga/RELEASE_PENDING_4B",
+      "answer_revision": "RELEASE_PENDING"
+    },
+    "b": {
+      "answer_model_id": "REFERENCE_PROTOCOL_PENDING",
+      "answer_revision": "RELEASE_PENDING"
+    }
+  },
+  "judge": {
+    "model_id": "mistral-large-latest",
+    "revision": "RELEASE_PENDING",
+    "temperature": 0,
+    "prompt_file": "judge_prompts.json",
+    "historical_alias_only": true
+  },
+  "encoder": {
+    "model_id": "BAAI/bge-large-en-v1.5",
+    "revision": "d4aa6901d3a41ba39fb536a557fa166f842b0e09"
+  },
+  "retrieval": {
+    "backend": "hybrid",
+    "vector_enabled": true,
+    "provider": "local",
+    "vector_device": "cpu",
+    "knee_cutoff": false,
+    "rrf_k": 60,
+    "bm25_weight": 1.0,
+    "vector_weight": 1.0,
+    "rerank_depth": 50,
+    "dedup": {
+      "enabled": false,
+      "type_cap_enabled": false,
+      "source_cap_enabled": false,
+      "cosine_enabled": false,
+      "best_per_source": false
+    },
+    "cross_encoder": {
+      "enabled": false,
+      "auto_enable": false
+    }
+  },
+  "datasets": {
+    "locomo": {
+      "filename": "locomo10.json",
+      "url": "https://raw.githubusercontent.com/snap-research/locomo/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376/data/locomo10.json",
+      "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+      "license": "CC-BY-NC-4.0",
+      "license_file": "locomo.LICENSE.txt"
+    },
+    "longmemeval_s": {
+      "filename": "longmemeval_s_cleaned.json",
+      "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416c24c778c2fee6e6f3006e7a073259d48f/longmemeval_s_cleaned.json",
+      "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "license": "MIT",
+      "license_file": "longmemeval.LICENSE"
+    },
+    "niah": {
+      "filename": "niah-dataset.json",
+      "url": "https://raw.githubusercontent.com/star-ga/mind-mem/4bdfbdda3abdd071e392b0c52678f17d7774c7d1/benchmarks/repro/niah/dataset.json",
+      "sha256": "11a56cc7399bf8ca00ecd78a403dc01989e50e92bab15b3e5c5b07c7d25d5dea",
+      "license": "Apache-2.0; repository LICENSE",
+      "generator": "tests/test_niah.py"
+    }
+  }
+}
