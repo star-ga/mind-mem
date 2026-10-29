@@ -7046,3 +7046,16 @@ Dropped if the 30-question set is answered no better than plain recall over bloc
 
 Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. An
 architecture audit verdict is required before implementation.
+
+<!-- MIND-NUMERICAL-OPTIMIZATION-REVIEW:BEGIN -->
+## Numerical optimization — proposed review (2026-10-29)
+- [ ] Run offline retrieval-weight calibration against held-out recall/precision and latency, comparing bounded derivative-free and smooth parameter searches; no online self-tuning without governance.
+- [ ] Apply relevant methods from GD, SGD, momentum, Adam/AdamW, L-BFGS, BFGS, Newton-CG, SQP, interior-point and Nelder–Mead only after a benchmarked workload-specific review. Numerical optimizer methods are not compiler code-generation passes.
+<!-- MIND-NUMERICAL-OPTIMIZATION-REVIEW:END -->
+
+<!-- MIND-ANALYTIC-INEQUALITIES-REVIEW:BEGIN -->
+## Analytic inequalities — proposed review (2026-10-29)
+- [ ] Use triangle/Cauchy–Schwarz/Jensen and Markov/Chebyshev only for well-specified score/error/statistical controls, with independent oracle and privacy-safe test data.
+- [ ] Select as needed from Young, triangle, Markov, Chebyshev, Cauchy–Schwarz, AM–GM, Minkowski, Grönwall, Hölder, Poincaré, Sobolev and Jensen; formally enumerate domains, hypotheses, numeric profiles, counterexamples and boundary cases.
+- [ ] No implementation or proof claim yet; preserve existing correctness, determinism, and release acceptance gates.
+<!-- MIND-ANALYTIC-INEQUALITIES-REVIEW:END -->
