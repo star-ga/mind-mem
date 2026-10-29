@@ -104,7 +104,7 @@ def rescore(benchmark: str, bundle: Path, historical_audit: bool = False, cache:
             "dev": None,
             "held_out": None,
         },
-        "correction_selection": {"included": len(corrections), "excluded": 0},
+        "correction_selection": {"included": len(corrections), "excluded": manifest["excluded_correction_candidates"]},
         "judge_replay": "saved majority votes; semantic correctness is not independently rejudged",
         "exact_match_and_token_f1": "computed from raw answers without a model",
     }

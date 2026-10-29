@@ -6,7 +6,7 @@
 
 **Project:** `mind-mem`
 **Files:** 1782 | **Est. tokens:** ~5224589
-**Generated:** 2026-10-29 09:44 UTC
+**Generated:** 2026-10-29 09:51 UTC
 
 ## Token Budget Guide
 
@@ -286,7 +286,7 @@
 - `judge_prompts.json` (~765 tok, large) — Keys: JUDGE_SYSTEM_PROMPT, JUDGE_USER_TEMPLATE, ADVERSARIAL_JUDGE_SYSTEM_PROMPT, ADVERSARIAL_JUDGE_USER_TEMPLATE, LME_JUDGE
 - `locomo.LICENSE.txt` (~4837 tok, huge) — Attribution-NonCommercial 4.0 International
 - `longmemeval.LICENSE` (~266 tok, medium) — MIT License
-- `manifest.json` (~694 tok, large) — Keys: schema_version, status, answer_configuration, source_revision, source_canonical_prompts_sha256
+- `manifest.json` (~716 tok, large) — Keys: schema_version, status, answer_configuration, source_revision, source_canonical_prompts_sha256
 - `protocol.json` (~627 tok, large) — Keys: schema_version, status, seed, max_input_tokens, max_new_tokens
 ### `benchmarks/`
 
@@ -319,7 +319,7 @@
 - `repro_manifest.py` (~2145 tok, huge) — Write a repro package: raw rows, recomputed metrics, and a manifest that pins
 - `repro_metrics.py` (~2213 tok, huge) — Recompute every headline metric from RAW per-unit rows, and nothing else.
 - `repro_niah.py` (~3976 tok, huge) — Reproducible NIAH benchmark harness -- emits an independently-verifiable package.
-- `repro_release.py` (~2622 tok, huge) — Public benchmark entry point: verify saved evidence or run a pinned evaluation.
+- `repro_release.py` (~2633 tok, huge) — Public benchmark entry point: verify saved evidence or run a pinned evaluation.
 - `repro_verify.py` (~4137 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `strat_probe.py` (~936 tok, large) — Stratified LongMemEval probe.

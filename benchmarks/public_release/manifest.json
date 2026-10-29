@@ -32,7 +32,7 @@
     "answers.jsonl": "1e004298c18e2795f3e7bde26ba6b57b8640fe782d51dc44a0064d237a0c5a21",
     "correction_evidence.jsonl": "303533518cb9398b2b3eb0892a862ec6a1ac8be9f8f11eac29a2806f9a73b194",
     "corrections.jsonl": "0434e8984b6aa91c9e24cd9a047f4cf19ad35a3689f215dff1fffb111b3d76c5",
-    "expected_scores.json": "f638c9e84bb778dcdb5b1592a8573f814d3eceb30511d8c4abade88a5372948b",
+    "expected_scores.json": "cfd9dc3dc7567171c2b5b3df3052f9f8cab06905432f9803769950e2571ce46c",
     "judge_prompts.json": "f60776b001582dc4ee0bacb4f4cde69e47901a037e0610d8d59d9b8a9fdfa9bb",
     "locomo.LICENSE.txt": "41003d4a74749c0220e33dd415042164b5a1093ed401f36277234f772d22d3d0",
     "longmemeval.LICENSE": "d3c4b9aa54759df6ded337978a6f3b55b75615e5e4525c3b82d7e2627d4b9732",
@@ -48,5 +48,7 @@
     "decoding": "greedy, 256 new tokens, thinking disabled",
     "historical_library_versions": "not recorded in supplied run metadata",
     "fresh_runtime": "bf16; historical quantized backend not asserted byte-identical"
-  }
+  },
+  "excluded_correction_candidates": 31,
+  "unchanged_audit_rows_not_distributed": 60
 }

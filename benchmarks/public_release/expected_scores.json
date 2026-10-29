@@ -154,7 +154,7 @@
     },
     "correction_selection": {
       "included": 96,
-      "excluded": 0
+      "excluded": 31
     },
     "judge_replay": "saved majority votes; semantic correctness is not independently rejudged",
     "exact_match_and_token_f1": "computed from raw answers without a model"
@@ -222,7 +222,7 @@
     },
     "correction_selection": {
       "included": 96,
-      "excluded": 0
+      "excluded": 31
     },
     "judge_replay": "saved majority votes; semantic correctness is not independently rejudged",
     "exact_match_and_token_f1": "computed from raw answers without a model"
