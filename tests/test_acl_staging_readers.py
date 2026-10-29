@@ -58,6 +58,10 @@ class _Source:
 
     def __init__(self, extra: dict[str, str] | None = None) -> None:
         self.text: dict[str, str] = {}
+        # Per module: its UTF-8 bytes and the byte offset of each line start,
+        # computed once so a node's source is one slice (see ``segment``).
+        self._utf8: dict[str, bytes] = {}
+        self._line_starts: dict[str, list[int]] = {}
         self.funcs: dict[str, ast.AST] = {}  # "module.Qual.name" -> node
         self.module_of: dict[str, str] = {}
         self.class_methods: dict[tuple[str, str], set[str]] = defaultdict(set)
@@ -76,6 +80,11 @@ class _Source:
             modules = [m for m in modules if m[0] != mod] + [(mod, text, False)]
         for mod, text, is_pkg in modules:
             self.text[mod] = text
+            data = text.encode("utf-8")
+            self._utf8[mod] = data
+            # The parser's line breaks: \r\n, \r, \n (never \f or other
+            # str.splitlines() separators), the same split ast uses.
+            self._line_starts[mod] = [0] + [m.end() for m in re.finditer(rb"\r\n|\r|\n", data)]
             tree = ast.parse(text)
             for node in tree.body:
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -90,6 +99,21 @@ class _Source:
                 else:
                     self._add_const(mod, "", node)
             self._imports(mod, tree, is_pkg)
+
+    def segment(self, mod: str, node: ast.AST) -> str:
+        """``ast.get_source_segment(self.text[mod], node) or ""``, by position.
+
+        The stdlib helper re-splits the whole module into lines on every call
+        (a per-character loop before Python 3.12), so calling it once per node
+        cost O(nodes x module size) per scan and timed out the slowest CI row.
+        Positions are UTF-8 byte columns, so this slices the encoded module."""
+        end_lineno = getattr(node, "end_lineno", None)
+        end_col = getattr(node, "end_col_offset", None)
+        if end_lineno is None or end_col is None:
+            return ""
+        starts = self._line_starts[mod]
+        begin = starts[node.lineno - 1] + node.col_offset  # type: ignore[attr-defined]
+        return self._utf8[mod][begin : starts[end_lineno - 1] + end_col].decode("utf-8")
 
     def _add(self, mod: str, qual: str, node: ast.AST) -> None:
         key = f"{mod}.{qual}"
@@ -182,7 +206,7 @@ class _Source:
         pattern = re.compile(rf"\b{re.escape(token)}\b")
 
         def names(k: str, n: ast.AST, mod: str) -> bool:
-            return bool(pattern.search(ast.get_source_segment(self.text[mod], n) or ""))
+            return bool(pattern.search(self.segment(mod, n)))
 
         # Constants first, to a fixed point: one naming the store, or built
         # from another that does, is the store as far as a reader is concerned.

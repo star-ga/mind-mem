@@ -6848,3 +6848,201 @@ No lost span, no broadened permission, byte-identical replay of recorded summari
 restore never returning bytes whose hash differs from the recorded span hash, and a measured
 task-quality or cost gain over today's stores. Otherwise drop the item and keep the existing
 stores.
+
+## Research continuity for frontier scientific computation (2026-10-26, Proposed)
+
+Status: proposed; not implemented or release-qualified.
+
+mind-mem's role in a cross-repository scientific-computation effort is research continuity:
+persistent derivation graphs, checkpoint indices, failed-hypothesis records, provenance
+deduplication, retrieval, and reproducible replay.
+
+### Acceptance
+
+- Existing release blockers, compiler pins and repository ownership are preserved; active
+  delivery is not diverted.
+- Start with small, independently known published symbolic tasks, frozen before
+  implementation; scale difficulty only after verified success.
+- Results are checked by an independent verifier, not agent consensus, with false-result
+  mutants, interruption and restart, and bounded-resource tests.
+- Exact source, compiler and dependency identities, assumptions, derivations, immutable
+  artifacts and measured time, memory and cost are recorded.
+- Benchmarks use reproducible baselines; no unmeasured state-of-the-art claim.
+- Research on open mathematical conjectures stays paused and their scientific statuses are
+  unchanged.
+
+## A plain-retrieval baseline beside every memory number, and a rule that gates defaults on it (2026-10-28, Proposed)
+
+Recent research reports that a plain retrieval pipeline over the raw history (dense retrieval, a reranker, no
+extraction, summarising, graph building or rewriting) matched or beat most agentic memory systems on the same
+long-conversation benchmarks, mainly because it puts the needed evidence in front of the reader more often.
+Our published numbers have no such control. Live state, checked 2026-10-28 on origin/main `cb8675a3`: the
+LoCoMo number (1986 questions, external answerer and judge, Acc>=50) and the LongMemEval-S table (470 eligible
+questions, BM25F with the vector leg off, `recall_any@5`, `recall_all@5`, MRR) report mind-mem against other
+memory systems and against a BM25 baseline, and nowhere against dense retrieval plus a reranker over the
+unprocessed text. A reader cannot tell what our extraction, tiers and fusion add over that control. This entry
+adds the control and a rule that uses it. It does not change any published number.
+
+### Deliverables (all `.mind`, tested with `mindc test`; the current Python harness is replaced, not extended)
+
+1. **The baseline, fixed before any run.** Serialize each conversation with its timestamps, split it into
+   256-token windows with a 32-token overlap, embed the windows with one pinned embedding model, take the 128
+   windows nearest the question by cosine similarity, rerank them with one pinned cross-encoder and keep the
+   top 15. The answerer sees the question and those windows only. Every parameter lives in one config file whose
+   hash goes into the result row. Windowing, nearest-neighbour selection with a total tie-break order (score
+   descending, window index ascending), reranked ordering and the top-k cut are `.mind` code over Q16.16 or
+   integers, reusing the existing fusion and cross-encoder modules where they fit. Embedding and reranker scores
+   are input artifacts pinned by hash, so the selection step is byte-identical on every substrate.
+2. **Scored on exactly what we report.** LoCoMo: the full 1986 questions and the non-adversarial subset, same
+   answerer, same judge, same repetitions as the canonical number. LongMemEval-S: the same 470 eligible
+   questions, `recall_any@5`, `recall_all@5` and MRR, plus answer accuracy wherever we report it. Same
+   context-token budget as the system it sits beside; a baseline given a larger budget does not count.
+3. **Published next to every memory number.** Each table in `README.md`, `docs/benchmarks.md` and each scorecard
+   that lists a mind-mem result carries a Raw-RAG row from the same run, with its config hash. Latency and tokens
+   per question are reported next to accuracy.
+4. **Coverage and utilization reported apart.** Coverage is the share of questions whose gold evidence is inside
+   the context the answerer received (a deterministic check against the evidence ids the benchmarks ship).
+   Utilization is accuracy among those covered questions. Two oracle rows sit beside them: gold evidence only,
+   and the full history where it fits. These separate "did not find it" from "found it, answered wrong".
+5. **Default-gate rule.** No new memory layer, model or retrieval mode becomes a default unless it beats the
+   baseline on the same questions, answerer, judge and budget as the run that justifies the default.
+   - Decision rule: paired per question. Count questions the candidate answers correctly and the baseline does
+     not (b) and the reverse (c). The candidate beats the baseline only if the one-sided exact binomial
+     probability of at least b successes among b + c discordant pairs at p = 1/2 is below 0.05, computed in
+     integer arithmetic. Ties and discordant counts are published. No post-hoc subset, and no second
+     attempt on the same questions after a loss.
+   - A change that cannot alter what is retrieved (the governed write path, audit chain, rollback, trust
+     labels) is judged on non-regression instead: the candidate must not lose to the baseline's paired result by
+     a margin declared before the run. Governance properties are not scored by these benchmarks.
+   - Failing the rule leaves the feature available and off by default, with the measurement recorded.
+
+### Acceptance
+
+- Unit tests cover window boundaries (first, last, shorter-than-window input, overlap), tie-break order,
+  top-k selection and a fixed fixture whose selected window ids match a committed golden table.
+- The selection step gives byte-identical output on x86 and ARM for the fixture.
+- Mutation controls, each of which must turn a test red: remove the reranker; set the overlap to zero; swap
+  the tie-break to window index descending; swap b and c in the decision rule.
+- Positive control for the gate: a candidate that is the baseline with its context cut to a third must fail the
+  rule on a fixture; the baseline compared with itself must report no win.
+- A MIND check over the benchmark tables fails when a table lists a mind-mem result with no Raw-RAG row from
+  the same run.
+
+### Falsification condition
+
+If the baseline beats the current default on the full LoCoMo set or the LongMemEval-S eligible set, the result
+is published as measured, the headline claims on those benchmarks are narrowed to say so, and the default
+changes only through the rule above. The product claim then rests on the governed write path and the audit
+properties, not on retrieval score.
+
+### Status
+
+Proposed, not built. Extends the standing LoCoMo and LongMemEval evals and the continuous benchmark
+regression item; replaces the Python harness for the baseline run only. Its consumer on the NAESTRO side is the
+roadmap entry R154. Needs an architecture audit before implementation.
+
+## Stage-by-stage trace parity for the pure-MIND port (2026-10-28, Proposed)
+
+The pure-MIND core port is accepted when its recall results equal the reference path's results. A
+final-results comparison says the two disagree; it does not say where. Add a trace mode: for a
+fixed query set, each recall stage (query normalization, candidate retrieval, score fusion,
+rerank, admission filter) writes one hash of its ordered output, and a `trace-diff` command
+compares the reference trace with the MIND trace and prints the first stage that differs, with the
+first differing item.
+
+- **Why it fits.** The MIND port claims bit-identical results across platforms; a per-stage hash is
+  the cheapest way to prove it across machines (a handful of hashes per query, not result sets) and
+  the fastest way to localize a disagreement to one stage during the port.
+- **Admission filter stays in the trace.** The trace includes the stage that withholds quarantined
+  or pending content, so a stage that leaks an item the reference withholds is the reported
+  difference, not a silent one.
+- **Deliverable:** `recall --trace` on both paths writing a stage-hash file; `trace-diff` over two
+  files; a CI job running the fixed query set on x86 and ARM and failing on the first difference.
+- **Gate:** a deliberately perturbed fusion weight in the MIND path is reported as a fusion-stage
+  difference and nothing earlier; an unperturbed port produces an empty diff; positive control:
+  the final result list also differs. A run in which either path crashed reports "unverified",
+  never an empty diff.
+- **Status:** Proposed. Fable audit verdict required before implementation.
+
+## Session lineage: forks, cuts and deleted parents as governed records, and scoped search over captured sessions (2026-10-28, Proposed)
+
+Recent agent tools let a user fork a session at any message, fork it into a new worktree, continue it
+as a new session or cut it short, and then search past sessions locally. Ideas only; no code adopted,
+and the source is not named in this public file. Already owned and not repeated here: the event shape
+and per-client readers ("Transcript capture beyond one agent CLI"), the cross-client search index
+(Naestro R136.2) and lifecycle deaths in the evidence chain (RA.3). This item adds the lineage between
+sessions and the rules every search over them must obey. Cross-repo sibling: Naestro R155.3, which owns
+the worktree side of a fork.
+
+Every deliverable is a `.mind` module with `mindc test` cases, deterministic and byte-identical on
+x86-64 and ARM64.
+
+### 1. Lineage edges between sessions
+
+- Four fork kinds: `fork_at` (the conversation is copied through message N), `fork_to_worktree` (the
+  same, anchored at the last commit the agent had made by message N), `continue_as_new` and `cut_at`.
+- Each fork writes one edge: child session id, parent session id, kind, fork point (the message index
+  and the hash of the parent's event prefix through that message) and, for a worktree fork, the anchor
+  commit sha.
+- Edges are evidence objects, hash-anchored like blocks. A child's edge verifies against its parent's
+  prefix hash, so a parent rewritten after the fork is detected.
+- Proposals staged in the parent before the fork stay owned by the parent. The child can read them but
+  cannot apply them, so a proposal is never applied twice through two branches.
+
+### 2. A deleted parent leaves a tombstone, not a hole
+
+- Deleting a session uses the RA.3 lifecycle verbs. `ARCHIVE` comes first and is reversible. `FORGET`
+  removes the content and keeps a tombstone: the session id, the prefix hashes its children cite, and
+  the deletion record.
+- A child of a forgotten parent still verifies its edge and is shown as forked from a deleted session.
+  Content is never restored from a tombstone.
+- Retention by age stages `ARCHIVE` proposals through `propose_update`. Nothing is forgotten outside the
+  governed path.
+
+### 3. Search scope and semantics
+
+- The default scope is session titles, user messages and assistant replies. Tool calls, tool results
+  and model reasoning are left out unless the caller names that scope, and they pass the pre-write
+  redaction like every other captured text.
+- A query is case-folded words, all required, with quoted phrases. There are no regular expressions or
+  wildcards, so a query cannot be expensive or ambiguous.
+- Filters: file touched, date range, model, and relationship in the fork tree (ancestors, descendants
+  or siblings of a given session).
+- Every hit passes the shared admission filter (`admit_corpus`), so quarantined, pending and tombstoned
+  content cannot be returned.
+- Results are ordered newest first, then by session id, then by event index. Any index may produce the
+  candidates, but the MIND matcher is the final filter and order, so the same store and query give the
+  same bytes on every machine.
+
+### Deliverable
+
+`session_lineage.mind` (edges, prefix hashes, tombstone verification) and `session_search.mind` (query
+parser, scope split, filters, admission, order), with MIND tests and a CI job that runs the fixture on
+x86-64 and ARM64.
+
+### Measurement
+
+A fixed set of 30 questions of the form "which session decided X, and what did it fork from", answered
+from the store. Report the hits at rank 1 and the share that needed a lineage filter.
+
+### Acceptance gate
+
+- On a fixture of five sessions (a fork at message 12, a worktree fork, one parent forgotten), every
+  edge verifies. The child of the forgotten parent shows as forked from a deleted session. Rewriting one
+  parent message after the fork fails verification.
+- A quoted phrase returns only sessions containing it. A word that appears only in a tool result is not
+  found under the default scope and is found under the tool scope (positive control).
+- A quarantined session's text is never returned, while an admin listing shows that it exists (positive
+  control). Removing the admission call turns that test red, and removing the scope split turns the
+  tool-result test red (mutation controls).
+- Result bytes are identical on x86-64 and ARM64. A run in which either leg crashed reports
+  "unverified", never a pass.
+
+### Falsification
+
+Dropped if the 30-question set is answered no better than plain recall over blocks.
+
+### Status
+
+Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. An
+architecture audit verdict is required before implementation.
