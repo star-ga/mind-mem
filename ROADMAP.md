@@ -1,3 +1,8 @@
+## Ecosystem research — Alien Science / Lacuna (proposal, 2026-10-29)
+
+- [ ] **Review required / default OFF.** Accept only reviewed evidence receipts from MIND-Lab; do not promote speculative hypothesis scores to memory.
+- [ ] See [detailed architecture and acceptance plan](docs/RESEARCH_ECOSYSTEM_ALIEN_LACUNA_20261029.md). Not implemented, benchmarked, or deployed.
+
 # MIND-Mem Roadmap
 
 > **Reality check (2026-05-20 honesty pass):** the v3.2.0+ sections
