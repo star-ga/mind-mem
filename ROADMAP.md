@@ -7046,3 +7046,11 @@ Dropped if the 30-question set is answered no better than plain recall over bloc
 
 Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. An
 architecture audit verdict is required before implementation.
+
+<!-- NUMERIC-REVIEW-REVISION-20261029:BEGIN -->
+## Offline retrieval-weight calibration (optional)
+- [ ] Freeze a holdout corpus with privacy-safe representative queries and stratified recall/precision/latency metrics; evaluate grid/random/coordinate search first because ranking objectives can be discontinuous.
+- [ ] Adopt a smooth solver only if a differentiable surrogate correlates with the real held-out objective and wins against the simpler baseline.
+- [ ] Require pinned parameter receipts, independent recall oracle, perturbation controls and no unsanctioned online learning or changes to governed memory writes.
+**Bounds:** optional score/norm diagnostics with triangle/Cauchy–Schwarz only; no automatic statistical/PDE theorem claims.
+<!-- NUMERIC-REVIEW-REVISION-20261029:END -->
