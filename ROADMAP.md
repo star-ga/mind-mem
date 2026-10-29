@@ -6963,3 +6963,86 @@ first differing item.
   the final result list also differs. A run in which either path crashed reports "unverified",
   never an empty diff.
 - **Status:** Proposed. Fable audit verdict required before implementation.
+
+## Session lineage: forks, cuts and deleted parents as governed records, and scoped search over captured sessions (2026-10-28, Proposed)
+
+Recent agent tools let a user fork a session at any message, fork it into a new worktree, continue it
+as a new session or cut it short, and then search past sessions locally. Ideas only; no code adopted,
+and the source is not named in this public file. Already owned and not repeated here: the event shape
+and per-client readers ("Transcript capture beyond one agent CLI"), the cross-client search index
+(Naestro R136.2) and lifecycle deaths in the evidence chain (RA.3). This item adds the lineage between
+sessions and the rules every search over them must obey. Cross-repo sibling: Naestro R155.3, which owns
+the worktree side of a fork.
+
+Every deliverable is a `.mind` module with `mindc test` cases, deterministic and byte-identical on
+x86-64 and ARM64.
+
+### 1. Lineage edges between sessions
+
+- Four fork kinds: `fork_at` (the conversation is copied through message N), `fork_to_worktree` (the
+  same, anchored at the last commit the agent had made by message N), `continue_as_new` and `cut_at`.
+- Each fork writes one edge: child session id, parent session id, kind, fork point (the message index
+  and the hash of the parent's event prefix through that message) and, for a worktree fork, the anchor
+  commit sha.
+- Edges are evidence objects, hash-anchored like blocks. A child's edge verifies against its parent's
+  prefix hash, so a parent rewritten after the fork is detected.
+- Proposals staged in the parent before the fork stay owned by the parent. The child can read them but
+  cannot apply them, so a proposal is never applied twice through two branches.
+
+### 2. A deleted parent leaves a tombstone, not a hole
+
+- Deleting a session uses the RA.3 lifecycle verbs. `ARCHIVE` comes first and is reversible. `FORGET`
+  removes the content and keeps a tombstone: the session id, the prefix hashes its children cite, and
+  the deletion record.
+- A child of a forgotten parent still verifies its edge and is shown as forked from a deleted session.
+  Content is never restored from a tombstone.
+- Retention by age stages `ARCHIVE` proposals through `propose_update`. Nothing is forgotten outside the
+  governed path.
+
+### 3. Search scope and semantics
+
+- The default scope is session titles, user messages and assistant replies. Tool calls, tool results
+  and model reasoning are left out unless the caller names that scope, and they pass the pre-write
+  redaction like every other captured text.
+- A query is case-folded words, all required, with quoted phrases. There are no regular expressions or
+  wildcards, so a query cannot be expensive or ambiguous.
+- Filters: file touched, date range, model, and relationship in the fork tree (ancestors, descendants
+  or siblings of a given session).
+- Every hit passes the shared admission filter (`admit_corpus`), so quarantined, pending and tombstoned
+  content cannot be returned.
+- Results are ordered newest first, then by session id, then by event index. Any index may produce the
+  candidates, but the MIND matcher is the final filter and order, so the same store and query give the
+  same bytes on every machine.
+
+### Deliverable
+
+`session_lineage.mind` (edges, prefix hashes, tombstone verification) and `session_search.mind` (query
+parser, scope split, filters, admission, order), with MIND tests and a CI job that runs the fixture on
+x86-64 and ARM64.
+
+### Measurement
+
+A fixed set of 30 questions of the form "which session decided X, and what did it fork from", answered
+from the store. Report the hits at rank 1 and the share that needed a lineage filter.
+
+### Acceptance gate
+
+- On a fixture of five sessions (a fork at message 12, a worktree fork, one parent forgotten), every
+  edge verifies. The child of the forgotten parent shows as forked from a deleted session. Rewriting one
+  parent message after the fork fails verification.
+- A quoted phrase returns only sessions containing it. A word that appears only in a tool result is not
+  found under the default scope and is found under the tool scope (positive control).
+- A quarantined session's text is never returned, while an admin listing shows that it exists (positive
+  control). Removing the admission call turns that test red, and removing the scope split turns the
+  tool-result test red (mutation controls).
+- Result bytes are identical on x86-64 and ARM64. A run in which either leg crashed reports
+  "unverified", never a pass.
+
+### Falsification
+
+Dropped if the 30-question set is answered no better than plain recall over blocks.
+
+### Status
+
+Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. An
+architecture audit verdict is required before implementation.
