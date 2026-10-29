@@ -6940,3 +6940,26 @@ properties, not on retrieval score.
 Proposed, not built. Extends the standing LoCoMo and LongMemEval evals and the continuous benchmark
 regression item; replaces the Python harness for the baseline run only. Its consumer on the NAESTRO side is the
 roadmap entry R154. Needs an architecture audit before implementation.
+
+## Stage-by-stage trace parity for the pure-MIND port (2026-10-28, Proposed)
+
+The pure-MIND core port is accepted when its recall results equal the reference path's results. A
+final-results comparison says the two disagree; it does not say where. Add a trace mode: for a
+fixed query set, each recall stage (query normalization, candidate retrieval, score fusion,
+rerank, admission filter) writes one hash of its ordered output, and a `trace-diff` command
+compares the reference trace with the MIND trace and prints the first stage that differs, with the
+first differing item.
+
+- **Why it fits.** The MIND port claims bit-identical results across platforms; a per-stage hash is
+  the cheapest way to prove it across machines (a handful of hashes per query, not result sets) and
+  the fastest way to localize a disagreement to one stage during the port.
+- **Admission filter stays in the trace.** The trace includes the stage that withholds quarantined
+  or pending content, so a stage that leaks an item the reference withholds is the reported
+  difference, not a silent one.
+- **Deliverable:** `recall --trace` on both paths writing a stage-hash file; `trace-diff` over two
+  files; a CI job running the fixed query set on x86 and ARM and failing on the first difference.
+- **Gate:** a deliberately perturbed fusion weight in the MIND path is reported as a fusion-stage
+  difference and nothing earlier; an unperturbed port produces an empty diff; positive control:
+  the final result list also differs. A run in which either path crashed reports "unverified",
+  never an empty diff.
+- **Status:** Proposed. Fable audit verdict required before implementation.
