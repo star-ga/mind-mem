@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1760 | **Est. tokens:** ~5,180,202
-**Generated:** 2026-10-29 06:02 UTC
+**Files:** 1760 | **Est. tokens:** ~5,180,548
+**Generated:** 2026-10-29 06:16 UTC
 
 ## Token Budget Guide
 
@@ -94,7 +94,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 801 | ~2,360,213 |
+| `tests/` | 801 | ~2,360,559 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -1286,7 +1286,7 @@
 - `test_abstention_store.py` (~5632 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_accountability_dashboard.py` (~6883 tok, huge) — RA.5 — the lifecycle-tier dashboard, and the four refusals it inherits.
 - `test_accountability_views.py` (~6320 tok, huge) — RA.2 — precision and waste as derived views, and the four refusals that shape them.
-- `test_acl_staging_readers.py` (~5568 tok, huge) — A user-scope staging write is allowed only while no reader serves it to others.
+- `test_acl_staging_readers.py` (~5914 tok, huge) — A user-scope staging write is allowed only while no reader serves it to others.
 - `test_acl_tool_coverage.py` (~2384 tok, huge) — ACL coverage invariant for the MCP tool surface.
 - `test_acl_user_scope_read_only.py` (~7449 tok, huge) — No USER-scope MCP tool may write, in any argument combination.
 - `test_active_only_filter.py` (~312 tok, medium) — Tests for active_only recall filter."""
