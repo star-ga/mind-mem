@@ -89,7 +89,7 @@ _TEMPORAL_CONTENT_TOKENS = (
     )
 )
 
-# Reranker feature weights (tuned for LoCoMo coverage)
+# Reranker feature weights (tuned for dialogue-retrieval coverage)
 # Reduced speaker dominance (was 0.40), increased entity/phrase overlap
 # to avoid "right speaker, wrong topic" over-preference.
 _RERANK_W_ENTITY = 0.30

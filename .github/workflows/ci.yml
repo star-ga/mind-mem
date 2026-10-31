@@ -698,6 +698,32 @@ jobs:
           # rather than baked-in literals — the M6 regression we are gating.
           grep -F 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' /tmp/rendered.yml
 
+  arch-gate:
+    name: arch-mind governance gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Checkout governance scanner (pinned ref)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          repository: ${{ vars.ARCH_MIND_REPOSITORY }}
+          ref: fea599ec4d3695cb39754d0fd5dcc1f1fb101dab
+          path: .arch-mind-src
+          token: ${{ secrets.ARCH_MIND_TOKEN }}
+      - name: Build arch-mind (pinned)
+        run: |
+          set -euo pipefail
+          ( cd .arch-mind-src/sidecar && cargo build --release )
+          install -m 0755 .arch-mind-src/bin/arch-mind /usr/local/bin/arch-mind
+          arch-mind --version
+      - name: Fixture staleness check
+        run: python3 .arch-mind/rescan.py --check
+      - name: Arch governance gate (fail-closed)
+        run: bash scripts/arch_gate.sh
+
   install-smoke:
     name: install.sh smoke (${{ matrix.installer }})
     runs-on: ubuntu-24.04

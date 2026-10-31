@@ -6447,7 +6447,7 @@ What that means here:
 - **Drafting can silently move evidence preimages.** `OllamaCompressor` requires `temperature=0` and a fixed seed because its output is an evidence-chain preimage. If drafting changes those bytes, the chain records a different hash for the same input with nothing flagging it. Drafting stays off on every path whose output is hashed until the gate below passes for that backend.
 - **Gate:** on a fixed corpus, compressor output is byte-identical with drafting on and off, per backend. Extraction runs at `temperature=0.1`, so it is held to the output-distribution check above instead. Report tok/s and accepted tokens per verify step separately for copy-heavy calls and for chat; a drafter slower than no drafting on either class stays off for that class.
 
-Status: proposed, not built. A Fable audit verdict is required before any build.
+Status: proposed, not built. An independent architecture audit verdict is required before any build.
 
 **Software roadmap attribution:** STARGA, Inc. No co-author trailers.
 
@@ -6962,7 +6962,7 @@ first differing item.
   difference and nothing earlier; an unperturbed port produces an empty diff; positive control:
   the final result list also differs. A run in which either path crashed reports "unverified",
   never an empty diff.
-- **Status:** Proposed. Fable audit verdict required before implementation.
+- **Status:** Proposed. An independent architecture audit verdict required before implementation.
 
 ## Session lineage: forks, cuts and deleted parents as governed records, and scoped search over captured sessions (2026-10-28, Proposed)
 

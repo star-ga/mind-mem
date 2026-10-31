@@ -65,7 +65,7 @@ _QUERY_EXPANSIONS = {
     "frontend": ["ui", "client", "browser", "react", "component"],
     "css": ["style", "stylesheet", "tailwind", "design"],
     "component": ["widget", "element", "ui", "module"],
-    # Common conversational terms (helps bridge LoCoMo's casual language)
+    # Common conversational terms (helps bridge casual spoken language)
     "talk": ["discuss", "mention", "conversation", "chat", "say"],
     "discuss": ["talk", "mention", "conversation", "said"],
     "mention": ["talk", "discuss", "said", "refer"],
