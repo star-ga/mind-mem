@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1760 | **Est. tokens:** ~5,180,548
-**Generated:** 2026-10-29 07:25 UTC
+**Files:** 1782 | **Est. tokens:** ~5,224,755
+**Generated:** 2026-10-31 00:10 UTC
 
 ## Token Budget Guide
 
@@ -22,11 +22,12 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 37 | ~51,980 |
+| `./` | 38 | ~52,353 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 66 | ~182,487 |
+| `benchmarks/` | 73 | ~197,380 |
+| `benchmarks/public_release/` | 9 | ~24,753 |
 | `benchmarks/repro/` | 1 | ~689 |
 | `benchmarks/repro/niah/` | 4 | ~2,557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
@@ -35,7 +36,7 @@
 | `deploy/docker/` | 1 | ~824 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 97 | ~240,940 |
+| `docs/` | 97 | ~242,234 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -63,7 +64,7 @@
 | `lib/` | 1 | ~2,451 |
 | `mind/` | 27 | ~9,634 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 25 | ~83,877 |
+| `scripts/` | 25 | ~83,907 |
 | `sdk/go/` | 11 | ~9,920 |
 | `sdk/go/testdata/contract/` | 6 | ~675 |
 | `sdk/js/` | 6 | ~4,864 |
@@ -94,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 801 | ~2,360,559 |
+| `tests/` | 806 | ~2,363,423 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -138,6 +139,7 @@
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~6047 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
+- `INVENTORY.md` (~373 tok, medium) — Public benchmark inventory
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~1097 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
@@ -228,9 +230,28 @@
 - `niah_v3.2.1_redis_results.txt` (~111 tok, small) — ============================= test session starts ==============================
 - `niah_v3.2.1_results.txt` (~203 tok, medium) — ============================= test session starts ==============================
 - `paired_scorecard.py` (~5476 tok, huge) — # Copyright 2026 STARGA, Inc.
+### `benchmarks/public_release/`
+
+- `adjudications.jsonl` (~13319 tok, huge) — {"id": "locomo-0-135", "answer": "In October 2023, Melanie got hurt and had to t
+- `expected_scores.json` (~1885 tok, huge) — Keys: locomo, lme, niah
+- `HELDOUT_SPLIT_20261029.json` (~1071 tok, large) — Keys: salt, rule, locomo_heldout_conversations, locomo_dev_conversations, locomo_heldout_questions
+- `judge_prompts.json` (~765 tok, large) — Keys: JUDGE_SYSTEM_PROMPT, JUDGE_USER_TEMPLATE, ADVERSARIAL_JUDGE_SYSTEM_PROMPT, ADVERSARIAL_JUDGE_USER_TEMPLATE, LME_JUDGE
+- `locomo.LICENSE.txt` (~4837 tok, huge) — Attribution-NonCommercial 4.0 International
+- `longmemeval.LICENSE` (~266 tok, medium) — MIT License
+- `manifest.json` (~716 tok, large) — Keys: schema_version, status, answer_configuration, source_revision, source_canonical_prompts_sha256
+- `protocol.json` (~627 tok, large) — Keys: schema_version, status, seed, max_input_tokens, max_new_tokens
+- `README.md` (~1267 tok, large) — Reproducible historical benchmark kit
+### `benchmarks/`
+
 - `ranking_identity.py` (~2910 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `README_benchmark_mode.md` (~1106 tok, large) — Full-capability benchmark mode (v3.3.0)
 - `recompaction_bench.py` (~6760 tok, huge) — # Relocated out of the wheel in 5.0.0: this is a benchmark entry-point
+- `release_archive.py` (~452 tok, medium) — Join measured answers to rendered prompts by exact identity and content hash.
+- `release_frozen_facts.py` (~3838 tok, huge) — Historical rendering arithmetic, retained only for archive reconstruction."""
+- `release_inputs.py` (~1283 tok, large) — Reconstruct licensed inputs from pinned downloads and text-free source references.
+- `release_judge.py` (~900 tok, large) — Frozen scoring protocol and explicit HTTP transport, separate from answering.
+- `release_runtime.py` (~2985 tok, huge) — Dataset adapters feeding the Python serving path without evaluation labels.
+- `release_scoring.py` (~2770 tok, huge) — Offline evidence verification and aggregate scoring for frozen answer records.
 - `REPORT.md` (~5281 tok, huge) — MIND-Mem Benchmark Report
 - `repro_manifest.py` (~2145 tok, huge) — Write a repro package: raw rows, recomputed metrics, and a manifest that pins
 - `repro_metrics.py` (~2213 tok, huge) — Recompute every headline metric from RAW per-unit rows, and nothing else.
@@ -255,6 +276,7 @@
 - `README.md` (~689 tok, large) — Repro packages
 ### `benchmarks/`
 
+- `repro_release.py` (~2665 tok, huge) — Public benchmark entry point: verify saved evidence or run a pinned evaluation.
 - `repro_verify.py` (~4137 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `STATUS.md` (~3163 tok, huge) — Benchmark Status
@@ -351,7 +373,7 @@
 - `local-receipt-pilot-20260914.md` (~1358 tok, large) — Local retrieval-receipt pilot — 2026-09-14
 ### `docs/`
 
-- `benchmarks.md` (~1746 tok, huge) — Benchmarks
+- `benchmarks.md` (~3040 tok, huge) — Benchmarks
 ### `docs/benchmarks/memory-ab-420s-runs/`
 
 - `MANIFEST.json` (~2906 tok, huge) — Keys: count, executable_binding, originals, receipts, what
@@ -629,7 +651,7 @@
 
 - `alignment_authorities.py` (~9437 tok, huge) — Where each counted doc claim gets its TRUE value from.
 - `anatomy-hook.sh` (~237 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
-- `anatomy.sh` (~2248 tok, huge) — anatomy — Generate ANATOMY.md for any repo
+- `anatomy.sh` (~2278 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `arch_gate.sh` (~400 tok, medium) — arch_gate.sh - architectural-governance gate (arch-mind). Re-scans the tree
 - `bandit_gate.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `build_integrity_manifest.py` (~681 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
@@ -1854,8 +1876,13 @@
 - `test_recompaction_bench.py` (~7349 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_release_alerts_gate.py` (~6554 tok, huge) — Tests for the code-scanning alerts release gate.
+- `test_release_archive.py` (~295 tok, medium) — Non-dataset examples for exact prompt/answer reuse."""
+- `test_release_inputs.py` (~571 tok, large) — Synthetic coverage for download-only dataset reconstruction."""
+- `test_release_judge.py` (~303 tok, medium) — Synthetic scoring protocol tests; no network or model needed."""
 - `test_release_preflight_gates.py` (~5507 tok, huge) — Tests for the release-preflight gates.
+- `test_release_runtime.py` (~457 tok, medium) — Serving-boundary tests use invented questions and fake retrieval only."""
 - `test_release_sbom.py` (~3035 tok, huge) — Fail-closed controls for the wheel-bound release SBOM helper."""
+- `test_release_scoring.py` (~1238 tok, large) — Synthetic tests of evidence binding, correction selection and offline metrics."""
 - `test_remote_vector_admission.py` (~2441 tok, huge) — Remote vector hits must be checked against the current corpus authority."""
 - `test_replay_check.py` (~4122 tok, huge) — Replay — does the ledger corroborate what one recall attestation claims?
 - `test_repo_task_generation.py` (~3390 tok, huge) — Tests for the real-repo A/B task generator.
@@ -2089,10 +2116,10 @@
 - `export_gguf.py` (~1769 tok, huge) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `HF_MODEL_CARD_v4.md` (~3162 tok, huge) — mind-mem-4b v4.1.1
 - `merge_and_eval_v4.1.0.py` (~1488 tok, large) — Post-Kaggle: pull LoRA adapter, merge with v4.0.0-base, eval 131 probes.
-- `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
-- `Modelfile.v4.0.0` (~576 tok, large) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
-- `Modelfile.v4.1.0` (~395 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.0/mind-mem-4b-v4.1.0-Q4_K_M.gguf
-- `Modelfile.v4.1.1` (~440 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.1/mind-mem-4b-v4.1.1-Q4_K_M.gguf
+- `Modelfile.v3.9.0` (~389 tok, medium) — Model serving configuration.
+- `Modelfile.v4.0.0` (~576 tok, large) — Model serving configuration.
+- `Modelfile.v4.1.0` (~395 tok, medium) — Model serving configuration.
+- `Modelfile.v4.1.1` (~440 tok, medium) — Model serving configuration.
 - `post_train_chain.sh` (~1325 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
 - `post_train_pipeline.sh` (~592 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
 - `qlora_local_3080.py` (~1182 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "status": "historical evidence; verification pending; not a fair release claim",
+  "answer_configuration": "a",
+  "source_revision": "0f25325c",
+  "source_canonical_prompts_sha256": "9b8cfdcc30a50699d95c520028df6ee496db3ed3b9db99bcbc376214fa918af9",
+  "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "rows": 2486,
+  "judge": {
+    "model_id": "mistral-large-latest",
+    "immutable_revision": null,
+    "temperature": 0,
+    "threshold": 50,
+    "policy": "one vote; two extra votes on a miss or score in [40,60]; majority"
+  },
+  "retrieval": {
+    "limit": 8,
+    "max_evidence_chars": 4000,
+    "historical_retrieval_rebuild_verified": false
+  },
+  "fairness": {
+    "prior_exposure": true,
+    "historical_category_conditioning": true,
+    "eligible_key_source": "independent audit",
+    "excluded_key_source": "canonical miss review",
+    "corrected_key_status": "verification pending"
+  },
+  "artifacts": {
+    "HELDOUT_SPLIT_20261029.json": "aad631b4c8e9204117a417ece751a3b40a10d9c5832da4ef29b117e02a987a71",
+    "README.md": "d4cc859856033b0f2df021167ff90f57b32c4e77c5020125703d065ab4d15482",
+    "adjudications.jsonl": "445872f302510217a7c23fae40574f41657c73164c5d31ce6e164879dfb07f5c",
+    "answers.jsonl": "1e004298c18e2795f3e7bde26ba6b57b8640fe782d51dc44a0064d237a0c5a21",
+    "correction_evidence.jsonl": "303533518cb9398b2b3eb0892a862ec6a1ac8be9f8f11eac29a2806f9a73b194",
+    "corrections.jsonl": "0434e8984b6aa91c9e24cd9a047f4cf19ad35a3689f215dff1fffb111b3d76c5",
+    "expected_scores.json": "cfd9dc3dc7567171c2b5b3df3052f9f8cab06905432f9803769950e2571ce46c",
+    "judge_prompts.json": "f60776b001582dc4ee0bacb4f4cde69e47901a037e0610d8d59d9b8a9fdfa9bb",
+    "locomo.LICENSE.txt": "41003d4a74749c0220e33dd415042164b5a1093ed401f36277234f772d22d3d0",
+    "longmemeval.LICENSE": "d3c4b9aa54759df6ded337978a6f3b55b75615e5e4525c3b82d7e2627d4b9732",
+    "prompt_hashes.jsonl": "d083cc9ee5f389857518ea7a618d932e2c1976231edd99a433a8281bb6c283f4",
+    "prompt_sources.jsonl": "a726ea1622fda053a64161ae2f139f3d6ca403dc9ddac0498d5470f5ba9222de",
+    "protocol.json": "f9818ab08bf850a32e6a9a3e520da0230f2b14326cd51970baa6b24b2b69bc44"
+  },
+  "dataset_download_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "dataset_serialization_note": "Historical cache and pinned upstream download parse to identical JSON; byte serialization differs.",
+  "hardware": {
+    "answer_gpu": "RTX 4070 Laptop, 8 GB",
+    "quantization": "nf4 4-bit, bf16 compute",
+    "decoding": "greedy, 256 new tokens, thinking disabled",
+    "historical_library_versions": "not recorded in supplied run metadata",
+    "fresh_runtime": "bf16; historical quantized backend not asserted byte-identical"
+  },
+  "excluded_correction_candidates": 31,
+  "unchanged_audit_rows_not_distributed": 60
+}

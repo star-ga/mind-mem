@@ -27,7 +27,13 @@ estimate_tokens() {
 extract_summary() {
   local file="$1"
   local ext="${file##*.}"
-  
+  case "${file##*/}" in
+    Modelfile|Modelfile.*)
+      echo "Model serving configuration."
+      return
+      ;;
+  esac
+
   case "$ext" in
     py)
       # Look for docstring or first comment
