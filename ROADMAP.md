@@ -5092,7 +5092,7 @@ block kind.
 > Prior-art shape observed in recent public research on gated self-evolving
 > agent systems (idea only — no code, no dependency). Never name the source in
 > a public artifact; provenance lives in mind-mem itself. Sibling entries:
-> `naestro/ROADMAP.md` R100 (the gate), the private research pipeline.
+> the gate (owned outside this repository) and the private research pipeline.
 
 ### AUDIT STATUS: the source's *code* backing for this idea is THIN — read this first
 
