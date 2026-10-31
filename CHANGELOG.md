@@ -6,6 +6,13 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Added
 
+- Reproducible benchmark kit `benchmarks/public_release/` +
+  `benchmarks/repro_release.py` (prompt-hash reconstruction, official and
+  corrected keys, frozen held-out split). Official-key headline: LoCoMo
+  categories 1–4 1002/1540 (65.1 %), dev 531/802, held-out 471/738;
+  LongMemEval 216/500 (43.2 %), dev 105/257, held-out 111/243. Historical
+  category-conditioned results are disclosed alongside and are not release
+  claims. Corrected-key scores are verification-pending.
 - Computed abstention (`mind_mem.recall_abstention`, `docs/computed-abstention.md`).
   `recall` returned ranked candidates and left "is any of this a clear match?" to the
   caller, so "five blocks, none a clear match" and "five blocks, the first clearly right"

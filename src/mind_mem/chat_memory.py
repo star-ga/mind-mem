@@ -621,6 +621,8 @@ def chat_with_memory(
             :func:`make_workspace_resolver` over the configured block
             store.
         category: Force a question category instead of classifying.
+            Must never be set by a benchmark harness; the category
+            classifier is the only intended source at evaluation time.
         condenser: **Opt-in** chain-of-note condenser (``prompt -> text``).
             ``None`` (default) skips condensation entirely, leaving the
             prompt identical to the un-condensed path.
