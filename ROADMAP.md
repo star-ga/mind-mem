@@ -1,3 +1,29 @@
+## Offline research receipts
+
+### Deliverable
+
+An opt-in store for reviewed experiment receipts from the offline research service. The memory product remains the governed store of record. Speculative scores are not promoted into approved memory.
+
+### Measurement
+
+A fixed set of receipts covering a verified result, a speculative lead, a retracted source, and a conflicting pair. Report whether each is stored, held, or refused, and whether a governed write changed.
+
+### Acceptance gate
+
+- Receipts are stored only through the existing propose, review, and approve path.
+- A speculative lead stays out of approved memory. Removing that separation turns the test red.
+- Revocation and retraction update the receipt without a silent overwrite.
+- Research scores are not benchmark results and are not written as benchmark claims.
+- Each accepted receipt records its source revision. Perturbing that revision turns the receipt check red.
+
+### Falsification
+
+Dropped if an external score can change approved memory without the review path, or if the store cannot represent a retraction.
+
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
+
 # MIND-Mem Roadmap
 
 > **Reality check (2026-05-20 honesty pass):** the v3.2.0+ sections
@@ -7046,3 +7072,31 @@ Dropped if the 30-question set is answered no better than plain recall over bloc
 
 Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. An
 architecture audit verdict is required before implementation.
+
+## Offline retrieval-weight calibration
+
+### Deliverable
+
+An optional, offline procedure that chooses retrieval weights from a private holdout corpus. It does not change governed memory writes and it does not learn from live traffic.
+
+### Measurement
+
+A frozen holdout of privacy-safe queries, with recall, precision and latency reported by stratum. The first measurement is a grid, random or coordinate search. A smoother solver is measured only against that baseline.
+
+### Acceptance gate
+
+- The calibration corpus is not data from any benchmark: no benchmark split, no benchmark ids, no speaker names.
+- Benchmarks are measured only after calibration, on their official splits, with the official judge.
+- Any weight change that improves one benchmark while lowering another gate is rejected.
+- The search baseline (grid, random or coordinate) runs first.
+- A smooth solver is adopted only if it beats that baseline on the held-out objective.
+- Each run records a parameter receipt.
+- A mutation control: perturb one weight, and the receipt check goes red.
+
+### Falsification
+
+Dropped if the calibrated weights do not beat the shipped weights on the held-out objective, or if a weight change that helps one benchmark lowers another gate. The smooth solver alone is dropped if it does not beat the search baseline.
+
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
