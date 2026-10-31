@@ -362,17 +362,17 @@ _IRREGULAR_LEMMA = {
 #: so adding a kind here is the single declaration point. The fragments are
 #: order-independent alternatives; any match is a block id mention.
 _BLOCK_ID_KINDS: tuple[str, ...] = (
-    r"D-\d{8}-\d{3}",          # decision records
-    r"T-\d{8}-\d{3}",          # task records
-    r"PRJ-\d{3}",               # project entities
-    r"PER-\d{3}",               # person entities
-    r"TOOL-\d{3}",              # tool entities
-    r"INC-\d{3}",               # incident entities
-    r"C-\d{8}-\d{3}",          # contradiction records
-    r"SIG-\d{8}-\d{3}",        # signal records
-    r"P-\d{8}-\d{3}",          # proposal records
-    r"DIA-[A-Za-z0-9]+-\d+",    # dialogue turns: PREFIX-SESSION-INDEX
-    r"FACT-\d{3,}",             # extracted fact cards
+    r"D-\d{8}-\d{3}",  # decision records
+    r"T-\d{8}-\d{3}",  # task records
+    r"PRJ-\d{3}",  # project entities
+    r"PER-\d{3}",  # person entities
+    r"TOOL-\d{3}",  # tool entities
+    r"INC-\d{3}",  # incident entities
+    r"C-\d{8}-\d{3}",  # contradiction records
+    r"SIG-\d{8}-\d{3}",  # signal records
+    r"P-\d{8}-\d{3}",  # proposal records
+    r"DIA-[A-Za-z0-9]+-\d+",  # dialogue turns: PREFIX-SESSION-INDEX
+    r"FACT-\d{3,}",  # extracted fact cards
 )
 
 # Regex matching any block ID pattern (D-..., T-..., PRJ-..., DIA-..., FACT-..., etc.)
