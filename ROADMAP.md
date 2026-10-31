@@ -1,29 +1,3 @@
-## Offline research receipts
-
-### Deliverable
-
-An opt-in store for reviewed experiment receipts from the offline research service. The memory product remains the governed store of record. Speculative scores are not promoted into approved memory.
-
-### Measurement
-
-A fixed set of receipts covering a verified result, a speculative lead, a retracted source, and a conflicting pair. Report whether each is stored, held, or refused, and whether a governed write changed.
-
-### Acceptance gate
-
-- Receipts are stored only through the existing propose, review, and approve path.
-- A speculative lead stays out of approved memory. Removing that separation turns the test red.
-- Revocation and retraction update the receipt without a silent overwrite.
-- Research scores are not benchmark results and are not written as benchmark claims.
-- Each accepted receipt records its source revision. Perturbing that revision turns the receipt check red.
-
-### Falsification
-
-Dropped if an external score can change approved memory without the review path, or if the store cannot represent a retraction.
-
-### Status
-
-Proposed. Nothing built. An architecture audit verdict is required before implementation.
-
 # MIND-Mem Roadmap
 
 > **Reality check (2026-05-20 honesty pass):** the v3.2.0+ sections
@@ -84,8 +58,8 @@ moving one of them to Thursday) found four defects. Each was fixed test-first an
 the original reproduction re-run against the fixed tree.
 
 - [x] **The merge planner proposed merging memories that differ in who, when or time zone.**
-  "Ilona Tue 10am Arizona" and "contractor Tue 10am Pacific" scored 0.82 and were offered
-  as a `keep_longer` merge, which would have dropped the Ilona memory. A merge is now never
+  "Dana Tue 10am Arizona" and "contractor Tue 10am Pacific" scored 0.82 and were offered
+  as a `keep_longer` merge, which would have dropped the Dana memory. A merge is now never
   proposed when people, day/date, clock time or time zone differ (`fact_slots.py`, used by
   `granularity_align.find_merge_candidates`). Test: `tests/test_granularity_align_discriminators.py`.
 - [x] **A superseded memory still ranked #1 in recall.** Every recall leg (scan, SQLite FTS,
@@ -112,14 +86,11 @@ the original reproduction re-run against the fixed tree.
 
 ### Model — retrained `mind-mem-4b` (1 item, in progress since early October 2026)
 
-- [~] **Retrain `mind-mem-4b` on a newer base model.** In progress on Qwen3.8-4B (full fine-tune);
-  acceptance rule: every gate and every benchmark at 100% (the rule is kept with the
-  retraining work and lands with it). The published weights are a
-  full fine-tune of Qwen3.5-4B built against an earlier tree, so they describe a tool
+- [~] **Retrain `mind-mem-4b` on a newer base model.** In progress since early October 2026 as a full fine-tune of a newer 4B open-weight base. The base checkpoint's identity and licence are recorded in the model card and the training manifest. Acceptance rule: 100% on every gate and every benchmark under the fairness rules. The held-out split is scored only as an aggregate. Every number is reported three ways (full, dev, held-out), with the official answer key as the headline. No benchmark label reaches the model at runtime. No change is kept if it lowers the held-out score or any other gate. The published weights are a full fine-tune of the previous 4B base built against an earlier tree, so they describe a tool
   surface that has since moved. Several planned features depend on a model trained
   against the current surface. Full fine-tune (not QLoRA), corpus regenerated from a
   current checkout; pipeline already in-tree under `train/`. On ship: regenerate the
-  GGUF, refresh the HF model card, restate the throughput numbers in `README.md`
+  GGUF, refresh the model card on the model hub, restate the throughput numbers in `README.md`
   (they are measurements of the *current* weights), and re-verify `mm install-model`.
   Requires rented GPU — a 4B full fine-tune does not fit local hardware.
   Source preparation now includes a deterministic
@@ -190,7 +161,7 @@ the original reproduction re-run against the fixed tree.
 - *(tracked below — see “Local visual viewer” in the status section; listed twice, counted once)*
 - [x] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
 - *(tracked below — see “Adversarial / poisoning defense” in the status section; listed twice, counted once)*
-- [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from recent research on invisible-Unicode covert channels: payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (reported 100% receiver recovery at 0% monitor detection). Provenance recorded privately in `mind-internal`, per the no-public-attribution rule. Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
+- [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from recent research on invisible-Unicode covert channels: payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (reported 100% receiver recovery at 0% monitor detection). Provenance recorded privately, per the no-public-attribution rule. Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
 - [x] **Memory reputation / trust scores** — shipped as the validity gate's FIFTH component, not a separate subsystem: `src/mind_mem/provenance_class.py` classifies a block `operator` > `agent-verified` > `agent-inferred` > `external-ingest` from the existing `ActorRole` / `ToolId` / `Source` fields, and `validity_gate.validity_components()` folds that weight into the composite `V`. No per-actor learned or anomaly scoring (determinism wedge). `trust_scores.apply_trust_scores` keeps the `actor_trust` field as a thin façade over that one component. Opt-in via `recall.validity_gate.provenance_class.enabled`; flag-off recall ordering is byte-identical. 48 tests.
 
 ### Group E — Compliance (5 items — 4 implemented, 1 partial)
@@ -585,8 +556,7 @@ ships as a versioned config, like any other governed change.
       reproducible-benchmark items in Group H; the matched-budget
       0.27 → 0.90 framing is the pitch slide.
 
-> Provenance (arxiv id, authors, exact tables) recorded privately in
-> `mind-internal`, per the no-public-attribution rule — public artifacts
+> Provenance (source id, authors, exact tables) recorded privately, per the no-public-attribution rule — public artifacts
 > say "recent scaling-law research" only.
 
 ### Group J — Client-side anticipation cache + tool-output offload (prior-art-informed, 2026-07-03)
@@ -603,7 +573,7 @@ fall through to the source), with a corpus-size floor so the ratio isn't
 dominated by stopwords on a cold cache.
 
 **Why this is ours to steal.** mind-mem already has the *hard* half — the
-governed store, the federation transport (U1-served Postgres+Redis), and
+governed store, the federation transport (a self-hosted Postgres+Redis node), and
 the idle machinery (`prefetch` / `speculative_prefetch`, the learned
 co-retrieval graph). What we lack is the *consumer* pattern that turns
 those idle tools into an actual local hot-path cache, plus the cheap
@@ -655,12 +625,11 @@ dropped-line counts are logged.
       (247 test binaries). **The real build** of the three.
 - [x] **One-command federation connect (`mind-mem connect`)** — the only **SHIPPED 2026-09-02 in `a4a1759`** — `src/mind_mem/federation_connect.py` (343 lines): `build_federation_config()` does an immutable deep-copy merge, `connect()` writes the config atomically at 0600. Verified at HEAD 2026-09-07.
       onboarding gap vs. hosted "shared context across all CLIs" comps:
-      a wrapper that wires a new CLI into the U1-served federation
+      a wrapper that wires a new CLI into the self-hosted federation
       (Postgres+Redis DSN) without hand-editing config. We already own
       the shared-context substrate; this is the frictionless join.
 
-> Provenance (source repos, exact heuristics) recorded privately in
-> `mind-internal`, per the no-public-attribution rule — public artifacts
+> Provenance (source repos, exact heuristics) recorded privately, per the no-public-attribution rule — public artifacts
 > say "recent agent-memory tooling" only.
 
 ### Group K — Graph-from-text construction + edge-grounded recall (prior-art-informed, 2026-07-24)
@@ -729,8 +698,7 @@ Group H recompaction).
       recompaction fixed-point + injected-compressor machinery; emits as
       a `propose_update`, never a direct write.
 
-> Provenance (source cookbook / working note + URL) recorded privately
-> in `mind-internal`, per the no-public-attribution rule.
+> Provenance (source cookbook / working note + URL) recorded privately, per the no-public-attribution rule.
 
 #### K.0 — Graph population is the bottleneck, not graph capability (2026-07-27)
 
@@ -1208,7 +1176,7 @@ Release criteria:
 ## v2.1.0 — Self-Improving Retrieval via OpenClaw-RL ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > **Basis:** recent research on training agent behaviour directly from natural-language
-> interaction. Provenance recorded privately in `mind-internal`, per the
+> interaction. Provenance recorded privately, per the
 > no-public-attribution rule.
 >
 > Theme: MIND-Mem learns from every user interaction — corrections, re-queries, and rephrased searches become training signals that improve retrieval quality over time.
@@ -2110,7 +2078,7 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (same model as answerer 
 - [x] **Probabilistic truth score** — shipped in `src/mind_mem/truth_score.py` (commit `e98c144`). Bayesian posterior ``prior × age_decay − contradiction_mass + access_bonus``, clamped [0.01, 0.99]. Exposed via ``annotate_results(results, contradiction_graph=…)``; caller surfaces as ``block.truth_score``. Feeds into EvidenceBundle confidence. 22 tests.
 - [x] **Streaming ingest + back-pressure queue** — shipped in `src/mind_mem/streaming.py` (commit `9956b7a`). Bounded mpsc deque with drop-oldest policy + per-client token bucket. ``build_queue_from_config`` opt-in via ``streaming.enabled``. Thread-safe multi-producer. 14 tests including a 4-thread concurrency test.
 - [x] **Consensus voting** — shipped in `src/mind_mem/consensus_vote.py` (commit `f644096`). ``reach_consensus(votes, quorum_threshold, min_votes)`` returns a typed ``ConsensusDecision(winner, margin, confidence, reason, vote_counts)``; trust weights pulled from ``Vote.trust_weight`` or ``namespaces.<id>.trust_weight``; 0-weight excludes. **Wired 5.0.1** into `conflict_resolver.analyze_contradiction`'s `manual_review` fallback behind `governance.consensus.enabled` (default off); votes read from `intelligence/VOTES.md` through `admit_corpus`, winner staged as a `pending-review` proposal, never applied. 41 tests.
-- [~] **mind-mem-4b v2 retrain — rebase to Qwen3.8-4B + catch up to the current surface** — **In progress since early October 2026; this supersedes the 2026-08-18 deferral below.** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **NOT required by the v4.5.0 recall-noise fix or the v4.6.0 validity gate** — both are backend / flag-gated and add no MCP tool, and the 4b is only the swappable KG-extraction/dispatch model (recall + hybrid *scoring* is the `mind/*.mind` kernels + Python, never the 4b). The refresh is warranted because the current 4b was trained knowing **83** tools while the live surface is now **107** (the typed-edge KG tools — `propose_edge` / `approve_edge` / `reject_edge` / `list_edge_proposals` / `entity_add_observation` — landed in v4.3/v4.4 *after* the 4b was trained). Proposed model = **full retrain on a Qwen3.8-4B base**, subject to verifying the base checkpoint's availability and suitability before training (current base: Qwen3.5-4B) over the surface + v3.2.x dispatchers + v3.3.0/v4.x retrieval shapes (incl. the validity-gate config, OKF v0.2, and hybrid fusion-provenance fields) + LoCoMo replay. **Sequencing (operator decision 2026-08-18): deferred to AFTER the full Pure-MIND port** — do the Qwen3.8-4B rebase + retrain once, over the *post-port* tool/surface, bundled with that milestone rather than now. The current 4b remains the swappable KG-extraction/dispatch model (never on the recall-scoring path — that is the `mind/*.mind` kernels + Python). The runtime continues to execute its registered tools, but the checkpoint's evaluation does not establish dispatch competence over the full current surface; the 83-versus-107 counts alone are not a tool-set compatibility proof. The current training-readiness corpus is development data with evaluation-target overlap; it does not establish an independent holdout or a retrain result. Runpod H200 kickoff (~$55, 8-12 hr external GPU) runs on operator approval at that time.
+- [~] **mind-mem-4b v2 retrain — rebase to a newer 4B base + catch up to the current surface** — **In progress since early October 2026; this supersedes the 2026-08-18 deferral below.** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **NOT required by the v4.5.0 recall-noise fix or the v4.6.0 validity gate** — both are backend / flag-gated and add no MCP tool, and the 4b is only the swappable KG-extraction/dispatch model (recall + hybrid *scoring* is the `mind/*.mind` kernels + Python, never the 4b). The refresh is warranted because the current 4b was trained knowing **83** tools while the live surface is now **107** (the typed-edge KG tools — `propose_edge` / `approve_edge` / `reject_edge` / `list_edge_proposals` / `entity_add_observation` — landed in v4.3/v4.4 *after* the 4b was trained). Proposed model = **full retrain on a newer 4B base**, subject to verifying the base checkpoint's availability and suitability before training (current base: the previous 4B base) over the surface + v3.2.x dispatchers + v3.3.0/v4.x retrieval shapes (incl. the validity-gate config, OKF v0.2, and hybrid fusion-provenance fields) + LoCoMo replay. **Sequencing:** the 2026-08-18 deferral is superseded. The retrain runs in this release on a frozen render of the current surface, and the Pure-MIND port follows in the next release. The current 4b remains the swappable KG-extraction/dispatch model (never on the recall-scoring path — that is the `mind/*.mind` kernels + Python). The runtime continues to execute its registered tools, but the checkpoint's evaluation does not establish dispatch competence over the full current surface; the 83-versus-107 counts alone are not a tool-set compatibility proof. The current training-readiness corpus is development data with evaluation-target overlap; it does not establish an independent holdout or a retrain result. The rented-GPU run (about $55, 8-12 hours) runs on operator approval.
 
 **Estimated (v3.3.0):** ~2400 lines retrieval (Tier 1+2+3) + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`, `mind-mem[rerank-ensemble]` (Tier 4).
 
@@ -2908,7 +2876,7 @@ raw fusion rank.
 - **Research-watch — faithful (not just factual) calibration, training-side complement
   (2026-07-08).** Recent research on eliciting faithful uncertainty expression from
   language models through a metacognitive training reward (provenance recorded
-  privately in `mind-internal`). Distinction worth stealing: *factual*
+  privately). Distinction worth stealing: *factual*
   calibration = "90% claimed → right 90% of the time"; *faithful* calibration = the
   stated confidence matches the model's own internal consistency (measured by sampling
   the same answer ~N× and comparing to the confidence it emits). Their fix is a second
@@ -2984,7 +2952,7 @@ raw fusion rank.
     a "second independent sighting" alongside the external distill→cascade note, which
     framed conformal as something we might build. That was wrong, and an ecosystem-wide
     check found why: **`ar_spine/rsi/conformal.py` (216 lines) is working code in
-    `mind-lab`, not a plan.** It implements the split-conformal quantile as the gate
+    the private research pipeline, not a plan.** It implements the split-conformal quantile as the gate
     (`conformal_threshold(calib, stratum, alpha)`, distil only when `score > tau`),
     **Mondrian stratification** (per-problem-class quantiles, not one global bound),
     cold-start abstention (`MIN_CALIB_PER_STRATUM = 20`, `MIN_BAD_PER_STRATUM = 5` —
@@ -3001,8 +2969,7 @@ raw fusion rank.
     If we reimplement, those three behaviours are the spec to match, and the golden-parity
     tests are the oracle. Do not re-solve them from scratch.
   - **Fork check (verified 2026-07-29).** `conformal.py` appears at eight live paths
-    across `ar-spine/`, `autoresearch/`, `mind-lab/`, `mind-lab-build/` and
-    `mind-lab-staging/`. All eight are **byte-identical** (md5 `24034cf5eb89`), so the
+    across `ar-spine/`, `autoresearch/` and the private research pipeline. All eight are **byte-identical** (md5 `24034cf5eb89`), so the
     "never fork across repos again" intent in its header is currently holding. Recorded
     because vendored-copy count is the kind of thing that silently stops being true;
     re-check before editing any copy.
@@ -3026,8 +2993,7 @@ raw fusion rank.
     observability-only reading of the same paper belongs to naestro's agent-trajectory
     lane, not here — mind-mem's interest is the one-class + conformal *pairing*.
   - **Provenance rail.** Prior-art shape observed in a public paper; no code, no
-    dependency, nothing named in any public artifact. Full citation lives in
-    `mind-internal` per the no-public-attribution convention.
+    dependency, nothing named in any public artifact. Full citation is recorded privately per the no-public-attribution convention.
 
 ## Divergent recall-path work on `autoresearch-recompact/jul10` (opened 2026-07-22)
 
@@ -3059,7 +3025,7 @@ still apply on top of the newer recall path.
 
 **Naming caveat.** The branch prefix `autoresearch-` refers to the *method* used
 to develop it (pre-registered, exp-numbered iterations), not to a home repo. The
-consolidated research tooling now lives in `mind-lab`; this branch's contents are
+consolidated research tooling now lives in the private research pipeline; this branch's contents are
 mind-mem product code and belong here. The prefix is misleading and cost one
 misread already — worth renaming if the branch survives.
 
@@ -3131,7 +3097,7 @@ avoid. If this is built, the description is a first-class input, not metadata.
 
 **Related but already ahead of the source:** the corroboration-weighted, integer-
 encoded confidence the same note lists as a "future direction" is already shipped
-in `mind-lab`'s `dr-spine` (`independent_corroboration()` → saturating term →
+in the private research pipeline (`independent_corroboration()` → saturating term →
 `confidence_milli`). Nothing to port; noted so the two are not confused.
 
 **What we did NOT take.** The note's knowledge-graph layer — mind-mem is already a
@@ -3200,7 +3166,7 @@ side: the benchmark the field runs is not the property we sell.
 - **Status:** Positioning note, 2026-07-30. No work item. Revisit if a governed-write
   competitor appears — that would be a real one, and none of these are.
 
-> Provenance (repo, author, metrics) recorded privately in `mind-internal`, per the
+> Provenance (repo, author, metrics) recorded privately, per the
 > no-public-attribution rule.
 
 ## Verified vs. attested: naming the runtime half of trust (prior-art shape observed 2026-07-30)
@@ -3278,7 +3244,7 @@ a discipline we independently arrived at for edge provenance.
 > designing around without a word for it, and reports an ablation that bears directly
 > on how mind-mem is consumed. **Concept and benchmark design only — no code taken, no
 > numbers reproduced here.** The external figures are that work's claims, not ours.
-> Source not named in any public artifact; citation lives in `mind-internal`.
+> Source not named in any public artifact; citation is recorded privately.
 
 **The failure mode.** In a long trajectory, a constraint that is present, visible, and
 still inside the context window stops influencing decisions. Not eviction, not
@@ -3645,7 +3611,7 @@ as it does in `enforce`.
   The reasoner is explicitly scoped *below* full OWL: unbounded entailment
   on a memory store is a latency and explainability hazard, not a feature.
 
-> Provenance (source + full analysis) recorded privately in `mind-internal`,
+> Provenance (source + full analysis) recorded privately,
 > per the no-public-attribution rule — public artifacts say "recent
 > enterprise knowledge-graph practice" only.
 
@@ -3987,7 +3953,7 @@ any item in this group** — M4's closed-set discipline is sourced to
 What the tutorial supplied was framing: the observation that these are
 *silent-failure* classes worth gating. Every mechanism below it is internal
 precedent, which is the stronger position — the patterns are already running
-here and were merely not yet applied to the store. Citation in `mind-internal`.
+here and were merely not yet applied to the store. Citation recorded privately.
 Cross-repo: `autoresearch` ROADMAP (M6's dead-end-registry symmetry, and the
 ablation pattern applied to loop components).
 
@@ -4231,7 +4197,7 @@ boundaries, and chunk-level provenance retention — plus one transferable bug
 class. Every mechanism described above is either implemented here (`_score_boundary`
 and the opt-in N2 importer), already stronger here than in the external design
 (offset spans versus element retention), or sourced to this ecosystem's own
-evidence layer. Citation in `mind-internal`.
+evidence layer. Citation recorded privately.
 
 - **Status:** N1 and N2 have implementation evidence in the current candidate;
   N2 is scoped to the opt-in Markdown/agentmem importer and its existing-chain
@@ -4314,11 +4280,7 @@ fresh every turn, with no track record behind it — an agent that has been wron
 about a class of claim four times sounds exactly like one that has never been
 wrong at all.
 
-The 2026-08-26 AGI3 session is the motivating case, and it is not hypothetical:
-in one session a documented fix was reported before it was applied; the tail
-failure was attributed to goal surplus and the attribution was wrong; §16.57
-over-generalized from two same-signed data points; and pre-screen timings were
-reported from a probe that bypassed the propagator. Every one was caught — but
+A 2026-08-26 agent session on a separate research project is the motivating case, and it is not hypothetical: in one session a documented fix was reported before it was applied; a failure was attributed to the wrong cause; a rule was over-generalized from two same-signed data points; and timings were reported from a probe that bypassed the component under test. Every one was caught — but
 caught **independently, from scratch, each time.** Nothing accumulated. A ledger
 turns four rediscoveries into one named pattern.
 
@@ -4382,7 +4344,7 @@ already implemented here in stronger form as the status-token dispatch contract,
 blind cross-family verifiers, and the byte-identity gates; only the wrongness
 ledger is genuinely absent. The "confidence as a spendable balance" framing was
 evaluated and **rejected** — it requires calibrated confidences, which LLM
-self-reports are not. Citation in `mind-internal`.
+self-reports are not. Citation recorded privately.
 
 ---
 
@@ -4594,8 +4556,7 @@ from*. Five edges asserted from inside a single repo during one campaign score
 exactly the same as five edges arriving from five independent repos.
 
 For a single-project store that is the right simplification. For the STARGA
-fleet it is not: sessions write to `mind`, `mind-lab`, `naestro`,
-`naestro-agi3`, `mind-nerve`, and `.agents` on the same day, and a fact
+fleet it is not: sessions write to six repositories on the same day, and a fact
 independently corroborated in three of those is qualitatively stronger evidence
 than the same count accumulated inside one. Repeated corroboration from one
 context is closer to one observation restated than to three observations.
@@ -4828,11 +4789,11 @@ this?* For everything below the answer was no.
 - ~~**Kafka / NATS event fan-out**~~
   **Why not:** Governance-event volume for one operator is a webhook, and alerting.py already ships webhooks. A broker is an ops dependency that contradicts the product.
 - ~~**`[CAUSAL]` block type** — world-model storage for learned state transitions~~
-  **Why not:** ARC-AGI-3 harness work that wandered into the memory layer's roadmap. Belongs in the consumer repo.
+  **Why not:** Agent-benchmark harness work that wandered into the memory layer's roadmap. Belongs in the consumer repo.
 - ~~**`[SKILL]` block type** — named strategy captures with preconditions / effects / success-rate~~
   **Why not:** Duplicates Group L2, which already holds the idea at EVALUATE with the sharper observation that a strategy's staleness is harder to detect than a fact's.
 - ~~**Cross-domain recall adapter** — surface most-similar `[TRAJECTORY]` / `[SKILL]` blocks across environments~~
-  **Why not:** Same ARC-AGI-3 bleed-through as the block types above.
+  **Why not:** Same harness bleed-through as the block types above.
 - ~~**`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory~~
   **Why not:** Grid-state embeddings in a governed store for CODING agents answer no question any consumer asks.
 - ~~**Evidence-chain submission format** — tamper-evident per-episode export~~
@@ -4872,11 +4833,11 @@ this?* For everything below the answer was no.
 - ~~**Chaos testing harness** — automated fault injection for federated deployments not built. Tracked.~~
   **Why not:** Scoped to federated deployments, which do not exist.
 - ~~**`[CAUSAL]` block type** — world-model storage for learned state transitions (observation → action → next-observation); consumed by the host agent's planner during multi-step lookahead~~
-  **Why not:** ARC-AGI-3 harness work that wandered into the memory layer's roadmap. Belongs in the consumer repo.
+  **Why not:** Agent-benchmark harness work that wandered into the memory layer's roadmap. Belongs in the consumer repo.
 - ~~**`[SKILL]` block type** — named strategy captures with preconditions, effects, and success-rate metadata; retrievable by skill-name or by applicable-context similarity~~
   **Why not:** Duplicates Group L2, which already holds the idea at EVALUATE with the sharper observation that a strategy's staleness is harder to detect than a fact's.
 - ~~**Cross-domain recall adapter** — given a novel environment, surface the most similar `[TRAJECTORY]` / `[SKILL]` blocks from unrelated environments by feature-embedding similarity rather than exact environment-id match~~
-  **Why not:** Same ARC-AGI-3 bleed-through as the block types above.
+  **Why not:** Same harness bleed-through as the block types above.
 - ~~**`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory; enables "I've seen this state before" recall across environments~~
   **Why not:** Grid-state embeddings in a governed store for CODING agents answer no question any consumer asks.
 - ~~**Evidence-chain submission format** — tamper-evident export of an agent's full decision history per episode, ready for third-party scorecard verification~~
@@ -4985,22 +4946,17 @@ Two constraints this must respect:
 
 ### T4 — external corroboration (REFERENCE, do not vendor)
 
-Two 2026 papers independently name this exact plane. Recorded for vocabulary
-and evaluation shape, not as a dependency:
+Two 2026 papers independently name this exact plane. They are recorded here for vocabulary and evaluation shape, not as a dependency; provenance is recorded privately:
 
-- **FORGETEVAL** (a 2026 benchmark paper) — thesis: production memory failures are
-  forgetting failures, not recall failures, *"yet existing memory benchmarks
-  measure only recall."* Decomposes forgetting into 5 primitive families and 10
+- **A 2026 forgetting benchmark** — thesis: production memory failures are forgetting failures, not recall failures, while existing memory benchmarks measure only recall. Decomposes forgetting into 5 primitive families and 10
   adversarial categories. At least four map onto live defects in our own note
-  corpus: recursive supersession (the fleet-panel chain), temporal qualifier
-  (every date-suffixed block), compound fact (the hub blocks), identifier
-  obfuscation (`~/autoresearch` vs `~/mind-lab/autoresearch`). Scoring is
+corpus: recursive supersession (a chain of superseded status notes), temporal qualifier (every date-suffixed block), compound fact (the hub blocks), identifier obfuscation (one directory referred to by an old and a new path). Scoring is
   deterministic substring match — **no LLM judge**, so it is reproducible across
   model versions the way our gates require. MIT.
   **Caveat:** its adapter protocol scores N/A for missing primitives, and we
   have no `purge` and no partial-`supersede` — so the aggregate would understate
   the gap. The per-category profile is the output worth having, not the headline.
-- **GPM** (a 2026 paper) — describes this architecture in academic
+- **A 2026 governed-memory architecture paper** — describes this architecture in academic
   vocabulary: bitemporal state transitions, source-bound admission, non-revival
   after retraction, fail-closed structured release. Independent confirmation that
   governed memory is a real category. **Nothing to steal — we built it.** Take
@@ -5008,11 +4964,7 @@ and evaluation shape, not as a dependency:
 
 ### Explicitly NOT taken from the trigger document
 
-The item that prompted this group was a typeset explainer ("Agent Memory
-Architecture — 5 Layers"), which carries a model vendor's wordmark on every page
-while disclaiming affiliation with that vendor, cites a vendor site for its headline
-numbers, and attributes an entire section to an unlocatable blog post. Its
-CoALA taxonomy is real and is not its own (it predates the document in published research). Recorded here so a
+The item that prompted this group was a typeset five-layer agent-memory explainer, which carries a model vendor's wordmark on every page while disclaiming affiliation with that vendor, cites a vendor site for its headline numbers, and attributes an entire section to an unlocatable blog post. Its cognitive-architecture taxonomy is real and is not its own (it predates the document in published research). Recorded here so a
 later pass does not re-import it:
 
 - ~~**The five-layer architecture** (working / episodic / semantic / procedural / forgetting)~~
@@ -5043,45 +4995,39 @@ whether T4's adapter is worth the work. Do not start at T4.
 
 ## Group U — Memory contract v1 (2026-10-24, Proposed)
 
-The memory layer is three repositories with three independent definitions of a
-record, a graph edge, a vector and an ordering. Nothing today lets a MIND-KG
-subgraph, a MIND-Vec result set and a MIND-Mem block be checked against one
-another, so no component can be swapped or ported except by faith. Group U fixes
-one contract and one corpus, and makes every migration pass behind them.
+### Deliverable
 
-**Owners (normative, one per section; the contract is the composition, not a new document):**
+One memory contract (record, graph edge, vector, ordering) and one shared parity corpus. With them, a memory block, a graph result and a vector result set can be checked against one another, and a backend is swapped only behind parity.
 
-| Section | Normative owner | Where it is defined today |
-|---|---|---|
-| Record | MIND-Mem | block schema + served-ledger row (`src/mind_mem/served_ledger.py`, `specs/retrieval-receipt-contract.md`) |
-| Graph | MIND-KG | `Predicate` / `Entity` / `Edge` in `src/kg.mind`, frozen at its Phase-1 gate |
-| Vector | MIND-Vec | `SPEC.md` §3 (input admission) and §7 (deterministic ranking) |
-| Ordering | MIND-Vec | the canonical Top-K comparator (`src/rank.mind`): descending score, ascending stable id on ties, filter before admission |
-| Evidence | the ecosystem evidence profile (tracked in the compiler and governance roadmaps) | Group RE consumes it; this group does not redefine it |
+Section owners:
+- Record: this repository (block schema and served-ledger row: `src/mind_mem/served_ledger.py`, `docs/specs/retrieval-receipt-contract.md`).
+- Graph: the MIND graph engine (`Predicate` / `Entity` / `Edge`).
+- Vector and Ordering: the MIND vector engine (input admission; canonical Top-K comparator: descending score, ascending stable id on ties, filter before admission).
+- Evidence: the ecosystem evidence profile, which Group RE consumes and this group does not redefine.
 
-**Deliverables**
+- [ ] **U.1 Shared parity corpus** — one checked-in fixture (blocks, typed edges with provenance, f32 vectors with stable `u64` ids, and a filter set) with golden digests for the block content, the lex-sorted adjacency state hash and the Top-K ids per query. An independent double-precision reference produces the goldens once; they are then frozen.
+- [ ] **U.2 This repository reproduces the goldens** — `mm` recall, graph query and the vector backend over the corpus match U.1 byte for byte, wired as a CI gate here.
+- [ ] **U.3 Consumer gates** — the MIND graph and vector engines run the same corpus against the same goldens in their own CI.
+- [ ] **U.4 Migration behind parity** — no backend swap (Python graph or vector leg -> MIND engine) and no Pure-MIND port increment of a scoring or graph unit ships unless U.2 holds before and after.
 
-- [ ] **U.1 Shared parity corpus** — one checked-in fixture (blocks, typed edges with
-      provenance, f32 vectors with stable `u64` ids, and a filter set) with golden
-      digests for: block content digest, lex-sorted adjacency state hash, Top-K ids
-      per query. Goldens are produced by an independent double-precision/Python
-      reference once, then frozen.
-- [ ] **U.2 MIND-Mem reproduces the goldens** — `mm` recall, graph query and the
-      vector backend over the corpus match U.1 byte-for-byte; wired as a CI gate here.
-- [ ] **U.3 Consumer gates** — MIND-KG and MIND-Vec each run the same corpus in
-      their own CI against the same goldens (their roadmaps carry the obligation).
-- [ ] **U.4 Migration-behind-parity rule** — no backend swap (Python KG → MIND-KG,
-      Python vector fallback → MIND-Vec) and no Pure-MIND port increment of a
-      scoring or graph unit ships unless U.2 holds before and after. Extends the
-      per-unit bit-identity discipline of the Pure-MIND Core Port across repositories.
+### Measurement
 
-**Done when:** U.1–U.3 are green in three repositories; a deliberate tie-break
-inversion in any one implementation turns that repository's gate red (mutation
-control); the owners table above is mirrored in the ecosystem architecture
-registry.
+Per implementation and per architecture (x86-64, ARM64): golden matches for block digests, the adjacency hash and Top-K per query.
 
-**Firewall:** the contract fixes identities and orderings, never scores or
-confidence; a component that reproduces the goldens has proved parity, not quality.
+### Acceptance gate
+
+- Positive control: the reference implementation and this repository's Python path both match every golden.
+- Mutation controls: inverting the tie-break in any one implementation turns that repository's gate red. Changing one edge's provenance changes the adjacency hash and turns U.2 red.
+- A run in which an implementation crashed or matched zero queries reports 'unverified', never a pass.
+- The contract fixes identities and orderings, never scores or confidence. Matching the goldens proves parity, not quality.
+
+### Falsification
+
+Dropped if the reference implementation itself cannot reproduce the goldens bit-exactly on x86-64 and ARM64.
+
+### Status
+
+Proposed. Nothing built. U.1 and U.2 can land now. U.3 is ordered after a MIND program can read a file under `mindc test` and `mindc run` (compiler request CRX-55). An architecture audit verdict is required before implementation.
 
 ---
 
@@ -5090,7 +5036,7 @@ confidence; a component that reproduces the goldens has proved parity, not quali
 > Prior-art shape observed in a recent public recursive-self-improvement paper
 > (idea only; the source repo ships a PDF and no license — nothing vendored,
 > never named in a public artifact). Full technical plan and the measured
-> numbers live in `mind-lab/autoresearch/ROADMAP.md` §12. This entry states only
+> numbers live in the private research pipeline §12. This entry states only
 > the mind-mem leg.
 
 ### The connection to `similar_trajectories`
@@ -5146,7 +5092,7 @@ block kind.
 > Prior-art shape observed in recent public research on gated self-evolving
 > agent systems (idea only — no code, no dependency). Never name the source in
 > a public artifact; provenance lives in mind-mem itself. Sibling entries:
-> `naestro/ROADMAP.md` R100 (the gate), `mind-lab/autoresearch/ROADMAP.md`.
+> `naestro/ROADMAP.md` R100 (the gate), the private research pipeline.
 
 ### AUDIT STATUS: the source's *code* backing for this idea is THIN — read this first
 
@@ -6260,364 +6206,255 @@ number.
 
 ## Transcript capture beyond one agent CLI (2026-10-21, Proposed)
 
-MIND-Mem already reaches 16 agent clients on the write side (`mm inject` and the hook
-installer). The read side reaches one: `transcript_capture --scan-recent` reads only
-`~/.claude/projects/*.jsonl`. Sessions from Codex, Gemini, Qwen, OpenCode, OpenClaw and
-the other clients never become signals, so what an agent learned in those sessions is
-lost when the session ends. Recent work on reading many agents' local histories shows
-the shape that keeps such readers correct while the formats keep changing. Ideas only;
-no code adopted, and the source is not named in this public file.
+### Deliverable
 
-### 1. One event shape, one reader per client
+The write side reaches 69 clients (41 MCP-aware) through `mm inject` and the hook installer. The read side, `transcript_capture --scan-recent`, reads one client's history directory. Add one reader per client that maps its local history (JSONL files or SQLite tables) to one event shape. Required fields: `id`, `kind`, `raw` (the original record). Optional fields: `timestamp`, `role`, `text`, tool name, input, output, `model`. `kind` is one of `user`, `assistant`, `tool_call`, `tool_result`, `error`, `meta`. `scan_transcript` runs on the event shape, so a new client adds a reader and never touches extraction. A reader opens only history paths, never credential files that share a directory or database with the history. A field the client does not record is stored absent, never inferred. Captured text passes the existing pre-write redaction, and every signal enters memory only through `propose_update`. Ideas only; no outside code adopted.
 
-Each reader turns its client's records into one event: required `id`, `kind` and `raw`
-(the original record, so nothing is lost); optional `timestamp`, `role`, `text`, tool
-name, input and output, `model`. `kind` is one of `user`, `assistant`, `tool_call`,
-`tool_result`, `error`, `meta`. Signal extraction (`scan_transcript`) runs on the event
-shape, so adding a client means adding a reader, not touching extraction. Storage
-differs per client: JSONL files for some, SQLite tables for others.
+### Measurement
 
-Readers open each client's history paths only. Some clients keep credentials in the same
-directory, or in the same database file, as their history; a reader never opens those.
+Per reader over 30 days: records read, events by kind, unknown records counted as `meta`, signals proposed and accepted.
 
-### 2. Unknown records are counted, never dropped
+### Acceptance gate
 
-A record type a reader does not know becomes `meta` and is counted. Each reader ships
-with a redacted fixture and a fingerprint of the types and keys it knows, and a check
-that exits 0 (current sessions match), 1 (something new appeared; prints the difference)
-or 2 (cannot check: client missing, no recent session, or too few records to judge).
-Too few records is 2, never 0. A fixture with one injected unknown key must exit 1.
+- Each reader ships a redacted fixture and a fingerprint of the record types and keys it knows. Its drift check exits 0 (current sessions match), 1 (a new type or key; prints the difference) or 2 (cannot check: client missing, no recent session, too few records). Too few records is 2, never 0.
+- Positive control: the committed fixture exits 0 and yields the expected event counts.
+- Mutation controls: a fixture with one injected unknown key exits 1. A reader patched to drop unknown records turns its count test red. A planted token in a fixture is absent from the resulting proposal; removing the redaction call turns that test red.
+- A path allow-list test fails if a reader opens any file outside the client's history paths.
 
-### 3. Missing stays missing
+### Falsification
 
-A field the client does not record (model, token counts, a timestamp) is stored as
-absent. It is never inferred, so a later reader cannot mistake a guess for a record.
-
-### 4. Secrets and governance unchanged
-
-Transcripts carry keys and tokens. Captured text passes the existing pre-write
-redaction before anything is proposed, and every signal still enters memory only
-through `propose_update`.
-
-### Falsification condition
-
-A client's reader is dropped if its sessions produce no accepted proposal over 30 days
-of capture.
+A client's reader is dropped if its sessions produce no accepted proposal over 30 days of capture.
 
 ### Status
 
-Proposed. Nothing built. Order: Codex, Gemini, Qwen, OpenCode, OpenClaw.
-
+Proposed. Nothing built. Order: the clients in `docs/client-integrations.md` that keep local history files, most-installed first. An architecture audit verdict is required before implementation.
 
 ---
 
 ## Dreaming over agent sessions: a nightly pass that learns across sessions (2026-10-23, Proposed)
 
-Recent public work on hosted agents runs a scheduled pass over many past sessions and
-the memory store. The pass finds what no single session can see and writes a separate,
-reviewable output. MIND-Mem has half of this. `dream_cycle` runs five nightly passes,
-but only over MIND-Mem's own daily logs and blocks; agent sessions are never an input.
-Ideas only; no code adopted, and the source is not named in this public file.
+### Deliverable
 
-### 1. Sessions become an input
+A sixth `dream_cycle` pass over the last N days of captured session events. It reuses the event shape and redaction from "Transcript capture beyond one agent CLI" and reads no new paths. It proposes only cross-session patterns: the same failure in three or more sessions, a step sequence several sessions converged on for one kind of task, and a correction the user made more than once. Each candidate names the sessions it rests on and carries a verdict label from "Verdict-labelled lessons"; a single-session pattern is `confounded`. The pass never edits a session file or an existing block. It writes a staged set of proposals that enter memory only through `propose_update`, and `auto_repair` does not apply to it. Ideas only; no outside code adopted.
 
-Once "Transcript capture beyond one agent CLI" (above) has readers, `dream_cycle` gains
-a sixth pass over the last N days of captured session events. It uses the same event
-shape and the same pre-write redaction, and reads no new paths of its own.
+### Measurement
 
-### 2. It looks for patterns across sessions only
+Over 30 nightly runs: candidates proposed, candidates accepted, and accepted candidates that per-session capture had already produced.
 
-The pass skips facts a single session already yields, since per-session capture
-covers those. It looks only for what needs several sessions:
+### Acceptance gate
 
-- the same failure in three or more sessions;
-- a sequence of steps several sessions converged on for one kind of task;
-- a correction the user made more than once.
+- Positive control: a fixture of five sessions with the same failure in three of them proposes exactly one pattern, naming those three sessions.
+- Mutation controls: lowering the session threshold to one turns the 'single-session fact is not proposed' test red. A pass that writes a block directly is refused, and its test goes red.
+- The workspace hash is unchanged after the pass until `approve_apply`.
 
-Each candidate names the sessions it rests on and uses the verdict format from
-"Verdict-labelled lessons". A pattern from a single session is `confounded`.
+### Falsification
 
-### 3. Separate output, never an in-place edit
-
-The pass never edits its inputs: no session file and no existing block. It writes a
-staged set of proposals, and each one enters memory only through `propose_update`, so
-review, contradiction checks and rollback apply unchanged. The `auto_repair` option of
-the other passes does not extend to this one.
-
-### Falsification condition
-
-Dropped if, over 30 days of nightly runs, it produces no accepted proposal that
-per-session capture had not already produced.
+Dropped if, over 30 days of nightly runs, it produces no accepted proposal that per-session capture had not already produced.
 
 ### Status
 
-Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI".
-
+Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI". An architecture audit verdict is required before implementation.
 
 ---
 
 ## Capture from the agent's own report, checkable verification, and a brief that tires (2026-10-24, Proposed)
 
-Recent public work on a local memory for coding agents runs the loop MIND-Mem already
-ships: a token-budgeted brief at session start and a capture at session end. It also
-reports what broke in daily use, and three of its answers fill gaps here. Ideas only;
-no code adopted, and the source is not named in this public file.
+### Deliverable
 
-### 0. Prerequisite: capture must not reuse ids
+0. **Prerequisite, its own fix, lands first:** auto-capture must not reuse ids on a Postgres-backed store. Today it takes its dedup set and next `SIG-` number from `intelligence/SIGNALS.md`, which a Postgres store never writes. Measured since 2026-09-06: 1,834 writes for 40 signals, and on two days a different signal overwrote an earlier one under the same id. The fix allocates ids and dedups from the active store.
+1. The session-end hook reads labelled fields from the agent's final report: the status token; done, concerns, deviations, findings; and `Verification:`, `Decision:`, `Commit:`. It parses them deterministically, with no model call, and proposes one signal per non-empty field through `propose_update`. A markdown-bold label still ends the previous field. Chatter produces nothing.
+2. A captured fix counts as verified only if its verification names something re-runnable: a command, a test id or a commit. This sets the existing provenance class and adds no new trust level.
+3. Brief fatigue: a block served in many briefs and never cited gets a penalty at brief-build time. The penalty is computed from the served-set ledger (RA.1), never stored as a score, and capped below the verified-block bonus.
+4. The brief drops a block that names another known project (from the project profiles) and never the current one.
+Ideas only; no outside code adopted.
 
-Measured on our own Postgres-backed workspace. Auto-capture takes its dedup set and its
-next `SIG-` number from `intelligence/SIGNALS.md`, but a Postgres store never writes
-that file. Since 2026-09-06 every run has reissued the day's `-001`: 1,834 writes for
-40 signals. On two days a second, different signal took the same id and overwrote the
-first. The fix is in progress separately, and nothing below lands before it.
+### Measurement
 
-### 1. Capture the report the agent already writes
+30 days on our own sessions against the current brief: the acceptance rate of item-1 proposals, the verified share of accepted fixes, and the share of served blocks later cited.
 
-Agents run under a structured dispatch already end with a status token and labelled
-fields (done, concerns, deviations, findings), and many also write `Verification:`,
-`Decision:` or `Commit:` lines. The session-end hook reads those labelled fields from
-the final report deterministically, with no model call, and proposes one signal per
-field that has content. A label written in markdown (`**Verification:**`) must still
-end the field before it; the reported failure was one field swallowing the rest of the
-message. Chatter ("Done!", "let me check") produces nothing. Proposals go through
-`propose_update` unchanged.
+### Acceptance gate
 
-### 2. "Verified" must name something checkable
+- Prerequisite: two capture runs on a Postgres-backed fixture issue distinct ids. Mutation control: reading the counter from the file again turns the test red.
+- Item 1: a report with four labelled fields yields four proposals (positive control). A report where `**Verification:**` follows `Concerns:` yields two separate fields; a parser that ignores bold labels turns this red. A chatter-only report yields none.
+- Item 2: 'tested, works' stays unverified, while a named test id is verified.
+- Item 3: a never-cited block served in 20 briefs ranks below an identical fresh block. A verified block at maximum fatigue still outranks an unverified one; removing the cap turns that test red. The store hash is unchanged after brief build.
+- Item 4: a block naming only another project is dropped, and one naming both projects is kept.
 
-A captured fix counts as verified only when its verification names something a reader
-can re-run: a command, a test id or a commit. Prose like "tested, works" stays
-unverified. The cited work measured that a keyword-only rule let mostly unverified prose
-through. This sets the existing provenance class and adds no new trust level.
+### Falsification
 
-### 3. A brief that tires of blocks it keeps serving
-
-The served-set ledger (RA.1) records what each brief served, but nothing uses that
-record against the brief itself. A block served in many briefs and never cited or used
-gets a fatigue penalty when the brief is built. The penalty is capped below the bonus a
-verified block gets, so fatigue alone never pushes out a verified block. It is computed
-from the ledger at brief time and never stored as a score, so RA.1's ruling against
-unreviewed score transitions holds.
-
-### 4. Drop blocks about another project
-
-The brief drops a block that names another known project and never the current one.
-Known projects come from the existing project profiles.
-
-### Falsification condition
-
-Each item runs for 30 days on our own sessions against the current brief. Item 1 is
-dropped if fewer than half of its proposals are accepted. Item 2 is dropped if the
-verified share of accepted fixes does not rise. Items 3 and 4 are dropped if the share
-of served blocks that are later cited does not rise.
+Item 1 is dropped if fewer than half of its proposals are accepted. Item 2 is dropped if the verified share of accepted fixes does not rise. Items 3 and 4 are dropped if the share of served blocks later cited does not rise.
 
 ### Status
 
-Proposed. Nothing built. Needs an architecture audit before implementation. Item 1 also
-needs the session-end hook installed on our own development machine: there, the main
-agent CLI's Stop hook only prints status, so none of its sessions reach capture.
-
+Proposed. Nothing built. The prerequisite lands first. Item 1 also needs the session-end hook installed where our own agent sessions run. An architecture audit verdict is required before implementation.
 
 ---
 
-## Byte-Level Distillation Research Track (2026-10-23)
+## Byte-level distillation research track (2026-10-23, Proposed)
 
-**Owner:** STARGA, Inc.  
-**Status:** Proposed; no implementation or performance claims.  
-**Research:** recent research on byte-level distillation.
+### Deliverable
 
-Recent research studies decoder-only byte versus token models and token-teacher-to-byte-student supervision via approximate Marginalize-It and exact End-of-Token (EOT). Raw bytes are not synonymous with byte-level BPE. Published scaling estimates do not constitute STARGA results.
+A research comparison of a token-based and a raw-byte student model on `mind-mem:4b`'s jobs: tool selection, schema-valid calls, governed recall, abstention and privacy compliance. A token teacher supplies byte-level supervision, through approximate marginalisation over token boundaries and an exact end-of-token probability. Training data is first regenerated against the live MCP tool definitions. Retrieval (BM25F and vector), governed writes, public APIs and determinism contracts are unchanged, and everything sits behind a feature flag. Raw bytes are not byte-level BPE. Ideas from recent research only; no outside code adopted, and published scaling estimates are not our results.
 
-### Project scope
+### Measurement
 
-First regenerate training data against the live MCP tool definitions, resolving known weight/tool-surface drift. Then compare token-based versus raw-byte student models for tool selection, schema validity, governed recall, hallucination, privacy compliance and cost. Preserve BM25F/vector retrieval and governed writes.
+With matched data, compute and capability for both students: tool-selection accuracy, schema-valid rate, governed-recall accuracy, hallucination rate, bits per byte, p50/p95 latency per output character, peak memory, serving cost, and run-to-run reproducibility.
 
-### Validation, dependencies and release gates
+### Acceptance gate
 
-- Verify full teacher-vocabulary byte-prefix probabilities against exhaustive small-vocabulary oracles, including EOT mass, UTF-8 multibyte strings, shared prefixes and token endings. Top-k truncation must not be called exact.
-- Compare token and byte baselines with matched data, compute, model capability and honest serving-cost accounting. Report bytes-per-byte, quality, p50/p95 latency per output character, peak memory and reproducibility.
-- Preserve existing public APIs, admission/governance gates and determinism contracts by default; use feature flags. Revert or defer when benefits are not established.
-- Dependency order: mind-inference reference -> mind-nerve benchmark -> MindLLM optional dispatch -> naestro/mind-mem pilots; mind-flow orchestrates experiments and mind/mind-runtime implement only proven optimizations.
+- Positive control: byte-prefix probabilities from the full teacher vocabulary match an exhaustive small-vocabulary oracle, including end-of-token mass, multibyte UTF-8, shared prefixes and token endings.
+- Mutation control: truncating the teacher vocabulary to top-k turns the exactness test red. A top-k result is never labelled exact.
+- The byte student is adopted only if it beats the token student on the held-out split without lowering any other gate.
 
-**Attribution:** STARGA, Inc. The research source is recorded privately, not cited here. No software-development co-authors are designated.
+### Falsification
 
+Dropped if the byte student does not beat the matched token student on tool selection and schema validity at equal or lower serving cost.
 
----
+### Status
 
-## Adaptive Speculative Decoding Research (2026-10-23)
-
-**Owner:** STARGA, Inc.  
-**Status:** Proposed, not shipped.  
-**Research reference:** recent research on a single speculative drafter that adapts to batch size and hardware.
-
-**License boundary:** the reference implementation is source-available, not a default permissive open-source implementation. Do not copy its source, tests, models, trained weights, unique implementation or assets without legal authorization. Independently implement generally described ideas after license and patent review; research citation is not a license.
-
-### Scope
-
-Opt-in acceleration for generative model only; retain retrieval, MCP, governance and tool validity.
-
-### Acceptance gates
-
-- Measure baseline ordinary and current speculative decoding, matched model, hardware, workload and sampling policy; concurrency 1, 8, 32, 64 when supported.
-- Track accepted tokens per verification, target-call cost, drafter overhead, throughput, TTFT, p50/p95 latency, peak memory and cost per token.
-- Verify output-distribution preservation for rejection/acceptance under temperature/top-k/top-p, including boundary cases and RNG reproducibility limitations.
-- Preserve governance, admission, evidence generation and normal-decoding fallback; feature-flag everything and do not promise numerical gains from the published results.
-- Treat byte-model distillation as a separate experiment; tokenizer alignment and proposal distributions must be verified before combining.
-
-### Addendum 2026-10-24: copy-heavy calls first, evidence preimages protected
-
-Field data, not reproduced by us: a recent community report on a 27B open-weight model on one 24 GB consumer GPU reached 4.6× decode speed on a task that quotes a long document (about 15 of every 16 drafted tokens accepted), but only 1.6× in ordinary chat. An independent replication on a mainstream engine found the best general arm was a 2-token multi-token-prediction head (+60%), and that 92–100% of speculative requests did not reproduce plain greedy output byte for byte.
-
-What that means here:
-
-- **Context-lookup drafting first.** Compression, relation extraction and graph ingest copy most of their output from the input, which is where lookup drafting does best. It needs no draft model and no change to `mind-mem:4b`. The `vllm` and `openai-compatible` extractor backends can already point at a server that offers n-gram lookup drafting; `OllamaCompressor` is Ollama-only today. Multi-token-prediction heads are a training-time option for a future model build; measure them against lookup on the same gate.
-- **Drafting can silently move evidence preimages.** `OllamaCompressor` requires `temperature=0` and a fixed seed because its output is an evidence-chain preimage. If drafting changes those bytes, the chain records a different hash for the same input with nothing flagging it. Drafting stays off on every path whose output is hashed until the gate below passes for that backend.
-- **Gate:** on a fixed corpus, compressor output is byte-identical with drafting on and off, per backend. Extraction runs at `temperature=0.1`, so it is held to the output-distribution check above instead. Report tok/s and accepted tokens per verify step separately for copy-heavy calls and for chat; a drafter slower than no drafting on either class stays off for that class.
-
-Status: proposed, not built. An independent architecture audit verdict is required before any build.
-
-**Software roadmap attribution:** STARGA, Inc. No co-author trailers.
-
+Proposed. Nothing built. Deferred until the in-flight `mind-mem:4b` retrain ships and passes its acceptance rule. An architecture audit verdict is required before implementation.
 
 ---
 
-## Verified Engineering Delivery Research (2026-10-23)
+## Adaptive speculative decoding (2026-10-23, Proposed)
 
-**Owner:** STARGA, Inc.  
-**Status:** Proposed; not shipped or independently benchmarked.  
-**Competitive reference:** a commercial verified-engineering-delivery product (provenance recorded privately, per the no-public-attribution rule) — learn from engineering workflow patterns; no copying of restricted assets.
+### Deliverable
 
-### Repository-specific work
+Opt-in decode acceleration for the generative calls only (compression, relation extraction, graph ingest, chat). It is feature-flagged with plain decoding as the fallback, and retrieval, MCP, governance and tool validity are unchanged. Order: (1) context-lookup (n-gram) drafting for copy-heavy calls, which needs no draft model and no model change, through the `vllm` and `openai-compatible` extractor backends and a lookup-capable server for the local compressor backend; (2) a single drafter that adapts to batch size and hardware; (3) multi-token-prediction heads as a training-time option for a future model build, measured against lookup on the same gate. Field data we have not reproduced says lookup drafting is strongest when the output quotes the input and weak in chat, and that most speculative requests did not reproduce plain greedy output byte for byte; hence the preimage gate below. The reference implementation of (2) is source-available, not permissive. Do not copy its source, tests, weights or assets; implement independently, and only after licence and patent review. Byte-model distillation is a separate experiment.
 
-Governed engineering decision memory with requirements history, source links, contradiction and staleness detection; no automatic rewriting of policies.
+### Measurement
 
-### Cross-project gates
+Against plain decoding and current speculative decoding, with matched model, hardware, workload and sampling, at concurrency 1, 8, 32 and 64 where supported: accepted tokens per verification, target-call cost, drafter overhead, throughput, time to first token, p50/p95 latency, peak memory and cost per token. Copy-heavy calls and chat are reported separately.
 
-- Canonical requirement and scope contract with permitted actions, named authority, expiry, budgets, impacted code and required tests.
-- Requirement -> symbols -> commit -> independently executed test evidence -> build artifact -> release decision; missing evidence fails closed. Implementer may not approve its own work.
-- Record signed evidence and offline replay verification where supported; never overclaim cryptographic guarantees or deployed status.
-- Evaluate prohibited-action prevention, missing-gate rejection, trace precision/recall, escaped defects, cost per accepted task and verification repeatability using held-out changes.
-- P0: authorization, independent CI and provenance. P1: cross-repo impact, bounded autonomous repair, cost routing and memory. P2: modernization parity testing and an enterprise control plane.
-- Ownership: Naestro OS mission UI/control; mind-flow DAG execution; mind-law authorization; mind-ci independent gates; mind-codegraph impact; mind-mem decisions; mind-predict calibration. Keep interfaces explicit and avoid duplicate engines.
+### Acceptance gate
 
-**Attribution:** STARGA, Inc. No additional software co-authors.
+- Compressor output (temperature 0, fixed seed) is an evidence-chain preimage, so it must be byte-identical with drafting on and off, per backend, on a fixed corpus. Drafting stays off on every path whose output is hashed until this passes for that backend.
+- Positive control: the plain-decoding run reproduces its own committed digest.
+- Mutation control: a drafter patched to accept one rejected token turns the byte-identity test red.
+- Extraction (temperature 0.1) passes an output-distribution check under temperature, top-k and top-p, including boundary cases.
+- A drafter slower than no drafting on either call class stays off for that class.
+
+### Falsification
+
+Dropped for a call class if no drafter beats plain decoding on that class at concurrency 1 and 8 while passing the gates above.
+
+### Status
+
+Proposed. Nothing built. An independent architecture audit verdict is required before any build.
+
+---
+
+## Governed engineering decision memory (2026-10-23, Proposed)
+
+### Deliverable
+
+Decision memory for engineering work: a requirement block, the decisions taken under it, and typed links from each decision to the code symbols, commit, independently executed test evidence and release decision that carry it out. Links are evidence objects, so a missing link is visible. Contradiction and staleness detection apply to decisions as to any block: a decision whose linked test was deleted, or whose symbol moved, is flagged stale. Writes go through `propose_update`. Nothing rewrites a policy or a decision automatically, and the implementer of a change cannot approve its own decision record. Ideas from recent engineering-delivery practice only; no outside code or assets.
+
+### Measurement
+
+On held-out changes from our own history: trace precision and recall (requirement -> commit -> test), the share of decisions flagged stale that were in fact stale, and missing-evidence rejections.
+
+### Acceptance gate
+
+- Positive control: a fixture requirement with one decision, one commit and one passing test resolves the full chain and is reported complete.
+- Mutation controls: deleting the test evidence makes the chain report 'missing evidence' and blocks a release-decision proposal. A decision approved by its own implementer is refused. Renaming the linked symbol flags the decision stale.
+
+### Falsification
+
+Dropped if trace recall on held-out changes is no better than a plain search over commit messages.
+
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
 
 ---
 
 ## Security evidence a reader can re-check: a repo scorecard and a published agent-security audit (2026-10-24, Proposed)
 
-MIND-Mem's security claims should rest on results anyone can open for this repository.
-Unsolicited "verified safe" badges circulate whose image is the same for every project
-and whose scan page reads A+ before anything is scanned. Rule for this README: a
-security badge links to a result for this repository, or it is not added.
+### Deliverable
 
-### 1. Public supply-chain scorecard
+Rule: a security badge links to a result for this repository, or it is not added.
+1. Public supply-chain scorecard: the OpenSSF Scorecard workflow runs on push to `main` and weekly, publishes results to the public Scorecard API, and uploads SARIF to code scanning. Actions are pinned by commit SHA, and the job gets only `security-events: write` and `id-token: write`. The README badge is added only after the first published run, and it links to the per-check result. Each check below 10 gets either a fix commit or a written reason in `docs/security/`. No check is skipped or worked around.
+2. A published agent-security audit: an open-source (MIT) multi-phase security-audit skill for coding agents, run in full-audit mode against a fixed `main` commit, with output outside the repository. Scope: the MCP tool surface; the governance gate; recall paths that hand stored text back to a model (indirect prompt injection through memory); tool arguments that reach paths, SQL or subprocesses; the encrypted backend's key handling; release and supply chain; resource exhaustion. Publish `docs/security/audits/<date>/` (the report, the full `findings.json` including rejected candidates, the audited commit and the exact invocation) only after every confirmed finding's fix has shipped.
 
-- Add the OpenSSF Scorecard workflow: on push to `main` and weekly, results published to
-  the public Scorecard API and uploaded as SARIF to code scanning. Actions pinned by
-  commit SHA; the job gets only `security-events: write` and `id-token: write`, read
-  for everything else.
-- No score exists today: the Scorecard API returns 404 for `star-ga/mind-mem`
-  (checked 2026-10-24).
-- The README badge is added only after the first published run, and it links to the
-  per-check result page. It shows the real score, whatever it is. No check is skipped
-  or worked around to raise the number.
-- Each check below 10 gets either a fix in its own commit (for example unpinned
-  actions, token permissions, branch protection, signed releases) or a written reason
-  it does not apply, kept in `docs/security/`.
+### Measurement
 
-### 2. A published agent-security audit
+Scorecard: the per-check score and the number of checks below 10 that have a fix or a written reason. Audit: candidates, confirmed, needs_validation and rejected, plus the confirmed findings that CodeQL, pip-audit or the red-team workflow already knew.
 
-- Run an open-source (MIT) multi-phase security-audit skill for coding agents in full
-  audit mode against a fixed `main` commit, with output outside the repository.
-  Hunting agents propose candidates and separate agents try to disprove them; every
-  record ends as `confirmed`, `needs_validation` or `rejected` and must pass the
-  skill's own schema and validators.
-- Scope: the MCP tool surface; the governance gate (`propose_update` → apply); recall
-  paths that hand stored block text back to a model (indirect prompt injection through
-  memory); tool arguments that reach paths, SQL or subprocesses; the encrypted backend's
-  key handling; release and supply chain (PyPI publish, CI workflows); and resource
-  exhaustion (recall, indexing, unbounded loops).
-- Every confirmed finding gets a fix and a regression test that fails before the fix.
-  Details of a confirmed finding are published only after its fix ships in a release.
-- Publish `docs/security/audits/<date>/`: the report, the full `findings.json`
-  including rejected candidates, the audited commit and the exact invocation. The
-  existing audit badge links to it.
+### Acceptance gate
 
-### Falsification condition
+- Positive control: the Scorecard API returns a result for `star-ga/mind-mem` (it returned 404 on 2026-10-24), and the badge URL resolves to it.
+- Mutation control: a CI link check goes red if the badge points at another repository's result.
+- Every confirmed finding has a fix commit and a regression test that fails on the parent commit and passes on the fix.
+- The published `findings.json` passes the skill's schema and validators. Mutation control: a record with no terminal verdict fails validation.
 
-Item 1 is done when a published Scorecard result exists, the badge links to it and
-every check below 10 has a fix commit or a written reason. Item 2 is done when the
-report is published, its `findings.json` passes the validators and every confirmed
-finding has a fix commit and test. If the audit finds nothing that CodeQL, pip-audit
-and the red-team workflow had not already found, it stays a one-off and is not added
-to release gating.
+### Falsification
+
+If the audit finds nothing that CodeQL, pip-audit and the red-team workflow had not already found, it stays a one-off and is not added to release gating.
 
 ### Status
 
-Proposed. Nothing built. Needs an architecture audit before implementation.
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
 
 ## A learned evidence harness for `mind-mem:4b`: revise the program, not the weights (2026-10-27, Proposed)
 
-Recent research trains a small proposer model to revise a frozen solver's *harness* (the program that builds the context for each model call and runs its tools and checks), rewarded by how the revised harness scores on questions the proposer never sees. Reported: on 21 task families excluded from training, a 4B proposer's single revisions rose from 0.32 to 0.62 mean score, ahead of the 35B model it was first trained to imitate (0.56; the larger model still wins when an oracle picks the best of eight proposals). A proposer trained on one multi-hop QA benchmark also improved harnesses on two it never saw. Both models stay frozen at test time. No code was released, so ideas only.
+### Deliverable
 
-### Why it fits here
+A proposer that revises the opt-in computed-evidence harness of `chat_with_memory` while the served `mind-mem:4b` stays frozen. The harness is `src/mind_mem/answer_facts.py`, on `main` since the 5.0.4 integration merge of 2026-10-27.
+- Phase 1, a prompted proposer with no training: each round it gets the current harness and its execution report on the development split, and returns one revision. At most 5 rounds. A revision is kept only if the development main gate improves and no other development suite drops. The final harness is chosen on a fresh development slice that produced no reward.
+- Phase 2, a trained proposer: supervised on the recorded revisions, then reinforcement learning rewarded by the development score. It is kept as a separate small model or adapter and never merged into the served weights.
+- Phase 3: treat the tools added since the published 4B was trained as unseen families. Test whether a harness revision that supplies the current MCP contract inventory (`train/source-corpus.md`) recovers dispatch without a retrain.
+Every kept revision is a content-addressed proposal. It needs human approval, its digest is recorded in each answer's receipt, and it can be rolled back to the previous harness. Ideas from recent research only; no code was released or adopted.
 
-- **We already revise this harness, one rule at a time.** The opt-in computed-evidence layer for `chat_with_memory` (`answer_facts`, on the 4B retrain branches, not yet on `main`) decides which deterministic facts the 4B answers from: event dates, elapsed time, gaps between named events, the options a choice question offers. Between 2026-10-06 and 2026-10-20 its rules were revised 13 times across two branches, each after reading the failures of the last run, and one revision was a revert after a rule refused 413 answerable training questions. That loop is the one a proposer learns to run.
-- **A harness revision keeps the replay promise; a weight update does not.** Same memory, same question and same harness digest give the same answer. A revision is a content-addressed diff that can be reviewed, recorded in the answer's receipt and reverted. The v2.1.0 weight-training loop stays, but adapting to a new workspace or question class goes through the harness first.
-- **This harness is already safe to revise automatically.** `answer_facts` is pure functions: no clock, no I/O, no logging. A proposed revision that adds any of those is rejected by a static check before it runs.
-- **A harness round is cheap.** It reruns the development suite on the served model. A weights round is a training run plus a rerun of every gate.
+### Measurement
 
-### Plan
+Per round: the development main gate and every other development suite. At acceptance only: the frozen held-out split as an aggregate, reported three ways (full, dev, held-out) on the official answer key.
 
-1. **Prompted proposer first, no training.** The served `mind-mem:4b` stays frozen. Each round, the proposer gets the current harness plus its execution report on the development split and returns one revision. At most 5 rounds. A revision is kept only if the development score improves, and the final harness is chosen on a fresh slice that produced no reward.
-2. **Trained proposer second.** Supervised training on the recorded revisions (the October rounds plus the phase-1 ledger: harness, report, edit, outcome), then reinforcement learning rewarded by the revised harness's development score. The proposer is a separate small model or adapter and is never merged into the served `mind-mem:4b` weights, so the served model's acceptance results are untouched.
-3. **Tool-surface drift as an unseen family.** The published 4B was trained against an older tool surface. Treat the tools added since as families it never saw, and test whether a harness revision that supplies the current [MCP contract inventory](train/source-corpus.md) recovers dispatch on them without a retrain. If it does, tool-surface changes stop forcing model retrains.
+### Acceptance gate
 
-### Contamination and governance
+- Phase 1: the proposed harness beats the hand-tuned harness on the development main gate and loses nothing on any other development suite or gate. Positive control: a deliberately broken revision scored in the same run scores lower, or the run is void.
+- Fairness: the proposer and its reward see only the development split. The held-out split and the sealed sets are never a reward and never a per-revision selection signal. They are scored once, on the final harness, at acceptance, under the unchanged 4B acceptance rule. If the final harness lowers the held-out aggregate or any other gate relative to the hand-tuned harness, it is rejected as a whole and the hand-tuned harness stays.
+- Every revision passes the benchmark-name, id and speaker-name grep and carries a unit test on non-benchmark data. Mutation control: a revision containing a benchmark speaker name is rejected before it runs.
+- Purity: a static check rejects any revision that adds a clock read, I/O or logging. Mutation control: a revision that calls the clock is rejected.
+- Phase 2: at a matched proposal budget, the trained proposer beats the prompted one on question classes held out from its training, and the untrained copy of the same base scores lower.
 
-- The proposer and its reward see only the development split. The true holdout, the memory-answering holdout and the sealed sets are never a reward or a selection signal. They are scored once, at acceptance, under the unchanged 4B acceptance rule (100% on every gate).
-- Every kept revision is a proposal: human approval, the harness digest recorded in each answer's receipt, and rollback to the previous harness.
+### Falsification
 
-### Gate and falsification
-
-- **Phase 1 gate:** the proposed harness beats the current hand-tuned harness on the development main gate and loses nothing on any other development suite. Positive control: a deliberately broken revision scored in the same run must score lower, or the run is void.
-- **Phase 2 gate:** at a matched proposal budget, the trained proposer beats the prompted one on question classes held out from its training, and the untrained copy of the same base scores lower.
-- **Falsification:** dropped if phase 1 cannot beat the hand-tuned harness within 5 rounds, or if its development gains do not appear on the true holdout at acceptance. Phase 3 is dropped if the frozen 4B does not recover dispatch on the newer tools.
+Dropped if phase 1 cannot beat the hand-tuned harness within 5 rounds, or if the final harness's development gains do not appear on the held-out split at acceptance. Phase 3 is dropped if the frozen 4B does not recover dispatch on the newer tools.
 
 ### Status
 
-Proposed, not built. Needs an architecture audit before implementation. Does not block or change the in-flight 4B retrain.
+Proposed. Nothing built. Does not block or change the in-flight 4B retrain. An architecture audit verdict is required before implementation.
 
 ## A plan-ready trust label on every recall hit (2026-10-27, Proposed)
 
-An agent planning an irreversible step (a push, a deploy, a sent message) needs to know whether a recalled
-fact can carry that step. Today the answer is spread across several signals: the block's `status`, its
-approval history (`propose_update` → `approve_apply`), the score from `validity_gate.py`, staleness inside the
-corpus from `lineage_staleness.py`, staleness against the outside world from `world_staleness.py`, and
-`block_maturity.py`. Each signal is useful, but a planner should not have to combine five of them itself.
+### Deliverable
 
-### Plan
+One field on every recall hit: `trust`, one of `verified`, `unverified`, `stale` or `missing`.
+- `verified`: approved through `approve_apply`, with no staleness flag from `lineage_staleness.py` or `world_staleness.py`.
+- `stale`: either module's stored flag is set.
+- `missing`: a cited block id that no longer resolves.
+- `unverified`: everything else.
+The validity score (`validity_gate.py`) and maturity (`block_maturity.py`) stay visible beside the label and never upgrade it. The label is a pure function of stored state: status, approval history, and the staleness flags as the staleness modules last recorded them. It uses no clock beyond stored timestamps, no I/O and no model call, so replayable memory still holds. Consumer: any agent planner that refuses an irreversible step (a push, a deploy, a sent message) unless every block it rests on is `verified`. Behind a flag, off by default.
 
-- Add one field to every recall hit: `trust`, with exactly one of `verified`, `unverified`, `stale` or
-  `missing` (for a cited block id that no longer resolves).
-- `verified` means human-approved through `approve_apply`, with no staleness flag from either staleness
-  module. `stale` means either module flags it. Everything else is `unverified`. The validity score and
-  maturity stay visible next to the label but never upgrade it.
-- The label is a pure function of stored state: no clock beyond the stored timestamps, no I/O, no model
-  call. Same memory and same question give the same label, so replayable memory still holds.
-- Consumer: NAESTRO's premise-checked plans, which refuse an irreversible step unless every block it rests
-  on is `verified`.
+### Measurement
 
-### Acceptance
+On our own workspace: the share of hits per label, and the planner refusals that a reviewer confirms were correct.
 
-- A table test covers every combination of the input signals, including the case where the label must
-  not be `verified` even though the validity score is high.
-- A block whose cited file is deleted moves from `verified` to `stale` on the next recall.
-- Turning the field off returns recall output byte-identical to today's.
+### Acceptance gate
+
+- A table test covers every combination of input signals, including a high validity score that must not yield `verified`.
+- A block whose cited file is deleted is `verified` before and `stale` after the next world-staleness scan, with no I/O on the recall path itself.
+- Mutation controls: dropping the world-staleness input turns the deleted-file row red, and letting the validity score upgrade the label turns the high-score row red.
+- With the flag off, recall output is byte-identical to today's on a fixed workspace.
+
+### Falsification
+
+Dropped if, on our own sessions, refusals based on the label are not confirmed correct more often than refusals based on `status` alone.
 
 ### Status
 
-Proposed, not built. Needs an architecture audit before implementation.
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
 
 ## Write-time memory for agents that write MIND: verified examples and compile-error fixes (2026-10-28, Proposed)
 
@@ -6675,51 +6512,32 @@ compiler's machine-readable diagnostics, to be confirmed against the pinned comp
 
 ## Independently reproduced release artifacts (2026-10-28, Proposed)
 
-> Basis: recent research and public practice on reproducible builds.
-> Ideas only, no code or dependency adopted. Provenance lives in governed memory, not here.
+### Deliverable
 
-### Why
+Release artifacts are already signed: the wheel and sdist carry Sigstore keyless signatures, PyPI uploads carry PEP 740 attestations, and a CycloneDX SBOM is bound to the wheel (`.github/workflows/release.yml`, `docs/supply-chain-security.md`). A signature shows who built the bytes, not that the bytes come from the tagged source. This item adds that check. It does not reopen the "SLSA build provenance level 3" decision under "Deliberately not pursued": it needs no isolated hosted builder, only a deterministic build and a second rebuilder.
+1. Pin the build: set `SOURCE_DATE_EPOCH` from the tag's commit time, keep the build backend version fixed by the existing `build-system` floor, write archive members in sorted order and strip build-host paths. Document the single command that builds the wheel and sdist from a tag.
+2. Rebuild on a second runner: a release job rebuilds each tag from source on an independent runner and compares the SHA-256 of the wheel and sdist with the published files.
+3. Gate the publish: the PyPI publish job waits for the rebuild job. A mismatch stops the publish and names the differing members.
+4. Publish a reproduction record under `docs/` for each release: both hashes, both builders' toolchain versions and the build command.
+Ideas from recent public practice on reproducible builds only; no code or dependency adopted.
 
-Release artifacts are already signed: the wheel and sdist carry Sigstore keyless signatures,
-PyPI uploads carry PEP 740 attestations, and a CycloneDX SBOM is bound to the wheel
-(`.github/workflows/release.yml`, `docs/supply-chain-security.md`). A signature shows who built
-the bytes. It does not show that the bytes come from the tagged source. Nothing in the build or
-release path rebuilds a tag and compares the result, and `SOURCE_DATE_EPOCH` is not set anywhere
-in that path, so a second build of the same tag would not be expected to match. Users who run
-mind-mem as governed memory for regulated work need that check.
+### Measurement
 
-This item does not reopen the "SLSA build provenance level 3" decision under
-"Deliberately not pursued". It needs no isolated hosted builder, only a deterministic build and
-a second rebuilder.
+Per release: the archive members that match and that differ between the two builders, with each builder's toolchain versions.
 
-### Plan
+### Acceptance gate
 
-1. **Pin the build.** Set `SOURCE_DATE_EPOCH` from the tag's commit time, keep the build backend
-   version fixed by the existing `build-system` floor, write archive members in sorted order and
-   strip build-host paths. Document the single command that builds the wheel and sdist from a tag.
-2. **Rebuild on a second runner.** A release job rebuilds each tag from source on an independent
-   runner and compares the SHA-256 of the wheel and sdist with the published files.
-3. **Gate the publish.** The PyPI publish job waits for the rebuild job. A mismatch stops the
-   publish and names the differing members.
-4. **Publish a receipt.** Each release gets a short reproduction record under `docs/`: both
-   hashes, both builders' toolchain versions and the build command.
+- Positive control: for the next two tagged releases, the second builder produces a byte-identical wheel and sdist.
+- Mutation control: deliberately altering one build input (an extra file or a changed timestamp) turns the rebuild gate red.
+- The publish job cannot run without a passing rebuild. A CI check over the release workflow fails if that dependency is removed.
 
-### Acceptance
+### Falsification
 
-- For the next two tagged releases, the second builder produces byte-identical wheel and sdist.
-- A control in which one build input is deliberately altered (an extra file or a changed
-  timestamp) turns the gate red.
-- The publish job cannot run without a passing rebuild.
-
-### Falsification condition
-
-If bit-identity is not reached within two release cycles after step 1, the receipt records which
-members differ, and the release notes stop claiming reproducibility for the artifacts that differ.
+If bit-identity is not reached within two release cycles after step 1, the reproduction record lists every differing member, and each gets its own fix item while the rebuild gate stays in place. The item is dropped only if a member cannot be made deterministic with the pinned toolchain. That member is then named in the record and in the release notes.
 
 ### Status
 
-Proposed. Nothing built. Needs an architecture audit of the release workflow's gate ordering
-before implementation.
+Proposed. Nothing built. An architecture audit verdict on the release workflow's gate ordering is required before implementation.
 
 ## Secret detectors for token shapes the registry misses, and a redact-rescan-drop write rule (2026-10-28, Proposed)
 
@@ -6780,15 +6598,13 @@ bytes, so the byte-identity criterion has to be checked on both paths.
 > Basis: recent prior art on guarded memory consolidation.
 > Ideas only, no code or dependency adopted. Provenance lives in governed memory, not here.
 
-### Why
+### Deliverable
 
 The destructive merge is deferred (the `# deferred:` marker in
 `src/mind_mem/consolidation_maturity_gate.py`). A weaker merge path is already live:
 `src/mind_mem/recompaction.py` proposes a rewrite with `supersedes=source_ids` and checks only a
 retention floor (25% of the largest source). It checks no rationale and no citation. A validator
 in front of every merged-block proposal closes that gap before the destructive step lands.
-
-### What to build
 
 A pure function `validate_merge(proposal, sources, workspace)` that accepts a merged block only
 when all of the following hold:
@@ -6804,98 +6620,89 @@ when all of the following hold:
 An accepted merge is emitted only as a `propose_update` proposal. Only `approve_apply` writes it.
 The validator sits behind a feature flag in `src/mind_mem/v4/flag_registry.py`, off by default.
 
-### Done criterion
+### Measurement
 
-- A table test with one case per rejection reason: no rationale, no citation, citation to a
-  deleted block, not shorter than the combined sources, and a source removed by the proposal. It
-  also has one accepted case, so the rejections are shown not to be vacuous.
-- An accepted merge changes no block until `approve_apply`. A test asserts the workspace hash is
-  unchanged after `propose_update`.
-- With the flag off, `plan_consolidation` and `dream_cycle` output is byte-identical to today's,
-  hashed over a fixed workspace.
-- Disabling any one of the four checks turns its table case red. Checked by mutation.
+On the merge proposals produced by recompaction and `plan_consolidation` over a fixed workspace: proposals accepted and rejected per reason, and accepted merges later rolled back.
 
-### Falsification condition
+### Acceptance gate
 
-Dropped if the validator accepts any case the table marks as rejected, or if flag-off output
-differs from today's.
+- Positive control: the accepted case passes, and a table test with one case per rejection reason: no rationale, no citation, citation to a deleted block, not shorter than the combined sources, and a source removed by the proposal. It also has one accepted case, so the rejections are shown not to be vacuous.
+- An accepted merge changes no block until `approve_apply`. A test asserts the workspace hash is unchanged after `propose_update`.
+- With the flag off, `plan_consolidation` and `dream_cycle` output is byte-identical to today's, hashed over a fixed workspace.
+- Mutation control: disabling any one of the four checks turns its table case red. Checked by mutation.
 
-### Open question
+### Falsification
 
-`recompaction.py` already passes `supersedes=source_ids`, while this item requires sources to stay
-in place. The two conflict. The audit has to decide whether recompaction's supersession is routed
-through this validator, or whether supersession is a separate, later step. Until that is decided,
-the validator gates only new merge proposals.
+Dropped if the validator accepts any case the table marks as rejected, or if flag-off output differs from today's.
 
 ### Status
 
-Proposed. Nothing built. Needs an architecture audit of the recompaction supersession conflict
-before implementation.
+Proposed. Nothing built. Open question for the audit: `recompaction.py` already passes `supersedes=source_ids`, while this item requires sources to stay in place. The audit decides whether recompaction's supersession is routed through this validator or is a separate, later step; until then the validator gates only new merge proposals. An architecture audit verdict is required before implementation.
 
 ## Custody of compacted agent context (2026-10-28, Proposed, P1)
 
-Cross-repo sibling: naestro **R152**, the consumer side (reversible, incremental compaction
-of an agent's own context). Recent work on long-running coding sessions keeps consumed
-conversation recoverable instead of discarding it. This item is only the storage half, and
-only for sessions that have no Naestro vault: the external-CLI lanes in R152. A Naestro
-session restores from its own vault and does not use this store, so no span is held twice.
-Terms: a **fold** is one compaction event; a **generation** is its record. The item adds no
-proxy and no compaction path of its own. Tool outputs already have custody in Group J
-(`mind_mem.tool_output`) and are referenced inside a span by handle, never copied; memory
-blocks are compacted by Group H recompaction. P1, because R152's restore path depends on it.
+### Deliverable
 
-- **Originals.** When an agent's context is compacted, the exact bytes of the replaced span
-  (messages, and tool results by their Group J handle) are kept under a reference keyed per
-  tenant (a keyed hash over the content hash), scoped to tenant, lane and session, written
-  by one writer per session, and never rewritten. Dedup never crosses a tenant.
-- **Each generation is a derived record:** source span IDs and hash, summary bytes and hash,
-  the model, prompt version and parameters that produced it, the budget decision that
-  triggered it, order, and tenant, lane and session. Replay reads the recorded summary; it
-  never asks a model to regenerate one.
-- **Restore** is a bounded read checked against the caller's current grant, not the grant at
-  write time. It returns the original span by reference after the same redaction a live tool
-  result gets. A denied restore and a missing span return the same error. Each restore is
-  logged with the grant that authorised it and whether its output reached a model.
-- **No supersession.** A generation never replaces or supersedes a canonical block and
-  carries no `supersedes` edge, so it does not wait on the open `recompaction.py`
-  supersession question above. Any later proposal to promote a summary into a block goes
-  through propose → review → `approve_apply` like any other write.
-- **Deletion propagates.** Deleting or redacting a span tombstones every generation derived
-  from it (`derived-from` edge). Restore, search and indexes never serve a tombstoned span
-  or a summary derived from one.
-- **Tests before build:** exact byte restore, partial failure, interrupted and restarted
-  sessions, concurrent writers, tenant isolation including a hash probe across tenants,
-  instructions planted in a summary, retention and secure deletion, and indexes never
-  serving a span that was deleted or redacted.
+The storage half of reversible context compaction, for agent sessions that have no vault of their own. A session that restores from its own vault does not use this store, so no span is held twice. A **fold** is one compaction event; a **generation** is its record. The item adds no proxy and no compaction path of its own. Tool outputs keep their Group J custody (`mind_mem.tool_output`) and appear in a span only by handle; memory blocks stay with Group H recompaction.
+- Originals: the exact bytes of each replaced span are kept under a per-tenant keyed hash over the content hash. They are scoped to tenant, lane and session, written by one writer per session, and never rewritten. Dedup never crosses a tenant.
+- Each generation records source span ids and hash, summary bytes and hash, the model, prompt version and parameters, the budget decision that triggered it, order, and tenant, lane and session. Replay reads the recorded summary and never regenerates it.
+- Restore is a bounded read checked against the caller's current grant, after the same redaction a live tool result gets. A denied restore and a missing span return the same error. Each restore is logged with its grant and whether its output reached a model.
+- A generation never supersedes a canonical block. Promoting a summary into a block goes through propose -> review -> `approve_apply`.
+- Deleting or redacting a span tombstones every generation derived from it (`derived-from` edge). Restore, search and indexes never serve a tombstoned span.
 
-### Stop condition
+### Measurement
 
-No lost span, no broadened permission, byte-identical replay of recorded summaries, a
-restore never returning bytes whose hash differs from the recorded span hash, and a measured
-task-quality or cost gain over today's stores. Otherwise drop the item and keep the existing
-stores.
+Task quality and cost on long sessions with and without restore, restore latency, and bytes stored per session.
 
-## Research continuity for frontier scientific computation (2026-10-26, Proposed)
+### Acceptance gate
 
-Status: proposed; not implemented or release-qualified.
+- Positive control: an exact-byte restore of a span whose hash equals the recorded span hash.
+- Partial failure, interrupted and restarted sessions, and concurrent writers lose no span.
+- A hash probe from another tenant learns nothing. Mutation control: replacing the keyed hash with a plain content hash turns that test red.
+- A restore under a revoked grant fails with the same error as a missing span. Mutation control: checking the write-time grant instead turns that test red.
+- Instructions planted in a summary are not executed on restore.
+- No index serves a deleted or redacted span. Mutation control: removing the tombstone check turns that test red.
+- Replay of recorded summaries is byte-identical.
 
-mind-mem's role in a cross-repository scientific-computation effort is research continuity:
-persistent derivation graphs, checkpoint indices, failed-hypothesis records, provenance
-deduplication, retrieval, and reproducible replay.
+### Falsification
 
-### Acceptance
+Dropped, keeping the existing stores, if there is no measured task-quality or cost gain over today's stores, or if any test above cannot be held.
 
-- Existing release blockers, compiler pins and repository ownership are preserved; active
-  delivery is not diverted.
-- Start with small, independently known published symbolic tasks, frozen before
-  implementation; scale difficulty only after verified success.
-- Results are checked by an independent verifier, not agent consensus, with false-result
-  mutants, interruption and restart, and bounded-resource tests.
-- Exact source, compiler and dependency identities, assumptions, derivations, immutable
-  artifacts and measured time, memory and cost are recorded.
-- Benchmarks use reproducible baselines; no unmeasured state-of-the-art claim.
-- Research on open mathematical conjectures stays paused and their scientific statuses are
-  unchanged.
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
+
+## Research continuity for long-running scientific computation (2026-10-26, Proposed)
+
+### Deliverable
+
+Memory for multi-session research work:
+- derivation-graph edges between result blocks (`derived-from`, `refutes`, `checkpoint-of`);
+- a failed-hypothesis record (hypothesis, test, evidence, verdict) that recall surfaces before the same hypothesis is retried;
+- checkpoint indices with exact source, compiler and dependency identities;
+- provenance deduplication;
+- replay of a derivation from its recorded inputs.
+Results enter through the governed path (see "Offline research receipts"). A result is marked verified only by an independent verifier, never by agent consensus.
+
+### Measurement
+
+On small published symbolic tasks frozen before implementation: retries of a recorded failed hypothesis with and without recall, the replay success rate, and time, memory and cost recorded per derivation.
+
+### Acceptance gate
+
+- Positive control: recall returns a recorded failed hypothesis when a new session proposes the same hypothesis.
+- Mutation controls: a false-result mutant marked verified without an independent check is refused. Changing one recorded dependency identity makes replay report a mismatch.
+- An interrupted and restarted derivation replays to the same result hash.
+- A derivation that exceeds its declared resource budget stops and is recorded as such.
+- Baselines are reproducible, and no unmeasured state-of-the-art claim is made.
+
+### Falsification
+
+Dropped if recall of failed hypotheses does not reduce repeated attempts on the frozen task set.
+
+### Status
+
+Proposed. Nothing built. Existing release blockers and compiler pins are unaffected. An architecture audit verdict is required before implementation.
 
 ## A plain-retrieval baseline beside every memory number, and a rule that gates defaults on it (2026-10-28, Proposed)
 
@@ -6909,20 +6716,16 @@ memory systems and against a BM25 baseline, and nowhere against dense retrieval 
 unprocessed text. A reader cannot tell what our extraction, tiers and fusion add over that control. This entry
 adds the control and a rule that uses it. It does not change any published number.
 
-### Deliverables (all `.mind`, tested with `mindc test`; the current Python harness is replaced, not extended)
+### Deliverable (a Python harness under `benchmarks/` in this release; the selection step is ported to `.mind` under the Pure-MIND Core Port once a MIND program can read a file under `mindc test` and `mindc run` (compiler request CRX-55), `mindc test` runs on the native backend (CRX-02) and the standard library has a deterministic stable sort (CRX-10), with byte-identical output on x86-64 and ARM64)
 
 1. **The baseline, fixed before any run.** Serialize each conversation with its timestamps, split it into
    256-token windows with a 32-token overlap, embed the windows with one pinned embedding model, take the 128
    windows nearest the question by cosine similarity, rerank them with one pinned cross-encoder and keep the
    top 15. The answerer sees the question and those windows only. Every parameter lives in one config file whose
    hash goes into the result row. Windowing, nearest-neighbour selection with a total tie-break order (score
-   descending, window index ascending), reranked ordering and the top-k cut are `.mind` code over Q16.16 or
-   integers, reusing the existing fusion and cross-encoder modules where they fit. Embedding and reranker scores
+   descending, window index ascending), reranked ordering and the top-k cut use integer arithmetic only, reusing the existing fusion and cross-encoder modules where they fit. Embedding and reranker scores
    are input artifacts pinned by hash, so the selection step is byte-identical on every substrate.
-2. **Scored on exactly what we report.** LoCoMo: the full 1986 questions and the non-adversarial subset, same
-   answerer, same judge, same repetitions as the canonical number. LongMemEval-S: the same 470 eligible
-   questions, `recall_any@5`, `recall_all@5` and MRR, plus answer accuracy wherever we report it. Same
-   context-token budget as the system it sits beside; a baseline given a larger budget does not count.
+2. **Scored on exactly what we report, under the fairness rules.** LoCoMo: all 1,986 questions with category 5 reported separately, and the same answerer, judge and repetitions as the canonical number. LongMemEval-S: the same 470 eligible questions, `recall_any@5`, `recall_all@5` and MRR, plus answer accuracy wherever we report it. Every number is given three ways (full set, dev, held-out per the frozen split), with the official answer key as the headline and any corrected-key number beside it. No benchmark label of any kind reaches either system at runtime. The baseline uses the same context-token budget as the system it sits beside; a baseline given a larger budget does not count.
 3. **Published next to every memory number.** Each table in `README.md`, `docs/benchmarks.md` and each scorecard
    that lists a mind-mem result carries a Raw-RAG row from the same run, with its config hash. Latency and tokens
    per question are reported next to accuracy.
@@ -6931,7 +6734,7 @@ adds the control and a rule that uses it. It does not change any published numbe
    Utilization is accuracy among those covered questions. Two oracle rows sit beside them: gold evidence only,
    and the full history where it fits. These separate "did not find it" from "found it, answered wrong".
 5. **Default-gate rule.** No new memory layer, model or retrieval mode becomes a default unless it beats the
-   baseline on the same questions, answerer, judge and budget as the run that justifies the default.
+    baseline on the held-out split, on the same questions, answerer, judge and budget as the run that justifies the default.
    - Decision rule: paired per question. Count questions the candidate answers correctly and the baseline does
      not (b) and the reverse (c). The candidate beats the baseline only if the one-sided exact binomial
      probability of at least b successes among b + c discordant pairs at p = 1/2 is below 0.05, computed in
@@ -6942,7 +6745,11 @@ adds the control and a rule that uses it. It does not change any published numbe
      a margin declared before the run. Governance properties are not scored by these benchmarks.
    - Failing the rule leaves the feature available and off by default, with the measurement recorded.
 
-### Acceptance
+### Measurement
+
+Per benchmark and configuration: accuracy, `recall_any@5`, `recall_all@5`, MRR, coverage and utilization, and latency and tokens per question, each reported three ways (full, dev, held-out).
+
+### Acceptance gate
 
 - Unit tests cover window boundaries (first, last, shorter-than-window input, overlap), tie-break order,
   top-k selection and a fixed fixture whose selected window ids match a committed golden table.
@@ -6951,44 +6758,41 @@ adds the control and a rule that uses it. It does not change any published numbe
   the tie-break to window index descending; swap b and c in the decision rule.
 - Positive control for the gate: a candidate that is the baseline with its context cut to a third must fail the
   rule on a fixture; the baseline compared with itself must report no win.
-- A MIND check over the benchmark tables fails when a table lists a mind-mem result with no Raw-RAG row from
+- A test in `tests/` over the benchmark tables fails when a table lists a mind-mem result with no Raw-RAG row from
   the same run.
 
-### Falsification condition
+### Falsification
 
-If the baseline beats the current default on the full LoCoMo set or the LongMemEval-S eligible set, the result
-is published as measured, the headline claims on those benchmarks are narrowed to say so, and the default
-changes only through the rule above. The product claim then rests on the governed write path and the audit
-properties, not on retrieval score.
+If the baseline beats the current default on the full LoCoMo set or the LongMemEval-S eligible set, the result is published as measured beside our number. A retrieval fix item is opened against the coverage or utilization gap the measurement names, and the default changes only through the rule above. The claim is not edited down; the code is raised until the default beats the baseline on the held-out split.
 
 ### Status
 
-Proposed, not built. Extends the standing LoCoMo and LongMemEval evals and the continuous benchmark
-regression item; replaces the Python harness for the baseline run only. Its consumer on the NAESTRO side is the
-roadmap entry R154. Needs an architecture audit before implementation.
+Proposed. Nothing built. Extends the standing LoCoMo and LongMemEval evals and the continuous benchmark regression item. The Python harness lands first. The `.mind` port of the selection step is ordered after compiler requests CRX-55, CRX-02 and CRX-10 (above). An architecture audit verdict is required before implementation.
 
 ## Stage-by-stage trace parity for the pure-MIND port (2026-10-28, Proposed)
 
-The pure-MIND core port is accepted when its recall results equal the reference path's results. A
-final-results comparison says the two disagree; it does not say where. Add a trace mode: for a
-fixed query set, each recall stage (query normalization, candidate retrieval, score fusion,
-rerank, admission filter) writes one hash of its ordered output, and a `trace-diff` command
-compares the reference trace with the MIND trace and prints the first stage that differs, with the
-first differing item.
+### Deliverable
 
-- **Why it fits.** The MIND port claims bit-identical results across platforms; a per-stage hash is
-  the cheapest way to prove it across machines (a handful of hashes per query, not result sets) and
-  the fastest way to localize a disagreement to one stage during the port.
-- **Admission filter stays in the trace.** The trace includes the stage that withholds quarantined
-  or pending content, so a stage that leaks an item the reference withholds is the reported
-  difference, not a silent one.
-- **Deliverable:** `recall --trace` on both paths writing a stage-hash file; `trace-diff` over two
-  files; a CI job running the fixed query set on x86 and ARM and failing on the first difference.
-- **Gate:** a deliberately perturbed fusion weight in the MIND path is reported as a fusion-stage
-  difference and nothing earlier; an unperturbed port produces an empty diff; positive control:
-  the final result list also differs. A run in which either path crashed reports "unverified",
-  never an empty diff.
-- **Status:** Proposed. An independent architecture audit verdict required before implementation.
+`recall --trace` on the reference (Python) path and on the MIND path writes one hash per recall stage of that stage's ordered output (query normalisation, candidate retrieval, score fusion, rerank, admission filter) for a fixed query set. `trace-diff` compares two trace files and prints the first stage that differs and its first differing item. A CI job runs the set on x86-64 and ARM64 and fails on the first difference. The admission filter is a traced stage, so a MIND stage that leaks an item the reference withholds is the reported difference.
+
+### Measurement
+
+Per port increment and architecture: stages compared, the first differing stage, and the number of queries compared.
+
+### Acceptance gate
+
+- Positive control: an unperturbed port produces an empty diff, and the final result lists match.
+- Mutation control: a perturbed fusion weight in the MIND path is reported as a fusion-stage difference and nothing earlier, and the final result list also differs.
+- Mutation control: removing the admission call from the MIND path is reported at the admission stage.
+- A run in which either path crashed, or that compared zero queries, reports 'unverified', never an empty diff.
+
+### Falsification
+
+Dropped if per-stage hashes cannot be made deterministic on the reference path itself across x86-64 and ARM64.
+
+### Status
+
+Proposed. Nothing built. The Python half can land first. The MIND half is ordered after the compiler can read a file from a MIND program under `mindc test` and `mindc run` (compiler request CRX-55) and can run tests on the native backend (CRX-02). An independent architecture audit verdict is required before implementation.
 
 ## Session lineage: forks, cuts and deleted parents as governed records, and scoped search over captured sessions (2026-10-28, Proposed)
 
@@ -6996,12 +6800,10 @@ Recent agent tools let a user fork a session at any message, fork it into a new 
 as a new session or cut it short, and then search past sessions locally. Ideas only; no code adopted,
 and the source is not named in this public file. Already owned and not repeated here: the event shape
 and per-client readers ("Transcript capture beyond one agent CLI"), the cross-client search index
-(Naestro R136.2) and lifecycle deaths in the evidence chain (RA.3). This item adds the lineage between
-sessions and the rules every search over them must obey. Cross-repo sibling: Naestro R155.3, which owns
-the worktree side of a fork.
+(owned outside this repository) and lifecycle deaths in the evidence chain (RA.3). This item adds the lineage between
+sessions and the rules every search over them must obey. The worktree side of a fork is owned outside this repository.
 
-Every deliverable is a `.mind` module with `mindc test` cases, deterministic and byte-identical on
-x86-64 and ARM64.
+Deliverables land in this release as Python modules, deterministic and byte-identical on x86-64 and ARM64. The `.mind` port follows under the Pure-MIND Core Port with stage-trace parity.
 
 ### 1. Lineage edges between sessions
 
@@ -7037,14 +6839,12 @@ x86-64 and ARM64.
 - Every hit passes the shared admission filter (`admit_corpus`), so quarantined, pending and tombstoned
   content cannot be returned.
 - Results are ordered newest first, then by session id, then by event index. Any index may produce the
-  candidates, but the MIND matcher is the final filter and order, so the same store and query give the
+  candidates, but one deterministic matcher is the final filter and order, so the same store and query give the
   same bytes on every machine.
 
 ### Deliverable
 
-`session_lineage.mind` (edges, prefix hashes, tombstone verification) and `session_search.mind` (query
-parser, scope split, filters, admission, order), with MIND tests and a CI job that runs the fixture on
-x86-64 and ARM64.
+`src/mind_mem/session_lineage.py` (edges, prefix hashes, tombstone verification) and `src/mind_mem/session_search.py` (query parser, scope split, filters, admission, order), with tests and a CI job that runs the fixture on x86-64 and ARM64. The `.mind` modules (`session_lineage.mind`, `session_search.mind`) follow after compiler requests CRX-55 (a MIND program reads a file) and CRX-02 (`mindc test --backend native`), and must match the Python trace stage by stage.
 
 ### Measurement
 
@@ -7070,32 +6870,57 @@ Dropped if the 30-question set is answered no better than plain recall over bloc
 
 ### Status
 
-Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. An
-architecture audit verdict is required before implementation.
+Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. The `.mind` port is ordered after CRX-55 and CRX-02. An architecture audit verdict is required before implementation.
 
-## Offline retrieval-weight calibration
+## Offline retrieval-weight calibration (2026-10-31, Proposed)
 
 ### Deliverable
 
-An optional, offline procedure that chooses retrieval weights from a private holdout corpus. It does not change governed memory writes and it does not learn from live traffic.
+An optional, offline procedure that chooses retrieval weights from a private holdout corpus of privacy-safe, non-benchmark queries. It does not change governed memory writes and does not learn from live traffic. Each run writes a parameter receipt: corpus hash, search method, seed and the chosen weights.
 
 ### Measurement
 
-A frozen holdout of privacy-safe queries, with recall, precision and latency reported by stratum. The first measurement is a grid, random or coordinate search. A smoother solver is measured only against that baseline.
+Recall, precision and latency by stratum on the frozen calibration holdout. The first measurement uses a grid, random or coordinate search; a smoother solver is measured only against that baseline.
 
 ### Acceptance gate
 
-- The calibration corpus is not data from any benchmark: no benchmark split, no benchmark ids, no speaker names.
-- Benchmarks are measured only after calibration, on their official splits, with the official judge.
-- Any weight change that improves one benchmark while lowering another gate is rejected.
-- The search baseline (grid, random or coordinate) runs first.
-- A smooth solver is adopted only if it beats that baseline on the held-out objective.
-- Each run records a parameter receipt.
-- A mutation control: perturb one weight, and the receipt check goes red.
+- A grep gate over the calibration corpus finds no benchmark data: no benchmark split, ids, speaker names or phrasing templates. Mutation control: planting one benchmark speaker name turns it red.
+- Positive control: on a synthetic corpus with planted optimal weights, the search baseline recovers them within its grid step.
+- Benchmarks are measured only after calibration, on their official splits with the official judge, and reported three ways (full, dev, held-out).
+- A weight change that lowers the held-out score or any other gate is rejected, even if it raises one benchmark.
+- A smooth solver is adopted only if it beats the search baseline on the held-out calibration objective.
+- Mutation control: perturbing one weight after a run turns the receipt check red.
 
 ### Falsification
 
-Dropped if the calibrated weights do not beat the shipped weights on the held-out objective, or if a weight change that helps one benchmark lowers another gate. The smooth solver alone is dropped if it does not beat the search baseline.
+Dropped if the calibrated weights do not beat the shipped weights on the held-out calibration objective, or if a weight change that helps one benchmark lowers another gate. The smooth solver alone is dropped if it does not beat the search baseline.
+
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
+
+## Offline research receipts (2026-10-31, Proposed)
+
+### Deliverable
+
+An opt-in store for reviewed experiment receipts from an offline research service. Each receipt is a block written only through `propose_update` -> review -> `approve_apply`. It carries its source revision and its verdict (verified, speculative, retracted). A retraction links to the receipt it retracts. Speculative scores never enter approved memory. The memory product stays the governed store of record.
+
+### Measurement
+
+A fixed fixture of four receipts: a verified result, a speculative lead, a retraction of an earlier verified result, and a conflicting pair. For each, report whether it is stored, held pending or refused, and whether any approved block changed.
+
+### Acceptance gate
+
+- Positive control: the verified receipt is stored through the approve path, and recall returns it with its source revision.
+- The speculative lead stays pending and default recall never returns it. Mutation control: removing the speculative/approved separation turns this test red.
+- A retraction writes a new receipt that supersedes the earlier one, and the earlier one stays readable as history. Mutation control: an in-place overwrite turns this test red.
+- `propose_update` reports the conflicting pair as a contradiction.
+- Perturbing the recorded source revision of an accepted receipt turns the receipt check red.
+- Research scores are never written as benchmark results.
+
+### Falsification
+
+Dropped if an external score can change approved memory without the review path, or if the store cannot represent a retraction.
 
 ### Status
 
