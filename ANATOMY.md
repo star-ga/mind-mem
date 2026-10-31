@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1783 | **Est. tokens:** ~5,227,574
-**Generated:** 2026-10-31 11:34 UTC
+**Files:** 1783 | **Est. tokens:** ~5,227,589
+**Generated:** 2026-10-31 14:34 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 38 | ~52,353 |
+| `./` | 38 | ~52,362 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
@@ -80,7 +80,7 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,620 |
+| `src/mind_mem/` | 257 | ~1,147,592 |
 | `src/mind_mem/api/` | 5 | ~29,070 |
 | `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -95,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 807 | ~2,365,717 |
+| `tests/` | 807 | ~2,365,751 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -134,7 +134,7 @@
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `EVIDENCE.md` (~2303 tok, huge) — Evidence Matrix
 - `generate_mind7b_training.py` (~5567 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
-- `.gitattributes` (~243 tok, medium) — # Auto-detect text files and normalize line endings
+- `.gitattributes` (~252 tok, medium) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~494 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
@@ -784,7 +784,7 @@
 - `alert_urls.py` (~1873 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `anchoring.py` (~4266 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `answer_facts.py` (~3637 tok, huge) — Deterministic facts computed from the evidence before the answerer sees it.
-- `answer_quality.py` (~3083 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
+- `answer_quality.py` (~3055 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
 ### `src/mind_mem/api/`
 
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
@@ -1442,7 +1442,7 @@
 - `test_consolidation_maturity_gate.py` (~3750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_consolidation_namespace_acl.py` (~1860 tok, huge) — Consolidation previews must use the caller's canonical admitted corpus."""
 - `test_consolidation_supersede_window.py` (~773 tok, large) — plan_consolidation scans a bounded window of blocks (``ORDER BY id LIMIT``).
-- `test_constants.py` (~1187 tok, large) — Tests for recall constants module."""
+- `test_constants.py` (~1221 tok, large) — Tests for recall constants module."""
 - `test_content_lifecycle.py` (~3227 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_content_source_provenance.py` (~5229 tok, huge) — Tests for content-provenance tagging (roadmap T-001).
 - `test_context_core.py` (~3175 tok, huge) — # Copyright 2026 STARGA, Inc.

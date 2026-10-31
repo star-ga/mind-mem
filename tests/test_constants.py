@@ -139,5 +139,7 @@ class TestGenericMechanismsOnNonBenchmarkData:
         assert "time" in _VERIFY_PATTERNS
         assert "number" in _VERIFY_PATTERNS
         assert "yes_no" in _VERIFY_PATTERNS
-        assert _VERIFY_PATTERNS["date"].search("January 5, 2024")
+        assert _VERIFY_PATTERNS["date"].search("5 January 2024")
+        assert _VERIFY_PATTERNS["date"].search("2024-01-05")
+        assert _VERIFY_PATTERNS["date"].search("not a date at all") is None
         assert _VERIFY_PATTERNS["yes_no"].search("No, never mentioned it")
