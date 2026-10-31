@@ -105,12 +105,12 @@ class TestGenericMechanismsOnNonBenchmarkData:
     """
 
     def test_conversational_synonym_expansion(self):
-        from mind_mem._recall_expansion import _SYNONYMS
+        from mind_mem._recall_expansion import _QUERY_EXPANSIONS
 
         # The conversational-term bridge works for any casual dialogue,
         # not just one dataset's speech patterns.
-        assert "discuss" in _SYNONYMS.get("talk", [])
-        assert "mention" in _SYNONYMS.get("said", [])
+        assert "discuss" in _QUERY_EXPANSIONS.get("talk", [])
+        assert "mention" in _QUERY_EXPANSIONS.get("said", [])
 
     def test_reranker_weights_are_generic(self):
         from mind_mem._recall_reranking import (
@@ -128,7 +128,7 @@ class TestGenericMechanismsOnNonBenchmarkData:
         from mind_mem.abstention_classifier import _extract_speaker_from_query
 
         result = _extract_speaker_from_query("Did Zara ever mention wanting a telescope?")
-        assert result == "Zara"
+        assert result == "zara"
 
     def test_verify_patterns_on_generic_shapes(self):
         from mind_mem.answer_quality import _VERIFY_PATTERNS

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1783 | **Est. tokens:** ~5,227,660
-**Generated:** 2026-10-31 09:49 UTC
+**Files:** 1783 | **Est. tokens:** ~5,227,696
+**Generated:** 2026-10-31 10:00 UTC
 
 ## Token Budget Guide
 
@@ -80,7 +80,7 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,618 |
+| `src/mind_mem/` | 257 | ~1,147,648 |
 | `src/mind_mem/api/` | 5 | ~29,070 |
 | `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -95,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 807 | ~2,365,823 |
+| `tests/` | 807 | ~2,365,829 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -784,7 +784,7 @@
 - `alert_urls.py` (~1873 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `anchoring.py` (~4266 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `answer_facts.py` (~3637 tok, huge) — Deterministic facts computed from the evidence before the answerer sees it.
-- `answer_quality.py` (~3055 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
+- `answer_quality.py` (~3085 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
 ### `src/mind_mem/api/`
 
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
@@ -1442,7 +1442,7 @@
 - `test_consolidation_maturity_gate.py` (~3750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_consolidation_namespace_acl.py` (~1860 tok, huge) — Consolidation previews must use the caller's canonical admitted corpus."""
 - `test_consolidation_supersede_window.py` (~773 tok, large) — plan_consolidation scans a bounded window of blocks (``ORDER BY id LIMIT``).
-- `test_constants.py` (~1181 tok, large) — Tests for recall constants module."""
+- `test_constants.py` (~1187 tok, large) — Tests for recall constants module."""
 - `test_content_lifecycle.py` (~3227 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_content_source_provenance.py` (~5229 tok, huge) — Tests for content-provenance tagging (roadmap T-001).
 - `test_context_core.py` (~3175 tok, huge) — # Copyright 2026 STARGA, Inc.

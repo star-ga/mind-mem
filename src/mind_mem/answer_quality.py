@@ -42,7 +42,11 @@ _log = get_logger("answer_quality")
 _VERIFY_PATTERNS = {
     # Known gold-answer shapes the verifier uses to spot answers that
     # clearly miss the expected pattern.
-    "date": re.compile(r"\b\d{1,2}\s+\w+,?\s+\d{4}\b|\b\d{4}-\d{2}-\d{2}\b"),
+    "date": re.compile(
+        r"\b\d{1,2}\s+\w+,?\s+\d{4}\b"   # day month year
+        r"|\b\w+\s+\d{1,2},?\s+\d{4}\b"   # month day, year
+        r"|\b\d{4}-\d{2}-\d{2}\b"          # ISO
+    ),
     "time": re.compile(r"\b\d{1,2}:\d{2}\s*(?:am|pm|AM|PM)?\b"),
     "number": re.compile(r"\b\d+(?:\.\d+)?\b"),
     "proper_noun": re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b"),
