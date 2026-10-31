@@ -1,3 +1,29 @@
+## Offline research receipts
+
+### Deliverable
+
+An opt-in store for reviewed experiment receipts from the offline research service. The memory product remains the governed store of record. Speculative scores are not promoted into approved memory.
+
+### Measurement
+
+A fixed set of receipts covering a verified result, a speculative lead, a retracted source, and a conflicting pair. Report whether each is stored, held, or refused, and whether a governed write changed.
+
+### Acceptance gate
+
+- Receipts are stored only through the existing propose, review, and approve path.
+- A speculative lead stays out of approved memory. Removing that separation turns the test red.
+- Revocation and retraction update the receipt without a silent overwrite.
+- Research scores are not benchmark results and are not written as benchmark claims.
+- Each accepted receipt records its source revision. Perturbing that revision turns the receipt check red.
+
+### Falsification
+
+Dropped if an external score can change approved memory without the review path, or if the store cannot represent a retraction.
+
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
+
 # MIND-Mem Roadmap
 
 > **Reality check (2026-05-20 honesty pass):** the v3.2.0+ sections

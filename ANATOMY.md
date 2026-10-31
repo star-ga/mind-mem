@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1782 | **Est. tokens:** ~5,224,755
-**Generated:** 2026-10-31 00:10 UTC
+**Files:** 1783 | **Est. tokens:** ~5,225,032
+**Generated:** 2026-10-31 11:34 UTC
 
 ## Token Budget Guide
 
@@ -36,7 +36,7 @@
 | `deploy/docker/` | 1 | ~824 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 97 | ~242,234 |
+| `docs/` | 98 | ~242,511 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -496,6 +496,7 @@
 - `quickstart.md` (~644 tok, large) — MIND-Mem Quickstart
 - `recompaction.md` (~3132 tok, huge) — Iterative Re-Compression Engine (Recompaction)
 - `red-team-audit.md` (~1164 tok, large) — Behavioral Audit — Operator Runbook
+- `RESEARCH_ECOSYSTEM_OFFLINE_RECEIPTS_20261029.md` (~277 tok, medium) — Governed memory consumption of offline research receipts
 - `rest-api.md` (~1713 tok, huge) — MIND-Mem REST API
 - `review-architecture-v3.2.0.md` (~1919 tok, huge) — Architecture Review — MIND-Mem v3.2.0 (Release Candidate)
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
