@@ -7069,7 +7069,7 @@ A frozen holdout of privacy-safe queries, with recall, precision and latency rep
 
 ### Falsification
 
-Dropped if the smoother solver does not beat the search baseline on the held-out objective, or if a weight change that helps one benchmark lowers another gate.
+Dropped if the calibrated weights do not beat the shipped weights on the held-out objective, or if a weight change that helps one benchmark lowers another gate. The smooth solver alone is dropped if it does not beat the search baseline.
 
 ### Status
 
