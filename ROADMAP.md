@@ -7047,10 +7047,30 @@ Dropped if the 30-question set is answered no better than plain recall over bloc
 Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. An
 architecture audit verdict is required before implementation.
 
-<!-- NUMERIC-REVIEW-REVISION-20261029:BEGIN -->
-## Offline retrieval-weight calibration (optional)
-- [ ] Freeze a holdout corpus with privacy-safe representative queries and stratified recall/precision/latency metrics; evaluate grid/random/coordinate search first because ranking objectives can be discontinuous.
-- [ ] Adopt a smooth solver only if a differentiable surrogate correlates with the real held-out objective and wins against the simpler baseline.
-- [ ] Require pinned parameter receipts, independent recall oracle, perturbation controls and no unsanctioned online learning or changes to governed memory writes.
-**Bounds:** optional score/norm diagnostics with triangle/Cauchy–Schwarz only; no automatic statistical/PDE theorem claims.
-<!-- NUMERIC-REVIEW-REVISION-20261029:END -->
+## Offline retrieval-weight calibration
+
+### Deliverable
+
+An optional, offline procedure that chooses retrieval weights from a private holdout corpus. It does not change governed memory writes and it does not learn from live traffic.
+
+### Measurement
+
+A frozen holdout of privacy-safe queries, with recall, precision and latency reported by stratum. The first measurement is a grid, random or coordinate search. A smoother solver is measured only against that baseline.
+
+### Acceptance gate
+
+- The calibration corpus is not data from any benchmark: no benchmark split, no benchmark ids, no speaker names.
+- Benchmarks are measured only after calibration, on their official splits, with the official judge.
+- Any weight change that improves one benchmark while lowering another gate is rejected.
+- The search baseline (grid, random or coordinate) runs first.
+- A smooth solver is adopted only if it beats that baseline on the held-out objective.
+- Each run records a parameter receipt.
+- A mutation control: perturb one weight, and the receipt check goes red.
+
+### Falsification
+
+Dropped if the smoother solver does not beat the search baseline on the held-out objective, or if a weight change that helps one benchmark lowers another gate.
+
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
