@@ -7046,3 +7046,31 @@ Dropped if the 30-question set is answered no better than plain recall over bloc
 
 Proposed. Nothing built. Depends on "Transcript capture beyond one agent CLI" for the event store. An
 architecture audit verdict is required before implementation.
+
+## Offline retrieval-weight calibration
+
+### Deliverable
+
+An optional, offline procedure that chooses retrieval weights from a private holdout corpus. It does not change governed memory writes and it does not learn from live traffic.
+
+### Measurement
+
+A frozen holdout of privacy-safe queries, with recall, precision and latency reported by stratum. The first measurement is a grid, random or coordinate search. A smoother solver is measured only against that baseline.
+
+### Acceptance gate
+
+- The calibration corpus is not data from any benchmark: no benchmark split, no benchmark ids, no speaker names.
+- Benchmarks are measured only after calibration, on their official splits, with the official judge.
+- Any weight change that improves one benchmark while lowering another gate is rejected.
+- The search baseline (grid, random or coordinate) runs first.
+- A smooth solver is adopted only if it beats that baseline on the held-out objective.
+- Each run records a parameter receipt.
+- A mutation control: perturb one weight, and the receipt check goes red.
+
+### Falsification
+
+Dropped if the calibrated weights do not beat the shipped weights on the held-out objective, or if a weight change that helps one benchmark lowers another gate. The smooth solver alone is dropped if it does not beat the search baseline.
+
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
