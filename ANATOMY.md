@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1782 | **Est. tokens:** ~5,224,755
-**Generated:** 2026-10-31 00:10 UTC
+**Files:** 1783 | **Est. tokens:** ~5,227,660
+**Generated:** 2026-10-31 09:49 UTC
 
 ## Token Budget Guide
 
@@ -27,7 +27,7 @@
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
 | `benchmarks/` | 73 | ~197,380 |
-| `benchmarks/public_release/` | 9 | ~24,753 |
+| `benchmarks/public_release/` | 9 | ~24,766 |
 | `benchmarks/repro/` | 1 | ~689 |
 | `benchmarks/repro/niah/` | 4 | ~2,557 |
 | `benchmarks/repro/niah-smoke/` | 5 | ~4,684 |
@@ -36,7 +36,7 @@
 | `deploy/docker/` | 1 | ~824 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 97 | ~242,234 |
+| `docs/` | 97 | ~242,270 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -56,7 +56,7 @@
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
 | `.github/scripts/` | 1 | ~985 |
-| `.github/workflows/` | 13 | ~23,673 |
+| `.github/workflows/` | 13 | ~23,922 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -80,7 +80,7 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,411 |
+| `src/mind_mem/` | 257 | ~1,147,618 |
 | `src/mind_mem/api/` | 5 | ~29,070 |
 | `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -95,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 806 | ~2,363,423 |
+| `tests/` | 807 | ~2,365,823 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -240,7 +240,7 @@
 - `longmemeval.LICENSE` (~266 tok, medium) — MIT License
 - `manifest.json` (~716 tok, large) — Keys: schema_version, status, answer_configuration, source_revision, source_canonical_prompts_sha256
 - `protocol.json` (~627 tok, large) — Keys: schema_version, status, seed, max_input_tokens, max_new_tokens
-- `README.md` (~1267 tok, large) — Reproducible historical benchmark kit
+- `README.md` (~1280 tok, large) — Reproducible historical benchmark kit
 ### `benchmarks/`
 
 - `ranking_identity.py` (~2910 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -316,7 +316,7 @@
 - `2026-09-05-recall-reentrant-fanout-dos.md` (~834 tok, large) — Advisory (DRAFT — not published): unbounded thread fan-out in auto-enabled recall
 ### `docs/`
 
-- `agent-comm.md` (~1251 tok, large) — Agent-to-agent messaging (`mm send` / `mm inbox`)
+- `agent-comm.md` (~1275 tok, large) — Agent-to-agent messaging (`mm send` / `mm inbox`)
 - `AGENTIC-MEMORY-SOTA.md` (~1675 tok, huge) — mind-mem → SOTA Agentic Memory (v4.5.0+ design brief)
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~7760 tok, huge) — API Reference
@@ -373,7 +373,7 @@
 - `local-receipt-pilot-20260914.md` (~1358 tok, large) — Local retrieval-receipt pilot — 2026-09-14
 ### `docs/`
 
-- `benchmarks.md` (~3040 tok, huge) — Benchmarks
+- `benchmarks.md` (~3052 tok, huge) — Benchmarks
 ### `docs/benchmarks/memory-ab-420s-runs/`
 
 - `MANIFEST.json` (~2906 tok, huge) — Keys: count, executable_binding, originals, receipts, what
@@ -584,7 +584,7 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~9688 tok, huge) — name: CI
+- `ci.yml` (~9937 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~261 tok, medium) — name: Docs
@@ -771,7 +771,7 @@
 - `mcp_server.py` (~280 tok, medium) — Wheel-level compatibility module for `mind_mem.mcp_server`.
 ### `src/mind_mem/`
 
-- `abstention_classifier.py` (~3315 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
+- `abstention_classifier.py` (~3316 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `abstention_eval.py` (~2621 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `abstention_store.py` (~4001 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `accountability_dashboard.py` (~6670 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -784,7 +784,7 @@
 - `alert_urls.py` (~1873 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `anchoring.py` (~4266 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `answer_facts.py` (~3637 tok, huge) — Deterministic facts computed from the evidence before the answerer sees it.
-- `answer_quality.py` (~3059 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
+- `answer_quality.py` (~3055 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
 ### `src/mind_mem/api/`
 
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
@@ -844,7 +844,7 @@
 - `chat_citations.py` (~2480 tok, huge) — Citation extraction + validation for the conversational chat layer.
 - `chat_cli.py` (~1135 tok, large) — ``mind-mem-chat`` — ask a workspace a question, get cited answers.
 - `chat_generators.py` (~2047 tok, huge) — Pluggable answer generators for the conversational chat layer.
-- `chat_memory.py` (~10891 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
+- `chat_memory.py` (~10925 tok, huge) — Conversational chat layer — grounded answers with ``[[block_id]]`` citations.
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
 - `client_config_io.py` (~1116 tok, large) — # Copyright 2026 STARGA, Inc.
 - `client_mcp.py` (~2905 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1054,14 +1054,14 @@
 - `recall_abstention.py` (~4573 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recall_attestation.py` (~13053 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
 - `recall_cache.py` (~6867 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
-- `_recall_constants.py` (~3480 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
+- `_recall_constants.py` (~3654 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2609 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
 - `_recall_detection.py` (~6949 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `recall_digests.py` (~2101 tok, huge) — Canonical digests the recall attestation commits to.
-- `_recall_expansion.py` (~3249 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
+- `_recall_expansion.py` (~3248 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `_recall_explain.py` (~2233 tok, huge) — Score decomposition record for explainable recall (v3.11.0, Pattern 1).
 - `recall.py` (~7756 tok, huge) — mind-mem Recall Engine (BM25 + TF-IDF + Graph + Stemming). Zero external deps.
-- `_recall_reranking.py` (~4277 tok, huge) — Recall engine reranking — deterministic feature-based re-scoring of BM25 hits."""
+- `_recall_reranking.py` (~4280 tok, huge) — Recall engine reranking — deterministic feature-based re-scoring of BM25 hits."""
 - `_recall_scoring.py` (~4992 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories.
 - `recall_smart_chunk.py` (~2826 tok, huge) — Config seam wiring :mod:`smart_chunker` into the BM25 chunk-boost path.
 - `recall_supersede.py` (~2789 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1442,7 +1442,7 @@
 - `test_consolidation_maturity_gate.py` (~3750 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_consolidation_namespace_acl.py` (~1860 tok, huge) — Consolidation previews must use the caller's canonical admitted corpus."""
 - `test_consolidation_supersede_window.py` (~773 tok, large) — plan_consolidation scans a bounded window of blocks (``ORDER BY id LIMIT``).
-- `test_constants.py` (~371 tok, medium) — Tests for recall constants module."""
+- `test_constants.py` (~1181 tok, large) — Tests for recall constants module."""
 - `test_content_lifecycle.py` (~3227 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_content_source_provenance.py` (~5229 tok, huge) — Tests for content-provenance tagging (roadmap T-001).
 - `test_context_core.py` (~3175 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1771,6 +1771,7 @@
 - `test_proposal_field_screening.py` (~1229 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_protection.py` (~2068 tok, huge) — Tests for mind_mem.protection (v3.3.0+)."""
 - `test_public_mcp_acl.py` (~2718 tok, huge) — Public MCP recall binds verified transport principals before retrieval."""
+- `test_public_release_bundle.py` (~1590 tok, huge) — Offline validation of the committed reproducible benchmark kit.
 - `test_q1616_preimage.py` (~1496 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_quality_gate.py` (~1971 tok, huge) — Tests for the v3.11.0 deterministic block quality gate.
 - `test_quality_gate_recent_window.py` (~2480 tok, huge) — quality_gate rule 6 (``near_duplicate``) must actually execute in the product.

@@ -357,14 +357,26 @@ _IRREGULAR_LEMMA = {
 }
 
 
-# Regex matching any block ID pattern (D-..., T-..., PRJ-..., DIA-..., FACT-..., etc.)
-_BLOCK_ID_RE = re.compile(
-    r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|PRJ-\d{3}|PER-\d{3}|TOOL-\d{3}"
-    r"|INC-\d{3}|C-\d{8}-\d{3}|SIG-\d{8}-\d{3}|P-\d{8}-\d{3}"
-    r"|DIA-[A-Za-z0-9]+-\d+"  # LoCoMo dialog turns: DIA-D1-3
-    r"|FACT-\d{3,}"  # Extracted fact cards: FACT-001
-    r")\b"
+#: Declared generic block-id kinds. Each entry is a regex fragment for one
+#: kind of block identifier. :data:`_BLOCK_ID_RE` is built from this table,
+#: so adding a kind here is the single declaration point. The fragments are
+#: order-independent alternatives; any match is a block id mention.
+_BLOCK_ID_KINDS: tuple[str, ...] = (
+    r"D-\d{8}-\d{3}",          # decision records
+    r"T-\d{8}-\d{3}",          # task records
+    r"PRJ-\d{3}",               # project entities
+    r"PER-\d{3}",               # person entities
+    r"TOOL-\d{3}",              # tool entities
+    r"INC-\d{3}",               # incident entities
+    r"C-\d{8}-\d{3}",          # contradiction records
+    r"SIG-\d{8}-\d{3}",        # signal records
+    r"P-\d{8}-\d{3}",          # proposal records
+    r"DIA-[A-Za-z0-9]+-\d+",    # dialogue turns: PREFIX-SESSION-INDEX
+    r"FACT-\d{3,}",             # extracted fact cards
 )
+
+# Regex matching any block ID pattern (D-..., T-..., PRJ-..., DIA-..., FACT-..., etc.)
+_BLOCK_ID_RE = re.compile(r"\b(" + "|".join(_BLOCK_ID_KINDS) + r")\b")
 
 # Graph neighbor boost factor: a neighbor gets this fraction of the referencing block's score
 GRAPH_BOOST_FACTOR = 0.4

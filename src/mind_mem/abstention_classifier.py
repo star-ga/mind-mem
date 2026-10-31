@@ -4,7 +4,7 @@ Pre-LLM confidence gate: examines retrieval results and decides whether
 there is enough direct evidence to answer a query. If confidence is below
 threshold, forces abstention without calling the LLM at all.
 
-This targets LoCoMo adversarial questions which are *designed* to be
+This targets adversarial questions that are *designed* to be
 unanswerable — the gold answer is typically "No, X never mentioned Y" or
 "Not found." The current 30.7% accuracy is because the LLM fabricates
 answers from tangentially related context.
@@ -215,7 +215,7 @@ def _extract_query_entities(question: str) -> set[str]:
 def _extract_speaker_from_query(question: str) -> str | None:
     """Extract a proper name from the query if present.
 
-    LoCoMo questions often ask about specific speakers:
+    Dialogue-retrieval questions often ask about specific speakers:
     "Did Emma ever mention wanting to adopt a dog?"
     """
     matches = _SPEAKER_RE.findall(question)
