@@ -242,7 +242,7 @@ def test_unknown_benchmark_is_a_failure_not_a_skip(tmp_path, rows):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("omitted", ["raw.ndjson", "metrics.json"])
+@pytest.mark.parametrize("omitted", ["raw.ndjson", "metrics.json", "dataset.json"])
 def test_manifest_omitting_a_core_artifact_fails_with_the_core_artifact_message(tmp_path, rows, omitted):
     out = _package(tmp_path, rows)
     assert repro_verify.verify_package(out).passed, "a complete package must verify"
