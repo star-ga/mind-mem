@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1785 | **Est. tokens:** ~5,230,221
-**Generated:** 2026-11-01 07:34 UTC
+**Files:** 1785 | **Est. tokens:** ~5,240,751
+**Generated:** 2026-11-01 07:39 UTC
 
 ## Token Budget Guide
 
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 38 | ~52,362 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 7 | ~5,887 |
+| `.arch-mind/` | 7 | ~16,417 |
 | `audits/` | 5 | ~24,039 |
 | `benchmarks/` | 73 | ~198,098 |
 | `benchmarks/public_release/` | 9 | ~24,766 |
@@ -164,11 +164,11 @@
 ### `.arch-mind/`
 
 - `baseline_2026-08-29.json` (~159 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
-- `fixture.json` (~265 tok, medium) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
-- `last_summary.json` (~265 tok, medium) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `fixture.json` (~3775 tok, huge) — Keys: _aggregated_for_phase_a, _comment, _languages, _redundancy, _repo_root
+- `last_summary.json` (~3775 tok, huge) — Keys: _aggregated_for_phase_a, _comment, _languages, _redundancy, _repo_root
 - `rescan.py` (~2916 tok, huge) — # Copyright 2026 STARGA, Inc. — Apache-2.0 (see ../LICENSE).
 - `rules.mind` (~1931 tok, huge) — mind-mem architectural-governance rules
-- `scan.json` (~265 tok, medium) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `scan.json` (~3775 tok, huge) — Keys: _aggregated_for_phase_a, _comment, _languages, _redundancy, _repo_root
 - `scan_v3813.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `audits/`
 
