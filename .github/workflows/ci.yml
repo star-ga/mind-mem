@@ -698,6 +698,54 @@ jobs:
           # rather than baked-in literals — the M6 regression we are gating.
           grep -F 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' /tmp/rendered.yml
 
+  arch-gate:
+    # Fork pull requests never reach the private scanner image.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: arch-mind governance gate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Pull the pinned scanner
+        env:
+          IMAGE: ghcr.io/star-ga/arch-mind@sha256:c63d54d8f2aa9914402f8c8b37381438ebfb2189f383052de722b44377e7772d
+          SCANNER_ROOT: ${{ runner.temp }}/arch-mind-scanner
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$IMAGE"
+          root="$SCANNER_ROOT"
+          case "$root" in "$GITHUB_WORKSPACE"|"$GITHUB_WORKSPACE"/*)
+            echo "::error::scanner root must sit outside the checkout"; exit 1;;
+          esac
+          rm -rf "$root"
+          mkdir -p "$root"
+          cid="$(docker create "$IMAGE")"
+          docker cp "$cid:/opt/arch-mind/." "$root/"
+          docker rm "$cid"
+          uid="$(id -u)"
+          gid="$(id -g)"
+          cat > "$root/bin/arch-mind" << EOF
+          #!/bin/bash
+          set -euo pipefail
+          exec docker run --rm --user ${uid}:${gid} -e PYTHONDONTWRITEBYTECODE=1 -e HOME=/tmp -v "\$PWD:\$PWD" -v /tmp:/tmp -w "\$PWD" "$IMAGE" "\$@"
+          EOF
+          chmod 0755 "$root/bin/arch-mind"
+          test -s "$root/tools/arch_mind_cli.py"
+          test -s "$root/tools/mind_reflect.py"
+          test -s "$root/tools/rules_engine.py"
+          test -x "$root/sidecar/target/release/arch-mind-sidecar"
+          install -m 0755 "$root/bin/arch-mind" /usr/local/bin/arch-mind
+      - name: Fixture staleness check
+        run: python3 .arch-mind/rescan.py --check
+      - name: Arch governance gate (fail-closed)
+        run: bash scripts/arch_gate.sh
+
   install-smoke:
     name: install.sh smoke (${{ matrix.installer }})
     runs-on: ubuntu-24.04

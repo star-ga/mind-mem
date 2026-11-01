@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 import pytest
 
-from mind_mem import client_mcp, client_paths, client_registry
+from mind_mem import client_mcp, client_paths, client_registry_schema
 from mind_mem.client_config_io import BACKUP_INFIX
 from mind_mem.hook_installer import (
     AGENT_REGISTRY,
@@ -191,7 +191,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _platform(monkeypatch: pytest.MonkeyPatch, plat: str) -> None:
     monkeypatch.setattr(client_paths, "current_platform", lambda: plat)
-    monkeypatch.setattr(client_registry, "current_platform", lambda: plat)
+    monkeypatch.setattr(client_registry_schema, "current_platform", lambda: plat)
 
 
 def _backups(p: Path) -> list[Path]:

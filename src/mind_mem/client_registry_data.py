@@ -1,8 +1,8 @@
 # Copyright 2026 STARGA, Inc.
 """Registry data: one entry per supported AI client.
 
-Kept apart from :mod:`mind_mem.client_registry` (the schema) so the list
-can grow without the logic file growing. Paths use the placeholders of
+Kept apart from :mod:`mind_mem.client_registry_schema` so the list
+can grow without the schema file growing. Paths use the placeholders of
 :mod:`mind_mem.client_paths`. Every path is the client's own documented
 location; where upstream documentation is incomplete the entry is guarded
 (``mcp_guard="dir"``) so nothing is created for a client that is absent.
@@ -10,7 +10,7 @@ location; where upstream documentation is incomplete the entry is guarded
 
 from __future__ import annotations
 
-from mind_mem.client_registry import _MM_MARKER, MEMORY_PROTOCOL_SNIPPET, AgentSpec, _client, _manual
+from mind_mem.client_registry_schema import _MM_MARKER, MEMORY_PROTOCOL_SNIPPET, AgentSpec, _client, _manual
 
 _VSIX = "{home}/.vscode/extensions/"
 _CLINE_SETTINGS = "globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
