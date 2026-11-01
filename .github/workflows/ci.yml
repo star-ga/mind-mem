@@ -701,24 +701,41 @@ jobs:
   arch-gate:
     name: arch-mind governance gate
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.12"
-      - name: Checkout governance scanner (pinned ref)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
-        with:
-          repository: ${{ vars.ARCH_MIND_REPOSITORY }}
-          ref: fea599ec4d3695cb39754d0fd5dcc1f1fb101dab
-          path: .arch-mind-src
-          token: ${{ secrets.ARCH_MIND_TOKEN }}
-      - name: Build arch-mind (pinned)
+      - name: Pull the pinned scanner
+        env:
+          IMAGE: ghcr.io/star-ga/arch-mind@sha256:IMAGE_DIGEST
+          SCANNER_ROOT: .arch-mind-src
         run: |
           set -euo pipefail
-          ( cd .arch-mind-src/sidecar && cargo build --release )
-          install -m 0755 .arch-mind-src/bin/arch-mind /usr/local/bin/arch-mind
-          arch-mind --version
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "$IMAGE"
+          root="$SCANNER_ROOT"
+          rm -rf "$root"
+          mkdir -p "$root"
+          cid="$(docker create "$IMAGE")"
+          docker cp "$cid:/opt/arch-mind/." "$root/"
+          docker rm "$cid"
+          uid="$(id -u)"
+          gid="$(id -g)"
+          cat > "$root/bin/arch-mind" << EOF
+          #!/bin/bash
+          set -euo pipefail
+          exec docker run --rm --user ${uid}:${gid} -e PYTHONDONTWRITEBYTECODE=1 -e HOME=/tmp -v "\$PWD:\$PWD" -v /tmp:/tmp -w "\$PWD" "$IMAGE" "\$@"
+          EOF
+          chmod 0755 "$root/bin/arch-mind"
+          test -s "$root/tools/arch_mind_cli.py"
+          test -s "$root/tools/mind_reflect.py"
+          test -s "$root/tools/rules_engine.py"
+          test -x "$root/sidecar/target/release/arch-mind-sidecar"
+          install -m 0755 "$root/bin/arch-mind" /usr/local/bin/arch-mind
       - name: Fixture staleness check
         run: python3 .arch-mind/rescan.py --check
       - name: Arch governance gate (fail-closed)
