@@ -711,7 +711,7 @@ jobs:
           python-version: "3.12"
       - name: Pull the pinned scanner
         env:
-          IMAGE: ghcr.io/star-ga/arch-mind@sha256:IMAGE_DIGEST
+          IMAGE: ghcr.io/star-ga/arch-mind@sha256:c63d54d8f2aa9914402f8c8b37381438ebfb2189f383052de722b44377e7772d
           SCANNER_ROOT: .arch-mind-src
         run: |
           set -euo pipefail
