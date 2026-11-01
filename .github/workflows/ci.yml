@@ -699,6 +699,8 @@ jobs:
           grep -F 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' /tmp/rendered.yml
 
   arch-gate:
+    # Fork pull requests never reach the private scanner image.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: arch-mind governance gate
     runs-on: ubuntu-24.04
     permissions:
