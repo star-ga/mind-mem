@@ -35,4 +35,5 @@ benchmark-results.json -diff
 # cloned them. Byte-identical on every platform is the whole point of a repro
 # package, so no line-ending translation may touch them.
 benchmarks/repro/** -text
+benchmarks/public_release/** -text
 docs/benchmarks/**.ndjson -text

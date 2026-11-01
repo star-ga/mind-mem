@@ -13,14 +13,14 @@ readable on every node — with no extra wiring.
 
 ```bash
 # Send a directed message
-mm send "deploy the patch" --to S1 --from U1 --subject "patch"
+mm send "deploy the patch" --to node-b --from node-a --subject "patch"
 
 # Send a broadcast (no --to: every recipient sees it)
-mm send "fleet-wide notice: gate is green" --from U1
+mm send "fleet-wide notice: gate is green" --from node-a
 
 # Read your inbox (your addressed mail + broadcasts), newest first
-mm inbox --to S1
-mm inbox --to S1 --since 2026-06-23 -n 50
+mm inbox --to node-b
+mm inbox --to node-b --since 2026-06-23 -n 50
 ```
 
 The `mm` console script is on PATH in every wired CLI (claude / codex /
@@ -39,8 +39,8 @@ form.
   routes through the `MSG` entry in `_BLOCK_PREFIX_MAP` to
   `memory/MESSAGES.md`. The block carries `To`, `From`, `Subject`, and the
   message body in `Statement`.
-- **Receive = read your mail.** `mm inbox --to S1` returns every message
-  addressed to `S1` plus every broadcast (a message with no `To`). It
+- **Receive = read your mail.** `mm inbox --to node-b` returns every message
+  addressed to `node-b` plus every broadcast (a message with no `To`). It
   enumerates the corpus directly (via the backend-aware
   `storage.iter_blocks`), so all message fields are preserved and it
   works identically on SQLite-markdown and Postgres.
@@ -66,28 +66,28 @@ form.
 Run against a fresh markdown workspace:
 
 ```text
-$ mm send "deploy the patch" --to S1 --from U1 --subject "patch"
-{"sent": "MSG-20260623T093228Z-ff9d2b71", "to": "S1", "from": "U1"}
+$ mm send "deploy the patch" --to node-b --from node-a --subject "patch"
+{"sent": "MSG-20260623T093228Z-ff9d2b71", "to": "node-b", "from": "node-a"}
 
-$ mm inbox --to S1
+$ mm inbox --to node-b
 [
   {
     "_id": "MSG-20260623T093228Z-ff9d2b71",
     "Statement": "deploy the patch",
     "Status": "quarantined",
     "Subject": "patch",
-    "From": "U1",
+    "From": "node-a",
     "IngestTier": "agent-message",
     "Timestamp": "20260623T093228Z",
-    "To": "S1",
+    "To": "node-b",
     "_source_file": "memory/MESSAGES.md",
     "_source_label": "messages"
   }
 ]
 ```
 
-Recipient scoping is real: `mm inbox --to G1` against the same workspace
-returns only broadcasts, never `S1`'s addressed mail.
+Recipient scoping is real: `mm inbox --to node-c` against the same workspace
+returns only broadcasts, never `node-b`'s addressed mail.
 
 ## Cross-node (the federation hub)
 
@@ -96,10 +96,10 @@ fleet message bus:
 
 ```bash
 export MIND_MEM_WORKSPACE="$HOME/.openclaw/workspace"   # mind-mem.json -> postgres .193
-# On U1:
-mm send "starting the keystone gate run" --from U1 --to S1
-# On S1 (same hub):
-mm inbox --to S1
+# On node-a:
+mm send "starting the keystone gate run" --from node-a --to node-b
+# On node-b (same hub):
+mm inbox --to node-b
 ```
 
 On Postgres, the store returns every block regardless of which node wrote
@@ -111,8 +111,8 @@ delivery.
 ```python
 from mind_mem.agent_messaging import send_message, read_inbox
 
-mid = send_message(ws, "deploy the patch", to="S1", sender="U1", subject="patch")
-for msg in read_inbox(ws, to="S1", since="2026-06-23"):
+mid = send_message(ws, "deploy the patch", to="node-b", sender="node-a", subject="patch")
+for msg in read_inbox(ws, to="node-b", since="2026-06-23"):
     print(msg["From"], "->", msg["To"], ":", msg["Statement"])
 ```
 

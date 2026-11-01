@@ -57,7 +57,8 @@ part of this kit.
 ## Artifacts
 
 - `corrections.jsonl`: exactly 96 changes, official/corrected answers, accepted
-  alternatives, short evidence quotes with dialogue IDs, and question hashes.
+  alternatives, verbatim evidence turns for the 96 changes (CC BY-NC 4.0,
+  attributed) with dialogue IDs, and question hashes.
 - `correction_evidence.jsonl`: the same 96 evidence records and their hashes.
 - `answers.jsonl`: our answers, boolean votes and verdicts, prompt hashes and
   split metadata keyed by question ID; no questions or official reference text.
@@ -78,8 +79,8 @@ answer excerpts in the 96 change records are attributed to the
 [pinned source](https://github.com/snap-research/locomo/tree/3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376)
 and covered by **CC BY-NC 4.0**, not the repository code license; see
 [the included license](locomo.LICENSE.txt). Corrected answers and accepted sets
-are our changes and are not endorsed by the original authors. The dataset itself
-is not redistributed.
+are our changes and are not endorsed by the original authors. No other dataset text
+is redistributed.
 
 LongMemEval is by Xiaowu Wang and collaborators. The
 [pinned cleaned dataset](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/tree/98d7416c24c778c2fee6e6f3006e7a073259d48f)
