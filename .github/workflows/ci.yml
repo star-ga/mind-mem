@@ -714,12 +714,15 @@ jobs:
       - name: Pull the pinned scanner
         env:
           IMAGE: ghcr.io/star-ga/arch-mind@sha256:c63d54d8f2aa9914402f8c8b37381438ebfb2189f383052de722b44377e7772d
-          SCANNER_ROOT: .arch-mind-src
+          SCANNER_ROOT: ${{ runner.temp }}/arch-mind-scanner
         run: |
           set -euo pipefail
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker pull "$IMAGE"
           root="$SCANNER_ROOT"
+          case "$root" in "$GITHUB_WORKSPACE"|"$GITHUB_WORKSPACE"/*)
+            echo "::error::scanner root must sit outside the checkout"; exit 1;;
+          esac
           rm -rf "$root"
           mkdir -p "$root"
           cid="$(docker create "$IMAGE")"
