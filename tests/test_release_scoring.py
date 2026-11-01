@@ -53,6 +53,14 @@ def test_negative_correction_and_answer_binding():
     assert scorer.score(row) is True
 
 
+def test_accepted_answer_with_a_citation_marker_takes_the_shortcut():
+    key = correction()
+    scorer = CorrectedKey([key], [])
+    row = answer()
+    row["generated"] = "red [[cite]]"
+    assert scorer.score(row) is True
+
+
 def test_key_revision_invalidates_adjudication():
     key = correction()
     reviewed = adjudication(key, True)
