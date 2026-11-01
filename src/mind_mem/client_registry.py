@@ -198,18 +198,9 @@ def _manual(name: str, description: str, vendor: str, steps: str, **extra: Any) 
     return _client(name, description, vendor, hook="", manual=steps, **extra)
 
 
-def _agent_registry() -> dict[str, AgentSpec]:
-    """Build the name map from the client tables.
+from mind_mem.client_registry_data import CORE_AGENTS, MANUAL_AGENTS, MORE_AGENTS  # noqa: E402
 
-    The tables import the schema names from this module. The import stays
-    inside this function so the two modules do not import each other.
-    """
-    from mind_mem.client_registry_data import CORE_AGENTS, MANUAL_AGENTS, MORE_AGENTS  # noqa: PLC0415
-
-    return {spec.name: spec for spec in (*CORE_AGENTS, *MORE_AGENTS, *MANUAL_AGENTS)}
-
-
-AGENT_REGISTRY: dict[str, AgentSpec] = _agent_registry()
+AGENT_REGISTRY: dict[str, AgentSpec] = {spec.name: spec for spec in (*CORE_AGENTS, *MORE_AGENTS, *MANUAL_AGENTS)}
 
 
 __all__ = ["AGENT_REGISTRY", "AgentSpec", "MEMORY_PROTOCOL_SNIPPET", "_MM_MARKER"]
