@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1784 | **Est. tokens:** ~5,230,114
-**Generated:** 2026-11-01 05:50 UTC
+**Files:** 1784 | **Est. tokens:** ~5,230,186
+**Generated:** 2026-11-01 07:04 UTC
 
 ## Token Budget Guide
 
@@ -80,7 +80,7 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,592 |
+| `src/mind_mem/` | 257 | ~1,147,664 |
 | `src/mind_mem/api/` | 5 | ~29,070 |
 | `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -851,7 +851,7 @@
 - `client_mcp.py` (~2905 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_paths.py` (~760 tok, large) — # Copyright 2026 STARGA, Inc.
 - `client_registry_data.py` (~6077 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `client_registry.py` (~2117 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `client_registry.py` (~2189 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_restore.py` (~1500 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_writers.py` (~5542 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
