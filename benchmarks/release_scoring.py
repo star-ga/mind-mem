@@ -14,6 +14,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from benchmarks.repro_manifest import safe_artifact_path
+
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -92,7 +94,10 @@ class CorrectedKey:
         ):
             raise ValueError("Correction question/reference mismatch")
         answer = row["generated"]
-        if answer.strip() in [str(a).strip() for a in key["accepted_answers"]]:
+        # Cleaned the same way the token metrics clean it: an answer that
+        # matches an accepted answer apart from a [[cite]] marker takes the
+        # shortcut instead of falling through to "Unreviewed answer".
+        if clean(answer).strip() in [clean(str(a)).strip() for a in key["accepted_answers"]]:
             return True
         pair = row["id"], hashlib.sha256(answer.encode()).hexdigest(), digest(key)
         if pair not in self.adjudications:
@@ -112,8 +117,11 @@ def verify_bundle(root: Path) -> tuple[dict, list[dict]]:
     if not {"answers.jsonl", prompt_file} <= set(manifest["artifacts"]):
         raise ValueError("Manifest omits required evidence artifacts")
     for name, expected in manifest["artifacts"].items():
-        path = (root / name).resolve()
-        if not path.is_relative_to(root.resolve()) or sha256(path) != expected:
+        try:
+            path = safe_artifact_path(root, name)
+        except ValueError as exc:
+            raise ValueError(f"Artifact hash mismatch or unsafe path ({exc})") from None
+        if sha256(path) != expected:
             raise ValueError("Artifact hash mismatch or unsafe path")
     rows = read_rows(root / "answers.jsonl")
     answers = unique(rows)

@@ -48,7 +48,14 @@ for _p in (_REPO_ROOT, os.path.join(_REPO_ROOT, "src")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from benchmarks.repro_manifest import canonical_json, display_path, read_rows, sha256_bytes  # noqa: E402
+from benchmarks.repro_manifest import (  # noqa: E402
+    CORE_ARTIFACTS,
+    canonical_json,
+    display_path,
+    read_rows,
+    safe_artifact_path,
+    sha256_bytes,
+)
 from benchmarks.repro_metrics import METRIC_FNS, SCHEMA, STATUS_OK  # noqa: E402
 
 
@@ -95,9 +102,22 @@ def verify_package(pkg_dir: str) -> Report:
 
     rep.check(manifest.get("schema") == SCHEMA, "manifest schema", SCHEMA, manifest.get("schema"))
 
+    # 0. The evidence chain must be named before any of it is hashed. A
+    #    manifest that leaves raw.ndjson out of `artifacts` would otherwise
+    #    pass the loop below with the raw rows never hashed at all.
+    missing_core = sorted(set(CORE_ARTIFACTS) - set(manifest.get("artifacts", {})))
+    rep.check(
+        not missing_core,
+        f"manifest lists the core artifacts ({', '.join(CORE_ARTIFACTS)}); missing: {missing_core}",
+    )
+
     # 1. Content addressing: an edited artifact fails here first.
     for name, meta in sorted(manifest.get("artifacts", {}).items()):
-        path = os.path.join(pkg_dir, name)
+        try:
+            path = safe_artifact_path(pkg_dir, name)
+        except ValueError as exc:
+            rep.check(False, f"unsafe artifact name: {name} ({exc})")
+            continue
         if not rep.check(os.path.isfile(path), f"artifact missing: {name}"):
             continue
         with open(path, "rb") as handle:

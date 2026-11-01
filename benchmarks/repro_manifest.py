@@ -32,6 +32,7 @@ import os
 import platform
 import subprocess
 from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from benchmarks.repro_metrics import SCHEMA
@@ -139,6 +140,39 @@ def environment_facts(packages: tuple[str, ...] = ()) -> dict[str, Any]:
         "mind_mem_version": pkg_version("mind-mem"),
         "packages": {p: pkg_version(p) for p in packages},
     }
+
+
+#: Artifacts every repro package must carry and every manifest must list in
+#: ``artifacts``. These three hold the evidence chain -- the raw rows, the
+#: numbers recomputed from them and the pinned inputs -- so a manifest that
+#: omits one leaves that file unhashed and unchecked. ``environment.json`` is
+#: written too but records measurement facts (hardware, wall clock) that
+#: legitimately vary box to box, so it is not core. The verifier reads this
+#: tuple rather than a second hand-kept list of the same names.
+CORE_ARTIFACTS = ("raw.ndjson", "metrics.json", "dataset.json")
+
+
+def safe_artifact_path(root: str | os.PathLike[str], name: str) -> Path:
+    """Resolve artifact *name* under *root*, refusing anything that escapes it.
+
+    Refuses absolute names, any ``..`` component (in either path syntax), and
+    any name whose resolved real path -- symlinks followed -- lands outside
+    *root*. Returns the resolved path; raises :class:`ValueError` on refusal.
+    The package verifier and the release-bundle verifier share this so both
+    confine artifact names to their own directory by the same rule.
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"unsafe artifact name: {name!r}")
+    posix, windows = PurePosixPath(name), PureWindowsPath(name)
+    if posix.is_absolute() or windows.is_absolute() or name.startswith(("/", "\\")):
+        raise ValueError(f"unsafe artifact name: {name!r}")
+    if ".." in posix.parts or ".." in windows.parts:
+        raise ValueError(f"unsafe artifact name: {name!r}")
+    root_path = Path(root).resolve()
+    resolved = (root_path / name).resolve()
+    if not resolved.is_relative_to(root_path):
+        raise ValueError(f"unsafe artifact name: {name!r}")
+    return resolved
 
 
 def build_manifest(

@@ -12,9 +12,11 @@ Copyright (c) STARGA Inc. All rights reserved.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +26,7 @@ for _p in (_REPO_ROOT, os.path.join(_REPO_ROOT, "src")):
         sys.path.insert(0, _p)
 
 from benchmarks import repro_verify  # noqa: E402
+from benchmarks.release_scoring import verify_bundle  # noqa: E402
 from benchmarks.repro_manifest import build_manifest, write_package  # noqa: E402
 from benchmarks.repro_metrics import niah_hit, niah_metrics  # noqa: E402
 
@@ -232,6 +235,118 @@ def test_unknown_benchmark_is_a_failure_not_a_skip(tmp_path, rows):
     rep = repro_verify.verify_package(out)
     assert not rep.passed
     assert any("no metric function registered" in f for f in rep.failures)
+
+
+# ---------------------------------------------------------------------------
+# The manifest must name the core artifacts, or the hash loop never touches them
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("omitted", ["raw.ndjson", "metrics.json", "dataset.json"])
+def test_manifest_omitting_a_core_artifact_fails_with_the_core_artifact_message(tmp_path, rows, omitted):
+    out = _package(tmp_path, rows)
+    assert repro_verify.verify_package(out).passed, "a complete package must verify"
+
+    manifest_path = os.path.join(out, "manifest.json")
+    with open(manifest_path, encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    del manifest["artifacts"][omitted]
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, sort_keys=True)
+
+    rep = repro_verify.verify_package(out)
+    assert not rep.passed, f"a manifest that leaves {omitted} out of artifacts must not verify"
+    assert any("core artifacts" in f for f in rep.failures), rep.render()
+    assert repro_verify.main(["package", out]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Artifact names are confined to the package directory
+# ---------------------------------------------------------------------------
+
+ESCAPES = ("parent", "absolute", "symlink")
+
+
+def _escape_case(tmp_path: Path, root: Path, kind: str) -> tuple[str, bytes]:
+    """Create the on-disk setup for one escape kind.
+
+    Returns the artifact name to put in the manifest and the bytes a
+    successful (unconfined) verifier would read for it -- so the entry hashes
+    match and the only thing that can reject it is the confinement rule.
+    """
+    if kind == "parent":
+        target = tmp_path / "x"
+        target.write_bytes(b"outside the package\n")
+        return "../x", target.read_bytes()
+    if kind == "absolute":
+        passwd = Path("/etc/passwd")
+        data = passwd.read_bytes() if passwd.is_file() else b""
+        return "/etc/passwd", data
+    if kind == "symlink":
+        target = tmp_path / "x"
+        target.write_bytes(b"outside the package\n")
+        link = root / "link"
+        try:
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks are not supported on this platform")
+        return "link", target.read_bytes()
+    raise AssertionError(kind)
+
+
+@pytest.mark.parametrize("kind", ESCAPES)
+def test_verify_package_refuses_artifact_names_escaping_the_package(tmp_path, rows, kind):
+    out = _package(tmp_path, rows)
+    name, data = _escape_case(tmp_path, Path(out), kind)
+
+    manifest_path = os.path.join(out, "manifest.json")
+    with open(manifest_path, encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    manifest["artifacts"][name] = {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, sort_keys=True)
+
+    rep = repro_verify.verify_package(out)
+    assert not rep.passed, f"{name!r} must be refused"
+    assert any("unsafe artifact name" in f for f in rep.failures), rep.render()
+
+
+def _release_bundle(root: Path) -> None:
+    """One-row release bundle that verifies cleanly on its own."""
+    prompt = "A generic evidence prompt"
+    h = hashlib.sha256(prompt.encode()).hexdigest()
+    row = {
+        "id": "example",
+        "question": "What is the color?",
+        "reference": "blue",
+        "generated": "green",
+        "partition": "held_out",
+        "official_ok": True,
+        "prompt_sha256": h,
+        "votes": [{"ok": True}],
+    }
+    (root / "answers.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    (root / "prompts.jsonl").write_text(
+        json.dumps({"id": row["id"], "prompt_sha256": h, "messages": [{"content": prompt}]}) + "\n", encoding="utf-8"
+    )
+    manifest = {"rows": 1, "artifacts": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir()}}
+    (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+@pytest.mark.parametrize("kind", ESCAPES)
+def test_verify_bundle_refuses_artifact_names_escaping_the_bundle(tmp_path, kind):
+    root = tmp_path / "bundle"
+    root.mkdir()
+    _release_bundle(root)
+    name, data = _escape_case(tmp_path, root, kind)
+
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"][name] = hashlib.sha256(data).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unsafe artifact name"):
+        verify_bundle(root)
 
 
 # ---------------------------------------------------------------------------

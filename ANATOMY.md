@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1784 | **Est. tokens:** ~5,227,599
-**Generated:** 2026-10-31 20:15 UTC
+**Files:** 1784 | **Est. tokens:** ~5,229,581
+**Generated:** 2026-11-01 04:07 UTC
 
 ## Token Budget Guide
 
@@ -26,7 +26,7 @@
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 7 | ~5,887 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 73 | ~197,380 |
+| `benchmarks/` | 73 | ~198,098 |
 | `benchmarks/public_release/` | 9 | ~24,766 |
 | `benchmarks/repro/` | 1 | ~689 |
 | `benchmarks/repro/niah/` | 4 | ~2,557 |
@@ -95,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 807 | ~2,365,751 |
+| `tests/` | 807 | ~2,367,015 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -251,9 +251,9 @@
 - `release_inputs.py` (~1283 tok, large) — Reconstruct licensed inputs from pinned downloads and text-free source references.
 - `release_judge.py` (~900 tok, large) — Frozen scoring protocol and explicit HTTP transport, separate from answering.
 - `release_runtime.py` (~2985 tok, huge) — Dataset adapters feeding the Python serving path without evaluation labels.
-- `release_scoring.py` (~2770 tok, huge) — Offline evidence verification and aggregate scoring for frozen answer records.
+- `release_scoring.py` (~2869 tok, huge) — Offline evidence verification and aggregate scoring for frozen answer records.
 - `REPORT.md` (~5281 tok, huge) — MIND-Mem Benchmark Report
-- `repro_manifest.py` (~2145 tok, huge) — Write a repro package: raw rows, recomputed metrics, and a manifest that pins
+- `repro_manifest.py` (~2599 tok, huge) — Write a repro package: raw rows, recomputed metrics, and a manifest that pins
 - `repro_metrics.py` (~2213 tok, huge) — Recompute every headline metric from RAW per-unit rows, and nothing else.
 ### `benchmarks/repro/niah/`
 
@@ -277,7 +277,7 @@
 ### `benchmarks/`
 
 - `repro_release.py` (~2665 tok, huge) — Public benchmark entry point: verify saved evidence or run a pinned evaluation.
-- `repro_verify.py` (~4137 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
+- `repro_verify.py` (~4302 tok, huge) — Verify that a published number can be recomputed from its committed evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `STATUS.md` (~3163 tok, huge) — Benchmark Status
 - `strat_probe.py` (~936 tok, large) — Stratified LongMemEval probe.
@@ -1884,7 +1884,7 @@
 - `test_release_preflight_gates.py` (~5507 tok, huge) — Tests for the release-preflight gates.
 - `test_release_runtime.py` (~457 tok, medium) — Serving-boundary tests use invented questions and fake retrieval only."""
 - `test_release_sbom.py` (~3035 tok, huge) — Fail-closed controls for the wheel-bound release SBOM helper."""
-- `test_release_scoring.py` (~1238 tok, large) — Synthetic tests of evidence binding, correction selection and offline metrics."""
+- `test_release_scoring.py` (~1295 tok, large) — Synthetic tests of evidence binding, correction selection and offline metrics."""
 - `test_remote_vector_admission.py` (~2441 tok, huge) — Remote vector hits must be checked against the current corpus authority."""
 - `test_replay_check.py` (~4122 tok, huge) — Replay — does the ledger corroborate what one recall attestation claims?
 - `test_repo_task_generation.py` (~3390 tok, huge) — Tests for the real-repo A/B task generator.
@@ -1893,7 +1893,7 @@
 - `test_repo_task_tar_extraction_guard.py` (~811 tok, large) — The tar-extraction guard in ``bench.repo_task_validation``.
 - `test_repro_cross_drive_paths.py` (~612 tok, large) — A package written to another drive must not take down the run.
 - `test_repro_disclosure_consistency.py` (~1312 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_repro_package.py` (~2585 tok, huge) — The verifier must be able to FAIL.
+- `test_repro_package.py` (~3792 tok, huge) — The verifier must be able to FAIL.
 - `test_request_context_binding.py` (~1540 tok, huge) — The request context must be READ by the engine, and by its thread workers.
 - `test_request_context_isolation.py` (~1116 tok, large) — The context must not outlive its request, and must not leak between them.
 - `test_required_named_controls.py` (~2126 tok, huge) — # Copyright 2026 STARGA, Inc.
