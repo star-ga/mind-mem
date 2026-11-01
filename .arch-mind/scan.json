@@ -1,23 +1,593 @@
 {
   "_aggregated_for_phase_a": {
     "cyclic_edges": 0,
-    "intra_package_edges": 77,
-    "longest_path": 4,
+    "intra_package_edges": 119,
+    "longest_path": 5,
     "max_mcp_tool_overlap": 2,
-    "module_count": 391,
-    "pure_modules": 261,
-    "redundancy_excess": 104,
-    "sum_abs_symbol_diffs": 1018892,
-    "sum_decision_points": 18852,
-    "sum_evidence_calls": 141,
+    "module_count": 460,
+    "pure_modules": 317,
+    "redundancy_body_tokens": 482816,
+    "redundancy_duplicate_functions": 61,
+    "redundancy_duplicate_groups": 25,
+    "redundancy_excess": 37,
+    "redundancy_functions_analysed": 3500,
+    "redundancy_redundant_tokens": 1798,
+    "sum_abs_symbol_diffs": 1725498,
+    "sum_decision_points": 28087,
+    "sum_evidence_calls": 301,
     "sum_protected_decls": 9,
-    "sum_symbols": 2764,
-    "total_edges": 77,
+    "sum_symbols": 3877,
+    "total_edges": 119,
     "total_mcp_tools": 40
   },
   "_comment": "Produced by `.arch-mind/rescan.py` from a `git archive` extraction of this commit's tracked content, scanned with `arch-mind sidecar-scan`. The extraction is why the numbers are a function of the commit and not of scan-time filesystem state: it contains tracked files only, so a nested working tree (a `git worktree` checkout under `.wt/`, `.claude/worktrees/`, or any other name) cannot be in scope whatever the scanner does. `_repo_root` is normalised to '.' because the scan runs in a scratch directory.",
   "_languages": "python,typescript,go,rust,mind",
+  "_redundancy": {
+    "body_tokens_total": 482816,
+    "functions_analysed": 3500,
+    "groups": [
+      {
+        "copies": 5,
+        "functions": [
+          {
+            "line": 37,
+            "name": "_connect",
+            "path": "src/mind_mem/auto_resolver.py"
+          },
+          {
+            "line": 77,
+            "name": "_connect",
+            "path": "src/mind_mem/causal_graph.py"
+          },
+          {
+            "line": 150,
+            "name": "_connect",
+            "path": "src/mind_mem/drift_detector.py"
+          },
+          {
+            "line": 42,
+            "name": "_connect",
+            "path": "src/mind_mem/field_audit.py"
+          },
+          {
+            "line": 104,
+            "name": "_connect",
+            "path": "src/mind_mem/retrieval_graph.py"
+          }
+        ],
+        "hash": "a5dd3ae230e9dedb",
+        "redundant_tokens": 272,
+        "tokens": 68
+      },
+      {
+        "copies": 10,
+        "functions": [
+          {
+            "line": 422,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/block_kinds.py"
+          },
+          {
+            "line": 417,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/block_metadata.py"
+          },
+          {
+            "line": 193,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/block_versioning.py"
+          },
+          {
+            "line": 258,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/embedding_pipeline.py"
+          },
+          {
+            "line": 690,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/federation.py"
+          },
+          {
+            "line": 345,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/hnsw_kind_index.py"
+          },
+          {
+            "line": 77,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/kernels.py"
+          },
+          {
+            "line": 510,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/kind_summaries.py"
+          },
+          {
+            "line": 556,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/pq.py"
+          },
+          {
+            "line": 366,
+            "name": "_table_exists",
+            "path": "src/mind_mem/v4/self_editing.py"
+          }
+        ],
+        "hash": "836226ae7c1a4697",
+        "redundant_tokens": 225,
+        "tokens": 25
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 49,
+            "name": "_build_context",
+            "path": "src/mind_mem/mcp/tools/frames.py"
+          },
+          {
+            "line": 50,
+            "name": "_build_context",
+            "path": "src/mind_mem/mcp/tools/guardrails.py"
+          }
+        ],
+        "hash": "a16cb5060d620fc8",
+        "redundant_tokens": 189,
+        "tokens": 189
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 135,
+            "name": "smoke_test",
+            "path": "train/ship_gguf_ollama_v4.1.0.py"
+          },
+          {
+            "line": 138,
+            "name": "smoke_test",
+            "path": "train/ship_gguf_ollama_v4.1.1.py"
+          }
+        ],
+        "hash": "ded0cb694bc591c6",
+        "redundant_tokens": 135,
+        "tokens": 135
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 140,
+            "name": "_extract_date",
+            "path": "src/mind_mem/conflict_resolver.py"
+          },
+          {
+            "line": 114,
+            "name": "_extract_date",
+            "path": "src/mind_mem/drift_detector.py"
+          }
+        ],
+        "hash": "8f4e3ee3439fd440",
+        "redundant_tokens": 119,
+        "tokens": 119
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 124,
+            "name": "ollama_create",
+            "path": "train/ship_gguf_ollama_v4.1.0.py"
+          },
+          {
+            "line": 127,
+            "name": "ollama_create",
+            "path": "train/ship_gguf_ollama_v4.1.1.py"
+          }
+        ],
+        "hash": "d8d8d5e9e814f592",
+        "redundant_tokens": 87,
+        "tokens": 87
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 69,
+            "name": "_parse_iso",
+            "path": "src/mind_mem/cognitive_forget.py"
+          },
+          {
+            "line": 92,
+            "name": "_parse_iso",
+            "path": "src/mind_mem/project_profile.py"
+          }
+        ],
+        "hash": "c768ec45fe39859a",
+        "redundant_tokens": 71,
+        "tokens": 71
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 151,
+            "name": "ensure_hnsw_schema",
+            "path": "src/mind_mem/v4/hnsw_kind_index.py"
+          },
+          {
+            "line": 403,
+            "name": "ensure_pq_schema",
+            "path": "src/mind_mem/v4/pq.py"
+          }
+        ],
+        "hash": "890d364c37f470fa",
+        "redundant_tokens": 69,
+        "tokens": 69
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 223,
+            "name": "ensure_federation_schema",
+            "path": "src/mind_mem/v4/federation.py"
+          },
+          {
+            "line": 141,
+            "name": "ensure_edit_schema",
+            "path": "src/mind_mem/v4/self_editing.py"
+          }
+        ],
+        "hash": "f48708f83cf2ab5d",
+        "redundant_tokens": 68,
+        "tokens": 68
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 220,
+            "name": "load_committed_spec",
+            "path": "src/mind_mem/spec/export_asyncapi.py"
+          },
+          {
+            "line": 97,
+            "name": "load_committed_spec",
+            "path": "src/mind_mem/spec/export_openapi.py"
+          }
+        ],
+        "hash": "8db72e2f8ebba1f2",
+        "redundant_tokens": 61,
+        "tokens": 61
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 193,
+            "name": "lineage_edge_id",
+            "path": "src/mind_mem/block_lineage.py"
+          },
+          {
+            "line": 42,
+            "name": "causal_edge_id",
+            "path": "src/mind_mem/causal_graph.py"
+          }
+        ],
+        "hash": "799d58343ede64e2",
+        "redundant_tokens": 56,
+        "tokens": 56
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 58,
+            "name": "sha256_file",
+            "path": "train/eval_receipt.py"
+          },
+          {
+            "line": 40,
+            "name": "sha256",
+            "path": "train/training_readiness_manifest.py"
+          }
+        ],
+        "hash": "e6be4105ae79234c",
+        "redundant_tokens": 51,
+        "tokens": 51
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 110,
+            "name": "_child_env",
+            "path": "src/mind_mem/project_key.py"
+          },
+          {
+            "line": 64,
+            "name": "_child_env",
+            "path": "src/mind_mem/world_git_probe.py"
+          }
+        ],
+        "hash": "ccea22a36fcaa5f3",
+        "redundant_tokens": 49,
+        "tokens": 49
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 294,
+            "name": "_one_line",
+            "path": "src/mind_mem/importers/quarantine.py"
+          },
+          {
+            "line": 84,
+            "name": "_one_line",
+            "path": "src/mind_mem/lint_autofix.py"
+          }
+        ],
+        "hash": "1dc9edc1a58e81cb",
+        "redundant_tokens": 41,
+        "tokens": 41
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 69,
+            "name": "_block_id",
+            "path": "src/mind_mem/personas.py"
+          },
+          {
+            "line": 71,
+            "name": "_block_id",
+            "path": "src/mind_mem/walkthrough.py"
+          }
+        ],
+        "hash": "c4297441bd1ad609",
+        "redundant_tokens": 37,
+        "tokens": 37
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 242,
+            "name": "_term_vector",
+            "path": "src/mind_mem/dedup.py"
+          },
+          {
+            "line": 181,
+            "name": "_term_vec",
+            "path": "src/mind_mem/granularity_align.py"
+          }
+        ],
+        "hash": "caf8d63a67f5a2a1",
+        "redundant_tokens": 33,
+        "tokens": 33
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 71,
+            "name": "_run",
+            "path": "train/ship_gguf_ollama_v4.1.0.py"
+          },
+          {
+            "line": 74,
+            "name": "_run",
+            "path": "train/ship_gguf_ollama_v4.1.1.py"
+          }
+        ],
+        "hash": "6370273004825c20",
+        "redundant_tokens": 31,
+        "tokens": 31
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 106,
+            "name": "_utc_iso",
+            "path": "src/mind_mem/bench/ab_seed.py"
+          },
+          {
+            "line": 160,
+            "name": "_utc_iso",
+            "path": "src/mind_mem/bench/repo_task_mining.py"
+          }
+        ],
+        "hash": "db8f746ef1988ea4",
+        "redundant_tokens": 31,
+        "tokens": 31
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 181,
+            "name": "_text_tokens",
+            "path": "src/mind_mem/dedup.py"
+          },
+          {
+            "line": 177,
+            "name": "_tokenize",
+            "path": "src/mind_mem/granularity_align.py"
+          }
+        ],
+        "hash": "2067994d962e7563",
+        "redundant_tokens": 29,
+        "tokens": 29
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 232,
+            "name": "_close_all_conn_managers",
+            "path": "src/mind_mem/calibration.py"
+          },
+          {
+            "line": 301,
+            "name": "close_all_conn_managers",
+            "path": "src/mind_mem/sqlite_index.py"
+          }
+        ],
+        "hash": "72d15879ae540326",
+        "redundant_tokens": 29,
+        "tokens": 29
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 1136,
+            "name": "_hit_score",
+            "path": "src/mind_mem/_recall_core.py"
+          },
+          {
+            "line": 184,
+            "name": "_score",
+            "path": "src/mind_mem/recall_supersede.py"
+          }
+        ],
+        "hash": "5461ae56d550e2ea",
+        "redundant_tokens": 27,
+        "tokens": 27
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 116,
+            "name": "_db_path",
+            "path": "src/mind_mem/maturity_breadth_scan.py"
+          },
+          {
+            "line": 88,
+            "name": "_db_path",
+            "path": "src/mind_mem/retrieval_graph.py"
+          }
+        ],
+        "hash": "6b130288ba54363f",
+        "redundant_tokens": 24,
+        "tokens": 24
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 55,
+            "name": "_passphrase",
+            "path": "src/mind_mem/block_store_encrypted.py"
+          },
+          {
+            "line": 103,
+            "name": "_encryption_passphrase",
+            "path": "src/mind_mem/mcp/tools/encryption.py"
+          }
+        ],
+        "hash": "689baf241133590f",
+        "redundant_tokens": 23,
+        "tokens": 23
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 370,
+            "name": "_norm_marker",
+            "path": "src/mind_mem/guardrails.py"
+          },
+          {
+            "line": 140,
+            "name": "_norm",
+            "path": "src/mind_mem/provenance_class.py"
+          }
+        ],
+        "hash": "ff393f017850701e",
+        "redundant_tokens": 21,
+        "tokens": 21
+      },
+      {
+        "copies": 2,
+        "functions": [
+          {
+            "line": 66,
+            "name": "_refuse",
+            "path": "train/ship_gguf_ollama_v4.1.0.py"
+          },
+          {
+            "line": 69,
+            "name": "_refuse",
+            "path": "train/ship_gguf_ollama_v4.1.1.py"
+          }
+        ],
+        "hash": "50b144d57b29efe5",
+        "redundant_tokens": 20,
+        "tokens": 20
+      }
+    ],
+    "groups_total": 25,
+    "groups_truncated": false,
+    "method": "normalised-function-hash/1",
+    "min_body_tokens": 20,
+    "redundancy_score": 9963,
+    "redundant_tokens": 1798
+  },
   "_repo_root": ".",
+  "_scanner": {
+    "go": {
+      "import_resolution": "legacy-dotted-v1",
+      "scanner_version": "0.2.0"
+    },
+    "mind": {
+      "import_resolution": "unversioned",
+      "scanner_version": "unversioned"
+    },
+    "python": {
+      "import_resolution": "legacy-dotted-v1",
+      "scanner_version": "0.2.0"
+    },
+    "rust": {
+      "import_resolution": "rust-longest-prefix-v7",
+      "scanner_version": "0.2.0"
+    },
+    "typescript": {
+      "import_resolution": "legacy-dotted-v1",
+      "scanner_version": "0.2.0"
+    }
+  },
+  "_scope": {
+    "declared": false,
+    "files_in_scope": {
+      "go": 8,
+      "mind": 27,
+      "python": 1303,
+      "rust": 0,
+      "typescript": 17
+    },
+    "files_out_of_scope": {},
+    "nested_checkouts_skipped": [],
+    "non_utf8_paths_skipped": [],
+    "patterns": {
+      "exclude": [],
+      "product": [],
+      "tooling": [],
+      "vendored": []
+    },
+    "patterns_from_rules": {
+      "exclude": [],
+      "product": [],
+      "tooling": [],
+      "vendored": []
+    },
+    "source": "none"
+  },
   "edges": [],
   "nodes": []
 }
