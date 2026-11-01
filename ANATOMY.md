@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1784 | **Est. tokens:** ~5,230,114
-**Generated:** 2026-11-01 05:50 UTC
+**Files:** 1785 | **Est. tokens:** ~5,230,221
+**Generated:** 2026-11-01 07:34 UTC
 
 ## Token Budget Guide
 
@@ -80,7 +80,7 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 257 | ~1,147,592 |
+| `src/mind_mem/` | 258 | ~1,147,695 |
 | `src/mind_mem/api/` | 5 | ~29,070 |
 | `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -95,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 807 | ~2,367,015 |
+| `tests/` | 807 | ~2,367,019 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -849,9 +849,10 @@
 - `check_version.py` (~1189 tok, large) — Version consistency checker for mind-mem.
 - `client_config_io.py` (~1116 tok, large) — # Copyright 2026 STARGA, Inc.
 - `client_mcp.py` (~2905 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `client_paths.py` (~760 tok, large) — # Copyright 2026 STARGA, Inc.
+- `client_paths.py` (~291 tok, medium) — # Copyright 2026 STARGA, Inc.
 - `client_registry_data.py` (~6077 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `client_registry.py` (~2117 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `client_registry.py` (~347 tok, medium) — # Copyright 2026 STARGA, Inc.
+- `client_registry_schema.py` (~2342 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_restore.py` (~1500 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `client_writers.py` (~5542 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `closed_slots.py` (~6827 tok, huge) — Closed, versioned fact slots on the governed Markdown store.
@@ -1409,7 +1410,7 @@
 - `test_chunk_text.py` (~231 tok, medium) — Tests for text chunking."""
 - `test_ci_green_per_job_gate.py` (~4342 tok, huge) — The CI-green gate must read JOBS, not just the workflow run's conclusion.
 - `test_cli_detector_refusal.py` (~1619 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_client_integrations.py` (~5609 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_client_integrations.py` (~5613 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_help_is_harmless.py` (~1922 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_cli_hint_correctness.py` (~1371 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_codepoint_sanitize.py` (~3333 tok, huge) — Tests for invisible-Unicode ingest sanitization (security).
