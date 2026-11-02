@@ -1,0 +1,11 @@
+{
+  "name": "minimatch",
+  "version": "11.0.3-v3shape.1",
+  "private": true,
+  "description": "The minimatch 3 call shape (a callable default export) backed by minimatch 11, for lint plugins that still require minimatch 3.",
+  "main": "index.js",
+  "license": "ISC",
+  "dependencies": {
+    "minimatch-patched": "npm:minimatch@^11.0.1"
+  }
+}
