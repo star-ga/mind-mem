@@ -5031,6 +5031,114 @@ Proposed. Nothing built. U.1 and U.2 can land now. U.3 is ordered after a MIND p
 
 ---
 
+## Group V — Associative refinement of the vector query, and a basin audit of the store (2026-11-01, Proposed)
+
+**Status:** proposed and audited 2026-11-01 (verdicts inline). Not scheduled. Default-off flag, PATCH bump
+when built. Both items share one small update function. Neither adds a stored artifact; V.2 adds one admin
+report.
+
+**The idea, stated as math so it can be checked.** Take a query vector `q` and the stored embeddings `K` of a
+candidate set (one L2-normalised row per block) and iterate
+
+```
+p_t     = softmax(β · K q_t)
+q_{t+1} = Kᵀ p_t
+```
+
+With the candidate set frozen across the `T` steps, no step raises the scalar energy
+`E(q) = ½‖q‖² − (1/β) · log Σ_i exp(β · k_iᵀ q)`: each step is a gradient step of size one on `E`, whose
+curvature is at most one. Re-selecting candidates between steps would change `E` and void this argument; in
+Q16.16 or f32 the descent holds within a stated rounding tolerance. `β` sets blend versus arbitration: at low
+`β` the query settles near a uniform average of the whole candidate set, at high `β` on one candidate. This is the attention update applied to a query against a fixed set of stored
+vectors, so nothing here is new mathematics. The claim to test is narrow: one to four such steps make the
+vector leg better at finding the right block from an incomplete cue.
+
+**What already exists, so nobody re-proposes it.**
+- Lexical pseudo-relevance feedback already expands the BM25 query from first-pass hits, with its own weight
+  for multi-hop questions (`_recall_core.py`). The vector leg has no equivalent today; V.1 is that equivalent.
+- "Recover the whole episode, not an isolated chunk" is already owned: `evidence_bundle.py` returns facts,
+  relations and a timeline, and `graph_recall.py` expands cross-reference neighbours on multi-hop queries
+  (`retrieval.multi_hop`). This group touches neither.
+- Superseded and revoked blocks are already demoted on every recall leg before that leg's own limit cut (fixed
+  2026-10-08, see Correctness above). Demotion, not exclusion: superseded history stays recallable. V.1
+  keeps that demotion on the leg's results.
+- Recall-time near-duplicate removal already exists (`dedup.py` layer 2, pairwise cosine above 0.85 on the
+  result list). V.2 audits the store; it is not a recall-time filter.
+- Contradiction detection already exists (`contradiction_detector.py`, `ConstraintSignatures`). Nothing in
+  this group resolves a conflict.
+
+**The hazard the audit found.** When two candidates are near-identical, for example a decision and the
+decision that superseded it, the iteration settles on a blend of the two rather than on either one. That is
+the worst case for this method, and it is exactly the case a "recover the decision from a fragment" pitch
+uses. Hence the ordering rule in V.1 (admission and supersession first) and the blend flag in its receipt.
+
+### Deliverable
+
+- [ ] **V.1 Associative refinement of the vector query (flag `retrieval.vector_refine`, default off).** Audit
+  verdict 2026-11-01: **CHANGE**, narrowed from "reconstruct memories from fragments" to query refinement only.
+  - *Where:* the vector leg of hybrid recall, after admission (`admit_corpus`), before RRF fusion. The leg's
+    result list keeps today's superseded/revoked demotion (`_rank_replaced_below_live`).
+  - *Candidates:* the first-pass vector top `N = 64` under the canonical Top-K comparator (score descending,
+    stable id ascending; Group U), using the embeddings already stored for those blocks. No re-encoding.
+    Superseded and revoked blocks are left out of this candidate set only, so the update cannot blend a
+    decision with its replacement; they still appear in the leg's results, demoted as today. The set is
+    frozen for all `T` steps.
+  - *Update:* `T` steps of the update above. `T ∈ {1, 2, 3, 4}` and `β` are chosen once on the dev split and
+    stored as versioned config, never tuned at runtime.
+  - *Second pass:* the refined `q_T` replaces the original query for one more vector search over the full
+    admitted index. That result list enters RRF exactly where the vector list enters today. Lexical legs,
+    graph expansion and fusion weights do not change.
+  - *Output:* real block ids only. `q_T` is never stored, returned or written.
+  - *Receipt (flag on):* `T`, `β`, the energy after each step, the final largest weight `p_max`, a blend flag
+    (`p_max < 0.5`) and a digest of the candidate set.
+  - *Flag off:* byte-identical to today. The flag is read once at config load, so the off path adds no read,
+    parse or per-query work.
+- [ ] **V.2 Basin audit of the store (admin report, offline; depends on V.1).** Audit verdict 2026-11-01:
+  **IMPLEMENT as a diagnostic**, lower priority than V.1.
+  - For each admitted, non-superseded block, run the V.1 update from the block's own embedding over its
+    `N = 32` nearest neighbours. The block is *shadowed* if the iteration does not settle on it: another block
+    wins, or its final weight is below a versioned threshold.
+  - Output: a read-only report of shadowed clusters. A cluster can be filed as a consolidation **proposal**
+    through the existing propose → review → approve path. Nothing is merged, rewritten or deleted
+    automatically.
+  - Runs in maintenance, never on the recall path.
+
+### Preregistered acceptance
+
+V.1 becomes a default only if every condition holds. The fairness rules apply (frozen held-out split, tuning
+and miss-reading on the dev split only, official key as the headline, no benchmark-specific code), and so does
+the plain-retrieval default-gate rule.
+
+1. **Partial cues (the claim under test).** Truncate every held-out question to the first half of its tokens,
+   one fixed generic rule. On LoCoMo and LongMemEval-S, coverage (gold evidence inside the answerer's context)
+   improves over the current pipeline on the primary benchmark, named in the preregistration before any
+   held-out run (the other benchmark is confirmatory), paired per question, one-sided exact binomial test at
+   p < 0.05, with no significant drop on the other.
+2. **Full questions.** No significant drop in coverage or official accuracy on either benchmark, same test.
+3. **Default gate.** The flag-on pipeline beats the plain-retrieval baseline on the held-out split under that
+   entry's rule.
+4. **Not more confidently wrong.** The rate of superseded or revoked blocks at rank 1 does not rise, and the
+   abstention classifier's rate of answering when it should abstain does not rise.
+5. **Latency.** p95 recall latency rises by no more than 10% on the standard workspace.
+6. **Determinism.** Three reruns with pinned inputs give byte-identical result lists and receipts, the
+   flag-off parity test is green, and disabling the update inside the flag-on path turns the acceptance test
+   red, so the test is shown to be able to fail.
+
+V.2 stays only if, on a hand-reviewed sample of 50 flagged clusters, at least 80% are real shadowing and at
+least 20% of those are clusters the recall-time cosine rule (`dedup.py` layer 2) would not catch. Otherwise it
+adds nothing over existing dedup and is dropped.
+
+**Kill rule.** If any V.1 condition fails, the flag stays off and this group closes with a dated note and the
+numbers. V.2 closes with it.
+
+**Ruled out in the same audit.** Letting a settled state stand in for a stored memory; any automatic merge or
+rewrite driven by low energy; learning or self-tuning `β` or `T` at runtime; a separate named "engine"
+component. A low-energy state is not a true or authorised state, and propose → review → approve stays the
+only way into the governed store.
+
+**Port.** Python first. The update is a fixed-order matrix-vector product plus a softmax, so its MIND kernel
+joins the Pure-MIND Core Port behind Group U parity like every other scoring unit.
+
 ## Replay-as-corpus: the recorded discovery tree as a first-class memory object (2026-09-18, Proposed)
 
 > Prior-art shape observed in a recent public recursive-self-improvement paper
