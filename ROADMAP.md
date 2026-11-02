@@ -5045,9 +5045,11 @@ p_t     = softmax(β · K q_t)
 q_{t+1} = Kᵀ p_t
 ```
 
-No step raises the scalar energy `E(q) = ½‖q‖² − (1/β) · log Σ_i exp(β · k_iᵀ q)`, so the iteration settles.
-`β` sets blend versus arbitration: at low `β` the query settles on a weighted average of similar candidates,
-at high `β` on one candidate. This is the attention update applied to a query against a fixed set of stored
+With the candidate set frozen across the `T` steps, no step raises the scalar energy
+`E(q) = ½‖q‖² − (1/β) · log Σ_i exp(β · k_iᵀ q)`: each step is a gradient step of size one on `E`, whose
+curvature is at most one. Re-selecting candidates between steps would change `E` and void this argument; in
+Q16.16 or f32 the descent holds within a stated rounding tolerance. `β` sets blend versus arbitration: at low
+`β` the query settles near a uniform average of the whole candidate set, at high `β` on one candidate. This is the attention update applied to a query against a fixed set of stored
 vectors, so nothing here is new mathematics. The claim to test is narrow: one to four such steps make the
 vector leg better at finding the right block from an incomplete cue.
 
@@ -5055,10 +5057,11 @@ vector leg better at finding the right block from an incomplete cue.
 - Lexical pseudo-relevance feedback already expands the BM25 query from first-pass hits, with its own weight
   for multi-hop questions (`_recall_core.py`). The vector leg has no equivalent today; V.1 is that equivalent.
 - "Recover the whole episode, not an isolated chunk" is already owned: `evidence_bundle.py` returns facts,
-  relations and a timeline, and `graph_recall.py` expands typed edges on multi-hop queries
+  relations and a timeline, and `graph_recall.py` expands cross-reference neighbours on multi-hop queries
   (`retrieval.multi_hop`). This group touches neither.
 - Superseded and revoked blocks are already demoted on every recall leg before that leg's own limit cut (fixed
-  2026-10-08, see Correctness above). V.1 runs after that admission step, never before it.
+  2026-10-08, see Correctness above). Demotion, not exclusion: superseded history stays recallable. V.1
+  keeps that demotion on the leg's results.
 - Recall-time near-duplicate removal already exists (`dedup.py` layer 2, pairwise cosine above 0.85 on the
   result list). V.2 audits the store; it is not a recall-time filter.
 - Contradiction detection already exists (`contradiction_detector.py`, `ConstraintSignatures`). Nothing in
@@ -5073,10 +5076,13 @@ uses. Hence the ordering rule in V.1 (admission and supersession first) and the 
 
 - [ ] **V.1 Associative refinement of the vector query (flag `retrieval.vector_refine`, default off).** Audit
   verdict 2026-11-01: **CHANGE**, narrowed from "reconstruct memories from fragments" to query refinement only.
-  - *Where:* the vector leg of hybrid recall, after admission (`admit_corpus`) and the superseded/revoked
-    exclusion, before RRF fusion.
+  - *Where:* the vector leg of hybrid recall, after admission (`admit_corpus`), before RRF fusion. The leg's
+    result list keeps today's superseded/revoked demotion (`_rank_replaced_below_live`).
   - *Candidates:* the first-pass vector top `N = 64` under the canonical Top-K comparator (score descending,
     stable id ascending; Group U), using the embeddings already stored for those blocks. No re-encoding.
+    Superseded and revoked blocks are left out of this candidate set only, so the update cannot blend a
+    decision with its replacement; they still appear in the leg's results, demoted as today. The set is
+    frozen for all `T` steps.
   - *Update:* `T` steps of the update above. `T ∈ {1, 2, 3, 4}` and `β` are chosen once on the dev split and
     stored as versioned config, never tuned at runtime.
   - *Second pass:* the refined `q_T` replaces the original query for one more vector search over the full
@@ -5105,8 +5111,9 @@ the plain-retrieval default-gate rule.
 
 1. **Partial cues (the claim under test).** Truncate every held-out question to the first half of its tokens,
    one fixed generic rule. On LoCoMo and LongMemEval-S, coverage (gold evidence inside the answerer's context)
-   improves over the current pipeline on at least one benchmark, paired per question, one-sided exact binomial
-   test at p < 0.05, with no significant drop on the other.
+   improves over the current pipeline on the primary benchmark, named in the preregistration before any
+   held-out run (the other benchmark is confirmatory), paired per question, one-sided exact binomial test at
+   p < 0.05, with no significant drop on the other.
 2. **Full questions.** No significant drop in coverage or official accuracy on either benchmark, same test.
 3. **Default gate.** The flag-on pipeline beats the plain-retrieval baseline on the held-out split under that
    entry's rule.
