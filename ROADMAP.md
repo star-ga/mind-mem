@@ -7033,3 +7033,47 @@ Dropped if an external score can change approved memory without the review path,
 ### Status
 
 Proposed. Nothing built. An architecture audit verdict is required before implementation.
+
+## Group W — Recall under a cold model and a misdirected start (2026-11-08, Proposed)
+
+### Problem
+
+When the embedding model is not in memory, recall gets slow, falls back to lexical search, and does not recover by itself. Three surfaces also report less than happened. Measured on 5.0.3 on one workstation. Each code path below was re-read at 5.0.4.
+
+- **W.1 Cold start never finishes.** Loading the model takes about 18 s. One embedding request is allowed 8 s (`embed_timeout_seconds`). The embedding server cancels a load when its caller disconnects, so each recall restarts the load and none completes. Nothing in the package loads the embedding model ahead of a recall.
+- **W.2 Last resort costs time it cannot repay.** When the configured provider declines, the fallback chain imports sentence-transformers (7 to 12 s) before it finds that a provider tag cannot be in that library's cache.
+- **W.3 The vector leg is attested by absence.** `derive_legs` records the vector leg as run when it was requested, the backend reports available, and no failure marker exists. On 5.0.3 an MCP recall returned hits with no embedding request reaching the server, and its record named the vector leg as run with nothing degraded. The cause of that run is not traced yet. The rule that allowed the record is unchanged at 5.0.4.
+- **W.4 Signal hits have no text.** `get_excerpt` does not read the `Excerpt` field, so a signal block shows only its id.
+- **W.5 The wrong directory looks like an empty memory.** `mm recall` in a directory with no workspace exits 0, prints `[]`, and creates `.mind-mem` and `.mind-mem-index` there.
+
+### Deliverable
+
+1. A warm-up that loads the configured embedding model once, off the recall path, at MCP server start and as a CLI command.
+2. When a recall times out on a cold model, one background request per process holds the load open until it ends, so a later recall finds the model loaded. The recall itself still returns inside its budget.
+3. The last resort checks its cache for the model before importing the library, and is skipped when the model is not there.
+4. The vector leg counts as run only on a positive signal recorded by the leg itself: the query was embedded, or a named cached embedding was used, and the index was searched. Anything else is degraded. If this changes what an existing record means, the record version goes up and old records stay verifiable.
+5. `get_excerpt` reads `Excerpt` after the fields it already reads. The id is used only when a block has no text field.
+6. `mm recall` outside a workspace exits nonzero, names the fix, and writes nothing.
+
+### Measurement
+
+An embedding-server stub with a settable load time and a call counter. Report time to the first vector-served recall over ten sequential recalls on a cold model, with the warm-up and hold-open against a raised `embed_timeout_seconds` alone. Report added wall time on the provider-down path before and after item 3. Report the added cost of items 1 to 4 on a recall against a loaded model.
+
+### Acceptance gate
+
+- Positive control: with the model loaded, the stub counts at least one call and `legs_ran` names `vector`.
+- With the vector leg short-circuited and no call made, `legs_ran` omits `vector` and `legs_degraded` names it. Mutation control: restoring the absence-of-marker rule turns this test red.
+- With a load longer than the budget, the first recall returns lexical hits inside the budget and names `vector` as degraded, the load finishes, and a later recall is vector-served. Mutation control: removing the hold-open turns this test red. Twenty concurrent recalls produce one held request.
+- With the vector leg off, the warm-up makes no network call and recall is byte-identical to a build without it.
+- Provider down and no cached model: `sentence_transformers` is not imported. Positive control: with the model cached, the last resort still runs.
+- A block with only `Excerpt` returns that text, a block with `Statement` still returns `Statement`, and a block with no text field returns its id.
+- Outside a workspace the exit code is nonzero and the directory stays empty. Positive control: inside a workspace the same query exits 0 with hits.
+- No recall benchmark or retrieval gate drops.
+
+### Falsification
+
+Items 1 and 2 are dropped if raising `embed_timeout_seconds` alone reaches the first vector-served recall as soon, with no worse recall latency on a cold model. Item 4 is changed if the leg cannot record the signal without added cost on a loaded model that the measurement can detect.
+
+### Status
+
+Proposed. Nothing built. An architecture audit verdict is required before implementation.
