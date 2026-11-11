@@ -2,8 +2,8 @@
 
 import os
 import re
-
-import anthropic
+import subprocess
+import tempfile
 
 MAX_DIFF = 150_000
 diff = open("/tmp/pr.diff", encoding="utf-8", errors="replace").read()
@@ -64,13 +64,32 @@ rubric = (
 truncated = len(diff) > MAX_DIFF
 # The model never sees a private term, and its output is redacted again before it is posted publicly.
 body = f"COMMIT LOG:\n{redact(log[:20_000])}\n\nDIFF{' (truncated)' if truncated else ''}:\n{redact(diff[:MAX_DIFF])}"
-msg = anthropic.Anthropic().messages.create(
-    model="claude-sonnet-5-5",
-    max_tokens=2000,
-    system=[{"type": "text", "text": rubric, "cache_control": {"type": "ephemeral"}}],
-    messages=[{"role": "user", "content": body}],
-)
-review = redact("".join(b.text for b in msg.content if b.type == "text").strip())
+
+
+def ask_model(system: str, user: str) -> str:
+    """One review completion through the review CLI on the subscription token: no tools, one turn, no checkout.
+    There is no paid-API fallback. Without the token, or on any CLI failure, this exits non-zero with a redacted
+    reason; /tmp/leaks.txt is already written, so the workflow posts the leak verdict and marks the review unavailable."""
+    if not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        raise SystemExit("review model call failed: no review token is set for this repository")
+    # The CLI must see only the token: no ANTHROPIC_* overrides, no leak list, no repository token.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ANTHROPIC_") and k not in ("LEAK_TERMS", "GH_TOKEN")}
+    # No tools and an empty working directory: a tool call would use the single allowed turn.
+    try:
+        run = subprocess.run(
+            ["claude", "-p", "--model", "claude-sonnet-5-5", "--max-turns", "1", "--tools", "", "--output-format", "text",
+             "--append-system-prompt", system],
+            input=user, capture_output=True, text=True, timeout=900, check=False, env=env, cwd=tempfile.mkdtemp(),
+        )  # fmt: skip
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SystemExit(f"review model call failed: {type(exc).__name__}") from None
+    if run.returncode != 0 or not run.stdout.strip():
+        detail = (run.stderr.strip() or run.stdout.strip())[:500]
+        raise SystemExit(f"review model call failed (rc={run.returncode}): {redact(detail)}")
+    return run.stdout.strip()
+
+
+review = redact(ask_model(rubric, body))
 
 out = ["<!-- pr-review -->", "### Automated review", ""]
 if hits:
