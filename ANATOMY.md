@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1787 | **Est. tokens:** ~5,241,698
-**Generated:** 2026-11-11 08:58 UTC
+**Files:** 1787 | **Est. tokens:** ~5,241,842
+**Generated:** 2026-11-11 09:41 UTC
 
 ## Token Budget Guide
 
@@ -36,7 +36,7 @@
 | `deploy/docker/` | 1 | ~824 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 98 | ~242,547 |
+| `docs/` | 98 | ~242,619 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/advisories/` | 1 | ~834 |
 | `docs/audit/` | 1 | ~4,973 |
@@ -49,7 +49,7 @@
 | `docs/evidence/5.0.2-f1/` | 12 | ~188,585 |
 | `docs/plans/` | 1 | ~6,134 |
 | `docs/security-baselines/` | 1 | ~18,974 |
-| `docs/specs/` | 3 | ~10,734 |
+| `docs/specs/` | 3 | ~10,806 |
 | `examples/` | 3 | ~1,203 |
 | `.gemini/` | 1 | ~28 |
 | `.githooks/` | 1 | ~98 |
@@ -416,7 +416,7 @@
 - `claude-desktop-setup.md` (~807 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~14943 tok, huge) — Client Integrations
 - `cli-reference.md` (~8910 tok, huge) — CLI Reference
-- `companion-tools.md` (~1111 tok, large) — Companion Tools
+- `companion-tools.md` (~1183 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~5464 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `computed-abstention.md` (~2322 tok, huge) — Computed abstention
@@ -521,7 +521,7 @@
 ### `docs/specs/`
 
 - `retrieval-receipt-canonical-vectors.json` (~1558 tok, huge) — Keys: profile, canonicalization, receipt_golden, rules
-- `retrieval-receipt-contract.md` (~8606 tok, huge) — Retrieval receipt contract
+- `retrieval-receipt-contract.md` (~8678 tok, huge) — Retrieval receipt contract
 - `retrieval-receipt-local-v1.json` (~570 tok, large) — Keys: $schema, $id, title, type, additionalProperties
 ### `docs/`
 

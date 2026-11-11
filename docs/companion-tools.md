@@ -1,5 +1,7 @@
 # Companion Tools
 
+> Naming (2026-11-10): the MIND-Law extensions E1–E6 were numbered I10–I15 (E*n* is the former I(*n*+9)); the code and wire ids stay 10 to 15. 512 defines seven canonical conditions. I1–I9 are MIND-Law's implementation of them. Extensions are MIND-Law's own and are not part of 512.
+
 External tools that solve adjacent memory/inference problems
 mind-mem deliberately does not solve. Documented here so users see
 them as **complements**, not competitors. mind-mem **does not depend
@@ -28,7 +30,7 @@ talk to `http://localhost:8080/v1` by default (override with
 | ------------------------------------------- | ------------------- | ------------------- |
 | Bit-identical output, same GPU              | no                  | **yes** (Q16.16 evidence path + deterministic-reduction kernels) |
 | Per-token cryptographic evidence chain      | no                  | **yes** |
-| Compiled governance constraints (I11–I15)   | no                  | **yes** (via MIND-Law) |
+| Compiled governance constraints (E2–E6)   | no                  | **yes** (via MIND-Law) |
 | Mid-request detection of silent reconfig    | no                  | **yes** (HOLD→RESUME) |
 | Raw tokens/sec advantage vs vLLM            | —                   | **±10%** at best |
 
