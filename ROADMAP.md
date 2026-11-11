@@ -1,5 +1,7 @@
 # MIND-Mem Roadmap
 
+> Naming (2026-11-10): the MIND-Law extensions E1–E6 were numbered I10–I15 (E*n* is the former I(*n*+9)); the code and wire ids stay 10 to 15. 512 defines seven canonical conditions. I1–I9 are MIND-Law's implementation of them. Extensions are MIND-Law's own and are not part of 512.
+
 > **Reality check (2026-05-20 honesty pass):** the v3.2.0+ sections
 > below were drafted ahead of the v3.9 → v4.0 release ladder and many
 > items shipped without being checked off here. The bulk of v3.2.0
@@ -4214,7 +4216,7 @@ evidence layer. Citation recorded privately.
 
 Six layers of the ecosystem each anchor a different "what survives
 transformation": `trace_hash` (artifact, `mind`), routing lineage (decision,
-Naestro), **the provenance chain (belief over time, here)**, I1–I15 + `spec_hash`
+Naestro), **the provenance chain (belief over time, here)**, I1–I9 and E1–E6 + `spec_hash`
 (constraint, MIND-Law), the governed route table (intent→capability, mind-nerve),
 and the session evidence log (structural health, arch-mind). Six roots, zero
 cross-links — nothing can prove the conjunction *"this binary, produced by this
@@ -4255,7 +4257,7 @@ canonical record, never over a caller's account of what it recalled. Same rule,
 same reason: a governing layer that decides on the governed party's summary is
 theatre.
 
-**Firewall (I13, inherited from MIND-Law).** The anchor is an evidence artifact,
+**Firewall (E4, inherited from MIND-Law).** The anchor is an evidence artifact,
 never a score. Belief coverage confers no authority — a well-anchored artifact is
 not thereby more trustworthy, and anchor breadth must never be optimized against
 or used to relax a gate. This is also why the composite anchor must stay separate
@@ -4320,7 +4322,7 @@ is another assertion is not evidence; it is a second opinion.
   volunteering the entry stays empty.
 
 **Firewall — a scar is evidence, never a score.** Same rule Group O inherits
-from MIND-Law (I13). A scar count must never be optimized against, never relax
+from MIND-Law (E4). A scar count must never be optimized against, never relax
 or tighten a gate automatically, and never be surfaced as an agent ranking. The
 moment "fewest scars" becomes a target, the incentive is to assert less
 specifically rather than to be right more often — and vague claims are the

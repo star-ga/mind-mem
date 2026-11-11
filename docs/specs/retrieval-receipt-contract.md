@@ -1,5 +1,7 @@
 # Retrieval receipt contract
 
+> Naming (2026-11-10): the MIND-Law extensions E1–E6 were numbered I10–I15 (E*n* is the former I(*n*+9)); the code and wire ids stay 10 to 15. 512 defines seven canonical conditions. I1–I9 are MIND-Law's implementation of them. Extensions are MIND-Law's own and are not part of 512.
+
 Status: **Local profile published in 5.0.3; broader profiles remain proposed.**
 Owner: STARGA Inc. Canonical milestones: [Group RE](../../ROADMAP.md#group-re--portable-retrieval-evidence).
 
@@ -144,7 +146,7 @@ evidence retain their original preimages. Legacy records remain readable with
 lineage status unknown; they cannot pass a new lineage-required profile through
 an invented field or a silent fallback. Keep lineage in the appropriate evidence
 plane: this does not authorize action identifiers or reward signals in an
-I13-governed non-causal structural witness.
+E4-governed non-causal structural witness.
 
 ### 3.3 Independent CVS protocol and MIND adapter
 
