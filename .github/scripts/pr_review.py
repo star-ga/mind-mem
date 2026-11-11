@@ -79,7 +79,8 @@ def ask_model(system: str, user: str) -> str:
         run = subprocess.run(
             ["claude", "-p", "--model", "claude-sonnet-5-5", "--max-turns", "1", "--tools", "", "--output-format", "text",
              "--append-system-prompt", system],
-            input=user, capture_output=True, text=True, timeout=900, check=False, env=env, cwd=tempfile.mkdtemp(),
+            input=user, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=900, check=False, env=env, cwd=tempfile.mkdtemp(),
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise SystemExit(f"review model call failed: {type(exc).__name__}") from None

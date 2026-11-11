@@ -6,7 +6,7 @@
     "max_mcp_tool_overlap": 2,
     "module_count": 461,
     "pure_modules": 317,
-    "redundancy_body_tokens": 483029,
+    "redundancy_body_tokens": 483041,
     "redundancy_duplicate_functions": 61,
     "redundancy_duplicate_groups": 25,
     "redundancy_excess": 37,
@@ -23,7 +23,7 @@
   "_comment": "Produced by `.arch-mind/rescan.py` from a `git archive` extraction of this commit's tracked content, scanned with `arch-mind sidecar-scan`. The extraction is why the numbers are a function of the commit and not of scan-time filesystem state: it contains tracked files only, so a nested working tree (a `git worktree` checkout under `.wt/`, `.claude/worktrees/`, or any other name) cannot be in scope whatever the scanner does. `_repo_root` is normalised to '.' because the scan runs in a scratch directory.",
   "_languages": "python,typescript,go,rust,mind",
   "_redundancy": {
-    "body_tokens_total": 483029,
+    "body_tokens_total": 483041,
     "functions_analysed": 3500,
     "groups": [
       {

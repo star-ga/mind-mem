@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1787 | **Est. tokens:** ~5,241,686
-**Generated:** 2026-11-11 07:45 UTC
+**Files:** 1787 | **Est. tokens:** ~5,241,698
+**Generated:** 2026-11-11 08:07 UTC
 
 ## Token Budget Guide
 
@@ -55,7 +55,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/scripts/` | 1 | ~1,319 |
+| `.github/scripts/` | 1 | ~1,331 |
 | `.github/workflows/` | 13 | ~24,609 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
@@ -578,7 +578,7 @@
 - `pull_request_template.md` (~87 tok, small) — Summary
 ### `.github/scripts/`
 
-- `pr_review.py` (~1319 tok, large) — PR review + public-leak check for this repository (comment only; never pushes or merges)."""
+- `pr_review.py` (~1331 tok, large) — PR review + public-leak check for this repository (comment only; never pushes or merges)."""
 ### `.github/`
 
 - `SECURITY_CONTACTS.md` (~124 tok, small) — Security Contacts
