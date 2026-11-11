@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1787 | **Est. tokens:** ~5,241,093
-**Generated:** 2026-11-11 07:08 UTC
+**Files:** 1787 | **Est. tokens:** ~5,241,842
+**Generated:** 2026-11-11 09:00 UTC
 
 ## Token Budget Guide
 
@@ -55,8 +55,8 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,466 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/scripts/` | 1 | ~985 |
-| `.github/workflows/` | 13 | ~24,206 |
+| `.github/scripts/` | 1 | ~1,331 |
+| `.github/workflows/` | 13 | ~24,609 |
 | `hooks/` | 3 | ~1,026 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -578,7 +578,7 @@
 - `pull_request_template.md` (~87 tok, small) — Summary
 ### `.github/scripts/`
 
-- `pr_review.py` (~985 tok, large) — PR review + public-leak check for this repository (comment only; never pushes or merges)."""
+- `pr_review.py` (~1331 tok, large) — PR review + public-leak check for this repository (comment only; never pushes or merges)."""
 ### `.github/`
 
 - `SECURITY_CONTACTS.md` (~124 tok, small) — Security Contacts
@@ -591,7 +591,7 @@
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~261 tok, medium) — name: Docs
 - `label-sync.yml` (~111 tok, small) — name: Label Sync
-- `pr-review.yml` (~721 tok, large) — name: pr-review
+- `pr-review.yml` (~1124 tok, large) — name: pr-review
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
 - `release.yml` (~6918 tok, huge) — name: Release
 - `security.yml` (~3350 tok, huge) — name: Supply-Chain Security
