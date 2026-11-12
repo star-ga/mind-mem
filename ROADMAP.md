@@ -7079,3 +7079,82 @@ Items 1 and 2 are dropped if raising `embed_timeout_seconds` alone reaches the f
 ### Status
 
 Proposed. Nothing built. An architecture audit verdict is required before implementation.
+
+## Training recipe for the sub-2-bit mind-mem model (2026-11-11, Proposed)
+
+The deferred 2B ternary model needs a training path: today's QLoRA script does
+not train ternary or sign-only weights. Recent research on sign-factor
+low-rank weights (W ~ diag(h) U diag(l) V^T diag(g), U and V in {+1, -1})
+gives a recipe that fills this gap.
+
+### Plan
+
+- Knowledge distillation from the current full-precision model: KL loss on
+  the output distribution plus 10 x MSE loss on the hidden states.
+- A straight-through sign: sign() in the forward pass, the derivative of
+  tanh(100x) in the backward pass.
+- 5 epochs, cosine learning rate, 2% warm-up.
+- Initialization: SVD of each layer for the signs and scales, then an
+  orthogonal rotation (iterative quantization) before training.
+- Inference: the sign-factor matrix-vector path proposed for mind-inference
+  and MIND-BLAS (integer adds only, bit-identical on every substrate).
+
+### What to watch
+
+- Published quality below 1 bit per weight is weak; the strict 95/95 gate
+  will likely refuse sub-1-bit settings. Start at about 1 bit per weight.
+- Fair-bench rule: compare against baselines with the same training budget.
+- Clean-room implementation from the equations only; check patents before
+  any commercial ship.
+
+### Acceptance
+
+- Every mind-mem gate and memory bench at or above the 4B model's scores,
+  with no gate regressing (the same bar as every model round).
+
+### Status
+
+Proposed, after the current 4B release. Needs an architecture-seat audit
+before any training run.
+
+## Choice calls on the local model through a decision head, not generated text (2026-11-11, Proposed)
+
+Some calls to the local model ask a choice question but read the answer out of generated text. The
+LLM rerank path is the clear case: it asks for scores as JSON, and when the JSON does not parse it
+silently returns the input order (`_recall_reranking.py`). The tool-trained 4B model needs its own
+schema for the same skill. Recent research on decision models gives a better shape for these calls.
+
+### Plan
+
+- A small head (about 1M parameters) on the local model scores each listed option by comparing the
+  hidden state at the answer position with the hidden state at the option's last token. One forward
+  pass, no decoding.
+- Three answer shapes: yes/no, one of N listed options, a point on a listed scale. Each answer
+  returns the probability of every option, calibrated per answer shape on a held-out split.
+- The head has no per-option weights, so any option count works and the option order does not bias
+  the answer. Several questions about one block cost one read of the block.
+- The answer can only be a listed option, so a parse failure cannot happen and text inside a block
+  cannot come back as an instruction.
+- Below the calibrated threshold the call abstains, and the item goes to the existing review path.
+- Deterministic checks stay first. The intent router stays regex-based; only questions that need the
+  model go to the head.
+- The chosen option enters the record. The probabilities are a sidecar outside every identity hash.
+
+### What to watch
+
+- Fair-bench rule: compare against the current path on the same held-out split and the same model.
+- Training data: check the licence of every source before training on it.
+- Clean-room implementation from the published description only.
+
+### Acceptance
+
+- On a held-out set of recorded rerank calls, the head returns only listed options and matches or
+  beats the current path on the recall benchmarks, with no gate regressing.
+- Replaying the same block, model hash and question gives the same chosen option, byte for byte
+  (positive control).
+- A block whose text tells the model to answer in free text still yields a listed option.
+- Mutation control: switching the call back to free generation turns the parse test red.
+
+### Status
+
+Proposed, after the current 4B release. Needs an architecture audit before implementation.
