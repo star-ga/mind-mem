@@ -7180,11 +7180,13 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 - A k-means++ start seeded from `cfg.kmeans_seed`, written to the pinned rules below. It is not
   the start in today's `pq._stdlib_kmeans`, which uses `randrange` and the built-in `sum()`. The
   first centroid is the sample point at index `floor(rng.random() * n)`. Each later centroid is
-  a weighted draw, as pinned below. Full Lloyd in the measurements uses this same start and seed,
+  a weighted draw, as pinned below. If every remaining distance is zero (duplicate points), the
+  next centroid is the lowest-index sample point not yet chosen, with no draw. Full Lloyd in the measurements uses this same start and seed,
   so the comparison measures the trainer, not the start. The current codebook is unchanged: at
   256 samples it never reaches a start.
-- Batch order: each pass draws a new seeded Fisher-Yates permutation of the sorted sample. Each
-  swap index is `floor(rng.random() * (i + 1))`, written out, not `random.shuffle`. All draws
+- Batch order: the sample is first sorted by block id. Each pass then draws a new seeded
+  Fisher-Yates permutation of that sorted list: for `i` from `n - 1` down to 1, swap position `i`
+  with position `floor(rng.random() * (i + 1))`, written out, not `random.shuffle`. All draws
   come from the one `random.Random(seed)` stream, in this order: the start draws, then the
   permutation for pass 1, then pass 2, then pass 3. A sort key can correlate with content (ids,
   insertion time, source file), so an unshuffled order would bias the last batches. Each pass
