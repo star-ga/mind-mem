@@ -7173,7 +7173,9 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 - A mini-batch trainer, stdlib only, installed through `pq.set_codebook_trainer`. After each
   small batch, every centroid moves a step toward the mean of the batch points assigned to it. It
   makes a few passes over the sample, not 25 full passes.
-- The step size and the batch size come from one fixed rule. There is no search per corpus and no
+- The step rule, batch size and pass count are fixed here: each centroid moves toward the mean of
+  its batch points by `batch_count / total_count`, where `total_count` is all points it has been
+  given so far, including this batch. Batch size 1,024, 3 passes over the sample. There is no search per corpus and no
   new config knob for them.
 - The same seeded k-means++ start from `cfg.kmeans_seed` as today. The batch order is a seeded
   Fisher-Yates permutation of the sorted sample: each swap index is
@@ -7187,8 +7189,9 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
     `sum()` over floats, because its algorithm changed in Python 3.12.
   - Each weighted draw for the start uses the next value of that one stream and a
     fixed-order cumulative sum, not a library sampling helper whose algorithm can change.
-  - Distances are squared L2 in plain loops. No `math.sqrt`, `exp`, `log`, `fsum`, `dist` or
-    `hypot`, whose results can differ between libm builds.
+  - Distances are squared L2 in plain loops. No `exp`, `log`, `hypot`, `dist` or `fsum`, whose
+    results can differ between libm builds or Python versions. (`math.sqrt` is correctly rounded
+    under IEEE 754, but squared L2 does not need it.)
   - A centroid that gets no points in a batch is left unchanged. There is no reseeding.
 - The stored codebook format and the 32-byte code per vector do not change.
 - The candidate new default is `train_sample = 4096`. Every gate below is evaluated at 4096, and
@@ -7197,6 +7200,8 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 
 ### Measurement
 
+- The held-out vectors and the held-out recall benchmark are disjoint from the training sample by
+  block id. The build PR names the benchmark and its query count before any run.
 - Reconstruction error on held-out vectors for three codebooks: the current one (256 samples),
   full Lloyd on the bigger sample (offline reference), and the mini-batch trainer on the same
   bigger sample.
@@ -7234,6 +7239,11 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
   "no more than 2% above full Lloyd" error check. The control is valid only if, on the gate data,
   the start centroids' own error is above that 2% bound. The test checks this margin first, so
   a control that cannot fail is reported as an error, not as a pass.
+- Three more controls: the current codebook fed to the recall check in place of the new one must
+  fail "strictly higher" (a tie), a trainer that draws from an unseeded generator must fail the
+  byte-identity check, and importing the trainer module with `v4.pq` off must fail the off-path
+  check. The 1-point-below-Lloyd recall gate and the manual wall-time benchmark have no mutation
+  control.
 
 ### Falsification
 
@@ -7243,7 +7253,9 @@ Each gate has a fixed outcome when it fails:
 - Error above the current codebook's, or more than 2% above full Lloyd: the trainer is dropped.
 - Recall more than 1 point below full Lloyd: the trainer is dropped. Full Lloyd becomes the
   candidate if it meets the 10% wall-time bound with equal or lower error.
-- Wall time above 10% at 4096: the trainer may stay as an opt-in, but the default stays at 256.
+- Wall time above 10% at 4096: the default stays at 256, where the trainer is never called
+  (`k >= len(points)`). It stays available only to a user who raises `train_sample`, and that
+  path passes the same byte-identity and quality gates at 4096.
 - Byte identity or the off-path gate fails: nothing lands until it passes. These are not traded
   against quality.
 
@@ -7252,5 +7264,7 @@ Each gate has a fixed outcome when it fails:
 Proposed, after the current 4B release. Nothing is built, and `v4.pq`
 stays off by default. No release is named for it yet. When it is built, the trainer is Python
 first. The `.mind` port follows the Pure-MIND Core Port, where the MIND roadmap's planned
-deterministic clustering program is the intended trainer. Needs an architecture audit before
+deterministic clustering program is the intended trainer. That program uses integer arithmetic
+and a different generator, so its codebook bytes differ from the Python trainer's: the port
+re-pins the byte-identity fixtures. Needs an architecture audit before
 implementation.
