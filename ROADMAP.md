@@ -7177,6 +7177,12 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
   new config knob for them.
 - The same seeded k-means++ start from `cfg.kmeans_seed` as today. The batch order comes from the
   rebuild's own sorted sequence. No clock, no unseeded draw. Ties go to the lowest centroid index.
+- Pinned arithmetic, so the stored bytes do not depend on the platform or the Python version:
+  - Every float sum is an explicit left-to-right loop in the sorted batch order. No built-in
+    `sum()` over floats, because its algorithm changed in Python 3.12.
+  - Each weighted draw for the start uses one `random.Random(seed).random()` value and a
+    fixed-order cumulative sum, not a library sampling helper whose algorithm can change.
+  - A centroid that gets no points in a batch is left unchanged. There is no reseeding.
 - The stored codebook format and the 32-byte code per vector do not change.
 - `train_sample` gets a higher default only after this trainer is the default, and only if the
   gate below passes.
@@ -7186,30 +7192,43 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 - Reconstruction error on held-out vectors for three codebooks: the current one (256 samples),
   full Lloyd on the bigger sample (offline reference), and the mini-batch trainer on the same
   bigger sample.
-- Recall on the held-out recall benchmark for no compression, the current codebook and the
-  mini-batch codebook. Same split, same embeddings, same code size.
-- Training wall time at 256, 4096 and 16384 sampled vectors.
+- Recall on the held-out recall benchmark for four indexes: no compression, the current codebook,
+  full Lloyd on the bigger sample and the mini-batch codebook. Same split, same embeddings, same
+  code size. The Lloyd row separates the effect of the bigger sample from the effect of the
+  trainer.
+- Training wall time at 256, 4096 and 16384 sampled vectors, and as a share of the total rebuild
+  wall time on the same machine.
 
 ### Acceptance gate
 
-- Two rebuilds with the same seed and corpus store byte-identical codebooks. Positive control: a
-  different seed stores different bytes.
+- Two rebuilds with the same seed and corpus store a byte-identical codebook BLOB in every cell of
+  the existing CI test matrix (Linux, macOS and Windows; Python 3.10 to 3.14). Positive control: a
+  different seed gives a different start centroid set, checked on the start itself before
+  training.
 - With `v4.pq` off, a rebuild is byte-for-byte what it is today and the trainer module is not
   imported.
-- The mini-batch codebook has a lower held-out reconstruction error than the current codebook, and
-  its recall is at or above the current compressed recall. No recall benchmark or retrieval gate
-  drops.
-- Mutation control: putting back the stop-at-once path (each centroid = one sampled vector) turns
-  the reconstruction-error test red.
+- The mini-batch codebook has a lower held-out reconstruction error than the current codebook,
+  and an error no more than 2% above full Lloyd on the same bigger sample.
+- Its held-out recall is strictly higher than the current compressed recall. A tie fails. The
+  benchmark is deterministic for a fixed codebook, so there is no run-to-run noise to allow for.
+  No recall benchmark or retrieval gate drops.
+- At the new default `train_sample`, codebook training takes no more than 10% of the total rebuild
+  wall time on the same machine.
+- These thresholds (2%, strictly higher, 10%) are fixed here, before any run.
+- Mutation control: a trainer that returns its k-means++ start centroids unchanged, with no update
+  step, is installed through `pq.set_codebook_trainer`. The reconstruction-error test must turn
+  red.
 
 ### Falsification
 
-Dropped if, at the same code size, the mini-batch codebook does not beat the current codebook on
-held-out recall. Changed to full Lloyd if Lloyd on the bigger sample trains in the same measured
-time with equal or lower error.
+Dropped if, at the same code size, the mini-batch codebook's held-out recall is not strictly
+higher than the current codebook's (the same rule as the gate). Changed to full Lloyd if Lloyd on
+the bigger sample also meets the 10% wall-time bound, with equal or lower error.
 
 ### Status
 
-Proposed. Nothing built, and `v4.pq` stays off by default. This release ships the Python trainer;
-the `.mind` port follows the Pure-MIND Core Port, where the MIND roadmap's planned deterministic
-clustering program is the intended trainer. Needs an architecture audit before implementation.
+Proposed, after the current 4B release. Nothing is built, and `v4.pq`
+stays off by default. No release is named for it yet. When it is built, the trainer is Python
+first. The `.mind` port follows the Pure-MIND Core Port, where the MIND roadmap's planned
+deterministic clustering program is the intended trainer. Needs an architecture audit before
+implementation.
