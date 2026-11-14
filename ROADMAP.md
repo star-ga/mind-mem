@@ -7177,16 +7177,24 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
   its batch points by `batch_count / total_count`, where `total_count` is all points it has been
   given so far, including this batch. Batch size 1,024, 3 passes over the sample. There is no search per corpus and no
   new config knob for them.
-- The same seeded k-means++ start from `cfg.kmeans_seed` as today. The batch order is a seeded
-  Fisher-Yates permutation of the sorted sample: each swap index is
-  `floor(rng.random() * (i + 1))` from the one `random.Random(seed)` stream, written out, not
-  `random.shuffle`. The start draws take their values from that stream first, then the
-  permutation. A sort key
-  can correlate with content (ids, insertion time, source file), so an unshuffled order would
-  bias the last batches. No clock, no unseeded draw. Ties go to the lowest centroid index.
+- A k-means++ start seeded from `cfg.kmeans_seed`, written to the pinned rules below. It is not
+  the start in today's `pq._stdlib_kmeans`, which uses `randrange` and the built-in `sum()`. The
+  first centroid is the sample point at index `floor(rng.random() * n)`. Each later centroid is
+  a weighted draw, as pinned below. Full Lloyd in the measurements uses this same start and seed,
+  so the comparison measures the trainer, not the start. The current codebook is unchanged: at
+  256 samples it never reaches a start.
+- Batch order: each pass draws a new seeded Fisher-Yates permutation of the sorted sample. Each
+  swap index is `floor(rng.random() * (i + 1))`, written out, not `random.shuffle`. All draws
+  come from the one `random.Random(seed)` stream, in this order: the start draws, then the
+  permutation for pass 1, then pass 2, then pass 3. A sort key can correlate with content (ids,
+  insertion time, source file), so an unshuffled order would bias the last batches. Each pass
+  splits its permutation into consecutive batches of 1,024. A final shorter batch is processed
+  with the same step rule, batches never wrap into the next pass, and no point is dropped. No
+  clock, no unseeded draw. Ties go to the lowest centroid index.
 - Pinned arithmetic, so the stored bytes do not depend on the platform or the Python version:
-  - Every float sum is an explicit left-to-right loop in the sorted batch order. No built-in
-    `sum()` over floats, because its algorithm changed in Python 3.12.
+  - Every float sum is an explicit left-to-right loop in processing order: the permuted batch
+    order for the update step, and sample index order for the start's distance sums. No
+    built-in `sum()` over floats, because its algorithm changed in Python 3.12.
   - Each weighted draw for the start uses the next value of that one stream and a
     fixed-order cumulative sum, not a library sampling helper whose algorithm can change.
   - Distances are squared L2 in plain loops. No `exp`, `log`, `hypot`, `dist` or `fsum`, whose
@@ -7201,7 +7209,12 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 ### Measurement
 
 - The held-out vectors and the held-out recall benchmark are disjoint from the training sample by
-  block id. The build PR names the benchmark and its query count before any run.
+  block id. The build PR names the benchmark before any run. It has at least 1,000 held-out
+  queries.
+- The primary recall metric is recall@10 against exact search: the share of each query's
+  uncompressed top 10 that the compressed index also returns in its top 10, averaged over
+  queries. Comparisons between two codebooks are paired per query, with a 95% interval from a
+  bootstrap over queries with a fixed seed (10,000 resamples).
 - Reconstruction error on held-out vectors for three codebooks: the current one (256 samples),
   full Lloyd on the bigger sample (offline reference), and the mini-batch trainer on the same
   bigger sample.
@@ -7224,23 +7237,25 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 - The mini-batch codebook has a lower held-out reconstruction error than the current codebook,
   and an error no more than 2% above full Lloyd on the same bigger sample.
 - Its held-out recall is no more than 1 percentage point below full Lloyd's recall on the same
-  bigger sample, on the benchmark's primary recall metric. The 2% error bound alone does not
-  guarantee comparable recall.
-- Its held-out recall is strictly higher than the current compressed recall. A tie fails. The
-  benchmark is deterministic for a fixed codebook, so there is no run-to-run noise to allow for.
-  No recall benchmark or retrieval gate drops.
+  bigger sample: the lower end of the paired 95% interval for (mini-batch minus Lloyd) is at
+  least -1 point. The 2% error bound alone does not guarantee comparable recall.
+- Its held-out recall is higher than the current compressed recall: the lower end of the paired
+  95% interval for (mini-batch minus current) is above 0. A tie fails. The benchmark is
+  deterministic for a fixed codebook, so the interval covers the choice of queries, not
+  run-to-run noise. No recall benchmark or retrieval gate drops.
 - Wall time (a manual benchmark, not a CI gate, because timing ratios are not stable on shared
   runners): at `train_sample = 4096`, codebook training takes no more than 10% of the total
   rebuild wall time, as the median of 5 rebuilds on one named, otherwise idle machine. The
   command, the machine and the raw times are recorded in the build PR.
-- These thresholds (2%, 1 point, strictly higher, 10%) are fixed here, before any run.
+- These thresholds (2%, 1 point, interval above 0, 10%, at least 1,000 queries) are fixed here,
+  before any run.
 - Mutation control: a trainer that returns its k-means++ start centroids unchanged, with no update
   step, is installed through `pq.set_codebook_trainer`. The assertion that must turn red is the
   "no more than 2% above full Lloyd" error check. The control is valid only if, on the gate data,
   the start centroids' own error is above that 2% bound. The test checks this margin first, so
   a control that cannot fail is reported as an error, not as a pass.
 - Three more controls: the current codebook fed to the recall check in place of the new one must
-  fail "strictly higher" (a tie), a trainer that draws from an unseeded generator must fail the
+  fail the "interval above 0" recall check (a tie), a trainer that draws from an unseeded generator must fail the
   byte-identity check, and importing the trainer module with `v4.pq` off must fail the off-path
   check. The 1-point-below-Lloyd recall gate and the manual wall-time benchmark have no mutation
   control.
@@ -7249,10 +7264,11 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 
 Each gate has a fixed outcome when it fails:
 
-- Recall not strictly higher than the current codebook's: the trainer is dropped.
+- Recall interval not above 0 against the current codebook: the trainer is dropped.
 - Error above the current codebook's, or more than 2% above full Lloyd: the trainer is dropped.
-- Recall more than 1 point below full Lloyd: the trainer is dropped. Full Lloyd becomes the
-  candidate if it meets the 10% wall-time bound with equal or lower error.
+- Recall interval against full Lloyd with a lower end below -1 point: the trainer is dropped. Full Lloyd becomes the
+  candidate if it meets the 10% wall-time bound with equal or lower error. If it does not,
+  which is likely because slow full Lloyd is why the default is 256, the default stays at 256.
 - Wall time above 10% at 4096: the default stays at 256, where the trainer is never called
   (`k >= len(points)`). It stays available only to a user who raises `train_sample`, and that
   path passes the same byte-identity and quality gates at 4096.
