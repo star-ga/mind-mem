@@ -101,14 +101,14 @@ the original reproduction re-run against the fixed tree.
   corpus or evaluation modules. The inventory is preparation evidence only;
   a reviewed training corpus, independent evaluation and the verified base
   revision remain open.
-  *Not replaced by a training-free weight patch (checked 2026-11-13).* Recent
-  research changes a quantized model's behaviour by writing a few unused MLP
-  units from two sets of example prompts, with no training, and it was tested on
-  a 4B base of the same size class. A written unit adds a fixed behaviour. It
-  cannot add knowledge, so it cannot teach the current weights the tools that
-  were registered after they were trained, and this retrain stays required. A
-  patch of that kind, for a fixed-format behaviour only, would ship as a
-  separate adapter on the inference side, never on this item's path.
+  *Not replaced by a training-free weight patch (decided 2026-11-13).* A patch
+  that writes fixed values into a few MLP units, without training, can add a
+  behaviour that fires in a matching context. It does not add knowledge: the
+  names, arguments and rules of the tools registered after the current weights
+  were trained are not in those weights, and a few written units cannot hold
+  them. This retrain therefore stays required. A patch of that kind, for a
+  fixed-format behaviour only, would ship as a separate adapter on the
+  inference side, never on this item's path.
 
 ### Governance — content-category decay policy (1 item, integration in progress)
 
