@@ -7158,3 +7158,58 @@ schema for the same skill. Recent research on decision models gives a better sha
 ### Status
 
 Proposed, after the current 4B release. Needs an architecture audit before implementation.
+
+## A trained codebook for the compressed vector index: a mini-batch trainer behind the existing hook (2026-11-13, Proposed)
+
+The opt-in `v4.pq` index (off by default) trains its codebook on `_PQ_DEFAULT_TRAIN_SAMPLE = 256`
+vectors, and the default centroid count is also 256. `pq._stdlib_kmeans` stops at once when
+`k >= len(points)`, so each centroid is one of the sampled vectors and no clustering happens. The
+source records this as deferred (the comment above `_PQ_DEFAULT_TRAIN_SAMPLE` in
+`recall_vector.py`): 25 full Lloyd passes over a bigger sample are too slow in pure Python. The
+upgrade path it names is a faster trainer installed through `pq.set_codebook_trainer(...)`.
+
+### Deliverable
+
+- A mini-batch trainer, stdlib only, installed through `pq.set_codebook_trainer`. After each
+  small batch, every centroid moves a step toward the mean of the batch points assigned to it. It
+  makes a few passes over the sample, not 25 full passes.
+- The step size and the batch size come from one fixed rule. There is no search per corpus and no
+  new config knob for them.
+- The same seeded k-means++ start from `cfg.kmeans_seed` as today. The batch order comes from the
+  rebuild's own sorted sequence. No clock, no unseeded draw. Ties go to the lowest centroid index.
+- The stored codebook format and the 32-byte code per vector do not change.
+- `train_sample` gets a higher default only after this trainer is the default, and only if the
+  gate below passes.
+
+### Measurement
+
+- Reconstruction error on held-out vectors for three codebooks: the current one (256 samples),
+  full Lloyd on the bigger sample (offline reference), and the mini-batch trainer on the same
+  bigger sample.
+- Recall on the held-out recall benchmark for no compression, the current codebook and the
+  mini-batch codebook. Same split, same embeddings, same code size.
+- Training wall time at 256, 4096 and 16384 sampled vectors.
+
+### Acceptance gate
+
+- Two rebuilds with the same seed and corpus store byte-identical codebooks. Positive control: a
+  different seed stores different bytes.
+- With `v4.pq` off, a rebuild is byte-for-byte what it is today and the trainer module is not
+  imported.
+- The mini-batch codebook has a lower held-out reconstruction error than the current codebook, and
+  its recall is at or above the current compressed recall. No recall benchmark or retrieval gate
+  drops.
+- Mutation control: putting back the stop-at-once path (each centroid = one sampled vector) turns
+  the reconstruction-error test red.
+
+### Falsification
+
+Dropped if, at the same code size, the mini-batch codebook does not beat the current codebook on
+held-out recall. Changed to full Lloyd if Lloyd on the bigger sample trains in the same measured
+time with equal or lower error.
+
+### Status
+
+Proposed. Nothing built, and `v4.pq` stays off by default. This release ships the Python trainer;
+the `.mind` port follows the Pure-MIND Core Port, where the MIND roadmap's planned deterministic
+clustering program is the intended trainer. Needs an architecture audit before implementation.
