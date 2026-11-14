@@ -457,7 +457,7 @@ def _resume_server(plan: _ResumePlan):
 
 def _run_resume(tmp_path: Path, base: str, plan: _ResumePlan, inject: str = "", polls: str = "4"):
     if os.name == "nt":
-        pytest.skip("resume script requires GNU stat")
+        pytest.skip("resume script tests run on POSIX runners")
     token = tmp_path / "hf"
     token.write_text("fixture-token\n", encoding="utf-8")
     token.chmod(0o600)
@@ -502,6 +502,7 @@ def _bodies(plan: _ResumePlan, suffix: str) -> list[str]:
 def test_resume_script_does_not_call_rest_v1():
     text = (REPO / "train" / "resume_pod_train.sh").read_text(encoding="utf-8")
     assert "rest.runpod.io/v1" not in text
+    assert "stat -c" not in text
     assert 'POD_ID="${MM_POD_ID:-}"' in text
     assert "MM_POD_ID:-" not in text.replace('POD_ID="${MM_POD_ID:-}"', "", 1)
     assert '"/pods/${POD_ID}/action"' in text
@@ -512,7 +513,7 @@ def test_resume_script_does_not_call_rest_v1():
 
 def test_resume_requires_pod_id_from_the_environment(tmp_path: Path):
     if os.name == "nt":
-        pytest.skip("resume script requires GNU stat")
+        pytest.skip("resume script tests run on POSIX runners")
     env = os.environ.copy()
     env.pop("MM_POD_ID", None)
     env["HF_TOKEN_FILE"] = str(tmp_path / "missing")
@@ -531,7 +532,7 @@ def test_resume_requires_pod_id_from_the_environment(tmp_path: Path):
 
 def test_resume_rejects_pod_id_before_any_request(tmp_path: Path):
     if os.name == "nt":
-        pytest.skip("resume script requires GNU stat")
+        pytest.skip("resume script tests run on POSIX runners")
     env = os.environ.copy()
     env["MM_POD_ID"] = "../x"
     env["HF_TOKEN_FILE"] = str(tmp_path / "missing")

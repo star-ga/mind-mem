@@ -77,7 +77,8 @@ if [[ ! -f "${HF_TOKEN_FILE}" ]]; then
 fi
 # Refuse if the file is group/world readable — token would survive any
 # ps/lsof leak that argv-injection would have caused.
-perms=$(stat -c '%a' "${HF_TOKEN_FILE}")
+# Python reports the mode. The GNU and BSD stat flags do not agree.
+perms=$(python3 -c 'import os, sys; print(format(os.stat(sys.argv[1]).st_mode & 0o777, "o"))' "${HF_TOKEN_FILE}")
 if [[ "${perms}" != "600" && "${perms}" != "400" ]]; then
     echo "refusing to use ${HF_TOKEN_FILE}: perms ${perms}, want 600" >&2
     exit 1
