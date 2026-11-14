@@ -7177,14 +7177,15 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
   new config knob for them.
 - The same seeded k-means++ start from `cfg.kmeans_seed` as today. The batch order is a seeded
   Fisher-Yates permutation of the sorted sample: each swap index is
-  `floor(rng.random() * (i + 1))` from one `random.Random(seed)` stream, written out, not
-  `random.shuffle`. A sort key
+  `floor(rng.random() * (i + 1))` from the one `random.Random(seed)` stream, written out, not
+  `random.shuffle`. The start draws take their values from that stream first, then the
+  permutation. A sort key
   can correlate with content (ids, insertion time, source file), so an unshuffled order would
   bias the last batches. No clock, no unseeded draw. Ties go to the lowest centroid index.
 - Pinned arithmetic, so the stored bytes do not depend on the platform or the Python version:
   - Every float sum is an explicit left-to-right loop in the sorted batch order. No built-in
     `sum()` over floats, because its algorithm changed in Python 3.12.
-  - Each weighted draw for the start uses one `random.Random(seed).random()` value and a
+  - Each weighted draw for the start uses the next value of that one stream and a
     fixed-order cumulative sum, not a library sampling helper whose algorithm can change.
   - Distances are squared L2 in plain loops. No `math.sqrt`, `exp`, `log`, `fsum`, `dist` or
     `hypot`, whose results can differ between libm builds.
@@ -7241,13 +7242,10 @@ Each gate has a fixed outcome when it fails:
 - Recall not strictly higher than the current codebook's: the trainer is dropped.
 - Error above the current codebook's, or more than 2% above full Lloyd: the trainer is dropped.
 - Recall more than 1 point below full Lloyd: the trainer is dropped. Full Lloyd becomes the
-  candidate if it meets the 10% wall-time bound.
+  candidate if it meets the 10% wall-time bound with equal or lower error.
 - Wall time above 10% at 4096: the trainer may stay as an opt-in, but the default stays at 256.
 - Byte identity or the off-path gate fails: nothing lands until it passes. These are not traded
   against quality.
-
-Changed to full Lloyd if Lloyd on the bigger sample also meets the 10% wall-time bound, with
-equal or lower error.
 
 ### Status
 
