@@ -101,6 +101,14 @@ the original reproduction re-run against the fixed tree.
   corpus or evaluation modules. The inventory is preparation evidence only;
   a reviewed training corpus, independent evaluation and the verified base
   revision remain open.
+  *Not replaced by a training-free weight patch (decided 2026-11-13).* A patch
+  that writes fixed values into a few MLP units, without training, can add a
+  behaviour that fires in a matching context. It does not add knowledge: the
+  names, arguments and rules of the tools registered after the current weights
+  were trained are not in those weights, and a few written units cannot hold
+  them. This retrain therefore stays required. A patch of that kind, for a
+  fixed-format behaviour only, would ship as a separate adapter on the
+  inference side, never on this item's path.
 
 ### Governance — content-category decay policy (1 item, integration in progress)
 
