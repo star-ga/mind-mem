@@ -6,7 +6,7 @@
 
 **Project:** `mind-mem`
 **Files:** 1787 | **Est. tokens:** ~5,241,844
-**Generated:** 2026-11-14 05:59 UTC
+**Generated:** 2026-11-14 08:20 UTC
 
 ## Token Budget Guide
 
