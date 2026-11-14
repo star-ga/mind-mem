@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1787 | **Est. tokens:** ~5,248,227
-**Generated:** 2026-11-14 11:42 UTC
+**Files:** 1787 | **Est. tokens:** ~5,248,440
+**Generated:** 2026-11-14 11:46 UTC
 
 ## Token Budget Guide
 
@@ -95,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 807 | ~2,370,733 |
+| `tests/` | 807 | ~2,370,930 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -108,7 +108,7 @@
 | `tests/integration/` | 2 | ~1,982 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 37 | ~89,482 |
+| `train/` | 37 | ~89,498 |
 | `web/` | 6 | ~1,759 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -1938,7 +1938,7 @@
 - `test_roadmap_ticks_gate.py` (~2742 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_rollback_restores_memory_only.py` (~893 tok, large) — Rolling back a correction restores memory, never the configuration.
 - `test_rrf_fuse_metadata_union.py` (~456 tok, medium) — RRF fusion keeps every leg's metadata, not only the dict it picked.
-- `test_runpod_release_bundle.py` (~7136 tok, huge) — Offline closure tests for the RunPod training/evaluation release bundle."""
+- `test_runpod_release_bundle.py` (~7333 tok, huge) — Offline closure tests for the RunPod training/evaluation release bundle."""
 - `test_schema_version.py` (~2454 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scope_outcome_is_truthful.py` (~6877 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_scoring_ledger_boundary.py` (~1120 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -2129,7 +2129,7 @@
 - `qlora_local_3080.py` (~1182 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
 - `qwen35_text_config_control.py` (~1075 tok, large) — Offline smoke control for the Qwen3.5 composite-config adapter.
 - `README.md` (~1376 tok, large) — mind-mem training pipeline
-- `resume_pod_train.sh` (~3900 tok, huge) — Recovery: wake the training pod, reinstall deps (the image layer is
+- `resume_pod_train.sh` (~3916 tok, huge) — Recovery: wake the training pod, reinstall deps (the image layer is
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
 - `runpod_deploy.py` (~7279 tok, huge) — End-to-end RunPod driver for full-FT on an explicitly configured base.
 - `runpod_full_ft.py` (~2669 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.

@@ -459,10 +459,10 @@ def _run_resume(tmp_path: Path, base: str, plan: _ResumePlan, inject: str = "", 
     if os.name == "nt":
         pytest.skip("resume script requires GNU stat")
     token = tmp_path / "hf"
-    token.write_text("hf_test\n", encoding="utf-8")
+    token.write_text("fixture-token\n", encoding="utf-8")
     token.chmod(0o600)
     config = tmp_path / "runpod.toml"
-    config.write_text('api_key = "test-key"\n', encoding="utf-8")
+    config.write_text('api_key = "fixture-api-key"\n', encoding="utf-8")
     env = os.environ.copy()
     env["HF_TOKEN_FILE"] = str(token)
     env["RUNPOD_CONFIG"] = str(config)
@@ -484,10 +484,11 @@ def _run_resume(tmp_path: Path, base: str, plan: _ResumePlan, inject: str = "", 
     )
     blob = completed.stdout + completed.stderr
     assert "should-not-leak" not in blob
-    assert "test-key" not in blob
+    assert "fixture-api-key" not in blob
+    assert "fixture-token" not in blob
     assert "PUBLIC_KEY" not in blob
     for _method, path, body, auth in plan.calls:
-        assert auth == "Bearer test-key"
+        assert auth == "Bearer fixture-api-key"
         assert "/v1/" not in path
         assert not path.endswith("/start")
         assert "terminate" not in body
@@ -501,10 +502,31 @@ def _bodies(plan: _ResumePlan, suffix: str) -> list[str]:
 def test_resume_script_does_not_call_rest_v1():
     text = (REPO / "train" / "resume_pod_train.sh").read_text(encoding="utf-8")
     assert "rest.runpod.io/v1" not in text
+    assert 'POD_ID="${MM_POD_ID:-}"' in text
+    assert "MM_POD_ID:-" not in text.replace('POD_ID="${MM_POD_ID:-}"', "", 1)
     assert '"/pods/${POD_ID}/action"' in text
     assert '\'{"action":"start"}\'' in text
     assert '\'{"action":"stop"}\'' in text
     assert '{"action":"terminate"}' not in text
+
+
+def test_resume_requires_pod_id_from_the_environment(tmp_path: Path):
+    if os.name == "nt":
+        pytest.skip("resume script requires GNU stat")
+    env = os.environ.copy()
+    env.pop("MM_POD_ID", None)
+    env["HF_TOKEN_FILE"] = str(tmp_path / "missing")
+    completed = subprocess.run(
+        [_bash_executable(), str(REPO / "train" / "resume_pod_train.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=20,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert "MM_POD_ID is required" in completed.stderr
 
 
 def test_resume_rejects_pod_id_before_any_request(tmp_path: Path):

@@ -14,7 +14,11 @@
 # Idempotent — safe to re-run if the resume itself gets preempted.
 set -euo pipefail
 
-POD_ID="${MM_POD_ID:-uz2uajluzskmm2}"
+POD_ID="${MM_POD_ID:-}"
+if [[ -z "$POD_ID" ]]; then
+    echo "MM_POD_ID is required" >&2
+    exit 1
+fi
 SSH_KEY="${MM_SSH_KEY:-$HOME/.ssh/id_ed25519}"
 MM_RUNPOD_API_BASE="${MM_RUNPOD_API_BASE:-https://api.runpod.io/v2}"
 MM_RUNPOD_API_BASE="${MM_RUNPOD_API_BASE%/}"
