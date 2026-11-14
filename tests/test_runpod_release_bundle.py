@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
 import subprocess
 import sys
+import threading
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -326,3 +330,363 @@ def test_token_is_copied_as_a_file_and_never_embedded_in_command(monkeypatch, tm
     assert ssh_commands == [f"chmod 600 {deploy.REMOTE_TOKEN_FILE}"]
     assert SECRET not in " ".join(ssh_commands)
     assert SECRET not in capsys.readouterr().out
+
+
+class _ResumePlan:
+    def __init__(self, pod_id: str = "abc123") -> None:
+        self.pod_id = pod_id
+        self.gets: list[tuple[int, dict]] = []
+        self.start: tuple[int, dict] = (500, {"title": "unset", "status": 500, "detail": "start was not scripted"})
+        self.stop: tuple[int, dict] = (500, {"title": "unset", "status": 500, "detail": "stop was not scripted"})
+        self.after_stop_get: tuple[int, dict] | None = None
+        self.graphql: dict | None = None
+        self.stop_seen = False
+        self.calls: list[tuple[str, str, str, str | None]] = []
+        self.lock = threading.Lock()
+
+
+def _resume_pod(
+    pod_id: str,
+    status: str,
+    *,
+    host: str = "",
+    port: int | None = None,
+    actions: list[str] | None = None,
+    locked: bool = False,
+    runtime: tuple[str, int] | None = None,
+) -> dict:
+    direct = None
+    if host and port is not None:
+        direct = {"host": host, "port": port, "username": "root"}
+    runtime_body = None
+    if runtime is not None:
+        runtime_body = {
+            "uptime": 1,
+            "ports": [{"private": 22, "public": runtime[1], "type": "tcp", "ip": runtime[0]}],
+        }
+    return {
+        "id": pod_id,
+        "status": status,
+        "actions": ["start", "stop", "restart", "terminate"] if actions is None else actions,
+        "locked": locked,
+        "ssh": {"proxy": {"host": "ssh.runpod.io", "port": 22}, "direct": direct},
+        "runtime": runtime_body,
+        "env": {"PUBLIC_KEY": "should-not-leak"},
+        "cost": 3.99,
+    }
+
+
+def _pop_script(items: list[tuple[int, dict]]) -> tuple[int, dict]:
+    if not items:
+        raise AssertionError("resume fixture has no scripted response")
+    if len(items) == 1:
+        return items[0]
+    return items.pop(0)
+
+
+@contextmanager
+def _resume_server(plan: _ResumePlan):
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, fmt, *args):
+            return
+
+        def _read(self) -> bytes:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            return self.rfile.read(length) if length else b""
+
+        def _send(self, code: int, payload: dict) -> None:
+            raw = json.dumps(payload).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def do_GET(self) -> None:
+            with plan.lock:
+                plan.calls.append(("GET", self.path, "", self.headers.get("Authorization")))
+                if self.path != f"/v2/pods/{plan.pod_id}":
+                    code, payload = (404, {"title": "Not Found", "status": 404, "detail": "resource not found"})
+                elif plan.stop_seen and plan.after_stop_get is not None:
+                    code, payload = plan.after_stop_get
+                else:
+                    code, payload = _pop_script(plan.gets)
+            self._send(code, payload)
+
+        def do_POST(self) -> None:
+            text = self._read().decode()
+            with plan.lock:
+                plan.calls.append(("POST", self.path, text, self.headers.get("Authorization")))
+                if self.path == "/graphql":
+                    code, payload = 200, (plan.graphql or {})
+                elif self.path == f"/v2/pods/{plan.pod_id}/action":
+                    try:
+                        action = json.loads(text or "{}").get("action")
+                    except json.JSONDecodeError:
+                        action = None
+                    if action == "terminate":
+                        code, payload = (400, {"title": "Bad Request", "status": 400, "detail": "terminate refused"})
+                    elif action == "stop":
+                        plan.stop_seen = True
+                        code, payload = plan.stop
+                    elif action == "start":
+                        code, payload = plan.start
+                    else:
+                        code, payload = (
+                            422,
+                            {"title": "Unprocessable Entity", "status": 422, "detail": "Request validation failed."},
+                        )
+                else:
+                    code, payload = (404, {"title": "Not Found", "status": 404, "detail": "resource not found"})
+            self._send(code, payload)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}/v2"
+    try:
+        yield base
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def _run_resume(tmp_path: Path, base: str, plan: _ResumePlan, inject: str = "", polls: str = "4"):
+    if os.name == "nt":
+        pytest.skip("resume script requires GNU stat")
+    token = tmp_path / "hf"
+    token.write_text("hf_test\n", encoding="utf-8")
+    token.chmod(0o600)
+    config = tmp_path / "runpod.toml"
+    config.write_text('api_key = "test-key"\n', encoding="utf-8")
+    env = os.environ.copy()
+    env["HF_TOKEN_FILE"] = str(token)
+    env["RUNPOD_CONFIG"] = str(config)
+    env["MM_POD_ID"] = plan.pod_id
+    env["MM_RUNPOD_API_BASE"] = base
+    env["MM_RUNPOD_GRAPHQL_URL"] = base[: -len("/v2")] + "/graphql"
+    env["MM_RESUME_MAX_POLLS"] = polls
+    env["MM_RESUME_POLL_SECONDS"] = "0"
+    env["MM_RESUME_STOP_POLLS"] = "3"
+    env["MM_RESUME_INJECT"] = inject
+    completed = subprocess.run(
+        [_bash_executable(), str(REPO / "train" / "resume_pod_train.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=20,
+        check=False,
+    )
+    blob = completed.stdout + completed.stderr
+    assert "should-not-leak" not in blob
+    assert "test-key" not in blob
+    assert "PUBLIC_KEY" not in blob
+    for _method, path, body, auth in plan.calls:
+        assert auth == "Bearer test-key"
+        assert "/v1/" not in path
+        assert not path.endswith("/start")
+        assert "terminate" not in body
+    return completed
+
+
+def _bodies(plan: _ResumePlan, suffix: str) -> list[str]:
+    return [body for _method, path, body, _auth in plan.calls if path.endswith(suffix)]
+
+
+def test_resume_script_does_not_call_rest_v1():
+    text = (REPO / "train" / "resume_pod_train.sh").read_text(encoding="utf-8")
+    assert "rest.runpod.io/v1" not in text
+    assert '"/pods/${POD_ID}/action"' in text
+    assert '\'{"action":"start"}\'' in text
+    assert '\'{"action":"stop"}\'' in text
+    assert '{"action":"terminate"}' not in text
+
+
+def test_resume_rejects_pod_id_before_any_request(tmp_path: Path):
+    if os.name == "nt":
+        pytest.skip("resume script requires GNU stat")
+    env = os.environ.copy()
+    env["MM_POD_ID"] = "../x"
+    env["HF_TOKEN_FILE"] = str(tmp_path / "missing")
+    completed = subprocess.run(
+        [_bash_executable(), str(REPO / "train" / "resume_pod_train.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=20,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert "invalid pod id" in completed.stderr
+
+
+def test_resume_parses_v2_problem_and_does_not_stop_an_exited_pod(tmp_path: Path):
+    plan = _ResumePlan()
+    exited = _resume_pod(plan.pod_id, "EXITED")
+    plan.gets = [(200, exited)]
+    plan.start = (
+        422,
+        {
+            "title": "Unprocessable Entity",
+            "status": 422,
+            "detail": "Request validation failed.",
+            "errors": ["action: rejected"],
+        },
+    )
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan)
+    assert completed.returncode != 0
+    assert "Unprocessable Entity (422): Request validation failed.; action: rejected" in completed.stderr
+    assert _bodies(plan, "/action") == ['{"action":"start"}']
+
+
+def test_resume_stops_a_pod_it_started_when_launch_is_not_confirmed(tmp_path: Path):
+    plan = _ResumePlan()
+    plan.gets = [
+        (200, _resume_pod(plan.pod_id, "EXITED")),
+        (200, _resume_pod(plan.pod_id, "RUNNING", host="203.0.113.10", port=4022)),
+    ]
+    plan.start = (200, _resume_pod(plan.pod_id, "STARTING"))
+    plan.stop = (200, _resume_pod(plan.pod_id, "EXITED"))
+    plan.after_stop_get = (200, _resume_pod(plan.pod_id, "EXITED"))
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan, inject="fail-after-ready")
+    assert completed.returncode != 0
+    assert "injected failure after SSH endpoint was ready" in completed.stderr
+    assert f"pod {plan.pod_id} status EXITED. Compute is not billed." in completed.stdout
+    assert _bodies(plan, "/action") == ['{"action":"start"}', '{"action":"stop"}']
+
+
+def test_resume_does_not_stop_a_pod_that_was_already_running(tmp_path: Path):
+    plan = _ResumePlan()
+    plan.gets = [(200, _resume_pod(plan.pod_id, "RUNNING", host="203.0.113.10", port=4022))]
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan, inject="fail-after-ready")
+    assert completed.returncode != 0
+    assert "pod is already RUNNING" in completed.stdout
+    assert "Compute may still be billed" not in completed.stderr
+    assert _bodies(plan, "/action") == []
+
+
+def test_resume_leaves_a_started_pod_running_when_launch_is_confirmed(tmp_path: Path):
+    plan = _ResumePlan()
+    plan.gets = [
+        (200, _resume_pod(plan.pod_id, "EXITED")),
+        (200, _resume_pod(plan.pod_id, "RUNNING", host="203.0.113.10", port=4022)),
+    ]
+    plan.start = (200, _resume_pod(plan.pod_id, "STARTING"))
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan, inject="confirm-launch")
+    assert completed.returncode == 0
+    assert "injected launch confirmation" in completed.stdout
+    assert _bodies(plan, "/action") == ['{"action":"start"}']
+
+
+def test_resume_reports_billing_when_stop_does_not_reach_exited(tmp_path: Path):
+    plan = _ResumePlan()
+    running = _resume_pod(plan.pod_id, "RUNNING", host="203.0.113.10", port=4022)
+    plan.gets = [(200, _resume_pod(plan.pod_id, "EXITED")), (200, running)]
+    plan.start = (200, _resume_pod(plan.pod_id, "STARTING"))
+    plan.stop = (200, running)
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan, inject="fail-after-ready")
+    assert completed.returncode != 0
+    assert f"pod {plan.pod_id} status RUNNING. Compute may still be billed." in completed.stderr
+    assert '{"action":"stop"}' in _bodies(plan, "/action")
+    assert '{"action":"start"}' in _bodies(plan, "/action")
+
+
+def test_resume_uses_graphql_ports_when_v2_has_no_ssh_endpoint(tmp_path: Path):
+    plan = _ResumePlan()
+    plan.gets = [
+        (200, _resume_pod(plan.pod_id, "EXITED")),
+        (200, _resume_pod(plan.pod_id, "RUNNING")),
+    ]
+    plan.start = (200, _resume_pod(plan.pod_id, "STARTING"))
+    plan.stop = (200, _resume_pod(plan.pod_id, "EXITED"))
+    plan.after_stop_get = (200, _resume_pod(plan.pod_id, "EXITED"))
+    plan.graphql = {
+        "data": {
+            "myself": {
+                "pods": [
+                    {
+                        "id": plan.pod_id,
+                        "runtime": {
+                            "ports": [
+                                {
+                                    "ip": "203.0.113.10",
+                                    "privatePort": 22,
+                                    "publicPort": 4022,
+                                    "isIpPublic": True,
+                                }
+                            ]
+                        },
+                    }
+                ]
+            }
+        }
+    }
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan, inject="fail-after-ready")
+    assert completed.returncode != 0
+    assert "ssh ready: 203.0.113.10:4022" in completed.stdout
+    assert any(path == "/graphql" for _method, path, _body, _auth in plan.calls)
+    assert _bodies(plan, "/action") == ['{"action":"start"}', '{"action":"stop"}']
+
+
+def test_resume_reads_ssh_from_v2_runtime_ports(tmp_path: Path):
+    plan = _ResumePlan()
+    plan.gets = [
+        (200, _resume_pod(plan.pod_id, "EXITED")),
+        (200, _resume_pod(plan.pod_id, "RUNNING", runtime=("203.0.113.10", 4022))),
+    ]
+    plan.start = (200, _resume_pod(plan.pod_id, "STARTING"))
+    plan.stop = (200, _resume_pod(plan.pod_id, "EXITED"))
+    plan.after_stop_get = (200, _resume_pod(plan.pod_id, "EXITED"))
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan, inject="fail-after-ready")
+    assert completed.returncode != 0
+    assert "ssh ready: 203.0.113.10:4022" in completed.stdout
+    assert not any(path == "/graphql" for _method, path, _body, _auth in plan.calls)
+
+
+def test_resume_stops_an_error_pod_instead_of_starting_it(tmp_path: Path):
+    plan = _ResumePlan()
+    plan.gets = [(200, _resume_pod(plan.pod_id, "ERROR", actions=["stop", "terminate"]))]
+    plan.stop = (200, _resume_pod(plan.pod_id, "EXITED"))
+    plan.after_stop_get = (200, _resume_pod(plan.pod_id, "EXITED"))
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan)
+    assert completed.returncode != 0
+    assert "Not sending start." in completed.stderr
+    assert f"pod {plan.pod_id} status EXITED. Compute is not billed." in completed.stdout
+    assert _bodies(plan, "/action") == ['{"action":"stop"}']
+
+
+def test_resume_does_not_stop_a_locked_error_pod(tmp_path: Path):
+    plan = _ResumePlan()
+    plan.gets = [(200, _resume_pod(plan.pod_id, "ERROR", actions=["stop"], locked=True))]
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan)
+    assert completed.returncode != 0
+    assert f"pod {plan.pod_id} is locked. Compute may still be billed." in completed.stderr
+    assert _bodies(plan, "/action") == []
+
+
+def test_resume_stops_a_pod_already_starting_when_ssh_never_appears(tmp_path: Path):
+    plan = _ResumePlan()
+    plan.gets = [(200, _resume_pod(plan.pod_id, "STARTING"))]
+    plan.stop = (200, _resume_pod(plan.pod_id, "EXITED"))
+    plan.after_stop_get = (200, _resume_pod(plan.pod_id, "EXITED"))
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan, polls="2")
+    assert completed.returncode != 0
+    assert "pod failed to expose SSH" in completed.stderr
+    assert _bodies(plan, "/action") == ['{"action":"stop"}']
+    assert f"pod {plan.pod_id} status EXITED. Compute is not billed." in completed.stdout
