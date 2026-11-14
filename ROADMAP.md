@@ -7202,7 +7202,7 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 ### Acceptance gate
 
 - Two rebuilds with the same seed and corpus store a byte-identical codebook BLOB in every cell of
-  the existing CI test matrix (Linux, macOS and Windows; Python 3.10 to 3.14). Positive control: a
+  the existing CI test matrix, which spans Linux, macOS and Windows and Python 3.10 to 3.14. Positive control: a
   different seed gives a different start centroid set, checked on the start itself before
   training.
 - With `v4.pq` off, a rebuild is byte-for-byte what it is today and the trainer module is not
