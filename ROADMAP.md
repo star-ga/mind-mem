@@ -7177,13 +7177,14 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
   its batch points by `batch_count / total_count`, where `total_count` is all points it has been
   given so far, including this batch. Batch size 1,024, 3 passes over the sample. There is no search per corpus and no
   new config knob for them.
-- A k-means++ start seeded from `cfg.kmeans_seed`, written to the pinned rules below. It is not
+- A k-means++ start seeded from `cfg.kmeans_seed` (an int), written to the pinned rules below. It is not
   the start in today's `pq._stdlib_kmeans`, which uses `randrange` and the built-in `sum()`. The
   first centroid is the sample point at index `floor(rng.random() * n)`. Each later centroid is
   a weighted draw, as pinned below. If every remaining distance is zero (duplicate points), the
   next centroid is the lowest-index sample point not yet chosen, with no draw. Full Lloyd in the measurements uses this same start and seed,
   so the comparison measures the trainer, not the start. The current codebook is unchanged: at
-  256 samples it never reaches a start.
+  256 samples it never reaches a start. Every sample index in the start is a position in the
+  block-id-sorted sample described under Batch order.
 - Batch order: the sample is first sorted by block id. Each pass then draws a new seeded
   Fisher-Yates permutation of that sorted list: for `i` from `n - 1` down to 1, swap position `i`
   with position `floor(rng.random() * (i + 1))`, written out, not `random.shuffle`. All draws
@@ -7195,7 +7196,7 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
   clock, no unseeded draw. Ties go to the lowest centroid index.
 - Pinned arithmetic, so the stored bytes do not depend on the platform or the Python version:
   - Every float sum is an explicit left-to-right loop in processing order: the permuted batch
-    order for the update step, and sample index order for the start's distance sums. No
+    order for the update step, and block-id-sorted sample order for the start's distance sums. No
     built-in `sum()` over floats, because its algorithm changed in Python 3.12.
   - Each weighted draw for the start uses the next value of that one stream and a
     fixed-order cumulative sum, not a library sampling helper whose algorithm can change.
@@ -7229,9 +7230,11 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 
 ### Acceptance gate
 
-- Two rebuilds with the same seed and corpus store a byte-identical codebook BLOB in every cell of
-  the existing CI test matrix, which spans Linux, macOS and Windows and Python 3.10 to 3.14. The
-  gate trains on a committed fixture of stored vectors, not on freshly computed embeddings, so
+- Every cell of the existing CI test matrix, which spans Linux, macOS and Windows and Python 3.10
+  to 3.14, stores the same codebook bytes. The test compares the SHA-256 of the stored BLOB with
+  one digest committed next to the fixture, so a cell whose bytes differ from the others goes
+  red. Two rebuilds in the same cell must also match. The gate trains on a committed fixture of
+  stored vectors, used as the training sample as stored, not on freshly computed embeddings, so
   the input bytes are the same in every cell. Positive control: a different seed gives a
   different start centroid set, checked on the start itself before training.
 - With `v4.pq` off, a rebuild is byte-for-byte what it is today and the trainer module is not
