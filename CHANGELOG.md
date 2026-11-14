@@ -65,6 +65,15 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Fixed
 
+- `train/resume_pod_train.sh` starts the training pod with `POST /v2/pods/{id}/action`
+  and body `{"action":"start"}`. It does not call REST v1 `POST /pods/{id}/start`.
+  A non-2xx response prints the problem `title`, `detail` and `errors`, and the
+  script stops. If this run leaves the pod in `PROVISIONING`, `STARTING`,
+  `RUNNING` or `ERROR`, and training launch is not confirmed, the script sends
+  `{"action":"stop"}` and waits for `EXITED` or `TERMINATED`. If that status
+  does not appear, the script exits non-zero and reports that compute may still
+  be billed. A pod that is already `RUNNING` is not stopped. The script does
+  not send `terminate`.
 - Code-scanning findings closed at the cause: rollback confines the receipt
   timestamp to the applied-snapshots directory before any filesystem call; `scan`
   reports a generic world-staleness error (detail stays in the server log) instead of
