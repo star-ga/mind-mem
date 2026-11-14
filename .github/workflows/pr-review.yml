@@ -13,7 +13,9 @@ jobs:
     # Same-repo branches only: fork PRs never get repository secrets or model access.
     # Dependabot PRs are skipped: they get no repository secrets, and their diffs are version bumps.
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    # Pinned to the same image as the other workflows. A -latest label
+    # moves the OS on the host's schedule.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       LEAK_TERMS: ${{ secrets.LEAK_TERMS }}
