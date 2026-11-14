@@ -7175,17 +7175,24 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
   makes a few passes over the sample, not 25 full passes.
 - The step size and the batch size come from one fixed rule. There is no search per corpus and no
   new config knob for them.
-- The same seeded k-means++ start from `cfg.kmeans_seed` as today. The batch order comes from the
-  rebuild's own sorted sequence. No clock, no unseeded draw. Ties go to the lowest centroid index.
+- The same seeded k-means++ start from `cfg.kmeans_seed` as today. The batch order is a seeded
+  Fisher-Yates permutation of the sorted sample: each swap index is
+  `floor(rng.random() * (i + 1))` from one `random.Random(seed)` stream, written out, not
+  `random.shuffle`. A sort key
+  can correlate with content (ids, insertion time, source file), so an unshuffled order would
+  bias the last batches. No clock, no unseeded draw. Ties go to the lowest centroid index.
 - Pinned arithmetic, so the stored bytes do not depend on the platform or the Python version:
   - Every float sum is an explicit left-to-right loop in the sorted batch order. No built-in
     `sum()` over floats, because its algorithm changed in Python 3.12.
   - Each weighted draw for the start uses one `random.Random(seed).random()` value and a
     fixed-order cumulative sum, not a library sampling helper whose algorithm can change.
+  - Distances are squared L2 in plain loops. No `math.sqrt`, `exp`, `log`, `fsum`, `dist` or
+    `hypot`, whose results can differ between libm builds.
   - A centroid that gets no points in a batch is left unchanged. There is no reseeding.
 - The stored codebook format and the 32-byte code per vector do not change.
-- `train_sample` gets a higher default only after this trainer is the default, and only if the
-  gate below passes.
+- The candidate new default is `train_sample = 4096`. Every gate below is evaluated at 4096, and
+  the default changes from 256 to 4096 only if all of them pass. 16384 is measured for reference
+  only and is not a candidate.
 
 ### Measurement
 
@@ -7202,28 +7209,45 @@ upgrade path it names is a faster trainer installed through `pq.set_codebook_tra
 ### Acceptance gate
 
 - Two rebuilds with the same seed and corpus store a byte-identical codebook BLOB in every cell of
-  the existing CI test matrix, which spans Linux, macOS and Windows and Python 3.10 to 3.14. Positive control: a
-  different seed gives a different start centroid set, checked on the start itself before
-  training.
+  the existing CI test matrix, which spans Linux, macOS and Windows and Python 3.10 to 3.14. The
+  gate trains on a committed fixture of stored vectors, not on freshly computed embeddings, so
+  the input bytes are the same in every cell. Positive control: a different seed gives a
+  different start centroid set, checked on the start itself before training.
 - With `v4.pq` off, a rebuild is byte-for-byte what it is today and the trainer module is not
   imported.
 - The mini-batch codebook has a lower held-out reconstruction error than the current codebook,
   and an error no more than 2% above full Lloyd on the same bigger sample.
+- Its held-out recall is no more than 1 percentage point below full Lloyd's recall on the same
+  bigger sample, on the benchmark's primary recall metric. The 2% error bound alone does not
+  guarantee comparable recall.
 - Its held-out recall is strictly higher than the current compressed recall. A tie fails. The
   benchmark is deterministic for a fixed codebook, so there is no run-to-run noise to allow for.
   No recall benchmark or retrieval gate drops.
-- At the new default `train_sample`, codebook training takes no more than 10% of the total rebuild
-  wall time on the same machine.
-- These thresholds (2%, strictly higher, 10%) are fixed here, before any run.
+- Wall time (a manual benchmark, not a CI gate, because timing ratios are not stable on shared
+  runners): at `train_sample = 4096`, codebook training takes no more than 10% of the total
+  rebuild wall time, as the median of 5 rebuilds on one named, otherwise idle machine. The
+  command, the machine and the raw times are recorded in the build PR.
+- These thresholds (2%, 1 point, strictly higher, 10%) are fixed here, before any run.
 - Mutation control: a trainer that returns its k-means++ start centroids unchanged, with no update
-  step, is installed through `pq.set_codebook_trainer`. The reconstruction-error test must turn
-  red.
+  step, is installed through `pq.set_codebook_trainer`. The assertion that must turn red is the
+  "no more than 2% above full Lloyd" error check. The control is valid only if, on the gate data,
+  the start centroids' own error is above that 2% bound. The test checks this margin first, so
+  a control that cannot fail is reported as an error, not as a pass.
 
 ### Falsification
 
-Dropped if, at the same code size, the mini-batch codebook's held-out recall is not strictly
-higher than the current codebook's (the same rule as the gate). Changed to full Lloyd if Lloyd on
-the bigger sample also meets the 10% wall-time bound, with equal or lower error.
+Each gate has a fixed outcome when it fails:
+
+- Recall not strictly higher than the current codebook's: the trainer is dropped.
+- Error above the current codebook's, or more than 2% above full Lloyd: the trainer is dropped.
+- Recall more than 1 point below full Lloyd: the trainer is dropped. Full Lloyd becomes the
+  candidate if it meets the 10% wall-time bound.
+- Wall time above 10% at 4096: the trainer may stay as an opt-in, but the default stays at 256.
+- Byte identity or the off-path gate fails: nothing lands until it passes. These are not traded
+  against quality.
+
+Changed to full Lloyd if Lloyd on the bigger sample also meets the 10% wall-time bound, with
+equal or lower error.
 
 ### Status
 
