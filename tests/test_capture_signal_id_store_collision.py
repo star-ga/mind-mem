@@ -22,6 +22,7 @@ from typing import Any
 from unittest import mock
 
 from mind_mem import capture
+from mind_mem.block_store import MarkdownBlockStore
 from mind_mem.init_workspace import init
 
 
@@ -88,6 +89,45 @@ class TestSameDaySignalsOnADetachedStore(unittest.TestCase):
         self.assertEqual(self.store.blocks["SIG-20261115-001"]["Excerpt"], "held before this call")
         self.assertIn("SIG-20261115-002", self.store.blocks)
 
+    def test_a_same_day_repeat_is_skipped_not_given_a_fresh_id(self) -> None:
+        text = "We decided to move the cache to Redis"
+        first = capture.append_signals(self.ws, [_signal(text)], "2026-11-15")
+        repeat = capture.append_signals(self.ws, [_signal(text)], "2026-11-15")
+
+        # Positive control: the first write landed, so the 0 below is the dedup.
+        self.assertEqual(first, 1)
+        self.assertEqual(repeat, 0)
+        self.assertEqual(sorted(self.store.blocks), ["SIG-20261115-001"])
+
+    def test_a_batch_skips_a_taken_id_in_the_middle(self) -> None:
+        self.store.blocks["SIG-20261115-002"] = {"_id": "SIG-20261115-002", "Excerpt": "held"}
+
+        written = capture.append_signals(
+            self.ws,
+            [_signal("We decided on plan A"), _signal("We decided on plan B"), _signal("We decided on plan C")],
+            "2026-11-15",
+        )
+
+        self.assertEqual(written, 3)
+        self.assertEqual(self.store.blocks["SIG-20261115-002"]["Excerpt"], "held")
+        self.assertEqual(sorted(self.store.blocks), ["SIG-20261115-001", "SIG-20261115-002", "SIG-20261115-003", "SIG-20261115-004"])
+
+    def test_a_nearly_full_day_truncates_the_batch(self) -> None:
+        for n in range(1, 998):
+            sid = f"SIG-20261115-{n:03d}"
+            self.store.blocks[sid] = {"_id": sid, "Excerpt": "taken"}
+
+        written = capture.append_signals(
+            self.ws,
+            [_signal("We decided on plan A"), _signal("We decided on plan B"), _signal("We decided on plan C")],
+            "2026-11-15",
+        )
+
+        self.assertEqual(written, 2)
+        self.assertIn("SIG-20261115-998", self.store.blocks)
+        self.assertIn("SIG-20261115-999", self.store.blocks)
+        self.assertEqual(len(self.store.blocks), 999)
+
     def test_a_full_day_writes_nothing_rather_than_overwriting(self) -> None:
         for n in range(1, 1000):
             sid = f"SIG-20261115-{n:03d}"
@@ -98,6 +138,33 @@ class TestSameDaySignalsOnADetachedStore(unittest.TestCase):
 
         self.assertEqual(written, 0)
         self.assertEqual(self.store.blocks, before)
+
+
+class TestTheMarkdownBackendNeverProbes(unittest.TestCase):
+    """The file is the Markdown store, so its ids are used without a store read."""
+
+    def test_free_ids_come_from_the_counter_without_a_store_call(self) -> None:
+        store = mock.create_autospec(MarkdownBlockStore, instance=True)
+
+        ids = capture._free_signal_ids(store, "20261115", 4, 3)
+
+        self.assertEqual(ids, ["SIG-20261115-004", "SIG-20261115-005", "SIG-20261115-006"])
+        store.get_by_id.assert_not_called()
+
+    def test_the_day_run_is_empty_without_a_store_call(self) -> None:
+        store = mock.create_autospec(MarkdownBlockStore, instance=True)
+
+        self.assertEqual(capture._store_day_run(store, "20261115", 4), (set(), 4))
+        store.get_by_id.assert_not_called()
+
+    def test_a_non_markdown_store_is_probed(self) -> None:
+        # Positive control for the two tests above: the same calls on a
+        # store that is not Markdown do read it.
+        store = _DetachedStore()
+        store.blocks["SIG-20261115-004"] = {"_id": "SIG-20261115-004", "ContentHash": "abc"}
+
+        self.assertEqual(capture._store_day_run(store, "20261115", 4), ({"abc"}, 5))
+        self.assertEqual(capture._free_signal_ids(store, "20261115", 4, 1), ["SIG-20261115-005"])
 
 
 if __name__ == "__main__":

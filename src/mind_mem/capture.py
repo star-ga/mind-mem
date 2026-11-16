@@ -351,6 +351,31 @@ def _signal_block(sig: dict, sig_id: str, date_str: str) -> dict[str, Any]:
     return block
 
 
+def _store_day_run(store: Any, today_compact: str, counter: int) -> tuple[set[str], int]:
+    """Hashes of today's blocks the store holds from *counter* on, and the next id after them.
+
+    The Markdown backend returns ``(set(), counter)`` without a store call:
+    there the file already holds every block. Elsewhere the contiguous run
+    of taken ids is read, so their ``ContentHash`` values join the dedup
+    set. A block beyond a gap in that run is not read: it keeps its id,
+    but a repeat of it lands as a new block.
+    """
+    from .block_store import MarkdownBlockStore
+
+    if isinstance(store, MarkdownBlockStore):
+        return set(), counter
+    hashes: set[str] = set()
+    n = counter
+    while n < 1000:
+        block = store.get_by_id(f"SIG-{today_compact}-{n:03d}")
+        if block is None:
+            break
+        if block.get("ContentHash"):
+            hashes.add(str(block["ContentHash"]))
+        n += 1
+    return hashes, n
+
+
 def _free_signal_ids(store: Any, today_compact: str, counter: int, wanted: int) -> list[str]:
     """Return up to *wanted* unused ``SIG-<today>-NNN`` ids, counting from *counter*.
 
@@ -359,6 +384,15 @@ def _free_signal_ids(store: Any, today_compact: str, counter: int, wanted: int) 
     asked id by id, because ``write_block`` replaces an existing block: a
     reused id silently destroys the signal written before it. An exhausted
     day returns fewer ids than asked, never a taken one.
+
+    The probe and the write are separate store calls. They are serialized
+    only by the ``FileLock`` that ``append_signals`` holds on this
+    workspace's ``SIGNALS.md``, so callers that share the workspace path
+    on one host cannot pick the same id.
+    deferred: would use an insert-if-absent write on the store, stubbed
+    because the ``BlockStore`` protocol has only persist-or-replace —
+    upgrade path: add a create-only write and use it here, which also
+    covers writers on other hosts that share one Postgres database.
     """
     from .block_store import MarkdownBlockStore
 
@@ -429,10 +463,11 @@ def append_signals(
     and ``write_block`` replaced the block written before it: one SIG
     block survived per day while every call returned 1.
 
-    deferred: the ``ContentHash`` dedup is still derived from the file, so
-    on a non-Markdown backend an exact repeat of an earlier signal lands
-    as a new block instead of being skipped. That duplicates, it does not
-    destroy. Upgrade path: derive the hash set through the store as
+    deferred: on a non-Markdown backend the ``ContentHash`` dedup covers the
+    file plus today's run of store blocks (:func:`_store_day_run`), so an
+    exact repeat of a signal from an earlier day lands as a new block
+    instead of being skipped. That duplicates, it does not destroy.
+    Upgrade path: derive the whole hash set through the store as
     ``intel_scan._recorded_findings`` does, once it can be done without
     paying a whole-corpus parse per call (measured 0.25 s for ``get_all``
     against 0.005 s for the file read on a 2,750-block workspace, on a
@@ -446,21 +481,6 @@ def append_signals(
         # Check existing signals to avoid duplicates via content hash
         with open(signals_path, "r", encoding="utf-8") as f:
             existing = f.read()
-
-        # Build set of existing content hashes for O(1) lookup
-        existing_hashes = set(re.findall(r"ContentHash: ([a-f0-9]+)", existing))
-
-        new_signals = []
-        for sig in signals:
-            sig_hash = content_hash(sig["text"])
-            # Skip if content hash already exists, or fallback substring match
-            if sig_hash in existing_hashes or sig["text"][:100] in existing:
-                continue
-            sig["content_hash"] = sig_hash
-            new_signals.append(sig)
-
-        if not new_signals:
-            return 0
 
         # Find next signal ID — filter by today's date to avoid cross-date max
         existing_ids = re.findall(r"\[SIG-(\d{8}-\d{3})\]", existing)
@@ -478,6 +498,26 @@ def append_signals(
         # must not leave an authorisation record behind for a write that
         # never happened.
         store = get_block_store(workspace)
+
+        # Build set of existing content hashes for O(1) lookup. A store the
+        # file does not mirror adds the hashes of the run of today's blocks
+        # it holds from the counter on, so a same-day repeat is skipped
+        # instead of taking a fresh id each time.
+        existing_hashes = set(re.findall(r"ContentHash: ([a-f0-9]+)", existing))
+        day_hashes, counter = _store_day_run(store, today_compact, counter)
+        existing_hashes |= day_hashes
+
+        new_signals = []
+        for sig in signals:
+            sig_hash = content_hash(sig["text"])
+            # Skip if content hash already exists, or fallback substring match
+            if sig_hash in existing_hashes or sig["text"][:100] in existing:
+                continue
+            sig["content_hash"] = sig_hash
+            new_signals.append(sig)
+
+        if not new_signals:
+            return 0
 
         # Cap at 999 signals per day to keep the ``SIG-YYYYMMDD-###`` id
         # format. The blocks are built first so the batch names exactly the

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 1788 | **Est. tokens:** ~5,249,917
-**Generated:** 2026-11-16 03:42 UTC
+**Files:** 1788 | **Est. tokens:** ~5,251,164
+**Generated:** 2026-11-16 03:51 UTC
 
 ## Token Budget Guide
 
@@ -80,7 +80,7 @@
 | `skills/mind-mem/` | 1 | ~1,765 |
 | `skills/mind-mem/references/` | 6 | ~19,499 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 258 | ~1,148,069 |
+| `src/mind_mem/` | 258 | ~1,148,540 |
 | `src/mind_mem/api/` | 5 | ~29,070 |
 | `src/mind_mem/bench/` | 17 | ~49,021 |
 | `src/mind_mem/compliance/` | 7 | ~15,436 |
@@ -95,7 +95,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~5,895 |
 | `src/mind_mem/v4/` | 24 | ~96,311 |
 | `src/mind_mem/viewer_static/` | 3 | ~865 |
-| `tests/` | 808 | ~2,371,970 |
+| `tests/` | 808 | ~2,372,746 |
 | `tests/fixtures/` | 8 | ~16,356 |
 | `tests/fixtures/importers/` | 5 | ~1,218 |
 | `tests/fixtures/importers/agent_memory/` | 4 | ~383 |
@@ -837,7 +837,7 @@
 - `bootstrap_corpus.py` (~4094 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `boundary_witness.py` (~3878 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `calibration.py` (~8306 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
-- `capture.py` (~5981 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
+- `capture.py` (~6452 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6359 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~4689 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
 - `causal_lm_loader.py` (~552 tok, large) — Load causal language models with the narrow Qwen3.5 config workaround.
@@ -1395,7 +1395,7 @@
 - `test_calibration_window_determinism.py` (~1159 tok, large) — The calibration window boundary is UTC-anchored and pinnable.
 - `test_capture_governed_signals.py` (~3277 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_capture.py` (~2193 tok, huge) — Tests for capture.py — zero external deps (stdlib unittest)."""
-- `test_capture_signal_id_store_collision.py` (~1025 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_capture_signal_id_store_collision.py` (~1801 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_category_distiller.py` (~2660 tok, huge) — Tests for category_distiller.py — CategoryDistiller class."""
 - `test_causal_graph.py` (~1566 tok, huge) — Tests for mind-mem temporal causal graph (causal_graph.py)."""
 - `test_causal_lm_import.py` (~596 tok, large)
