@@ -505,7 +505,7 @@ def append_signals(
         # instead of taking a fresh id each time.
         existing_hashes = set(re.findall(r"ContentHash: ([a-f0-9]+)", existing))
         day_hashes, counter = _store_day_run(store, today_compact, counter)
-        pass  # MUTANT: day_hashes ignored
+        existing_hashes |= day_hashes
 
         new_signals = []
         for sig in signals:
