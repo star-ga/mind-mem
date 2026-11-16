@@ -351,6 +351,66 @@ def _signal_block(sig: dict, sig_id: str, date_str: str) -> dict[str, Any]:
     return block
 
 
+def _store_day_run(store: Any, today_compact: str, counter: int) -> tuple[set[str], int]:
+    """Hashes of today's blocks the store holds from *counter* on, and the next id after them.
+
+    The Markdown backend returns ``(set(), counter)`` without a store call:
+    there the file already holds every block. Elsewhere the contiguous run
+    of taken ids is read, so their ``ContentHash`` values join the dedup
+    set. A block beyond a gap in that run is not read: it keeps its id,
+    but a repeat of it lands as a new block.
+    """
+    from .block_store import MarkdownBlockStore
+
+    if isinstance(store, MarkdownBlockStore):
+        return set(), counter
+    hashes: set[str] = set()
+    n = counter
+    while n < 1000:
+        block = store.get_by_id(f"SIG-{today_compact}-{n:03d}")
+        if block is None:
+            break
+        if block.get("ContentHash"):
+            hashes.add(str(block["ContentHash"]))
+        n += 1
+    return hashes, n
+
+
+def _free_signal_ids(store: Any, today_compact: str, counter: int, wanted: int) -> list[str]:
+    """Return up to *wanted* unused ``SIG-<today>-NNN`` ids, counting from *counter*.
+
+    *counter* comes from ``intelligence/SIGNALS.md``, which is the whole
+    corpus only for the Markdown backend. Any other backend (Postgres) is
+    asked id by id, because ``write_block`` replaces an existing block: a
+    reused id silently destroys the signal written before it. An exhausted
+    day returns fewer ids than asked, never a taken one.
+
+    The probe and the write are separate store calls. They are serialized
+    only by the ``FileLock`` that ``append_signals`` holds on this
+    workspace's ``SIGNALS.md``, so callers that share the workspace path
+    on one host cannot pick the same id.
+    deferred: would use an insert-if-absent write on the store, stubbed
+    because the ``BlockStore`` protocol has only persist-or-replace —
+    upgrade path: add a create-only write and use it here, which also
+    covers writers on other hosts that share one Postgres database.
+    """
+    from .block_store import MarkdownBlockStore
+
+    candidates = (f"SIG-{today_compact}-{n:03d}" for n in range(counter, 1000))
+    if isinstance(store, MarkdownBlockStore):
+        return [sig_id for _, sig_id in zip(range(wanted), candidates)]
+    # shortcut: one get_by_id per probed id (O(signals already landed today)
+    # queries); upgrade to a single prefix query on the store when days
+    # routinely carry hundreds of signals.
+    free: list[str] = []
+    for sig_id in candidates:
+        if len(free) == wanted:
+            break
+        if store.get_by_id(sig_id) is None:
+            free.append(sig_id)
+    return free
+
+
 def append_signals(
     workspace: str,
     signals: list[dict],
@@ -394,17 +454,24 @@ def append_signals(
     receipt raises :class:`~mind_mem.admission.UngatedWriteError`. The
     caller sees the failure instead of a count.
 
-    deferred: the daily id counter and the ``ContentHash`` dedup are still
-    derived from ``intelligence/SIGNALS.md`` on disk, which is authoritative
-    only while ``get_block_store`` resolves to the Markdown backend (the
-    default). On a Postgres-backed workspace the canonical file stays
-    empty, so the counter restarts and a new signal can take an id an
-    existing one already holds — the same hazard ``intel_scan``
-    documents. Upgrade path: derive the used-id set through the store as
+    The daily counter starts from ``intelligence/SIGNALS.md`` on disk,
+    which is authoritative only while ``get_block_store`` resolves to the
+    Markdown backend (the default). On any other backend the file stops
+    changing, so :func:`_free_signal_ids` asks the store for each
+    candidate id and skips the taken ones. Before that check, a
+    Postgres-backed workspace gave every signal of a day the id ``-001``
+    and ``write_block`` replaced the block written before it: one SIG
+    block survived per day while every call returned 1.
+
+    deferred: on a non-Markdown backend the ``ContentHash`` dedup covers the
+    file plus today's run of store blocks (:func:`_store_day_run`), so an
+    exact repeat of a signal from an earlier day lands as a new block
+    instead of being skipped. That duplicates, it does not destroy.
+    Upgrade path: derive the whole hash set through the store as
     ``intel_scan._recorded_findings`` does, once it can be done without
-    paying a whole-corpus parse per call (measured 0.25 s for
-    ``get_all`` against 0.005 s for the file read on a 2,750-block
-    workspace, on a path that includes the ``observe_signal`` MCP tool).
+    paying a whole-corpus parse per call (measured 0.25 s for ``get_all``
+    against 0.005 s for the file read on a 2,750-block workspace, on a
+    path that includes the ``observe_signal`` MCP tool).
     """
     signals_path = os.path.join(workspace, "intelligence", "SIGNALS.md")
     if not os.path.isfile(signals_path):
@@ -415,8 +482,30 @@ def append_signals(
         with open(signals_path, "r", encoding="utf-8") as f:
             existing = f.read()
 
-        # Build set of existing content hashes for O(1) lookup
+        # Find next signal ID — filter by today's date to avoid cross-date max
+        existing_ids = re.findall(r"\[SIG-(\d{8}-\d{3})\]", existing)
+        today_compact = date_str.replace("-", "")
+        today_ids = [eid for eid in existing_ids if eid.startswith(today_compact)]
+        if today_ids:
+            counter = max(int(eid[9:]) for eid in today_ids) + 1
+        else:
+            counter = 1
+
+        from .governance_gate import get_gate
+        from .storage import get_block_store
+
+        # Built before the scope opens: a store that cannot be constructed
+        # must not leave an authorisation record behind for a write that
+        # never happened.
+        store = get_block_store(workspace)
+
+        # Build set of existing content hashes for O(1) lookup. A store the
+        # file does not mirror adds the hashes of the run of today's blocks
+        # it holds from the counter on, so a same-day repeat is skipped
+        # instead of taking a fresh id each time.
         existing_hashes = set(re.findall(r"ContentHash: ([a-f0-9]+)", existing))
+        day_hashes, counter = _store_day_run(store, today_compact, counter)
+        existing_hashes |= day_hashes
 
         new_signals = []
         for sig in signals:
@@ -430,23 +519,12 @@ def append_signals(
         if not new_signals:
             return 0
 
-        # Find next signal ID — filter by today's date to avoid cross-date max
-        existing_ids = re.findall(r"\[SIG-(\d{8}-\d{3})\]", existing)
-        today_compact = date_str.replace("-", "")
-        today_ids = [eid for eid in existing_ids if eid.startswith(today_compact)]
-        if today_ids:
-            counter = max(int(eid[9:]) for eid in today_ids) + 1
-        else:
-            counter = 1
-
         # Cap at 999 signals per day to keep the ``SIG-YYYYMMDD-###`` id
         # format. The blocks are built first so the batch names exactly the
         # ids it will write — a receipt that covers an id no one writes is
         # noise, and one that misses an id refuses that write.
-        blocks = [
-            _signal_block(sig, f"SIG-{today_compact}-{counter + offset:03d}", date_str)
-            for offset, sig in enumerate(new_signals[: max(0, 1000 - counter)])
-        ]
+        ids = _free_signal_ids(store, today_compact, counter, len(new_signals))
+        blocks = [_signal_block(sig, sig_id, date_str) for sig, sig_id in zip(new_signals, ids)]
         if not blocks:
             return 0
         # Bind the gate's side mapping to the payload that will actually be
@@ -462,13 +540,6 @@ def append_signals(
                     if prov_clean:
                         block[prov_field] = prov_clean
 
-        from .governance_gate import get_gate
-        from .storage import get_block_store
-
-        # Built before the scope opens: a store that cannot be constructed
-        # must not leave an authorisation record behind for a write that
-        # never happened.
-        store = get_block_store(workspace)
         with get_gate(workspace).admit_batch(
             action="WRITE",
             batch_id=f"capture-{today_compact}",

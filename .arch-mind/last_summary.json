@@ -6,25 +6,25 @@
     "max_mcp_tool_overlap": 2,
     "module_count": 461,
     "pure_modules": 317,
-    "redundancy_body_tokens": 483041,
+    "redundancy_body_tokens": 483238,
     "redundancy_duplicate_functions": 61,
     "redundancy_duplicate_groups": 25,
     "redundancy_excess": 37,
-    "redundancy_functions_analysed": 3500,
+    "redundancy_functions_analysed": 3502,
     "redundancy_redundant_tokens": 1798,
-    "sum_abs_symbol_diffs": 1734336,
-    "sum_decision_points": 28097,
+    "sum_abs_symbol_diffs": 1735508,
+    "sum_decision_points": 28109,
     "sum_evidence_calls": 301,
     "sum_protected_decls": 9,
-    "sum_symbols": 3877,
+    "sum_symbols": 3879,
     "total_edges": 121,
     "total_mcp_tools": 40
   },
   "_comment": "Produced by `.arch-mind/rescan.py` from a `git archive` extraction of this commit's tracked content, scanned with `arch-mind sidecar-scan`. The extraction is why the numbers are a function of the commit and not of scan-time filesystem state: it contains tracked files only, so a nested working tree (a `git worktree` checkout under `.wt/`, `.claude/worktrees/`, or any other name) cannot be in scope whatever the scanner does. `_repo_root` is normalised to '.' because the scan runs in a scratch directory.",
   "_languages": "python,typescript,go,rust,mind",
   "_redundancy": {
-    "body_tokens_total": 483041,
-    "functions_analysed": 3500,
+    "body_tokens_total": 483238,
+    "functions_analysed": 3502,
     "groups": [
       {
         "copies": 5,
@@ -567,7 +567,7 @@
     "files_in_scope": {
       "go": 8,
       "mind": 27,
-      "python": 1304,
+      "python": 1305,
       "rust": 0,
       "typescript": 17
     },
