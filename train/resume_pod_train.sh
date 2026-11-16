@@ -432,7 +432,8 @@ SSH_OPTS=(-i "${SSH_KEY}" -p "${port}" -o StrictHostKeyChecking=no -o UserKnownH
 
 echo ""
 echo "=== Step 3: reinstall deps ==="
-ssh "${SSH_OPTS[@]}" "root@${ip}" "pip install --no-cache-dir 'transformers==5.7.0' 'trl==1.2.0' 'peft==0.14.0' 'accelerate==1.5.0' 'bitsandbytes==0.46.1' 'datasets>=4.7.0,<5' huggingface_hub 2>&1 | tail -3"
+# The remote shell does not inherit pipefail. tail must not hide a pip failure.
+ssh "${SSH_OPTS[@]}" "root@${ip}" "set -o pipefail; pip install --no-cache-dir 'transformers==5.7.0' 'trl==1.2.0' 'peft==0.14.0' 'accelerate==1.5.0' 'bitsandbytes==0.46.1' 'datasets>=4.7.0,<5' huggingface_hub 2>&1 | tail -3"
 
 echo ""
 echo "=== Step 4: detect resume state ==="
@@ -441,7 +442,18 @@ ssh "${SSH_OPTS[@]}" "root@${ip}" "test -s /workspace/_causal_lm_import.py && te
     echo "redeploy with train/runpod_deploy.py so both loader files reach /workspace" >&2
     exit 1
 }
-ckpt=$(ssh "${SSH_OPTS[@]}" "root@${ip}" "ls -d /workspace/train-output/full-ft/checkpoint-* 2>/dev/null | tail -1")
+# No match (ls status 2) is a fresh start. Any other pipe status is returned.
+ckpt=$(ssh "${SSH_OPTS[@]}" "root@${ip}" 'set +e
+set -o pipefail
+ls -d /workspace/train-output/full-ft/checkpoint-* 2>/dev/null | tail -1
+rc=("${PIPESTATUS[@]}")
+if [[ ${#rc[@]} -eq 2 && ${rc[0]} -eq 2 && ${rc[1]} -eq 0 ]]; then
+  exit 0
+fi
+if [[ ${rc[0]} -ne 0 ]]; then
+  exit "${rc[0]}"
+fi
+exit "${rc[1]}"') || exit
 if [[ -n "$ckpt" ]]; then
     echo "found checkpoint at $ckpt — will resume"
 else
@@ -455,6 +467,7 @@ echo "=== Step 5: relaunch training ==="
 # clean) and it's never assigned to a local shell variable (so no shell
 # history risk on this host either).
 ssh "${SSH_OPTS[@]}" "root@${ip}" 'set -e
+set -o pipefail
 IFS= read -r HF_TOKEN
 cd /workspace
 test -f train-output/train.log && mv train-output/train.log train-output/train-prev.log

@@ -455,7 +455,14 @@ def _resume_server(plan: _ResumePlan):
         thread.join(timeout=5)
 
 
-def _run_resume(tmp_path: Path, base: str, plan: _ResumePlan, inject: str = "", polls: str = "4"):
+def _run_resume(
+    tmp_path: Path,
+    base: str,
+    plan: _ResumePlan,
+    inject: str = "",
+    polls: str = "4",
+    extra_env: dict[str, str] | None = None,
+):
     if os.name == "nt":
         pytest.skip("resume script tests run on POSIX runners")
     token = tmp_path / "hf"
@@ -473,6 +480,8 @@ def _run_resume(tmp_path: Path, base: str, plan: _ResumePlan, inject: str = "", 
     env["MM_RESUME_POLL_SECONDS"] = "0"
     env["MM_RESUME_STOP_POLLS"] = "3"
     env["MM_RESUME_INJECT"] = inject
+    if extra_env:
+        env.update(extra_env)
     completed = subprocess.run(
         [_bash_executable(), str(REPO / "train" / "resume_pod_train.sh")],
         env=env,
@@ -713,3 +722,74 @@ def test_resume_stops_a_pod_already_starting_when_ssh_never_appears(tmp_path: Pa
     assert "pod failed to expose SSH" in completed.stderr
     assert _bodies(plan, "/action") == ['{"action":"stop"}']
     assert f"pod {plan.pod_id} status EXITED. Compute is not billed." in completed.stdout
+
+
+def _write_fake_ssh(bin_dir: Path, log_path: Path, pip_rc: int, ls_rc: str) -> None:
+    bin_dir.mkdir()
+    log_q = shlex.quote(str(log_path))
+    ls_q = shlex.quote(ls_rc)
+    text = f"""#!/bin/bash
+remote="${{@: -1}}"
+printf '%s\\n' "$remote" >> {log_q}
+if [[ "$remote" == *pip\\ install* ]]; then
+  bash --noprofile --norc -c 'pip() {{ return {pip_rc}; }}; eval "$1"' _ "$remote"
+  rc=$?
+  printf 'PIP_SSH_RC=%s\\n' "$rc" >> {log_q}
+  exit "$rc"
+fi
+if [[ "$remote" == *test\\ -s* ]]; then exit 0; fi
+if [[ "$remote" == *checkpoint-* ]]; then
+  if [[ -n {ls_q} ]]; then
+    bash --noprofile --norc -c 'ls() {{ return {ls_rc}; }}; eval "$1"' _ "$remote"
+    exit $?
+  fi
+  echo /workspace/train-output/full-ft/checkpoint-1
+  exit 0
+fi
+printf 'LAUNCH_SEEN\\n' >> {log_q}
+exit 0
+"""
+    path = bin_dir / "ssh"
+    path.write_text(text, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _run_resume_ssh(tmp_path: Path, pip_rc: int, ls_rc: str = ""):
+    plan = _ResumePlan()
+    plan.gets = [
+        (200, _resume_pod(plan.pod_id, "EXITED")),
+        (200, _resume_pod(plan.pod_id, "RUNNING", host="203.0.113.10", port=4022)),
+    ]
+    plan.start = (200, _resume_pod(plan.pod_id, "STARTING"))
+    plan.stop = (200, _resume_pod(plan.pod_id, "EXITED"))
+    plan.after_stop_get = (200, _resume_pod(plan.pod_id, "EXITED"))
+    log_path = tmp_path / "ssh.log"
+    bin_dir = tmp_path / "fake-bin"
+    _write_fake_ssh(bin_dir, log_path, pip_rc, ls_rc)
+    path = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+    with _resume_server(plan) as base:
+        completed = _run_resume(tmp_path, base, plan, extra_env={"PATH": path})
+    log = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
+    assert "fixture-token" not in log
+    assert "fixture-api-key" not in log
+    return completed, plan, log
+
+
+def test_resume_stops_the_pod_when_pip_install_fails(tmp_path: Path):
+    completed, plan, log = _run_resume_ssh(tmp_path, 7)
+    assert completed.returncode != 0 and "Resume launched" not in completed.stdout
+    assert _bodies(plan, "/action") == ['{"action":"start"}', '{"action":"stop"}']
+    assert "PIP_SSH_RC=7" in log and "LAUNCH_SEEN" not in log
+
+
+def test_resume_confirms_launch_when_pip_install_succeeds(tmp_path: Path):
+    completed, plan, log = _run_resume_ssh(tmp_path, 0)
+    assert completed.returncode == 0 and "Resume launched" in completed.stdout
+    assert _bodies(plan, "/action") == ['{"action":"start"}']
+    assert "PIP_SSH_RC=0" in log and "LAUNCH_SEEN" in log
+
+
+def test_resume_fresh_start_when_no_checkpoint_matches(tmp_path: Path):
+    completed, plan, log = _run_resume_ssh(tmp_path, 0, ls_rc="2")
+    assert completed.returncode == 0 and "fresh start" in completed.stdout
+    assert _bodies(plan, "/action") == ['{"action":"start"}'] and "LAUNCH_SEEN" in log
