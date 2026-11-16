@@ -7297,3 +7297,71 @@ deterministic clustering program is the intended trainer. That program uses inte
 and a different generator, so its codebook bytes differ from the Python trainer's: the port
 re-pins the byte-identity fixtures. Needs an architecture audit before
 implementation.
+
+---
+
+## Join the caller's trace, and an exact-search check on sampled live recalls (2026-11-16, Proposed)
+
+Two gaps in how a recall can be observed from outside. Checked on origin/main `59ea7cf4`.
+
+- **Each recall starts its own trace.** `src/mind_mem/telemetry.py` creates OpenTelemetry spans when
+  the `otel` extra is installed, and `traced` wraps `recall` in `_recall_core.py` and the
+  governance tools (`propose_update`, `scan`, `propose_slot_update`). `audit_context.py` carries
+  `X-MindMem-Request-Id` end to end. No code reads a W3C
+  `traceparent`, so a caller that traces its own request cannot see the recall inside that trace.
+- **Exact-search recall is measured only on a fixed benchmark.** The compressed-index entry
+  (2026-11-13) measures recall@10 against exact search on held-out queries, and the plain-retrieval
+  baseline entry compares pipelines on fixed sets. Nothing checks the served results of real
+  recalls against an exact search over the same admitted corpus.
+
+### Deliverables
+
+1. **Trace context in.** Read `traceparent` on REST and gRPC, and from the `_meta` object of an MCP
+   request. Validate the W3C format and bound its length before anything logs or stores it, as
+   `sanitize_header_value` does for the audit headers. A valid value makes the mind-mem spans
+   children of the caller's span. A missing or malformed value starts a new trace and is never
+   echoed. The mind-mem request id becomes a span attribute, so both ids can be joined.
+2. **Trace context out.** Outbound peer calls forward the trace context next to the audit headers.
+3. **Ids never enter hashed bytes.** Trace and span ids are random per call. They never enter a
+   block hash, the audit chain, an anchor, a Merkle root or any evidence record. They sit beside
+   those records as a lookup key only.
+4. **Content stays out of spans.** Spans carry sizes, counts, timings, block ids and hashes. Query
+   text and block text are never span attributes.
+5. **Exact-search replay, opt-in and local.** A sample of real recalls is recorded on the same
+   machine only when the operator turns it on. Recorded queries never leave the machine. An offline
+   command reruns each recorded query through the same pipeline with exact vector search, after the
+   same admission filter (`admit_corpus`) as the served recall, and reports:
+   - overlap@10 between the served top 10 and the exact top 10, averaged over recalls;
+   - the chance row: the expected overlap@10 of 10 blocks drawn uniformly from the same admitted
+     corpus, computed exactly, not sampled.
+   A recall whose corpus changed between serving and replay is reported as "unverified".
+6. **Observability only.** The replay numbers are reported beside the existing retrieval
+   diagnostics. They never change a ranked list and never gate a recall.
+
+### Acceptance gate
+
+- A recall called with a valid `traceparent` appears as a child span of that trace. Positive
+  control: the same call without the header starts a new trace.
+- A malformed `traceparent` starts a new trace, and its raw value appears in no log, span or
+  response.
+- The audit chain, block hashes and anchors are byte-identical for the same writes under two
+  different trace ids. Positive control: changing one block's content changes them. Mutation:
+  write the trace id into a hashed record; the test must go red.
+- With the `otel` extra absent, recall output is byte-identical to a build without this code, and
+  the off path does no header parse beyond the audit headers it already reads.
+- Replay: with exact search on both sides, overlap@10 is 1 on every fixture recall.
+- Positive control: a replay that ranks blocks in reverse score order scores at or below the chance
+  row. A replay that skips `admit_corpus` on one side must fail a fixture that holds a quarantined
+  block.
+- A replay in which no recall could be rerun reports "unverified", never a number.
+
+### Falsification
+
+If the served overlap@10 on live recalls falls below the held-out benchmark's recall@10 against
+exact search, beyond the sample's 95% interval, the benchmark does not represent real use, and the
+benchmark is fixed before any recall default changes on its strength.
+
+### Status
+
+Proposed. Nothing built. The trace-context items are small and can ship in a patch release; the
+replay command follows the current release. Needs an architecture audit before implementation.
