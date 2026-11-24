@@ -7365,3 +7365,66 @@ benchmark is fixed before any recall default changes on its strength.
 
 Proposed. Nothing built. The trace-context items are small and can ship in a patch release; the
 replay command follows the current release. Needs an architecture audit before implementation.
+
+## Expected head on every governed write (2026-11-23, Proposed)
+
+A governed write should state which chain head it saw, and be refused when the chain has moved.
+Today it cannot state one. Checked on origin/main `46f69fce`.
+
+- **The write path takes no head.** The governed write doors are the `admit*` methods of
+  `GovernanceGate` in `src/mind_mem/governance_gate.py`. Each one ends in `_write_records`, which
+  calls `HashChainV2.append(block_id, action, content)`. `append` reads the tail under its own
+  lock and links the new entry to it. The caller never says which head it acted on.
+- **The head is compared only on verify.** `verify_head` in `src/mind_mem/hash_chain_v2.py`
+  compares the tail with the head sidecar. It is read-only, and only `verify_cli.py` calls it. So a
+  head mismatch shows up when someone verifies the chain, never when a write lands.
+- **`AuditChain.append` works the same way.** It reads the last entry under a file lock and links
+  to it, with no head from the caller.
+- **The class of defect is real.** The same-day signal-id overwrite on Postgres (fixed in
+  `50375c2e`, #660) was a writer that acted on a stale copy of state. That fix checks the store for
+  each signal id. It does not stop the next writer that acts on a stale view through another door.
+
+### Deliverables
+
+1. **Reads return the head.** Every read a caller makes before a governed write (the proposal it
+   approves, the block it updates, `verify_chain`) returns the chain head it saw.
+2. **Governed writes take `expected_head`.** Each `admit*` method, and every tool that reaches one
+   (for example `approve_apply`, through `apply_proposal` and `admit_proposal`), accepts the head
+   the caller acted on.
+   `_write_records` passes it to `HashChainV2.append`, which compares it with the tail it already
+   reads under its lock. The check adds no file read and no clock read.
+3. **A mismatch refuses, and nothing retries.** If the live head differs, the write is refused and
+   nothing is written: no evidence record, no chain entry, no block. The tool never re-reads and
+   retries on its own. The caller reads the new state and decides again.
+4. **Two refusal codes.** `head_moved`: the expected head is an older entry of this chain, so
+   another writer landed first. `head_unknown`: the expected head is not in this chain at all, so
+   the caller holds state from another store, or the chain was rewritten. The second is reported
+   with the same weight as a failed `verify_chain`.
+5. **Migration in two releases.** In the first release `expected_head` is optional, and a write
+   without it is marked `unchecked` in its audit record. The next release requires it on every
+   governed write.
+
+### Acceptance gate
+
+- Two writers read the same head. The first write lands. The second is refused with `head_moved`
+  and writes nothing. Positive control: the second write lands when it passes the new head.
+  Mutation: remove the comparison; the test must go red.
+- An expected head that is not in the chain gives `head_unknown`, not `head_moved`. Positive
+  control: an older head of the same chain gives `head_moved`.
+- After a refusal, the chain length, the head sidecar and the block store are byte-identical to
+  their state before the call.
+- For the same sequence of accepted writes, the chain bytes are identical with and without the
+  check.
+- In the first release, a write without `expected_head` lands and its audit record says
+  `unchecked`.
+
+### Falsification
+
+If an audit of every governed write door finds that each one already re-reads and compares the
+state it acted on inside the write lock, the stale-view class is closed already, and this entry
+closes as a no-op.
+
+### Status
+
+Proposed. Nothing built. Needs an architecture audit before implementation, because it changes the
+signature of every governed write door and of the MCP tools that call them.
