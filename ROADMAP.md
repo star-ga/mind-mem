@@ -7468,12 +7468,20 @@ Today it reads each safetensors header and never looks at the shapes. Checked on
    names a registered base must have the fingerprint of that base. A fine-tune keeps the shapes of
    its base. A legitimate shape change (for example new vocabulary rows) is a finding that needs
    the existing override and is recorded as one.
-4. **Weight-pattern scan, second slice, opt-in.** `mm audit-model --scan-weights` reads the weight
+4. **Norm-gain scan (small tensors, on every run).** A new check `norm_gains` reads only the 1-D
+   normalization weights, located by the offsets in the header that `check_safetensors_header`
+   already parses. For a 3B model they are under 1 MB, so the check can run every time. It reports
+   long runs of channels whose effective gain is exactly 0, and gains whose size is far above the
+   rest of the model. In models that store the gain as an offset from 1, the published circuit
+   method writes exactly `-1.0` (effective gain 0) on the wires it switches off, and `+254.0` and
+   `-256.0` (effective gain plus and minus 255) on its readout pairs. A pretrained norm has neither
+   pattern. The bound is fixed per architecture before the run, never tuned on the result.
+5. **Weight-pattern scan, third slice, opt-in.** `mm audit-model --scan-weights` reads the weight
    bytes and reports block-sparse regions and extreme gate values. It is off by default, because it
    reads gigabytes and its false-positive rate on real checkpoints is not measured yet.
-5. **Migration in two releases.** In the first release a `tensor_shapes` failure is reported but
-   does not fail `audit_model`, `mm gate check` or `mm audit-pinned`. The next release makes it
-   fail-closed like the other seven checks.
+6. **Migration in two releases.** In the first release a `tensor_shapes` or `norm_gains` failure is
+   reported but does not fail `audit_model`, `mm gate check` or `mm audit-pinned`. The next release
+   makes both fail-closed like the other seven checks.
 
 ### Acceptance gate
 
@@ -7487,6 +7495,10 @@ Today it reads each safetensors header and never looks at the shapes. Checked on
   counted as a pass.
 - The check reads only header bytes. A test that counts bytes read on a multi-file checkpoint
   proves it.
+- A checkpoint with a run of norm gains set to give effective gain 0, and one with a pair of gains
+  of plus and minus 255, both fail `norm_gains`. Positive control: the unchanged checkpoint passes.
+  Mutation: remove the run-length test; the first case must go red.
+- `norm_gains` reads only the norm tensors. The byte-count test proves it reads no other tensor.
 - On a checkpoint with no `.safetensors` file the report bytes, except the new entry, are
   identical to the report from origin/main.
 
@@ -7499,4 +7511,57 @@ fingerprint in item 3 remains.
 ### Status
 
 Proposed. Nothing built. Item 1 is a small change inside `check_safetensors_header` and can ship in
-a patch release. Item 3 changes the gate registry format and needs an architecture audit first.
+a patch release. Item 4 reuses the same header offsets and reads only the norm tensors. Item 3
+changes the gate registry format and needs an architecture audit first.
+
+## A "not worse" verdict for paired benchmarks (2026-11-23, Proposed)
+
+`mind_mem.bench.ab_stats` should be able to prove that a change is not worse than the control by more
+than a stated margin. Today it can only show a difference. Checked on origin/main `732eb60b`.
+
+- **The gap.** `_verdict` in `src/mind_mem/bench/ab_stats.py` returns `no_evidence`, `underpowered`,
+  `not_significant`, `memory_better` or `control_better`, from a two-sided exact McNemar test on
+  the discordant pairs. `not_significant` means "no difference was shown". It does not mean "no
+  regression", but a reader of a scorecard can take it that way. A change that must not hurt recall
+  (a new index, a faster path, a model swap) needs a test whose pass means "not worse".
+- **The method.** A one-sided paired non-inferiority test on the same discordant pairs: H0 is that
+  the new arm loses at least `delta` (a share of all tasks) against the control. The verdict
+  `non_inferior` needs p <= alpha against that H0. Recent research reports this form with the
+  margin frozen in a file before each run, and that is the part we need most: the same lesson as a
+  pass limit chosen after the result, which can never fail.
+
+### Deliverables
+
+1. **Margin file.** `benchmarks/margins.toml` holds one `delta` per benchmark, as an exact
+   fraction, with a one-line reason. The run reads it before any arm executes and writes its
+   SHA-256 into the report. A run with no margin entry for its benchmark refuses to give a
+   non-inferiority verdict.
+2. **New verdicts.** `summarise_noninferiority(pairs, delta, alpha)` returns `non_inferior`,
+   `inferiority_not_excluded` or `underpowered`, with the same exact `Fraction` arithmetic and the
+   same honest note as `_verdict`. The existing two-sided function does not change.
+3. **Power floor.** Like `smallest_significant_discordant`, it reports the smallest task count at
+   which `non_inferior` is reachable for the given `delta` and alpha, so an underpowered run says
+   so.
+4. **Report wiring.** `ab_report` prints the non-inferiority row next to the two-sided row when the
+   benchmark has a margin entry.
+
+### Acceptance gate
+
+- A fixture where the new arm loses 0 of N discordant pairs passes `non_inferior` when N is above
+  the floor. Positive control: a fixture that loses clearly more than `delta` gives
+  `inferiority_not_excluded`.
+- Mutation: change the margin file after the run has read it; the report hash no longer matches,
+  and a test must catch this.
+- Mutation: make the test two-sided; the first fixture must go red at the floor size.
+- With no margin file present, every existing report is byte-identical to origin/main.
+
+### Falsification
+
+If no benchmark we run has enough tasks to reach `non_inferior` at a margin we would accept (for
+example 3 percentage points), the verdict cannot be reached in practice. Then the item closes, and
+the scorecards keep only the two-sided verdict with a plain note that `not_significant` is not
+"no regression".
+
+### Status
+
+Proposed. Nothing built. Items 1 to 3 are local to `ab_stats.py` and need no architecture audit.
