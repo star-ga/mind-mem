@@ -7428,3 +7428,75 @@ closes as a no-op.
 
 Proposed. Nothing built. Needs an architecture audit before implementation, because it changes the
 signature of every governed write door and of the MCP tools that call them.
+
+## Tensor shapes must match the declared config (2026-11-23, Proposed)
+
+`mm audit-model` should prove that every tensor in a checkpoint has the shape its config declares.
+Today it reads each safetensors header and never looks at the shapes. Checked on origin/main
+`496be476`.
+
+- **Why it matters.** Recent research shows that exact circuits can be written into the weights of
+  a pretrained model with no training. The method makes the model wider: new hidden dimensions,
+  wider embeddings, extra rows in the gate weights. The circuit does nothing until its trigger
+  appears, so a behaviour benchmark does not see it. A widened checkpoint still loads, and its
+  SHA-256 manifest is still self-consistent, because the manifest is made from the changed files.
+- **The header is already read.** `check_safetensors_header` in `src/mind_mem/model_audit.py`
+  parses the full header JSON of every `.safetensors` file. That JSON holds the `dtype` and `shape`
+  of every tensor. The check only looks at `__metadata__` keys. The shapes are parsed and then
+  dropped.
+- **The config is already read.** `check_remote_code_hooks` and `check_provenance` already open
+  `config.json`. Its `hidden_size`, `intermediate_size`, `vocab_size`, `num_hidden_layers`,
+  `num_attention_heads`, `num_key_value_heads` and `head_dim` fix the shape of every tensor of a
+  standard decoder.
+- **A changed config is the next gap.** An author who widens the weights can also edit
+  `config.json`. So the check must also compare with a trusted reference, not only with the files
+  in the same directory.
+
+### Deliverables
+
+1. **Shape check against the local config (header only).** A new check `tensor_shapes` reads the
+   shapes from the headers that `check_safetensors_header` already parses, and compares them with
+   a per-architecture shape table derived from `config.json`. It reads no weight bytes. First table:
+   the embedding, and the output head when it is not tied, must be `[vocab_size, hidden_size]`.
+   Every layer index in a tensor name must be below `num_hidden_layers`. The attention and MLP
+   projections must have the sizes the config gives.
+2. **Three results, not two.** `CheckResult` gains a `checked` flag. An architecture with no shape
+   table gives `checked: false`, which is reported as "not checked". It is never reported as a
+   pass.
+3. **Shape fingerprint in the gate registry.** `sha256` over the sorted `(name, dtype, shape)`
+   list, stored next to `manifest_sha256` in `model_gate.json`. A checkpoint whose `base_model`
+   names a registered base must have the fingerprint of that base. A fine-tune keeps the shapes of
+   its base. A legitimate shape change (for example new vocabulary rows) is a finding that needs
+   the existing override and is recorded as one.
+4. **Weight-pattern scan, second slice, opt-in.** `mm audit-model --scan-weights` reads the weight
+   bytes and reports block-sparse regions and extreme gate values. It is off by default, because it
+   reads gigabytes and its false-positive rate on real checkpoints is not measured yet.
+5. **Migration in two releases.** In the first release a `tensor_shapes` failure is reported but
+   does not fail `audit_model`, `mm gate check` or `mm audit-pinned`. The next release makes it
+   fail-closed like the other seven checks.
+
+### Acceptance gate
+
+- A checkpoint with one hidden dimension made wider in the weights, with the config unchanged,
+  fails `tensor_shapes`. Positive control: the unchanged checkpoint passes. Mutation: remove the
+  comparison; the test must go red.
+- The same widened checkpoint with an edited `config.json` passes item 1 and fails item 3 against
+  the registered base fingerprint. Positive control: an unchanged fine-tune of that base passes
+  item 3.
+- An architecture with no shape table reports "not checked". A test asserts that it is never
+  counted as a pass.
+- The check reads only header bytes. A test that counts bytes read on a multi-file checkpoint
+  proves it.
+- On a checkpoint with no `.safetensors` file the report bytes, except the new entry, are
+  identical to the report from origin/main.
+
+### Falsification
+
+If the shape tables for the architectures on the provenance allowlist give false failures on their
+own published checkpoints, the table approach is wrong. Then item 1 closes, and only the base
+fingerprint in item 3 remains.
+
+### Status
+
+Proposed. Nothing built. Item 1 is a small change inside `check_safetensors_header` and can ship in
+a patch release. Item 3 changes the gate registry format and needs an architecture audit first.
