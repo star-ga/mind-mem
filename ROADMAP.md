@@ -7565,3 +7565,51 @@ the scorecards keep only the two-sided verdict with a plain note that `not_signi
 ### Status
 
 Proposed. Nothing built. Items 1 to 3 are local to `ab_stats.py` and need no architecture audit.
+
+## Two more memory benchmarks and a fixed-candidate rerank test (2026-11-26, Proposed)
+
+Recent memory research reports results on MemBench and PersonaMem beside LoCoMo and LongMemEval,
+and compares rerankers on one fixed candidate list. We take the benchmark set and the test shape.
+No code is adopted.
+
+### Deliverables
+
+1. **MemBench and PersonaMem harnesses.** Add both in the shape of the existing harnesses: one
+   case per subprocess (as in `benchmarks/repro_niah.py`), a scorecard and an NDJSON pair per run
+   (as for LongMemEval) that `benchmarks/repro_verify.py` can recompute, and the answerer and judge
+   settings recorded in the scorecard. Check each dataset's license before any data file enters the repo.
+   If a license does not allow redistribution, the harness downloads the data at run time and
+   stores only its hash.
+2. **Fixed-candidate rerank test.** Extend `benchmarks/crossencoder_ab.py` from conv-0 to all ten
+   LoCoMo conversations. A fixed first-stage list (256 candidates per question from one pinned
+   small embedder) is saved once with its hash. Each reranker (the opt-in cross-encoder leg, and
+   any later candidate) picks its top 20 from that same list. This measures the reranker apart
+   from first-stage recall, so a rerank change cannot hide behind a recall change.
+3. **Paired verdict.** Each new benchmark row uses the paired "not worse" verdict (item of
+   2026-11-23), with the margin frozen before the run.
+4. **Recent window as its own lane (opt-in A/B arm).** Today recency is a score multiplier
+   (`recency_weight` in `_recall_core.py`). The arm puts the last N blocks of the active session
+   into the context unscored and takes the top K only from older blocks. It runs against the
+   current multiplier on LoCoMo and LongMemEval. The default stays off until the arm wins.
+5. **Time order for every question type (opt-in A/B arm).** `evidence_packer.py` puts hits in time
+   order only for temporal questions. The arm puts every packed set in time order after selection,
+   and the result is reported per question category. The default packing does not change.
+
+### Acceptance gate
+
+- Each harness runs on a three-case fixture with a scripted answerer and gives a byte-identical
+  scorecard on two runs.
+- The rerank test refuses to run when the candidate-list hash differs from the saved one. Mutation:
+  rebuild the list with a different embedder; the test must refuse.
+- Positive control: a reranker that returns the first-stage order unchanged scores exactly the
+  first-stage baseline.
+- Each arm has a fixture where it changes the packed context (positive control) and a fixture
+  where it must not (a session shorter than N; a set that is already in time order).
+- With the new harnesses not selected and both arms off, every existing scorecard and packed
+  context is byte-identical to origin/main.
+
+### Status
+
+Proposed. Nothing built. The dataset license check comes first. Items 1 to 5 are benchmark-only or
+off by default and need no architecture audit. Making an arm the default is a separate decision
+after its paired verdict.
