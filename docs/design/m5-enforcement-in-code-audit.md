@@ -183,5 +183,5 @@ Prior-art shape observed in a public tutorial; the principle is one this
 project already held and published. No code adopted, nothing named in any
 public artifact. The closing mechanism — fail-closed capability flags with
 undefined-extern backends — is **internal precedent** from `mind-law`
-(`drift.mind`, `key_management.mind`), not external. Citation in
-`mind-internal`.
+(`drift.mind`, `key_management.mind`), not external. The citation is
+kept privately.

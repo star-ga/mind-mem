@@ -226,5 +226,5 @@ Prior-art shape observed in a public tutorial: the index-exclusion
 round-trip probe, the always-injected token-tax constraint, and the
 asymmetric-floor justification. The cited figures are the *shape of a
 working separation* observed externally — not our measurements and not
-targets. No code adopted, nothing named in any public artifact. Citation in
-`mind-internal`.
+targets. No code adopted, nothing named in any public artifact. The citation
+is kept privately.

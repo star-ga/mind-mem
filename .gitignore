@@ -65,7 +65,7 @@ scratchpad_roadmap/
 
 .claude/worktrees/
 
-# Local fleet/infra topology notes — private, never public (see mind-internal)
+# Local fleet/infra topology notes — private, never public
 docs/FLEET_MCP_WIRING.md
 
 # Written by the test suite's thread-ceiling watchdog when it stops a run.

@@ -185,4 +185,4 @@ space so a violation collides by construction rather than needing to be
 noticed. 121 enums across that repo make it a convention, not a one-off.
 Cite `drift.mind` as the precedent for closed-set-as-mechanism; the
 external source contributed the specific application to storage keys and
-nothing else. Citation in `mind-internal`.
+nothing else. The citation is kept privately.

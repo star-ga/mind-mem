@@ -176,4 +176,4 @@ the same mistake in the other direction.
 Prior-art shape observed in a public tutorial; no code adopted, nothing
 named in any public artifact. The separation figures above are cited as the
 *shape of a working pairing* observed externally, not as our measurement and
-not as a target. Citation in `mind-internal`.
+not as a target. The citation is kept privately.
