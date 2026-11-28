@@ -7618,4 +7618,4 @@ after its paired verdict.
 
 Study opt-in hierarchical memory consolidation: versioned summaries retain source identifiers and explicit uncertainty, exact retrieval fallback, no silent replacement, stable ordering and replay. Test forgetting, temporal contradictions, deletion propagation and tenant isolation, using public synthetic fixtures; compare retrieval quality and storage cost with unmodified baseline.
 
-Reference: https://arxiv.org/abs/2611.32802 (verify claims, revision and artifact rights before reproduction). BACKLOG/NOT_RUN; existing priorities and owner gates unchanged. No implementation, training, deployment or spend authorized.
+Based on recent research (verify claims, revision and artifact rights before reproduction). Provenance lives in mind-internal. BACKLOG/NOT_RUN; existing priorities and owner gates unchanged. No implementation, training, deployment or spend authorized.
